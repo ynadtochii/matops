@@ -1,0 +1,6 @@
+{
+  "// note": "Uses base.json (noEmit), NOT compiled-package.json. The tRPC AppRouter type embeds the full Better Auth `Auth` type, which is too large / non-portable to serialize into a .d.ts (TS7056/TS2742). So @matops/api is consumed from SOURCE (exports.types -> src) like @matops/auth; type inference still works, we just don't emit declarations.",
+  "extends": "@matops/tsconfig/base.json",
+  "include": ["src"],
+  "exclude": ["node_modules"]
+}

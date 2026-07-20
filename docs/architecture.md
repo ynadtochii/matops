@@ -1,0 +1,191 @@
+# matops — Architecture Design Doc (v1)
+
+*The design of record for **matops** (the from-scratch rebuild of the old app **MAT**). A build team starts here. Pairs with the product [spec.md](./spec.md); every decision below is a resolved wayfinder ticket (links go to the rationale).*
+
+> **Naming:** **matops** = this new project (`/Users/kuna/projects/matops`). **MAT** = the old reference app (`/Users/kuna/projects/mat`); "the old app" always means MAT.
+
+> **✅ Folds in the critical-review wave (tickets 12–21).** The three original over-claims are corrected here: tenant isolation is now **Postgres RLS** (§5), booking is an **atomic conditional `UPDATE`** (§7), and future live updates use a **separate always-on worker**, not SSE on the serverless API (§7/§8). Also folded in: push+email notifications (§7), the `pg`+Fluid+pooler connection (§9), dropped `completed` status, lazy+cron materialization, instructor/approval rules, and the multi-academy switcher.
+>
+> **➕ Low-friction student wave (tickets 22–27) — product detail lives in [spec.md](./spec.md); captured here at reference level.** Technical shape (to be detailed when we move past conceptual): a new **`enrolledProcedure`** tier lets pending members read + provisionally book/check-in (role still only at approval); `class_participation` gains **`booking_tier`** so only *confirmed* (approved-member) bookings count capacity; a **`drop_in`** table + a public per-gym check-in/lead endpoint (an enumerated public entry point); a **QR check-in** endpoint; and **magic-link** auth. See the stack table's "Student low-friction" row and the schema draft.
+
+---
+
+## 0. As-built status (Phase 0 complete — read this first)
+
+Sections 1–11 are the **conceptual design of record** (the "why", written before code). This section is the **reality on disk** after Phase 0. Where they differ, this section wins for "what exists today"; the sections below still hold for intent and Phases 1+. Slice-by-slice detail: [../CHANGELOG.md](../CHANGELOG.md); live plan + status matrix: [roadmap.md](roadmap.md); how we build + keep docs true: [delivery.md](delivery.md).
+
+**Built and green** (`pnpm format lint typecheck test` all pass, 10 tests): the create-t3-turbo monorepo, the DB layer on **Neon** (connected, all migrations applied), the RLS tenant seam (**verified live on Neon**, not only PGlite), Better Auth (org + magic-link), and the tRPC procedure tiers. **Not built yet:** everything from Phase 1 on — academy onboarding, invites, approval, roster, scheduling, booking, notifications.
+
+**Packages that exist:** `apps/{nextjs,expo}` · `packages/{api,auth,db,domain,validators,ui}` · `tooling/{eslint,prettier,tailwind,typescript,github}`. Scope is `@matops/*`. `packages/notifications` does **not** exist yet (Phase 4).
+
+**Concrete facts that refine the conceptual sections below:**
+
+- **DB driver / connection (refines §9):** a `pg` (node-postgres) `Pool` in `packages/db/src/client.ts`, using the Neon **`-pooler`** string in `POSTGRES_URL` (`sslmode=verify-full`). `drizzle.config.ts` strips `-pooler` so **migrations** run on the direct endpoint.
+- **RLS mechanism (refines §5), as implemented:** `withTenant(academyId, fn)` in `packages/db/src/tenant.ts` opens a transaction and runs **`SET LOCAL ROLE matops_app`** + `set_config('app.academy_id', <id>, true)`, then the resolver's queries. `matops_app` is a NOLOGIN, non-BYPASSRLS role (migration `0001`); migration `0003` does `GRANT matops_app TO current_user` so the (non-superuser) connection role can `SET ROLE` to it — **required on managed Postgres like Neon**; PGlite (superuser) doesn't need it. `academy_id` is **text**, no `::uuid`. The RLS example + regression table is `tenant_probe`.
+- **Procedure tiers (refines §4), as implemented** in `packages/api/src/trpc.ts`: `publicProcedure` · `protectedProcedure` (authed, kept from template) · **`enrolledProcedure`** (any member incl. pending — this is the one that opens the tenant tx) · `memberProcedure` (active) · `staffProcedure` (owner|instructor) · `ownerProcedure`. The `enforceTenant` middleware reads `session.activeOrganizationId`, loads membership via `getMembership`, then wraps the resolver in `withTenant`. Role/status checks are pure predicates in `@matops/domain` (`isActiveMember`/`isStaff`/`isOwner`), unit-tested.
+- **`@matops/api` and `@matops/auth` are consumed from SOURCE** (no `.d.ts` emit): the `AppRouter` type embeds the whole Better Auth `Auth` type, too large to serialize (TS7056). Their `exports.types` point at `src` and their tsconfig extends `base.json` (noEmit). Do not revert.
+- **Migrations (refines §10):** versioned SQL in `packages/db/migrations`, applied with `pnpm -F @matops/db migrate` (**not** `push` — the RLS role/policy are hand-written in `0001`/`0003`). `drizzle-kit check` runs in CI. Current set: `0000` core tables + `_health`, `0001` RLS role/policy/probe, `0002` Better Auth org tables (organization/member/invitation + `user.phone` + `session.activeOrganizationId`), `0003` role grant.
+- **Auth (refines §6):** magic-link (`sendMagicLink` logs the URL in dev — Resend is Phase 4) + Organization plugin; roles owner/instructor/student in the client-safe `@matops/auth/permissions`; `member.status` defaults `pending`. Discord OAuth was removed.
+- **Testing (refines §10):** RLS/DB behavior is tested with **PGlite** (embedded Postgres) in `packages/db/test`; pure logic with vitest in `packages/domain/test`. CI gates: format · lint · typecheck · test · `drizzle-kit check`.
+
+---
+
+## 1. Principles (the spine)
+
+Four constraints drove every choice; when in doubt, re-derive from these:
+
+1. **Minimal vendor lock** — portable/ejectable core: standard Postgres, open auth, no proprietary reactive engine. (Convex + Clerk deliberately rejected.)
+2. **Simple now, expandable without a major refactor** — MVP is small; the *seams* for later domains are placed now (§8).
+3. **Solo builder, move fast, DX-first** — fewest moving parts; shared types; no codegen pipelines.
+4. **Agentic-coding first** — a maximally conventional, well-documented stack agents know cold → the **create-t3-turbo** pattern.
+
+We also carry forward three *patterns* (not code) from the old app: **domain partitioning**, a **pure policy layer**, and a **structural tenancy seam**.
+
+---
+
+## 2. Stack at a glance
+
+| Layer | Choice | Ticket |
+|---|---|---|
+| Monorepo | Turborepo + pnpm | [07] |
+| Owner web | Next.js (App Router) + shadcn/ui + Tailwind + TanStack Query → **Vercel** | input / [11] |
+| Student mobile | Expo (React Native) + NativeWind + react-native-reusables → **EAS** | input / [11] |
+| API | **tRPC** colocated in Next.js (internal-only; `trpc-to-openapi` hedge) | [01],[15] |
+| Auth | **Better Auth** + Organization plugin (Expo secure-store, org/role) **+ magic-link** | [02],[14],[26] |
+| Student low-friction | **provisional (no-spot) booking** for pending; **QR self check-in**; **public drop-in/lead form** | [22]–[26] |
+| DB access | **Drizzle** + Postgres (**Neon**); driver **`pg` on Vercel Fluid compute → Neon `-pooler`** | [03],[21] |
+| Multi-tenancy | shared DB + `academyId` + **Postgres RLS**; tRPC middleware sets `app.academy_id` per request | [05],[12] |
+| Real-time | **none in v1** — TanStack polling. Live-UI later = a **separate always-on worker** (LISTEN/NOTIFY→SSE), not the serverless API | [04] |
+| Notifications | **push (Expo) + email (Resend)** in v1, via a thin helper — all serverless HTTPS | [17] |
+| Scheduling | recurring templates **materialized lazily on save + a bounded daily Vercel Cron** | [08],[16] |
+
+*Whole stack is TypeScript end to end.*
+
+[01]: issues/01-api-contract-and-runtime.md · [02]: issues/02-auth-stack.md · [03]: issues/03-postgres-access-layer.md · [04]: issues/04-realtime-strategy.md · [05]: issues/05-multitenancy-model.md · [06]: issues/06-hosting-topology.md · [07]: issues/07-monorepo-structure.md · [08]: issues/08-mvp-domain-model.md · [11]: issues/11-design-system.md · [12]: issues/12-tenant-isolation-mechanism.md · [13]: issues/13-booking-write-atomicity.md · [14]: issues/14-better-auth-approval-feasibility.md · [15]: issues/15-api-deployment-shape.md · [16]: issues/16-materialization-job-scaling.md · [17]: issues/17-class-cancellation-notification.md · [18]: issues/18-multi-academy-ux.md · [21]: issues/21-neon-connection-model.md · [22]: issues/22-provisional-booking-capacity.md · [23]: issues/23-pending-capability-never-block.md · [24]: issues/24-qr-self-checkin.md · [25]: issues/25-dropin-lead-form.md · [26]: issues/26-seamless-registration-deeplink.md · [27]: issues/27-home-widget.md
+
+---
+
+## 3. Monorepo layout
+
+```
+apps/
+  nextjs/        owner web + tRPC API route handler (/api/trpc/[trpc]) + cron endpoint
+  expo/          student mobile
+packages/
+  api/            tRPC routers + procedures (the contract; both apps import its type)
+  db/             Drizzle schema (per-domain files) + RLS policies + tenantTx() helper + migrations
+  auth/           Better Auth server config (Organization plugin) + client helpers
+  validators/     Zod schemas shared by api + clients
+  domain/         PURE business logic — booking policy, materialization math (no React/Next/Expo/ctx)
+  notifications/  thin helper: notifyUsers() (Expo Push) + sendEmail() (Resend)
+  ui/             shared design tokens (Tailwind preset) + shareable headless bits
+tooling/
+  eslint/ tsconfig/ tailwind/    shared presets
+```
+
+**Dependency direction:** `apps/*` → `packages/*`; packages never import apps. `db`, `validators`, `domain` are platform-agnostic leaves. **`packages/domain` must stay framework-free** so the server *and* both clients import the same policy functions — this is the re-derived "pure policy layer" and the key testability seam.
+
+---
+
+## 4. Request lifecycle (the core path)
+
+```
+Client (web in-process | Expo over HTTPS)
+  → tRPC procedure
+    → auth middleware     : Better Auth validates session → ctx.user
+    → tenant middleware   : read active academy (Better Auth activeOrganizationId) →
+                            load the member row → assert status='active' + role →
+                            open a tx and set_config('app.academy_id', id, true)  (ctx.tx)
+    → procedure resolver  : calls packages/domain (pure) for decisions;
+                            all reads/writes go through ctx.tx — Postgres RLS
+                            filters every row to app.academy_id
+      → Drizzle (pg) → Postgres (Neon, non-BYPASSRLS role)
+```
+
+The **procedure tiers**: `protectedProcedure` (authed) → `memberProcedure` (authed + active membership, opens the RLS tx) → `staffProcedure` (owner **or** instructor) → `ownerProcedure`. Because RLS filters in the database, resolvers can run plain Drizzle queries and still cannot read another academy's rows.
+
+---
+
+## 5. Tenancy — Postgres RLS (the load-bearing idea)
+
+- **Shared DB, `academyId` on every tenant row, academyId-leading indexes.**
+- **Postgres RLS is the guarantee.** Every tenant table has RLS enabled + a policy `USING (academy_id = current_setting('app.academy_id'))` (and a matching `WITH CHECK` for writes). Note `academy_id` is **`text`** (it holds Better Auth's `organization.id`, a random string, not a UUID) — the policy compares text to text, no cast. The app connects with a **non-`BYPASSRLS` role**. The tenant middleware opens a per-request transaction and runs `select set_config('app.academy_id', <id>, true)` (transaction-local) — the local scope matches the Neon pooler's checkout boundary, so the setting never leaks to a reused connection ([21]).
+- **Why RLS, not an app-side `scopedDb` wrapper:** auto-injecting `where academy_id` into every select/join/update/delete is easy to get wrong (a missed join or raw query leaks). With RLS the middleware sets **one variable** and Postgres does the filtering — app queries stay plain Drizzle and **cannot** leak, even from a buggy query. This is the true by-construction property (the earlier "no RLS, scopedDb" plan was reversed by the review).
+- **Deletion test:** remove the middleware and requests lose their `app.academy_id` → RLS returns *nothing* (fails closed), not another academy's rows. Structural, not disciplinary.
+- **Guardrails:** a lint rule forbids resolvers opening a connection outside the tenant helper; the CI **cross-tenant leak test** (foreign `academy_id` → assert empty) stays as a regression net on the policies.
+- **Identity via Better Auth:** `organization` = academy (`academyId === organization.id`), `member` = membership (role + `status` pending/active), `invitation` = invite link. **These tables keep the plugin's own scoping — do not force RLS on them.** Global/cross-tenant tables (e.g. a future games catalog) get no academy policy and are reached by a trusted **service role** (an enumerated, server-only exception — used by system jobs, never request handlers).
+- **Active academy** comes from Better Auth's `activeOrganizationId`; switching academy = `setActive()` → the next request's `app.academy_id` changes ([18]).
+
+---
+
+## 6. Auth flows (web + mobile)
+
+- **Web:** Better Auth cookie session; server components/route handlers read it; tRPC middleware validates.
+- **Mobile:** `@better-auth/expo` persists the session in `expo-secure-store` (Keychain/Keystore), auto-attaches it to tRPC calls; social OAuth via app `scheme` + server `trustedOrigins`; refresh validated server-side.
+- **Authorization** is *ours*: authN + org/role come from Better Auth; resource-level rules live in the tenant/role tRPC procedures.
+- **Approval + the status trap ([14]):** Better Auth's access checks are **role-based and ignore our `status` field** — a `pending` member who holds a role would pass every check. So we **grant the role only at approval**: a student joining via the student link lands `pending` with **no role** (harmless); the owner approves → role assigned + `status='active'`. Instructors join active via the instructor link. Defense-in-depth: `memberProcedure` also rejects `status !== 'active'`. Pin the Better Auth version + an integration test (`additionalFields` inference bugs).
+- **Contract discipline (mobile version skew):** store apps linger on old builds → tRPC procedures are **additive-only** (never change/remove a shape a shipped app calls). This is the one operational rule the internal-tRPC choice demands; enforce it in review.
+
+---
+
+## 7. Scheduling engine
+
+- **Materialize lazily on save + extend by cron ([16]):** creating/editing a `class_template` materializes its near-term `class` rows **immediately** (in-request), so schedules appear at once. A **bounded daily Vercel Cron** then extends every active template out to a rolling **~6-week horizon** — processing templates **stale-first** with a `LIMIT` + soft time budget, so it never approaches the serverless duration ceiling; leftovers resume next tick. Idempotent via `UNIQUE(templateId, startsAt)` + cursor `template.generatedUntil`. The cron runs cross-academy under the **service role** (outside the tenant seam). Time math (local `startsAtMinutes` + IANA tz → UTC instant, DST-aware) lives in `packages/domain`.
+- **One-off classes:** `templateId` nullable → special classes cost nothing extra.
+- **Class status is `scheduled | cancelled` only ([19]).** "Past/done" is **derived** from `starts_at + duration < now()` — no stored `completed`, no sweep job.
+- **Booking = atomic capacity claim ([13]):** inside the request's RLS transaction, an **atomic conditional `UPDATE`** — `UPDATE class SET booking_count = booking_count + 1 WHERE id=? AND status='scheduled' AND deleted_at IS NULL AND starts_at > now() AND booking_count < capacity RETURNING id` — succeeds only if a spot was free; its row lock serializes concurrent claims (no `SELECT … FOR UPDATE`). Paired with a transition-detecting participation upsert (`UNIQUE(classId, studentId)` prevents double-book; re-book flips `cancelled → booked`). A failed claim rolls back the whole request. This is why **no real-time is needed** for correctness — only display freshness, handled by polling.
+- **Notifications ([17]):** class-cancelled → push + email to booked students; class reminder (cron) → push; membership-approved → push. Sent through `packages/notifications` from the relevant mutations/cron. No open connection, no comms domain.
+- Full data model + invariants: [08] and [assets/schema-draft.ts](./assets/schema-draft.ts).
+
+---
+
+## 8. Expansion seams — how deferred domains plug in without a refactor
+
+The whole "expandable" constraint lives here. Each deferred domain is **additive**: a new `packages/db/schema/<domain>.ts`, a new tRPC router mounted on the root, optionally new `packages/domain/<domain>` pure logic — no change to the tenancy seam, the request path, or existing tables.
+
+| Deferred domain | Plug-point | Why it's additive |
+|---|---|---|
+| **Billing / memberships / payments** | new tables (`membership_type`, `subscription`, `payment`) all carrying `academyId`; a `billing` router; a **payment-gate** step composed *before* the booking resolver | booking already funnels through one tenant procedure — insert a gate; nothing existing changes |
+| **Curriculum / games** | `games` as a **global, cross-tenant** table (no `academyId`) reached via an explicit `globalProcedure` escape hatch (mirrors the seam's allowlist idea); academy curriculum tables are tenant-scoped and reference it | the seam already anticipates a small enumerated global set |
+| **Comms (announcements + in-app DMs)** | `comms` schema + router. *(Transactional push/email already exist in v1 via `packages/notifications`; this adds the in-app messaging surface.)* | no coupling to scheduling beyond reading class/booking ids |
+| **Belts / rank** | per-discipline `belt` + `belt_history` tables, tenant-scoped; a `curriculum`/`identity` router | pure additive; attendance recency signal already exists |
+| **Live in-app updates (WebSocket/SSE)** | a **separate always-on worker** (Fly/Railway) holds the connections and listens to Postgres `LISTEN/NOTIFY`; mutations publish events to it; clients subscribe. *Cannot* live on the serverless API ([15]) | "serverless publishes, a worker subscribes." v1 polling upgrades in place; the main API doesn't move (kept extraction-ready) |
+| **Tiers / entitlements** | a single `getEntitlements(academy)` resolver + a gate; frontend hides nav | one gate, not per-feature tier reads (old app's proven shape) |
+| **Cross-academy views / hard isolation** | aggregated "all my gyms" screens are additive reads over existing memberships; harder physical isolation = promote a tenant to its own schema/DB | RLS is already the v1 guarantee (§5); these are further steps, not the baseline |
+
+**Rule of expansion:** a new domain adds a schema file + a router + (maybe) pure logic. If adding one forces edits to the tenancy layer or existing tables, that's the signal the boundary is wrong — fix the boundary, not the caller.
+
+---
+
+## 9. Deployment topology
+
+```
+Vercel ────── apps/nextjs (web + tRPC API + cron endpoint)   [Fluid compute]
+Neon ──────── Postgres (single shared DB; Better Auth + domain tables)
+                connect: pg driver → Neon "-pooler" endpoint, non-BYPASSRLS role
+EAS ───────── Expo builds / OTA / store submission
+Vercel Cron ─ daily → /api/cron/materialize (protected, service role)
+Expo Push ── phone notifications   |   Resend ── email       (both: outbound HTTPS)
+```
+
+**Escape hatches (nothing is a one-way door):** Next containerizes off Vercel (Docker → Fly/Railway/self); Postgres migrates by dump/restore; the tRPC routers (pure) extract onto `@hono/trpc-server` if a standalone API is ever wanted; **future live-UI adds a separate always-on worker** without moving the API; EAS is build tooling, not data lock.
+
+---
+
+## 10. Cross-cutting engineering
+
+- **Migrations:** `drizzle-kit generate` (versioned SQL) in CI, applied on deploy; `push` in local dev only.
+- **Validation & errors:** Zod at the tRPC boundary; typed error codes (re-derive the old app's `DomainError` set: `NOT_FOUND`, `FORBIDDEN`, `CLASS_FULL`, `BOOKING_NOT_ALLOWED`, …) surfaced as tRPC errors clients map to human toasts.
+- **Testing:** unit-test `packages/domain` (pure → trivial); integration-test tRPC procedures against a test Postgres; **cross-tenant leak suite** in CI (asserts the RLS policies deny a foreign `academy_id`); a Better Auth `additionalFields`/approval integration test ([14]). This is why the pure/boundary split matters — the hard logic is testable without the framework.
+- **Guardrails:** lint rule forbidding resolvers from opening a db connection outside the tenant helper (so `app.academy_id` is always set); `packages/domain` may not import React/Next/Expo/tRPC.
+- **Observability (thin v1):** platform logs (Vercel/Neon) + an append-only `audit_log` table for owner-facing "what happened" — a documented next step, not built day 1.
+
+---
+
+## 11. Open items carried into build (from the map's fog)
+
+Not blockers; sharpen during implementation: offline/sync behavior, CI/observability depth, dev seeding, deep-link setup for the invite flow (Apple App Site Association + Android assetlinks + EAS config — non-trivial, estimate it). Tracked in the map's *Not yet specified*.
+
+---
+
+*Status: all 27 decision tickets resolved; product scope locked (spec.md); **Phase 0 built** — see §0 for the as-built reality and [roadmap.md](roadmap.md) for what's next (Phase 1). This doc stays the design of record: §0 is what exists, §§1–11 are the intent that guides Phases 1+.*

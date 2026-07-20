@@ -1,0 +1,7 @@
+{
+  "name": "@matops/tsconfig",
+  "private": true,
+  "files": [
+    "*.json"
+  ]
+}

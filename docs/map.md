@@ -1,0 +1,107 @@
+<!-- wayfinder:map -->
+# Map: matops — MVP rebuild (product spec + architecture)
+
+> **Naming (read first).** Two distinct projects:
+> - **matops** — THIS project, the from-scratch rebuild being designed here. Repo: `/Users/kuna/projects/matops`. When these docs say "the app", "v1", "the rebuild", or "we build", they mean **matops**.
+> - **MAT** — the OLD, existing app, kept only as a **reference** (patterns, product context, schema instincts). Repo: `/Users/kuna/projects/mat`. Any mention of "the old app" means **MAT**. We do not build on it.
+
+## Destination
+
+A **first-iteration deliverable pair** for **matops** (the from-scratch rebuild of MAT):
+1. an **MVP product spec** (owner web + student mobile, "standard" class-management scope), and
+2. an **architecture design doc** — a portable, expandable foundation that a build team can start from without a major refactor later.
+
+Reaching the end of this map means every decision below is locked and those two documents exist. This effort **carries execution to the point of those two documents** (see Notes override) — but not to code.
+
+## Notes
+
+**Domain:** **matops** is a greenfield rebuild of the grappling-academy admin SaaS. The old app **MAT** lives at `/Users/kuna/projects/mat` — it is a **reference, not a base**. Product context digest (from MAT) was gathered in the first session (see `/Users/kuna/projects/mat/docs/product/` and `docs/technical/`).
+
+**Execution override:** unlike default wayfinder (decisions only), this effort's destination *is* two deliverable documents. The synthesis tickets ([MVP product spec](issues/09-mvp-product-spec.md) and [Architecture design doc](issues/10-architecture-design-doc.md)) produce them. Every other ticket resolves a decision those two documents depend on.
+
+**Settled at charting (destination-fixing decisions — inputs, not tickets):**
+- **Codebase:** greenfield new codebase; carry forward the *patterns* that earned their place in the old app — domain partitioning (ADR-001), the pure booking-policy engine, the tenant seam (ADR-004) — as design lessons re-derived fresh, not copied code.
+- **Vendor lock:** portable / ejectable. Standard Postgres (any host), open auth, plain HTTP API. **Convex is OUT** (proprietary reactive engine = deep lock). **Clerk is OUT** (auth must be open/portable). No proprietary service in the critical data path that can't be migrated.
+- **MVP scope (standard):** academies (tenant), owner + instructor + student accounts, recurring class schedule, student book/cancel against capacity, member roster + approval, instructor attendance marking.
+- **Clients:** Expo/React Native student app + Next.js owner web, in one TS monorepo with shared packages.
+
+**Constraints (sessions 3–4):**
+- **Internal-only API → tRPC.** ~~Client-agnostic API~~ retracted: the API is consumed *only* by our own web + mobile in one monorepo, never handed to third parties. So tRPC's TS-coupling is a non-issue and its zero-codegen DX wins. OpenAPI is retrofittable later via `trpc-to-openapi` if an external need ever appears. Locked in [01](issues/01-api-contract-and-runtime.md).
+- **Multi-academy native, NOT "typical SaaS."** The requirement is clean tenant separation + scaling across many academies — *not* billing/plans/self-serve-signup/marketing machinery. So keep tenancy **simple**: shared DB + `academyId` + an app-level scoped seam (a tRPC middleware injecting academyId + a scoped db client). No RLS / schema-per-tenant in v1. Simplifies [05](issues/05-multitenancy-model.md).
+- **Solo builder (1 person, FE+BE).** Every removable moving part is worth real time. Bias hard to fewer services, shared types, no sync/codegen burden.
+- **Move fast, DX-first, simple-but-scalable.** Velocity over architectural purity; don't over-engineer, don't paint into a corner.
+- **Agentic-coding first.** Prefer stacks agents know cold (most training data, most conventional). This is a first-class selection criterion, and it points the whole effort at the **create-t3-turbo** pattern (see below).
+- **Flawless, simple UX** — crowded niche; wins on UX, not feature count. Quality bar on [09](issues/09-mvp-product-spec.md) + design system [11](issues/11-design-system.md).
+
+**Settled FE stack (input):** Next.js (App Router) + shadcn/ui + Tailwind + TanStack Query, web → **Vercel**. shadcn/ui is web-only → Expo needs its own RN system ([11](issues/11-design-system.md)).
+
+**Through-line — the `create-t3-turbo` pattern.** All the above converge on this canonical, agent-famous template: Turborepo monorepo · Next.js (web) + Expo (mobile) · **tRPC** (colocated in Next, both clients consume it) · Tailwind + NativeWind · Prisma-or-Drizzle · Better Auth. It IS this stack, is maximally known to coding agents, and is built for a solo dev. Treat it as the reference skeleton the build phase scaffolds from. Downstream tickets ([03](issues/03-postgres-access-layer.md) ORM, [06](issues/06-hosting-topology.md) hosting, [07](issues/07-monorepo-structure.md) monorepo, [11](issues/11-design-system.md) design system) should default to its conventions unless there's a reason to diverge.
+
+**Skills every session should consult:** `/grilling` and `/domain-modeling` for decision tickets; `/research` for the research tickets; `/prototype` for the product-spec ticket.
+
+**Stack (whole effort is TypeScript end to end.)**
+
+## Decisions so far
+
+<!-- one line per closed ticket; zoom the link for detail -->
+
+- [API contract & backend runtime](issues/01-api-contract-and-runtime.md) — **tRPC colocated in Next.js** (create-t3-turbo pattern); zero-codegen end-to-end types, both clients consume the same router. Reversed from an earlier REST+OpenAPI/Hono lock once the API was confirmed internal-only. Cautions: additive-only contract for mobile version skew; `trpc-to-openapi` is the external-API hedge.
+- [Auth stack for web + Expo mobile](issues/02-auth-stack.md) — **Better Auth**: Postgres-native (zero lock), first-class Expo secure-store sessions, Organization plugin carries academy→role; authZ layered in the tenancy seam.
+- [Postgres access layer (ORM)](issues/03-postgres-access-layer.md) — **Drizzle** (drizzle-kit migrations, Neon driver). Chosen over Prisma for T3-default consistency, lightest serverless cold starts, cleanest explicit `scopedDb(academyId)` tenant seam, and purest portability. Per-domain schema files.
+- [Real-time strategy (post-Convex)](issues/04-realtime-strategy.md) — **No persistent realtime for v1.** Capacity = server-side transactional integrity (tx + unique constraint); TanStack Query refetch-on-focus + light polling on hot screens; SSE + Postgres LISTEN/NOTIFY is the additive upgrade path.
+- [Multi-tenancy enforcement](issues/05-multitenancy-model.md) — **Shared DB + `academyId` + tRPC tenant middleware** injecting a `scopedDb(academyId)` Drizzle client; resolvers never see raw db (deletion-test load-bearing). No RLS/schema-per-tenant in v1. Membership-in-academy is a first-class join.
+- [Hosting & deployment topology](issues/06-hosting-topology.md) — **Web+API together on Vercel · Neon Postgres · EAS for mobile.** Escape hatches: Next containerizable off Vercel, tRPC extractable to Hono, Postgres dump/restore portable.
+- [Monorepo structure & shared packages](issues/07-monorepo-structure.md) — **Turborepo + pnpm, create-t3-turbo layout**: `apps/{nextjs,expo}` + `packages/{api,db,auth,validators,domain,ui}` + `tooling/*`. Types shared via tRPC (no codegen); `packages/domain` framework-free.
+- [Cross-platform design system](issues/11-design-system.md) — **shadcn/ui (web) + NativeWind & react-native-reusables (mobile), shared Tailwind-preset tokens.** Tokens/headless shared; rendered components are platform-specific.
+- [MVP domain model & schema](issues/08-mvp-domain-model.md) — **Identity reuses Better Auth org/member/invitation (academyId = organization.id); scheduling domain = 3 tables.** D1 → materialize-ahead via scheduled job (Vercel Cron), one-off classes free. D2 → **unified `classParticipation`** (orthogonal booking+attendance axes); `UNIQUE(classId,studentId)` = double-book guard, capacity transactional. Draft: [assets/schema-draft.ts](assets/schema-draft.ts).
+- [MVP product spec](issues/09-mvp-product-spec.md) — **DELIVERABLE:** [spec.md](spec.md). Student mobile (7 screens, ≤3-tap book) + owner/instructor web (6 screens), two core loops, approval gate, transactional capacity, flawless empty/error states, explicit not-in-v1.
+- [Architecture design doc](issues/10-architecture-design-doc.md) — **DELIVERABLE:** [architecture.md](architecture.md). Full synthesis + the expandability spine (§8): every deferred domain is additive (schema file + router + pure logic), seam stays untouched.
+- [Neon driver + serverless connection model](issues/21-neon-connection-model.md) — *(review wave)* **Facts:** `neon-http` = no interactive tx (fine for atomic UPDATE); WebSocket/`pg` = full tx + row locks. Pooler (txn mode) breaks `SET`/`LISTEN-NOTIFY`/advisory locks; RLS via `SET LOCAL`/`set_config(...,true)` in a per-request tx. Recommended: **`pg` + Vercel Fluid compute on the `-pooler` endpoint**. LISTEN/NOTIFY needs a long-lived worker.
+- [Better Auth Organization: pending-approval feasibility](issues/14-better-auth-approval-feasibility.md) — *(review wave)* **Keep the plugin's `member` table + custom `status` field** (v1.3 `additionalFields`); `addMember` creates a pending member without an invitation. **Risk:** the plugin ignores status in all access checks — a pending member with a role passes everything. Mitigation: enforce `status==='active'` in the tenant middleware and/or **grant the role only at approval**.
+- [API deployment shape](issues/15-api-deployment-shape.md) — *(review wave)* **In-Next serverless for v1, `packages/api` kept extraction-ready.** Single Next app on Vercel (web + tRPC + cron), `pg` on Fluid compute + Neon pooler. Everything v1 needs runs serverless; DB-driven live updates (deferred) become a *separate small worker* later, not an API rewrite. Corrects the "SSE on the same API" claim in 06/architecture §9.
+- [Tenant isolation mechanism](issues/12-tenant-isolation-mechanism.md) — *(review wave)* **Postgres RLS is the guarantee** (reverses "no RLS in v1"). Policy per tenant table `USING (academy_id = current_setting('app.academy_id'))`; non-BYPASSRLS role; per-request `SET LOCAL` in a transaction (works on Neon pooler). App queries stay plain and cannot leak. Better Auth tables keep plugin scoping; leak-test kept as regression net. Corrects architecture §5.
+- [v1 notifications: push + email](issues/17-class-cancellation-notification.md) — *(review wave)* **Push folded into v1.** Expo Push (mobile) + Resend email, via a thin `packages/notifications` helper — all serverless HTTPS, no WebSocket. v1 events: class cancelled (push+email), class reminder (cron), membership approved (push). **WebSocket/live-UI stays deferred** ([04](issues/04-realtime-strategy.md)): serverless publishes, a future worker subscribes.
+- [Booking write atomicity](issues/13-booking-write-atomicity.md) — *(review wave)* **Atomic conditional `UPDATE` claims capacity** (`WHERE booking_count < capacity`, row-lock serializes concurrent claims), + transition-detected participation upsert, inside the RLS transaction; failed claim rolls back. No `FOR UPDATE`. Re-book = same path (ON CONFLICT flips cancelled→booked); cancel decrements floored. Corrects architecture §7.
+- [Instructor permissions + approval gate](issues/20-instructor-permissions-and-approval-gate.md) — *(review wave → pressure-test)* **Instructors run the whole schedule once approved** (all classes+templates+attendance; owner-only for roster/settings/invites). **Approval is now uniform**: students *and* coaches join pending/view-only; owner approval grants the role (closes leaked-instructor-link risk). Role granted only at approval (safe given Better Auth ignores status).
+- [Class `completed` status](issues/19-class-completed-transition.md) — *(review wave)* **Dropped.** `class.status` = `'scheduled' | 'cancelled'`; "past/done" is derived from `starts_at + duration < now()`, never stored. No sweep job needed. Schema draft updated.
+- [Materialization job: scheduler + scaling](issues/16-materialization-job-scaling.md) — *(review wave)* **Vercel Cron (daily) + lazy materialization on template write + bounded, resumable, stale-first batch** (LIMIT + time budget → never hits the serverless duration ceiling; idempotent via `generated_until` + `UNIQUE(template_id,starts_at)`). Runs cross-academy under a trusted **service role** outside the tenant seam. No queue/pg_cron/worker in v1.
+- [Multi-academy: join + switch UX](issues/18-multi-academy-ux.md) — *(review wave)* **Data supports many; v1 UI = one active academy + basic switcher** (Better Auth `activeOrganizationId` → drives RLS scope; shown only if 2+). Client is the role lens (web=owner/instructor, mobile=student). Join 2nd via another invite link. Cross-academy aggregated views deferred.
+- [Booking & capacity model](issues/22-provisional-booking-capacity.md) — *(friction wave → pressure-test)* **No hard cap in v1.** Booking is never blocked; at/over capacity shows red "may be busy" + confirm; owner manages the room. Pending bookings are tagged "pending approval" (display only). Hard cap / priority / waitlist / no-show / cancel-cutoff → **next iteration**.
+- [Pending capability — never block](issues/23-pending-capability-never-block.md) — *(friction wave)* New **`enrolledProcedure`** tier: a pending member can read own-academy schedule + provisional book/cancel + check-in, nothing else. Full `student` role still granted **only at approval** (14/20 security preserved).
+- [QR self check-in](issues/24-qr-self-checkin.md) — *(friction wave)* **One static per-gym QR** → marks present for today's class (books first if needed). Attendance recorded **even if full** (physically present ≠ reservation). Booking = book only; **QR = book + attend**.
+- [Drop-in / no-app public form](issues/25-dropin-lead-form.md) — *(friction wave)* Same venue QR → **public web form** (name, surname, phone, email optional) → drop-in **lead + attendance**, no capacity. Owner sees + marks + keeps for follow-up. QR-in-gym = anti-spam. New `drop_in`/lead table + public endpoint.
+- [Seamless registration + deep link](issues/26-seamless-registration-deeplink.md) — *(friction wave)* Preselected academy · social **or** email+**magic link** · minimal fields (+phone) · **see schedule + provisionally book while pending** · push on approval · no-app → public form fallback.
+- [Home widget](issues/27-home-widget.md) — *(friction wave)* **Fast-follow** (not v1-launch): today's classes + one-tap book/cancel; needs native widget code. API kept widget-ready.
+
+---
+
+**➕ Low-friction student wave (session 11) — decided, docs pending.** After the review wave, a product pass on **student adoption** ("owners want everyone tracked; students find booking apps a chore") added a decided cluster (tickets 22–27). Core reframe: **let students in with almost no friction, confirm them as they engage.** Capacity is now **two-tier** — only approved members hold real spots; pending members and drop-ins book **provisionally** (no spot, never blocked). Adds **QR self check-in**, a **public drop-in/lead form**, **seamless magic-link registration + browse/book-while-pending**, and a **home widget** (fast-follow). **Folded in:** the product detail is now in [spec.md](spec.md) (§ student-friction principle, S1–S3, S5, S8, O4–O6, §4); [architecture.md](architecture.md) + the schema draft carry it at **reference level** — deep technical write-up deferred while we stay conceptual.
+
+**🔒 PRODUCT SCOPE LOCKED (session 12).** A full product pressure-test tightened the model and it is now locked in [spec.md](spec.md): **no hard capacity cap** (soft red "may be busy", owner manages the room; hygiene features → next iteration) · **uniform approval** (coaches also join pending/view-only — closes the leaked-link risk) · **email required** for members · **schedule privacy** (only approved members see attendee names) · **drop-in = first-visitors only** + consent + owner follow-up · **owner onboarding seamless** too. The small **edge rules are settled** (spec §4): edit-a-class → notify on time/instructor change, soft capacity cut, template edits hit future instances only; pending visit-count nudge; leads deduped by phone; owner can promote a co-owner; history kept on removal; QR-with-no-class → general lead. Applied to spec + tickets 13/20/22/23/25/26. **Next:** implementation, or fold into architecture/schema when leaving conceptual mode.
+
+**🗺️ DELIVERY PLAN (session 13).** Added two docs that carry the effort from "scope locked" to "shipped": [delivery.md](delivery.md) — the rulebook (four doc altitudes, the **surface matrix** BE/FE/app tracking, the anti-drift Definition of Done, the per-slice loop, and the repo `CLAUDE.md` snippet that makes specs persistent memory for agents) — and [roadmap.md](roadmap.md) — the live plan: **6 phases · 25 vertical slices**, each with a status cell per surface (DB · API · Web · Mob · Shared · Infra) and spec/ticket back-references. Phase order: 0 Foundations → 1 Identity → 2 Scheduling → 3 Booking → 4 Notify+Polish → 5 Hardening. Parked list = next-iteration (caps, widget, live UI, deferred domains). Nothing built yet.
+
+**Review wave (session 8) — done.** All 21 earlier tickets resolved (11 charting + 10 review). Deliverables incorporate: **RLS** tenant isolation; **atomic `UPDATE`** booking; **in-Next serverless** (`pg` + Fluid + Neon pooler), API extraction-ready; **push + email** notifications (live-UI via a future worker); `completed` **dropped**; **lazy + bounded-cron** materialization; instructors run the schedule; students approved / staff direct (role at approval); **basic academy switcher**.
+
+## Not yet specified
+
+<!-- in-scope fog; graduates into tickets as the frontier advances -->
+
+- **Offline / sync behavior** for the mobile student app — how much works without connectivity; sharpens once the [real-time strategy](issues/04-realtime-strategy.md) is decided.
+- **CI/CD, testing strategy, observability** for the monorepo — depends on hosting + repo structure.
+- **Dev environment / seeding / migrations** workflow — depends on the DB access layer.
+- **Expansion seams for deferred domains** (billing, curriculum, comms, belts) — the exact plug-points sharpen after the core architecture doc lands; that's the whole point of the "expandable" constraint, so expect these to graduate into concrete seam tickets during the [architecture design doc](issues/10-architecture-design-doc.md).
+
+## Out of scope
+
+<!-- ruled beyond the destination; never graduates -->
+
+- **Memberships, subscriptions, payments / billing** — past the standard MVP scope boundary; deferred.
+- **Belts / rank progression, curriculum planner, games library, comms (announcements/DMs)** — deferred; the architecture must leave room (see fog) but v1 does not build them.
+- **Convex, Clerk** — ruled out by the vendor-lock decision (not "later work", simply not used).
+- **Card processing / Stripe, multi-academy franchise UI, i18n, super-admin UI** — inherited non-goals from the original product positioning; remain out.
+
+**Scope adjustments (friction wave):**
+- The "no public unauthenticated page" non-goal is **softened**: a controlled per-gym **check-in/lead form** ([25](issues/25-dropin-lead-form.md)) is now IN. A public *booking* page stays OUT.
+- "Waitlists" stays OUT as a feature, but a **minimal provisional→confirmed-on-approval** behavior ([22](issues/22-provisional-booking-capacity.md)) is accepted (no queue ordering).
+- **Home widget** ([27](issues/27-home-widget.md)) is a planned **fast-follow**, not part of the v1 launch build.
