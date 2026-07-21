@@ -36,19 +36,6 @@ export async function generateAcademyCode(): Promise<string> {
 }
 
 /**
- * Allocate a code and persist it on a freshly created academy. Called from the
- * auth `afterCreateOrganization` hook, so a new gym has a shareable code at once.
- */
-export async function assignAcademyCode(academyId: string): Promise<string> {
-  const code = await generateAcademyCode();
-  await db
-    .update(organization)
-    .set({ publicCode: code })
-    .where(eq(organization.id, academyId));
-  return code;
-}
-
-/**
  * Resolve a shared code → the academy id + name, or null. Backs the mobile
  * `academy.findByCode` search; the caller then confirms and joins.
  */

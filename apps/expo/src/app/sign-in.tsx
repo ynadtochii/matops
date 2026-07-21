@@ -1,38 +1,62 @@
 import { useState } from "react";
 import { Text, View } from "react-native";
-import { Stack, useLocalSearchParams } from "expo-router";
+import { Stack as RouterStack, useLocalSearchParams } from "expo-router";
 
-import { Button } from "@matops/ui/button";
-
-import { Heading, Muted, Screen, TextField } from "~/components/ui";
+import {
+  Button,
+  Heading,
+  Muted,
+  OrDivider,
+  Screen,
+  Stack,
+  TextField,
+  useTheme,
+} from "~/components/ui";
 import { authClient } from "~/utils/auth";
 
 /**
- * Sign in (spec S1) — passwordless magic link. Email only; the student's name +
- * phone are captured later in the join flow (S2). The `callbackURL` (a relative
- * path) is turned into the app's `matops://` deep link by @better-auth/expo, so
- * opening the link bounces back into the app and the auth gate (index) routes
- * onward. When reached from an invite (S2), `redirect` carries the join path so
- * the magic-link return lands back on the invite — the token is not lost.
+ * Sign in (spec S1) — social login (Google) or a passwordless magic link. Email
+ * only for the link; the student's name + phone are captured later in the join
+ * flow (S2). The `callbackURL` (a relative path) is turned into the app's
+ * `matops://` deep link by @better-auth/expo, so the return bounces back into
+ * the app and the auth gate (index) routes onward. `redirect` carries an
+ * in-flight invite so the magic-link return lands back on it.
  *
  * In development the link prints to the Next.js console (email is Phase 4) — the
  * user copies the `[auth] magic link …` URL and opens it.
  */
 export default function SignIn() {
+  const t = useTheme();
   const { redirect } = useLocalSearchParams<{ redirect?: string }>();
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [pending, setPending] = useState(false);
+  const [googlePending, setGooglePending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const canSend = email.includes("@") && !pending;
+  const canSend = email.includes("@") && !pending && !googlePending;
+  const callbackURL = redirect?.startsWith("/") ? redirect : "/";
+
+  // Continue with Google (spec S1 social login, ADR 35). @better-auth/expo opens
+  // the OAuth flow in a system browser (expo-web-browser) and returns the session
+  // to the app via the trusted `matops://` scheme, so the auth gate routes onward
+  // — same landing as magic-link.
+  const signInGoogle = async () => {
+    setGooglePending(true);
+    setError(null);
+    const res = await authClient.signIn.social({ provider: "google", callbackURL });
+    setGooglePending(false);
+    if (res.error) {
+      setError(res.error.message ?? "Could not sign in with Google. Try again.");
+    }
+  };
 
   const send = async () => {
     setPending(true);
     setError(null);
     const res = await authClient.signIn.magicLink({
       email: email.trim(),
-      callbackURL: redirect?.startsWith("/") ? redirect : "/",
+      callbackURL,
     });
     setPending(false);
     if (res.error) {
@@ -43,55 +67,73 @@ export default function SignIn() {
   };
 
   return (
-    <Screen className="justify-center gap-6">
-      <Stack.Screen options={{ title: "Sign in" }} />
+    <Screen center>
+      <RouterStack.Screen options={{ title: "Sign in" }} />
 
-      <View className="gap-2">
-        <Heading>Sign in</Heading>
-        <Muted>
-          We&apos;ll email you a one-tap sign-in link — no password to remember.
-        </Muted>
-      </View>
+      <Stack gap={24}>
+        <Stack gap={8}>
+          <Heading>Sign in</Heading>
+          <Muted>
+            Continue with Google, or we&apos;ll email you a one-tap sign-in link
+            — no password to remember.
+          </Muted>
+        </Stack>
 
-      {sent ? (
-        <View className="gap-4">
-          <View className="bg-muted gap-1 rounded-md p-4">
-            <Text className="text-foreground text-base font-medium">
-              Check your email
-            </Text>
-            <Muted>
-              Open the sign-in link we sent to {email.trim()}. In development,
-              copy the “[auth] magic link …” line from the Next.js terminal and
-              open it.
-            </Muted>
-          </View>
-          <Button
-            variant="ghost"
-            onPress={() => {
-              setSent(false);
-              setError(null);
-            }}
-          >
-            Use a different email
-          </Button>
-        </View>
-      ) : (
-        <View className="gap-4">
-          <TextField
-            label="Email"
-            value={email}
-            onChangeText={setEmail}
-            placeholder="you@example.com"
-            autoCapitalize="none"
-            keyboardType="email-address"
-            autoFocus
-          />
-          {error && <Text className="text-destructive text-sm">{error}</Text>}
-          <Button onPress={send} disabled={!canSend}>
-            {pending ? "Sending…" : "Send magic link"}
-          </Button>
-        </View>
-      )}
+        {sent ? (
+          <Stack gap={16}>
+            <View
+              style={{ gap: 4, backgroundColor: t.muted, borderRadius: 8, padding: 16 }}
+            >
+              <Text
+                style={{ fontSize: 16, fontWeight: "500", color: t.foreground }}
+              >
+                Check your email
+              </Text>
+              <Muted>
+                Open the sign-in link we sent to {email.trim()}. In development,
+                copy the “[auth] magic link …” line from the Next.js terminal and
+                open it.
+              </Muted>
+            </View>
+            <Button
+              label="Use a different email"
+              variant="ghost"
+              onPress={() => {
+                setSent(false);
+                setError(null);
+              }}
+            />
+          </Stack>
+        ) : (
+          <Stack gap={16}>
+            <Button
+              label={googlePending ? "Opening Google…" : "Continue with Google"}
+              variant="outline"
+              onPress={signInGoogle}
+              disabled={pending || googlePending}
+            />
+
+            <OrDivider />
+
+            <TextField
+              label="Email"
+              value={email}
+              onChangeText={setEmail}
+              placeholder="you@example.com"
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+            {error ? (
+              <Text style={{ color: t.destructive, fontSize: 14 }}>{error}</Text>
+            ) : null}
+            <Button
+              label={pending ? "Sending…" : "Send magic link"}
+              onPress={send}
+              disabled={!canSend}
+            />
+          </Stack>
+        )}
+      </Stack>
     </Screen>
   );
 }

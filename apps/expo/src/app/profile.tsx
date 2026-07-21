@@ -1,9 +1,16 @@
 import { useState } from "react";
-import { Pressable, Switch, Text, useColorScheme, View } from "react-native";
-import { Stack, useRouter } from "expo-router";
+import { Pressable, Switch, Text, View } from "react-native";
+import { Stack as RouterStack, useRouter } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { Button, Heading, Loading, Screen } from "~/components/ui";
+import {
+  Button,
+  Heading,
+  Loading,
+  Screen,
+  Stack,
+  useTheme,
+} from "~/components/ui";
 import { trpc } from "~/utils/api";
 import { authClient } from "~/utils/auth";
 import {
@@ -21,7 +28,7 @@ import {
  * preference needed. Class reminders and cancellations both ride push.
  */
 function NotificationToggle() {
-  const scheme = useColorScheme() === "dark" ? "dark" : "light";
+  const t = useTheme();
   const [on, setOn] = useState(pushEnabled());
   const register = useMutation(trpc.pushToken.register.mutationOptions());
   const unregister = useMutation(trpc.pushToken.unregister.mutationOptions());
@@ -47,20 +54,26 @@ function NotificationToggle() {
   };
 
   return (
-    <View className="flex-row items-center justify-between gap-4">
-      <View className="flex-1">
-        <Text className="text-foreground text-base">Push notifications</Text>
-        <Text className="text-muted-foreground text-sm">
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 16,
+      }}
+    >
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 16, color: t.foreground }}>
+          Push notifications
+        </Text>
+        <Text style={{ fontSize: 14, color: t.mutedForeground }}>
           Class reminders and cancellations.
         </Text>
       </View>
       <Switch
         value={on}
         onValueChange={toggle}
-        trackColor={{
-          true: scheme === "dark" ? "#fafaf9" : "#1c1917",
-          false: "#d6d3d1",
-        }}
+        trackColor={{ true: t.primary, false: "#d6d3d1" }}
         thumbColor="#ffffff"
       />
     </View>
@@ -69,13 +82,38 @@ function NotificationToggle() {
 
 /** One labelled fact row. */
 function Field({ label, value }: { label: string; value: string }) {
+  const t = useTheme();
   return (
-    <View className="gap-1">
-      <Text className="text-muted-foreground text-xs font-semibold uppercase">
+    <View style={{ gap: 4 }}>
+      <Text
+        style={{
+          fontSize: 12,
+          fontWeight: "600",
+          textTransform: "uppercase",
+          color: t.mutedForeground,
+        }}
+      >
         {label}
       </Text>
-      <Text className="text-foreground text-base">{value}</Text>
+      <Text style={{ fontSize: 16, color: t.foreground }}>{value}</Text>
     </View>
+  );
+}
+
+/** A small section label above a group. */
+function SectionLabel({ children }: { children: string }) {
+  const t = useTheme();
+  return (
+    <Text
+      style={{
+        fontSize: 12,
+        fontWeight: "600",
+        textTransform: "uppercase",
+        color: t.mutedForeground,
+      }}
+    >
+      {children}
+    </Text>
   );
 }
 
@@ -87,6 +125,7 @@ function Field({ label, value }: { label: string; value: string }) {
  * lists academies where the user is a student, not the ones they run.
  */
 export default function Profile() {
+  const t = useTheme();
   const router = useRouter();
   const queryClient = useQueryClient();
   const { data: session } = authClient.useSession();
@@ -126,60 +165,65 @@ export default function Profile() {
   const activeId = current.data?.academyId;
 
   return (
-    <Screen className="gap-6">
-      <Stack.Screen options={{ title: "Profile" }} />
+    <Screen>
+      <RouterStack.Screen options={{ title: "Profile" }} />
 
-      <Heading>{user.name || user.email}</Heading>
+      <Stack gap={24}>
+        <Heading>{user.name || user.email}</Heading>
 
-      <View className="gap-5">
-        <Field label="Name" value={user.name || "—"} />
-        <Field label="Phone" value={phone} />
-        <Field label="Email" value={user.email} />
-        <Field label="Current academy" value={current.data?.name ?? "—"} />
-      </View>
+        <Stack gap={20}>
+          <Field label="Name" value={user.name || "—"} />
+          <Field label="Phone" value={phone} />
+          <Field label="Email" value={user.email} />
+          <Field label="Current academy" value={current.data?.name ?? "—"} />
+        </Stack>
 
-      {list.length >= 2 && (
-        <View className="gap-2">
-          <Text className="text-muted-foreground text-xs font-semibold uppercase">
-            Switch academy
-          </Text>
-          {list.map((a) => {
-            const isActive = a.academyId === activeId;
-            return (
-              <Pressable
-                key={a.academyId}
-                disabled={isActive || setActive.isPending}
-                onPress={() => setActive.mutate({ academyId: a.academyId })}
-                className={`flex-row items-center justify-between rounded-lg p-4 ${
-                  isActive ? "bg-primary" : "bg-muted"
-                }`}
-              >
-                <Text
-                  className={
-                    isActive
-                      ? "text-primary-foreground text-base font-medium"
-                      : "text-foreground text-base"
-                  }
+        {list.length >= 2 && (
+          <Stack gap={8}>
+            <SectionLabel>Switch academy</SectionLabel>
+            {list.map((a) => {
+              const isActive = a.academyId === activeId;
+              return (
+                <Pressable
+                  key={a.academyId}
+                  disabled={isActive || setActive.isPending}
+                  onPress={() => setActive.mutate({ academyId: a.academyId })}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    borderRadius: 8,
+                    padding: 16,
+                    backgroundColor: isActive ? t.primary : t.muted,
+                  }}
                 >
-                  {a.name}
-                </Text>
-                {isActive && (
-                  <Text className="text-primary-foreground text-base">✓</Text>
-                )}
-              </Pressable>
-            );
-          })}
-        </View>
-      )}
+                  <Text
+                    style={{
+                      fontSize: 16,
+                      fontWeight: isActive ? "500" : "400",
+                      color: isActive ? t.primaryForeground : t.foreground,
+                    }}
+                  >
+                    {a.name}
+                  </Text>
+                  {isActive && (
+                    <Text style={{ fontSize: 16, color: t.primaryForeground }}>
+                      ✓
+                    </Text>
+                  )}
+                </Pressable>
+              );
+            })}
+          </Stack>
+        )}
 
-      <View className="gap-2">
-        <Text className="text-muted-foreground text-xs font-semibold uppercase">
-          Notifications
-        </Text>
-        <NotificationToggle />
-      </View>
+        <Stack gap={8}>
+          <SectionLabel>Notifications</SectionLabel>
+          <NotificationToggle />
+        </Stack>
 
-      <Button label="Sign out" variant="outline" onPress={signOut} />
+        <Button label="Sign out" variant="outline" onPress={signOut} />
+      </Stack>
     </Screen>
   );
 }

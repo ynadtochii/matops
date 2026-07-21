@@ -23,14 +23,20 @@ Legend: `[ ]` = to verify on device · note the build (iOS / Android + version).
 
 ---
 
-## S1 · Sign in (magic link) — device-only
+## S1 · Sign in (magic link) — device-VERIFIED (simulator, 2026-07-21)
 
-- [ ] Enter email → "Check your email" state.
-- [ ] Copy the `[auth] magic link for …` URL from the `pnpm dev:next` terminal,
-      open it on the device.
-- [ ] The link **bounces back into the app** (not Safari) and the auth gate routes
-      onward. *(This is the `matops://` return — the main device-only risk.)*
-- [ ] Signed-in with no academy → lands on **"Join a gym"** (onboarding).
+The terminal logs **two** links per sign-in: the web `[auth] magic link …` (http)
+and `[auth] mobile deep link …: matops://magic-link?token=…`. **Mobile must use the
+deep link** — opening the http link in Safari sets the session cookie in the
+browser, not the app, so the app can't sign in. `app/magic-link.tsx` verifies the
+token from the app's own client (the cookie then lands in SecureStore).
+
+- [x] Enter email → "Check your email" state.
+- [x] Open the **`matops://magic-link?token=…`** deep link (e.g.
+      `xcrun simctl openurl booted "matops://magic-link?token=…"`, tap **Open**).
+- [x] The app verifies and the auth gate routes onward — **not** stuck on sign-in.
+- [x] Signed-in with no academy → lands on **"Join a gym"** (onboarding).
+- [ ] Real-device retest (email link tap, not simctl) once EAS is set up (Phase 5).
 
 ## S2 · Join by academy code (slice 1.7) — the v1 flow
 

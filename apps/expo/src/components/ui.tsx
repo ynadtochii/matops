@@ -1,45 +1,139 @@
 import type { ReactNode } from "react";
+import type { StyleProp, ViewStyle } from "react-native";
 import {
   ActivityIndicator,
   Pressable,
   Text,
   TextInput,
+  useColorScheme,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 /**
- * A tiny NativeWind RN UI kit for the student app — the mobile twin of the web
- * `@matops/ui`. Class names use the shared theme tokens (`bg-background`,
- * `text-foreground`, `bg-muted`, `text-primary`, `text-destructive`,
- * `text-muted-foreground`) so light/dark follow the same palette as the web.
+ * A tiny RN UI kit for the student app — the mobile twin of the web
+ * `@matops/ui`. The palette mirrors the shared design tokens
+ * (`@matops/tailwind-config/theme`), so light/dark follow the same colors as the
+ * web.
+ *
+ * NOTE on styling: these primitives use **explicit React Native styles**, not
+ * NativeWind classes. NativeWind v5 (preview) does not reliably translate every
+ * utility on native (spacing, flex alignment, and foreground colors were
+ * dropping), which left buttons cramped and their labels unreadable. Explicit
+ * styles keep the login/logout and join screens correct regardless. Colors come
+ * from `useTheme()` so both schemes render right.
  */
+
+/** Design tokens (mirror tooling/tailwind/theme.css). */
+const light = {
+  background: "#ffffff",
+  foreground: "#0c0a09",
+  primary: "#1c1917",
+  primaryForeground: "#fafaf9",
+  muted: "#f5f5f4",
+  mutedForeground: "#79716b",
+  border: "#e7e5e4",
+  input: "#e7e5e4",
+  destructive: "#e40014",
+};
+
+const dark: typeof light = {
+  background: "#000000",
+  foreground: "#fafaf9",
+  primary: "#fafaf9",
+  primaryForeground: "#1c1917",
+  muted: "#292524",
+  mutedForeground: "#a6a09b",
+  border: "#292524",
+  input: "#292524",
+  destructive: "#fb2c36",
+};
+
+export type Theme = typeof light;
+
+/** The active palette for the device color scheme. */
+export function useTheme(): Theme {
+  return useColorScheme() === "dark" ? dark : light;
+}
+
+const RADIUS = 8;
 
 /** Header colors for the expo-router Stack (which needs hex, not classNames). */
 export const headerColors = {
-  light: { bg: "#ffffff", tint: "#0c0a09" },
-  dark: { bg: "#0a0908", tint: "#fafaf9" },
+  light: { bg: light.background, tint: light.foreground },
+  dark: { bg: dark.background, tint: dark.foreground },
 };
 
 /** Full-screen padded surface. Wrap every screen in this. */
 export function Screen({
   children,
+  center = false,
   className = "",
+  style,
 }: {
   children: ReactNode;
+  /** Center content vertically (auth/onboarding screens). */
+  center?: boolean;
+  /** Legacy NativeWind classes for screens not yet ported to explicit styles. */
   className?: string;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const t = useTheme();
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: t.background }}>
+      <View
+        className={className}
+        style={[
+          { flex: 1, padding: 16 },
+          center && { justifyContent: "center" },
+          style,
+        ]}
+      >
+        {children}
+      </View>
+    </SafeAreaView>
+  );
+}
+
+/** Vertical (or horizontal) stack with a reliable gap. */
+export function Stack({
+  children,
+  gap = 12,
+  row = false,
+  center = false,
+  style,
+}: {
+  children: ReactNode;
+  gap?: number;
+  row?: boolean;
+  center?: boolean;
+  style?: StyleProp<ViewStyle>;
 }) {
   return (
-    <SafeAreaView className="bg-background flex-1">
-      <View className={`flex-1 p-4 ${className}`}>{children}</View>
-    </SafeAreaView>
+    <View
+      style={[
+        { gap, flexDirection: row ? "row" : "column" },
+        center && { alignItems: "center" },
+        style,
+      ]}
+    >
+      {children}
+    </View>
   );
 }
 
 /** Centered spinner — the loading state between auth/query resolutions. */
 export function Loading() {
+  const t = useTheme();
   return (
-    <SafeAreaView className="bg-background flex-1 items-center justify-center">
+    <SafeAreaView
+      style={{
+        flex: 1,
+        backgroundColor: t.background,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
       <ActivityIndicator />
     </SafeAreaView>
   );
@@ -52,34 +146,37 @@ export function Button({
   onPress,
   variant = "primary",
   disabled = false,
-  className = "",
 }: {
   label: string;
   onPress: () => void;
   variant?: ButtonVariant;
   disabled?: boolean;
-  className?: string;
 }) {
-  const base =
-    "h-11 items-center justify-center rounded-md px-4 flex-row gap-2";
-  const byVariant: Record<ButtonVariant, string> = {
-    primary: "bg-primary",
-    outline: "border border-input bg-background",
-    ghost: "bg-transparent",
-  };
-  const textByVariant: Record<ButtonVariant, string> = {
-    primary: "text-primary-foreground",
-    outline: "text-foreground",
-    ghost: "text-foreground",
-  };
+  const t = useTheme();
+  const bg =
+    variant === "primary" ? t.primary : variant === "outline" ? t.background : "transparent";
+  const textColor = variant === "primary" ? t.primaryForeground : t.foreground;
   return (
     <Pressable
       accessibilityRole="button"
       disabled={disabled}
       onPress={onPress}
-      className={`${base} ${byVariant[variant]} ${disabled ? "opacity-50" : ""} ${className}`}
+      style={({ pressed }) => [
+        {
+          height: 48,
+          borderRadius: RADIUS,
+          paddingHorizontal: 16,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 8,
+          backgroundColor: bg,
+          opacity: disabled ? 0.5 : pressed ? 0.85 : 1,
+        },
+        variant === "outline" && { borderWidth: 1, borderColor: t.input },
+      ]}
     >
-      <Text className={`text-base font-medium ${textByVariant[variant]}`}>
+      <Text style={{ fontSize: 16, fontWeight: "600", color: textColor }}>
         {label}
       </Text>
     </Pressable>
@@ -103,19 +200,43 @@ export function TextField({
   keyboardType?: "default" | "email-address" | "phone-pad";
   autoFocus?: boolean;
 }) {
+  const t = useTheme();
   return (
-    <View className="gap-1.5">
-      <Text className="text-foreground text-sm font-medium">{label}</Text>
+    <View style={{ gap: 6 }}>
+      <Text style={{ fontSize: 14, fontWeight: "500", color: t.foreground }}>
+        {label}
+      </Text>
       <TextInput
-        className="border-input bg-background text-foreground h-11 rounded-md border px-3 text-base"
+        style={{
+          height: 48,
+          borderRadius: RADIUS,
+          borderWidth: 1,
+          borderColor: t.input,
+          paddingHorizontal: 12,
+          fontSize: 16,
+          color: t.foreground,
+          backgroundColor: t.background,
+        }}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor="#79716b"
+        placeholderTextColor={t.mutedForeground}
         autoCapitalize={autoCapitalize}
         keyboardType={keyboardType}
         autoFocus={autoFocus}
       />
+    </View>
+  );
+}
+
+/** A horizontal "or" divider (two rules + a label). */
+export function OrDivider() {
+  const t = useTheme();
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+      <View style={{ flex: 1, height: 1, backgroundColor: t.border }} />
+      <Text style={{ fontSize: 13, color: t.mutedForeground }}>or</Text>
+      <View style={{ flex: 1, height: 1, backgroundColor: t.border }} />
     </View>
   );
 }
@@ -130,27 +251,39 @@ export function Banner({
   children: ReactNode;
   tone?: BannerTone;
 }) {
-  const toneClass =
-    tone === "warning"
-      ? "bg-muted border-l-4 border-destructive"
-      : tone === "success"
-        ? "bg-muted border-l-4 border-primary"
-        : "bg-muted";
+  const t = useTheme();
+  const accent =
+    tone === "warning" ? t.destructive : tone === "success" ? t.primary : null;
   return (
-    <View className={`rounded-md p-3 ${toneClass}`}>
-      <Text className="text-muted-foreground text-sm">{children}</Text>
+    <View
+      style={[
+        { backgroundColor: t.muted, borderRadius: RADIUS, padding: 12 },
+        accent && { borderLeftWidth: 4, borderLeftColor: accent },
+      ]}
+    >
+      <Text style={{ fontSize: 14, color: t.mutedForeground }}>{children}</Text>
     </View>
   );
 }
 
 /** Section/screen heading. */
 export function Heading({ children }: { children: ReactNode }) {
-  return <Text className="text-foreground text-2xl font-bold">{children}</Text>;
+  const t = useTheme();
+  return (
+    <Text style={{ fontSize: 24, fontWeight: "700", color: t.foreground }}>
+      {children}
+    </Text>
+  );
 }
 
 /** Secondary/muted body copy. */
 export function Muted({ children }: { children: ReactNode }) {
-  return <Text className="text-muted-foreground text-sm">{children}</Text>;
+  const t = useTheme();
+  return (
+    <Text style={{ fontSize: 14, color: t.mutedForeground, lineHeight: 20 }}>
+      {children}
+    </Text>
+  );
 }
 
 /**
@@ -166,13 +299,25 @@ export function EmptyState({
   body?: string;
   action?: ReactNode;
 }) {
+  const t = useTheme();
   return (
-    <View className="border-border/70 gap-2 rounded-lg border border-dashed p-4">
-      <Text className="text-foreground text-base font-medium">{title}</Text>
+    <View
+      style={{
+        gap: 8,
+        borderRadius: RADIUS,
+        borderWidth: 1,
+        borderStyle: "dashed",
+        borderColor: t.border,
+        padding: 16,
+      }}
+    >
+      <Text style={{ fontSize: 16, fontWeight: "500", color: t.foreground }}>
+        {title}
+      </Text>
       {body ? (
-        <Text className="text-muted-foreground text-sm">{body}</Text>
+        <Text style={{ fontSize: 14, color: t.mutedForeground }}>{body}</Text>
       ) : null}
-      {action ? <View className="pt-1">{action}</View> : null}
+      {action ? <View style={{ paddingTop: 4 }}>{action}</View> : null}
     </View>
   );
 }
@@ -188,12 +333,21 @@ export function ErrorState({
   label: string;
   onRetry?: () => void;
 }) {
+  const t = useTheme();
   return (
-    <View className="border-destructive/30 bg-destructive/5 gap-2 rounded-lg border p-4">
-      <Text className="text-foreground text-base font-medium">
+    <View
+      style={{
+        gap: 8,
+        borderRadius: RADIUS,
+        borderWidth: 1,
+        borderColor: t.destructive,
+        padding: 16,
+      }}
+    >
+      <Text style={{ fontSize: 16, fontWeight: "500", color: t.foreground }}>
         {`Couldn't load ${label}.`}
       </Text>
-      <Text className="text-muted-foreground text-sm">
+      <Text style={{ fontSize: 14, color: t.mutedForeground }}>
         Check your connection and try again.
       </Text>
       {onRetry ? (

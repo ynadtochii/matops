@@ -15,7 +15,8 @@ Foundations, the identity join loop (Phase 1), the scheduling core (Phase 2), **
 - Live plan + per-slice status matrix: `docs/roadmap.md`. What shipped, slice by slice: `CHANGELOG.md`. Design of record (with an "as-built" section 0, incl. Phases 1–3 + the mobile pass): `docs/architecture.md`. **Next: Phase 4** (notifications & polish).
 
 ## Run it
-- `pnpm install`, then `pnpm dev:next` → http://localhost:3000. Sign in via the magic-link form; copy the `[auth] magic link …` URL from the terminal into the browser.
+- `pnpm install`, then `pnpm dev:next` → **http://localhost:3004** (port 3000 is kept free on purpose). Sign in via the magic-link form; copy the `[auth] magic link …` URL from the terminal into the browser (no email provider needed — it prints to the terminal).
+- **`pnpm dev:ios`** — one command to prepare + run the whole iOS stack: installs deps if needed, starts the web/API on 3004, then boots the Expo app in the iOS Simulator (Metro + dev-client build). Env-tolerant: missing email (Resend) / push (EAS) config just no-ops. `pnpm dev:ios "iPhone Air"` picks a simulator.
 - `pnpm test` — PGlite RLS leak tests (probe + `class_template` + `class`) + health + pure domain logic (access, approval, invite, schedule, DST materialization, edit rules); no database needed.
 - `pnpm -F @matops/db migrate` applies migrations to `POSTGRES_URL`; `pnpm -F @matops/db seed` writes a probe row.
 - `.env` holds `POSTGRES_URL` (Neon **pooled** string, `sslmode=verify-full`) + `AUTH_SECRET`, plus **`CRON_SECRET`** for the materialization cron (required in production; optional in dev). Note: `.env.example` still shows a Supabase placeholder (it was permission-locked during scaffolding).
@@ -63,7 +64,7 @@ tooling/{eslint,prettier,tailwind,typescript,github}
 ```
 
 ## Commands (pnpm)
-- `pnpm dev` — run everything · `pnpm dev:next` — web only
+- `pnpm dev` — run everything · `pnpm dev:next` — web only (:3004) · `pnpm dev:ios` — web + iOS Simulator, one command
 - `pnpm typecheck` · `pnpm lint` · `pnpm format:fix`
 - `pnpm db:push` — push schema · `pnpm db:studio` — Drizzle studio · `pnpm auth:generate` — regen auth schema
 

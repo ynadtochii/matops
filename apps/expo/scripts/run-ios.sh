@@ -19,8 +19,15 @@ set -euo pipefail
 
 DEVICE="${1:-iPhone 17 Pro}"
 APP_ID="com.matops.app"                  # matches app.config.ts bundleIdentifier
+APP_SCHEME="matops"                      # matches app.config.ts `scheme`
 METRO_URL="http://localhost:8081"
-DEEP_LINK="exp+expo://expo-development-client/?url=${METRO_URL}"
+# Launch the dev client into a specific Metro bundle. The scheme MUST be one the
+# installed app registers — the app's own custom scheme (`matops`) or `exp+<slug>`.
+# `exp+expo://` is Expo Go's scheme; nothing registers it here, so opening it
+# fails with LSApplicationWorkspaceErrorDomain error 115. `url` is percent-encoded
+# so the inner `://` isn't misparsed as part of the outer URL.
+METRO_URL_ENC="http%3A%2F%2Flocalhost%3A8081"
+DEEP_LINK="${APP_SCHEME}://expo-development-client/?url=${METRO_URL_ENC}"
 
 # Repo root = two levels up from apps/expo/scripts.
 EXPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
