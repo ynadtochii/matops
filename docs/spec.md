@@ -45,7 +45,7 @@ The owner is the buyer, but the **student is the user**. The owner's data only e
 ## 2. Student mobile app (Expo)
 
 ### S1 · Sign in / Sign up  *(as light as possible)*
-- **Social login** or **email + magic link** (passwordless — no password to invent). One tap where possible. Built: **Continue with Google** (web + mobile) alongside the magic link (ADR 35); Google is shown only when the server has OAuth creds set.
+- **Social login** or **email + magic link** (passwordless — no password to invent). One tap where possible. Built: **Continue with Google** on **web** alongside the magic link (ADR 35); Google is shown only when the server has OAuth creds set. **Mobile is magic-link only for now** — the Google button is deferred (the iOS browser→app session return doesn't land; ADR 35, `docs/mobile-google-login-handoff.md`).
 - **Fields:** first name, second name, phone, **email (required)**. Email is the reliable channel for cancellations and gym announcements, so it's not optional for members. Nothing else.
 - Reached before joining (S2). On mobile v1 the student picks the academy by its ID; sign-in comes first, then the join.
 

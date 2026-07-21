@@ -74,25 +74,43 @@ Until then, only the magic-link path is offered.
 - **Account linking — works.** Signing in with magic-link on the same email as a
   Google account reaches the same user/academy (verified via a sign-out →
   sign-in round-trip). One identity per email holds.
-- **Mobile Google login — server side works, session return open.** With the
+- **Mobile Google login — DEFERRED (2026-07-21); mobile is magic-link only.**
+  Decision: do not fix now. The break is client-side (below) and the reliable fix
+  is the native idToken flow, which needs an iOS OAuth client + native module +
+  rebuild — out of scope. The **"Continue with Google" button was removed from the
+  Expo sign-in** (`apps/expo/src/app/sign-in.tsx`) so mobile users don't hit a
+  silently-failing sign-in; **web Google is unchanged**. Diagnosis kept for the
+  next pass:
+- With the
   redirect URI registered, the mobile flow completes on the **server**: the
   `@better-auth/expo` browser flow → `/api/auth/callback/google` creates the user
   + `google` account + session and redirects to **`matops:///`** with the session
   cookie present (confirmed with a temporary diagnostic hook). But the **cookie
   is not landing in the app's storage**, so the app stays on Sign in. This is the
-  same class of problem as the earlier mobile magic-link cookie hand-off. The
-  remaining unknown is whether `@better-auth/expo`'s `after` hook actually appends
-  `?cookie=` to the `matops://` deep link (a server-side plugin-ordering question,
-  possibly with `nextCookies`) or the iOS auth session fails to capture the return
-  (client-side). Not yet resolved.
-  - **Options on the table:** (a) finish the browser-flow fix once the diagnostic
-    confirms server- vs client-side; (b) switch mobile to the **native idToken
-    flow** (`@react-native-google-signin`, needs the iOS OAuth client for bundle
-    `com.matops.app` + a rebuild) — sidesteps the cookie dance; (c) defer mobile
-    Google to the Phase-5 universal-links task, keeping magic-link on mobile.
+  same class of problem as the earlier mobile magic-link cookie hand-off.
+  **Narrowed by source analysis (2026-07-21):** the server side is ruled out — the
+  `@better-auth/expo` `after` hook *does* append `?cookie=` to the `matops://`
+  deep link (config hooks run before plugin hooks, so the earlier config-level
+  diagnostic saw a pre-append value and proved nothing; `nextCookies` never strips
+  the `set-cookie` header; `oAuthProxy`'s after-hook ignores non-proxy locations).
+  The break is client-side: iOS `ASWebAuthenticationSession` isn't returning
+  `type:"success"` for the empty-host `matops:///` return. Not yet resolved.
+  - **Options on the table** (now that the break is client-side): (a) **native
+    idToken flow — recommended** (`@react-native-google-signin`, needs the iOS
+    OAuth client for bundle `com.matops.app` + a rebuild) — sidesteps the fragile
+    iOS browser return entirely; (b) try to move the return URL off empty-host
+    `matops:///` (cheap, but the expo client always builds an empty-host URL from a
+    leading-`/` `callbackURL`, so it likely needs an upstream/patched change);
+    (c) defer mobile Google to the Phase-5 universal-links task, keeping magic-link
+    on mobile.
+  - **Full debug handoff** (mechanism, evidence, the one disambiguating step, repro
+    commands): [`docs/mobile-google-login-handoff.md`](../mobile-google-login-handoff.md).
 
 ## Deferred
 
+- **Mobile Google login as a whole (2026-07-21).** Mobile ships **magic-link
+  only**; the Google button is removed from the Expo sign-in. Revisit via the
+  native idToken flow, most likely alongside the Phase-5 native/launch-infra work.
 - Native Google Sign-In sheet on mobile (above).
 - Apple sign-in (App Store often requires it once another social provider ships —
   revisit in the Phase 5 launch-infra task alongside universal links, ADR 31).

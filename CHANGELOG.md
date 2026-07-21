@@ -2,6 +2,10 @@
 
 One line per shipped slice (see `docs/delivery.md` §4). Newest first.
 
+## Mobile Google login — deferred (magic-link only on mobile)
+
+- **Deferred mobile Google sign-in; mobile is magic-link only for now** (ADR [35](docs/issues/35-social-login-google.md), `docs/mobile-google-login-handoff.md`). Source analysis of `@better-auth/expo` ruled out the server side — the `/callback` after-hook *does* append `?cookie=` to the `matops://` deep link (config hooks run before plugin hooks, so the earlier config-level diagnostic saw a pre-append value; `nextCookies` never strips `set-cookie`; `oAuthProxy`'s after-hook ignores non-proxy locations). The break is the iOS `ASWebAuthenticationSession` return for the empty-host `matops:///` URL, whose reliable fix is the native idToken flow (iOS OAuth client + native module + rebuild) — out of scope now. So the **"Continue with Google" button was removed from `apps/expo/src/app/sign-in.tsx`** to avoid a silently-failing sign-in; **web Google is unchanged and still works**. Green: expo lint + typecheck.
+
 ## Mobile polish + Google-login status
 
 - **Mobile UI made usable** (ADR [36](docs/issues/36-mobile-ui-explicit-styles.md)). NativeWind v5 (preview) wasn't translating spacing (`gap`), flex alignment, and foreground colors on native, so the Expo login/logout screens rendered as cramped bars with unreadable labels. The shared kit `apps/expo/src/components/ui.tsx` (`Button`/`TextField`/`Screen`/`Heading`/`Muted`/`Banner`/`EmptyState`/`ErrorState` + new `Stack`/`OrDivider`/`useTheme`) now uses **explicit React Native styles**, theme-aware (light+dark) from the shared tokens. `sign-in.tsx` (login) and `profile.tsx` (logout) rewritten onto it; **verified on the iPhone 17 simulator**. Other screens keep a `className` passthrough (compile unchanged; spacing port is a follow-up). Green: lint/typecheck/test.

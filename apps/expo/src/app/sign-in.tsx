@@ -6,7 +6,6 @@ import {
   Button,
   Heading,
   Muted,
-  OrDivider,
   Screen,
   Stack,
   TextField,
@@ -15,12 +14,17 @@ import {
 import { authClient } from "~/utils/auth";
 
 /**
- * Sign in (spec S1) — social login (Google) or a passwordless magic link. Email
- * only for the link; the student's name + phone are captured later in the join
- * flow (S2). The `callbackURL` (a relative path) is turned into the app's
- * `matops://` deep link by @better-auth/expo, so the return bounces back into
- * the app and the auth gate (index) routes onward. `redirect` carries an
- * in-flight invite so the magic-link return lands back on it.
+ * Sign in (spec S1) — a passwordless magic link. Email only for the link; the
+ * student's name + phone are captured later in the join flow (S2). The
+ * `callbackURL` (a relative path) is turned into the app's `matops://` deep link
+ * by @better-auth/expo, so the return bounces back into the app and the auth
+ * gate (index) routes onward. `redirect` carries an in-flight invite so the
+ * magic-link return lands back on it.
+ *
+ * Social login (Continue with Google) is **web-only for now** — the mobile
+ * browser→app session hand-off isn't landing yet, so mobile uses magic-link
+ * only. Deferred to the native idToken flow (ADR 35, docs/mobile-google-login-
+ * handoff.md).
  *
  * In development the link prints to the Next.js console (email is Phase 4) — the
  * user copies the `[auth] magic link …` URL and opens it.
@@ -31,25 +35,10 @@ export default function SignIn() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [pending, setPending] = useState(false);
-  const [googlePending, setGooglePending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const canSend = email.includes("@") && !pending && !googlePending;
+  const canSend = email.includes("@") && !pending;
   const callbackURL = redirect?.startsWith("/") ? redirect : "/";
-
-  // Continue with Google (spec S1 social login, ADR 35). @better-auth/expo opens
-  // the OAuth flow in a system browser (expo-web-browser) and returns the session
-  // to the app via the trusted `matops://` scheme, so the auth gate routes onward
-  // — same landing as magic-link.
-  const signInGoogle = async () => {
-    setGooglePending(true);
-    setError(null);
-    const res = await authClient.signIn.social({ provider: "google", callbackURL });
-    setGooglePending(false);
-    if (res.error) {
-      setError(res.error.message ?? "Could not sign in with Google. Try again.");
-    }
-  };
 
   const send = async () => {
     setPending(true);
@@ -74,8 +63,8 @@ export default function SignIn() {
         <Stack gap={8}>
           <Heading>Sign in</Heading>
           <Muted>
-            Continue with Google, or we&apos;ll email you a one-tap sign-in link
-            — no password to remember.
+            We&apos;ll email you a one-tap sign-in link — no password to
+            remember.
           </Muted>
         </Stack>
 
@@ -106,15 +95,6 @@ export default function SignIn() {
           </Stack>
         ) : (
           <Stack gap={16}>
-            <Button
-              label={googlePending ? "Opening Google…" : "Continue with Google"}
-              variant="outline"
-              onPress={signInGoogle}
-              disabled={pending || googlePending}
-            />
-
-            <OrDivider />
-
             <TextField
               label="Email"
               value={email}
