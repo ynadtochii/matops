@@ -4,6 +4,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { magicLink, oAuthProxy, organization } from "better-auth/plugins";
 
+import { setMemberActive } from "@matops/db";
 import { db } from "@matops/db/client";
 
 import { ac, roles } from "./permissions";
@@ -37,9 +38,15 @@ export function initAuth<
       organization({
         ac,
         roles,
-        // The academy creator becomes an owner (docs/issues/20). Onboarding
-        // (slice 1.1) additionally sets that member active.
+        // The academy creator becomes an owner (docs/issues/20). The hook below
+        // also flips that owner membership to `active` at once, so onboarding is
+        // seamless — the creator is a working owner with no approval step.
         creatorRole: "owner",
+        organizationHooks: {
+          afterCreateOrganization: async ({ member }) => {
+            await setMemberActive(member.id);
+          },
+        },
         schema: {
           member: {
             additionalFields: {
@@ -49,6 +56,16 @@ export function initAuth<
               status: {
                 type: "string",
                 defaultValue: "pending",
+                input: false,
+              },
+              // The role to grant AT approval (docs/issues/14, 20). A pending
+              // member holds the harmless Better Auth default role (`member`) —
+              // not one of our academy roles — so it passes no role check even if
+              // a status guard is missed; approval sets `role := invitedRole`.
+              // Server-controlled (`input: false`); set from the invite at join.
+              invitedRole: {
+                type: "string",
+                required: false,
                 input: false,
               },
             },

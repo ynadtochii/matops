@@ -24,3 +24,8 @@ export function isStaff(m: Membership): boolean {
 export function isOwner(m: Membership): boolean {
   return isActiveMember(m) && m.role === "owner";
 }
+
+/** Suspended — access revoked by an owner; kept for history, not active. */
+export function isSuspended(m: Membership): boolean {
+  return m.status === "suspended";
+}

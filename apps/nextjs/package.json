@@ -16,6 +16,7 @@
     "@matops/api": "workspace:*",
     "@matops/auth": "workspace:*",
     "@matops/db": "workspace:*",
+    "@matops/domain": "workspace:*",
     "@matops/ui": "workspace:*",
     "@matops/validators": "workspace:*",
     "@t3-oss/env-nextjs": "^0.13.8",

@@ -5,9 +5,12 @@
 > Flip cells as you go: **`—`** not needed · **`todo`** · **`wip`** · **`done`**. Every flip to `done` must pass the [Definition of Done](delivery.md#4-definition-of-done-the-anti-drift-gate).
 > Surfaces: **DB · API · Web · Mob · Sh(ared) · Inf(ra)**. Spec IDs trace up to [spec.md](spec.md); tickets to [map.md](map.md).
 
-**Status:** **Phase 0 complete** (slices 0.1–0.6). The monorepo is scaffolded and all static gates are green — `format`, `lint` (13/13), `typecheck` (15/15), `test` (10 tests: 5 RLS leak + 1 health + 4 access-predicate). The RLS tenant seam and the auth/tRPC tiers are built and type-safe.
+**Status:** **Phase 2 complete, web-first** (slices 2.1–2.4; Phase 1 done before it). All static gates are green — `lint` (13/13), `typecheck` (15/15), `test` (54 tests). Scheduling core is built: recurring class templates (O3), DST-aware materialization (lazy on save + a bounded daily Vercel Cron), one-off classes, edit/cancel with future-instance propagation, and the schedule reads (owner web `class.week`; student `class.mine`, API-ready). **Deferred to a mobile pass:** all Expo student UI — the join screen + deep links (1.3/1.4/1.6) **and** the student schedule screen (2.4 Mob) — the student-lens API is now in place, so the pass is unblocked.
 
-> **Live on Neon.** A Neon database is connected (`.env`), all migrations are applied, the seed round-trips, and RLS isolation is **verified live on Neon** (A sees only its own rows; a cross-tenant write is blocked). The web app boots and **magic-link sign-in works** — the link prints to the dev console (email is Phase 4). Still gated on Phase 1: there is no UI yet to create an academy or approve members, so the tenant-scoped tiers (`enrolled`/`member`/`staff`/`owner`) can't be exercised end-to-end through the browser yet.
+> **Verified live on Neon.**
+> - **Phase 1 exit test** — sign in (magic link) → **Start a gym** → active **owner** (RLS scope set) → create/rotate an invite link → a second user joins **pending, holding no academy role** → owner **approves** → role granted + active. "Never ownerless" blocks removing the sole owner; a student is `FORBIDDEN` from owner-only routes.
+> - **Phase 2** — a Mon/Wed/Fri 18:00 Europe/Kyiv template **materialized 18 classes** over 6 weeks at 15:00 UTC (correct DST offset); re-run inserted **0** (idempotent); cursor advanced to now+42d. Template edits propagate: a content edit kept the rows + retitled; a timing edit regenerated Mon/Wed → Tue/Thu; one-off create + cancel worked.
+> - Migrations `0000`–`0008` applied; RLS leak tests (probe + `class_template` + `class`) green.
 
 ---
 
@@ -42,17 +45,17 @@ One row per slice. This is the single answer to *"what's left, on which surface?
 | 0.5 | Better Auth (core + org + magic-link) | done | done | done | done | done | — |
 | 0.6 | CI/CD + env + preview builds | — | — | — | — | — | done |
 | **1** | **Identity & tenancy** | | | | | | |
-| 1.1 | Owner onboarding (create academy, magic link) | todo | todo | todo | — | todo | — |
-| 1.2 | Invite links (per-role, create/rotate) | todo | todo | todo | — | todo | — |
-| 1.3 | Student self-join → pending (min fields, email req.) | todo | todo | — | todo | todo | — |
-| 1.4 | Uniform approval gate + `enrolledProcedure` | — | todo | todo | todo | todo | — |
-| 1.5 | Roster (approve/remove/suspend, promote co-owner) | todo | todo | todo | — | — | — |
-| 1.6 | Multi-academy switcher | — | todo | todo | todo | — | — |
+| 1.1 | Owner onboarding (create academy, magic link) | done | done | done | — | done | — |
+| 1.2 | Invite links (per-role, create/rotate) | done | done | done | — | done | — |
+| 1.3 | Student self-join → pending (min fields, email req.) | done | done | — | todo | done | — |
+| 1.4 | Uniform approval gate + `enrolledProcedure` | — | done | done | todo | done | — |
+| 1.5 | Roster (approve/remove/suspend, promote co-owner) | done | done | done | — | — | — |
+| 1.6 | Multi-academy switcher | — | done | done | todo | — | — |
 | **2** | **Scheduling core** | | | | | | |
-| 2.1 | Class templates CRUD (recurring) | todo | todo | todo | — | todo | — |
-| 2.2 | Materialization (lazy + bounded cron) | todo | todo | — | — | — | todo |
-| 2.3 | Class instances (one-off + edit/cancel rules) | todo | todo | todo | — | todo | — |
-| 2.4 | Schedule read (owner web + student mobile) | — | todo | todo | todo | todo | — |
+| 2.1 | Class templates CRUD (recurring) | done | done | done | — | done | — |
+| 2.2 | Materialization (lazy + bounded cron) | done | done | — | — | — | done |
+| 2.3 | Class instances (one-off + edit/cancel rules) | done | done | done | — | done | — |
+| 2.4 | Schedule read (owner web + student mobile) | — | done | done | todo | done | — |
 | **3** | **Booking & attendance** | | | | | | |
 | 3.1 | Book / cancel (atomic write, soft capacity) | todo | todo | todo | todo | todo | — |
 | 3.2 | Provisional booking for pending (display tag) | — | todo | todo | todo | — | — |
@@ -94,13 +97,15 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 - **1.5 Roster** — approve / remove / suspend; **promote a member to co-owner** (never ownerless); pending rows show **visit-count nudge**; removal keeps history + revokes access. Spec: §4 edge rules.
 - **1.6 Multi-academy switcher** — `activeOrganizationId` drives RLS scope; switcher shown only if 2+; join 2nd via another link. Spec: ticket 18.
 
+> **Deferred: Phase 1 mobile pass (Mob cells for 1.3/1.4/1.6).** Decision (session after Phase 1 web): the Expo student pieces are scheduled **with/after Phase 2 scheduling**, because the pending student's home is the schedule (S4) — which is Phase 2 — so a mobile-only pass would land on an empty home. Auth + the tRPC client are already wired on Expo; the routers are callable today. Remaining work when we do it: (a) replace the T3 demo home with an auth-gated student shell + retire the `post` demo (then drop the `post` router), (b) `app/join/[token].tsx` (RN twin of the web join flow) + sign-in-first, (c) pending banner (S3), (d) profile + switcher (S7), (e) **deep links** `matops://join/<code>` + universal links / AASA + Android assetlinks + EAS ids (non-trivial — architecture §11), deferred-deep-link falls back to the Phase-3 drop-in form. **API gap — CLOSED (slice 2.4):** the student-lens variant now exists — `isStudentLensMembership` in `@matops/domain` + `academy.listMineStudent`, plus the student schedule read `class.mine` (enrolled tier). The mobile pass can build directly on these.
+
 ### Phase 2 — Scheduling core
 **Exit test:** owner defines a recurring week; concrete classes appear; both clients read the schedule.
 
 - **2.1 Class templates** — recurring weekly definition (days, local start minutes, duration, tz, capacity, discipline). Staff CRUD. Refs: ticket 08.
 - **2.2 Materialization** — lazy on template write + **bounded daily Vercel Cron** (LIMIT + time budget, resumable, stale-first); idempotent via `generated_until` + `UNIQUE(template_id, starts_at)`; runs under trusted **service role** outside the tenant seam. Refs: ticket 16.
 - **2.3 Class instances** — one-off create (templateId null) + edit/cancel. Edit rules: **notify booked students** on time/instructor change; capacity cut below bookings allowed (soft); **template edits hit future non-cancelled instances only**; delete = soft-delete, keep bookings. `status = scheduled|cancelled` (no "completed"). Refs: spec §4; tickets 19, 08.
-- **2.4 Schedule read** — owner web (full) + student mobile (**own academy only**, can't see other academies). Refs: spec S-schedule.
+- **2.4 Schedule read** — owner web (full) + student mobile (**own academy only**, can't see other academies). Refs: spec S-schedule. **As built (web-first):** owner web read = `class.week` (staff, shipped in 2.3); student read = `class.mine` on `enrolledProcedure` (pending may browse, RLS-scoped to own academy). Student-lens API ready (`isStudentLensMembership` + `academy.listMineStudent`). **Mob** (the Expo student schedule screen) stays `todo` — it lands in the deferred mobile pass, which is now unblocked.
 
 ### Phase 3 — Booking & attendance
 **Exit test:** student books/cancels (≤3 taps) + checks in via QR; walk-in via public form; staff sees attendance.

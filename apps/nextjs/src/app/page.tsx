@@ -1,41 +1,25 @@
-import { Suspense } from "react";
+import { getSession } from "~/auth/server";
+import { Home } from "./_components/home";
+import { SignIn } from "./_components/sign-in";
 
-import { HydrateClient, prefetch, trpc } from "~/trpc/server";
-import { AuthShowcase } from "./_components/auth-showcase";
-import {
-  CreatePostForm,
-  PostCardSkeleton,
-  PostList,
-} from "./_components/posts";
-
-export default function HomePage() {
-  prefetch(trpc.post.all.queryOptions());
+export default async function HomePage() {
+  const session = await getSession();
 
   return (
-    <HydrateClient>
-      <main className="container h-screen py-16">
-        <div className="flex flex-col items-center justify-center gap-4">
-          <h1 className="text-5xl font-extrabold tracking-tight sm:text-[5rem]">
-            Create <span className="text-primary">T3</span> Turbo
-          </h1>
-          <AuthShowcase />
-
-          <CreatePostForm />
-          <div className="w-full max-w-2xl overflow-y-scroll">
-            <Suspense
-              fallback={
-                <div className="flex w-full flex-col gap-4">
-                  <PostCardSkeleton />
-                  <PostCardSkeleton />
-                  <PostCardSkeleton />
-                </div>
-              }
-            >
-              <PostList />
-            </Suspense>
-          </div>
+    <main className="container flex min-h-screen flex-col items-center justify-center gap-8 py-16">
+      {session ? (
+        <div className="w-full">
+          <Home />
         </div>
-      </main>
-    </HydrateClient>
+      ) : (
+        <div className="flex flex-col items-center gap-6">
+          <h1 className="text-4xl font-extrabold tracking-tight">matops</h1>
+          <p className="text-muted-foreground text-center">
+            Run your grappling academy — schedule, roster, and attendance.
+          </p>
+          <SignIn />
+        </div>
+      )}
+    </main>
   );
 }

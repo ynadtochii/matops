@@ -40,6 +40,9 @@ export const createTRPCContext = async (opts: {
     authApi,
     session,
     db,
+    // Forwarded so resolvers can call Better Auth server APIs (createOrganization,
+    // setActiveOrganization, …) on behalf of the signed-in user.
+    headers: opts.headers,
   };
 };
 /**

@@ -2,18 +2,20 @@
 
 **matops** is a multi-academy admin SaaS for grappling gyms: an **Expo** student app + a **Next.js** owner/instructor web app, one TypeScript monorepo. It is a from-scratch rebuild; the old app **MAT** (`/Users/kuna/projects/mat`) is reference only, never a base.
 
-## Current state — Phase 0 complete (foundations)
-The monorepo is scaffolded and the data + auth + API foundation is built and green (`pnpm format lint typecheck test` all pass; 10 tests). A **Neon** database is connected in `.env`, all migrations are applied, and RLS tenant isolation is **verified live on Neon** (not only the embedded PGlite test).
+## Current state — Phase 2 complete, web-first (scheduling core)
+Foundations, the identity join loop (Phase 1), and now the scheduling core (Phase 2) are built and green (`pnpm lint typecheck test` all pass; 54 tests). A **Neon** database is connected in `.env`, all migrations (`0000`–`0008`) are applied, and materialization + template-edit propagation are **verified live on Neon**.
 
-- **Works now:** magic-link sign-in (the link prints to the dev console — email is Phase 4), reading/writing Neon via the `post`/`system` tRPC routers, and the RLS tenant seam under every scoped procedure.
-- **Does NOT exist yet:** any UI to create an academy or approve members — that's **Phase 1**. So the tenant-scoped tiers (`enrolled`/`member`/`staff`/`owner`) can't be clicked through in the browser yet, though they are built and type-safe.
-- Live plan + per-slice status matrix: `docs/roadmap.md`. What shipped, slice by slice: `CHANGELOG.md`. Design of record (with a Phase-0 "as-built" section 0): `docs/architecture.md`. **Next: Phase 1** (identity & tenancy).
+- **Works now (web):** magic-link sign-in → **Start a gym** (creator is an active owner) → per-role **invite links** → self-join **pending, no academy role** (intended role on `member.invitedRole`) → owner **approves** → role granted. Roster (never-ownerless) + multi-academy switcher. **Scheduling (staff):** recurring **class templates** (O3), **one-off classes** + edit/cancel (O2), DST-aware **materialization** (lazy on save + a daily Vercel Cron), and the **schedule read** (`class.week`). All under the RLS tenant seam.
+- **Does NOT exist yet:** the **Expo student UI + deep links** (deferred mobile pass — Mob cells 1.3/1.4/1.6 **and** 2.4 stay `todo`; the student-lens API `class.mine`/`academy.listMineStudent` is ready), and Phase 3+ (booking, attendance, notifications). The scaffold `post` router lingers only for the deferred Expo demo screens.
+- Key ADRs: Phase 1 — `docs/issues/28` (custom invite table) + `29` (pending holds no role). Phase 2 — `08`/`16` (data model + materialization) + `19` (no `completed` status) + `30` (template-edit propagation).
+- **Infra note:** set **`CRON_SECRET`** in the Vercel project so the daily `/api/cron/materialize` job runs (it refuses to run unprotected in production).
+- Live plan + per-slice status matrix: `docs/roadmap.md`. What shipped, slice by slice: `CHANGELOG.md`. Design of record (with an "as-built" section 0, incl. Phases 1–2): `docs/architecture.md`. **Next: Phase 3** (booking & attendance), plus the deferred mobile pass.
 
 ## Run it
 - `pnpm install`, then `pnpm dev:next` → http://localhost:3000. Sign in via the magic-link form; copy the `[auth] magic link …` URL from the terminal into the browser.
-- `pnpm test` — RLS leak test (PGlite) + health + domain access predicates; no database needed.
+- `pnpm test` — PGlite RLS leak tests (probe + `class_template` + `class`) + health + pure domain logic (access, approval, invite, schedule, DST materialization, edit rules); no database needed.
 - `pnpm -F @matops/db migrate` applies migrations to `POSTGRES_URL`; `pnpm -F @matops/db seed` writes a probe row.
-- `.env` holds `POSTGRES_URL` (Neon **pooled** string, `sslmode=verify-full`) + `AUTH_SECRET`. Note: `.env.example` still shows a Supabase placeholder (it was permission-locked during scaffolding).
+- `.env` holds `POSTGRES_URL` (Neon **pooled** string, `sslmode=verify-full`) + `AUTH_SECRET`, plus **`CRON_SECRET`** for the materialization cron (required in production; optional in dev). Note: `.env.example` still shows a Supabase placeholder (it was permission-locked during scaffolding).
 
 ## Phase 0 gotchas (do not "fix" these)
 - **`@matops/api` and `@matops/auth` are consumed from SOURCE** — `exports.types` point at `src`, tsconfig extends `base.json` (noEmit). The tRPC `AppRouter` embeds the full Better Auth `Auth` type, too large to serialize into a `.d.ts` (TS7056). Do NOT switch them back to `compiled-package.json`.

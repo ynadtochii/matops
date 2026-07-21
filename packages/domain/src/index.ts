@@ -13,3 +13,9 @@
  */
 
 export * from "./access";
+export * from "./class-edit";
+export * from "./invite";
+export * from "./materialize";
+export * from "./membership";
+export * from "./schedule";
+export * from "./slug";

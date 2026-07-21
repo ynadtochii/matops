@@ -1,6 +1,7 @@
+import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 
-import { member } from "./auth-schema";
+import { member, organization, user } from "./auth-schema";
 import { db } from "./client";
 
 export interface Membership {
@@ -29,4 +30,205 @@ export async function getMembership(
   const row = rows[0];
   if (!row) return null;
   return { role: row.role, status: row.status ?? "pending" };
+}
+
+/**
+ * Mark a member row active. Used by the onboarding hook (the academy creator is
+ * an active owner at once — docs/issues/20) and by owner approval. Writes the
+ * Better Auth `member` table on the base connection (no RLS there).
+ */
+export async function setMemberActive(memberId: string): Promise<void> {
+  await db
+    .update(member)
+    .set({ status: "active" })
+    .where(eq(member.id, memberId));
+}
+
+/** One academy the user belongs to, with the caller's role/status there. */
+export interface UserAcademy {
+  academyId: string;
+  name: string;
+  slug: string;
+  role: string;
+  status: string;
+  invitedRole: string | null;
+}
+
+/** Every academy the user is a member of (any status), for the switcher lens. */
+export async function listMembershipsForUser(
+  userId: string,
+): Promise<UserAcademy[]> {
+  const rows = await db
+    .select({
+      academyId: organization.id,
+      name: organization.name,
+      slug: organization.slug,
+      role: member.role,
+      status: member.status,
+      invitedRole: member.invitedRole,
+    })
+    .from(member)
+    .innerJoin(organization, eq(member.organizationId, organization.id))
+    .where(eq(member.userId, userId));
+
+  return rows.map((r) => ({ ...r, status: r.status ?? "pending" }));
+}
+
+/** Set the user's display name + phone at self-join (spec S1, minimal fields). */
+export async function updateUserProfile(
+  userId: string,
+  profile: { name: string; phone: string },
+): Promise<void> {
+  await db
+    .update(user)
+    .set({ name: profile.name, phone: profile.phone })
+    .where(eq(user.id, userId));
+}
+
+/** A full member row plus the joined user profile, for the roster (spec O4). */
+export interface RosterRow {
+  memberId: string;
+  userId: string;
+  role: string;
+  status: string;
+  invitedRole: string | null;
+  name: string;
+  email: string;
+  phone: string | null;
+  createdAt: Date;
+}
+
+/** Every member of one academy, newest first, with the user profile joined. */
+export async function listMembersOf(academyId: string): Promise<RosterRow[]> {
+  const rows = await db
+    .select({
+      memberId: member.id,
+      userId: member.userId,
+      role: member.role,
+      status: member.status,
+      invitedRole: member.invitedRole,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      createdAt: member.createdAt,
+    })
+    .from(member)
+    .innerJoin(user, eq(member.userId, user.id))
+    .where(eq(member.organizationId, academyId));
+
+  return rows
+    .map((r) => ({ ...r, status: r.status ?? "pending" }))
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+}
+
+/** One member row by id, or null. Includes the academy id so owner mutations can
+ * verify the target belongs to the caller's academy (the table has no RLS). */
+export async function getMemberById(memberId: string): Promise<{
+  id: string;
+  academyId: string;
+  userId: string;
+  role: string;
+  status: string;
+  invitedRole: string | null;
+} | null> {
+  const rows = await db
+    .select({
+      id: member.id,
+      academyId: member.organizationId,
+      userId: member.userId,
+      role: member.role,
+      status: member.status,
+      invitedRole: member.invitedRole,
+    })
+    .from(member)
+    .where(eq(member.id, memberId))
+    .limit(1);
+
+  const row = rows[0];
+  if (!row) return null;
+  return { ...row, status: row.status ?? "pending" };
+}
+
+/** Write a new role + status (owner approval grants the role here). */
+export async function setMemberRoleStatus(
+  memberId: string,
+  next: { role: string; status: string },
+): Promise<void> {
+  await db
+    .update(member)
+    .set({ role: next.role, status: next.status })
+    .where(eq(member.id, memberId));
+}
+
+/** Set only the status (suspend, or soft-remove — keeps the row + its history). */
+export async function setMemberStatus(
+  memberId: string,
+  status: string,
+): Promise<void> {
+  await db.update(member).set({ status }).where(eq(member.id, memberId));
+}
+
+/** Set only the role (promote a member to co-owner). */
+export async function setMemberRole(
+  memberId: string,
+  role: string,
+): Promise<void> {
+  await db.update(member).set({ role }).where(eq(member.id, memberId));
+}
+
+/**
+ * Create — or re-open — a PENDING membership for a self-joining user
+ * (docs/issues/14, 20). The member holds the harmless Better Auth default role
+ * (`member`, not an academy role); the real role is granted only at approval. The
+ * intended role rides on `invitedRole`.
+ *
+ * Idempotent by (user, academy): if a live membership already exists it is left
+ * as-is; a previously removed one is re-opened to pending. Returns the resulting
+ * status so the API can tell "joined" from "already a member".
+ */
+export async function createPendingMembership(input: {
+  userId: string;
+  academyId: string;
+  invitedRole: string;
+}): Promise<{ status: string; alreadyMember: boolean }> {
+  const existing = await db
+    .select({ id: member.id, status: member.status })
+    .from(member)
+    .where(
+      and(
+        eq(member.userId, input.userId),
+        eq(member.organizationId, input.academyId),
+      ),
+    )
+    .limit(1);
+
+  const row = existing[0];
+  if (row) {
+    const status = row.status ?? "pending";
+    // Already pending or active → leave it (don't downgrade an active member).
+    if (status === "pending" || status === "active") {
+      return { status, alreadyMember: true };
+    }
+    // Removed/rejected/suspended → re-open as pending with the fresh intent.
+    await db
+      .update(member)
+      .set({
+        status: "pending",
+        role: "member",
+        invitedRole: input.invitedRole,
+      })
+      .where(eq(member.id, row.id));
+    return { status: "pending", alreadyMember: false };
+  }
+
+  await db.insert(member).values({
+    id: randomUUID(),
+    organizationId: input.academyId,
+    userId: input.userId,
+    role: "member",
+    status: "pending",
+    invitedRole: input.invitedRole,
+    createdAt: new Date(),
+  });
+  return { status: "pending", alreadyMember: false };
 }
