@@ -19,6 +19,25 @@
   }
 }
 
+/* Better Auth motifs — blueprint background textures (web).
+   Mobile gets an RN/SVG equivalent later; see docs/design.md §2. */
+@utility bg-grid {
+  background-image:
+    linear-gradient(to right, var(--border) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--border) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+@utility bg-grid-small {
+  background-image:
+    linear-gradient(to right, var(--border) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--border) 1px, transparent 1px);
+  background-size: 8px 8px;
+}
+@utility bg-dot {
+  background-image: radial-gradient(var(--border) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
 @layer base {
   * {
     @apply border-border;

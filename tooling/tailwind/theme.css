@@ -1,27 +1,23 @@
 /* ===========================================================================
- * matops design system — base tokens ("ink & canvas")
+ * matops design system — base tokens
+ *
+ * Values mirror the Better Auth brand system (better-auth.com/brand) closely:
+ *   - light theme  = Better Auth :root (warm stone)
+ *   - dark theme   = Better Auth brand page (canonical: pure-black surface)
+ *   - callout accents (info / warning / error / success) = their exact hues
+ *   - radius base 0.2rem, deliberately tight; code & callouts break to 0
+ *   - Geist for UI, Geist Mono for code & metadata
  *
  * One source of truth for BOTH platforms:
  *   - web    apps/nextjs/src/app/styles.css   @import "@matops/tailwind-config/theme"
  *   - mobile apps/expo/src/styles.css          @import "@matops/tailwind-config/theme"
  * Change a value here and both the web and mobile app follow.
  *
- * Direction: almost black-and-white, warm-neutral (stone). The grappling belt
- * path ends at black, so black is the primary / "mastery" color. Surfaces are
- * warm off-white, like canvas mat and gi. The only color with chroma is a
- * danger red; everything else is grayscale.
- *
- * Type:
- *   --font-sans  Geist        — everything. Headings use a light weight + tight
- *                               tracking (utilities: font-medium tracking-tight).
- *   --font-mono  Geist Mono   — the "mat clock": time / count / score data only
- *                               (class times, capacity, round timers, schedule).
- * Fallbacks are baked in so mobile still renders before Geist is loaded via
- * expo-font. On web, next/font sets --font-geist-sans / --font-geist-mono.
+ * Usage rules (how, not just what) live in docs/design.md.
  * ======================================================================== */
 
 :root {
-  /* --- surfaces & text (warm stone) --- */
+  /* --- surfaces & text (light = warm stone) --- */
   --background: #ffffff;
   --foreground: #0c0a09; /* stone-950 */
   --card: #ffffff;
@@ -29,7 +25,7 @@
   --popover: #ffffff;
   --popover-foreground: #0c0a09;
 
-  /* --- primary = ink (black belt) --- */
+  /* --- primary = ink --- */
   --primary: #1c1917; /* stone-900 */
   --primary-foreground: #fafaf9; /* stone-50 */
 
@@ -41,14 +37,24 @@
   --accent: #f5f5f4;
   --accent-foreground: #1c1917;
 
-  /* --- the one chromatic token: danger --- */
-  --destructive: #e11d2e;
+  /* --- destructive --- */
+  --destructive: #e40014;
   --destructive-foreground: #fafaf9;
 
   /* --- lines & focus --- */
   --border: #e7e5e4; /* stone-200 */
   --input: #e7e5e4;
-  --ring: #0c0a09; /* bold ink focus ring — high-contrast, keyboard-visible */
+  --ring: #a6a09b; /* stone-400 */
+
+  /* --- callout accents (functional only; theme-independent) --- */
+  --info: #2b7fff;
+  --info-foreground: #fafaf9;
+  --warning: #ff6900;
+  --warning-foreground: #1c1917;
+  --error: #fb2c36;
+  --error-foreground: #fafaf9;
+  --success: #00c950;
+  --success-foreground: #052e16;
 
   /* --- data viz: monochrome ramp (dark -> light) --- */
   --chart-1: #1c1917;
@@ -57,7 +63,7 @@
   --chart-4: #a6a09b; /* stone-400 */
   --chart-5: #d6d3d1; /* stone-300 */
 
-  /* --- sidebar (owner/instructor web nav) --- */
+  /* --- sidebar --- */
   --sidebar: #fafaf9;
   --sidebar-foreground: #44403c;
   --sidebar-primary: #1c1917;
@@ -65,12 +71,12 @@
   --sidebar-accent: #f5f5f4;
   --sidebar-accent-foreground: #1c1917;
   --sidebar-border: #e7e5e4;
-  --sidebar-ring: #0c0a09;
+  --sidebar-ring: #a6a09b;
 
-  /* --- shape: sharp, crisp corners --- */
-  --radius: 0.375rem;
+  /* --- shape: base 0.2rem, deliberately tight (code/callouts break to 0) --- */
+  --radius: 0.2rem;
 
-  /* --- elevation: near-flat --- */
+  /* --- elevation: sparingly; lift interactive affordances only --- */
   --shadow-2xs: 0px 1px 2px 0px hsl(24 6% 10% / 0.04);
   --shadow-xs: 0px 1px 2px 0px hsl(24 6% 10% / 0.04);
   --shadow-sm:
@@ -95,47 +101,46 @@
   --spacing: 0.25rem;
 
   @variant dark {
-    /* --- surfaces & text (warm near-black) --- */
-    --background: #0a0908;
+    /* --- canonical Better Auth dark: pure-black surface --- */
+    --background: #000000;
     --foreground: #fafaf9;
-    --card: #141210;
+    --card: #0a0a0a;
     --card-foreground: #fafaf9;
-    --popover: #141210;
+    --popover: #0a0a0a;
     --popover-foreground: #fafaf9;
 
-    /* --- primary inverts: chalk on ink --- */
     --primary: #fafaf9;
     --primary-foreground: #1c1917;
 
-    --secondary: #1f1d1b;
+    --secondary: #292524; /* stone-800 */
     --secondary-foreground: #fafaf9;
-    --muted: #1f1d1b;
-    --muted-foreground: #a8a29e; /* stone-400 */
-    --accent: #292524; /* stone-800 */
+    --muted: #292524;
+    --muted-foreground: #a6a09b; /* stone-400 */
+    --accent: #292524;
     --accent-foreground: #fafaf9;
 
-    --destructive: #e5484d;
+    --destructive: #82181a; /* red-900 */
     --destructive-foreground: #fafaf9;
 
     --border: #292524;
     --input: #292524;
-    --ring: #d6d3d1; /* light ring, visible on ink */
+    --ring: #79716b; /* stone-500 */
 
     /* data viz: monochrome ramp (light -> dark) */
     --chart-1: #fafaf9;
     --chart-2: #d6d3d1;
-    --chart-3: #a8a29e;
+    --chart-3: #a6a09b;
     --chart-4: #79716b;
     --chart-5: #44403c;
 
-    --sidebar: #141210;
+    --sidebar: #0a0a0a;
     --sidebar-foreground: #d6d3d1;
     --sidebar-primary: #fafaf9;
     --sidebar-primary-foreground: #1c1917;
     --sidebar-accent: #292524;
     --sidebar-accent-foreground: #fafaf9;
     --sidebar-border: #292524;
-    --sidebar-ring: #d6d3d1;
+    --sidebar-ring: #79716b;
 
     --shadow-2xs: 0px 1px 2px 0px hsl(0 0% 0% / 0.16);
     --shadow-xs: 0px 1px 2px 0px hsl(0 0% 0% / 0.16);
@@ -173,6 +178,17 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
+  /* callout accents */
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-error: var(--error);
+  --color-error-foreground: var(--error-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -195,8 +211,9 @@
     monospace
   );
 
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
+  /* Better Auth radius scale: base tight, code/callouts use rounded-none (0) */
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: calc(var(--radius) - 1px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 

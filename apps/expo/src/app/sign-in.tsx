@@ -2,7 +2,9 @@ import { useState } from "react";
 import { Text, View } from "react-native";
 import { Stack, useLocalSearchParams } from "expo-router";
 
-import { Button, Heading, Muted, Screen, TextField } from "~/components/ui";
+import { Button } from "@matops/ui/button";
+
+import { Heading, Muted, Screen, TextField } from "~/components/ui";
 import { authClient } from "~/utils/auth";
 
 /**
@@ -64,13 +66,14 @@ export default function SignIn() {
             </Muted>
           </View>
           <Button
-            label="Use a different email"
             variant="ghost"
             onPress={() => {
               setSent(false);
               setError(null);
             }}
-          />
+          >
+            Use a different email
+          </Button>
         </View>
       ) : (
         <View className="gap-4">
@@ -84,11 +87,9 @@ export default function SignIn() {
             autoFocus
           />
           {error && <Text className="text-destructive text-sm">{error}</Text>}
-          <Button
-            label={pending ? "Sending…" : "Send magic link"}
-            onPress={send}
-            disabled={!canSend}
-          />
+          <Button onPress={send} disabled={!canSend}>
+            {pending ? "Sending…" : "Send magic link"}
+          </Button>
         </View>
       )}
     </Screen>

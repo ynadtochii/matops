@@ -9,6 +9,7 @@
     "dev:ios": "expo start --ios",
     "android": "expo run:android",
     "ios": "expo run:ios",
+    "mobile": "bash ./scripts/run-ios.sh",
     "format": "prettier --check . --ignore-path ../../.gitignore --ignore-path .prettierignore",
     "lint": "eslint --flag unstable_native_nodejs_ts_config",
     "typecheck": "tsc --noEmit"
@@ -16,6 +17,7 @@
   "dependencies": {
     "@better-auth/expo": "catalog:",
     "@legendapp/list": "^2.0.14",
+    "@matops/ui": "workspace:*",
     "@tanstack/react-query": "catalog:",
     "@trpc/client": "catalog:",
     "@trpc/server": "catalog:",
