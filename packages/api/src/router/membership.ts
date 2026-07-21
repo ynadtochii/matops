@@ -23,6 +23,7 @@ import {
 } from "@matops/validators";
 
 import type { createTRPCContext } from "../trpc";
+import { notifyMembershipApproved } from "../notify";
 import { ownerProcedure, protectedProcedure } from "../trpc";
 
 type BaseContext = Awaited<ReturnType<typeof createTRPCContext>>;
@@ -204,7 +205,11 @@ export const membershipRouter = {
         });
       }
       await setMemberRoleStatus(input.memberId, approveMembership(m));
-      // TODO(phase 4): notify the member ("You're in at {academy}").
+      // Welcome push to the newly approved member (§4/S3, docs/issues/17).
+      await notifyMembershipApproved({
+        academyId: ctx.academyId,
+        userId: m.userId,
+      });
       return { ok: true as const };
     }),
 

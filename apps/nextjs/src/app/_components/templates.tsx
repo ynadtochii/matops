@@ -15,6 +15,7 @@ import { Label } from "@matops/ui/label";
 import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
+import { EmptyState, ErrorState, SkeletonRows } from "./states";
 
 type Template = RouterOutputs["template"]["list"][number];
 
@@ -155,10 +156,14 @@ export function Templates() {
         )}
       </div>
 
-      {templates.length === 0 && form === null ? (
-        <p className="text-muted-foreground text-sm">
-          No recurring classes yet. Create your first one.
-        </p>
+      {list.isPending ? (
+        <SkeletonRows rows={3} />
+      ) : list.isError ? (
+        <ErrorState label="your templates" onRetry={() => void list.refetch()} />
+      ) : templates.length === 0 && form === null ? (
+        <EmptyState title="No recurring classes yet.">
+          Create a weekly template and matops fills the calendar for you.
+        </EmptyState>
       ) : (
         <div className="flex flex-col gap-2">
           {templates.map((t) => (

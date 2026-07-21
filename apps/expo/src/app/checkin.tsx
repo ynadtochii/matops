@@ -6,6 +6,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Banner,
   Button,
+  EmptyState,
+  ErrorState,
   Heading,
   Loading,
   Muted,
@@ -50,12 +52,15 @@ export default function CheckIn() {
       {today.isPending ? (
         <Loading />
       ) : today.isError ? (
-        <Muted>Could not load classes. Try again.</Muted>
+        <ErrorState
+          label="today's classes"
+          onRetry={() => void today.refetch()}
+        />
       ) : today.data.length === 0 ? (
-        <View className="gap-2">
-          <Muted>No class right now.</Muted>
-          <Muted>Come back around class time to check in.</Muted>
-        </View>
+        <EmptyState
+          title="No class right now."
+          body="Come back around class time to check in."
+        />
       ) : (
         <View className="gap-4">
           <Muted>

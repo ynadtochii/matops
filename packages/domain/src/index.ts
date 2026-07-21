@@ -22,5 +22,6 @@ export * from "./dropin";
 export * from "./invite";
 export * from "./materialize";
 export * from "./membership";
+export * from "./notify";
 export * from "./schedule";
 export * from "./slug";

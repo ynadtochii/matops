@@ -4,7 +4,13 @@ import { Stack, useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "~/utils/api";
-import { Banner, Loading, Muted, Screen } from "~/components/ui";
+import {
+  Banner,
+  EmptyState,
+  ErrorState,
+  Loading,
+  Screen,
+} from "~/components/ui";
 import { trpc } from "~/utils/api";
 import { dayFmt, dayKey, spotsLeftLabel, timeFmt } from "~/utils/format";
 
@@ -121,10 +127,16 @@ export default function Schedule() {
 
       {week.isPending ? (
         <Loading />
+      ) : week.isError ? (
+        <ErrorState
+          label="your schedule"
+          onRetry={() => void week.refetch()}
+        />
       ) : byDay.length === 0 ? (
-        <View className="flex-1 items-center justify-center">
-          <Muted>No classes scheduled this week.</Muted>
-        </View>
+        <EmptyState
+          title="No classes this week."
+          body="Check back soon — your gym adds classes here as they schedule them."
+        />
       ) : (
         <ScrollView
           className="flex-1"

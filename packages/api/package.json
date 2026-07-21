@@ -6,6 +6,10 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./notify": {
+      "types": "./src/notify.ts",
+      "default": "./src/notify.ts"
     }
   },
   "license": "MIT",
@@ -21,6 +25,7 @@
     "@matops/auth": "workspace:*",
     "@matops/db": "workspace:*",
     "@matops/domain": "workspace:*",
+    "@matops/notifications": "workspace:*",
     "@matops/validators": "workspace:*",
     "@trpc/server": "catalog:",
     "superjson": "2.2.3",

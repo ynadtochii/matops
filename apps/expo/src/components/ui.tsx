@@ -152,3 +152,53 @@ export function Heading({ children }: { children: ReactNode }) {
 export function Muted({ children }: { children: ReactNode }) {
   return <Text className="text-muted-foreground text-sm">{children}</Text>;
 }
+
+/**
+ * Empty state — an invitation to the next action (slice 4.3, the mobile twin of
+ * the web `EmptyState`). `title` names what's absent; `body` says what to do.
+ */
+export function EmptyState({
+  title,
+  body,
+  action,
+}: {
+  title: string;
+  body?: string;
+  action?: ReactNode;
+}) {
+  return (
+    <View className="border-border/70 gap-2 rounded-lg border border-dashed p-4">
+      <Text className="text-foreground text-base font-medium">{title}</Text>
+      {body ? (
+        <Text className="text-muted-foreground text-sm">{body}</Text>
+      ) : null}
+      {action ? <View className="pt-1">{action}</View> : null}
+    </View>
+  );
+}
+
+/**
+ * Error state — names what failed and offers a retry, kept distinct from
+ * EmptyState so "couldn't load" never reads as "nothing here". No apology.
+ */
+export function ErrorState({
+  label,
+  onRetry,
+}: {
+  label: string;
+  onRetry?: () => void;
+}) {
+  return (
+    <View className="border-destructive/30 bg-destructive/5 gap-2 rounded-lg border p-4">
+      <Text className="text-foreground text-base font-medium">
+        {`Couldn't load ${label}.`}
+      </Text>
+      <Text className="text-muted-foreground text-sm">
+        Check your connection and try again.
+      </Text>
+      {onRetry ? (
+        <Button label="Try again" variant="outline" onPress={onRetry} />
+      ) : null}
+    </View>
+  );
+}

@@ -228,3 +228,25 @@ export const DropInSchema = z.object({
   consent: z.literal(true, "Please tick the consent box to continue"),
 });
 export type DropInInput = z.infer<typeof DropInSchema>;
+
+// ─── Push notifications (Phase 4, slice 4.1) ─────────────────────────────────
+
+/**
+ * Register a device's Expo push token (docs/issues/17). Token is user-global —
+ * the router keys it by the authenticated user, not an academy. Expo tokens look
+ * like `ExponentPushToken[xxxxxxxx]`.
+ */
+export const RegisterPushTokenSchema = z.object({
+  token: z.string().trim().min(1).max(200),
+  platform: z.enum(["ios", "android"]),
+  deviceId: z.string().trim().max(200).optional(),
+});
+export type RegisterPushTokenInput = z.infer<typeof RegisterPushTokenSchema>;
+
+/** Remove a device's push token (on sign-out). */
+export const UnregisterPushTokenSchema = z.object({
+  token: z.string().trim().min(1).max(200),
+});
+export type UnregisterPushTokenInput = z.infer<
+  typeof UnregisterPushTokenSchema
+>;

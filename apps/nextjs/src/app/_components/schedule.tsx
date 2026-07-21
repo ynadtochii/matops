@@ -10,6 +10,7 @@ import { Label } from "@matops/ui/label";
 import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
+import { EmptyState, ErrorState, SkeletonRows } from "./states";
 
 type ClassRow = RouterOutputs["class"]["week"][number];
 
@@ -187,11 +188,13 @@ export function Schedule() {
       </div>
 
       {week.isPending ? (
-        <p className="text-muted-foreground text-sm">Loading…</p>
+        <SkeletonRows rows={3} />
+      ) : week.isError ? (
+        <ErrorState label="this week's schedule" onRetry={() => void week.refetch()} />
       ) : byDay.length === 0 ? (
-        <p className="text-muted-foreground text-sm">
-          No classes this week. Add a recurring template or a one-off class.
-        </p>
+        <EmptyState title="No classes this week.">
+          Add a one-off class above, or set up a recurring template below.
+        </EmptyState>
       ) : (
         <div className="flex flex-col gap-4">
           {byDay.map(([key, rows]) => (

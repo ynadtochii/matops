@@ -7,6 +7,7 @@ import { Button } from "@matops/ui/button";
 import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
+import { EmptyState, ErrorState, SkeletonRows } from "./states";
 
 type Member = RouterOutputs["membership"]["roster"][number];
 
@@ -66,6 +67,24 @@ export function Roster() {
     suspend.isPending ||
     promote.isPending;
 
+  if (roster.isPending) {
+    return (
+      <section className="flex flex-col gap-3">
+        <h2 className="text-lg font-semibold">Members</h2>
+        <SkeletonRows rows={4} />
+      </section>
+    );
+  }
+
+  if (roster.isError) {
+    return (
+      <section className="flex flex-col gap-3">
+        <h2 className="text-lg font-semibold">Members</h2>
+        <ErrorState label="the roster" onRetry={() => void roster.refetch()} />
+      </section>
+    );
+  }
+
   return (
     <section className="flex flex-col gap-6">
       <div className="flex flex-col gap-3">
@@ -78,7 +97,9 @@ export function Roster() {
           )}
         </h2>
         {pending.length === 0 ? (
-          <p className="text-muted-foreground text-sm">No one is waiting.</p>
+          <EmptyState title="No one is waiting.">
+            New sign-ups land here for you to approve.
+          </EmptyState>
         ) : (
           pending.map((m) => (
             <MemberRow key={m.memberId} m={m} label={roleLabel(m)}>
@@ -105,9 +126,10 @@ export function Roster() {
       <div className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">Members</h2>
         {active.length === 0 ? (
-          <p className="text-muted-foreground text-sm">
-            No active members yet.
-          </p>
+          <EmptyState title="No active members yet.">
+            Approve a pending sign-up, or share an invite link to bring people
+            in.
+          </EmptyState>
         ) : (
           active.map((m) => (
             <MemberRow key={m.memberId} m={m} label={roleLabel(m)}>
@@ -147,11 +169,13 @@ export function Roster() {
 
       <div className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">Drop-in leads</h2>
-        {(leads.data ?? []).length === 0 ? (
-          <p className="text-muted-foreground text-sm">
-            No drop-ins yet. They arrive when a first-time visitor checks in via
-            the gym QR.
-          </p>
+        {leads.isError ? (
+          <ErrorState label="drop-in leads" onRetry={() => void leads.refetch()} />
+        ) : (leads.data ?? []).length === 0 ? (
+          <EmptyState title="No drop-in leads yet.">
+            First-time visitors who check in via the gym QR show up here to
+            follow up.
+          </EmptyState>
         ) : (
           (leads.data ?? []).map((l) => (
             <div

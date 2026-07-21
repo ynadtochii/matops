@@ -78,6 +78,27 @@ still resolves:
 - [ ] After a successful join, re-opening the app skips onboarding and lands on
       the schedule (active-academy gate).
 
+## Push notifications (Phase 4 — device-only; needs a dev build + an EAS project id)
+
+Simulators cannot receive push, and `getExpoPushTokenAsync` needs an EAS project
+id (lands with the Phase 5 launch infra), so all of this is device-only.
+
+- [ ] On first sign-in, iOS/Android shows the **notification permission** prompt;
+      granting it registers a token (a `push_token` row appears for the user).
+- [ ] **Class cancelled** (owner cancels a class you booked) → a push arrives even
+      with the app closed; tapping it opens that **class detail**.
+- [ ] **Class time/instructor change** on a booked class → push arrives.
+- [ ] **Membership approved** (owner approves you) → "You're in!" push; tapping it
+      opens the **schedule**.
+- [ ] **Reminder:** trigger `GET /api/cron/remind` (with `Authorization: Bearer
+      $CRON_SECRET`) for a booked class starting within the lead window → one push;
+      a second call sends **0** (idempotent via `reminder_sent_at`).
+- [ ] **Profile → Push notifications toggle:** turning it **off** stops further
+      pushes to this device (token removed); turning it **on** re-registers.
+- [ ] **Sign out** removes the device token (no pushes after signing out).
+- [ ] Foreground push shows the in-app banner; permission **denied** → app still
+      works, no crash, no token.
+
 ---
 
 *Report: build (iOS/Android + version), which items passed/failed, and any repro

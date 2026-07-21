@@ -5,7 +5,7 @@
 > Flip cells as you go: **`—`** not needed · **`todo`** · **`wip`** · **`done`**. Every flip to `done` must pass the [Definition of Done](delivery.md#4-definition-of-done-the-anti-drift-gate).
 > Surfaces: **DB · API · Web · Mob · Sh(ared) · Inf(ra)**. Spec IDs trace up to [spec.md](spec.md); tickets to [map.md](map.md).
 
-**Status:** **Phases 2–3 complete + Expo student app shipped (mobile pass) + slice 1.7 (academy-code join).** All static gates are green — `lint` (13/13), `typecheck` (15/15), `test` (117 tests). Phase 3 (booking, attendance, QR check-in, public drop-in) is built and its migrations (`0011`–`0013`) are applied + verified on Neon. A tenant-seam hardening pass (ADR 33) then made the RLS seam fail-closed and fixed an enrolled-tier fail-open. Scheduling core is built: recurring class templates (O3), DST-aware materialization (lazy on save + a bounded daily Vercel Cron), one-off classes, edit/cancel with future-instance propagation, and the schedule reads (owner web `class.week`; student `class.mine`). The **Expo student app** shipped in the mobile pass (join → pending → schedule → detail → profile/switcher, Mob cells 1.3/1.4/1.6/2.4); mobile join is a 6-digit academy-code lookup (slice 1.7, ADR 32). **Not built yet:** Phase 4 (notifications & polish), Phase 5 (launch hardening incl. universal/App links + booking-count reconciliation), and the one flagged follow-up — rendering the venue check-in URL as a scannable QR image (needs a QR lib; the link itself is live in O6). All of Phase 3 (book/cancel, provisional tier, attendance, QR check-in, public drop-in) is in.
+**Status:** **Phases 2–3 complete + Expo student app shipped (mobile pass) + slice 1.7 (academy-code join).** All static gates are green — `lint` (13/13), `typecheck` (15/15), `test` (117 tests). Phase 3 (booking, attendance, QR check-in, public drop-in) is built and its migrations (`0011`–`0013`) are applied + verified on Neon. A tenant-seam hardening pass (ADR 33) then made the RLS seam fail-closed and fixed an enrolled-tier fail-open. Scheduling core is built: recurring class templates (O3), DST-aware materialization (lazy on save + a bounded daily Vercel Cron), one-off classes, edit/cancel with future-instance propagation, and the schedule reads (owner web `class.week`; student `class.mine`). The **Expo student app** shipped in the mobile pass (join → pending → schedule → detail → profile/switcher, Mob cells 1.3/1.4/1.6/2.4); mobile join is a 6-digit academy-code lookup (slice 1.7, ADR 32). **Phase 4 (notifications & polish) is now built** — a pure-transport `packages/notifications` (Expo Push + Resend), the three event sends (cancel/change/approved) wired into the mutations, the class-reminder sweep + `/api/cron/remind` route (its frequent cron schedule deferred to Phase 5); push tokens live outside the tenant seam (migration `0014`, ADR **34**); and (slice 4.3) a shared **states system** — skeleton / empty-as-invitation / error-with-retry on both clients — plus the thin S7 push toggle. **Not built yet:** Phase 5 (launch hardening incl. universal/App links + booking-count reconciliation + the reminder cron schedule), and the one flagged follow-up — rendering the venue check-in URL as a scannable QR image (needs a QR lib; the link itself is live in O6). All of Phase 3 (book/cancel, provisional tier, attendance, QR check-in, public drop-in) is in.
 
 > **Verified live on Neon.**
 > - **Phase 1 exit test** — sign in (magic link) → **Start a gym** → active **owner** (RLS scope set) → create/rotate an invite link → a second user joins **pending, holding no academy role** → owner **approves** → role granted + active. "Never ownerless" blocks removing the sole owner; a student is `FORBIDDEN` from owner-only routes.
@@ -64,9 +64,11 @@ One row per slice. This is the single answer to *"what's left, on which surface?
 | 3.4 | QR self check-in (book + attend) | done | done | — | done | done | — |
 | 3.5 | Public drop-in / lead form (consent, dedupe) | done | done | done | — | done | done |
 | **4** | **Notifications & polish** | | | | | | |
-| 4.1 | `notifications` package (Expo Push + Resend) | — | todo | — | todo | todo | todo |
-| 4.2 | Events (cancel, reminder, approval, class change) | todo | todo | — | todo | todo | todo |
-| 4.3 | Empty/error/soft-capacity states, design pass | — | — | todo | todo | todo | — |
+| 4.1 | `notifications` package (Expo Push + Resend) | done | done | — | done | done | done |
+| 4.2 | Events (cancel, reminder, approval, class change) | done | done | — | done | done | done¹ |
+| 4.3 | Empty/error/soft-capacity states, design pass | — | — | done | done | done | — |
+
+¹ Reminder sweep + `/api/cron/remind` route ship in 4.2; the **frequent cron schedule** in `vercel.json` (needs a sub-daily cron / Vercel Pro) is deferred to Phase 5 (ADR 34).
 | **5** | **Launch hardening** | | | | | | |
 | 5.1 | `booking_count` reconciliation cron | — | todo | — | — | — | todo |
 | 5.2 | Observability + errors + rate-limit public routes | — | todo | todo | todo | — | todo |
@@ -121,15 +123,16 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 ### Phase 4 — Notifications & polish
 **Exit test:** every v1 event fires on the right channel; empty/error states are flawless.
 
-- **4.1 notifications package** — thin `packages/notifications`: Expo Push + Resend email, serverless HTTPS only. Refs: ticket 17.
-- **4.2 Events** — class cancelled (**push + email**), class reminder (cron), membership approved (push), class time/instructor change (push). Store push tokens. Refs: ticket 17; spec §4.
-- **4.3 States + design pass** — empty/loading/error for every screen; soft-capacity warning UI; ≤3-tap booking verified; NativeWind tokens shared with web. Refs: tickets 09, 11.
+- **4.1 notifications package** — **DONE.** Thin `packages/notifications` = pure transport (`sendPush` batched Expo Push + `sendEmail` Resend, serverless HTTPS, never throws, no DB dep). Message text = pure builders in `@matops/domain/notify.ts` (+13 tests); resolution lives in the API layer (ADR **34**). Push tokens stored **outside the tenant seam** — `push_token` (migration `0014`, keyed by `user.id`, no `academy_id`/RLS); `pushToken.register`/`unregister` on `protectedProcedure`; mobile registers on sign-in via `expo-notifications` (`utils/push.ts` + `push-sync.tsx`). Refs: tickets 17, 34.
+- **4.2 Events** — **DONE (bar the reminder schedule).** The three `TODO(phase 4)` hooks are wired: class cancelled (**push + email**), class time/instructor change (**push + email**), membership approved (**push**) — via `packages/api/notify.ts`, awaited but error-swallowed so a send never fails the mutation. Class-reminder **sweep** (`claimDueReminderClasses`, atomic `reminder_sent_at` claim in `0014`) + `runReminderSweep` + the protected `/api/cron/remind` route ship now; the **frequent cron schedule** is a Phase 5 task (ADR 34). Mobile: tap-to-navigate handler. Refs: tickets 17, 34; spec §4.
+- **4.3 States + design pass** — **DONE.** A shared **state system** on both clients — `SkeletonRows` / `EmptyState` / `ErrorState` (web `_components/states.tsx`; mobile `components/ui.tsx`): loading skeletons, empties written as **invitations** (title + what-to-do), and errors with a **retry** that never masquerade as "no data". Applied across every data screen (web home/schedule/roster/attendance/templates; mobile schedule/class/check-in) — fixed two real bugs where a fetch error fell through to onboarding (web) / "no classes" (mobile). Soft-capacity red + ≤3-tap booking verified (already built in S5). Thin S7 **Push notifications** toggle on mobile profile (registers/unregisters this device's token — no server pref). NativeWind/Tailwind tokens already shared (ADR 11). Refs: tickets 09, 11.
 
 ### Phase 5 — Launch hardening
 **Exit test:** v1 running in production, both apps published.
 
 - **5.1 Reconciliation** — periodic recompute of `booking_count` from participations (safety net for the denormalized count). Refs: ticket 13.
 - **5.2 Observability & abuse** — error tracking, structured logs, rate-limit the **public** drop-in endpoint (QR-in-gym is the main anti-spam; add a soft limit). Refs: ticket 25.
+- **5.x Reminder cron schedule** — add the frequent `crons` entry for `/api/cron/remind` to `vercel.json` (sweep + route already built in 4.2). Needs a sub-daily cron (Vercel Pro; Hobby caps crons at 1/day). Refs: ADR 34, ticket 17.
 - **5.3 Release** — Vercel prod, Neon prod branch + migration run, EAS build + store submit, env promotion.
 
 ---

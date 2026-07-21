@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Banner,
   Button,
+  ErrorState,
   Heading,
   Loading,
   Muted,
@@ -67,12 +68,9 @@ export default function ClassDetail() {
 
   if (q.isError) {
     return (
-      <Screen className="justify-center gap-3">
+      <Screen className="justify-center">
         <Stack.Screen options={{ title: "Class" }} />
-        <Heading>Class not found</Heading>
-        <Muted>
-          This class may have been removed. Go back to the schedule.
-        </Muted>
+        <ErrorState label="this class" onRetry={() => void q.refetch()} />
       </Screen>
     );
   }

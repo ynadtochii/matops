@@ -123,6 +123,9 @@ export const classInstance = pgTable(
     capacity: t.integer().notNull(),
     bookingCount: t.integer().notNull().default(0),
     status: classStatus().notNull().default("scheduled"),
+    // Phase 4 (docs/issues/17): stamped when the reminder cron has pushed this
+    // class's reminder, so a re-run never double-sends (idempotency guard).
+    reminderSentAt: t.timestamp({ withTimezone: true }),
     deletedAt: t.timestamp({ withTimezone: true }),
     createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: t

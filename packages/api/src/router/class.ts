@@ -20,6 +20,7 @@ import {
   UpdateClassSchema,
 } from "@matops/validators";
 
+import { notifyClassCancelled, notifyClassChanged } from "../notify";
 import { enrolledProcedure, staffProcedure } from "../trpc";
 
 /** Week window input shared by the staff and student schedule reads. */
@@ -218,7 +219,23 @@ export const classRouter = {
         { startsAt: row.startsAt, instructorId: row.instructorId },
       );
       if (change.shouldNotify) {
-        // TODO(phase 4): push + email booked students about the time/instructor change.
+        // Notify booked students of the time/instructor change (§4, docs/issues/17).
+        const booked = await ctx.db
+          .select({ studentId: classParticipation.studentId })
+          .from(classParticipation)
+          .where(
+            and(
+              eq(classParticipation.classId, row.id),
+              eq(classParticipation.bookingStatus, "booked"),
+            ),
+          );
+        await notifyClassChanged({
+          academyId: ctx.academyId,
+          className: row.title,
+          startsAt: row.startsAt,
+          classId: row.id,
+          studentIds: booked.map((b) => b.studentId),
+        });
       }
       return row;
     }),
@@ -237,14 +254,34 @@ export const classRouter = {
             eq(classInstance.status, "scheduled"),
           ),
         )
-        .returning({ id: classInstance.id });
+        .returning({
+          id: classInstance.id,
+          title: classInstance.title,
+          startsAt: classInstance.startsAt,
+        });
       if (!row) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Class not found or already cancelled",
         });
       }
-      // TODO(phase 4): push + email every booked student (class cancelled).
+      // Push + email every booked student (class cancelled — §4, docs/issues/17).
+      const booked = await ctx.db
+        .select({ studentId: classParticipation.studentId })
+        .from(classParticipation)
+        .where(
+          and(
+            eq(classParticipation.classId, row.id),
+            eq(classParticipation.bookingStatus, "booked"),
+          ),
+        );
+      await notifyClassCancelled({
+        academyId: ctx.academyId,
+        className: row.title,
+        startsAt: row.startsAt,
+        classId: row.id,
+        studentIds: booked.map((b) => b.studentId),
+      });
       return { ok: true as const };
     }),
 } satisfies TRPCRouterRecord;

@@ -7,6 +7,7 @@ import { classRouter } from "./router/class";
 import { dropInRouter } from "./router/dropin";
 import { inviteRouter } from "./router/invite";
 import { membershipRouter } from "./router/membership";
+import { pushTokenRouter } from "./router/pushToken";
 import { systemRouter } from "./router/system";
 import { templateRouter } from "./router/template";
 import { createTRPCRouter } from "./trpc";
@@ -22,6 +23,7 @@ export const appRouter = createTRPCRouter({
   attendance: attendanceRouter,
   checkin: checkinRouter,
   dropIn: dropInRouter,
+  pushToken: pushTokenRouter,
   system: systemRouter,
 });
 

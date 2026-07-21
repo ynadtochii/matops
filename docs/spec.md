@@ -81,7 +81,7 @@ No blank waiting screen. A **slim banner** on the schedule: "Pending approval �
 ### S7 · Profile / account
 - Name, phone, current academy, sign out.
 - **Academy switcher** — shown only if the student belongs to >1 academy; switching changes the active academy and all data follows.
-- **Notification settings** (optional, thin): toggle class reminders / cancellation alerts.
+- **Notification settings** (thin): a single **Push notifications** on/off toggle (v1 — one switch covers reminders and cancellation alerts; turning it off drops this device's push token so nothing is sent). Separate per-event toggles are a later iteration.
 
 ### S8 · Check in (QR)
 - Tap **Check in** (or scan the gym's poster) → the app reads the **gym QR** → confirms *"Check in to {today's class}?"* → one tap → marked **present**.

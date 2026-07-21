@@ -3,9 +3,10 @@ import { vercel } from "@t3-oss/env-nextjs/presets-zod";
 import { z } from "zod/v4";
 
 import { authEnv } from "@matops/auth/env";
+import { notificationsEnv } from "@matops/notifications/env";
 
 export const env = createEnv({
-  extends: [authEnv(), vercel()],
+  extends: [authEnv(), notificationsEnv(), vercel()],
   shared: {
     NODE_ENV: z
       .enum(["development", "production", "test"])

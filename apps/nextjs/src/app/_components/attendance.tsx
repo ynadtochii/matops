@@ -7,6 +7,7 @@ import { Button } from "@matops/ui/button";
 import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
+import { EmptyState, ErrorState, SkeletonRows } from "./states";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -99,8 +100,16 @@ export function Attendance() {
         ))}
       </select>
 
-      {classId !== "" && roster.isPending ? (
-        <p className="text-muted-foreground text-sm">Loading…</p>
+      {classId === "" && !classes.isPending && !classes.isError && options.length === 0 ? (
+        <EmptyState title="No recent classes.">
+          Attendance opens once a class has run. Add classes on the schedule.
+        </EmptyState>
+      ) : classId === "" && classes.isError ? (
+        <ErrorState label="your classes" onRetry={() => void classes.refetch()} />
+      ) : classId !== "" && roster.isPending ? (
+        <SkeletonRows rows={4} />
+      ) : classId !== "" && roster.isError ? (
+        <ErrorState label="the class roster" onRetry={() => void roster.refetch()} />
       ) : classId !== "" && roster.data ? (
         <div className="flex flex-col gap-3">
           {counts && (
@@ -113,9 +122,9 @@ export function Attendance() {
           )}
 
           {roster.data.rows.length === 0 ? (
-            <p className="text-muted-foreground text-sm">
-              No one booked yet. Add a walk-in below.
-            </p>
+            <EmptyState title="No one booked yet.">
+              Mark people present as they arrive — add a walk-in below.
+            </EmptyState>
           ) : (
             <ul className="flex flex-col gap-2">
               {roster.data.rows.map((r) => {
