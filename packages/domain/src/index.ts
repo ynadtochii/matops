@@ -12,6 +12,7 @@
  *   - 2.2 template → concrete-class materialization math
  */
 
+export * from "./academy-code";
 export * from "./access";
 export * from "./class-edit";
 export * from "./invite";

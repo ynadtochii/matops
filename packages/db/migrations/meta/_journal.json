@@ -71,6 +71,13 @@
       "when": 1784616725810,
       "tag": "0009_workable_viper",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1784624789985,
+      "tag": "0010_pink_maggott",
+      "breakpoints": true
     }
   ]
 }

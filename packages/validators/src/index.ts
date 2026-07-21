@@ -41,6 +41,25 @@ export const InviteTokenSchema = z.object({
   token: z.string().min(1),
 });
 
+/** The 6-digit academy code a student types to find a gym on mobile (S2,
+ * docs/issues/32). Exactly six digits — matches `isValidAcademyCode` in domain. */
+export const AcademyCodeSchema = z.object({
+  code: z.string().regex(/^\d{6}$/, "Enter your gym's 6-digit ID"),
+});
+export type AcademyCodeInput = z.infer<typeof AcademyCodeSchema>;
+
+/**
+ * Student self-join by academy code (mobile v1, docs/issues/32). Same minimal
+ * profile as the invite-link join; the role is always "student" (set server-side),
+ * so there is no role field here. Email is already verified via magic-link.
+ */
+export const JoinByCodeSchema = AcademyCodeSchema.extend({
+  firstName: z.string().trim().min(1).max(60),
+  lastName: z.string().trim().min(1).max(60),
+  phone: z.string().trim().min(3).max(30),
+});
+export type JoinByCodeInput = z.infer<typeof JoinByCodeSchema>;
+
 // ─── Scheduling (Phase 2) ────────────────────────────────────────────────────
 
 /** Optional grappling tag on a class/template (spec O3, matches the DB enum). */

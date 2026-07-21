@@ -3,13 +3,18 @@ import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod/v4";
 
-import { getMembership, listMembershipsForUser } from "@matops/db";
+import {
+  findAcademyByCode,
+  getAcademyCode,
+  getMembership,
+  listMembershipsForUser,
+} from "@matops/db";
 import {
   isStudentLensMembership,
   isWebLensMembership,
   slugify,
 } from "@matops/domain";
-import { CreateAcademySchema } from "@matops/validators";
+import { AcademyCodeSchema, CreateAcademySchema } from "@matops/validators";
 
 import { protectedProcedure } from "../trpc";
 
@@ -33,7 +38,8 @@ export const academyRouter = {
     return all.filter(isStudentLensMembership);
   }),
 
-  /** The active academy (name + the caller's role/status there), or null. */
+  /** The active academy (name, the caller's role/status, and the shareable code
+   * an owner gives students to join in the app — docs/issues/32), or null. */
   current: protectedProcedure.query(async ({ ctx }) => {
     const academyId = ctx.session.session.activeOrganizationId;
     if (!academyId) return null;
@@ -45,8 +51,21 @@ export const academyRouter = {
       name: academy.name,
       role: academy.role,
       status: academy.status,
+      code: await getAcademyCode(academyId),
     };
   }),
+
+  /**
+   * Look up an academy by its shared 6-digit code — the mobile search step
+   * before joining (spec S2, docs/issues/32). Signed-in only (the mobile join
+   * flow runs after sign-in); returns just the id + name to confirm, or null if
+   * no academy has that code.
+   */
+  findByCode: protectedProcedure
+    .input(AcademyCodeSchema)
+    .query(async ({ input }) => {
+      return findAcademyByCode(input.code);
+    }),
 
   /**
    * "Start a gym" (spec 1.1, docs/issues/20). Creates the organization; Better

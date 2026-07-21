@@ -33,6 +33,7 @@ export function Invites() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const invites = useQuery(trpc.invite.list.queryOptions());
+  const academy = useQuery(trpc.academy.current.queryOptions());
 
   const invalidate = () =>
     queryClient.invalidateQueries(trpc.invite.list.pathFilter());
@@ -54,9 +55,33 @@ export function Invites() {
   );
 
   const busy = create.isPending || rotate.isPending;
+  const academyCode = academy.data?.code;
 
   return (
     <section className="flex flex-col gap-4">
+      {academyCode && (
+        <div className="bg-muted flex flex-col gap-2 rounded-lg p-4">
+          <span className="font-medium">Academy ID</span>
+          <p className="text-muted-foreground text-sm">
+            Students join in the app with this number — no link needed.
+          </p>
+          <div className="flex items-center gap-3">
+            <span className="font-mono text-2xl tracking-widest">
+              {academyCode}
+            </span>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={async () => {
+                await navigator.clipboard.writeText(academyCode);
+                toast.success("Academy ID copied");
+              }}
+            >
+              Copy
+            </Button>
+          </div>
+        </div>
+      )}
       <h2 className="text-lg font-semibold">Invite links</h2>
       <div className="flex flex-col gap-4">
         {ROLES.map(({ role, label, hint }) => {

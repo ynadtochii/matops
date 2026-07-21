@@ -51,6 +51,7 @@ One row per slice. This is the single answer to *"what's left, on which surface?
 | 1.4 | Uniform approval gate + `enrolledProcedure` | — | done | done | done | done | — |
 | 1.5 | Roster (approve/remove/suspend, promote co-owner) | done | done | done | — | — | — |
 | 1.6 | Multi-academy switcher | — | done | done | done | — | — |
+| 1.7 | Numeric academy code join (mobile v1) | done | done | done | done | done | — |
 | **2** | **Scheduling core** | | | | | | |
 | 2.1 | Class templates CRUD (recurring) | done | done | done | — | done | — |
 | 2.2 | Materialization (lazy + bounded cron) | done | done | — | — | — | done |
@@ -96,6 +97,7 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 - **1.4 Uniform approval gate** — pending = view-only for **students and coaches** (browse + provisional book + check-in, no attendee names, no tools). Owner approval → grant role + `status=active`. `enrolledProcedure` guards pending capability. Spec: S3; tickets 20, 23, 14.
 - **1.5 Roster** — approve / remove / suspend; **promote a member to co-owner** (never ownerless); pending rows show **visit-count nudge**; removal keeps history + revokes access. Spec: §4 edge rules.
 - **1.6 Multi-academy switcher** — `activeOrganizationId` drives RLS scope; switcher shown only if 2+; join 2nd via another link. Spec: ticket 18.
+- **1.7 Numeric academy code join (mobile v1)** — every academy gets a plain 6-digit `public_code` (migration `0010`, assigned by the auth hook). Owner shares the number; the student types it in the Expo app → `academy.findByCode` → `membership.joinByCode` → pending **student** (role fixed). Replaces the deep link on mobile v1; invite links + the `join/[token]` route stay for the web + next iteration. Spec: S2, O4; ticket [32](issues/32-academy-code-join.md).
 
 > **Shipped: mobile pass (Mob cells 1.3/1.4/1.6/2.4).** The Expo student app was built as one pass after Phase 2 (the pending student's home is the schedule S4 — Phase 2 — so a mobile-only pass would have landed on an empty home). Delivered slice by slice (M0–M5, see [CHANGELOG](../CHANGELOG.md)): (a) auth-gated student shell + the `post` demo retired (router + table dropped, migration `0009`), (b) magic-link sign-in with a `matops://` deep-link return, (c) `app/join/[token].tsx` (RN twin of the web join flow) + in-app paste + sign-in-first with the token preserved, (d) pending banner (S3), (e) schedule (S4) + read-only class detail (S5, new `class.get`), (f) profile + switcher (S7). **Deep links = custom scheme now** (`matops://join/<code>`); **universal links / AASA + Android assetlinks + EAS submit are deferred to a Phase 5 launch-infra task** (need Apple/Google/EAS accounts + a hosted domain) — ADR [31](issues/31-deep-link-approach.md). Verified by the static gates + code review; a device-test checklist was handed off (no simulator in the build env).
 

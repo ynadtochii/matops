@@ -82,6 +82,10 @@ export const organization = pgTable("organization", {
   logo: text("logo"),
   createdAt: timestamp("created_at").notNull(),
   metadata: text("metadata"),
+  // Plain 6-digit number an owner shares so a student can find + join the gym in
+  // the mobile app (docs/issues/32). Assigned at creation by the auth hook,
+  // unique across academies. Not secret — it only names the academy in search.
+  publicCode: text("public_code").notNull().unique(),
 });
 
 export const member = pgTable("member", {

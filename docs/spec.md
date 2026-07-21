@@ -47,15 +47,14 @@ The owner is the buyer, but the **student is the user**. The owner's data only e
 ### S1 · Sign in / Sign up  *(as light as possible)*
 - **Social login** or **email + magic link** (passwordless — no password to invent). One tap where possible.
 - **Fields:** first name, second name, phone, **email (required)**. Email is the reliable channel for cancellations and gym announcements, so it's not optional for members. Nothing else.
-- Usually reached *through* an invite link (S2), so the academy is already chosen.
+- Reached before joining (S2). On mobile v1 the student picks the academy by its ID; sign-in comes first, then the join.
 
 ### S2 · Join an academy  *(the onboarding spine)*
-- Opens via **invite link** (deep link `matops://join/<code>` or an https universal link) — the **academy is preselected**, no list to pick from.
-- If the app isn't installed → app store → the link is **remembered** so the academy is still preselected on first open. *(If that ever fails, the link falls back to the drop-in web form — see §4.)*
-- Resolves to *"Join **{Academy}**"* → confirm → creates a **pending** membership.
+- **Mobile v1 (docs/issues/32):** the owner shares the academy's **ID — a plain 6-digit number**. The student **types the ID** in the app → we find the academy → *"Join **{Academy}**"* → confirm + minimal profile → a **pending** membership. No link, no deep link, no list to scroll.
+  - Edge: no academy for that ID → clear "No gym found with that ID — check the number with your gym."
+- **Web + a later mobile iteration:** opens via an **invite link** (deep link `matops://join/<code>` or an https universal link) — the academy is preselected. On mobile this returns after v1 (docs/issues/31); the invite links stay live for the web (per-role, incl. instructors).
 - **No waiting wall.** The student lands straight on the schedule (S4) and can **book right away** (provisionally). Approval happens in the background.
-- Edge: bad/expired code → clear "This invite isn't valid — ask your gym for a new link."
-- *(Joining a **second** academy later: open its invite link while signed in → another pending membership → appears in the S7 switcher.)*
+- *(Joining a **second** academy later: enter another gym's ID while signed in → another pending membership → appears in the S7 switcher.)*
 
 ### S3 · Pending banner  *(not a blocker)*
 No blank waiting screen. A **slim banner** on the schedule: "Pending approval — you can browse and book; your gym will confirm you soon." Bookings made now are **provisional** (§4). When the owner approves, the banner clears and a **push** ("You're in at {Academy}") lands.
@@ -116,6 +115,7 @@ No blank waiting screen. A **slim banner** on the schedule: "Pending approval �
 - **Pending approvals** section: approve / reject. This covers **both students and coaches** — approving assigns the intended role (student → member features; instructor → schedule + attendance tools) and activates them. A pending person's bookings simply become normal bookings on approval.
 - **Active members** list → member detail: role, attendance history, contact, remove/suspend.
 - **Drop-in leads** section: **first-time visitors** who checked in via the gym QR without an account (name, phone, email, which class, consent flag). Kept for **follow-up** — the owner can send them an **app invite link (deep-linked to this gym)** to convert them into a member. Repeat visitors are nudged to register, so the form stays a first touch.
+- **Academy ID:** a plain **6-digit number** shown to copy + share. Students enter it in the app to find and join the gym (S2, mobile v1 — docs/issues/32). Joining by ID lands **pending/view-only** as a student, same as an invite link.
 - **Invite links:** generate/copy a shareable link **per role** (student / instructor). Either way the joiner lands **pending/view-only** until the owner approves — so a forwarded link never grants access on its own. One active link per role.
 
 ### O5 · Attendance

@@ -4,7 +4,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { magicLink, oAuthProxy, organization } from "better-auth/plugins";
 
-import { setMemberActive } from "@matops/db";
+import { assignAcademyCode, setMemberActive } from "@matops/db";
 import { db } from "@matops/db/client";
 
 import { ac, roles } from "./permissions";
@@ -45,6 +45,9 @@ export function initAuth<
         organizationHooks: {
           afterCreateOrganization: async ({ member }) => {
             await setMemberActive(member.id);
+            // Give the new gym a shareable 6-digit code so students can find +
+            // join it in the mobile app (docs/issues/32).
+            await assignAcademyCode(member.organizationId);
           },
         },
         schema: {

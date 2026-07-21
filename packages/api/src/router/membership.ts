@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 
 import {
   createPendingMembership,
+  findAcademyByCode,
   getMemberById,
   listMembersOf,
   resolveInviteToken,
@@ -14,10 +15,63 @@ import {
   approveMembership,
   canApprove,
   canRemoveOrDemote,
+  CODE_JOIN_ROLE,
 } from "@matops/domain";
-import { JoinAcademySchema, MemberActionSchema } from "@matops/validators";
+import {
+  JoinAcademySchema,
+  JoinByCodeSchema,
+  MemberActionSchema,
+} from "@matops/validators";
 
+import type { createTRPCContext } from "../trpc";
 import { ownerProcedure, protectedProcedure } from "../trpc";
+
+type BaseContext = Awaited<ReturnType<typeof createTRPCContext>>;
+/** Context inside a `protectedProcedure` — the session is guaranteed present. */
+type AuthedContext = BaseContext & {
+  session: NonNullable<BaseContext["session"]>;
+};
+
+/**
+ * Shared self-join step (spec S1–S3, docs/issues/14, 20, 26). Saves the minimal
+ * profile and creates a PENDING membership with NO academy role — the role rides
+ * on `invitedRole` and is granted only at approval. Idempotent if already a
+ * member. The FIRST academy also becomes the active one so the user lands in
+ * context; a later join does not force a switch (docs/issues/18). Used by both
+ * the invite-link join (`join`) and the mobile code join (`joinByCode`).
+ */
+async function joinPending(
+  ctx: AuthedContext,
+  input: {
+    academyId: string;
+    invitedRole: string;
+    firstName: string;
+    lastName: string;
+    phone: string;
+  },
+) {
+  const userId = ctx.session.user.id;
+  await updateUserProfile(userId, {
+    name: `${input.firstName} ${input.lastName}`.trim(),
+    phone: input.phone,
+  });
+  const result = await createPendingMembership({
+    userId,
+    academyId: input.academyId,
+    invitedRole: input.invitedRole,
+  });
+  if (!ctx.session.session.activeOrganizationId) {
+    await ctx.authApi.setActiveOrganization({
+      body: { organizationId: input.academyId },
+      headers: ctx.headers,
+    });
+  }
+  return {
+    academyId: input.academyId,
+    status: result.status,
+    alreadyMember: result.alreadyMember,
+  };
+}
 
 /** Load the target member and assert it belongs to the caller's academy. */
 async function requireMember(academyId: string, memberId: string) {
@@ -64,27 +118,39 @@ export const membershipRouter = {
           message: "This invite isn't valid — ask your gym for a new link.",
         });
       }
-      const userId = ctx.session.user.id;
-      await updateUserProfile(userId, {
-        name: `${input.firstName} ${input.lastName}`.trim(),
-        phone: input.phone,
-      });
-      const result = await createPendingMembership({
-        userId,
+      return joinPending(ctx, {
         academyId: invite.academyId,
         invitedRole: invite.role,
+        firstName: input.firstName,
+        lastName: input.lastName,
+        phone: input.phone,
       });
-      if (!ctx.session.session.activeOrganizationId) {
-        await ctx.authApi.setActiveOrganization({
-          body: { organizationId: invite.academyId },
-          headers: ctx.headers,
+    }),
+
+  /**
+   * Self-join by academy code — the mobile v1 path (spec S2, docs/issues/32).
+   * The student typed the gym's 6-digit number; look it up and create a PENDING
+   * membership as a STUDENT (the Expo app is the student app, so the role is not
+   * a choice here). Same pending gate as the invite-link join.
+   */
+  joinByCode: protectedProcedure
+    .input(JoinByCodeSchema)
+    .mutation(async ({ ctx, input }) => {
+      const academy = await findAcademyByCode(input.code);
+      if (!academy) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message:
+            "No gym found with that ID — check the number with your gym.",
         });
       }
-      return {
-        academyId: invite.academyId,
-        status: result.status,
-        alreadyMember: result.alreadyMember,
-      };
+      return joinPending(ctx, {
+        academyId: academy.academyId,
+        invitedRole: CODE_JOIN_ROLE,
+        firstName: input.firstName,
+        lastName: input.lastName,
+        phone: input.phone,
+      });
     }),
 
   /**
