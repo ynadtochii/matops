@@ -83,7 +83,11 @@ export function initAuth<
       expo(),
       ...(options.extraPlugins ?? []),
     ],
-    trustedOrigins: ["expo://"],
+    // The mobile app's custom scheme (apps/expo scheme = `matops`). The magic-link
+    // verify redirect must start with a trusted origin for @better-auth/expo to
+    // append the session cookie back to the app. (Expo Go's `exp://` is auto-added
+    // in development by the expo() plugin; the custom scheme is not, so list it.)
+    trustedOrigins: ["matops://"],
     onAPIError: {
       onError(error, ctx) {
         console.error("BETTER AUTH API ERROR", error, ctx);

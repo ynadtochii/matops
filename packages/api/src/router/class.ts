@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod/v4";
 
 import { and, asc, eq, gte, isNull, lt } from "@matops/db";
-import { classInstance } from "@matops/db/schema";
+import { classInstance, user } from "@matops/db/schema";
 import { classChange, instantFromLocalDate } from "@matops/domain";
 import {
   ClassIdSchema,
@@ -60,6 +60,37 @@ export const classRouter = {
         ),
       )
       .orderBy(asc(classInstance.startsAt));
+  }),
+
+  /**
+   * One class by id for the student detail screen (spec S5). Enrolled tier, so a
+   * PENDING member may view it too (read-only — booking is Phase 3). RLS scopes
+   * it to the caller's active academy. Left-joins `user` for the instructor name
+   * (matops_app has SELECT on the auth tables and `user` carries no RLS).
+   */
+  get: enrolledProcedure.input(ClassIdSchema).query(async ({ ctx, input }) => {
+    const [row] = await ctx.db
+      .select({
+        id: classInstance.id,
+        title: classInstance.title,
+        discipline: classInstance.discipline,
+        startsAt: classInstance.startsAt,
+        durationMinutes: classInstance.durationMinutes,
+        capacity: classInstance.capacity,
+        bookingCount: classInstance.bookingCount,
+        status: classInstance.status,
+        instructorId: classInstance.instructorId,
+        instructorName: user.name,
+      })
+      .from(classInstance)
+      .leftJoin(user, eq(user.id, classInstance.instructorId))
+      .where(
+        and(eq(classInstance.id, input.id), isNull(classInstance.deletedAt)),
+      );
+    if (!row) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Class not found" });
+    }
+    return row;
   }),
 
   /** Create a one-off class (`template_id` null). Local date+time → UTC instant. */

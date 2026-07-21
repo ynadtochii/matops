@@ -47,15 +47,15 @@ One row per slice. This is the single answer to *"what's left, on which surface?
 | **1** | **Identity & tenancy** | | | | | | |
 | 1.1 | Owner onboarding (create academy, magic link) | done | done | done | — | done | — |
 | 1.2 | Invite links (per-role, create/rotate) | done | done | done | — | done | — |
-| 1.3 | Student self-join → pending (min fields, email req.) | done | done | — | todo | done | — |
-| 1.4 | Uniform approval gate + `enrolledProcedure` | — | done | done | todo | done | — |
+| 1.3 | Student self-join → pending (min fields, email req.) | done | done | — | done | done | — |
+| 1.4 | Uniform approval gate + `enrolledProcedure` | — | done | done | done | done | — |
 | 1.5 | Roster (approve/remove/suspend, promote co-owner) | done | done | done | — | — | — |
-| 1.6 | Multi-academy switcher | — | done | done | todo | — | — |
+| 1.6 | Multi-academy switcher | — | done | done | done | — | — |
 | **2** | **Scheduling core** | | | | | | |
 | 2.1 | Class templates CRUD (recurring) | done | done | done | — | done | — |
 | 2.2 | Materialization (lazy + bounded cron) | done | done | — | — | — | done |
 | 2.3 | Class instances (one-off + edit/cancel rules) | done | done | done | — | done | — |
-| 2.4 | Schedule read (owner web + student mobile) | — | done | done | todo | done | — |
+| 2.4 | Schedule read (owner web + student mobile) | — | done | done | done | done | — |
 | **3** | **Booking & attendance** | | | | | | |
 | 3.1 | Book / cancel (atomic write, soft capacity) | todo | todo | todo | todo | todo | — |
 | 3.2 | Provisional booking for pending (display tag) | — | todo | todo | todo | — | — |
@@ -97,7 +97,7 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 - **1.5 Roster** — approve / remove / suspend; **promote a member to co-owner** (never ownerless); pending rows show **visit-count nudge**; removal keeps history + revokes access. Spec: §4 edge rules.
 - **1.6 Multi-academy switcher** — `activeOrganizationId` drives RLS scope; switcher shown only if 2+; join 2nd via another link. Spec: ticket 18.
 
-> **Deferred: Phase 1 mobile pass (Mob cells for 1.3/1.4/1.6).** Decision (session after Phase 1 web): the Expo student pieces are scheduled **with/after Phase 2 scheduling**, because the pending student's home is the schedule (S4) — which is Phase 2 — so a mobile-only pass would land on an empty home. Auth + the tRPC client are already wired on Expo; the routers are callable today. Remaining work when we do it: (a) replace the T3 demo home with an auth-gated student shell + retire the `post` demo (then drop the `post` router), (b) `app/join/[token].tsx` (RN twin of the web join flow) + sign-in-first, (c) pending banner (S3), (d) profile + switcher (S7), (e) **deep links** `matops://join/<code>` + universal links / AASA + Android assetlinks + EAS ids (non-trivial — architecture §11), deferred-deep-link falls back to the Phase-3 drop-in form. **API gap — CLOSED (slice 2.4):** the student-lens variant now exists — `isStudentLensMembership` in `@matops/domain` + `academy.listMineStudent`, plus the student schedule read `class.mine` (enrolled tier). The mobile pass can build directly on these.
+> **Shipped: mobile pass (Mob cells 1.3/1.4/1.6/2.4).** The Expo student app was built as one pass after Phase 2 (the pending student's home is the schedule S4 — Phase 2 — so a mobile-only pass would have landed on an empty home). Delivered slice by slice (M0–M5, see [CHANGELOG](../CHANGELOG.md)): (a) auth-gated student shell + the `post` demo retired (router + table dropped, migration `0009`), (b) magic-link sign-in with a `matops://` deep-link return, (c) `app/join/[token].tsx` (RN twin of the web join flow) + in-app paste + sign-in-first with the token preserved, (d) pending banner (S3), (e) schedule (S4) + read-only class detail (S5, new `class.get`), (f) profile + switcher (S7). **Deep links = custom scheme now** (`matops://join/<code>`); **universal links / AASA + Android assetlinks + EAS submit are deferred to a Phase 5 launch-infra task** (need Apple/Google/EAS accounts + a hosted domain) — ADR [31](issues/31-deep-link-approach.md). Verified by the static gates + code review; a device-test checklist was handed off (no simulator in the build env).
 
 ### Phase 2 — Scheduling core
 **Exit test:** owner defines a recurring week; concrete classes appear; both clients read the schedule.

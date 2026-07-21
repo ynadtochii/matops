@@ -3,28 +3,27 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { QueryClientProvider } from "@tanstack/react-query";
 
+import { headerColors } from "~/components/ui";
 import { queryClient } from "~/utils/api";
 
 import "../styles.css";
 
-// This is the main layout of the app
-// It wraps your pages with the providers they need
+/**
+ * Root layout — wraps every screen in the tRPC/React Query provider and a
+ * neutral Stack whose header follows the shared light/dark palette (the Stack
+ * needs hex, not NativeWind classes).
+ */
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  const scheme = useColorScheme() === "dark" ? "dark" : "light";
+  const c = headerColors[scheme];
   return (
     <QueryClientProvider client={queryClient}>
-      {/*
-          The Stack component displays the current page.
-          It also allows you to configure your screens 
-        */}
       <Stack
         screenOptions={{
-          headerStyle: {
-            backgroundColor: "#c03484",
-          },
-          contentStyle: {
-            backgroundColor: colorScheme == "dark" ? "#09090B" : "#FFFFFF",
-          },
+          headerStyle: { backgroundColor: c.bg },
+          headerTintColor: c.tint,
+          headerShadowVisible: false,
+          contentStyle: { backgroundColor: c.bg },
         }}
       />
       <StatusBar />

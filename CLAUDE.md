@@ -2,14 +2,15 @@
 
 **matops** is a multi-academy admin SaaS for grappling gyms: an **Expo** student app + a **Next.js** owner/instructor web app, one TypeScript monorepo. It is a from-scratch rebuild; the old app **MAT** (`/Users/kuna/projects/mat`) is reference only, never a base.
 
-## Current state — Phase 2 complete, web-first (scheduling core)
-Foundations, the identity join loop (Phase 1), and now the scheduling core (Phase 2) are built and green (`pnpm lint typecheck test` all pass; 54 tests). A **Neon** database is connected in `.env`, all migrations (`0000`–`0008`) are applied, and materialization + template-edit propagation are **verified live on Neon**.
+## Current state — Phases 0–2 + mobile pass complete
+Foundations, the identity join loop (Phase 1), the scheduling core (Phase 2), and the **Expo student app** (mobile pass) are built and green (`pnpm lint typecheck test` all pass; 54 tests, plus the Expo static gates). A **Neon** database is connected in `.env`, all migrations (`0000`–`0009`) are applied, and materialization + template-edit propagation are **verified live on Neon**.
 
 - **Works now (web):** magic-link sign-in → **Start a gym** (creator is an active owner) → per-role **invite links** → self-join **pending, no academy role** (intended role on `member.invitedRole`) → owner **approves** → role granted. Roster (never-ownerless) + multi-academy switcher. **Scheduling (staff):** recurring **class templates** (O3), **one-off classes** + edit/cancel (O2), DST-aware **materialization** (lazy on save + a daily Vercel Cron), and the **schedule read** (`class.week`). All under the RLS tenant seam.
-- **Does NOT exist yet:** the **Expo student UI + deep links** (deferred mobile pass — Mob cells 1.3/1.4/1.6 **and** 2.4 stay `todo`; the student-lens API `class.mine`/`academy.listMineStudent` is ready), and Phase 3+ (booking, attendance, notifications). The scaffold `post` router lingers only for the deferred Expo demo screens.
+- **Works now (mobile — Expo student app):** magic-link **sign-in** (S1) → **join** via `matops://join/<code>` deep link or in-app paste (S2) → **pending** with the S3 banner → **schedule** (S4, `class.mine`) → read-only **class detail** (S5, `class.get`) → **profile + student-lens switcher** (S7). Custom-scheme deep links (universal/App links deferred to Phase 5 — ADR 31). Verified by the Expo static gates + code review; a device-test checklist was handed off (no simulator in the build env).
+- **Does NOT exist yet:** Phase 3+ (booking, attendance, notifications) and the Phase 5 **universal/App links** (the app uses a custom scheme today). The scaffold `post` demo is **retired** (Expo screen + router + table dropped, migration `0009`).
 - Key ADRs: Phase 1 — `docs/issues/28` (custom invite table) + `29` (pending holds no role). Phase 2 — `08`/`16` (data model + materialization) + `19` (no `completed` status) + `30` (template-edit propagation).
 - **Infra note:** set **`CRON_SECRET`** in the Vercel project so the daily `/api/cron/materialize` job runs (it refuses to run unprotected in production).
-- Live plan + per-slice status matrix: `docs/roadmap.md`. What shipped, slice by slice: `CHANGELOG.md`. Design of record (with an "as-built" section 0, incl. Phases 1–2): `docs/architecture.md`. **Next: Phase 3** (booking & attendance), plus the deferred mobile pass.
+- Live plan + per-slice status matrix: `docs/roadmap.md`. What shipped, slice by slice: `CHANGELOG.md`. Design of record (with an "as-built" section 0, incl. Phases 1–2 + the mobile pass): `docs/architecture.md`. **Next: Phase 3** (booking & attendance).
 
 ## Run it
 - `pnpm install`, then `pnpm dev:next` → http://localhost:3000. Sign in via the magic-link form; copy the `[auth] magic link …` URL from the terminal into the browser.

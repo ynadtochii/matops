@@ -1,194 +1,39 @@
-import { useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Link, Stack } from "expo-router";
-import { LegendList } from "@legendapp/list";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Redirect, Stack } from "expo-router";
+import { useQuery } from "@tanstack/react-query";
 
-import type { RouterOutputs } from "~/utils/api";
+import { Loading } from "~/components/ui";
 import { trpc } from "~/utils/api";
 import { authClient } from "~/utils/auth";
 
-function PostCard(props: {
-  post: RouterOutputs["post"]["all"][number];
-  onDelete: () => void;
-}) {
-  return (
-    <View className="bg-muted flex flex-row rounded-lg p-4">
-      <View className="grow">
-        <Link
-          asChild
-          href={{
-            pathname: "/post/[id]",
-            params: { id: props.post.id },
-          }}
-        >
-          <Pressable className="">
-            <Text className="text-primary text-xl font-semibold">
-              {props.post.title}
-            </Text>
-            <Text className="text-foreground mt-2">{props.post.content}</Text>
-          </Pressable>
-        </Link>
-      </View>
-      <Pressable onPress={props.onDelete}>
-        <Text className="text-primary font-bold uppercase">Delete</Text>
-      </Pressable>
-    </View>
-  );
-}
+/**
+ * Auth gate (the student shell entry). Routes on session + active academy:
+ *   - no session               → Sign in (S1)
+ *   - session, no active gym    → Join a gym (S2 empty state / paste invite)
+ *   - session, active gym       → Schedule (S4, the home)
+ * A pending member still has an active academy, so they land on the schedule
+ * and see the S3 pending banner there — no waiting wall (spec S3).
+ */
+export default function Index() {
+  const { data: session, isPending: sessionPending } = authClient.useSession();
 
-function CreatePost() {
-  const queryClient = useQueryClient();
-
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-
-  const { mutate, error } = useMutation(
-    trpc.post.create.mutationOptions({
-      async onSuccess() {
-        setTitle("");
-        setContent("");
-        await queryClient.invalidateQueries(trpc.post.all.queryFilter());
-      },
+  const current = useQuery(
+    trpc.academy.current.queryOptions(undefined, {
+      enabled: !!session,
     }),
   );
 
-  return (
-    <View className="mt-4 flex gap-2">
-      <TextInput
-        className="border-input bg-background text-foreground items-center rounded-md border px-3 text-lg leading-tight"
-        value={title}
-        onChangeText={setTitle}
-        placeholder="Title"
-      />
-      {error?.data?.zodError?.fieldErrors.title && (
-        <Text className="text-destructive mb-2">
-          {error.data.zodError.fieldErrors.title}
-        </Text>
-      )}
-      <TextInput
-        className="border-input bg-background text-foreground items-center rounded-md border px-3 text-lg leading-tight"
-        value={content}
-        onChangeText={setContent}
-        placeholder="Content"
-      />
-      {error?.data?.zodError?.fieldErrors.content && (
-        <Text className="text-destructive mb-2">
-          {error.data.zodError.fieldErrors.content}
-        </Text>
-      )}
-      <Pressable
-        className="bg-primary flex items-center rounded-sm p-2"
-        onPress={() => {
-          mutate({
-            title,
-            content,
-          });
-        }}
-      >
-        <Text className="text-foreground">Create</Text>
-      </Pressable>
-      {error?.data?.code === "UNAUTHORIZED" && (
-        <Text className="text-destructive mt-2">
-          You need to be logged in to create a post
-        </Text>
-      )}
-    </View>
-  );
-}
-
-function MobileAuth() {
-  const { data: session } = authClient.useSession();
-  const [email, setEmail] = useState("");
-
-  if (session) {
-    return (
-      <>
-        <Text className="text-foreground pb-2 text-center text-xl font-semibold">
-          Hello, {session.user.name || session.user.email}
-        </Text>
-        <Pressable
-          onPress={() => {
-            void authClient.signOut();
-          }}
-          className="bg-primary flex items-center rounded-sm p-2"
-        >
-          <Text>Sign Out</Text>
-        </Pressable>
-      </>
-    );
-  }
+  const target = () => {
+    if (sessionPending) return <Loading />;
+    if (!session) return <Redirect href="/sign-in" />;
+    if (current.isPending) return <Loading />;
+    if (!current.data) return <Redirect href="/onboarding" />;
+    return <Redirect href="/schedule" />;
+  };
 
   return (
     <>
-      <Text className="text-foreground pb-2 text-center text-xl font-semibold">
-        Not logged in
-      </Text>
-      <TextInput
-        className="border-input bg-background text-foreground items-center rounded-md border px-3 text-lg leading-tight"
-        value={email}
-        onChangeText={setEmail}
-        placeholder="you@example.com"
-        autoCapitalize="none"
-        keyboardType="email-address"
-      />
-      <Pressable
-        onPress={() => {
-          void authClient.signIn.magicLink({ email, callbackURL: "/" });
-        }}
-        className="bg-primary mt-2 flex items-center rounded-sm p-2"
-      >
-        <Text>Send magic link</Text>
-      </Pressable>
+      <Stack.Screen options={{ headerShown: false }} />
+      {target()}
     </>
-  );
-}
-
-export default function Index() {
-  const queryClient = useQueryClient();
-
-  const postQuery = useQuery(trpc.post.all.queryOptions());
-
-  const deletePostMutation = useMutation(
-    trpc.post.delete.mutationOptions({
-      onSettled: () =>
-        queryClient.invalidateQueries(trpc.post.all.queryFilter()),
-    }),
-  );
-
-  return (
-    <SafeAreaView className="bg-background">
-      {/* Changes page title visible on the header */}
-      <Stack.Screen options={{ title: "Home Page" }} />
-      <View className="bg-background h-full w-full p-4">
-        <Text className="text-foreground pb-2 text-center text-5xl font-bold">
-          Create <Text className="text-primary">T3</Text> Turbo
-        </Text>
-
-        <MobileAuth />
-
-        <View className="py-2">
-          <Text className="text-primary font-semibold italic">
-            Press on a post
-          </Text>
-        </View>
-
-        <LegendList
-          data={postQuery.data ?? []}
-          estimatedItemSize={20}
-          keyExtractor={(item) => item.id}
-          ItemSeparatorComponent={() => <View className="h-2" />}
-          renderItem={(p) => (
-            <PostCard
-              post={p.item}
-              onDelete={() => deletePostMutation.mutate(p.item.id)}
-            />
-          )}
-        />
-
-        <CreatePost />
-      </View>
-    </SafeAreaView>
   );
 }
