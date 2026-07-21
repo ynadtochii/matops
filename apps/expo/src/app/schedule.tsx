@@ -20,6 +20,7 @@ function startOfToday(): Date {
 /** One class row in the schedule (spec S4: time · title · N spots left). */
 function ClassCard({ c, onPress }: { c: ClassRow; onPress: () => void }) {
   const cancelled = c.status === "cancelled";
+  const booked = c.myBooking === "booked";
   return (
     <Pressable
       onPress={onPress}
@@ -44,6 +45,11 @@ function ClassCard({ c, onPress }: { c: ClassRow; onPress: () => void }) {
               {spotsLeftLabel(c.capacity, c.bookingCount)}
             </Text>
           )}
+          {booked && !cancelled && (
+            <Text className="bg-primary/10 text-primary rounded px-2 py-0.5 text-xs font-medium">
+              Booked
+            </Text>
+          )}
         </View>
       </View>
       <Text className="text-muted-foreground text-lg">›</Text>
@@ -54,8 +60,8 @@ function ClassCard({ c, onPress }: { c: ClassRow; onPress: () => void }) {
 /**
  * Schedule home (spec S4) — the student's rolling week of classes, grouped by
  * day (Today first). A pending member browses here behind the S3 banner (no
- * waiting wall). Tapping a class opens the read-only detail (S5). Booking is
- * Phase 3.
+ * waiting wall). Tapping a class opens the detail (S5), where booking happens
+ * (slice 3.1); a class the student has booked shows a "Booked" pill here.
  */
 export default function Schedule() {
   const router = useRouter();
@@ -89,6 +95,13 @@ export default function Schedule() {
       <Stack.Screen
         options={{
           title: "Schedule",
+          headerLeft: () => (
+            <Pressable onPress={() => router.push("/checkin")} hitSlop={8}>
+              <Text className="text-primary text-base font-medium">
+                Check in
+              </Text>
+            </Pressable>
+          ),
           headerRight: () => (
             <Pressable onPress={() => router.push("/profile")} hitSlop={8}>
               <Text className="text-primary text-base font-medium">

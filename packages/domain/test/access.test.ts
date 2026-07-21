@@ -1,11 +1,22 @@
 import { describe, expect, it } from "vitest";
 
 import type { Membership } from "../src/access";
-import { isActiveMember, isOwner, isStaff } from "../src/access";
+import { canEnroll, isActiveMember, isOwner, isStaff } from "../src/access";
 
 const m = (role: string, status: string): Membership => ({ role, status });
 
 describe("access predicates", () => {
+  it("canEnroll: only pending and active may use the view-only tier", () => {
+    for (const role of ["owner", "instructor", "student"]) {
+      expect(canEnroll(m(role, "pending"))).toBe(true);
+      expect(canEnroll(m(role, "active"))).toBe(true);
+      // Suspended / removed keep a row for history but have no access.
+      expect(canEnroll(m(role, "suspended"))).toBe(false);
+      expect(canEnroll(m(role, "removed"))).toBe(false);
+    }
+  });
+
+
   it("pending members are never active/staff/owner (view-only)", () => {
     for (const role of ["owner", "instructor", "student"]) {
       const pending = m(role, "pending");

@@ -225,8 +225,10 @@ export function Schedule() {
                         className={`text-sm ${full ? "text-destructive" : "text-muted-foreground"}`}
                       >
                         {c.bookingCount}/{c.capacity}
-                        {full ? " · may be busy" : " booked"} ·{" "}
-                        {c.durationMinutes}
+                        {full ? " · may be busy" : " booked"}
+                        {c.pendingCount > 0 &&
+                          ` · +${c.pendingCount} pending`}{" "}
+                        · {c.durationMinutes}
                         min
                       </span>
                     </div>

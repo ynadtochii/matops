@@ -19,3 +19,9 @@ Low-friction goal: unapproved students and drop-ins can book, but capacity must 
 
 ## ⚠ Pressure-test refinement (session 12) — SUPERSEDED for v1
 The two-tier **capacity enforcement** here is deferred (no hard cap in v1 — see [13](13-booking-write-atomicity.md)). What remains in v1: a pending member's booking is shown **tagged "pending approval"** (display only), and the class count separates approved vs pending for the owner. There is **no spot-holding, no conversion-on-approval, no priority** — those return with hard caps/waitlists in the next iteration. On approval, a pending booking simply becomes a normal booking.
+
+## ✅ As built (slice 3.1)
+Two decisions were confirmed when the booking write shipped:
+- **`class.booking_count` counts CONFIRMED only.** A `provisional` (pending-member) booking inserts the `class_participation` row and shows "pending approval" but never moves `booking_count`. The tier is set from the booker's membership at book time (`bookingTier` in `@matops/domain`).
+- **No conversion-on-approval in 3.1.** A pending member's booking stays `provisional` (uncounted) even after an owner approves them — `booking_count` is not retro-incremented. Harmless in v1 (no hard cap; the reconciliation cron in slice 5.1 recomputes the count from participations). Revisit alongside hard caps/waitlists.
+- **Table scope:** `class_participation` shipped with **booking columns only** (`booking_status`, `booking_tier`, `booked_at`, `cancelled_at`). Attendance columns (the "unified" part of [08](08-mvp-domain-model.md)) land in slice 3.3. `student_id` is a `user.id` and NOT NULL; app-less drop-ins (3.5) get their own shape.

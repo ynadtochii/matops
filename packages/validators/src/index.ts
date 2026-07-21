@@ -166,3 +166,65 @@ export type UpdateClassInput = z.infer<typeof UpdateClassSchema>;
 
 /** Address a single class by id (cancel / get). */
 export const ClassIdSchema = z.object({ id: z.uuid() });
+
+// ─── Booking (Phase 3) ───────────────────────────────────────────────────────
+
+/**
+ * Book a concrete class (spec S5, docs/issues/13). Booking is never blocked —
+ * the router applies the soft-capacity + tier rules from @matops/domain. A
+ * pending member may book too (provisional); the tier is decided server-side
+ * from the caller's membership, so it is not an input here.
+ */
+export const BookClassSchema = z.object({ classId: z.uuid() });
+export type BookClassInput = z.infer<typeof BookClassSchema>;
+
+/** Cancel the caller's own booking on a class (spec S5). */
+export const CancelBookingSchema = z.object({ classId: z.uuid() });
+export type CancelBookingInput = z.infer<typeof CancelBookingSchema>;
+
+// ─── Attendance (Phase 3, slice 3.3) ─────────────────────────────────────────
+
+/** Attendance mark a staff member can set on a participant (spec O5). */
+export const AttendanceStatusSchema = z.enum(["present", "absent", "unmarked"]);
+export type AttendanceStatusInput = z.infer<typeof AttendanceStatusSchema>;
+
+/** Mark one participant present/absent/unmarked on a class (spec O5). */
+export const MarkAttendanceSchema = z.object({
+  classId: z.uuid(),
+  studentId: z.string().min(1),
+  status: AttendanceStatusSchema,
+});
+export type MarkAttendanceInput = z.infer<typeof MarkAttendanceSchema>;
+
+/** Add a walk-in: mark a member present who never booked (spec O5). */
+export const AddWalkInSchema = z.object({
+  classId: z.uuid(),
+  studentId: z.string().min(1),
+});
+export type AddWalkInInput = z.infer<typeof AddWalkInSchema>;
+
+// ─── QR check-in (Phase 3, slice 3.4) ────────────────────────────────────────
+
+/** Check in to a class (book-if-needed + mark present), spec S8. */
+export const CheckInSchema = z.object({ classId: z.uuid() });
+export type CheckInInput = z.infer<typeof CheckInSchema>;
+
+// ─── Public drop-in / lead (Phase 3, slice 3.5) ──────────────────────────────
+
+/** Address one academy publicly (drop-in page header). */
+export const AcademyPublicSchema = z.object({ academyId: z.string().min(1) });
+
+/**
+ * Public drop-in form (spec O4/§4, docs/issues/25). First-time, no-app visitor.
+ * `consent` MUST be true (GDPR — "OK for the gym to contact me"); `z.literal(true)`
+ * rejects an unchecked box. `classId` is resolved server-side, not submitted.
+ */
+export const DropInSchema = z.object({
+  academyId: z.string().min(1),
+  firstName: z.string().trim().min(1).max(60),
+  lastName: z.string().trim().min(1).max(60),
+  phone: z.string().trim().min(3).max(30),
+  email: z.email().max(120).optional(),
+  consent: z.literal(true, "Please tick the consent box to continue"),
+});
+export type DropInInput = z.infer<typeof DropInSchema>;

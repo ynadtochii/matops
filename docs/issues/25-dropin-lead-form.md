@@ -21,3 +21,9 @@ New: a `drop_in` / `lead` table (academyId, name, surname, phone, email?, classI
 
 ## ⚠ Pressure-test refinement (session 12)
 The drop-in form is for **first-time visitors only** (finding A1) — not a repeat check-in path. After capture, the owner **follows up with an app invite link (deep-linked to the gym)** to convert the lead into a member; repeat visitors are nudged to register. Add a **consent checkbox** ("OK for the gym to contact me") to the form (finding E3, GDPR).
+
+## ✅ As built (slice 3.5)
+- **Table `drop_in`** (migration `0013`): `academy_id`, name, phone, `email?`, `class_id?` (null = general lead), `consent`, `visit_count`, first/last-visit timestamps. Dedupe = `UNIQUE(academy_id, phone)`; a repeat phone bumps `visit_count` (spec §4), never a new row.
+- **Public endpoint:** `dropIn.submit` + `dropIn.academyInfo` are the project's **first `publicProcedure`s** (unauthenticated). With no session they can't use `withTenant`; they call `@matops/db` helpers that write on the **trusted base connection** (bypasses RLS, like the cron), each pinned to a validated `academy_id`. Owner reads (`dropIn.list`) go through RLS-scoped `ctx.db`. This is the enumerated tenant-seam exception ([12]).
+- **Consent required** (`z.literal(true)` + pure `canSubmitDropIn`). The current class is resolved server-side (attached if exactly one is on, else a general lead).
+- **Web:** public `/checkin/[academyId]` form; owner O4 Drop-in leads section; O6 venue check-in link (printable). *Follow-up:* render that link as a scannable QR image (needs a QR lib).

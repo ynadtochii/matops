@@ -1,9 +1,11 @@
 "use client";
 
 import { AcademySwitcher } from "./academy-switcher";
+import { Attendance } from "./attendance";
 import { Invites } from "./invites";
 import { Roster } from "./roster";
 import { Schedule } from "./schedule";
+import { Settings } from "./settings";
 import { SignOutButton } from "./sign-out";
 import { Templates } from "./templates";
 
@@ -59,11 +61,13 @@ export function Dashboard({
       )}
 
       {isStaff && <Schedule />}
+      {isStaff && <Attendance />}
       {isStaff && <Templates />}
       {isOwner && (
         <>
           <Invites />
           <Roster />
+          <Settings academyId={current.academyId} />
         </>
       )}
       {!isStaff && !isPending && (
