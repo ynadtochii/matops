@@ -3,20 +3,19 @@ import { TRPCError } from "@trpc/server";
 
 import {
   createPendingMembership,
+  eq,
   findAcademyByCode,
   getMemberById,
   listMembersOf,
   resolveInviteToken,
   setMemberRoleStatus,
   setMemberStatus,
+  setMemberStatusIfNotLastOwner,
+  sql,
   updateUserProfile,
 } from "@matops/db";
-import {
-  approveMembership,
-  canApprove,
-  canRemoveOrDemote,
-  CODE_JOIN_ROLE,
-} from "@matops/domain";
+import { classParticipation } from "@matops/db/schema";
+import { approveMembership, canApprove, CODE_JOIN_ROLE } from "@matops/domain";
 import {
   JoinAcademySchema,
   JoinByCodeSchema,
@@ -82,15 +81,23 @@ async function requireMember(academyId: string, memberId: string) {
   return m;
 }
 
-/** Reject remove/suspend/demote that would leave the academy ownerless (§4). */
-async function assertNotLastOwner(academyId: string, memberId: string) {
-  const roster = await listMembersOf(academyId);
-  const members = roster.map((r) => ({
-    id: r.memberId,
-    role: r.role,
-    status: r.status,
-  }));
-  if (!canRemoveOrDemote(members, memberId)) {
+/**
+ * Set a member's status, but reject the change if it would leave the academy
+ * ownerless (§4). The check + write are atomic (one locked transaction) in
+ * `setMemberStatusIfNotLastOwner`, so two concurrent owner mutations cannot both
+ * pass and strand the gym without an owner.
+ */
+async function setStatusOrRejectLastOwner(
+  academyId: string,
+  memberId: string,
+  status: string,
+) {
+  const { ok } = await setMemberStatusIfNotLastOwner(
+    academyId,
+    memberId,
+    status,
+  );
+  if (!ok) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
       message:
@@ -155,11 +162,21 @@ export const membershipRouter = {
 
   /**
    * The roster for the active academy (spec O4). Owner-only. Removed rows are
-   * hidden; history is kept. `visitCount` is a stub until attendance ships
-   * (Phase 3) — it will power the "attended 3×" nudge on pending rows (§4).
+   * hidden; history is kept. `visitCount` (slice 3.3) = how many classes the
+   * member attended (present), powering the "attended 3×" nudge on pending rows
+   * (§4). Counted on the RLS-scoped `ctx.db`, grouped by student.
    */
   roster: ownerProcedure.query(async ({ ctx }) => {
     const rows = await listMembersOf(ctx.academyId);
+    const visits = await ctx.db
+      .select({
+        studentId: classParticipation.studentId,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(classParticipation)
+      .where(eq(classParticipation.attendanceStatus, "present"))
+      .groupBy(classParticipation.studentId);
+    const visitByUser = new Map(visits.map((v) => [v.studentId, v.count]));
     return rows
       .filter((r) => r.status !== "removed")
       .map((r) => ({
@@ -171,7 +188,7 @@ export const membershipRouter = {
         status: r.status,
         invitedRole: r.invitedRole,
         joinedAt: r.createdAt,
-        visitCount: 0, // TODO(phase 3): real attendance count for the approval nudge
+        visitCount: visitByUser.get(r.userId) ?? 0,
       }));
   }),
 
@@ -205,8 +222,11 @@ export const membershipRouter = {
     .input(MemberActionSchema)
     .mutation(async ({ ctx, input }) => {
       await requireMember(ctx.academyId, input.memberId);
-      await assertNotLastOwner(ctx.academyId, input.memberId);
-      await setMemberStatus(input.memberId, "removed");
+      await setStatusOrRejectLastOwner(
+        ctx.academyId,
+        input.memberId,
+        "removed",
+      );
       return { ok: true as const };
     }),
 
@@ -215,8 +235,11 @@ export const membershipRouter = {
     .input(MemberActionSchema)
     .mutation(async ({ ctx, input }) => {
       await requireMember(ctx.academyId, input.memberId);
-      await assertNotLastOwner(ctx.academyId, input.memberId);
-      await setMemberStatus(input.memberId, "suspended");
+      await setStatusOrRejectLastOwner(
+        ctx.academyId,
+        input.memberId,
+        "suspended",
+      );
       return { ok: true as const };
     }),
 

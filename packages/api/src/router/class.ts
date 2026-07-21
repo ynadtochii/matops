@@ -2,8 +2,17 @@ import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod/v4";
 
-import { and, asc, eq, gte, isNull, lt } from "@matops/db";
-import { classInstance, user } from "@matops/db/schema";
+import {
+  and,
+  asc,
+  eq,
+  getTableColumns,
+  gte,
+  isNull,
+  lt,
+  sql,
+} from "@matops/db";
+import { classInstance, classParticipation, user } from "@matops/db/schema";
 import { classChange, instantFromLocalDate } from "@matops/domain";
 import {
   ClassIdSchema,
@@ -25,10 +34,23 @@ const WeekInput = z.object({ from: z.iso.datetime(), to: z.iso.datetime() });
  * `starts_at + duration < now()` at read time (docs/issues/19), never stored.
  */
 export const classRouter = {
-  /** Classes in [from, to) for the active academy, soonest first (O2 week view). */
+  /**
+   * Classes in [from, to) for the active academy, soonest first (O2 week view).
+   * `bookingCount` is the CONFIRMED count; `pendingCount` (slice 3.2) counts the
+   * provisional bookings so the owner sees "N/cap · +M pending". The subquery is
+   * RLS-scoped like the outer query, so it only counts this academy's rows.
+   */
   week: staffProcedure.input(WeekInput).query(({ ctx, input }) => {
     return ctx.db
-      .select()
+      .select({
+        ...getTableColumns(classInstance),
+        pendingCount: sql<number>`(
+          SELECT count(*)::int FROM ${classParticipation}
+          WHERE ${classParticipation.classId} = ${classInstance.id}
+            AND ${classParticipation.bookingStatus} = 'booked'
+            AND ${classParticipation.bookingTier} = 'provisional'
+        )`,
+      })
       .from(classInstance)
       .where(
         and(
@@ -50,8 +72,29 @@ export const classRouter = {
    */
   mine: enrolledProcedure.input(WeekInput).query(({ ctx, input }) => {
     return ctx.db
-      .select()
+      .select({
+        id: classInstance.id,
+        title: classInstance.title,
+        discipline: classInstance.discipline,
+        startsAt: classInstance.startsAt,
+        durationMinutes: classInstance.durationMinutes,
+        capacity: classInstance.capacity,
+        bookingCount: classInstance.bookingCount,
+        status: classInstance.status,
+        instructorId: classInstance.instructorId,
+        // The caller's OWN booking (slice 3.1): drives the inline "Booked" pill
+        // (spec S4). Left-joined + filtered to studentId=me, so at most one row.
+        myBooking: classParticipation.bookingStatus, // "booked" | "cancelled" | null
+        myBookingTier: classParticipation.bookingTier, // "confirmed" | "provisional" | null
+      })
       .from(classInstance)
+      .leftJoin(
+        classParticipation,
+        and(
+          eq(classParticipation.classId, classInstance.id),
+          eq(classParticipation.studentId, ctx.session.user.id),
+        ),
+      )
       .where(
         and(
           isNull(classInstance.deletedAt),
@@ -81,9 +124,20 @@ export const classRouter = {
         status: classInstance.status,
         instructorId: classInstance.instructorId,
         instructorName: user.name,
+        // The caller's OWN booking (slice 3.1): drives the Book vs Cancel button
+        // and the "pending approval" tag on S5. Filtered to studentId=me.
+        myBooking: classParticipation.bookingStatus, // "booked" | "cancelled" | null
+        myBookingTier: classParticipation.bookingTier, // "confirmed" | "provisional" | null
       })
       .from(classInstance)
       .leftJoin(user, eq(user.id, classInstance.instructorId))
+      .leftJoin(
+        classParticipation,
+        and(
+          eq(classParticipation.classId, classInstance.id),
+          eq(classParticipation.studentId, ctx.session.user.id),
+        ),
+      )
       .where(
         and(eq(classInstance.id, input.id), isNull(classInstance.deletedAt)),
       );

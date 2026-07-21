@@ -14,7 +14,11 @@
 
 export * from "./academy-code";
 export * from "./access";
+export * from "./attendance";
+export * from "./booking";
+export * from "./checkin";
 export * from "./class-edit";
+export * from "./dropin";
 export * from "./invite";
 export * from "./materialize";
 export * from "./membership";

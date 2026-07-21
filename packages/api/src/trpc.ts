@@ -12,8 +12,7 @@ import { z, ZodError } from "zod/v4";
 
 import type { Auth } from "@matops/auth";
 import { getMembership, withTenant } from "@matops/db";
-import { db } from "@matops/db/client";
-import { isActiveMember, isOwner, isStaff } from "@matops/domain";
+import { canEnroll, isActiveMember, isOwner, isStaff } from "@matops/domain";
 
 /**
  * 1. CONTEXT
@@ -39,7 +38,16 @@ export const createTRPCContext = async (opts: {
   return {
     authApi,
     session,
-    db,
+    // NOTE: the base context deliberately carries NO database handle. The only
+    // db handle a resolver ever sees is `ctx.db` — the RLS-scoped transaction
+    // injected by the tenant middleware (`enforceTenant`) below. So a resolver
+    // on a NON-tenant procedure (public/protected) has no `ctx.db` at all and
+    // fails at typecheck if it reaches for one, instead of silently getting an
+    // RLS-bypassing owner connection. The raw owner `db` (from
+    // `@matops/db/client`) is reserved for the tenant seam, the auth package,
+    // migrations, and the materialization cron — a lint rule blocks importing it
+    // inside routers. See docs/issues/33 and docs/architecture.md §5.
+    //
     // Forwarded so resolvers can call Better Auth server APIs (createOrganization,
     // setActiveOrganization, …) on behalf of the signed-in user.
     headers: opts.headers,
@@ -163,6 +171,16 @@ const enforceTenant = t.middleware(async ({ ctx, next }) => {
     throw new TRPCError({
       code: "FORBIDDEN",
       message: "You are not a member of this academy",
+    });
+  }
+  // A membership row is kept after suspend/remove (history), so existence is not
+  // access. Only `pending` and `active` may enter the enrolled tier — otherwise a
+  // suspended/removed member could still read (and, once Phase 3 lands on this
+  // tier, book). See docs/issues/23 and spec §4.
+  if (!canEnroll(membership)) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Your access to this academy has been removed",
     });
   }
   return withTenant(academyId, (tx) =>

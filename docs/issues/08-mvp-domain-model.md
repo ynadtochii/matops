@@ -67,3 +67,10 @@ One row per `(class, student)`, with **two orthogonal state axes** (the ADR-005 
 
 ## ⚠ Post-review note (session 8)
 Two refinements from the critical review: the booking write mechanism (interactive tx vs atomic conditional UPDATE) → [13 — Booking write atomicity](13-booking-write-atomicity.md); the undefined `completed` status transition → [19](19-class-completed-transition.md). The Better Auth pending-member assumption is being validated in [14](14-better-auth-approval-feasibility.md).
+
+## ✅ As built (Phase 3)
+The unified `class_participation` was delivered across two migrations, not one:
+- **Booking axis** (migration `0011`, slice 3.1): `booking_status` (`booked|cancelled|none`) + `booking_tier` (`confirmed|provisional`) + `booked_at`/`cancelled_at`. `UNIQUE(class_id, student_id)` is the double-book guard.
+- **Attendance axis** (migration `0012`, slice 3.3): `attendance_status` (`unmarked|present|absent`) + `attended_at` + `marked_by`. Orthogonal to booking, exactly as D2 specified.
+- **Walk-in** = booking `none` + attendance `present` (D2), added by staff (`attendance.addWalkIn`) or QR check-in.
+- **Drop-ins** (no `user.id`) are NOT participation rows — they live in the separate `drop_in` table (slice 3.5) and are unioned into the O5 roster.

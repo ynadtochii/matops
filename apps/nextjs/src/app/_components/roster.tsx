@@ -20,6 +20,7 @@ export function Roster() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const roster = useQuery(trpc.membership.roster.queryOptions());
+  const leads = useQuery(trpc.dropIn.list.queryOptions());
 
   const invalidate = () =>
     queryClient.invalidateQueries(trpc.membership.roster.pathFilter());
@@ -140,6 +141,38 @@ export function Roster() {
                 Remove
               </Button>
             </MemberRow>
+          ))
+        )}
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <h2 className="text-lg font-semibold">Drop-in leads</h2>
+        {(leads.data ?? []).length === 0 ? (
+          <p className="text-muted-foreground text-sm">
+            No drop-ins yet. They arrive when a first-time visitor checks in via
+            the gym QR.
+          </p>
+        ) : (
+          (leads.data ?? []).map((l) => (
+            <div
+              key={l.id}
+              className="bg-muted flex flex-wrap items-center justify-between gap-3 rounded-lg p-4"
+            >
+              <div className="flex flex-col">
+                <span className="font-medium">
+                  {l.firstName} {l.lastName}
+                  {l.visitCount > 1 && (
+                    <span className="text-muted-foreground ml-2 text-xs uppercase">
+                      visited {l.visitCount}×
+                    </span>
+                  )}
+                </span>
+                <span className="text-muted-foreground text-sm">
+                  {l.phone}
+                  {l.email ? ` · ${l.email}` : ""}
+                </span>
+              </div>
+            </div>
           ))
         )}
       </div>

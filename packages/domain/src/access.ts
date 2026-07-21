@@ -10,8 +10,18 @@ export interface Membership {
   status: string;
 }
 
+/**
+ * May this membership use the "enrolled" (view-only) tier at all? True only for
+ * `pending` and `active` rows. A `suspended` or `removed` member keeps a row
+ * (history is preserved) but has NO access — so the enrolled tier must reject
+ * them, not just check that a row exists. See docs/issues/23 and spec §4.
+ */
+export function canEnroll(m: Membership): boolean {
+  return m.status === "pending" || m.status === "active";
+}
+
 /** An approved member — owner, instructor, or student, once active. */
-export function isActiveMember(m: Membership): boolean {
+export function isActiveMember(m: Pick<Membership, "status">): boolean {
   return m.status === "active";
 }
 

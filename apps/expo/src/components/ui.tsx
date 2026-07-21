@@ -120,7 +120,7 @@ export function TextField({
   );
 }
 
-type BannerTone = "info" | "warning";
+type BannerTone = "info" | "warning" | "success";
 
 /** A slim status strip (spec S3 pending banner). */
 export function Banner({
@@ -131,7 +131,11 @@ export function Banner({
   tone?: BannerTone;
 }) {
   const toneClass =
-    tone === "warning" ? "bg-muted border-l-4 border-destructive" : "bg-muted";
+    tone === "warning"
+      ? "bg-muted border-l-4 border-destructive"
+      : tone === "success"
+        ? "bg-muted border-l-4 border-primary"
+        : "bg-muted";
   return (
     <View className={`rounded-md p-3 ${toneClass}`}>
       <Text className="text-muted-foreground text-sm">{children}</Text>

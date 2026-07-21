@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 
+import { canRemoveOrDemote } from "@matops/domain";
+
 import { member, organization, user } from "./auth-schema";
 import { db } from "./client";
 
@@ -166,6 +168,47 @@ export async function setMemberStatus(
   status: string,
 ): Promise<void> {
   await db.update(member).set({ status }).where(eq(member.id, memberId));
+}
+
+/**
+ * Set a member's status (suspend / remove) ATOMICALLY with the "never ownerless"
+ * check (spec §4). The check and the write must not race: two owners removing
+ * each other at the same time could each read `2 active owners`, both pass a
+ * separate check, and leave the academy with none. So we do it in ONE
+ * transaction, locking the academy's member rows with `FOR UPDATE` so concurrent
+ * mutations serialize, re-run the pure `canRemoveOrDemote` guard on the freshly
+ * locked rows, and only then write. Returns `{ ok: false }` (no write) when the
+ * change would drop the last active owner.
+ *
+ * Runs on the base connection (the `member` table has no RLS — RLS is only on our
+ * domain tables, docs/issues/12); isolation comes from the explicit `academyId`
+ * filter plus the row lock.
+ */
+export async function setMemberStatusIfNotLastOwner(
+  academyId: string,
+  memberId: string,
+  status: string,
+): Promise<{ ok: boolean }> {
+  return db.transaction(async (tx) => {
+    const rows = await tx
+      .select({ id: member.id, role: member.role, status: member.status })
+      .from(member)
+      .where(eq(member.organizationId, academyId))
+      .for("update");
+
+    const members = rows.map((r) => ({
+      id: r.id,
+      role: r.role,
+      status: r.status ?? "pending",
+    }));
+
+    if (!canRemoveOrDemote(members, memberId)) {
+      return { ok: false };
+    }
+
+    await tx.update(member).set({ status }).where(eq(member.id, memberId));
+    return { ok: true };
+  });
 }
 
 /** Set only the role (promote a member to co-owner). */

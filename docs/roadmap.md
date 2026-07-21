@@ -5,12 +5,12 @@
 > Flip cells as you go: **`—`** not needed · **`todo`** · **`wip`** · **`done`**. Every flip to `done` must pass the [Definition of Done](delivery.md#4-definition-of-done-the-anti-drift-gate).
 > Surfaces: **DB · API · Web · Mob · Sh(ared) · Inf(ra)**. Spec IDs trace up to [spec.md](spec.md); tickets to [map.md](map.md).
 
-**Status:** **Phase 2 complete, web-first** (slices 2.1–2.4; Phase 1 done before it). All static gates are green — `lint` (13/13), `typecheck` (15/15), `test` (54 tests). Scheduling core is built: recurring class templates (O3), DST-aware materialization (lazy on save + a bounded daily Vercel Cron), one-off classes, edit/cancel with future-instance propagation, and the schedule reads (owner web `class.week`; student `class.mine`, API-ready). **Deferred to a mobile pass:** all Expo student UI — the join screen + deep links (1.3/1.4/1.6) **and** the student schedule screen (2.4 Mob) — the student-lens API is now in place, so the pass is unblocked.
+**Status:** **Phases 2–3 complete + Expo student app shipped (mobile pass) + slice 1.7 (academy-code join).** All static gates are green — `lint` (13/13), `typecheck` (15/15), `test` (117 tests). Phase 3 (booking, attendance, QR check-in, public drop-in) is built and its migrations (`0011`–`0013`) are applied + verified on Neon. A tenant-seam hardening pass (ADR 33) then made the RLS seam fail-closed and fixed an enrolled-tier fail-open. Scheduling core is built: recurring class templates (O3), DST-aware materialization (lazy on save + a bounded daily Vercel Cron), one-off classes, edit/cancel with future-instance propagation, and the schedule reads (owner web `class.week`; student `class.mine`). The **Expo student app** shipped in the mobile pass (join → pending → schedule → detail → profile/switcher, Mob cells 1.3/1.4/1.6/2.4); mobile join is a 6-digit academy-code lookup (slice 1.7, ADR 32). **Not built yet:** Phase 4 (notifications & polish), Phase 5 (launch hardening incl. universal/App links + booking-count reconciliation), and the one flagged follow-up — rendering the venue check-in URL as a scannable QR image (needs a QR lib; the link itself is live in O6). All of Phase 3 (book/cancel, provisional tier, attendance, QR check-in, public drop-in) is in.
 
 > **Verified live on Neon.**
 > - **Phase 1 exit test** — sign in (magic link) → **Start a gym** → active **owner** (RLS scope set) → create/rotate an invite link → a second user joins **pending, holding no academy role** → owner **approves** → role granted + active. "Never ownerless" blocks removing the sole owner; a student is `FORBIDDEN` from owner-only routes.
 > - **Phase 2** — a Mon/Wed/Fri 18:00 Europe/Kyiv template **materialized 18 classes** over 6 weeks at 15:00 UTC (correct DST offset); re-run inserted **0** (idempotent); cursor advanced to now+42d. Template edits propagate: a content edit kept the rows + retitled; a timing edit regenerated Mon/Wed → Tue/Thu; one-off create + cancel worked.
-> - Migrations `0000`–`0008` applied; RLS leak tests (probe + `class_template` + `class`) green.
+> - Migrations `0000`–`0010` applied; RLS leak tests (probe + `class_template` + `class`) green.
 
 ---
 
@@ -58,11 +58,11 @@ One row per slice. This is the single answer to *"what's left, on which surface?
 | 2.3 | Class instances (one-off + edit/cancel rules) | done | done | done | — | done | — |
 | 2.4 | Schedule read (owner web + student mobile) | — | done | done | done | done | — |
 | **3** | **Booking & attendance** | | | | | | |
-| 3.1 | Book / cancel (atomic write, soft capacity) | todo | todo | todo | todo | todo | — |
-| 3.2 | Provisional booking for pending (display tag) | — | todo | todo | todo | — | — |
-| 3.3 | Attendance marking (staff) | todo | todo | todo | — | — | — |
-| 3.4 | QR self check-in (book + attend) | todo | todo | todo | todo | todo | todo |
-| 3.5 | Public drop-in / lead form (consent, dedupe) | todo | todo | todo | — | todo | todo |
+| 3.1 | Book / cancel (atomic write, soft capacity) | done | done | — | done | done | — |
+| 3.2 | Provisional booking for pending (display tag) | — | done | done | done | done | — |
+| 3.3 | Attendance marking (staff) | done | done | done | — | done | — |
+| 3.4 | QR self check-in (book + attend) | done | done | — | done | done | — |
+| 3.5 | Public drop-in / lead form (consent, dedupe) | done | done | done | — | done | done |
 | **4** | **Notifications & polish** | | | | | | |
 | 4.1 | `notifications` package (Expo Push + Resend) | — | todo | — | todo | todo | todo |
 | 4.2 | Events (cancel, reminder, approval, class change) | todo | todo | — | todo | todo | todo |
@@ -112,11 +112,11 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 ### Phase 3 — Booking & attendance
 **Exit test:** student books/cancels (≤3 taps) + checks in via QR; walk-in via public form; staff sees attendance.
 
-- **3.1 Book / cancel** — atomic conditional `UPDATE` increments `booking_count` (capacity guard **dropped** in v1); `UNIQUE(class_id, student_id)` stops double-book; re-book = ON CONFLICT flips cancelled→booked; cancel decrements floored. **Soft capacity:** never blocked; at/over shows red "22/20 · may be busy" + confirm. Refs: tickets 13, 22.
-- **3.2 Provisional booking** — pending member's booking tagged "pending approval", **display only**, no spot held. Refs: tickets 22, 23.
-- **3.3 Attendance** — staff marks present/absent per class (unified `class_participation`; walk-in = booking `none` + attendance `present`). Refs: ticket 08, spec O-attendance.
-- **3.4 QR self check-in** — **one static per-gym QR** → today's class → book-if-needed **+ mark present**, recorded **even if full**. Booking = book only; QR = book + attend. QR with no class → "No class right now" + general lead. Refs: ticket 24; spec §4.
-- **3.5 Public drop-in form** — same venue QR, no app → public web form (name, surname, phone, email optional) → `drop_in` **lead + attendance**, no capacity, **consent checkbox**, **dedupe by phone** (one person + visit count), owner follows up. Refs: ticket 25; spec §4.
+- **3.1 Book / cancel** — **DONE.** New `class_participation` table (migration `0011` + RLS) + `booking` router (`book`/`cancel` on `enrolledProcedure`). Atomic conditional `UPDATE` increments `booking_count` (capacity guard **dropped** in v1); `UNIQUE(class_id, student_id)` stops double-book; re-book = ON CONFLICT flips cancelled→booked; cancel decrements floored. **Confirmed-only count:** an approved member's booking counts; a **pending** member's is `provisional` — recorded + tagged "pending approval", never counted. **Soft capacity:** never blocked; at/over shows red "22/20 · may be busy" + confirm (mobile S5). `class.get`/`class.mine` now return the caller's `myBooking`. Pure rules `bookingTier`/`canBook`/`capacityDisplay` in `@matops/domain`. Refs: tickets 13, 22.
+- **3.2 Provisional booking** — **DONE.** The provisional *tier* + the student-side "pending approval" tag shipped with 3.1; 3.2 added the **owner-side** view: `class.week` returns a `pendingCount` (provisional-only subquery) and the web schedule shows "N/cap · +M pending". Refs: tickets 22, 23.
+- **3.3 Attendance** — **DONE.** Migration `0012` adds the attendance axis to `class_participation` (`attendance_status` + `attended_at`/`marked_by`) and a `none` booking value for walk-ins. New `attendance` router (`staffProcedure`: `roster`/`mark`/`addWalkIn`/`members`) + the O5 web screen (pick a class in the 14-day backfill window → mark present/absent → add a walk-in). Walk-in = booking `none` + attendance `present`, never counted. Roster `visitCount` ("attended N×") now real. Pure rules `canMarkAttendance`/`attendanceCounts`. Refs: ticket 08, spec O5.
+- **3.4 QR self check-in** — **DONE.** New `checkin` router (`enrolledProcedure`: `today`/`checkIn`). Check-in = **book + attend** in one (soft cap — present even if full; pending → provisional). `resolveCheckInClass` (pure, server-side) picks the current/next class; mobile S8 `checkin` screen confirms + checks in. **No camera in v1** (D3): uses the active academy; the physical QR routes no-app visitors to 3.5. Refs: ticket 24; spec S8/§4.
+- **3.5 Public drop-in form** — **DONE.** New `drop_in` table (migration `0013` + owner-read RLS). The `dropIn` router's `submit` + `academyInfo` are the **first public (unauthenticated) procedures** — an enumerated tenant-seam exception (writes on the trusted base connection). Public web page `/checkin/[academyId]` (name, surname, phone, email optional, **required consent**), **dedupe by phone** (one lead + visit count), resolves today's class server-side (else general lead). Owner O4 leads section + O6 venue-link poster. Refs: ticket 25; spec §4. *(Follow-up: render the O6 link as a scannable QR image — needs a QR lib.)*
 
 ### Phase 4 — Notifications & polish
 **Exit test:** every v1 event fires on the right channel; empty/error states are flawless.

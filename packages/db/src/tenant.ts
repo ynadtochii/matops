@@ -14,7 +14,8 @@ if (!/^[a-z_][a-z0-9_]*$/.test(APP_ROLE)) {
   throw new Error(`Unsafe APP_ROLE: ${APP_ROLE}`);
 }
 
-type TenantTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+/** The RLS-scoped transaction handle a tenant resolver runs on (`ctx.db`). */
+export type TenantTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /**
  * Run `fn` inside a transaction scoped to one academy.
