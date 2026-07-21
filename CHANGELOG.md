@@ -4,7 +4,7 @@ One line per shipped slice (see `docs/delivery.md` §4). Newest first.
 
 ## Slice 1.7 — Numeric academy code join (mobile v1)
 
-- **1.7 Academy code join** — every academy gets a plain 6-digit `public_code` (`organization` column, migration `0010`, backfilled + assigned by the auth `afterCreateOrganization` hook). Mobile onboarding is now a code lookup: type the gym's ID → `academy.findByCode` → confirm + minimal profile → `membership.joinByCode` → pending **student** (role fixed via `CODE_JOIN_ROLE`, shared `joinPending` step with the invite-link join). Web dashboard shows the ID to copy; per-role invite links + the `join/[token]` deep-link route stay for the web + next iteration (ADR [32](docs/issues/32-academy-code-join.md), refines [31](docs/issues/31-deep-link-approach.md)). Green: `lint` (13/13), `typecheck` (15/15), `test` (61).
+- **1.7 Academy code join** — every academy gets a plain 6-digit `public_code` (`organization` column, migration `0010`, backfilled + assigned by the auth `afterCreateOrganization` hook). Mobile onboarding is now a code lookup: type the gym's ID → `academy.findByCode` → confirm + minimal profile → `membership.joinByCode` → pending **student** (role fixed via `CODE_JOIN_ROLE`, shared `joinPending` step with the invite-link join). Web dashboard shows the ID to copy; per-role invite links + the `join/[token]` deep-link route stay for the web + next iteration (ADR [32](docs/issues/32-academy-code-join.md), refines [31](docs/issues/31-deep-link-approach.md)). Green: `lint` (13/13), `typecheck` (15/15), `test` (61); device-only checks in the [mobile device-test checklist](docs/mobile-device-test.md).
 
 ## Mobile pass — Expo student app
 
