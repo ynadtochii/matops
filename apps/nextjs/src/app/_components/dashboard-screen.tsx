@@ -66,6 +66,14 @@ export function DashboardScreen() {
     ...trpc.dropIn.list.queryOptions(),
     enabled: isOwner,
   });
+  const insights = useQuery({
+    ...trpc.stats.gym.queryOptions(),
+    enabled: isStaff,
+  });
+  const drifting = useQuery({
+    ...trpc.stats.drifting.queryOptions(),
+    enabled: isOwner,
+  });
 
   if (current.isPending) return <SkeletonRows rows={5} />;
   if (current.isError || !c)
@@ -155,6 +163,47 @@ export function DashboardScreen() {
         )}
       </div>
 
+      {/* Insights — gym activity over the last 30 days */}
+      <div className="mb-8 flex flex-col gap-3">
+        <h2 className="text-lg font-semibold">Insights</h2>
+        {insights.isPending ? (
+          <SkeletonRows rows={2} />
+        ) : insights.isError ? (
+          <ErrorState
+            label="gym insights"
+            onRetry={() => void insights.refetch()}
+          />
+        ) : (
+          <Insights data={insights.data} isOwner={isOwner} />
+        )}
+      </div>
+
+      {/* Who's drifting — members who used to train and have gone quiet */}
+      {isOwner && (
+        <div className="mb-8 flex flex-col gap-3">
+          <h2 className="text-lg font-semibold">Who&apos;s drifting</h2>
+          {drifting.isPending ? (
+            <SkeletonRows rows={2} />
+          ) : drifting.isError ? (
+            <ErrorState
+              label="the drifting list"
+              onRetry={() => void drifting.refetch()}
+            />
+          ) : drifting.data.length === 0 ? (
+            <EmptyState title="Everyone's showing up.">
+              Members who used to train here but have gone quiet appear here so
+              you can reach out.
+            </EmptyState>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {drifting.data.slice(0, 6).map((m) => (
+                <DriftRow key={m.memberId} m={m} today={today} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Quick actions */}
       <div className="flex flex-wrap gap-2">
         <QuickAction href="/schedule">Add class</QuickAction>
@@ -195,7 +244,13 @@ function TriageCard({
   );
 }
 
-function Stat({ value, label }: { value: number; label: string }) {
+function Stat({
+  value,
+  label,
+}: {
+  value: number | string;
+  label: string;
+}) {
   return (
     <div>
       <p className="font-mono text-xl tabular-nums">{value}</p>
@@ -221,6 +276,95 @@ function TodayRow({ c }: { c: ClassRow }) {
         {c.pendingCount > 0 ? ` · +${c.pendingCount}` : ""}
       </span>
     </div>
+  );
+}
+
+type GymInsights = RouterOutputs["stats"]["gym"];
+type DriftMember = RouterOutputs["stats"]["drifting"][number];
+
+const DRIFT_LABEL: Record<DriftMember["drift"], string> = {
+  active: "Active",
+  cooling: "Cooling",
+  at_risk: "At risk",
+  dormant: "Dormant",
+};
+
+/** Gym-activity block: counts lead, rate only shown when it's meaningful. */
+function Insights({
+  data,
+  isOwner,
+}: {
+  data: GymInsights;
+  isOwner: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap gap-x-8 gap-y-3">
+        <Stat value={data.visitsThisWeek} label="Visits this week" />
+        <Stat value={data.visitsThisMonth} label="Visits this month" />
+        {isOwner && (
+          <Stat value={data.newMembersThisMonth} label="New members" />
+        )}
+        {data.attendanceRate !== null && (
+          <Stat
+            value={`${Math.round(data.attendanceRate * 100)}%`}
+            label="Attendance rate"
+          />
+        )}
+      </div>
+      {data.busiest.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <p className="text-muted-foreground font-mono text-[10px] tracking-wide uppercase">
+            Busiest classes
+          </p>
+          {data.busiest.slice(0, 3).map((b) => (
+            <div
+              key={b.title}
+              className="border-border flex items-center justify-between border-b py-1.5 text-sm last:border-0"
+            >
+              <span className="font-medium">{b.title}</span>
+              <span className="text-muted-foreground font-mono text-xs tabular-nums">
+                {b.count}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** One "who's drifting" row — links to the member's detail (C.2). */
+function DriftRow({ m, today }: { m: DriftMember; today: Date }) {
+  const days = m.lastAttendance
+    ? Math.floor(
+        (today.getTime() - new Date(m.lastAttendance).getTime()) /
+          (24 * 60 * 60 * 1000),
+      )
+    : null;
+  const tone =
+    m.drift === "dormant"
+      ? "text-error border-error/40"
+      : m.drift === "at_risk"
+        ? "text-warning border-warning/40"
+        : "text-muted-foreground border-border";
+  return (
+    <Link
+      href={`/roster?member=${m.memberId}`}
+      className="border-border hover:bg-muted flex items-center justify-between gap-3 rounded-lg border p-3 transition-colors"
+    >
+      <div className="flex flex-col">
+        <span className="font-medium">{m.name}</span>
+        <span className="text-muted-foreground text-sm">
+          {days != null ? `Last trained ${days} days ago` : "No recent sessions"}
+        </span>
+      </div>
+      <span
+        className={`shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium ${tone}`}
+      >
+        {DRIFT_LABEL[m.drift]}
+      </span>
+    </Link>
   );
 }
 

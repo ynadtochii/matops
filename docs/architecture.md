@@ -10,7 +10,7 @@
 
 ---
 
-## 0. As-built status (Phases 0–4 + mobile pass + v1.1 UX pass — read this first)
+## 0. As-built status (Phases 0–4 + mobile pass + v1.1 UX pass + v1.2 foundation — read this first)
 
 Sections 1–11 are the **conceptual design of record** (the "why", written before code). This section is the **reality on disk** after Phases 0–2 and the mobile pass. Where they differ, this section wins for "what exists today"; the sections below still hold for intent and Phases 2+. Slice-by-slice detail: [../CHANGELOG.md](../CHANGELOG.md); live plan + status matrix: [roadmap.md](roadmap.md); how we build + keep docs true: [delivery.md](delivery.md).
 
@@ -71,6 +71,10 @@ This iteration added no new domains — it restructured both clients' **UX** on 
 - **Screens:** the O1 **Dashboard** command center (`dashboard-screen.tsx` — owner triage cards + KPI stats + today's classes + quick actions; instructor gets the schedule half; pending coach sees "almost in") is new. Schedule wraps the week + templates as **tabs** (`schedule-screen.tsx`). Roster is **people-only** (`roster-screen.tsx` → pending / members / drop-in leads) — join mechanics moved out. Settings (`settings-screen.tsx`) holds academy identity + invite links + the **venue QR poster** (`venue-checkin.tsx`, **`qrcode.react`** — SVG, `level="M"`, `marginSize={4}`, black-on-white, print via `window.print()` + `@media print`, no PDF lib).
 - **Academy identity model:** the **name is a mutable, non-unique label** (owner renames it via `academy.rename` — an `ownerProcedure` calling Better Auth `updateOrganization`, so its org-permission check applies; the client `AcademyIdentity` invalidates the `academy` query path so the sidebar + switcher follow). **Identity is the immutable `public_code`** (the "Academy code", `UNIQUE`, no update path) + the internal org id. The duplicate "Academy ID" display was removed — one code everywhere; both role invite links kept.
 - **Mobile tabs (ADR 38):** an expo-router **`(tabs)/` group** — Schedule (S4) / Check in (S8) / Profile (S7); class detail (S5) + the pre-join stack (sign-in, join) push over the tabs from the root Stack. The kit (`components/ui.tsx`) gained the **brand tokens**, a **`Mark`/`Logo`** (basketweave via Views), and a brand **Banner** tone (the S3 pending banner); home/check-in/class-detail/onboarding/sign-in were ported from NativeWind classes to **explicit RN styles** (per ADR 36) with restrained violet accents.
+
+**v1.2 as-built (Personal & Insight; ADR [39](issues/39-attendance-derived-stats.md)):**
+
+Adds personal + gym numbers on top of stored attendance — no new domain, **no migration, no cron**. The math is one pure engine, `packages/domain/src/stats.ts` (`trainingStats`/`classifyDrift`/`gymInsights`/`splitMyClasses`/`nextClass`), tested in isolation and reused by every surface. A **session** = a `present` `class_participation` row joined to its `class` (the roster `visitCount` basis); all stats are **per-academy** (they run on the RLS `ctx.db`), and week/month boundaries are drawn in the **academy** time zone (Sunday-start), reusing the `materialize.ts` `Intl.DateTimeFormat` local-parts idiom. Read-time compute — a cached `users.stats` aggregate + refresh cron stays a deferred optimization. New reads sit on existing tiers: `stats.me`/`booking.mine` (`enrolledProcedure`), `stats.gym` (`staffProcedure`), `stats.drifting`/`membership.memberHistory` (`ownerProcedure`), and `account.updateProfile` (`protectedProcedure` → the `updateUserProfile` base-connection helper, since `user` has no RLS). Clients: mobile gains a **Training tab** (next-class card + My Training stats + Upcoming/Past) and editable profile name/phone; web gains a dashboard **Insights + "who's drifting"** block and a **tabbed member detail** (Overview · Attendance). *(Slice-by-slice status: roadmap.md v1.2.)*
 
 ---
 

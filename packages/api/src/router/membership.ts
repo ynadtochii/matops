@@ -2,7 +2,9 @@ import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
 import {
+  and,
   createPendingMembership,
+  desc,
   eq,
   findAcademyByCode,
   getMemberById,
@@ -14,8 +16,14 @@ import {
   sql,
   updateUserProfile,
 } from "@matops/db";
-import { classParticipation } from "@matops/db/schema";
-import { approveMembership, canApprove, CODE_JOIN_ROLE } from "@matops/domain";
+import { classInstance, classParticipation } from "@matops/db/schema";
+import {
+  approveMembership,
+  canApprove,
+  classifyDrift,
+  CODE_JOIN_ROLE,
+  trainingStats,
+} from "@matops/domain";
 import {
   JoinAcademySchema,
   JoinByCodeSchema,
@@ -23,6 +31,7 @@ import {
 } from "@matops/validators";
 
 import type { createTRPCContext } from "../trpc";
+import { academyTimeZone } from "../academy-tz";
 import { notifyMembershipApproved } from "../notify";
 import { ownerProcedure, protectedProcedure } from "../trpc";
 
@@ -192,6 +201,47 @@ export const membershipRouter = {
         visitCount: visitByUser.get(r.userId) ?? 0,
       }));
   }),
+
+  /**
+   * One member's attendance history + derived stats (spec O4 "member detail",
+   * slice C.2 — ADR 39). Owner-only. Resolves the member to its user, lists
+   * their `present` sessions (newest first), and reuses the pure `trainingStats`
+   * + `classifyDrift` for the Overview tab. Contact/role come from the roster
+   * row the web already holds — this returns only the history + numbers.
+   */
+  memberHistory: ownerProcedure
+    .input(MemberActionSchema)
+    .query(async ({ ctx, input }) => {
+      const m = await requireMember(ctx.academyId, input.memberId);
+      const history = await ctx.db
+        .select({
+          classId: classInstance.id,
+          title: classInstance.title,
+          discipline: classInstance.discipline,
+          startsAt: classInstance.startsAt,
+        })
+        .from(classParticipation)
+        .innerJoin(
+          classInstance,
+          eq(classParticipation.classId, classInstance.id),
+        )
+        .where(
+          and(
+            eq(classParticipation.studentId, m.userId),
+            eq(classParticipation.attendanceStatus, "present"),
+          ),
+        )
+        .orderBy(desc(classInstance.startsAt));
+      const now = new Date();
+      const timeZone = await academyTimeZone(ctx.db);
+      const lastAttendance = history[0]?.startsAt ?? null;
+      return {
+        stats: trainingStats(history, now, timeZone),
+        drift: classifyDrift(lastAttendance, now),
+        lastAttendance,
+        history,
+      };
+    }),
 
   /** Approve a pending member → grant the invited role + activate (docs/issues/20). */
   approve: ownerProcedure

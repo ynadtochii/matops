@@ -1,7 +1,7 @@
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
-import { and, eq, ne, sql } from "@matops/db";
+import { and, desc, eq, isNull, ne, sql } from "@matops/db";
 import { classInstance, classParticipation } from "@matops/db/schema";
 import { bookingTier, canBook } from "@matops/domain";
 import { BookClassSchema, CancelBookingSchema } from "@matops/validators";
@@ -22,6 +22,41 @@ import { enrolledProcedure } from "../trpc";
  * statements commit or roll back together. See docs/issues/13.
  */
 export const bookingRouter = {
+  /**
+   * The caller's own participations, each joined to its class (slice B.2, spec
+   * S6 "My classes"). The mobile Training tab feeds these to `splitMyClasses`,
+   * which divides them into Upcoming (still booked, not started — confirmed +
+   * provisional) and Past (attended). Every row of the caller's is returned
+   * (RLS scopes the academy); the pure split drops cancelled-and-never-attended
+   * rows. Soft-deleted classes are excluded here.
+   */
+  mine: enrolledProcedure.query(async ({ ctx }) => {
+    return ctx.db
+      .select({
+        classId: classInstance.id,
+        title: classInstance.title,
+        startsAt: classInstance.startsAt,
+        durationMinutes: classInstance.durationMinutes,
+        discipline: classInstance.discipline,
+        status: classInstance.status,
+        bookingStatus: classParticipation.bookingStatus,
+        bookingTier: classParticipation.bookingTier,
+        attendanceStatus: classParticipation.attendanceStatus,
+      })
+      .from(classParticipation)
+      .innerJoin(
+        classInstance,
+        eq(classParticipation.classId, classInstance.id),
+      )
+      .where(
+        and(
+          eq(classParticipation.studentId, ctx.session.user.id),
+          isNull(classInstance.deletedAt),
+        ),
+      )
+      .orderBy(desc(classInstance.startsAt));
+  }),
+
   /**
    * Book (or re-book) a class. Idempotent: a second tap on an already-booked
    * class is a no-op that does not double-count. Re-booking a cancelled row

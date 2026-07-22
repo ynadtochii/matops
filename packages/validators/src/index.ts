@@ -30,6 +30,18 @@ export const JoinAcademySchema = z.object({
 });
 export type JoinAcademyInput = z.infer<typeof JoinAcademySchema>;
 
+/**
+ * Edit the signed-in user's own profile (spec S7, slice B.3). Name + phone are
+ * editable; email stays read-only (it is the login identity + notification
+ * channel). Same field shapes as the join schemas.
+ */
+export const UpdateProfileSchema = z.object({
+  firstName: z.string().trim().min(1).max(60),
+  lastName: z.string().trim().min(1).max(60),
+  phone: z.string().trim().min(3).max(30),
+});
+export type UpdateProfileInput = z.infer<typeof UpdateProfileSchema>;
+
 /** A single member action (approve / reject / remove / suspend / promote). */
 export const MemberActionSchema = z.object({
   memberId: z.string().min(1),

@@ -4,8 +4,9 @@ import { Tabs } from "expo-router";
 import { useTheme } from "~/components/ui";
 
 /**
- * The student tab bar (mobile structure, ticket 05). Three tabs cover the core
- * loop: Schedule (S4, home) → Check in (S8) → Profile (S7). Class detail (S5)
+ * The student tab bar (mobile structure, ticket 05; Training added in v1.2
+ * B.2). Four tabs: Schedule (S4, home) → Training (S6, my classes + stats) →
+ * Check in (S8) → Profile (S7). Class detail (S5)
  * and the pre-join stack (sign-in, join) push over the tabs from the root Stack.
  * Screens own their own headings (like the web), so the tab header is hidden.
  * Icons are simple monochrome View shapes — no icon-font dependency.
@@ -33,6 +34,13 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="training"
+        options={{
+          title: "Training",
+          tabBarIcon: ({ color }) => <TrainingIcon color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="checkin"
         options={{
           title: "Check in",
@@ -56,6 +64,25 @@ function ScheduleIcon({ color }: { color: string }) {
       style={{ width: 18, height: 18, borderRadius: 4, borderWidth: 1.8, borderColor: color }}
     >
       <View style={{ position: "absolute", top: 3.5, left: 1, right: 1, height: 1.6, backgroundColor: color }} />
+    </View>
+  );
+}
+
+function TrainingIcon({ color }: { color: string }) {
+  // A simple bar-chart glyph — three rising bars for "your training".
+  return (
+    <View
+      style={{
+        width: 18,
+        height: 18,
+        flexDirection: "row",
+        alignItems: "flex-end",
+        justifyContent: "space-between",
+      }}
+    >
+      <View style={{ width: 4, height: 8, borderRadius: 1, backgroundColor: color }} />
+      <View style={{ width: 4, height: 13, borderRadius: 1, backgroundColor: color }} />
+      <View style={{ width: 4, height: 18, borderRadius: 1, backgroundColor: color }} />
     </View>
   );
 }

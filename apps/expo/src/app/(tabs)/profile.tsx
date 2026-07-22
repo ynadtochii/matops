@@ -9,6 +9,7 @@ import {
   Loading,
   Screen,
   Stack,
+  TextField,
   useTheme,
 } from "~/components/ui";
 import { trpc } from "~/utils/api";
@@ -100,6 +101,119 @@ function Field({ label, value }: { label: string; value: string }) {
   );
 }
 
+/**
+ * Editable personal details (spec S7, slice B.3). Name + phone are editable via
+ * `account.updateProfile`; email stays read-only (login identity). After a save
+ * the Better Auth session is refetched with `disableCookieCache` so the new
+ * values show at once (the write goes straight to the user row, bypassing the
+ * client session cache).
+ */
+function ProfileDetails({
+  name,
+  phone,
+  email,
+  onSaved,
+}: {
+  name: string;
+  phone: string;
+  email: string;
+  onSaved: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [phoneValue, setPhoneValue] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const update = useMutation(
+    trpc.account.updateProfile.mutationOptions({
+      onSuccess: () => {
+        setEditing(false);
+        setError(null);
+        onSaved();
+      },
+      onError: (err) => setError(err.message || "Could not save"),
+    }),
+  );
+
+  const startEdit = () => {
+    const parts = name.trim().split(/\s+/);
+    setFirstName(parts[0] ?? "");
+    setLastName(parts.slice(1).join(" "));
+    setPhoneValue(phone);
+    setError(null);
+    setEditing(true);
+  };
+
+  const canSave =
+    firstName.trim().length > 0 &&
+    lastName.trim().length > 0 &&
+    phoneValue.trim().length >= 3;
+
+  if (!editing) {
+    return (
+      <Stack gap={20}>
+        <Field label="Name" value={name || "—"} />
+        <Field label="Phone" value={phone || "—"} />
+        <Field label="Email" value={email} />
+        <Button label="Edit profile" variant="outline" onPress={startEdit} />
+      </Stack>
+    );
+  }
+
+  return (
+    <Stack gap={16}>
+      <TextField
+        label="First name"
+        value={firstName}
+        onChangeText={setFirstName}
+        autoCapitalize="words"
+        autoFocus
+      />
+      <TextField
+        label="Last name"
+        value={lastName}
+        onChangeText={setLastName}
+        autoCapitalize="words"
+      />
+      <TextField
+        label="Phone"
+        value={phoneValue}
+        onChangeText={setPhoneValue}
+        keyboardType="phone-pad"
+      />
+      <Field label="Email" value={email} />
+      {error ? <ErrorText>{error}</ErrorText> : null}
+      <Stack row gap={8}>
+        <Button
+          label={update.isPending ? "Saving…" : "Save"}
+          disabled={!canSave || update.isPending}
+          onPress={() =>
+            update.mutate({
+              firstName: firstName.trim(),
+              lastName: lastName.trim(),
+              phone: phoneValue.trim(),
+            })
+          }
+        />
+        <Button
+          label="Cancel"
+          variant="ghost"
+          onPress={() => setEditing(false)}
+        />
+      </Stack>
+    </Stack>
+  );
+}
+
+/** Inline validation / error line. */
+function ErrorText({ children }: { children: string }) {
+  const t = useTheme();
+  return (
+    <Text style={{ fontSize: 14, color: t.destructive }}>{children}</Text>
+  );
+}
+
 /** A small section label above a group. */
 function SectionLabel({ children }: { children: string }) {
   const t = useTheme();
@@ -126,7 +240,7 @@ export default function Profile() {
   const t = useTheme();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { data: session } = authClient.useSession();
+  const { data: session, refetch: refetchSession } = authClient.useSession();
   const current = useQuery(trpc.academy.current.queryOptions());
   const academies = useQuery(trpc.academy.listMineStudent.queryOptions());
 
@@ -157,7 +271,7 @@ export default function Profile() {
 
   const user = session.user;
   const phone =
-    typeof user.phone === "string" && user.phone.length > 0 ? user.phone : "—";
+    typeof user.phone === "string" && user.phone.length > 0 ? user.phone : "";
   const list = academies.data ?? [];
   const activeId = current.data?.academyId;
 
@@ -166,12 +280,14 @@ export default function Profile() {
       <Stack gap={24}>
         <Heading>{user.name || user.email}</Heading>
 
-        <Stack gap={20}>
-          <Field label="Name" value={user.name || "—"} />
-          <Field label="Phone" value={phone} />
-          <Field label="Email" value={user.email} />
-          <Field label="Current academy" value={current.data?.name ?? "—"} />
-        </Stack>
+        <ProfileDetails
+          name={user.name || ""}
+          phone={phone}
+          email={user.email}
+          onSaved={() => refetchSession({ query: { disableCookieCache: true } })}
+        />
+
+        <Field label="Current academy" value={current.data?.name ?? "—"} />
 
         {list.length >= 2 && (
           <Stack gap={8}>

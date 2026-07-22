@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
@@ -10,6 +12,25 @@ import { useTRPC } from "~/trpc/react";
 import { EmptyState, ErrorState, SkeletonRows } from "./states";
 
 type Member = RouterOutputs["membership"]["roster"][number];
+type MemberHistory = RouterOutputs["membership"]["memberHistory"];
+type DriftStatus = MemberHistory["drift"];
+
+/** Weekday labels, 0 = Sun … 6 = Sat — mirrors `@matops/domain` DAY_LABELS. */
+const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+const DRIFT_LABEL: Record<DriftStatus, string> = {
+  active: "Active",
+  cooling: "Cooling",
+  at_risk: "At risk",
+  dormant: "Dormant",
+};
+
+const dateFmt = new Intl.DateTimeFormat(undefined, {
+  weekday: "short",
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
 
 function roleLabel(m: Member): string {
   if (m.status === "pending")
@@ -22,6 +43,15 @@ export function Roster() {
   const queryClient = useQueryClient();
   const roster = useQuery(trpc.membership.roster.queryOptions());
   const leads = useQuery(trpc.dropIn.list.queryOptions());
+
+  // A member id from `?member=` (the dashboard "who's drifting" widget links
+  // here) opens that member's detail on first render.
+  const searchParams = useSearchParams();
+  const [openId, setOpenId] = useState<string | null>(
+    searchParams.get("member"),
+  );
+  const toggle = (id: string) =>
+    setOpenId((current) => (current === id ? null : id));
 
   const invalidate = () =>
     queryClient.invalidateQueries(trpc.membership.roster.pathFilter());
@@ -132,37 +162,45 @@ export function Roster() {
           </EmptyState>
         ) : (
           active.map((m) => (
-            <MemberRow key={m.memberId} m={m} label={roleLabel(m)}>
-              {m.role !== "owner" && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => promote.mutate({ memberId: m.memberId })}
-                >
-                  Make owner
-                </Button>
-              )}
-              {m.status === "active" && (
+            <div key={m.memberId} className="flex flex-col">
+              <MemberRow
+                m={m}
+                label={roleLabel(m)}
+                open={openId === m.memberId}
+                onToggle={() => toggle(m.memberId)}
+              >
+                {m.role !== "owner" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => promote.mutate({ memberId: m.memberId })}
+                  >
+                    Make owner
+                  </Button>
+                )}
+                {m.status === "active" && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={busy}
+                    onClick={() => suspend.mutate({ memberId: m.memberId })}
+                  >
+                    Suspend
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   variant="ghost"
+                  className="text-destructive"
                   disabled={busy}
-                  onClick={() => suspend.mutate({ memberId: m.memberId })}
+                  onClick={() => remove.mutate({ memberId: m.memberId })}
                 >
-                  Suspend
+                  Remove
                 </Button>
-              )}
-              <Button
-                size="sm"
-                variant="ghost"
-                className="text-destructive"
-                disabled={busy}
-                onClick={() => remove.mutate({ memberId: m.memberId })}
-              >
-                Remove
-              </Button>
-            </MemberRow>
+              </MemberRow>
+              {openId === m.memberId && <MemberDetail m={m} />}
+            </div>
           ))
         )}
       </div>
@@ -208,29 +246,235 @@ function MemberRow({
   m,
   label,
   children,
+  open,
+  onToggle,
 }: {
   m: Member;
   label: string;
   children: React.ReactNode;
+  /** When present, the name becomes a toggle for the detail panel (C.2). */
+  open?: boolean;
+  onToggle?: () => void;
 }) {
+  const name = (
+    <>
+      <span className="font-medium">
+        {m.name}
+        {m.status === "suspended" && (
+          <span className="text-muted-foreground ml-2 text-xs uppercase">
+            suspended
+          </span>
+        )}
+      </span>
+      <span className="text-muted-foreground text-sm">
+        {label} · {m.email}
+        {m.phone ? ` · ${m.phone}` : ""}
+        {m.visitCount > 0 ? ` · attended ${m.visitCount}×` : ""}
+      </span>
+    </>
+  );
   return (
-    <div className="bg-muted flex flex-wrap items-center justify-between gap-3 rounded-lg p-4">
-      <div className="flex flex-col">
-        <span className="font-medium">
-          {m.name}
-          {m.status === "suspended" && (
-            <span className="text-muted-foreground ml-2 text-xs uppercase">
-              suspended
-            </span>
-          )}
-        </span>
-        <span className="text-muted-foreground text-sm">
-          {label} · {m.email}
-          {m.phone ? ` · ${m.phone}` : ""}
-          {m.visitCount > 0 ? ` · attended ${m.visitCount}×` : ""}
-        </span>
-      </div>
+    <div
+      className={`bg-muted flex flex-wrap items-center justify-between gap-3 p-4 ${
+        open ? "rounded-t-lg" : "rounded-lg"
+      }`}
+    >
+      {onToggle ? (
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          className="flex flex-1 items-center gap-2 text-left"
+        >
+          <span
+            className={`text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
+            aria-hidden
+          >
+            ›
+          </span>
+          <span className="flex flex-col">{name}</span>
+        </button>
+      ) : (
+        <div className="flex flex-col">{name}</div>
+      )}
       <div className="flex gap-2">{children}</div>
     </div>
+  );
+}
+
+/**
+ * Expanded member detail (spec O4, slice C.2 — ADR 39). Two tabs: Overview
+ * (contact + role + attendance stats + drift band) and Attendance (the full
+ * present-session history, paginated). Contact/role come from the roster row;
+ * `membership.memberHistory` supplies the numbers + list.
+ */
+function MemberDetail({ m }: { m: Member }) {
+  const trpc = useTRPC();
+  const [tab, setTab] = useState<"overview" | "attendance">("overview");
+  const detail = useQuery(
+    trpc.membership.memberHistory.queryOptions({ memberId: m.memberId }),
+  );
+
+  return (
+    <div className="border-border bg-background rounded-b-lg border border-t-0 p-4">
+      <div className="border-border mb-4 flex gap-1 border-b">
+        <TabButton active={tab === "overview"} onClick={() => setTab("overview")}>
+          Overview
+        </TabButton>
+        <TabButton
+          active={tab === "attendance"}
+          onClick={() => setTab("attendance")}
+        >
+          Attendance
+        </TabButton>
+      </div>
+
+      {detail.isPending ? (
+        <SkeletonRows rows={3} />
+      ) : detail.isError ? (
+        <ErrorState
+          label="member detail"
+          onRetry={() => void detail.refetch()}
+        />
+      ) : tab === "overview" ? (
+        <Overview m={m} data={detail.data} />
+      ) : (
+        <AttendanceHistory history={detail.data.history} />
+      )}
+    </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+        active
+          ? "border-brand text-foreground"
+          : "text-muted-foreground border-transparent hover:text-foreground"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Overview({ m, data }: { m: Member; data: MemberHistory }) {
+  const s = data.stats;
+  const favorite = [
+    s.favoriteDiscipline?.toUpperCase(),
+    s.favoriteWeekday != null ? DAY_LABELS[s.favoriteWeekday] : undefined,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-3 text-sm">
+        <DriftBadge drift={data.drift} />
+        <span className="text-muted-foreground">
+          {data.lastAttendance
+            ? `Last trained ${dateFmt.format(new Date(data.lastAttendance))}`
+            : "No attended sessions yet"}
+        </span>
+      </div>
+
+      <div className="flex flex-wrap gap-x-8 gap-y-3">
+        <Stat value={s.total} label="Sessions" />
+        <Stat value={s.thisMonth} label="This month" />
+        <Stat value={s.streakWeeks} label="Week streak" />
+      </div>
+
+      <dl className="text-sm">
+        <Detail term="Role" value={m.role} />
+        <Detail term="Email" value={m.email} />
+        {m.phone ? <Detail term="Phone" value={m.phone} /> : null}
+        {favorite ? <Detail term="Favorite" value={favorite} /> : null}
+        <Detail term="Joined" value={dateFmt.format(new Date(m.joinedAt))} />
+      </dl>
+    </div>
+  );
+}
+
+function Detail({ term, value }: { term: string; value: string }) {
+  return (
+    <div className="border-border flex justify-between border-b py-1.5 last:border-0">
+      <dt className="text-muted-foreground">{term}</dt>
+      <dd className="font-medium">{value}</dd>
+    </div>
+  );
+}
+
+function AttendanceHistory({ history }: { history: MemberHistory["history"] }) {
+  const [limit, setLimit] = useState(15);
+  if (history.length === 0) {
+    return (
+      <EmptyState title="No attended sessions yet.">
+        Once this member is marked present at a class, it shows up here.
+      </EmptyState>
+    );
+  }
+  const shown = history.slice(0, limit);
+  return (
+    <div className="flex flex-col gap-1">
+      {shown.map((h) => (
+        <div
+          key={h.classId}
+          className="border-border flex items-center justify-between gap-3 border-b py-2 text-sm last:border-0"
+        >
+          <span className="font-medium">{h.title}</span>
+          <span className="text-muted-foreground shrink-0">
+            {dateFmt.format(new Date(h.startsAt))}
+          </span>
+        </div>
+      ))}
+      {history.length > limit && (
+        <button
+          type="button"
+          onClick={() => setLimit((n) => n + 15)}
+          className="text-brand-strong mt-2 self-start text-sm font-medium"
+        >
+          Show more ({history.length - limit})
+        </button>
+      )}
+    </div>
+  );
+}
+
+function Stat({ value, label }: { value: number; label: string }) {
+  return (
+    <div>
+      <p className="font-mono text-xl tabular-nums">{value}</p>
+      <p className="text-muted-foreground font-mono text-[10px] tracking-wide uppercase">
+        {label}
+      </p>
+    </div>
+  );
+}
+
+function DriftBadge({ drift }: { drift: DriftStatus }) {
+  const tone =
+    drift === "dormant"
+      ? "text-error border-error/40"
+      : drift === "at_risk"
+        ? "text-warning border-warning/40"
+        : drift === "cooling"
+          ? "text-muted-foreground border-border"
+          : "text-success border-success/40";
+  return (
+    <span
+      className={`rounded-full border px-2 py-0.5 text-xs font-medium ${tone}`}
+    >
+      {DRIFT_LABEL[drift]}
+    </span>
   );
 }

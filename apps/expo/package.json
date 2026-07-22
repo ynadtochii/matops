@@ -17,6 +17,7 @@
   "dependencies": {
     "@better-auth/expo": "catalog:",
     "@legendapp/list": "^2.0.14",
+    "@matops/domain": "workspace:*",
     "@matops/ui": "workspace:*",
     "@tanstack/react-query": "catalog:",
     "@trpc/client": "catalog:",

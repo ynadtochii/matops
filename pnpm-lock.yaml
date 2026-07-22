@@ -110,6 +110,9 @@ importers:
       '@legendapp/list':
         specifier: ^2.0.14
         version: 2.0.19(react-native@0.81.6(@babel/core@7.29.7)(@types/react@19.1.17)(bufferutil@4.1.0)(react@19.1.4))(react@19.1.4)
+      '@matops/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@matops/ui':
         specifier: workspace:*
         version: link:../../packages/ui

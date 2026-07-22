@@ -74,6 +74,13 @@ One row per slice. This is the single answer to *"what's left, on which surface?
 | 5.1 | `booking_count` reconciliation cron | — | todo | — | — | — | todo |
 | 5.2 | Observability + errors + rate-limit public routes | — | todo | todo | todo | — | todo |
 | 5.3 | Production release (Vercel + Neon prod + EAS submit) | todo | — | todo | todo | — | todo |
+| **v1.2** | **Personal & Insight** *(no new domain, no migration, no cron)* | | | | | | |
+| A.0 | `stats.ts` pure engine + tests (ADR 39) | — | — | — | — | done | — |
+| B.1 | My Training stats (student, `stats.me`) | — | done | — | done | — | — |
+| B.2 | Training tab + next-class card (`booking.mine`) | — | done | — | done | — | — |
+| B.3 | Edit profile (name / phone) | — | done | — | done | done | — |
+| C.1 | Gym insights + "who's drifting" (owner web) | — | done | done | — | — | — |
+| C.2 | Tabbed member detail (attendance history) | — | done | done | — | — | — |
 
 ---
 
@@ -136,6 +143,16 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 - **5.2 Observability & abuse** — error tracking, structured logs, rate-limit the **public** drop-in endpoint (QR-in-gym is the main anti-spam; add a soft limit). Refs: ticket 25.
 - **5.x Reminder cron schedule** — add the frequent `crons` entry for `/api/cron/remind` to `vercel.json` (sweep + route already built in 4.2). Needs a sub-daily cron (Vercel Pro; Hobby caps crons at 1/day). Refs: ADR 34, ticket 17.
 - **5.3 Release** — Vercel prod, Neon prod branch + migration run, EAS build + store submit, env promotion.
+
+### v1.2 — Personal & Insight
+**Exit test:** the student sees their own training (total/streak/next class); the owner sees gym activity + who's drifting; both read from attendance data already stored. Plan: `.scratch/v1.2/plan.md`; decision: ADR 39. **No migration, no cron.**
+
+- **A.0 stats engine** — **DONE.** `packages/domain/src/stats.ts` (pure, 20 tests): `trainingStats`, `classifyDrift` (+ `DRIFT_THRESHOLDS`), `gymInsights`, `splitMyClasses`, `nextClass`. Sessions = `present` participations; per-academy; academy-zone Sunday-start weeks. Refs: ADR 39.
+- **B.1 My Training stats** — **DONE.** `stats.me` on `enrolledProcedure` (present participations join `class` → `trainingStats`; academy zone resolved from templates, `academy-tz.ts`); mobile `MyTrainingCard` (total · month · streak · favorite · days since last). Refs: spec S7; ADR 39.
+- **B.2 Training tab + next-class card** — **DONE.** `booking.mine` (caller's participations join `class`) split client-side by `splitMyClasses`/`nextClass` (`@matops/domain` added to expo); new `(tabs)/training.tsx` = next-class card + stats + Upcoming (cancel)/Past; tabs are now Schedule · Training · Check-in · Profile. Refs: spec S6.
+- **B.3 Edit profile** — **DONE.** `UpdateProfileSchema` + `account.updateProfile` on `protectedProcedure` → `updateUserProfile`; email read-only; mobile profile Name/Phone editable, session refetched with `disableCookieCache` after save. Refs: spec S7.
+- **C.1 Gym insights + drifting** — **DONE.** `stats.gym` (staff, 30-day window → `gymInsights` + new-members-this-month) + `stats.drifting` (owner, `max(startsAt)` per student → `classifyDrift`, ≥1-session members only, stalest first); dashboard Insights block + "who's drifting" widget linking to `/roster?member=`. Refs: spec O1; ADR 39.
+- **C.2 Tabbed member detail** — **DONE.** `membership.memberHistory` (owner; member's present participations + `trainingStats`/`classifyDrift`); roster row expands to Overview · Attendance tabs (paginated), deep-linkable from C.1. Fulfils spec O4 "attendance history". Refs: spec O4.
 
 ---
 

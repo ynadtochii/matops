@@ -74,12 +74,16 @@ No blank waiting screen. A **slim banner** on the schedule: "Pending approval �
 - **Who's in the class:** **approved members** can see the **names** of other approved attendees. **Pending members and drop-ins show only as a count** (e.g. "+3 others"). A pending viewer sees only counts, no names. *(Owner/coach see everyone by name for attendance.)*
 - Cancelled class → shown read-only as **Cancelled**.
 
-### S6 · My classes
+### S6 · My classes  *(its own **Training** tab — v1.2 B.2)*
+- A **next-class card** at the top (the soonest upcoming booked class; provisional labelled "pending approval").
+- A **My Training** stats card (see S7 — total · this month · streak · favorite · days since last class).
 - **Upcoming** classes (confirmed and provisional, clearly labelled; cancel from here too).
-- **Past** (attended) — a light history; read-only. Nice-to-have; can ship thin.
+- **Past** (attended) — a light history; read-only.
+- *(Reads `booking.mine`; the pure `splitMyClasses` / `nextClass` divide the list — ADR 39. Built in v1.2; was previously "folded into the schedule".)*
 
 ### S7 · Profile / account
-- Name, phone, current academy, sign out.
+- Name, phone, current academy, sign out. **Name and phone are editable** (edit → save; email is read-only — it's the login identity + notification channel). *(v1.2 B.3.)*
+- **My Training stats** (v1.2 B.1 — surfaced on the Training tab, S6): total attended sessions · this month · week **streak** · favorite discipline + weekday · days since last class. Per-academy, from attendance already stored (ADR 39). Empty state until the first check-in.
 - **Academy switcher** — shown only if the student belongs to >1 academy; switching changes the active academy and all data follows.
 - **Notification settings** (thin): a single **Push notifications** on/off toggle (v1 — one switch covers reminders and cancellation alerts; turning it off drops this device's push token so nothing is sent). Separate per-event toggles are a later iteration.
 
@@ -98,6 +102,8 @@ No blank waiting screen. A **slim banner** on the schedule: "Pending approval �
 
 ### O1 · Dashboard  *(the "run the week" home)*
 - **This week at a glance:** today's classes with booking counts; **pending-approvals** badge; quick counts (active members, upcoming classes).
+- **Insights** (v1.2 C.1): gym activity over the last 30 days — visits this week / month, busiest classes, **attendance rate** (shown only when the gym marks absences — otherwise it would read a meaningless 100%), and new members this month. From attendance already stored (ADR 39).
+- **Who's drifting** (v1.2 C.1, owner-only): members who used to train here but have gone quiet — banded `cooling` / `at risk` / `dormant` by days since their last session — each linking to their member detail (O4) so the owner can reach out.
 - Direct actions: *Approve members*, *Take attendance*, *Add class*.
 
 ### O2 · Schedule (classes)
@@ -113,7 +119,7 @@ No blank waiting screen. A **slim banner** on the schedule: "Pending approval �
 
 ### O4 · Roster (members + leads)
 - **Pending approvals** section: approve / reject. This covers **both students and coaches** — approving assigns the intended role (student → member features; instructor → schedule + attendance tools) and activates them. A pending person's bookings simply become normal bookings on approval.
-- **Active members** list → member detail: role, attendance history, contact, remove/suspend.
+- **Active members** list → **member detail** (v1.2 C.2): a tabbed panel — **Overview** (role, contact, attendance stats, drift band) and **Attendance** (the member's full present-session history, paginated) — plus remove/suspend. Opening a member from the O1 "who's drifting" widget deep-links straight to their detail. *(Activity/audit tab deferred — needs the audit log.)*
 - **Drop-in leads** section: **first-time visitors** who checked in via the gym QR without an account (name, phone, email, which class, consent flag). Kept for **follow-up** — the owner can send them an **app invite link (deep-linked to this gym)** to convert them into a member. Repeat visitors are nudged to register, so the form stays a first touch.
 - **Academy ID:** a plain **6-digit number** shown to copy + share. Students enter it in the app to find and join the gym (S2, mobile v1 — docs/issues/32). Joining by ID lands **pending/view-only** as a student, same as an invite link.
 - **Invite links:** generate/copy a shareable link **per role** (student / instructor). Either way the joiner lands **pending/view-only** until the owner approves — so a forwarded link never grants access on its own. One active link per role.
