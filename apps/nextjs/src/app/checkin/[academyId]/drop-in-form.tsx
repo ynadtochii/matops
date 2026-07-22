@@ -36,7 +36,7 @@ export function DropInForm({ academyId }: { academyId: string }) {
   if (academy.isError) {
     return (
       <div className="flex max-w-sm flex-col gap-3 text-center">
-        <h1 className="text-2xl font-bold">Gym not found</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Gym not found</h1>
         <p className="text-muted-foreground text-sm">
           This check-in link isn&apos;t valid. Please ask the front desk.
         </p>
@@ -47,7 +47,7 @@ export function DropInForm({ academyId }: { academyId: string }) {
   if (submit.isSuccess) {
     return (
       <div className="flex max-w-sm flex-col gap-3 text-center">
-        <h1 className="text-2xl font-bold">You&apos;re checked in 🥋</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">You&apos;re checked in 🥋</h1>
         <p className="text-muted-foreground text-sm">
           {submit.data.firstVisit
             ? "Welcome! The gym will follow up with you."
@@ -85,7 +85,7 @@ export function DropInForm({ academyId }: { academyId: string }) {
       }}
     >
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold">
+        <h1 className="text-2xl font-semibold tracking-tight">
           Check in{academy.data ? ` at ${academy.data.name}` : ""}
         </h1>
         <p className="text-muted-foreground text-sm">

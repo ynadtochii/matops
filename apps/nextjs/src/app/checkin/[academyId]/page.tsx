@@ -1,3 +1,5 @@
+import { Logo } from "@matops/ui/logo";
+
 import { DropInForm } from "./drop-in-form";
 
 /**
@@ -12,7 +14,8 @@ export default async function DropInPage({
 }) {
   const { academyId } = await params;
   return (
-    <main className="container flex min-h-screen flex-col items-center justify-center py-16">
+    <main className="container flex min-h-screen flex-col items-center justify-center gap-8 py-16">
+      <Logo size={26} />
       <DropInForm academyId={academyId} />
     </main>
   );

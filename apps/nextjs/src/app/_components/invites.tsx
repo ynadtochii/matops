@@ -2,12 +2,14 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { cn } from "@matops/ui";
 import { Button } from "@matops/ui/button";
 import { Input } from "@matops/ui/input";
 import { toast } from "@matops/ui/toast";
 
 import { shareLink, useCanShare } from "~/lib/share";
 import { useTRPC } from "~/trpc/react";
+import { cardClass, SectionHeading } from "./primitives";
 
 type InviteRole = "student" | "instructor";
 const ROLES: { role: InviteRole; label: string; hint: string }[] = [
@@ -62,7 +64,7 @@ export function Invites() {
   return (
     <section className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <h2 className="text-lg font-semibold">Invite links</h2>
+        <SectionHeading>Invite links</SectionHeading>
         <p className="text-muted-foreground text-sm">
           A shareable link per role. Either way the joiner lands pending until you
           approve them — a forwarded link never grants access on its own.
@@ -72,10 +74,7 @@ export function Invites() {
         {ROLES.map(({ role, label, hint }) => {
           const invite = invites.data?.find((i) => i.role === role);
           return (
-            <div
-              key={role}
-              className="bg-muted flex flex-col gap-2 rounded-lg p-4"
-            >
+            <div key={role} className={cn(cardClass(), "flex flex-col gap-2")}>
               <div className="flex items-center justify-between">
                 <span className="font-medium">{label}</span>
                 {invite ? (

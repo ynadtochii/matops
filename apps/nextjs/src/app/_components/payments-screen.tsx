@@ -4,13 +4,16 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
+import { cn } from "@matops/ui";
 import { Button } from "@matops/ui/button";
 import { Input } from "@matops/ui/input";
+import { Select } from "@matops/ui/select";
 import { toast } from "@matops/ui/toast";
 
 import { formatMoney } from "~/lib/money";
 import { useTRPC } from "~/trpc/react";
 import { PageHeader } from "./page-header";
+import { cardClass, SectionHeading } from "./primitives";
 import { EmptyState, ErrorState, SkeletonRows } from "./states";
 
 type Plan = RouterOutputs["payments"]["plans"][number];
@@ -68,14 +71,9 @@ function ClaimsToConfirm() {
 
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="text-lg font-semibold">
+      <SectionHeading count={claims.data?.length}>
         Claims to confirm
-        {(claims.data?.length ?? 0) > 0 && (
-          <span className="bg-primary text-primary-foreground ml-2 rounded-full px-2 py-0.5 text-xs">
-            {claims.data?.length}
-          </span>
-        )}
-      </h2>
+      </SectionHeading>
       {claims.isPending ? (
         <SkeletonRows rows={2} />
       ) : claims.isError ? (
@@ -88,7 +86,10 @@ function ClaimsToConfirm() {
         claims.data.map((c) => (
           <div
             key={c.id}
-            className="bg-muted flex flex-wrap items-center justify-between gap-3 rounded-lg p-4"
+            className={cn(
+              cardClass(),
+              "flex flex-wrap items-center justify-between gap-3",
+            )}
           >
             <div className="flex flex-col">
               <span className="font-medium">
@@ -136,7 +137,7 @@ function MemberDues() {
 
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="text-lg font-semibold">Member dues</h2>
+      <SectionHeading>Member dues</SectionHeading>
       {roster.isPending || plans.isPending ? (
         <SkeletonRows rows={3} />
       ) : roster.isError ? (
@@ -193,7 +194,7 @@ function MemberDuesRow({ member, plans }: { member: Member; plans: Plan[] }) {
   const busy = set.isPending || clear.isPending;
 
   return (
-    <div className="bg-muted flex flex-col gap-3 rounded-lg p-4">
+    <div className={cn(cardClass(), "flex flex-col gap-3")}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="font-medium">{member.name}</span>
         {member.dues ? (
@@ -206,17 +207,13 @@ function MemberDuesRow({ member, plans }: { member: Member; plans: Plan[] }) {
         )}
       </div>
       <div className="flex flex-wrap items-end gap-2">
-        <select
-          value={planId}
-          onChange={(e) => setPlanId(e.target.value)}
-          className="border-input bg-background h-9 rounded-md border px-2 text-sm"
-        >
+        <Select value={planId} onChange={(e) => setPlanId(e.target.value)}>
           {plans.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name} · {formatMoney(p.priceMinor, p.currency)}
             </option>
           ))}
-        </select>
+        </Select>
         <Input
           type="date"
           value={date}
@@ -294,7 +291,7 @@ function Plans() {
 
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="text-lg font-semibold">Plans</h2>
+      <SectionHeading>Plans</SectionHeading>
       {plans.isPending ? (
         <SkeletonRows rows={2} />
       ) : plans.isError ? (
@@ -307,7 +304,10 @@ function Plans() {
         plans.data.map((p) => (
           <div
             key={p.id}
-            className="bg-muted flex items-center justify-between gap-3 rounded-lg p-4"
+            className={cn(
+              cardClass(),
+              "flex items-center justify-between gap-3",
+            )}
           >
             <span className="font-medium">
               {p.name}

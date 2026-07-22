@@ -6,9 +6,11 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
+import { cn } from "@matops/ui";
 
 import { useTRPC } from "~/trpc/react";
 import { PageHeader } from "./page-header";
+import { cardClass, Eyebrow, SectionHeading, Stat } from "./primitives";
 import { EmptyState, ErrorState, SkeletonRows } from "./states";
 
 type ClassRow = RouterOutputs["class"]["week"][number];
@@ -108,12 +110,12 @@ export function DashboardScreen() {
   ).length;
 
   return (
-    <>
+    <div className="space-y-8">
       <PageHeader title="This week" subtitle={dateFmt.format(today)} />
 
       {/* Triage — what needs you now (owner only) */}
       {isOwner && (
-        <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <TriageCard
             href="/roster"
             value={pendingCount}
@@ -131,15 +133,15 @@ export function DashboardScreen() {
       )}
 
       {/* Glanceable numbers */}
-      <div className="border-border mb-8 flex flex-wrap gap-x-8 gap-y-3 border-b pb-6">
+      <div className="border-border flex flex-wrap gap-x-8 gap-y-3 border-b pb-6">
         {isOwner && <Stat value={activeCount} label="Active members" />}
         <Stat value={weekCount} label="Classes this week" />
         <Stat value={todays.length} label="On today" />
       </div>
 
       {/* Today's classes */}
-      <div className="mb-8 flex flex-col gap-3">
-        <h2 className="text-lg font-semibold">Today</h2>
+      <div className="flex flex-col gap-3">
+        <SectionHeading>Today</SectionHeading>
         {week.isPending ? (
           <SkeletonRows rows={2} />
         ) : week.isError ? (
@@ -164,8 +166,8 @@ export function DashboardScreen() {
       </div>
 
       {/* Insights — gym activity over the last 30 days */}
-      <div className="mb-8 flex flex-col gap-3">
-        <h2 className="text-lg font-semibold">Insights</h2>
+      <div className="flex flex-col gap-3">
+        <SectionHeading>Insights</SectionHeading>
         {insights.isPending ? (
           <SkeletonRows rows={2} />
         ) : insights.isError ? (
@@ -180,8 +182,8 @@ export function DashboardScreen() {
 
       {/* Who's drifting — members who used to train and have gone quiet */}
       {isOwner && (
-        <div className="mb-8 flex flex-col gap-3">
-          <h2 className="text-lg font-semibold">Who&apos;s drifting</h2>
+        <div className="flex flex-col gap-3">
+          <SectionHeading>Who&apos;s drifting</SectionHeading>
           {drifting.isPending ? (
             <SkeletonRows rows={2} />
           ) : drifting.isError ? (
@@ -205,12 +207,15 @@ export function DashboardScreen() {
       )}
 
       {/* Quick actions */}
-      <div className="flex flex-wrap gap-2">
-        <QuickAction href="/schedule">Add class</QuickAction>
-        <QuickAction href="/attendance">Take attendance</QuickAction>
-        {isOwner && <QuickAction href="/roster">Approve members</QuickAction>}
+      <div className="flex flex-col gap-3">
+        <Eyebrow>Quick actions</Eyebrow>
+        <div className="flex flex-wrap gap-2">
+          <QuickAction href="/schedule">Add class</QuickAction>
+          <QuickAction href="/attendance">Take attendance</QuickAction>
+          {isOwner && <QuickAction href="/roster">Approve members</QuickAction>}
+        </div>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -228,11 +233,11 @@ function TriageCard({
   return (
     <Link
       href={href}
-      className={`rounded-lg border p-4 transition-colors ${
+      className={
         active
-          ? "border-brand/40 bg-brand-wash hover:border-brand"
-          : "border-border hover:bg-muted"
-      }`}
+          ? "border-brand/40 bg-brand-wash hover:border-brand rounded-lg border p-4 transition-colors"
+          : cardClass({ variant: "outline", interactive: true })
+      }
     >
       <p
         className={`font-mono text-3xl tabular-nums ${active ? "text-brand-strong" : ""}`}
@@ -241,23 +246,6 @@ function TriageCard({
       </p>
       <p className="text-muted-foreground mt-0.5 text-sm">{label}</p>
     </Link>
-  );
-}
-
-function Stat({
-  value,
-  label,
-}: {
-  value: number | string;
-  label: string;
-}) {
-  return (
-    <div>
-      <p className="font-mono text-xl tabular-nums">{value}</p>
-      <p className="text-muted-foreground font-mono text-[10px] tracking-wide uppercase">
-        {label}
-      </p>
-    </div>
   );
 }
 
@@ -314,9 +302,7 @@ function Insights({
       </div>
       {data.busiest.length > 0 && (
         <div className="flex flex-col gap-1">
-          <p className="text-muted-foreground font-mono text-[10px] tracking-wide uppercase">
-            Busiest classes
-          </p>
+          <Eyebrow>Busiest classes</Eyebrow>
           {data.busiest.slice(0, 3).map((b) => (
             <div
               key={b.title}
@@ -351,7 +337,10 @@ function DriftRow({ m, today }: { m: DriftMember; today: Date }) {
   return (
     <Link
       href={`/roster?member=${m.memberId}`}
-      className="border-border hover:bg-muted flex items-center justify-between gap-3 rounded-lg border p-3 transition-colors"
+      className={cn(
+        cardClass({ variant: "outline", interactive: true }),
+        "flex items-center justify-between gap-3 p-3",
+      )}
     >
       <div className="flex flex-col">
         <span className="font-medium">{m.name}</span>

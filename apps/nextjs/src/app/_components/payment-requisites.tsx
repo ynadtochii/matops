@@ -7,6 +7,7 @@ import { Button } from "@matops/ui/button";
 import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
+import { SectionHeading } from "./primitives";
 import { ErrorState, SkeletonRows } from "./states";
 
 /**
@@ -32,7 +33,7 @@ export function PaymentRequisites() {
   return (
     <section className="flex flex-col gap-3">
       <div>
-        <h2 className="text-lg font-semibold">Payment requisites</h2>
+        <SectionHeading>Payment requisites</SectionHeading>
         <p className="text-muted-foreground text-sm">
           Your bank details, shown to students on their pay screen. They
           transfer manually and tap “I paid” — you confirm it under Payments.

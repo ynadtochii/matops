@@ -1,3 +1,5 @@
+import { Logo } from "@matops/ui/logo";
+
 import { SignIn } from "~/app/_components/sign-in";
 import { getSession } from "~/auth/server";
 import { JoinFlow } from "./join-flow";
@@ -12,6 +14,7 @@ export default async function JoinPage({
 
   return (
     <main className="container flex min-h-screen flex-col items-center justify-center gap-6 py-16">
+      <Logo size={26} />
       <JoinFlow token={token} signedIn={!!session} />
       {!session && <SignIn callbackURL={`/join/${token}`} />}
     </main>

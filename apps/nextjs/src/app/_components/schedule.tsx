@@ -4,12 +4,15 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
+import { cn } from "@matops/ui";
 import { Button } from "@matops/ui/button";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
+import { Select } from "@matops/ui/select";
 import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
+import { cardClass } from "./primitives";
 import { EmptyState, ErrorState, SkeletonRows } from "./states";
 
 type ClassRow = RouterOutputs["class"]["week"][number];
@@ -207,7 +210,11 @@ export function Schedule() {
                 return (
                   <div
                     key={c.id}
-                    className="bg-muted flex flex-wrap items-center justify-between gap-3 rounded-lg p-4"
+                    className={cn(
+                      cardClass(),
+                      "flex flex-wrap items-center justify-between gap-3",
+                      cancelled && "opacity-60",
+                    )}
                   >
                     <div className="flex flex-col">
                       <span className="font-medium">
@@ -255,7 +262,7 @@ export function Schedule() {
 
       {form !== null && (
         <form
-          className="bg-muted flex flex-col gap-4 rounded-lg p-4"
+          className={cn(cardClass(), "flex flex-col gap-4")}
           onSubmit={(e) => {
             e.preventDefault();
             submitOneOff();
@@ -324,7 +331,7 @@ export function Schedule() {
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="cl-discipline">Discipline</Label>
-              <select
+              <Select
                 id="cl-discipline"
                 value={form.discipline}
                 onChange={(e) =>
@@ -333,7 +340,6 @@ export function Schedule() {
                     discipline: e.target.value as Discipline | "",
                   })
                 }
-                className="border-input bg-background h-9 rounded-md border px-3 text-sm"
               >
                 <option value="">None</option>
                 {DISCIPLINES.map((d) => (
@@ -341,7 +347,7 @@ export function Schedule() {
                     {d.toUpperCase()}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
           </div>
           <div className="flex flex-col gap-1.5">

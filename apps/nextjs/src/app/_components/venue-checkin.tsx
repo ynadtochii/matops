@@ -7,6 +7,7 @@ import { Button } from "@matops/ui/button";
 import { toast } from "@matops/ui/toast";
 
 import { shareLink, useCanShare } from "~/lib/share";
+import { SectionHeading } from "./primitives";
 
 /**
  * Venue check-in QR (spec O6, ticket 08). Renders the public `/checkin/[id]`
@@ -36,7 +37,7 @@ export function VenueCheckin({
   return (
     <section className="flex flex-col gap-3">
       <style>{`@media print{body *{visibility:hidden}.qr-print,.qr-print *{visibility:visible}.qr-print{position:fixed;inset:0;margin:auto;height:max-content}}`}</style>
-      <h2 className="text-lg font-semibold">Venue check-in QR</h2>
+      <SectionHeading>Venue check-in QR</SectionHeading>
       <p className="text-muted-foreground text-sm">
         Print this poster for your gym. First-time visitors scan it to check in
         and leave their details — no app needed.

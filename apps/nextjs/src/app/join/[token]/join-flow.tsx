@@ -51,7 +51,7 @@ export function JoinFlow({
   if (invite.isError) {
     return (
       <div className="flex flex-col items-center gap-3 text-center">
-        <h1 className="text-2xl font-bold">Invite not valid</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Invite not valid</h1>
         <p className="text-muted-foreground text-sm">
           This invite isn&apos;t valid — ask your gym for a new link.
         </p>
@@ -64,7 +64,7 @@ export function JoinFlow({
   return (
     <div className="flex w-full max-w-sm flex-col gap-5">
       <div className="flex flex-col gap-1 text-center">
-        <h1 className="text-2xl font-bold">Join {academyName}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Join {academyName}</h1>
         <p className="text-muted-foreground text-sm">
           You&apos;re joining as a{role === "instructor" ? "n" : ""} {role}.
           Your gym confirms you after you join.

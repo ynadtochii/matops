@@ -3,10 +3,13 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { cn } from "@matops/ui";
 import { Button } from "@matops/ui/button";
+import { Select } from "@matops/ui/select";
 import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
+import { cardClass, SectionHeading } from "./primitives";
 import { EmptyState, ErrorState, SkeletonRows } from "./states";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -97,12 +100,12 @@ export function Attendance() {
 
   return (
     <section className="flex flex-col gap-4">
-      <h2 className="text-lg font-semibold">Attendance</h2>
+      <SectionHeading>Attendance</SectionHeading>
 
-      <select
+      <Select
         value={classId}
         onChange={(e) => setClassId(e.target.value)}
-        className="border-input bg-background h-9 rounded-md border px-3 text-sm"
+        className="w-full"
       >
         <option value="">Pick a class…</option>
         {options.map((c) => (
@@ -111,7 +114,7 @@ export function Attendance() {
             {c.status === "cancelled" ? " (cancelled)" : ""}
           </option>
         ))}
-      </select>
+      </Select>
 
       {classId === "" &&
       !classes.isPending &&
@@ -171,7 +174,10 @@ export function Attendance() {
                 return (
                   <li
                     key={r.studentId}
-                    className="bg-muted flex flex-wrap items-center justify-between gap-2 rounded-lg p-3"
+                    className={cn(
+                      cardClass(),
+                      "flex flex-wrap items-center justify-between gap-2 p-3",
+                    )}
                   >
                     <span className="text-sm font-medium">
                       {r.name ?? "Member"}
@@ -229,10 +235,10 @@ export function Attendance() {
           )}
 
           <div className="flex flex-wrap items-center gap-2">
-            <select
+            <Select
               value={walkInId}
               onChange={(e) => setWalkInId(e.target.value)}
-              className="border-input bg-background h-9 min-w-48 rounded-md border px-3 text-sm"
+              className="min-w-48"
             >
               <option value="">Add a walk-in…</option>
               {walkInCandidates.map((m) => (
@@ -240,7 +246,7 @@ export function Attendance() {
                   {m.name}
                 </option>
               ))}
-            </select>
+            </Select>
             <Button
               size="sm"
               disabled={walkInId === "" || addWalkIn.isPending}

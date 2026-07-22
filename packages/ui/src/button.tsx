@@ -17,10 +17,24 @@ export type { ButtonVariants } from "./button-variants";
  */
 const webAdornments =
   "inline-flex shrink-0 whitespace-nowrap outline-none transition-all " +
-  "hover:opacity-90 focus-visible:border-ring focus-visible:ring-ring/50 " +
+  "focus-visible:border-ring focus-visible:ring-ring/50 " +
   "focus-visible:ring-[3px] disabled:pointer-events-none disabled:opacity-50 " +
   "aria-invalid:border-destructive aria-invalid:ring-destructive/20 " +
   "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4";
+
+/**
+ * Web-only hover states, per variant. A real surface/colour response beats the
+ * old blanket `hover:opacity-90`, which dimmed the label along with the fill.
+ * Native has no hover, so this stays out of the shared recipe.
+ */
+const webHover: Record<NonNullable<ButtonVariants["variant"]>, string> = {
+  default: "hover:bg-primary/90",
+  secondary: "hover:bg-secondary/70",
+  outline: "hover:bg-muted hover:text-foreground",
+  ghost: "hover:bg-muted hover:text-foreground",
+  destructive: "hover:bg-destructive/90",
+  link: "hover:underline",
+};
 
 export function Button({
   className,
@@ -41,6 +55,7 @@ export function Button({
         buttonContainerVariants({ variant, size }),
         buttonTextVariants({ variant }),
         webAdornments,
+        webHover[variant ?? "default"],
         className,
       )}
       {...props}

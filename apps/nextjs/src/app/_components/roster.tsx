@@ -11,11 +11,14 @@ import {
   RANK_SYSTEMS,
   rankDisciplines,
 } from "@matops/domain";
+import { cn } from "@matops/ui";
 import { Button } from "@matops/ui/button";
+import { Select } from "@matops/ui/select";
 import { toast } from "@matops/ui/toast";
 
 import { formatMoney } from "~/lib/money";
 import { useTRPC } from "~/trpc/react";
+import { cardClass, SectionHeading, Stat } from "./primitives";
 import { EmptyState, ErrorState, SkeletonRows } from "./states";
 
 type Member = RouterOutputs["membership"]["roster"][number];
@@ -146,16 +149,9 @@ export function Roster() {
   }
 
   return (
-    <section className="flex flex-col gap-6">
+    <section className="flex flex-col gap-8">
       <div className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold">
-          Pending approvals
-          {pending.length > 0 && (
-            <span className="bg-primary text-primary-foreground ml-2 rounded-full px-2 py-0.5 text-xs">
-              {pending.length}
-            </span>
-          )}
-        </h2>
+        <SectionHeading count={pending.length}>Pending approvals</SectionHeading>
         {pending.length === 0 ? (
           <EmptyState title="No one is waiting.">
             New sign-ups land here for you to approve.
@@ -184,23 +180,26 @@ export function Roster() {
       </div>
 
       <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Members</h2>
-          {active.some((m) => m.dues) && (
-            <button
-              type="button"
-              onClick={() => setOverdueOnly((v) => !v)}
-              aria-pressed={overdueOnly}
-              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                overdueOnly
-                  ? "border-error/40 bg-error/10 text-error"
-                  : "border-border text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Overdue{overdueCount > 0 ? ` (${overdueCount})` : ""}
-            </button>
-          )}
-        </div>
+        <SectionHeading
+          action={
+            active.some((m) => m.dues) && (
+              <button
+                type="button"
+                onClick={() => setOverdueOnly((v) => !v)}
+                aria-pressed={overdueOnly}
+                className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                  overdueOnly
+                    ? "border-error/40 bg-error/10 text-error"
+                    : "border-border text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Overdue{overdueCount > 0 ? ` (${overdueCount})` : ""}
+              </button>
+            )
+          }
+        >
+          Members
+        </SectionHeading>
         {active.length === 0 ? (
           <EmptyState title="No active members yet.">
             Approve a pending sign-up, or share an invite link to bring people
@@ -256,7 +255,7 @@ export function Roster() {
       </div>
 
       <div className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold">Drop-in leads</h2>
+        <SectionHeading>Drop-in leads</SectionHeading>
         {leads.isError ? (
           <ErrorState
             label="drop-in leads"
@@ -271,7 +270,10 @@ export function Roster() {
           (leads.data ?? []).map((l) => (
             <div
               key={l.id}
-              className="bg-muted flex flex-wrap items-center justify-between gap-3 rounded-lg p-4"
+              className={cn(
+                cardClass(),
+                "flex flex-wrap items-center justify-between gap-3",
+              )}
             >
               <div className="flex flex-col">
                 <span className="font-medium">
@@ -329,9 +331,11 @@ function MemberRow({
   );
   return (
     <div
-      className={`bg-muted flex flex-wrap items-center justify-between gap-3 p-4 ${
-        open ? "rounded-t-lg" : "rounded-lg"
-      }`}
+      className={cn(
+        cardClass(),
+        "flex flex-wrap items-center justify-between gap-3",
+        open && "rounded-b-none",
+      )}
     >
       {onToggle ? (
         <button
@@ -483,46 +487,40 @@ function RankTab({ memberId }: { memberId: string }) {
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1 text-sm">
             <span className="text-muted-foreground text-xs">Discipline</span>
-            <select
+            <Select
               value={discipline}
               onChange={(e) => onDiscipline(e.target.value)}
-              className="border-border bg-background rounded-md border px-2 py-1.5 text-sm"
             >
               {systems.map((s) => (
                 <option key={s.discipline} value={s.discipline}>
                   {s.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <label className="flex flex-col gap-1 text-sm">
             <span className="text-muted-foreground text-xs">Belt</span>
-            <select
-              value={belt}
-              onChange={(e) => setBelt(e.target.value)}
-              className="border-border bg-background rounded-md border px-2 py-1.5 text-sm"
-            >
+            <Select value={belt} onChange={(e) => setBelt(e.target.value)}>
               {(system?.belts ?? []).map((b) => (
                 <option key={b} value={b}>
                   {b}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           {system && system.maxStripes > 0 && (
             <label className="flex flex-col gap-1 text-sm">
               <span className="text-muted-foreground text-xs">Stripes</span>
-              <select
+              <Select
                 value={stripes}
                 onChange={(e) => setStripes(Number(e.target.value))}
-                className="border-border bg-background rounded-md border px-2 py-1.5 text-sm"
               >
                 {Array.from({ length: system.maxStripes + 1 }, (_, i) => (
                   <option key={i} value={i}>
                     {i}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
           )}
           <Button
@@ -628,7 +626,7 @@ function NotesTab({ memberId }: { memberId: string }) {
           {notes.data.map((n) => (
             <div
               key={n.id}
-              className="bg-muted flex flex-col gap-1 rounded-lg p-3 text-sm"
+              className={cn(cardClass(), "flex flex-col gap-1 p-3 text-sm")}
             >
               <p className="whitespace-pre-wrap">{n.body}</p>
               <div className="text-muted-foreground flex items-center justify-between text-xs">
@@ -772,17 +770,6 @@ function AttendanceHistory({ history }: { history: MemberHistory["history"] }) {
           Show more ({history.length - limit})
         </button>
       )}
-    </div>
-  );
-}
-
-function Stat({ value, label }: { value: number; label: string }) {
-  return (
-    <div>
-      <p className="font-mono text-xl tabular-nums">{value}</p>
-      <p className="text-muted-foreground font-mono text-[10px] tracking-wide uppercase">
-        {label}
-      </p>
     </div>
   );
 }
