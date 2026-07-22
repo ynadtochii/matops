@@ -27,7 +27,10 @@ export default function RootLayout() {
           headerShadowVisible: false,
           contentStyle: { backgroundColor: c.bg },
         }}
-      />
+      >
+        {/* The tab group owns its own chrome (screens render their headings). */}
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      </Stack>
       <StatusBar />
     </QueryClientProvider>
   );

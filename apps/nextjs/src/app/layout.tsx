@@ -16,18 +16,15 @@ export const metadata: Metadata = {
       ? "https://turbo.t3.gg"
       : "http://localhost:3004",
   ),
-  title: "Create T3 Turbo",
-  description: "Simple monorepo with shared backend for web & mobile apps",
+  title: "matops",
+  description: "Schedule, roster, and attendance for grappling academies.",
   openGraph: {
-    title: "Create T3 Turbo",
-    description: "Simple monorepo with shared backend for web & mobile apps",
-    url: "https://create-t3-turbo.vercel.app",
-    siteName: "Create T3 Turbo",
+    title: "matops",
+    description: "Schedule, roster, and attendance for grappling academies.",
+    siteName: "matops",
   },
   twitter: {
     card: "summary_large_image",
-    site: "@jullerino",
-    creator: "@jullerino",
   },
 };
 

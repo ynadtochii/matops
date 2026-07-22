@@ -1,0 +1,74 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
+
+import { Button } from "@matops/ui/button";
+import { toast } from "@matops/ui/toast";
+
+/**
+ * Venue check-in QR (spec O6, ticket 08). Renders the public `/checkin/[id]`
+ * URL as a scannable, printable poster with `qrcode.react` (SVG so it prints
+ * crisp; black-on-white so dark mode never inverts the code). "Print poster"
+ * isolates the poster via an @media print block — no PDF library.
+ */
+export function VenueCheckin({
+  academyId,
+  academyName,
+}: {
+  academyId: string;
+  academyName: string;
+}) {
+  const path = `/checkin/${academyId}`;
+  const [origin, setOrigin] = useState("");
+  // One-time client read of the real origin so the QR encodes an absolute,
+  // scannable URL — deferred to an effect to avoid an SSR hydration mismatch.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => setOrigin(window.location.origin), []);
+  const url = origin ? `${origin}${path}` : path;
+
+  return (
+    <section className="flex flex-col gap-3">
+      <style>{`@media print{body *{visibility:hidden}.qr-print,.qr-print *{visibility:visible}.qr-print{position:fixed;inset:0;margin:auto;height:max-content}}`}</style>
+      <h2 className="text-lg font-semibold">Venue check-in QR</h2>
+      <p className="text-muted-foreground text-sm">
+        Print this poster for your gym. First-time visitors scan it to check in
+        and leave their details — no app needed.
+      </p>
+
+      <div className="qr-print border-border mx-auto flex w-full max-w-xs flex-col items-center gap-4 rounded-lg border bg-white p-8 text-center">
+        <QRCodeSVG
+          value={url}
+          size={200}
+          level="M"
+          marginSize={4}
+          bgColor="#ffffff"
+          fgColor="#000000"
+        />
+        <div>
+          <p className="text-lg font-semibold text-black">{academyName}</p>
+          <p className="text-sm text-neutral-500">Scan to check in</p>
+        </div>
+      </div>
+
+      <div className="border-border flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
+        <code className="text-sm break-all">{url}</code>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              void navigator.clipboard.writeText(url);
+              toast.success("Link copied");
+            }}
+          >
+            Copy link
+          </Button>
+          <Button size="sm" onClick={() => window.print()}>
+            Print poster
+          </Button>
+        </div>
+      </div>
+    </section>
+  );
+}

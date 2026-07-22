@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { Stack, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "~/utils/api";
@@ -8,8 +8,11 @@ import {
   Banner,
   EmptyState,
   ErrorState,
+  Heading,
   Loading,
+  Mark,
   Screen,
+  useTheme,
 } from "~/components/ui";
 import { trpc } from "~/utils/api";
 import { dayFmt, dayKey, spotsLeftLabel, timeFmt } from "~/utils/format";
@@ -23,53 +26,76 @@ function startOfToday(): Date {
   return d;
 }
 
-/** One class row in the schedule (spec S4: time · title · N spots left). */
+/** One class row (spec S4: time · title · N spots left; a Booked pill if booked). */
 function ClassCard({ c, onPress }: { c: ClassRow; onPress: () => void }) {
+  const t = useTheme();
   const cancelled = c.status === "cancelled";
   const booked = c.myBooking === "booked";
   return (
     <Pressable
       onPress={onPress}
-      className="bg-muted flex-row items-center justify-between gap-3 rounded-lg p-4"
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+        backgroundColor: t.muted,
+        borderRadius: 8,
+        padding: 16,
+      }}
     >
-      <View className="flex-1 gap-1">
-        <Text className="text-foreground text-base font-medium">
+      <View style={{ flex: 1, gap: 4 }}>
+        <Text style={{ fontSize: 16, fontWeight: "500", color: t.foreground }}>
           {timeFmt.format(new Date(c.startsAt))} · {c.title}
         </Text>
-        <View className="flex-row items-center gap-2">
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           {c.discipline && (
-            <Text className="text-muted-foreground text-xs uppercase">
+            <Text
+              style={{ fontSize: 12, textTransform: "uppercase", color: t.mutedForeground }}
+            >
               {c.discipline}
             </Text>
           )}
           {cancelled ? (
-            <Text className="text-destructive text-xs uppercase">
+            <Text
+              style={{ fontSize: 12, textTransform: "uppercase", color: t.destructive }}
+            >
               Cancelled
             </Text>
           ) : (
-            <Text className="text-muted-foreground text-sm">
+            <Text style={{ fontSize: 14, color: t.mutedForeground }}>
               {spotsLeftLabel(c.capacity, c.bookingCount)}
             </Text>
           )}
           {booked && !cancelled && (
-            <Text className="bg-primary/10 text-primary rounded px-2 py-0.5 text-xs font-medium">
-              Booked
-            </Text>
+            <View
+              style={{
+                backgroundColor: t.brandWash,
+                paddingHorizontal: 8,
+                paddingVertical: 2,
+                borderRadius: 4,
+              }}
+            >
+              <Text style={{ fontSize: 12, fontWeight: "500", color: t.brandStrong }}>
+                Booked
+              </Text>
+            </View>
           )}
         </View>
       </View>
-      <Text className="text-muted-foreground text-lg">›</Text>
+      <Text style={{ fontSize: 18, color: t.mutedForeground }}>›</Text>
     </Pressable>
   );
 }
 
 /**
- * Schedule home (spec S4) — the student's rolling week of classes, grouped by
- * day (Today first). A pending member browses here behind the S3 banner (no
- * waiting wall). Tapping a class opens the detail (S5), where booking happens
- * (slice 3.1); a class the student has booked shows a "Booked" pill here.
+ * Schedule home (spec S4) — the student's rolling week, grouped by day (Today
+ * first). A pending member browses here behind the S3 banner (no waiting wall).
+ * Tapping a class opens the detail (S5) where booking happens; a booked class
+ * shows a violet "Booked" pill here.
  */
 export default function Schedule() {
+  const t = useTheme();
   const router = useRouter();
   const current = useQuery(trpc.academy.current.queryOptions());
 
@@ -97,41 +123,32 @@ export default function Schedule() {
   const isPending = current.data?.status === "pending";
 
   return (
-    <Screen className="gap-4">
-      <Stack.Screen
-        options={{
-          title: "Schedule",
-          headerLeft: () => (
-            <Pressable onPress={() => router.push("/checkin")} hitSlop={8}>
-              <Text className="text-primary text-base font-medium">
-                Check in
-              </Text>
-            </Pressable>
-          ),
-          headerRight: () => (
-            <Pressable onPress={() => router.push("/profile")} hitSlop={8}>
-              <Text className="text-primary text-base font-medium">
-                Profile
-              </Text>
-            </Pressable>
-          ),
+    <Screen>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 16,
         }}
-      />
+      >
+        <Heading>{current.data?.name ?? "Schedule"}</Heading>
+        <Mark size={26} />
+      </View>
 
       {isPending && (
-        <Banner tone="warning">
-          Pending approval — you can browse and book; your gym will confirm you
-          soon.
-        </Banner>
+        <View style={{ marginBottom: 16 }}>
+          <Banner tone="brand">
+            Pending approval — you can browse and book; your gym will confirm you
+            soon.
+          </Banner>
+        </View>
       )}
 
       {week.isPending ? (
         <Loading />
       ) : week.isError ? (
-        <ErrorState
-          label="your schedule"
-          onRetry={() => void week.refetch()}
-        />
+        <ErrorState label="your schedule" onRetry={() => void week.refetch()} />
       ) : byDay.length === 0 ? (
         <EmptyState
           title="No classes this week."
@@ -139,13 +156,20 @@ export default function Schedule() {
         />
       ) : (
         <ScrollView
-          className="flex-1"
-          contentContainerClassName="gap-5 pb-8"
+          style={{ flex: 1 }}
+          contentContainerStyle={{ gap: 20, paddingBottom: 24 }}
           showsVerticalScrollIndicator={false}
         >
           {byDay.map(([key, rows]) => (
-            <View key={key} className="gap-2">
-              <Text className="text-muted-foreground text-xs font-semibold uppercase">
+            <View key={key} style={{ gap: 8 }}>
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontWeight: "600",
+                  textTransform: "uppercase",
+                  color: t.mutedForeground,
+                }}
+              >
                 {key === todayKey
                   ? "Today"
                   : dayFmt.format(new Date(`${key}T12:00:00`))}

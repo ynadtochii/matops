@@ -10,6 +10,10 @@
       "react-native": "./src/button.native.tsx",
       "default": "./src/button.tsx"
     },
+    "./logo": {
+      "react-native": "./src/logo.native.tsx",
+      "default": "./src/logo.tsx"
+    },
     "./dropdown-menu": "./src/dropdown-menu.tsx",
     "./field": "./src/field.tsx",
     "./input": "./src/input.tsx",

@@ -12,18 +12,28 @@ import {
   Loading,
   Muted,
   Screen,
+  Stack as UIStack,
+  useTheme,
 } from "~/components/ui";
 import { trpc } from "~/utils/api";
 import { dayLongFmt, timeFmt } from "~/utils/format";
 
 /** One labelled fact row on the detail screen. */
 function Field({ label, children }: { label: string; children: ReactNode }) {
+  const t = useTheme();
   return (
-    <View className="gap-1">
-      <Text className="text-muted-foreground text-xs font-semibold uppercase">
+    <View style={{ gap: 4 }}>
+      <Text
+        style={{
+          fontSize: 12,
+          fontWeight: "600",
+          textTransform: "uppercase",
+          color: t.mutedForeground,
+        }}
+      >
         {label}
       </Text>
-      <Text className="text-foreground text-base">{children}</Text>
+      <Text style={{ fontSize: 16, color: t.foreground }}>{children}</Text>
     </View>
   );
 }
@@ -31,16 +41,16 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 /**
  * Class detail (spec S5) — title, discipline, day/time, duration, instructor,
  * capacity, and Book / Cancel (slice 3.1). Enrolled tier, so a PENDING member
- * may book too — their booking is tagged "pending approval". Booking is never
- * blocked; at/over capacity the count turns red and Book asks to confirm.
+ * may book too — tagged "pending approval". Booking is never blocked; at/over
+ * capacity the count turns red and Book asks to confirm.
  */
 export default function ClassDetail() {
+  const t = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const q = useQuery(trpc.class.get.queryOptions({ id }, { retry: false }));
 
-  // Refresh the detail + the schedule ("Booked" pills / counts) after a change.
   const refresh = () => queryClient.invalidateQueries(trpc.class.pathFilter());
 
   const book = useMutation(
@@ -68,7 +78,7 @@ export default function ClassDetail() {
 
   if (q.isError) {
     return (
-      <Screen className="justify-center">
+      <Screen center>
         <Stack.Screen options={{ title: "Class" }} />
         <ErrorState label="this class" onRetry={() => void q.refetch()} />
       </Screen>
@@ -78,7 +88,6 @@ export default function ClassDetail() {
   const c = q.data;
   const cancelled = c.status === "cancelled";
   const start = new Date(c.startsAt);
-  // At/over capacity is red (spec S5/§4) — booking still never blocked.
   const over = c.capacity > 0 && c.bookingCount >= c.capacity;
   const capacityLabel =
     c.capacity <= 0 ? "No limit" : `${c.bookingCount} / ${c.capacity}`;
@@ -102,69 +111,82 @@ export default function ClassDetail() {
   };
 
   return (
-    <Screen className="gap-6">
+    <Screen>
       <Stack.Screen options={{ title: "Class" }} />
 
-      <View className="gap-2">
-        <Heading>{c.title}</Heading>
-        {c.discipline && (
-          <Text className="text-muted-foreground text-xs uppercase">
-            {c.discipline}
-          </Text>
-        )}
-      </View>
-
-      {cancelled && <Banner tone="warning">This class is cancelled.</Banner>}
-
-      <View className="gap-5">
-        <Field label="Day">{dayLongFmt.format(start)}</Field>
-        <Field label="Time">
-          {timeFmt.format(start)} · {c.durationMinutes} min
-        </Field>
-        <Field label="Instructor">{c.instructorName ?? "—"}</Field>
-        <View className="gap-1">
-          <Text className="text-muted-foreground text-xs font-semibold uppercase">
-            Capacity
-          </Text>
-          <Text
-            className={`text-base ${over ? "text-destructive" : "text-foreground"}`}
-          >
-            {capacityLabel}
-            {over ? " · may be busy" : ""}
-          </Text>
-        </View>
-      </View>
-
-      {error && <Text className="text-destructive text-sm">{error}</Text>}
-
-      {cancelled ? (
-        <Muted>This class was cancelled — booking is closed.</Muted>
-      ) : past ? (
-        <Muted>This class has already started.</Muted>
-      ) : booked ? (
-        <View className="gap-2">
-          {provisional && (
-            <Text className="text-muted-foreground text-sm">
-              Booked · pending approval
+      <UIStack gap={24}>
+        <UIStack gap={6}>
+          <Heading>{c.title}</Heading>
+          {c.discipline && (
+            <Text
+              style={{ fontSize: 12, textTransform: "uppercase", color: t.mutedForeground }}
+            >
+              {c.discipline}
             </Text>
           )}
+        </UIStack>
+
+        {cancelled && <Banner tone="warning">This class is cancelled.</Banner>}
+
+        <UIStack gap={20}>
+          <Field label="Day">{dayLongFmt.format(start)}</Field>
+          <Field label="Time">
+            {timeFmt.format(start)} · {c.durationMinutes} min
+          </Field>
+          <Field label="Instructor">{c.instructorName ?? "—"}</Field>
+          <View style={{ gap: 4 }}>
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: "600",
+                textTransform: "uppercase",
+                color: t.mutedForeground,
+              }}
+            >
+              Capacity
+            </Text>
+            <Text
+              style={{ fontSize: 16, color: over ? t.destructive : t.foreground }}
+            >
+              {capacityLabel}
+              {over ? " · may be busy" : ""}
+            </Text>
+          </View>
+        </UIStack>
+
+        {error && (
+          <Text style={{ fontSize: 14, color: t.destructive }}>{error}</Text>
+        )}
+
+        {cancelled ? (
+          <Muted>This class was cancelled — booking is closed.</Muted>
+        ) : past ? (
+          <Muted>This class has already started.</Muted>
+        ) : booked ? (
+          <UIStack gap={8}>
+            {provisional && (
+              <Text style={{ fontSize: 14, color: t.brandStrong }}>
+                Booked · pending approval
+              </Text>
+            )}
+            <Button
+              label={cancel.isPending ? "Cancelling…" : "Cancel booking"}
+              variant="outline"
+              disabled={busy}
+              onPress={() => {
+                setError(null);
+                cancel.mutate({ classId: c.id });
+              }}
+            />
+          </UIStack>
+        ) : (
           <Button
-            label={cancel.isPending ? "Cancelling…" : "Cancel booking"}
-            variant="outline"
+            label={book.isPending ? "Booking…" : "Book"}
             disabled={busy}
-            onPress={() => {
-              setError(null);
-              cancel.mutate({ classId: c.id });
-            }}
+            onPress={onBook}
           />
-        </View>
-      ) : (
-        <Button
-          label={book.isPending ? "Booking…" : "Book"}
-          disabled={busy}
-          onPress={onBook}
-        />
-      )}
+        )}
+      </UIStack>
     </Screen>
   );
 }

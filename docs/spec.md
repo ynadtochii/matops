@@ -34,7 +34,7 @@ The owner is the buyer, but the **student is the user**. The owner's data only e
 | Role | Client | Can do |
 |---|---|---|
 | **Owner** | Web | Everything: academy settings, invites, roster + **approve members and coaches**, all templates/classes, attendance |
-| **Instructor** | Web | *(after owner approval)* Run the **whole schedule** — create/edit/cancel **any** class or template, **take attendance**, see the roster; *not* academy settings, invites, or approvals |
+| **Instructor** | Web | *(after owner approval)* Run the **whole schedule** — create/edit/cancel **any** class or template, **take attendance** (and see attendees on each class); *not* the Roster screen, academy settings, invites, or approvals |
 | **Pending (student or coach)** | Mobile / Web | **View-only:** browse the schedule, book/cancel own, check in. **No** member names, no tools — until the owner approves |
 | **Student** | Mobile | *(after approval)* View schedule, **book/cancel**, see who's in a class, own classes/profile |
 
@@ -124,11 +124,11 @@ No blank waiting screen. A **slim banner** on the schedule: "Pending approval �
 - *(This is the payoff of QR check-in: most attendance is already filled in before the owner touches it.)*
 
 ### O6 · Settings
-- Academy name, **time zone** (drives class materialization), disciplines toggle. **Owner-only.**
+- **Academy name** — the owner can **rename** it: a mutable label, *not* unique-constrained. Identity is the **Academy code** — a unique, permanent 6-digit number shown read-only (students type it to join; it never changes) — plus the internal org id. *(Time zone + disciplines toggle: later.)* **Owner-only.**
 - **Venue QR:** view / print the gym's check-in QR poster (one static code per gym — covers both app check-in and the drop-in form).
 - *(Invite links live in O4 Roster.)*
 
-**Owner v1 = 6 screens.** Instructors see O1–O3, O5 (no O4 approval, no O6).
+**Owner v1 = 6 screens.** Instructors see O1–O3 and O5 (no O4 Roster, no O6 Settings) — the shell hides those nav items and the server procedures guard them. *(Resolved a contradiction with the roles table; ADR 38.)*
 
 ---
 

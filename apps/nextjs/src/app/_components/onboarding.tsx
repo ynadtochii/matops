@@ -7,6 +7,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@matops/ui/button";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
+import { Logo } from "@matops/ui/logo";
 import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
@@ -48,6 +49,7 @@ export function Onboarding({ academies = [] }: { academies?: Academy[] }) {
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-8">
+      <Logo size={30} />
       <div className="flex flex-col gap-3">
         <h1 className="text-2xl font-bold">Start a gym</h1>
         <p className="text-muted-foreground text-sm">

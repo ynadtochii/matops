@@ -41,6 +41,14 @@
   --destructive: #e40014;
   --destructive-foreground: #fafaf9;
 
+  /* --- brand: the one signature identity hue (violet). Restrained — mark,
+   * active nav, links, focus, pending tag. NEVER a status (statuses ride the
+   * functional callouts below). See docs/design.md §1.1 + ADR 37. --- */
+  --brand: #6a4dff;
+  --brand-strong: #5a3cf0; /* text-on-light / links */
+  --brand-foreground: #ffffff; /* text + seams on a brand fill */
+  --brand-wash: #f1eeff; /* tint surface: pending banner, active nav */
+
   /* --- lines & focus --- */
   --border: #e7e5e4; /* stone-200 */
   --input: #e7e5e4;
@@ -122,6 +130,12 @@
     --destructive: #82181a; /* red-900 */
     --destructive-foreground: #fafaf9;
 
+    /* --- brand (violet, brightened for the black surface) --- */
+    --brand: #8b72ff;
+    --brand-strong: #a390ff;
+    --brand-foreground: #12091f;
+    --brand-wash: #17122e;
+
     --border: #292524;
     --input: #292524;
     --ring: #79716b; /* stone-500 */
@@ -175,6 +189,13 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+
+  /* brand (signature identity hue) */
+  --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-wash: var(--brand-wash);
+
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);

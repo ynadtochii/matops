@@ -5,6 +5,7 @@ import { Stack as RouterStack, useLocalSearchParams } from "expo-router";
 import {
   Button,
   Heading,
+  Logo,
   Muted,
   Screen,
   Stack,
@@ -60,6 +61,7 @@ export default function SignIn() {
       <RouterStack.Screen options={{ title: "Sign in" }} />
 
       <Stack gap={24}>
+        <Logo size={32} />
         <Stack gap={8}>
           <Heading>Sign in</Heading>
           <Muted>

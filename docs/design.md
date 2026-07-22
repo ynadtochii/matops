@@ -4,9 +4,11 @@ The look-and-feel rulebook for both apps (web + mobile). Tokens live in
 `tooling/tailwind/theme.css`; **this doc says how to use them**. Read it before
 building any new screen or component.
 
-**Reference:** the **Better Auth** brand system — <https://better-auth.com/brand>.
-Decision: **match it closely.** Our tokens mirror theirs exactly; we keep only a
-thin layer of our own grounding (see §0). When in doubt, do what that page does.
+**Heritage:** the token *plumbing* and the disciplined, monochrome baseline came
+from the **Better Auth** brand system — <https://better-auth.com/brand> — which
+was the scaffold. **matops now owns its own identity** (ADR 37): a signature
+**violet** and the **basketweave** mark are ours, layered on the kept neutral
+foundation. Better Auth is heritage here, not the source of truth.
 
 ---
 
@@ -14,9 +16,11 @@ thin layer of our own grounding (see §0). When in doubt, do what that page does
 
 **Sharp, not loud: monochrome, disciplined, data-first — an instrument, not a poster.**
 
-The gym runs on a schedule, a roster, a clock. Our one flavor on top of Better
-Auth's system: **Geist Mono is the mat clock** — every time, count, and score
-reads like a scoreboard (§3).
+The gym runs on a schedule, a roster, a clock. Two matops flavors sit on the
+greyscale baseline: **Geist Mono is the mat clock** — every time, count, and
+score reads like a scoreboard (§3) — and **one signature violet** is the only
+identity colour (§1.1), carried by the **basketweave mark** (§6). Everything
+else stays monochrome; the violet is a spark, never decoration and never a status.
 
 ---
 
@@ -50,10 +54,25 @@ page (canonical, pure black)**. Full set in `theme.css`; key tokens:
 | `--error` | `#FB2C36` | failure ("Broken") |
 | `--success` | `#00C950` | confirmation ("Nice") |
 
-Rule: if a color is not `--destructive` or one of these four, don't use it. Reach
-for weight, size, or a hairline instead. matops status maps onto these when
-Phase 3 lands: booking `● open/full/closed`, attendance `● present/late/absent`,
-class `● live/cancelled` — a small dot + a **mono** label, text stays neutral.
+Rule: if a color is not `--destructive`, `--brand` (below), or one of these four,
+don't use it. Reach for weight, size, or a hairline instead. matops status maps
+onto these when Phase 3 lands: booking `● open/full/closed`, attendance
+`● present/late/absent`, class `● live/cancelled` — a small dot + a **mono**
+label, text stays neutral.
+
+**Brand hue — violet (the one identity colour).** The single non-neutral hue that
+is *not* a status. Restrained: the mark, active nav, links, focus, the pending
+banner/tag — never a solid primary button (that stays ink), never a status.
+
+| Token | Light | Dark | Use |
+|---|---|---|---|
+| `--brand` | `#6A4DFF` | `#8B72FF` | mark fill, active nav, focus |
+| `--brand-strong` | `#5A3CF0` | `#A390FF` | links / text-on-light |
+| `--brand-foreground` | `#FFFFFF` | `#12091F` | text + seams on a brand fill |
+| `--brand-wash` | `#F1EEFF` | `#17122E` | tint surface: pending, active nav |
+
+Rule: violet marks **identity**, the four callouts mark **meaning** — they never
+swap jobs. Utilities: `bg-brand`, `text-brand-strong`, `bg-brand-wash`, `fill-brand`.
 
 ### 1.2 Typography
 
@@ -161,9 +180,17 @@ is the reference pair (`packages/ui/src/button.tsx` + `button.native.tsx` +
 
 ## 6. Logo
 
-Mark + wordmark, light/dark. Use the mark at **24px minimum**; prefer the
-wordmark when the brand must read at a distance. (matops mark is todo — we build
-our own; we do **not** reuse Better Auth's `H` mark.)
+**Mark = the basketweave mat bond.** A rounded tile (`rx` 6.5 on a 32 viewBox)
+filled `--brand`, seams of a **basketweave** bond — the woven plank pairs real
+mats are laid in — in `--brand-foreground` at 85%. Seam path:
+`M16 1.6V30.4 M1.6 16H30.4 M8.5 1.6V16 M16 8.5H30.4 M1.6 23.5H16 M23.5 16V30.4`.
+
+Built once, shared: **`@matops/ui/logo`** — `Mark` (tile) + `Logo` (mark +
+wordmark); web = inline SVG, mobile = positioned Views (no `react-native-svg`).
+Web favicon: `apps/nextjs/src/app/icon.svg`. Use the mark at **24px minimum**;
+prefer the full `Logo` when the brand must read at a distance. Wordmark: `matops`,
+lowercase Geist ~640 weight, `-0.02em` tracking, "ops" in `--brand-strong`. Full
+reference: `docs/design-system/matops-design-system.html`. Rationale in ADR 37.
 
 ---
 
@@ -171,7 +198,7 @@ our own; we do **not** reuse Better Auth's `H` mark.)
 
 | Piece | State |
 |---|---|
-| Color tokens (light+dark), callout accents, radius, shadow, fonts | **done** — `theme.css` |
+| Color tokens (light+dark), **brand (violet)**, callout accents, radius, shadow, fonts | **done** — `theme.css` |
 | Motif utilities (`.bg-grid` / `-small` / `.bg-dot`) | **done (web)** — `styles.css` |
 | Heading treatment, mono-as-clock, voice | **this doc** — apply when building |
 | Cross-platform component pattern + reference Button | **done** — ADR [32](issues/32-cross-platform-ui.md) |
@@ -181,4 +208,4 @@ our own; we do **not** reuse Better Auth's `H` mark.)
 | Retire `apps/expo/src/components/ui.tsx` local kit | **todo** — migrate onto `@matops/ui` |
 | Mobile Geist via `expo-font` + RN motif equivalent | **todo** |
 | matops `● status` states (booking/attendance) | **Phase 3**, onto callout accents |
-| matops logo / wordmark | **todo** |
+| matops basketweave mark + wordmark | **done** — `@matops/ui/logo`, `app/icon.svg` |

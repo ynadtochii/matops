@@ -35,6 +35,11 @@ const light = {
   border: "#e7e5e4",
   input: "#e7e5e4",
   destructive: "#e40014",
+  // signature brand (violet) — restrained: active nav, links, pending, the mark
+  brand: "#6a4dff",
+  brandStrong: "#5a3cf0",
+  brandForeground: "#ffffff",
+  brandWash: "#f1eeff",
 };
 
 const dark: typeof light = {
@@ -47,6 +52,10 @@ const dark: typeof light = {
   border: "#292524",
   input: "#292524",
   destructive: "#fb2c36",
+  brand: "#8b72ff",
+  brandStrong: "#a390ff",
+  brandForeground: "#12091f",
+  brandWash: "#17122e",
 };
 
 export type Theme = typeof light;
@@ -63,6 +72,65 @@ export const headerColors = {
   light: { bg: light.background, tint: light.foreground },
   dark: { bg: dark.background, tint: dark.foreground },
 };
+
+/**
+ * The matops mark — a rounded tile of a **basketweave** mat bond, drawn with
+ * positioned Views (no SVG dep). Fill + seams use explicit theme colours so it
+ * follows light/dark. Mirrors the web `@matops/ui/logo` (design.md §6, ADR 37).
+ */
+export function Mark({ size = 24 }: { size?: number }) {
+  const t = useTheme();
+  const th = Math.max(1, size * 0.055);
+  const half = size / 2;
+  const seam = (s: ViewStyle) => (
+    <View
+      style={{
+        position: "absolute",
+        backgroundColor: t.brandForeground,
+        opacity: 0.85,
+        ...s,
+      }}
+    />
+  );
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size * 0.22,
+        backgroundColor: t.brand,
+        overflow: "hidden",
+      }}
+    >
+      {seam({ left: half - th / 2, top: 0, width: th, height: size })}
+      {seam({ top: half - th / 2, left: 0, width: size, height: th })}
+      {seam({ left: size * 0.2656 - th / 2, top: 0, width: th, height: half })}
+      {seam({ top: size * 0.2656 - th / 2, left: half, width: half, height: th })}
+      {seam({ top: size * 0.7344 - th / 2, left: 0, width: half, height: th })}
+      {seam({ left: size * 0.7344 - th / 2, top: half, width: th, height: half })}
+    </View>
+  );
+}
+
+/** Mark + `matops` wordmark lockup — "ops" carries the brand-strong accent. */
+export function Logo({ size = 24 }: { size?: number }) {
+  const t = useTheme();
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+      <Mark size={size} />
+      <Text
+        style={{
+          fontSize: 18,
+          fontWeight: "600",
+          letterSpacing: -0.4,
+          color: t.foreground,
+        }}
+      >
+        mat<Text style={{ color: t.brandStrong }}>ops</Text>
+      </Text>
+    </View>
+  );
+}
 
 /** Full-screen padded surface. Wrap every screen in this. */
 export function Screen({
@@ -241,7 +309,7 @@ export function OrDivider() {
   );
 }
 
-type BannerTone = "info" | "warning" | "success";
+type BannerTone = "info" | "warning" | "success" | "brand";
 
 /** A slim status strip (spec S3 pending banner). */
 export function Banner({
@@ -252,16 +320,19 @@ export function Banner({
   tone?: BannerTone;
 }) {
   const t = useTheme();
+  // brand = the pending tone (violet wash + violet text); the rest sit on muted.
+  const bg = tone === "brand" ? t.brandWash : t.muted;
+  const text = tone === "brand" ? t.brandStrong : t.mutedForeground;
   const accent =
     tone === "warning" ? t.destructive : tone === "success" ? t.primary : null;
   return (
     <View
       style={[
-        { backgroundColor: t.muted, borderRadius: RADIUS, padding: 12 },
+        { backgroundColor: bg, borderRadius: RADIUS, padding: 12 },
         accent && { borderLeftWidth: 4, borderLeftColor: accent },
       ]}
     >
-      <Text style={{ fontSize: 14, color: t.mutedForeground }}>{children}</Text>
+      <Text style={{ fontSize: 14, color: text }}>{children}</Text>
     </View>
   );
 }

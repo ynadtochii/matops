@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Pressable, Switch, Text, View } from "react-native";
-import { Stack as RouterStack, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -73,7 +73,7 @@ function NotificationToggle() {
       <Switch
         value={on}
         onValueChange={toggle}
-        trackColor={{ true: t.primary, false: "#d6d3d1" }}
+        trackColor={{ true: t.brand, false: "#d6d3d1" }}
         thumbColor="#ffffff"
       />
     </View>
@@ -118,11 +118,9 @@ function SectionLabel({ children }: { children: string }) {
 }
 
 /**
- * Profile / account (spec S7) — name, phone, current academy, and sign out. The
- * academy switcher appears only when the student trains at 2+ gyms; switching
- * changes the active academy and every scoped query follows via RLS. Notification
- * settings are Phase 4. This is the mobile student lens (docs/issues/18) — it
- * lists academies where the user is a student, not the ones they run.
+ * Profile / account (spec S7) — name, phone, current academy, switcher, and sign
+ * out. The switcher appears only when the student trains at 2+ gyms. This is the
+ * mobile student lens (docs/issues/18) — academies where the user is a student.
  */
 export default function Profile() {
   const t = useTheme();
@@ -150,7 +148,6 @@ export default function Profile() {
       void forgetPushToken();
     }
     void authClient.signOut();
-    // The gate (index) sends signed-out users to sign in.
     router.replace("/");
   };
 
@@ -166,8 +163,6 @@ export default function Profile() {
 
   return (
     <Screen>
-      <RouterStack.Screen options={{ title: "Profile" }} />
-
       <Stack gap={24}>
         <Heading>{user.name || user.email}</Heading>
 
@@ -194,20 +189,20 @@ export default function Profile() {
                     justifyContent: "space-between",
                     borderRadius: 8,
                     padding: 16,
-                    backgroundColor: isActive ? t.primary : t.muted,
+                    backgroundColor: isActive ? t.brand : t.muted,
                   }}
                 >
                   <Text
                     style={{
                       fontSize: 16,
                       fontWeight: isActive ? "500" : "400",
-                      color: isActive ? t.primaryForeground : t.foreground,
+                      color: isActive ? t.brandForeground : t.foreground,
                     }}
                   >
                     {a.name}
                   </Text>
                   {isActive && (
-                    <Text style={{ fontSize: 16, color: t.primaryForeground }}>
+                    <Text style={{ fontSize: 16, color: t.brandForeground }}>
                       ✓
                     </Text>
                   )}

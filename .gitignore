@@ -53,3 +53,5 @@ dist/
 
 # tanstack
 .tanstack
+# local scratch / planning workspace
+.scratch/

@@ -16,7 +16,7 @@ import {
 } from "@matops/domain";
 import { AcademyCodeSchema, CreateAcademySchema } from "@matops/validators";
 
-import { protectedProcedure } from "../trpc";
+import { ownerProcedure, protectedProcedure } from "../trpc";
 
 export const academyRouter = {
   /**
@@ -89,6 +89,25 @@ export const academyRouter = {
         });
       }
       return { academyId: org.id };
+    }),
+
+  /**
+   * Rename the active academy (owner only). The **name is a mutable label** — not
+   * unique-constrained, because identity is the immutable `public_code` (the
+   * Academy code) + the org id. Updates via Better Auth so its org permission
+   * check applies; the code is never touched.
+   */
+  rename: ownerProcedure
+    .input(CreateAcademySchema)
+    .mutation(async ({ ctx, input }) => {
+      await ctx.authApi.updateOrganization({
+        body: {
+          organizationId: ctx.academyId,
+          data: { name: input.name.trim() },
+        },
+        headers: ctx.headers,
+      });
+      return { ok: true as const };
     }),
 
   /** Switch the active academy (multi-academy switcher, docs/issues/18). */
