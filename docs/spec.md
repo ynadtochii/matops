@@ -156,7 +156,12 @@ No blank waiting screen. A **slim banner** on the schedule: "Pending approval �
 - **Confirm claims:** a "claims to confirm" list of student **"I paid"** submissions (S9). One tap to **confirm** (rolls the member's next-due date forward by the cycle) or **reject**. The student's reference code matches the bank-transfer note.
 - **Payment reminders:** automatic **push + email** ~3 days before and on the due day — no owner effort (reuses the Phase-4 notify engine + the daily reminder cron; ADR 34).
 
-**Owner v1 = 6 screens** (O1–O6). **v1.3 adds O7 (payments).** Instructors see O1–O3 and O5 (no O4 Roster, no O6 Settings, no O7 Payments) — the shell hides those nav items and the server procedures guard them. *(Resolved a contradiction with the roles table; ADR 38.)*
+### O8 · Install as an app (PWA)  *(v1.5 — owner on the mat; ADR 42)*
+- The owner/instructor web app is an **installable PWA**: add it to the iOS / Android home screen and it opens **standalone** (no browser chrome), with the matops icon + brand splash. No app store, no separate binary — the same web app earns its keep on the phone.
+- It exists for the owner's **on-the-mat, one-handed, five-second** jobs: take attendance, cancel / edit a class, **share** the invite link + venue QR through the phone's native share sheet, and approve a pending join — the same screens, tuned for thumb reach at phone size.
+- **Cut on mobile (desk-first / the deferred-native tail):** the O1 dashboard analytics reflow, editing payments / plans / settings, and **native push + offline** — dues + class notices ride the existing email / reminder path (§4). Design intent, not a port of the desktop layout.
+
+**Owner v1 = 6 screens** (O1–O6). **v1.3 adds O7 (payments); v1.5 adds O8 (install as a PWA — the web app on the phone, not a native app; ADR 42).** Instructors see O1–O3 and O5 (no O4 Roster, no O6 Settings, no O7 Payments) — the shell hides those nav items and the server procedures guard them. *(Resolved a contradiction with the roles table; ADR 38.)*
 
 ---
 
@@ -203,6 +208,9 @@ Scope additions (v1.3 "Frictionless & Pay"):
 
 Scope additions (v1.4 "Rank & Notes"; ADR 41):
 - **Member rank → v1.4.** Per-discipline ranks the **coach sets** (BJJ belts + stripes and Judo belts seeded; the model is general), a student-visible **promotion timeline** (O4, S7), and **staff-private notes** on a member (O4) ARE in v1.4. **Still OUT:** attendance→promotion **automation / progress prediction**, owner-defined **custom rank ladders**, **bulk** promotion, and a **student training journal** (submissions / rolls / competition log / session notes — a separate product, rejected not deferred).
+
+Scope additions (v1.5 "Owner on the mat"; ADR 42):
+- **Owner PWA → v1.5.** The owner/instructor web app becomes an **installable PWA** for on-the-mat jobs (O8). **A unified both-roles native app stays OUT** — the two clients keep their natural axis (**student = native / casual**, **owner = web / admin + now mobile**). A **separate** native owner app is revisited only on a native-only mat need (reliable push, offline attendance, a home widget) **and** the Apple-account / device-test blockers clearing. **Student web** also stays OUT (rejected — Kano *Indifferent*, no natural laptop moment; the shared router keeps it cheap to revisit).
 
 The architecture leaves seams for the deferred items ([architecture.md](./architecture.md) §8).
 

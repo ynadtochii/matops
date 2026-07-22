@@ -296,8 +296,9 @@ function ShellChrome({
 
       {/* Main column */}
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Mobile top bar */}
-        <header className="bg-sidebar border-sidebar-border flex items-center justify-between border-b px-4 py-3 md:hidden">
+        {/* Mobile top bar — top padding clears the status-bar notch when installed
+            as a PWA (viewport-fit=cover; ADR 42). env() is 0 elsewhere. */}
+        <header className="bg-sidebar border-sidebar-border flex items-center justify-between border-b px-4 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-3 md:hidden">
           <Logo size={20} />
           {academies.length >= 2 ? (
             <AcademySwitcher academies={academies} activeId={activeId} />
@@ -317,8 +318,9 @@ function ShellChrome({
         </main>
       </div>
 
-      {/* Mobile bottom tabs */}
-      <nav className="bg-sidebar border-sidebar-border fixed inset-x-0 bottom-0 z-20 flex border-t md:hidden">
+      {/* Mobile bottom tabs — bottom padding clears the home indicator when
+          installed as a PWA (viewport-fit=cover; ADR 42). env() is 0 elsewhere. */}
+      <nav className="bg-sidebar border-sidebar-border fixed inset-x-0 bottom-0 z-20 flex border-t pb-[env(safe-area-inset-bottom)] md:hidden">
         {items.map((i) => (
           <Link
             key={i.href}

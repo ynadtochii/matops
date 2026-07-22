@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { QRCodeSVG } from "qrcode.react";
 
 import { Button } from "@matops/ui/button";
 import { toast } from "@matops/ui/toast";
+
+import { shareLink, useCanShare } from "~/lib/share";
 
 /**
  * Venue check-in QR (spec O6, ticket 08). Renders the public `/checkin/[id]`
@@ -20,11 +22,15 @@ export function VenueCheckin({
   academyName: string;
 }) {
   const path = `/checkin/${academyId}`;
-  const [origin, setOrigin] = useState("");
-  // One-time client read of the real origin so the QR encodes an absolute,
-  // scannable URL — deferred to an effect to avoid an SSR hydration mismatch.
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => setOrigin(window.location.origin), []);
+  // The real origin is client-only; read it through `useSyncExternalStore` with
+  // an empty server snapshot so the QR encodes an absolute URL after hydration
+  // without an SSR mismatch (and without an effect).
+  const origin = useSyncExternalStore(
+    () => () => undefined,
+    () => window.location.origin,
+    () => "",
+  );
+  const shareable = useCanShare();
   const url = origin ? `${origin}${path}` : path;
 
   return (
@@ -54,6 +60,21 @@ export function VenueCheckin({
       <div className="border-border flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
         <code className="text-sm break-all">{url}</code>
         <div className="flex gap-2">
+          {shareable && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                void shareLink({
+                  url,
+                  title: `Check in at ${academyName}`,
+                  text: "Scan or open this to check in:",
+                })
+              }
+            >
+              Share
+            </Button>
+          )}
           <Button
             size="sm"
             variant="outline"

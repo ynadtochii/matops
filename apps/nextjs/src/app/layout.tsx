@@ -26,6 +26,17 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
   },
+  // PWA install (ADR 42). `manifest.ts` supplies the web manifest; these add the
+  // iOS home-screen bits (Safari ignores the manifest for add-to-home-screen).
+  applicationName: "matops",
+  appleWebApp: {
+    capable: true,
+    title: "matops",
+    statusBarStyle: "default",
+  },
+  icons: {
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
+  },
 };
 
 export const viewport: Viewport = {
@@ -33,6 +44,9 @@ export const viewport: Viewport = {
     { media: "(prefers-color-scheme: light)", color: "white" },
     { media: "(prefers-color-scheme: dark)", color: "black" },
   ],
+  // Extend under the notch / home indicator so the installed app can honour the
+  // safe-area insets in the mobile shell (see AppShell).
+  viewportFit: "cover",
 };
 
 const geistSans = Geist({

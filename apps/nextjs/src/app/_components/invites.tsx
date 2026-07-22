@@ -6,6 +6,7 @@ import { Button } from "@matops/ui/button";
 import { Input } from "@matops/ui/input";
 import { toast } from "@matops/ui/toast";
 
+import { shareLink, useCanShare } from "~/lib/share";
 import { useTRPC } from "~/trpc/react";
 
 type InviteRole = "student" | "instructor";
@@ -33,6 +34,9 @@ export function Invites() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const invites = useQuery(trpc.invite.list.queryOptions());
+
+  // Offer the OS share sheet (ADR 42) only where it exists.
+  const shareable = useCanShare();
 
   const invalidate = () =>
     queryClient.invalidateQueries(trpc.invite.list.pathFilter());
@@ -98,6 +102,20 @@ export function Invites() {
               {invite && (
                 <div className="flex gap-2">
                   <Input readOnly value={joinUrl(invite.token)} />
+                  {shareable && (
+                    <Button
+                      variant="secondary"
+                      onClick={() =>
+                        void shareLink({
+                          url: joinUrl(invite.token),
+                          title: "Join our academy on matops",
+                          text: "Here's your link to join our academy:",
+                        })
+                      }
+                    >
+                      Share
+                    </Button>
+                  )}
                   <Button
                     variant="secondary"
                     onClick={async () => {

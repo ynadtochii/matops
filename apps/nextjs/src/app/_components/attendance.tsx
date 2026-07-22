@@ -187,9 +187,13 @@ export function Attendance() {
                           </span>
                         )}
                     </span>
-                    <div className="flex gap-1">
+                    {/* On mobile the pair fills the row as two ≥44px thumb
+                        targets (ADR 42 on-the-mat design); on desktop it stays
+                        the compact right-aligned pair. */}
+                    <div className="flex w-full gap-1 sm:w-auto">
                       <Button
                         size="sm"
+                        className="min-h-11 flex-1 sm:min-h-8 sm:flex-none"
                         variant={present ? "default" : "outline"}
                         disabled={mark.isPending}
                         onClick={() =>
@@ -204,6 +208,7 @@ export function Attendance() {
                       </Button>
                       <Button
                         size="sm"
+                        className="min-h-11 flex-1 sm:min-h-8 sm:flex-none"
                         variant={absent ? "destructive" : "outline"}
                         disabled={mark.isPending}
                         onClick={() =>
