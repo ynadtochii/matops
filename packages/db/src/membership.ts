@@ -35,6 +35,24 @@ export async function getMembership(
 }
 
 /**
+ * Resolve the caller's `member.id` in one academy (base connection — the member
+ * table has no RLS). Payment tables key dues + claims by `member.id`, but the
+ * tRPC context only carries `user.id` + `academyId`, so a student-facing payments
+ * resolver maps one to the other here. Returns null if not a member.
+ */
+export async function getMemberIdForUser(
+  userId: string,
+  academyId: string,
+): Promise<string | null> {
+  const rows = await db
+    .select({ id: member.id })
+    .from(member)
+    .where(and(eq(member.userId, userId), eq(member.organizationId, academyId)))
+    .limit(1);
+  return rows[0]?.id ?? null;
+}
+
+/**
  * Mark a member row active. Used by the onboarding hook (the academy creator is
  * an active owner at once — docs/issues/20) and by owner approval. Writes the
  * Better Auth `member` table on the base connection (no RLS there).

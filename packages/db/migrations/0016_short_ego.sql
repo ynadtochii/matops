@@ -1,0 +1,1 @@
+ALTER TABLE "member_dues" ADD COLUMN "dues_reminder_period" text;

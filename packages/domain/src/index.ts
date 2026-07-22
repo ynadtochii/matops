@@ -23,6 +23,8 @@ export * from "./invite";
 export * from "./materialize";
 export * from "./membership";
 export * from "./notify";
+export * from "./payments";
+export * from "./rank";
 export * from "./schedule";
 export * from "./slug";
 export * from "./stats";

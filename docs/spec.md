@@ -61,6 +61,7 @@ No blank waiting screen. A **slim banner** on the schedule: "Pending approval �
 
 ### S4 · Schedule  *(home — the core screen)*
 - This week's classes, grouped by day (Today first). Each row: **title · time · instructor · "N spots left"**.
+- **Today / next card** *(v1.3, F.1):* a card at the top shows the one class you'd book next, with a single **Book** button — the common case is one tap, no navigation.
 - Optional discipline filter chip row (BJJ / No-Gi / …) — only if the academy uses disciplines.
 - Tap a class → **S5**. Your already-booked classes show a **Booked** pill inline.
 - Empty state: "No classes scheduled this week."
@@ -84,6 +85,7 @@ No blank waiting screen. A **slim banner** on the schedule: "Pending approval �
 ### S7 · Profile / account
 - Name, phone, current academy, sign out. **Name and phone are editable** (edit → save; email is read-only — it's the login identity + notification channel). *(v1.2 B.3.)*
 - **My Training stats** (v1.2 B.1 — surfaced on the Training tab, S6): total attended sessions · this month · week **streak** · favorite discipline + weekday · days since last class. Per-academy, from attendance already stored (ADR 39). Empty state until the first check-in.
+- **My rank** (v1.4 G.3, ADR 41): your rank in each discipline (e.g. *BJJ · Blue · 2 stripes*) plus a short **promotion timeline** (when you were promoted). **Read-only** — only the gym sets rank. Empty until a coach sets it.
 - **Academy switcher** — shown only if the student belongs to >1 academy; switching changes the active academy and all data follows.
 - **Notification settings** (thin): a single **Push notifications** on/off toggle (v1 — one switch covers reminders and cancellation alerts; turning it off drops this device's push token so nothing is sent). Separate per-event toggles are a later iteration.
 
@@ -92,7 +94,17 @@ No blank waiting screen. A **slim banner** on the schedule: "Pending approval �
 - If not booked, this **books + attends** in the same tap. Works **even if the class is full** — you're physically there; capacity only governs reservations.
 - The single lowest-friction action in the product: show up, one tap, tracked.
 
-**Student v1 = 8 screens.** Core loop (S4 → S5 → booked) is two taps from open; checking in is one.
+### S9 · Pay (dues + requisites)  *(v1.3 — manual bank transfer; ADR 40)*
+- **What you owe, at a glance:** your plan, amount, and next-due date, with a status — **paid** / **due soon** / **overdue** (derived from the due date, ADR 40). Empty until the gym sets up your dues.
+- **How to pay → requisites card:** the gym's bank details plus a **reference code** to put in the transfer note (copy buttons on each). You pay in your own bank app. *(No card on file, no in-app card payment in v1.3 — manual bank transfer only.)*
+- **"I paid":** after you transfer, tap **I paid** (optionally attach a screenshot as proof). This raises a claim the owner confirms (O7); when they confirm, the status turns to paid and the next-due date rolls forward.
+- One open claim per period (you can't double-claim); the reference code is what lets the owner match your transfer fast.
+
+### S10 · Home-screen widget  *(v1.3 — native, fast-follow; ADR 27 promoted)*
+- The next class you'd book, on the **phone home screen** — one tap to book **without opening the app**. Mirrors the S4 "Today / next" card.
+- Native widget code (iOS WidgetKit / Android); ships as a fast-follow, last in the wave, off the payments critical path.
+
+**Student v1 = 8 screens** (S1–S8). **v1.3 adds S9 (pay) + S10 (home widget).** Core loop (S4 → S5 → booked) is two taps from open; checking in is one; the S4 "Today / next" card makes the common booking one tap.
 
 ---
 
@@ -119,7 +131,9 @@ No blank waiting screen. A **slim banner** on the schedule: "Pending approval �
 
 ### O4 · Roster (members + leads)
 - **Pending approvals** section: approve / reject. This covers **both students and coaches** — approving assigns the intended role (student → member features; instructor → schedule + attendance tools) and activates them. A pending person's bookings simply become normal bookings on approval.
-- **Active members** list → **member detail** (v1.2 C.2): a tabbed panel — **Overview** (role, contact, attendance stats, drift band) and **Attendance** (the member's full present-session history, paginated) — plus remove/suspend. Opening a member from the O1 "who's drifting" widget deep-links straight to their detail. *(Activity/audit tab deferred — needs the audit log.)*
+- **Active members** list → **member detail** (v1.2 C.2): a tabbed panel — **Overview** (role, contact, attendance stats, drift band), **Attendance** (the member's full present-session history, paginated), **Rank** (v1.4 G.2), and **Notes** (v1.4 G.4) — plus remove/suspend. Opening a member from the O1 "who's drifting" widget deep-links straight to their detail. *(Activity/audit tab deferred — needs the audit log.)*
+  - **Rank (v1.4 G.2, ADR 41):** the coach sets/changes the member's rank **per discipline** (e.g. *BJJ · Blue · 2 stripes*, *Judo · Green*), picking from the **seeded** rank systems (BJJ belts + stripes, Judo belts). Belt + stripes are validated against the system. Changing rank records a **promotion history** (from → to · date · who) shown below. **No automation, no progress bar** — the coach decides. Disciplines with no belt ladder (boxing, MMA) have no rank control.
+  - **Notes (v1.4 G.4, ADR 41):** **staff-private** coaching notes on the member (injuries, goals, readiness). Visible to **all staff at this academy**, timestamped + authored; **never** shown to the member.
 - **Drop-in leads** section: **first-time visitors** who checked in via the gym QR without an account (name, phone, email, which class, consent flag). Kept for **follow-up** — the owner can send them an **app invite link (deep-linked to this gym)** to convert them into a member. Repeat visitors are nudged to register, so the form stays a first touch.
 - **Academy ID:** a plain **6-digit number** shown to copy + share. Students enter it in the app to find and join the gym (S2, mobile v1 — docs/issues/32). Joining by ID lands **pending/view-only** as a student, same as an invite link.
 - **Invite links:** generate/copy a shareable link **per role** (student / instructor). Either way the joiner lands **pending/view-only** until the owner approves — so a forwarded link never grants access on its own. One active link per role.
@@ -127,14 +141,22 @@ No blank waiting screen. A **slim banner** on the schedule: "Pending approval �
 ### O5 · Attendance
 - Pick a class (today / recent past, ≤14-day backfill window) → see everyone present: **booked members** (confirmed + provisional), **self check-ins** (via QR), and **drop-ins** (from the public form).
 - Mark **present / absent**, or **add a walk-in** (search a member). Self check-ins arrive already marked present — the owner just confirms.
+- **Mark all present** *(v1.3, F.2):* one tap marks everyone who booked as present; the owner then removes the few no-shows — faster than adding one by one. Respects the 14-day backfill window.
 - *(This is the payoff of QR check-in: most attendance is already filled in before the owner touches it.)*
 
 ### O6 · Settings
 - **Academy name** — the owner can **rename** it: a mutable label, *not* unique-constrained. Identity is the **Academy code** — a unique, permanent 6-digit number shown read-only (students type it to join; it never changes) — plus the internal org id. *(Time zone + disciplines toggle: later.)* **Owner-only.**
 - **Venue QR:** view / print the gym's check-in QR poster (one static code per gym — covers both app check-in and the drop-in form).
+- **Payment requisites** *(v1.3, ADR 40):* the owner enters the gym's **bank details** here — these feed the student's requisites card (S9). Owner-only.
 - *(Invite links live in O4 Roster.)*
 
-**Owner v1 = 6 screens.** Instructors see O1–O3 and O5 (no O4 Roster, no O6 Settings) — the shell hides those nav items and the server procedures guard them. *(Resolved a contradiction with the roles table; ADR 38.)*
+### O7 · Payments  *(v1.3 — manual bank transfer; ADR 40)*
+- **Membership plan + dues:** the owner sets a plan (name, price, currency, cycle) and each member's next-due date. No card processor, no auto-charge — this is manual reconciliation.
+- **Who paid / who's overdue:** the O4 roster shows a **status dot** per member — **paid** / **due soon** / **overdue** (derived from the due date, ADR 40) — with an **Overdue** filter. Member detail shows next-due + last confirmed payment.
+- **Confirm claims:** a "claims to confirm" list of student **"I paid"** submissions (S9). One tap to **confirm** (rolls the member's next-due date forward by the cycle) or **reject**. The student's reference code matches the bank-transfer note.
+- **Payment reminders:** automatic **push + email** ~3 days before and on the due day — no owner effort (reuses the Phase-4 notify engine + the daily reminder cron; ADR 34).
+
+**Owner v1 = 6 screens** (O1–O6). **v1.3 adds O7 (payments).** Instructors see O1–O3 and O5 (no O4 Roster, no O6 Settings, no O7 Payments) — the shell hides those nav items and the server procedures guard them. *(Resolved a contradiction with the roles table; ADR 38.)*
 
 ---
 
@@ -169,12 +191,18 @@ No blank waiting screen. A **slim banner** on the schedule: "Pending approval �
 
 ## 5. Explicitly NOT in v1
 
-Mirrors the map's Out-of-scope: **memberships / payments / billing**, **belts & rank progression**, **curriculum & games library**, a **full comms domain** (announcements + in-app DMs — *note: transactional push + email notifications ARE in v1, §4*), **live in-app updates / WebSockets**, **cross-academy aggregated views**, **session packs**, **multi-currency / i18n**, **super-admin UI**, **rich offline/sync**.
+Mirrors the map's Out-of-scope: **card payment processing / auto-subscription / billing** (*note: manual-transfer dues ARE in v1.3 — see below*), **belts & rank progression** (*note: member rank IS in v1.4 — see below*), **curriculum & games library**, a **full comms domain** (announcements + in-app DMs — *note: transactional push + email notifications ARE in v1, §4*), **live in-app updates / WebSockets**, **cross-academy aggregated views**, **session packs**, **multi-currency / i18n**, **super-admin UI**, **rich offline/sync**.
 
 Clarifications from the friction wave:
 - **Public *booking* page** stays OUT — but a controlled per-gym **check-in / drop-in lead form** IS in v1 (§4).
 - **Capacity hygiene → next iteration:** hard caps / blocking a full class, priority for registered members, **waitlists**, **no-show tracking or penalties**, and **cancellation cut-offs** are all deferred. v1 shows a soft red "may be busy" warning and lets the owner manage the room.
-- **Home widget** (today's classes + one-tap book/cancel) is a planned **fast-follow**, right after the v1 launch — not in the launch build (needs native widget code).
+
+Scope additions (v1.3 "Frictionless & Pay"):
+- **Payments → v1.3 (manual bank transfer only).** Membership dues, a **requisites card**, an owner-confirmed **"I paid"** claim, roster **paid / overdue** status, and dues **reminders** ARE in v1.3 (S9, O7, ADR 40). **Card processing / auto-subscription / Stripe stays OUT** — a candidate only after the manual flow proves demand.
+- **Home widget** (today's classes + one-tap book/cancel) is scheduled as the **v1.3 fast-follow** (S10, R.2), right after the launch build — needs native widget code (ADR 27, promoted).
+
+Scope additions (v1.4 "Rank & Notes"; ADR 41):
+- **Member rank → v1.4.** Per-discipline ranks the **coach sets** (BJJ belts + stripes and Judo belts seeded; the model is general), a student-visible **promotion timeline** (O4, S7), and **staff-private notes** on a member (O4) ARE in v1.4. **Still OUT:** attendance→promotion **automation / progress prediction**, owner-defined **custom rank ladders**, **bulk** promotion, and a **student training journal** (submissions / rolls / competition log / session notes — a separate product, rejected not deferred).
 
 The architecture leaves seams for the deferred items ([architecture.md](./architecture.md) §8).
 

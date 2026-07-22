@@ -1,6 +1,7 @@
 import type { ClaimRemindersOptions } from "@matops/db";
 import type { EmailMessage, PushMessage } from "@matops/domain";
 import {
+  claimDueDuesReminders,
   claimDueReminderClasses,
   getAcademyPublic,
   getPushTargets,
@@ -9,6 +10,7 @@ import {
   buildApprovalMessage,
   buildCancelledMessage,
   buildClassChangeMessage,
+  buildDuesReminderMessage,
   buildReminderMessage,
   formatWhen,
 } from "@matops/domain";
@@ -64,7 +66,9 @@ export interface ClassEventInput {
 }
 
 /** Class cancelled → push + email every booked student (highest stakes, §4). */
-export async function notifyClassCancelled(input: ClassEventInput): Promise<void> {
+export async function notifyClassCancelled(
+  input: ClassEventInput,
+): Promise<void> {
   const msg = buildCancelledMessage({
     academyName: await academyName(input.academyId),
     className: input.className,
@@ -78,7 +82,9 @@ export async function notifyClassCancelled(input: ClassEventInput): Promise<void
 }
 
 /** Class time/instructor changed → push + email booked students (§4). */
-export async function notifyClassChanged(input: ClassEventInput): Promise<void> {
+export async function notifyClassChanged(
+  input: ClassEventInput,
+): Promise<void> {
   const msg = buildClassChangeMessage({
     academyName: await academyName(input.academyId),
     className: input.className,
@@ -111,7 +117,12 @@ export async function notifyMembershipApproved(input: {
  */
 export async function runReminderSweep(
   opts: ClaimRemindersOptions = {},
-): Promise<{ processed: number; sent: number }> {
+): Promise<{
+  processed: number;
+  sent: number;
+  duesProcessed: number;
+  duesSent: number;
+}> {
   const claimed = await claimDueReminderClasses(opts);
   let sent = 0;
   for (const c of claimed) {
@@ -122,6 +133,53 @@ export async function runReminderSweep(
     await deliver(c.studentIds, {
       push,
       data: { type: "class", classId: c.classId },
+    });
+    sent += 1;
+  }
+  const dues = await sweepDuesReminders(opts);
+  return {
+    processed: claimed.length,
+    sent,
+    duesProcessed: dues.processed,
+    duesSent: dues.sent,
+  };
+}
+
+/** Short due-date label for a dues reminder, e.g. "10 Aug" (UTC calendar day). */
+function formatDueLabel(nextDueAt: Date): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  }).format(nextDueAt);
+}
+
+/**
+ * Dues-reminder sweep (v1.3, R.1 — docs/issues/40). Claims each member who is due
+ * soon or overdue and not yet reminded this period (one per period, base
+ * connection), then pushes + emails them via the existing transport. Rides the
+ * DAILY cron; the frequent cadence stays a Phase-5 concern. Never throws (each
+ * `deliver` swallows its own errors).
+ */
+async function sweepDuesReminders(
+  opts: ClaimRemindersOptions = {},
+): Promise<{ processed: number; sent: number }> {
+  const claimed = await claimDueDuesReminders({
+    now: opts.now,
+    limit: opts.limit,
+  });
+  let sent = 0;
+  for (const d of claimed) {
+    const msg = buildDuesReminderMessage({
+      academyName: d.academyName,
+      amountLabel: `${d.currency} ${(d.priceMinor / 100).toFixed(2)}`,
+      dueLabel: formatDueLabel(d.nextDueAt),
+      overdue: d.overdue,
+    });
+    await deliver([d.userId], {
+      push: msg.push,
+      email: msg.email,
+      data: { type: "dues" },
     });
     sent += 1;
   }

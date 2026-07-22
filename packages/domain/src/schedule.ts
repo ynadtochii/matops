@@ -54,3 +54,32 @@ export function describeRecurrence(
     .join(", ");
   return `${days} · ${formatStartMinutes(startsAtMinutes)}`;
 }
+
+/** The minimal shape the "next class to book" selection needs (F.1 / R.2). */
+export interface SchedulableClass {
+  startsAt: Date | string; // UTC instant (Date after transport, string on the wire)
+  status: string; // "scheduled" | "cancelled"
+  myBooking?: string | null; // "booked" | "cancelled" | null
+}
+
+/**
+ * The one class the student would book next (v1.3, F.1 + the R.2 home widget).
+ * The soonest **upcoming, non-cancelled** class they have NOT already booked;
+ * if every upcoming class is booked, the soonest upcoming one (so the surface can
+ * show a "you're set" state); null when nothing is upcoming. Pure so the mobile
+ * card, and later the native widget's data feed, select identically.
+ */
+export function nextBookableClass<T extends SchedulableClass>(
+  classes: T[],
+  now: Date,
+): T | null {
+  const t = now.getTime();
+  const upcoming = classes
+    .filter(
+      (c) => new Date(c.startsAt).getTime() > t && c.status !== "cancelled",
+    )
+    .sort(
+      (a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
+    );
+  return upcoming.find((c) => c.myBooking !== "booked") ?? upcoming[0] ?? null;
+}

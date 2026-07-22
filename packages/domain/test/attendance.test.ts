@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { attendanceCounts, canMarkAttendance } from "../src/attendance";
+import {
+  attendanceCounts,
+  bulkMarkTargets,
+  canMarkAttendance,
+} from "../src/attendance";
 
 describe("canMarkAttendance", () => {
   const now = new Date("2026-08-15T12:00:00Z");
@@ -104,5 +108,34 @@ describe("attendanceCounts", () => {
       provisional: 0,
       walkIn: 0,
     });
+  });
+});
+
+describe("bulkMarkTargets", () => {
+  it("returns booked+unmarked students, leaving absents and walk-ins", () => {
+    const rows = [
+      { studentId: "a", bookingStatus: "booked", attendanceStatus: "unmarked" },
+      { studentId: "b", bookingStatus: "booked", attendanceStatus: "present" }, // already
+      { studentId: "c", bookingStatus: "booked", attendanceStatus: "absent" }, // explicit
+      { studentId: "d", bookingStatus: "none", attendanceStatus: "present" }, // walk-in
+      {
+        studentId: "e",
+        bookingStatus: "cancelled",
+        attendanceStatus: "unmarked",
+      },
+    ];
+    expect(bulkMarkTargets(rows).sort()).toEqual(["a"]);
+  });
+
+  it("is empty when everyone is already marked (idempotent)", () => {
+    const rows = [
+      { studentId: "a", bookingStatus: "booked", attendanceStatus: "present" },
+      { studentId: "b", bookingStatus: "booked", attendanceStatus: "absent" },
+    ];
+    expect(bulkMarkTargets(rows)).toEqual([]);
+  });
+
+  it("is empty for no rows", () => {
+    expect(bulkMarkTargets([])).toEqual([]);
   });
 });

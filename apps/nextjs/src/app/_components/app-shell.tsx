@@ -24,7 +24,13 @@ interface NavItem {
 const iconClass = "size-[18px] shrink-0";
 
 const DashboardIcon = () => (
-  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} className={iconClass}>
+  <svg
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={1.5}
+    className={iconClass}
+  >
     <rect x="2" y="2" width="5" height="5" rx="1" />
     <rect x="9" y="2" width="5" height="5" rx="1" />
     <rect x="2" y="9" width="5" height="5" rx="1" />
@@ -32,28 +38,64 @@ const DashboardIcon = () => (
   </svg>
 );
 const ScheduleIcon = () => (
-  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} className={iconClass}>
+  <svg
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={1.5}
+    className={iconClass}
+  >
     <rect x="2" y="3" width="12" height="11" rx="1.5" />
     <path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3" />
   </svg>
 );
 const RosterIcon = () => (
-  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} className={iconClass}>
+  <svg
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={1.5}
+    className={iconClass}
+  >
     <circle cx="6" cy="6" r="2.4" />
     <path d="M2 13.5c0-2.2 1.8-3.5 4-3.5s4 1.3 4 3.5M11 5.2a2.2 2.2 0 010 4.2M12.5 13.5c0-1.7-.9-2.9-2.2-3.3" />
   </svg>
 );
 const AttendanceIcon = () => (
-  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} className={iconClass}>
+  <svg
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={1.5}
+    className={iconClass}
+  >
     <rect x="2" y="2" width="12" height="12" rx="2" />
     <path d="M5 8.2l2 2 4-4.4" />
   </svg>
 );
 const SettingsIcon = () => (
-  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} className={iconClass}>
+  <svg
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={1.5}
+    className={iconClass}
+  >
     <path d="M3 5h10M3 11h10" />
     <circle cx="6" cy="5" r="1.7" fill="var(--sidebar)" />
     <circle cx="10" cy="11" r="1.7" fill="var(--sidebar)" />
+  </svg>
+);
+const PaymentsIcon = () => (
+  <svg
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={1.5}
+    className={iconClass}
+  >
+    <rect x="2" y="4" width="12" height="8" rx="1.5" />
+    <path d="M2 7h12" />
   </svg>
 );
 
@@ -98,7 +140,10 @@ export function AppShell({
     );
   }
 
-  const academies = mine.data.map((a) => ({ academyId: a.academyId, name: a.name }));
+  const academies = mine.data.map((a) => ({
+    academyId: a.academyId,
+    name: a.name,
+  }));
 
   // No active academy → onboarding, no shell.
   if (!current.data) {
@@ -165,9 +210,21 @@ function ShellChrome({
   const pendingCount =
     roster.data?.filter((m) => m.status === "pending").length ?? 0;
 
+  // Payments badge: how many "I paid" claims are waiting for the owner (ADR 40).
+  const claims = useQuery({
+    ...trpc.payments.claims.queryOptions(),
+    enabled: isOwner,
+  });
+  const claimsCount = claims.data?.length ?? 0;
+
   const items: NavItem[] = [
     { href: "/", label: "Dashboard", icon: <DashboardIcon />, show: true },
-    { href: "/schedule", label: "Schedule", icon: <ScheduleIcon />, show: isStaff },
+    {
+      href: "/schedule",
+      label: "Schedule",
+      icon: <ScheduleIcon />,
+      show: isStaff,
+    },
     {
       href: "/roster",
       label: "Roster",
@@ -175,8 +232,25 @@ function ShellChrome({
       show: isOwner,
       badge: pendingCount,
     },
-    { href: "/attendance", label: "Attendance", icon: <AttendanceIcon />, show: isStaff },
-    { href: "/settings", label: "Settings", icon: <SettingsIcon />, show: isOwner },
+    {
+      href: "/attendance",
+      label: "Attendance",
+      icon: <AttendanceIcon />,
+      show: isStaff,
+    },
+    {
+      href: "/payments",
+      label: "Payments",
+      icon: <PaymentsIcon />,
+      show: isOwner,
+      badge: claimsCount,
+    },
+    {
+      href: "/settings",
+      label: "Settings",
+      icon: <SettingsIcon />,
+      show: isOwner,
+    },
   ].filter((i) => i.show);
 
   const isCurrent = (href: string) =>
@@ -249,7 +323,7 @@ function ShellChrome({
           <Link
             key={i.href}
             href={i.href}
-            className={`relative flex flex-1 flex-col items-center gap-1 py-2 font-mono text-[9px] uppercase tracking-wide ${
+            className={`relative flex flex-1 flex-col items-center gap-1 py-2 font-mono text-[9px] tracking-wide uppercase ${
               isCurrent(i.href) ? "text-brand-strong" : "text-muted-foreground"
             }`}
           >

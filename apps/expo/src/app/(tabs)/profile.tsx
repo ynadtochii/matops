@@ -3,8 +3,12 @@ import { Pressable, Switch, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import type { PaymentStatus } from "@matops/domain";
+import { disciplineLabel, formatRank } from "@matops/domain";
+
 import {
   Button,
+  ErrorState,
   Heading,
   Loading,
   Screen,
@@ -209,9 +213,7 @@ function ProfileDetails({
 /** Inline validation / error line. */
 function ErrorText({ children }: { children: string }) {
   const t = useTheme();
-  return (
-    <Text style={{ fontSize: 14, color: t.destructive }}>{children}</Text>
-  );
+  return <Text style={{ fontSize: 14, color: t.destructive }}>{children}</Text>;
 }
 
 /** A small section label above a group. */
@@ -228,6 +230,287 @@ function SectionLabel({ children }: { children: string }) {
     >
       {children}
     </Text>
+  );
+}
+
+/** Money stored in minor units → "USD 50.00" (Hermes Intl is partial on native). */
+function money(minor: number, currency: string): string {
+  return `${currency} ${(minor / 100).toFixed(2)}`;
+}
+
+const STATUS_META: Record<PaymentStatus, { label: string; color: string }> = {
+  paid: { label: "Paid", color: "#00c950" },
+  due_soon: { label: "Due soon", color: "#ff6900" },
+  overdue: { label: "Overdue", color: "#fb2c36" },
+};
+
+/** A labelled value with a Copy button (the load-bearing manual-transfer step). */
+function CopyRow({ label, value }: { label: string; value: string }) {
+  const t = useTheme();
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1200);
+    // Loaded lazily + guarded: a dev client built before `expo-clipboard` was
+    // added has no native module, and a top-level import would crash this whole
+    // route (and drop the Profile tab). On such a build the value stays
+    // long-press-selectable; a dev-client rebuild enables one-tap copy.
+    void import("expo-clipboard")
+      .then((Clipboard) => Clipboard.setStringAsync(value))
+      .catch(() => undefined);
+  };
+  return (
+    <View style={{ gap: 4 }}>
+      <Text
+        style={{
+          fontSize: 12,
+          fontWeight: "600",
+          textTransform: "uppercase",
+          color: t.mutedForeground,
+        }}
+      >
+        {label}
+      </Text>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+        }}
+      >
+        <Text selectable style={{ flex: 1, fontSize: 16, color: t.foreground }}>
+          {value}
+        </Text>
+        <Pressable onPress={copy} hitSlop={8}>
+          <Text style={{ fontSize: 14, fontWeight: "600", color: t.brand }}>
+            {copied ? "Copied ✓" : "Copy"}
+          </Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+/**
+ * Membership dues (spec S9, ADR 40) — manual bank transfer. Shows what you owe +
+ * status, the gym's requisites with a fixed reference code to copy into the
+ * transfer note, and an "I paid" button that raises a claim the owner confirms.
+ * No card on file, no in-app card payment. Empty until the gym sets up your dues.
+ */
+function MembershipDues() {
+  const t = useTheme();
+  const dues = useQuery(trpc.payments.myDues.queryOptions());
+  const claim = useMutation(
+    trpc.payments.claim.mutationOptions({
+      onSuccess: () => void dues.refetch(),
+      onError: (err) => setError(err.message || "Could not submit"),
+    }),
+  );
+  const [error, setError] = useState<string | null>(null);
+
+  if (dues.isPending) return <Loading />;
+  if (dues.isError) {
+    return <ErrorState label="your dues" onRetry={() => void dues.refetch()} />;
+  }
+
+  const { dues: d, requisites, openClaim, canPay } = dues.data;
+
+  // Nothing to show until the gym sets up dues (and no bank details to display).
+  if (!d && !requisites.bankDetails) {
+    return (
+      <Text style={{ fontSize: 14, color: t.mutedForeground }}>
+        Your gym hasn’t set up membership dues yet.
+      </Text>
+    );
+  }
+
+  const meta = d ? STATUS_META[d.status] : null;
+
+  return (
+    <View
+      style={{
+        gap: 16,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: t.border,
+        padding: 16,
+      }}
+    >
+      {d ? (
+        <View style={{ gap: 4 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Text
+              style={{ fontSize: 18, fontWeight: "600", color: t.foreground }}
+            >
+              {money(d.amountMinor, d.currency)}
+            </Text>
+            {meta && (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                  paddingHorizontal: 8,
+                  paddingVertical: 2,
+                  borderRadius: 999,
+                  backgroundColor: t.muted,
+                }}
+              >
+                <View
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: 4,
+                    backgroundColor: meta.color,
+                  }}
+                />
+                <Text style={{ fontSize: 12, color: t.foreground }}>
+                  {meta.label}
+                </Text>
+              </View>
+            )}
+          </View>
+          <Text style={{ fontSize: 14, color: t.mutedForeground }}>
+            {d.planName} · due {new Date(d.nextDueAt).toLocaleDateString()}
+          </Text>
+        </View>
+      ) : null}
+
+      {requisites.bankDetails ? (
+        <View style={{ gap: 12 }}>
+          <CopyRow label="Bank details" value={requisites.bankDetails} />
+          <CopyRow
+            label="Reference (add to your transfer)"
+            value={requisites.reference}
+          />
+        </View>
+      ) : (
+        <Text style={{ fontSize: 14, color: t.mutedForeground }}>
+          Ask your gym for their bank details to pay.
+        </Text>
+      )}
+
+      {error ? <ErrorText>{error}</ErrorText> : null}
+
+      {d ? (
+        openClaim ? (
+          <Text style={{ fontSize: 14, color: t.mutedForeground }}>
+            Payment submitted — waiting for your gym to confirm.
+          </Text>
+        ) : (
+          <Button
+            label={claim.isPending ? "Submitting…" : "I paid"}
+            disabled={!canPay || claim.isPending || !requisites.bankDetails}
+            onPress={() => {
+              setError(null);
+              claim.mutate({});
+            }}
+          />
+        )
+      ) : null}
+    </View>
+  );
+}
+
+/**
+ * My ranks (spec S7, slice G.3 — ADR 41). Read-only: the student sees their rank
+ * in each discipline plus a short promotion timeline. Only the gym sets rank.
+ * Empty until a coach sets it.
+ */
+function MyRanks() {
+  const t = useTheme();
+  const ranks = useQuery(trpc.rank.mine.queryOptions());
+
+  if (ranks.isPending) return <Loading />;
+  if (ranks.isError) {
+    return (
+      <ErrorState label="your ranks" onRetry={() => void ranks.refetch()} />
+    );
+  }
+
+  const { ranks: list, history } = ranks.data;
+  if (list.length === 0) {
+    return (
+      <Text style={{ fontSize: 14, color: t.mutedForeground }}>
+        Your gym hasn’t set your rank yet.
+      </Text>
+    );
+  }
+
+  return (
+    <View
+      style={{
+        gap: 12,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: t.border,
+        padding: 16,
+      }}
+    >
+      {list.map((r) => (
+        <View
+          key={r.discipline}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+          }}
+        >
+          <Text style={{ fontSize: 14, color: t.mutedForeground }}>
+            {disciplineLabel(r.discipline)}
+          </Text>
+          <Text style={{ fontSize: 16, fontWeight: "600", color: t.foreground }}>
+            {formatRank(r)}
+          </Text>
+        </View>
+      ))}
+      {history.length > 0 && (
+        <View
+          style={{
+            gap: 6,
+            borderTopWidth: 1,
+            borderTopColor: t.border,
+            paddingTop: 12,
+          }}
+        >
+          <Text
+            style={{
+              fontSize: 12,
+              fontWeight: "600",
+              textTransform: "uppercase",
+              color: t.mutedForeground,
+            }}
+          >
+            Promotions
+          </Text>
+          {history.slice(0, 5).map((h) => (
+            <View
+              key={h.id}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 8,
+              }}
+            >
+              <Text style={{ fontSize: 14, color: t.foreground }}>
+                {disciplineLabel(h.discipline)} ·{" "}
+                {formatRank({
+                  discipline: h.discipline,
+                  belt: h.toBelt,
+                  stripes: h.toStripes,
+                })}
+              </Text>
+              <Text style={{ fontSize: 13, color: t.mutedForeground }}>
+                {new Date(h.promotedAt).toLocaleDateString()}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -284,10 +567,22 @@ export default function Profile() {
           name={user.name || ""}
           phone={phone}
           email={user.email}
-          onSaved={() => refetchSession({ query: { disableCookieCache: true } })}
+          onSaved={() =>
+            refetchSession({ query: { disableCookieCache: true } })
+          }
         />
 
         <Field label="Current academy" value={current.data?.name ?? "—"} />
+
+        <Stack gap={8}>
+          <SectionLabel>My rank</SectionLabel>
+          <MyRanks />
+        </Stack>
+
+        <Stack gap={8}>
+          <SectionLabel>Membership dues</SectionLabel>
+          <MembershipDues />
+        </Stack>
 
         {list.length >= 2 && (
           <Stack gap={8}>

@@ -16,12 +16,19 @@ import {
   sql,
   updateUserProfile,
 } from "@matops/db";
-import { classInstance, classParticipation } from "@matops/db/schema";
+import {
+  classInstance,
+  classParticipation,
+  memberDues,
+  membershipPlan,
+  paymentClaim,
+} from "@matops/db/schema";
 import {
   approveMembership,
   canApprove,
   classifyDrift,
   CODE_JOIN_ROLE,
+  paymentStatus,
   trainingStats,
 } from "@matops/domain";
 import {
@@ -187,19 +194,63 @@ export const membershipRouter = {
       .where(eq(classParticipation.attendanceStatus, "present"))
       .groupBy(classParticipation.studentId);
     const visitByUser = new Map(visits.map((v) => [v.studentId, v.count]));
+
+    // Per-member dues + derived payment status (slice P.2, ADR 40). All three
+    // reads run on the RLS-scoped `ctx.db` (the payment tables carry academy_id
+    // policies), so no explicit academy pin is needed here. `member_dues.memberId`
+    // is the `member.id`, aligning with the roster row's `memberId`.
+    const duesRows = await ctx.db
+      .select({
+        memberId: memberDues.memberId,
+        nextDueAt: memberDues.nextDueAt,
+        priceMinor: membershipPlan.priceMinor,
+        currency: membershipPlan.currency,
+        planName: membershipPlan.name,
+      })
+      .from(memberDues)
+      .innerJoin(membershipPlan, eq(memberDues.planId, membershipPlan.id));
+    const duesByMember = new Map(duesRows.map((d) => [d.memberId, d]));
+
+    const confirmed = await ctx.db
+      .select({
+        memberId: paymentClaim.memberId,
+        lastConfirmedAt: sql<Date | null>`max(${paymentClaim.confirmedAt})`,
+      })
+      .from(paymentClaim)
+      .where(eq(paymentClaim.status, "confirmed"))
+      .groupBy(paymentClaim.memberId);
+    const lastConfirmedByMember = new Map(
+      confirmed.map((c) => [c.memberId, c.lastConfirmedAt]),
+    );
+
+    const now = new Date();
     return rows
       .filter((r) => r.status !== "removed")
-      .map((r) => ({
-        memberId: r.memberId,
-        name: r.name,
-        email: r.email,
-        phone: r.phone,
-        role: r.role,
-        status: r.status,
-        invitedRole: r.invitedRole,
-        joinedAt: r.createdAt,
-        visitCount: visitByUser.get(r.userId) ?? 0,
-      }));
+      .map((r) => {
+        const d = duesByMember.get(r.memberId);
+        return {
+          memberId: r.memberId,
+          name: r.name,
+          email: r.email,
+          phone: r.phone,
+          role: r.role,
+          status: r.status,
+          invitedRole: r.invitedRole,
+          joinedAt: r.createdAt,
+          visitCount: visitByUser.get(r.userId) ?? 0,
+          // null = the owner has not set up dues for this member yet (P.2).
+          dues: d
+            ? {
+                status: paymentStatus(d.nextDueAt, now),
+                nextDueAt: d.nextDueAt,
+                priceMinor: d.priceMinor,
+                currency: d.currency,
+                planName: d.planName,
+                lastConfirmedAt: lastConfirmedByMember.get(r.memberId) ?? null,
+              }
+            : null,
+        };
+      });
   }),
 
   /**

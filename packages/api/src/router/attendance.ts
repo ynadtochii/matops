@@ -2,14 +2,18 @@ import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
 import type { TenantTx } from "@matops/db";
-import { and, eq, getMembership, listMembersOf } from "@matops/db";
+import { and, eq, getMembership, inArray, listMembersOf } from "@matops/db";
 import {
   classInstance,
   classParticipation,
   dropIn,
   user,
 } from "@matops/db/schema";
-import { attendanceCounts, canMarkAttendance } from "@matops/domain";
+import {
+  attendanceCounts,
+  bulkMarkTargets,
+  canMarkAttendance,
+} from "@matops/domain";
 import {
   AddWalkInSchema,
   ClassIdSchema,
@@ -92,6 +96,44 @@ export const attendanceRouter = {
         });
       }
       return { ok: true as const };
+    }),
+
+  /**
+   * Mark everyone who booked present in one go (v1.3, F.2 — spec O5). Flips the
+   * **booked + unmarked** rows to present (the pure `bulkMarkTargets` picks them),
+   * leaving explicit absents and walk-ins untouched. One bounded `UPDATE` in the
+   * request's RLS transaction; respects the ≤14-day backfill window. Returns how
+   * many were flipped so the client can toast it.
+   */
+  markAll: staffProcedure
+    .input(ClassIdSchema)
+    .mutation(async ({ ctx, input }) => {
+      await assertMarkable(ctx.db, input.id);
+      const rows = await ctx.db
+        .select({
+          studentId: classParticipation.studentId,
+          bookingStatus: classParticipation.bookingStatus,
+          attendanceStatus: classParticipation.attendanceStatus,
+        })
+        .from(classParticipation)
+        .where(eq(classParticipation.classId, input.id));
+      const targets = bulkMarkTargets(rows);
+      if (targets.length === 0) return { marked: 0 };
+      await ctx.db
+        .update(classParticipation)
+        .set({
+          attendanceStatus: "present",
+          attendedAt: new Date(),
+          markedBy: ctx.session.user.id,
+        })
+        .where(
+          and(
+            eq(classParticipation.classId, input.id),
+            eq(classParticipation.attendanceStatus, "unmarked"),
+            inArray(classParticipation.studentId, targets),
+          ),
+        );
+      return { marked: targets.length };
     }),
 
   /**

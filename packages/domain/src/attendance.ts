@@ -46,6 +46,31 @@ export interface ParticipationRow {
   attendanceStatus: string; // "unmarked" | "present" | "absent"
 }
 
+/** A participation row reduced to what bulk marking needs (F.2). */
+export interface BulkMarkRow {
+  studentId: string; // user.id
+  bookingStatus: string; // "booked" | "cancelled" | "none"
+  attendanceStatus: string; // "unmarked" | "present" | "absent"
+}
+
+/**
+ * The student ids to flip to `present` for a "mark all present" bulk action
+ * (v1.3, F.2 — spec O5). Targets are the **booked but still unmarked** rows: the
+ * people who reserved a spot and haven't been marked yet. Deliberately leaves
+ * explicit **absent** marks alone (the staff set those on purpose) and never
+ * touches walk-ins (booking `none`, already present) or already-present rows.
+ * Idempotent: re-running after everyone is marked returns an empty list.
+ */
+export function bulkMarkTargets(rows: BulkMarkRow[]): string[] {
+  const ids = new Set<string>();
+  for (const r of rows) {
+    if (r.bookingStatus === "booked" && r.attendanceStatus === "unmarked") {
+      ids.add(r.studentId);
+    }
+  }
+  return [...ids];
+}
+
 export interface AttendanceCounts {
   present: number;
   absent: number;

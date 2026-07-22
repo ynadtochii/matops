@@ -92,6 +92,34 @@ export function buildReminderMessage(input: {
   };
 }
 
+/**
+ * Dues reminder (v1.3, R.1 — docs/issues/40). One per billing period, sent when
+ * a member is due soon or overdue. Push + email so it lands even with pushes off.
+ * `amountLabel`/`dueLabel` are pre-formatted upstream (same pattern as the class
+ * builders' `whenLabel`), keeping this pure and locale-free.
+ */
+export function buildDuesReminderMessage(input: {
+  academyName: string;
+  amountLabel: string;
+  dueLabel: string;
+  overdue: boolean;
+}): { push: PushMessage; email: EmailMessage } {
+  const { academyName, amountLabel, dueLabel, overdue } = input;
+  const title = overdue ? "Payment overdue" : "Membership due soon";
+  const body = overdue
+    ? `Your ${amountLabel} dues at ${academyName} are overdue.`
+    : `Your ${amountLabel} dues at ${academyName} are due ${dueLabel}.`;
+  return {
+    push: { title, body },
+    email: {
+      subject: overdue
+        ? `Overdue: your ${academyName} membership`
+        : `Reminder: your ${academyName} membership is due ${dueLabel}`,
+      text: `${body}\n\nTransfer the amount in your bank app, then open the app and tap “I paid” — your gym will confirm it.`,
+    },
+  };
+}
+
 /** Default reminder lead time (how long before start the reminder fires). */
 export const REMINDER_LEAD_MINUTES = 120;
 const MIN_MS = 60 * 1000;
@@ -111,7 +139,11 @@ export function isInReminderWindow(
   const dueAt = startsAt.getTime() - lead * MIN_MS;
   const t = now.getTime();
   // Fire once `now` reaches the due point, but not for classes already started.
-  return t >= dueAt && t - dueAt < opts.sweepMinutes * MIN_MS && t < startsAt.getTime();
+  return (
+    t >= dueAt &&
+    t - dueAt < opts.sweepMinutes * MIN_MS &&
+    t < startsAt.getTime()
+  );
 }
 
 /** A booking row, reduced to what recipient selection needs. */

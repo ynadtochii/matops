@@ -6,6 +6,7 @@ import { useTRPC } from "~/trpc/react";
 import { AcademyIdentity } from "./academy-identity";
 import { Invites } from "./invites";
 import { PageHeader } from "./page-header";
+import { PaymentRequisites } from "./payment-requisites";
 import { ErrorState, SkeletonRows } from "./states";
 import { VenueCheckin } from "./venue-checkin";
 
@@ -22,7 +23,7 @@ export function SettingsScreen() {
     <>
       <PageHeader
         title="Settings"
-        subtitle="Your academy, how people join it, and the check-in poster."
+        subtitle="Your academy, how people join it, your bank details, and the check-in poster."
       />
       {academy.isPending ? (
         <SkeletonRows rows={3} />
@@ -35,6 +36,7 @@ export function SettingsScreen() {
         <div className="flex flex-col gap-8">
           <AcademyIdentity name={academy.data.name} code={academy.data.code} />
           <Invites />
+          <PaymentRequisites />
           <VenueCheckin
             academyId={academy.data.academyId}
             academyName={academy.data.name}

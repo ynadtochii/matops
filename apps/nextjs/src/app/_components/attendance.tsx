@@ -67,6 +67,19 @@ export function Attendance() {
       onError,
     }),
   );
+  const markAll = useMutation(
+    trpc.attendance.markAll.mutationOptions({
+      onSuccess: async ({ marked }) => {
+        await invalidate();
+        toast.success(
+          marked === 0
+            ? "Everyone was already marked"
+            : `Marked ${marked} present`,
+        );
+      },
+      onError,
+    }),
+  );
 
   // Most-recent classes first for the picker (week read is ascending).
   const options = useMemo(
@@ -100,25 +113,50 @@ export function Attendance() {
         ))}
       </select>
 
-      {classId === "" && !classes.isPending && !classes.isError && options.length === 0 ? (
+      {classId === "" &&
+      !classes.isPending &&
+      !classes.isError &&
+      options.length === 0 ? (
         <EmptyState title="No recent classes.">
           Attendance opens once a class has run. Add classes on the schedule.
         </EmptyState>
       ) : classId === "" && classes.isError ? (
-        <ErrorState label="your classes" onRetry={() => void classes.refetch()} />
+        <ErrorState
+          label="your classes"
+          onRetry={() => void classes.refetch()}
+        />
       ) : classId !== "" && roster.isPending ? (
         <SkeletonRows rows={4} />
       ) : classId !== "" && roster.isError ? (
-        <ErrorState label="the class roster" onRetry={() => void roster.refetch()} />
+        <ErrorState
+          label="the class roster"
+          onRetry={() => void roster.refetch()}
+        />
       ) : classId !== "" && roster.data ? (
         <div className="flex flex-col gap-3">
           {counts && (
-            <p className="text-muted-foreground text-sm">
-              {counts.present} present · {counts.absent} absent ·{" "}
-              {counts.unmarked} unmarked
-              {counts.provisional > 0 && ` · ${counts.provisional} pending`}
-              {counts.walkIn > 0 && ` · ${counts.walkIn} walk-in`}
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-muted-foreground text-sm">
+                {counts.present} present · {counts.absent} absent ·{" "}
+                {counts.unmarked} unmarked
+                {counts.provisional > 0 && ` · ${counts.provisional} pending`}
+                {counts.walkIn > 0 && ` · ${counts.walkIn} walk-in`}
+              </p>
+              {roster.data.rows.some(
+                (r) =>
+                  r.bookingStatus === "booked" &&
+                  r.attendanceStatus === "unmarked",
+              ) && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={markAll.isPending}
+                  onClick={() => markAll.mutate({ id: classId })}
+                >
+                  Mark all present
+                </Button>
+              )}
+            </div>
           )}
 
           {roster.data.rows.length === 0 ? (

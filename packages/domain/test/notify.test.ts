@@ -4,6 +4,7 @@ import {
   buildApprovalMessage,
   buildCancelledMessage,
   buildClassChangeMessage,
+  buildDuesReminderMessage,
   buildReminderMessage,
   formatWhen,
   isInReminderWindow,
@@ -24,7 +25,11 @@ describe("formatWhen", () => {
 });
 
 describe("message builders", () => {
-  const base = { academyName: "Kyiv BJJ", className: "Fundamentals", whenLabel: "Sat 15 Aug, 18:00" };
+  const base = {
+    academyName: "Kyiv BJJ",
+    className: "Fundamentals",
+    whenLabel: "Sat 15 Aug, 18:00",
+  };
 
   it("cancelled → push + email both name the class", () => {
     const m = buildCancelledMessage(base);
@@ -49,7 +54,10 @@ describe("message builders", () => {
   });
 
   it("reminder → push naming the class + when", () => {
-    const m = buildReminderMessage({ className: "Fundamentals", whenLabel: "in 2 hours" });
+    const m = buildReminderMessage({
+      className: "Fundamentals",
+      whenLabel: "in 2 hours",
+    });
     expect(m.body).toContain("Fundamentals");
     expect(m.body).toContain("in 2 hours");
   });
@@ -105,5 +113,33 @@ describe("reminderRecipients", () => {
 
   it("empty for no bookings", () => {
     expect(reminderRecipients([])).toEqual([]);
+  });
+});
+
+describe("buildDuesReminderMessage", () => {
+  it("due-soon message names the amount, gym, and due date", () => {
+    const m = buildDuesReminderMessage({
+      academyName: "Ronin BJJ",
+      amountLabel: "USD 50.00",
+      dueLabel: "10 Aug",
+      overdue: false,
+    });
+    expect(m.push.title).toBe("Membership due soon");
+    expect(m.push.body).toContain("USD 50.00");
+    expect(m.push.body).toContain("Ronin BJJ");
+    expect(m.push.body).toContain("10 Aug");
+    expect(m.email.text).toContain("I paid");
+  });
+
+  it("overdue message switches the title + wording", () => {
+    const m = buildDuesReminderMessage({
+      academyName: "Ronin BJJ",
+      amountLabel: "USD 50.00",
+      dueLabel: "10 Aug",
+      overdue: true,
+    });
+    expect(m.push.title).toBe("Payment overdue");
+    expect(m.push.body).toContain("overdue");
+    expect(m.email.subject).toContain("Overdue");
   });
 });

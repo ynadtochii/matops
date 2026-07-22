@@ -5,15 +5,17 @@ import { runReminderSweep } from "@matops/api/notify";
 import { env } from "~/env";
 
 /**
- * Class-reminder cron (docs/issues/17, Phase 4). A system job like the
- * materialization cron: it runs cross-academy on the base DB connection (the
- * trusted service role, OUTSIDE the tenant seam), claims every class whose
- * reminder is due (idempotent via `reminder_sent_at`), and pushes each class's
- * booked students. Bounded per run so it never approaches the serverless limit.
+ * Reminder cron (docs/issues/17, 40). A system job like the materialization
+ * cron: it runs cross-academy on the base DB connection (the trusted service
+ * role, OUTSIDE the tenant seam) and does two sweeps, each idempotent + bounded:
+ *   - CLASS reminders (Phase 4) — claim classes whose reminder is due
+ *     (`reminder_sent_at`) and push booked students.
+ *   - DUES reminders (v1.3 R.1) — claim members due-soon / overdue not yet
+ *     reminded this period (`dues_reminder_period`) and push + email them.
  *
- * The CODE ships in Phase 4; the frequent SCHEDULE that fires it (~every 15 min
- * — needs a sub-daily cron / Vercel Pro) is deferred to Phase 5, so there is no
- * `crons` entry in vercel.json yet. Until then it is exercised by a manual call:
+ * This route now runs DAILY (vercel.json `crons`) — enough for dues. The
+ * *frequent* (~15 min) cadence that class reminders really want still needs a
+ * sub-daily cron / Vercel Pro and stays a Phase-5 concern. Also callable by hand:
  *   curl -H "Authorization: Bearer $CRON_SECRET" .../api/cron/remind
  *
  * Protected by CRON_SECRET, exactly like the materialize route.

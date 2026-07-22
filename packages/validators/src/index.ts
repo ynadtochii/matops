@@ -262,3 +262,111 @@ export const UnregisterPushTokenSchema = z.object({
 export type UnregisterPushTokenInput = z.infer<
   typeof UnregisterPushTokenSchema
 >;
+
+// ─── Manual-transfer payments (v1.3, docs/issues/40) ─────────────────────────
+
+/** Billing cadence a plan charges on. v1.3 ships monthly only (ADR 40). */
+export const BillingCycleSchema = z.enum(["monthly"]);
+export type BillingCycleInput = z.infer<typeof BillingCycleSchema>;
+
+/**
+ * A membership plan (price list) the owner defines (spec O7). `priceMinor` is an
+ * integer in the currency's MINOR unit (e.g. cents) — never a float. `currency`
+ * is a 3-letter ISO-4217 code, upper-cased at the boundary.
+ */
+export const CreateMembershipPlanSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  priceMinor: z.number().int().min(0).max(100_000_000),
+  currency: z
+    .string()
+    .trim()
+    .length(3)
+    .regex(/^[A-Za-z]{3}$/, "Use a 3-letter currency code")
+    .transform((c) => c.toUpperCase()),
+  cycle: BillingCycleSchema.default("monthly"),
+});
+export type CreateMembershipPlanInput = z.infer<
+  typeof CreateMembershipPlanSchema
+>;
+
+/** Edit a plan; the id names the target. */
+export const UpdateMembershipPlanSchema = CreateMembershipPlanSchema.extend({
+  id: z.uuid(),
+});
+export type UpdateMembershipPlanInput = z.infer<
+  typeof UpdateMembershipPlanSchema
+>;
+
+/** Address a single plan by id (delete / read). */
+export const PlanIdSchema = z.object({ id: z.uuid() });
+
+/**
+ * Owner sets (or clears) a member's dues: put them on a plan with a next-due
+ * date (spec O7). `nextDueAt` is a calendar date (`"YYYY-MM-DD"`); `planId` null
+ * clears the dues record entirely.
+ */
+export const SetMemberDuesSchema = z.object({
+  memberId: z.string().min(1),
+  planId: z.uuid().nullable(),
+  nextDueAt: z.iso.date(), // "YYYY-MM-DD"
+});
+export type SetMemberDuesInput = z.infer<typeof SetMemberDuesSchema>;
+
+/**
+ * Owner's bank details / requisites shown on the student pay card (spec S9/O6).
+ * Free text (IBAN, card number, bank name); may be blank to clear it.
+ */
+export const UpdatePaymentRequisitesSchema = z.object({
+  bankDetails: z.string().trim().max(2000),
+});
+export type UpdatePaymentRequisitesInput = z.infer<
+  typeof UpdatePaymentRequisitesSchema
+>;
+
+/**
+ * Student raises an "I paid" claim (spec S9). The member, plan, amount, and
+ * period are all resolved server-side from the caller's dues — the only optional
+ * input is a proof screenshot URL.
+ */
+export const CreatePaymentClaimSchema = z.object({
+  proofUrl: z.url().max(500).optional(),
+});
+export type CreatePaymentClaimInput = z.infer<typeof CreatePaymentClaimSchema>;
+
+/** Owner confirms or rejects one "I paid" claim by id (spec O7). */
+export const ClaimIdSchema = z.object({ claimId: z.uuid() });
+export type ClaimIdInput = z.infer<typeof ClaimIdSchema>;
+
+// ─── Member rank + staff notes (v1.4, docs/issues/41) ────────────────────────
+
+/**
+ * Staff set/change a member's rank in one discipline (spec O4). `discipline`,
+ * `belt`, and `stripes` are validated against the seeded rank system
+ * (`isValidRank` in @matops/domain) in the router — kept as loose strings here so
+ * the model stays general (a new belted art needs no validator change).
+ */
+export const SetMemberRankSchema = z.object({
+  memberId: z.string().min(1),
+  discipline: z.string().trim().min(1).max(40),
+  belt: z.string().trim().min(1).max(40),
+  stripes: z.number().int().min(0).max(20),
+});
+export type SetMemberRankInput = z.infer<typeof SetMemberRankSchema>;
+
+/** Clear a member's rank in one discipline (spec O4 — a correction). */
+export const ClearMemberRankSchema = z.object({
+  memberId: z.string().min(1),
+  discipline: z.string().trim().min(1).max(40),
+});
+export type ClearMemberRankInput = z.infer<typeof ClearMemberRankSchema>;
+
+/** Staff add a private note about a member (spec O4). Never member-visible. */
+export const AddMemberNoteSchema = z.object({
+  memberId: z.string().min(1),
+  body: z.string().trim().min(1).max(2000),
+});
+export type AddMemberNoteInput = z.infer<typeof AddMemberNoteSchema>;
+
+/** Address a single staff note by id (delete). */
+export const NoteIdSchema = z.object({ noteId: z.uuid() });
+export type NoteIdInput = z.infer<typeof NoteIdSchema>;

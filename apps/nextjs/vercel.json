@@ -4,6 +4,10 @@
     {
       "path": "/api/cron/materialize",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/remind",
+      "schedule": "30 3 * * *"
     }
   ]
 }
