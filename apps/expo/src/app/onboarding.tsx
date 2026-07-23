@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Text } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -10,9 +9,9 @@ import {
   Logo,
   Muted,
   Screen,
-  Stack as UIStack,
   TextField,
-  useTheme,
+  Txt,
+  Stack as UIStack,
 } from "~/components/ui";
 import { trpc } from "~/utils/api";
 import { authClient } from "~/utils/auth";
@@ -27,7 +26,6 @@ const CODE_RE = /^\d{6}$/;
  * a PENDING membership → they land on the schedule with the S3 banner.
  */
 export default function Onboarding() {
-  const t = useTheme();
   const router = useRouter();
   const queryClient = useQueryClient();
 
@@ -73,7 +71,9 @@ export default function Onboarding() {
 
   const academy = found.data ?? null;
   const errText = (msg: string) => (
-    <Text style={{ fontSize: 14, color: t.destructive }}>{msg}</Text>
+    <Txt size={14} tone="error">
+      {msg}
+    </Txt>
   );
 
   return (
@@ -129,7 +129,11 @@ export default function Onboarding() {
                   });
                 }}
               />
-              <Button label="Use a different ID" variant="ghost" onPress={reset} />
+              <Button
+                label="Use a different ID"
+                variant="ghost"
+                onPress={reset}
+              />
             </UIStack>
           </UIStack>
         ) : (

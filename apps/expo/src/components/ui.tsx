@@ -1,156 +1,225 @@
 import type { ReactNode } from "react";
-import type { StyleProp, ViewStyle } from "react-native";
+import type {
+  TextProps as RNTextProps,
+  StyleProp,
+  TextStyle,
+  ViewStyle,
+} from "react-native";
+import { useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
   Text,
   TextInput,
-  useColorScheme,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import type { FontWeight } from "./fonts";
+import type { Theme } from "./theme";
+import { mono, sans } from "./fonts";
+import { useTheme } from "./theme";
+
+export { useTheme } from "./theme";
+export type { Theme } from "./theme";
+
 /**
- * A tiny RN UI kit for the student app — the mobile twin of the web
- * `@matops/ui`. The palette mirrors the shared design tokens
- * (`@matops/tailwind-config/theme`), so light/dark follow the same colors as the
- * web.
+ * The student app's UI kit — the mobile twin of the web `@matops/ui` +
+ * `_components/primitives`. It renders the same design language on native:
+ * Geist for text, **Geist Mono for data** (times, counts, prices — the "mat
+ * clock", docs/design.md §3), the signature violet used only for identity, a
+ * deliberately **tight 3px radius**, flat cards on a hairline border, and
+ * dashed-stripe callouts. Colours come from `useTheme()` (design tokens for the
+ * resolved scheme), so the whole kit follows the dark-first theme.
  *
- * NOTE on styling: these primitives use **explicit React Native styles**, not
- * NativeWind classes. NativeWind v5 (preview) does not reliably translate every
- * utility on native (spacing, flex alignment, and foreground colors were
- * dropping), which left buttons cramped and their labels unreadable. Explicit
- * styles keep the login/logout and join screens correct regardless. Colors come
- * from `useTheme()` so both schemes render right.
+ * Styling is explicit React Native, not NativeWind classes: NativeWind v5
+ * (preview) drops spacing / flex / foreground colours on native (ADR 36), which
+ * left labels unreadable. Explicit styles + tokens keep every screen correct.
  */
 
-/** Design tokens (mirror tooling/tailwind/theme.css). */
-const light = {
-  background: "#ffffff",
-  foreground: "#0c0a09",
-  primary: "#1c1917",
-  primaryForeground: "#fafaf9",
-  muted: "#f5f5f4",
-  mutedForeground: "#79716b",
-  border: "#e7e5e4",
-  input: "#e7e5e4",
-  destructive: "#e40014",
-  // signature brand (violet) — restrained: active nav, links, pending, the mark
-  brand: "#6a4dff",
-  brandStrong: "#5a3cf0",
-  brandForeground: "#ffffff",
-  brandWash: "#f1eeff",
-};
+/** Shape: base radius is tight (web `--radius` 0.2rem ≈ 3px); pills are round. */
+const RADIUS = 3;
+const RADIUS_HERO = 6;
+const PILL = 999;
 
-const dark: typeof light = {
-  background: "#000000",
-  foreground: "#fafaf9",
-  primary: "#fafaf9",
-  primaryForeground: "#1c1917",
-  muted: "#292524",
-  mutedForeground: "#a6a09b",
-  border: "#292524",
-  input: "#292524",
-  destructive: "#fb2c36",
-  brand: "#8b72ff",
-  brandStrong: "#a390ff",
-  brandForeground: "#12091f",
-  brandWash: "#17122e",
-};
+type Tone =
+  "default" | "muted" | "brand" | "info" | "warning" | "error" | "success";
 
-export type Theme = typeof light;
-
-/** The active palette for the device color scheme. */
-export function useTheme(): Theme {
-  return useColorScheme() === "dark" ? dark : light;
+function toneColor(t: Theme, tone: Tone): string {
+  switch (tone) {
+    case "muted":
+      return t.mutedForeground;
+    case "brand":
+      return t.brandStrong;
+    case "info":
+      return t.info;
+    case "warning":
+      return t.warning;
+    case "error":
+      return t.error;
+    case "success":
+      return t.success;
+    default:
+      return t.foreground;
+  }
 }
 
-const RADIUS = 8;
+/* ------------------------------------------------------------------ text --- */
 
-/** Header colors for the expo-router Stack (which needs hex, not classNames). */
-export const headerColors = {
-  light: { bg: light.background, tint: light.foreground },
-  dark: { bg: dark.background, tint: dark.foreground },
-};
+interface TxtProps {
+  children: ReactNode;
+  size?: number;
+  weight?: FontWeight;
+  tone?: Tone;
+  /** Explicit colour, overrides `tone`. */
+  color?: string;
+  /** Geist Mono — for any machine/data value. Defaults on = tabular figures. */
+  data?: boolean;
+  uppercase?: boolean;
+  tracking?: number;
+  lineHeight?: number;
+  align?: TextStyle["textAlign"];
+  numberOfLines?: number;
+  selectable?: boolean;
+  onPress?: RNTextProps["onPress"];
+  style?: StyleProp<TextStyle>;
+}
 
-/**
- * The matops mark — a rounded tile of a **basketweave** mat bond, drawn with
- * positioned Views (no SVG dep). Fill + seams use explicit theme colours so it
- * follows light/dark. Mirrors the web `@matops/ui/logo` (design.md §6, ADR 37).
- */
-export function Mark({ size = 24 }: { size?: number }) {
+/** The one text primitive — every label/value flows through it so Geist is
+ * applied consistently and data values pick up Geist Mono + tabular figures. */
+export function Txt({
+  children,
+  size = 15,
+  weight = 400,
+  tone = "default",
+  color,
+  data = false,
+  uppercase = false,
+  tracking,
+  lineHeight,
+  align,
+  numberOfLines,
+  selectable,
+  onPress,
+  style,
+}: TxtProps) {
   const t = useTheme();
-  const th = Math.max(1, size * 0.055);
-  const half = size / 2;
-  const seam = (s: ViewStyle) => (
-    <View
-      style={{
-        position: "absolute",
-        backgroundColor: t.brandForeground,
-        opacity: 0.85,
-        ...s,
-      }}
-    />
-  );
   return (
-    <View
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size * 0.22,
-        backgroundColor: t.brand,
-        overflow: "hidden",
-      }}
+    <Text
+      numberOfLines={numberOfLines}
+      selectable={selectable}
+      onPress={onPress}
+      style={[
+        {
+          fontFamily: data ? mono(weight) : sans(weight),
+          fontSize: size,
+          color: color ?? toneColor(t, tone),
+        },
+        data && { fontVariant: ["tabular-nums"] },
+        uppercase && { textTransform: "uppercase" },
+        tracking != null && { letterSpacing: tracking },
+        lineHeight != null && { lineHeight },
+        align != null && { textAlign: align },
+        style,
+      ]}
     >
-      {seam({ left: half - th / 2, top: 0, width: th, height: size })}
-      {seam({ top: half - th / 2, left: 0, width: size, height: th })}
-      {seam({ left: size * 0.2656 - th / 2, top: 0, width: th, height: half })}
-      {seam({ top: size * 0.2656 - th / 2, left: half, width: half, height: th })}
-      {seam({ top: size * 0.7344 - th / 2, left: 0, width: half, height: th })}
-      {seam({ left: size * 0.7344 - th / 2, top: half, width: th, height: half })}
+      {children}
+    </Text>
+  );
+}
+
+/** Screen / section title — Geist semibold, tight-tracked, never bold-and-big. */
+export function Heading({
+  children,
+  size = 26,
+}: {
+  children: ReactNode;
+  size?: number;
+}) {
+  return (
+    <Txt size={size} weight={600} tracking={-0.6}>
+      {children}
+    </Txt>
+  );
+}
+
+/** Card / group title. */
+export function Title({ children }: { children: ReactNode }) {
+  return (
+    <Txt size={17} weight={600} tracking={-0.2}>
+      {children}
+    </Txt>
+  );
+}
+
+/** Secondary body copy. */
+export function Muted({ children }: { children: ReactNode }) {
+  return (
+    <Txt size={14} tone="muted" lineHeight={20}>
+      {children}
+    </Txt>
+  );
+}
+
+/** Mono uppercase metadata label — the web `Eyebrow` (design.md §1.2). */
+export function Eyebrow({ children }: { children: ReactNode }) {
+  return (
+    <Txt data size={11} weight={600} tone="muted" uppercase tracking={0.8}>
+      {children}
+    </Txt>
+  );
+}
+
+/** A data value in Geist Mono (times, counts, prices, capacity, streaks). */
+export function Mono({
+  children,
+  size = 15,
+  weight = 500,
+  tone = "default",
+  color,
+}: {
+  children: ReactNode;
+  size?: number;
+  weight?: FontWeight;
+  tone?: Tone;
+  color?: string;
+}) {
+  return (
+    <Txt data size={size} weight={weight} tone={tone} color={color}>
+      {children}
+    </Txt>
+  );
+}
+
+/** A big mono stat over a mono label — the web `Stat` (roster/dashboard). */
+export function Stat({ value, label }: { value: string; label: string }) {
+  return (
+    <View style={{ flex: 1, gap: 2 }}>
+      <Mono size={22} weight={600}>
+        {value}
+      </Mono>
+      <Eyebrow>{label}</Eyebrow>
     </View>
   );
 }
 
-/** Mark + `matops` wordmark lockup — "ops" carries the brand-strong accent. */
-export function Logo({ size = 24 }: { size?: number }) {
-  const t = useTheme();
-  return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-      <Mark size={size} />
-      <Text
-        style={{
-          fontSize: 18,
-          fontWeight: "600",
-          letterSpacing: -0.4,
-          color: t.foreground,
-        }}
-      >
-        mat<Text style={{ color: t.brandStrong }}>ops</Text>
-      </Text>
-    </View>
-  );
-}
+/* --------------------------------------------------------------- layout --- */
 
 /** Full-screen padded surface. Wrap every screen in this. */
 export function Screen({
   children,
   center = false,
-  className = "",
   style,
 }: {
   children: ReactNode;
-  /** Center content vertically (auth/onboarding screens). */
+  /** Centre content vertically (auth/onboarding screens). */
   center?: boolean;
-  /** Legacy NativeWind classes for screens not yet ported to explicit styles. */
-  className?: string;
   style?: StyleProp<ViewStyle>;
 }) {
   const t = useTheme();
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: t.background }}>
       <View
-        className={className}
         style={[
           { flex: 1, padding: 16 },
           center && { justifyContent: "center" },
@@ -190,7 +259,7 @@ export function Stack({
   );
 }
 
-/** Centered spinner — the loading state between auth/query resolutions. */
+/** Centred spinner — the loading state between auth/query resolutions. */
 export function Loading() {
   const t = useTheme();
   return (
@@ -202,12 +271,268 @@ export function Loading() {
         justifyContent: "center",
       }}
     >
-      <ActivityIndicator />
+      <ActivityIndicator color={t.brand} />
     </SafeAreaView>
   );
 }
 
-type ButtonVariant = "primary" | "outline" | "ghost";
+/** A hairline dashed rule — the design's "dashed divider" for card meta. */
+export function DashedRule({ style }: { style?: StyleProp<ViewStyle> }) {
+  const t = useTheme();
+  return (
+    <View
+      style={[
+        { borderTopWidth: 1, borderStyle: "dashed", borderColor: t.border },
+        style,
+      ]}
+    />
+  );
+}
+
+/** A horizontal "or" divider (two rules + a label). */
+export function OrDivider() {
+  const t = useTheme();
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+      <View style={{ flex: 1, height: 1, backgroundColor: t.border }} />
+      <Txt size={13} tone="muted">
+        or
+      </Txt>
+      <View style={{ flex: 1, height: 1, backgroundColor: t.border }} />
+    </View>
+  );
+}
+
+/* ----------------------------------------------------------------- card --- */
+
+type CardVariant = "filled" | "outline" | "hero";
+
+/**
+ * A surface. `filled` = quiet muted row (default list item); `outline` = a
+ * bordered card on the near-black surface (navigate / act); `hero` = the one
+ * featured brand-wash surface per screen. Flat — depth comes from the border,
+ * never a shadow (design.md §1.4).
+ */
+export function Card({
+  children,
+  variant = "filled",
+  onPress,
+  padded = true,
+  style,
+}: {
+  children: ReactNode;
+  variant?: CardVariant;
+  onPress?: () => void;
+  padded?: boolean;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const t = useTheme();
+  const base: ViewStyle =
+    variant === "hero"
+      ? {
+          backgroundColor: t.brandWash,
+          borderWidth: 1,
+          borderColor: t.brand,
+          borderRadius: RADIUS_HERO,
+        }
+      : variant === "outline"
+        ? {
+            backgroundColor: t.card,
+            borderWidth: 1,
+            borderColor: t.border,
+            borderRadius: RADIUS,
+          }
+        : { backgroundColor: t.muted, borderRadius: RADIUS };
+  const box = [base, padded && { padding: 16 }, style];
+
+  if (onPress) {
+    return (
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => [box, pressed && { opacity: 0.85 }]}
+      >
+        {children}
+      </Pressable>
+    );
+  }
+  return <View style={box}>{children}</View>;
+}
+
+/* -------------------------------------------------------------- callout --- */
+
+type CalloutTone = "info" | "warning" | "error" | "success" | "brand";
+
+/**
+ * A status strip with a coloured **dashed left stripe** (design.md §4). The
+ * stripe carries meaning via a callout accent; body copy stays neutral. `brand`
+ * is the identity tone (the S3 pending banner). Kept named `Banner` too for the
+ * existing call sites.
+ */
+export function Callout({
+  children,
+  tone = "info",
+}: {
+  children: ReactNode;
+  tone?: CalloutTone;
+}) {
+  const t = useTheme();
+  const stripe =
+    tone === "brand"
+      ? t.brand
+      : tone === "warning"
+        ? t.warning
+        : tone === "error"
+          ? t.error
+          : tone === "success"
+            ? t.success
+            : t.info;
+  const bg = tone === "brand" ? t.brandWash : `${stripe}1a`;
+  const textTone: Tone = tone === "brand" ? "brand" : "default";
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        backgroundColor: bg,
+        borderRadius: RADIUS,
+        borderLeftWidth: 3,
+        borderLeftColor: stripe,
+        borderStyle: "dashed",
+        padding: 12,
+        paddingLeft: 14,
+      }}
+    >
+      <Txt size={14} tone={textTone} lineHeight={20} style={{ flex: 1 }}>
+        {children}
+      </Txt>
+    </View>
+  );
+}
+
+/** Back-compat alias — the older `tone` names map onto the callout accents. */
+export function Banner({
+  children,
+  tone = "info",
+}: {
+  children: ReactNode;
+  tone?: "info" | "warning" | "success" | "brand";
+}) {
+  return <Callout tone={tone}>{children}</Callout>;
+}
+
+/* --------------------------------------------------------------- status --- */
+
+/** A status dot + mono label (booking/dues/attendance state). */
+export function StatusPill({
+  tone,
+  label,
+}: {
+  tone: "success" | "warning" | "error" | "info";
+  label: string;
+}) {
+  const t = useTheme();
+  const color = toneColor(t, tone);
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: PILL,
+        backgroundColor: t.muted,
+      }}
+    >
+      <View
+        style={{
+          width: 7,
+          height: 7,
+          borderRadius: PILL,
+          backgroundColor: color,
+        }}
+      />
+      <Txt data size={11} weight={600} uppercase tracking={0.4}>
+        {label}
+      </Txt>
+    </View>
+  );
+}
+
+/** The brand "spark" count badge — "N things want you", never a data status. */
+export function CountBadge({ count }: { count: number }) {
+  const t = useTheme();
+  if (count <= 0) return null;
+  return (
+    <View
+      style={{
+        minWidth: 20,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: PILL,
+        backgroundColor: t.brand,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <Txt data size={11} weight={600} color={t.brandForeground}>
+        {count}
+      </Txt>
+    </View>
+  );
+}
+
+/** A section header row: title + optional count badge (web `SectionHeading`). */
+export function SectionHeading({
+  children,
+  count = 0,
+}: {
+  children: ReactNode;
+  count?: number;
+}) {
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+      }}
+    >
+      <Title>{children}</Title>
+      <CountBadge count={count} />
+    </View>
+  );
+}
+
+/** One labelled fact row — Eyebrow label over its value (deduped from screens). */
+export function Field({
+  label,
+  value,
+  children,
+  data = false,
+}: {
+  label: string;
+  /** Plain string value; renders mono when `data`. Use `children` for nodes. */
+  value?: string;
+  children?: ReactNode;
+  data?: boolean;
+}) {
+  return (
+    <View style={{ gap: 4 }}>
+      <Eyebrow>{label}</Eyebrow>
+      {children ??
+        (data ? (
+          <Mono size={16}>{value ?? "—"}</Mono>
+        ) : (
+          <Txt size={16}>{value ?? "—"}</Txt>
+        ))}
+    </View>
+  );
+}
+
+/* --------------------------------------------------------------- inputs --- */
+
+type ButtonVariant = "primary" | "outline" | "ghost" | "destructive";
 
 export function Button({
   label,
@@ -222,8 +547,19 @@ export function Button({
 }) {
   const t = useTheme();
   const bg =
-    variant === "primary" ? t.primary : variant === "outline" ? t.background : "transparent";
-  const textColor = variant === "primary" ? t.primaryForeground : t.foreground;
+    variant === "primary"
+      ? t.primary
+      : variant === "destructive"
+        ? t.destructive
+        : variant === "outline"
+          ? t.card
+          : "transparent";
+  const textColor =
+    variant === "primary"
+      ? t.primaryForeground
+      : variant === "destructive"
+        ? t.destructiveForeground
+        : t.foreground;
   return (
     <Pressable
       accessibilityRole="button"
@@ -231,9 +567,10 @@ export function Button({
       onPress={onPress}
       style={({ pressed }) => [
         {
-          height: 48,
+          minHeight: 48,
           borderRadius: RADIUS,
           paddingHorizontal: 16,
+          paddingVertical: 12,
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "center",
@@ -244,7 +581,7 @@ export function Button({
         variant === "outline" && { borderWidth: 1, borderColor: t.input },
       ]}
     >
-      <Text style={{ fontSize: 16, fontWeight: "600", color: textColor }}>
+      <Text style={{ fontFamily: sans(600), fontSize: 15, color: textColor }}>
         {label}
       </Text>
     </Pressable>
@@ -262,31 +599,35 @@ export function TextField({
 }: {
   label: string;
   value: string;
-  onChangeText: (t: string) => void;
+  onChangeText: (text: string) => void;
   placeholder?: string;
   autoCapitalize?: "none" | "sentences" | "words" | "characters";
   keyboardType?: "default" | "email-address" | "phone-pad";
   autoFocus?: boolean;
 }) {
   const t = useTheme();
+  const [focused, setFocused] = useState(false);
   return (
     <View style={{ gap: 6 }}>
-      <Text style={{ fontSize: 14, fontWeight: "500", color: t.foreground }}>
-        {label}
-      </Text>
+      {/* UPPERCASE mono field label (design.md §4). */}
+      <Eyebrow>{label}</Eyebrow>
       <TextInput
         style={{
-          height: 48,
+          minHeight: 48,
           borderRadius: RADIUS,
           borderWidth: 1,
-          borderColor: t.input,
+          borderColor: focused ? t.brand : t.input,
           paddingHorizontal: 12,
+          paddingVertical: 12,
+          fontFamily: sans(400),
           fontSize: 16,
           color: t.foreground,
-          backgroundColor: t.background,
+          backgroundColor: t.card,
         }}
         value={value}
         onChangeText={onChangeText}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
         placeholder={placeholder}
         placeholderTextColor={t.mutedForeground}
         autoCapitalize={autoCapitalize}
@@ -297,69 +638,144 @@ export function TextField({
   );
 }
 
-/** A horizontal "or" divider (two rules + a label). */
-export function OrDivider() {
+/* ----------------------------------------------------------------- logo --- */
+
+/**
+ * The matops mark — a rounded tile of a **basketweave** mat bond, drawn with
+ * positioned Views (no SVG dep). Fill + seams follow the theme. Mirrors the web
+ * `@matops/ui/logo` (design.md §6, ADR 37).
+ */
+export function Mark({ size = 24 }: { size?: number }) {
   const t = useTheme();
-  return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-      <View style={{ flex: 1, height: 1, backgroundColor: t.border }} />
-      <Text style={{ fontSize: 13, color: t.mutedForeground }}>or</Text>
-      <View style={{ flex: 1, height: 1, backgroundColor: t.border }} />
-    </View>
+  const th = Math.max(1, size * 0.055);
+  const half = size / 2;
+  const seam = (s: ViewStyle) => (
+    <View
+      style={{
+        position: "absolute",
+        backgroundColor: t.brandForeground,
+        opacity: 0.85,
+        ...s,
+      }}
+    />
   );
-}
-
-type BannerTone = "info" | "warning" | "success" | "brand";
-
-/** A slim status strip (spec S3 pending banner). */
-export function Banner({
-  children,
-  tone = "info",
-}: {
-  children: ReactNode;
-  tone?: BannerTone;
-}) {
-  const t = useTheme();
-  // brand = the pending tone (violet wash + violet text); the rest sit on muted.
-  const bg = tone === "brand" ? t.brandWash : t.muted;
-  const text = tone === "brand" ? t.brandStrong : t.mutedForeground;
-  const accent =
-    tone === "warning" ? t.destructive : tone === "success" ? t.primary : null;
   return (
     <View
-      style={[
-        { backgroundColor: bg, borderRadius: RADIUS, padding: 12 },
-        accent && { borderLeftWidth: 4, borderLeftColor: accent },
-      ]}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size * 0.22,
+        backgroundColor: t.brand,
+        overflow: "hidden",
+      }}
     >
-      <Text style={{ fontSize: 14, color: text }}>{children}</Text>
+      {seam({ left: half - th / 2, top: 0, width: th, height: size })}
+      {seam({ top: half - th / 2, left: 0, width: size, height: th })}
+      {seam({ left: size * 0.2656 - th / 2, top: 0, width: th, height: half })}
+      {seam({
+        top: size * 0.2656 - th / 2,
+        left: half,
+        width: half,
+        height: th,
+      })}
+      {seam({ top: size * 0.7344 - th / 2, left: 0, width: half, height: th })}
+      {seam({
+        left: size * 0.7344 - th / 2,
+        top: half,
+        width: th,
+        height: half,
+      })}
     </View>
   );
 }
 
-/** Section/screen heading. */
-export function Heading({ children }: { children: ReactNode }) {
+/** Mark + `matops` wordmark lockup — "ops" carries the brand-strong accent. */
+export function Logo({ size = 24 }: { size?: number }) {
   const t = useTheme();
   return (
-    <Text style={{ fontSize: 24, fontWeight: "700", color: t.foreground }}>
-      {children}
-    </Text>
-  );
-}
-
-/** Secondary/muted body copy. */
-export function Muted({ children }: { children: ReactNode }) {
-  const t = useTheme();
-  return (
-    <Text style={{ fontSize: 14, color: t.mutedForeground, lineHeight: 20 }}>
-      {children}
-    </Text>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+      <Mark size={size} />
+      <Text
+        style={{
+          fontFamily: sans(600),
+          fontSize: 18,
+          letterSpacing: -0.4,
+          color: t.foreground,
+        }}
+      >
+        mat<Text style={{ color: t.brandStrong }}>ops</Text>
+      </Text>
+    </View>
   );
 }
 
 /**
- * Empty state — an invitation to the next action (slice 4.3, the mobile twin of
- * the web `EmptyState`). `title` names what's absent; `body` says what to do.
+ * Blueprint backdrop — a whisper-quiet hairline grid (the "mat diagram", design
+ * .md §2). Measures itself, then tiles `--border` lines behind a hero. Use at
+ * most one per view, behind non-text areas.
+ */
+export function Blueprint({
+  cell = 28,
+  opacity = 0.6,
+  style,
+}: {
+  cell?: number;
+  opacity?: number;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const t = useTheme();
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  const cols = Math.ceil(size.w / cell);
+  const rows = Math.ceil(size.h / cell);
+  return (
+    <View
+      pointerEvents="none"
+      onLayout={(e) =>
+        setSize({
+          w: e.nativeEvent.layout.width,
+          h: e.nativeEvent.layout.height,
+        })
+      }
+      style={[
+        { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, opacity },
+        style,
+      ]}
+    >
+      {Array.from({ length: cols }, (_, i) => (
+        <View
+          key={`v${i}`}
+          style={{
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            left: i * cell,
+            width: 1,
+            backgroundColor: t.border,
+          }}
+        />
+      ))}
+      {Array.from({ length: rows }, (_, i) => (
+        <View
+          key={`h${i}`}
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: i * cell,
+            height: 1,
+            backgroundColor: t.border,
+          }}
+        />
+      ))}
+    </View>
+  );
+}
+
+/* ---------------------------------------------------------- empty/error --- */
+
+/**
+ * Empty state — an invitation to the next action. `title` names what's absent;
+ * `body` says what to do.
  */
 export function EmptyState({
   title,
@@ -382,12 +798,10 @@ export function EmptyState({
         padding: 16,
       }}
     >
-      <Text style={{ fontSize: 16, fontWeight: "500", color: t.foreground }}>
+      <Txt size={16} weight={500}>
         {title}
-      </Text>
-      {body ? (
-        <Text style={{ fontSize: 14, color: t.mutedForeground }}>{body}</Text>
-      ) : null}
+      </Txt>
+      {body ? <Muted>{body}</Muted> : null}
       {action ? <View style={{ paddingTop: 4 }}>{action}</View> : null}
     </View>
   );
@@ -411,16 +825,12 @@ export function ErrorState({
         gap: 8,
         borderRadius: RADIUS,
         borderWidth: 1,
-        borderColor: t.destructive,
+        borderColor: t.error,
         padding: 16,
       }}
     >
-      <Text style={{ fontSize: 16, fontWeight: "500", color: t.foreground }}>
-        {`Couldn't load ${label}.`}
-      </Text>
-      <Text style={{ fontSize: 14, color: t.mutedForeground }}>
-        Check your connection and try again.
-      </Text>
+      <Txt size={16} weight={500}>{`Couldn't load ${label}.`}</Txt>
+      <Muted>Check your connection and try again.</Muted>
       {onRetry ? (
         <Button label="Try again" variant="outline" onPress={onRetry} />
       ) : null}

@@ -198,6 +198,16 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 
 ---
 
+### v1.7 — Mobile dark-first design pass (Geist + shared language)
+**Exit test:** the Expo student app opens **dark** (canonical pure black) with class times, capacity, prices and streaks set in **Geist Mono** (the "mat clock"), cards and callouts match the web (tight 3px radius, filled-vs-outline, dashed stripe), and Profile offers a **Light / Dark / System** toggle that persists. Decision: **ADR [44](issues/44-mobile-dark-first-design-system.md)**. **No domain / API / migration / router / token change** — presentation only, so the web can't regress.
+
+- **U.1 Dark-first theme + Appearance toggle** — **DONE.** Mobile `ThemeProvider` (`components/theme.tsx`) defaults to dark, tri-state (Light / Dark / System), persisted in `expo-secure-store`, applied via RN `Appearance.setColorScheme` (NativeWind follows). New **Appearance** control on Profile (S7). Palette now derived from `@matops/ui/tokens` (hand-copied drift removed). Spec: S1–S9.
+- **U.2 Geist typography + aligned kit** — **DONE.** `@expo-google-fonts/geist` + `-geist-mono` via `useFonts` (splash held); `Txt` / `Mono` / `Eyebrow` / `Stat` apply Geist + tabular mono to every data value. `components/ui.tsx` rebuilt to the web vocabulary — `Card` (filled/outline), dashed `Callout`, `StatusPill`, `CountBadge`, mono field labels, input focus ring, 3px radius — plus a `Blueprint` sign-in hero (the RN motif). Green: `pnpm -F @matops/expo typecheck · lint · format`; `expo export` bundles clean. **Dev-client rebuild + device check pending** (new font dep; no simulator — the standing handoff pattern).
+
+**Cut:** none — full scope shipped. The remaining follow-up is collapsing the local `components/ui.tsx` kit onto the shared `@matops/ui` RN primitives (`button.native` / `logo.native`); the screens import behind `~/components/ui`, which is the seam.
+
+---
+
 ## Parked — next iteration (do NOT build in v1)
 
 Promote to a slice only on purpose (an ADR or a new roadmap row).

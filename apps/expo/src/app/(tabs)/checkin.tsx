@@ -1,18 +1,19 @@
 import { useState } from "react";
-import { Text, View } from "react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   Banner,
   Button,
+  Card,
   EmptyState,
   ErrorState,
   Heading,
   Loading,
+  Mono,
   Muted,
   Screen,
   Stack,
-  useTheme,
+  Txt,
 } from "~/components/ui";
 import { trpc } from "~/utils/api";
 import { timeFmt } from "~/utils/format";
@@ -21,11 +22,9 @@ import { timeFmt } from "~/utils/format";
  * Check in (spec S8, slice 3.4). Resolves the academy's current/next class
  * (server-side) and, on one tap, marks the student present — booking the class
  * first if needed, even if it's full. A pending member checks in too
- * (provisional). No camera in v1: uses the active academy directly (the physical
- * gym QR routes no-app visitors to the public drop-in form instead).
+ * (provisional). No camera in v1: uses the active academy directly.
  */
 export default function CheckIn() {
-  const t = useTheme();
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [doneId, setDoneId] = useState<string | null>(null);
@@ -70,28 +69,23 @@ export default function CheckIn() {
                 : "Which class are you here for?"}
             </Muted>
             {error && (
-              <Text style={{ fontSize: 14, color: t.destructive }}>{error}</Text>
+              <Txt size={14} tone="error">
+                {error}
+              </Txt>
             )}
             {today.data.map((c) => {
               const done = doneId === c.id;
               return (
-                <View
-                  key={c.id}
-                  style={{
-                    gap: 12,
-                    backgroundColor: t.muted,
-                    borderRadius: 8,
-                    padding: 16,
-                  }}
-                >
-                  <Text
-                    style={{ fontSize: 16, fontWeight: "500", color: t.foreground }}
-                  >
-                    {timeFmt.format(new Date(c.startsAt))} · {c.title}
-                  </Text>
+                <Card key={c.id} variant="outline" style={{ gap: 12 }}>
+                  <Txt size={16} weight={500}>
+                    <Mono size={16} weight={600}>
+                      {timeFmt.format(new Date(c.startsAt))}
+                    </Mono>
+                    {`  ${c.title}`}
+                  </Txt>
                   {done ? (
                     <Banner tone="success">
-                      You're checked in. See you on the mats.
+                      You&apos;re checked in. See you on the mats.
                     </Banner>
                   ) : (
                     <Button
@@ -103,7 +97,7 @@ export default function CheckIn() {
                       }}
                     />
                   )}
-                </View>
+                </Card>
               );
             })}
           </Stack>

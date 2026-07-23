@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 
-import { Button, Heading, Loading, Muted, Screen } from "~/components/ui";
+import {
+  Button,
+  Heading,
+  Loading,
+  Muted,
+  Screen,
+  Stack as UIStack,
+} from "~/components/ui";
 import { authClient } from "~/utils/auth";
 
 /**
@@ -36,23 +43,30 @@ export default function MagicLink() {
     };
   }, [token, router]);
 
-  const error = !token ? "This sign-in link is missing its token." : verifyError;
+  const error = !token
+    ? "This sign-in link is missing its token."
+    : verifyError;
 
   if (error) {
     return (
-      <Screen className="justify-center gap-4">
+      <Screen center>
         <Stack.Screen options={{ title: "Sign in" }} />
-        <Heading>Couldn't sign you in</Heading>
-        <Muted>{error} Request a fresh link and try again.</Muted>
-        <Button label="Back to sign in" onPress={() => router.replace("/sign-in")} />
+        <UIStack gap={16}>
+          <Heading>Couldn&apos;t sign you in</Heading>
+          <Muted>{error} Request a fresh link and try again.</Muted>
+          <Button
+            label="Back to sign in"
+            onPress={() => router.replace("/sign-in")}
+          />
+        </UIStack>
       </Screen>
     );
   }
 
   return (
-    <Screen className="justify-center">
+    <>
       <Stack.Screen options={{ title: "Signing in…" }} />
       <Loading />
-    </Screen>
+    </>
   );
 }

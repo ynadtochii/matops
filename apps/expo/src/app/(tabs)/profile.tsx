@@ -1,19 +1,27 @@
 import { useState } from "react";
-import { Pressable, Switch, Text, View } from "react-native";
+import { Pressable, Switch, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { PaymentStatus } from "@matops/domain";
 import { disciplineLabel, formatRank } from "@matops/domain";
 
+import type { ThemeMode } from "~/components/theme";
+import { useThemeMode } from "~/components/theme";
 import {
   Button,
+  Card,
   ErrorState,
+  Eyebrow,
+  Field,
   Heading,
   Loading,
+  Mono,
   Screen,
   Stack,
+  StatusPill,
   TextField,
+  Txt,
   useTheme,
 } from "~/components/ui";
 import { trpc } from "~/utils/api";
@@ -28,9 +36,8 @@ import {
 } from "~/utils/push";
 
 /**
- * Notification setting (spec S7) — the thin version: one switch that registers
- * or drops this device's push token, so "off" means nothing is sent. No server
- * preference needed. Class reminders and cancellations both ride push.
+ * Notification setting (spec S7) — one switch that registers or drops this
+ * device's push token, so "off" means nothing is sent. No server preference.
  */
 function NotificationToggle() {
   const t = useTheme();
@@ -68,49 +75,71 @@ function NotificationToggle() {
       }}
     >
       <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 16, color: t.foreground }}>
-          Push notifications
-        </Text>
-        <Text style={{ fontSize: 14, color: t.mutedForeground }}>
+        <Txt size={16}>Push notifications</Txt>
+        <Txt size={14} tone="muted">
           Class reminders and cancellations.
-        </Text>
+        </Txt>
       </View>
       <Switch
         value={on}
         onValueChange={toggle}
-        trackColor={{ true: t.brand, false: "#d6d3d1" }}
+        trackColor={{ true: t.brand, false: t.input }}
         thumbColor="#ffffff"
       />
     </View>
   );
 }
 
-/** One labelled fact row. */
-function Field({ label, value }: { label: string; value: string }) {
+/** Light / Dark / System selector (mirrors the web ThemeToggle). */
+function AppearanceControl() {
   const t = useTheme();
+  const { mode, setMode } = useThemeMode();
+  const options: { key: ThemeMode; label: string }[] = [
+    { key: "dark", label: "Dark" },
+    { key: "light", label: "Light" },
+    { key: "auto", label: "System" },
+  ];
   return (
-    <View style={{ gap: 4 }}>
-      <Text
-        style={{
-          fontSize: 12,
-          fontWeight: "600",
-          textTransform: "uppercase",
-          color: t.mutedForeground,
-        }}
-      >
-        {label}
-      </Text>
-      <Text style={{ fontSize: 16, color: t.foreground }}>{value}</Text>
+    <View
+      style={{
+        flexDirection: "row",
+        borderWidth: 1,
+        borderColor: t.input,
+        borderRadius: 3,
+        overflow: "hidden",
+      }}
+    >
+      {options.map((o) => {
+        const active = mode === o.key;
+        return (
+          <Pressable
+            key={o.key}
+            onPress={() => setMode(o.key)}
+            style={{
+              flex: 1,
+              paddingVertical: 10,
+              alignItems: "center",
+              backgroundColor: active ? t.brandWash : "transparent",
+            }}
+          >
+            <Txt
+              size={14}
+              weight={active ? 600 : 400}
+              tone={active ? "brand" : "muted"}
+            >
+              {o.label}
+            </Txt>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
 
 /**
- * Editable personal details (spec S7, slice B.3). Name + phone are editable via
- * `account.updateProfile`; email stays read-only (login identity). After a save
- * the Better Auth session is refetched with `disableCookieCache` so the new
- * values show at once (the write goes straight to the user row, bypassing the
- * client session cache).
+ * Editable personal details (spec S7, slice B.3). Name + phone are editable;
+ * email stays read-only. After a save the Better Auth session is refetched with
+ * `disableCookieCache` so the new values show at once.
  */
 function ProfileDetails({
   name,
@@ -158,7 +187,7 @@ function ProfileDetails({
     return (
       <Stack gap={20}>
         <Field label="Name" value={name || "—"} />
-        <Field label="Phone" value={phone || "—"} />
+        <Field label="Phone" value={phone || "—"} data />
         <Field label="Email" value={email} />
         <Button label="Edit profile" variant="outline" onPress={startEdit} />
       </Stack>
@@ -187,7 +216,11 @@ function ProfileDetails({
         keyboardType="phone-pad"
       />
       <Field label="Email" value={email} />
-      {error ? <ErrorText>{error}</ErrorText> : null}
+      {error ? (
+        <Txt size={14} tone="error">
+          {error}
+        </Txt>
+      ) : null}
       <Stack row gap={8}>
         <Button
           label={update.isPending ? "Saving…" : "Save"}
@@ -210,67 +243,43 @@ function ProfileDetails({
   );
 }
 
-/** Inline validation / error line. */
-function ErrorText({ children }: { children: string }) {
-  const t = useTheme();
-  return <Text style={{ fontSize: 14, color: t.destructive }}>{children}</Text>;
-}
-
-/** A small section label above a group. */
-function SectionLabel({ children }: { children: string }) {
-  const t = useTheme();
-  return (
-    <Text
-      style={{
-        fontSize: 12,
-        fontWeight: "600",
-        textTransform: "uppercase",
-        color: t.mutedForeground,
-      }}
-    >
-      {children}
-    </Text>
-  );
-}
-
 /** Money stored in minor units → "USD 50.00" (Hermes Intl is partial on native). */
 function money(minor: number, currency: string): string {
   return `${currency} ${(minor / 100).toFixed(2)}`;
 }
 
-const STATUS_META: Record<PaymentStatus, { label: string; color: string }> = {
-  paid: { label: "Paid", color: "#00c950" },
-  due_soon: { label: "Due soon", color: "#ff6900" },
-  overdue: { label: "Overdue", color: "#fb2c36" },
+const STATUS_TONE: Record<
+  PaymentStatus,
+  { label: string; tone: "success" | "warning" | "error" }
+> = {
+  paid: { label: "Paid", tone: "success" },
+  due_soon: { label: "Due soon", tone: "warning" },
+  overdue: { label: "Overdue", tone: "error" },
 };
 
 /** A labelled value with a Copy button (the load-bearing manual-transfer step). */
-function CopyRow({ label, value }: { label: string; value: string }) {
-  const t = useTheme();
+function CopyRow({
+  label,
+  value,
+  data = false,
+}: {
+  label: string;
+  value: string;
+  data?: boolean;
+}) {
   const [copied, setCopied] = useState(false);
   const copy = () => {
     setCopied(true);
     setTimeout(() => setCopied(false), 1200);
     // Loaded lazily + guarded: a dev client built before `expo-clipboard` was
-    // added has no native module, and a top-level import would crash this whole
-    // route (and drop the Profile tab). On such a build the value stays
-    // long-press-selectable; a dev-client rebuild enables one-tap copy.
+    // added has no native module, and a top-level import would crash this route.
     void import("expo-clipboard")
       .then((Clipboard) => Clipboard.setStringAsync(value))
       .catch(() => undefined);
   };
   return (
     <View style={{ gap: 4 }}>
-      <Text
-        style={{
-          fontSize: 12,
-          fontWeight: "600",
-          textTransform: "uppercase",
-          color: t.mutedForeground,
-        }}
-      >
-        {label}
-      </Text>
+      <Eyebrow>{label}</Eyebrow>
       <View
         style={{
           flexDirection: "row",
@@ -279,13 +288,17 @@ function CopyRow({ label, value }: { label: string; value: string }) {
           gap: 12,
         }}
       >
-        <Text selectable style={{ flex: 1, fontSize: 16, color: t.foreground }}>
-          {value}
-        </Text>
+        {data ? (
+          <Mono size={16}>{value}</Mono>
+        ) : (
+          <Txt size={16} selectable style={{ flex: 1 }}>
+            {value}
+          </Txt>
+        )}
         <Pressable onPress={copy} hitSlop={8}>
-          <Text style={{ fontSize: 14, fontWeight: "600", color: t.brand }}>
+          <Txt size={14} weight={600} tone="brand">
             {copied ? "Copied ✓" : "Copy"}
-          </Text>
+          </Txt>
         </Pressable>
       </View>
     </View>
@@ -294,12 +307,10 @@ function CopyRow({ label, value }: { label: string; value: string }) {
 
 /**
  * Membership dues (spec S9, ADR 40) — manual bank transfer. Shows what you owe +
- * status, the gym's requisites with a fixed reference code to copy into the
- * transfer note, and an "I paid" button that raises a claim the owner confirms.
- * No card on file, no in-app card payment. Empty until the gym sets up your dues.
+ * status, the gym's requisites with a fixed reference code to copy, and an
+ * "I paid" button that raises a claim the owner confirms. No card on file.
  */
 function MembershipDues() {
-  const t = useTheme();
   const dues = useQuery(trpc.payments.myDues.queryOptions());
   const claim = useMutation(
     trpc.payments.claim.mutationOptions({
@@ -316,64 +327,32 @@ function MembershipDues() {
 
   const { dues: d, requisites, openClaim, canPay } = dues.data;
 
-  // Nothing to show until the gym sets up dues (and no bank details to display).
   if (!d && !requisites.bankDetails) {
     return (
-      <Text style={{ fontSize: 14, color: t.mutedForeground }}>
+      <Txt size={14} tone="muted">
         Your gym hasn’t set up membership dues yet.
-      </Text>
+      </Txt>
     );
   }
 
-  const meta = d ? STATUS_META[d.status] : null;
+  const meta = d ? STATUS_TONE[d.status] : null;
 
   return (
-    <View
-      style={{
-        gap: 16,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: t.border,
-        padding: 16,
-      }}
-    >
+    <Card variant="outline" style={{ gap: 16 }}>
       {d ? (
         <View style={{ gap: 4 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Text
-              style={{ fontSize: 18, fontWeight: "600", color: t.foreground }}
-            >
+            <Mono size={18} weight={600}>
               {money(d.amountMinor, d.currency)}
-            </Text>
-            {meta && (
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 6,
-                  paddingHorizontal: 8,
-                  paddingVertical: 2,
-                  borderRadius: 999,
-                  backgroundColor: t.muted,
-                }}
-              >
-                <View
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: 4,
-                    backgroundColor: meta.color,
-                  }}
-                />
-                <Text style={{ fontSize: 12, color: t.foreground }}>
-                  {meta.label}
-                </Text>
-              </View>
-            )}
+            </Mono>
+            {meta && <StatusPill tone={meta.tone} label={meta.label} />}
           </View>
-          <Text style={{ fontSize: 14, color: t.mutedForeground }}>
-            {d.planName} · due {new Date(d.nextDueAt).toLocaleDateString()}
-          </Text>
+          <Txt size={14} tone="muted">
+            {d.planName} · due{" "}
+            <Mono size={14} tone="muted">
+              {new Date(d.nextDueAt).toLocaleDateString()}
+            </Mono>
+          </Txt>
         </View>
       ) : null}
 
@@ -383,21 +362,26 @@ function MembershipDues() {
           <CopyRow
             label="Reference (add to your transfer)"
             value={requisites.reference}
+            data
           />
         </View>
       ) : (
-        <Text style={{ fontSize: 14, color: t.mutedForeground }}>
+        <Txt size={14} tone="muted">
           Ask your gym for their bank details to pay.
-        </Text>
+        </Txt>
       )}
 
-      {error ? <ErrorText>{error}</ErrorText> : null}
+      {error ? (
+        <Txt size={14} tone="error">
+          {error}
+        </Txt>
+      ) : null}
 
       {d ? (
         openClaim ? (
-          <Text style={{ fontSize: 14, color: t.mutedForeground }}>
+          <Txt size={14} tone="muted">
             Payment submitted — waiting for your gym to confirm.
-          </Text>
+          </Txt>
         ) : (
           <Button
             label={claim.isPending ? "Submitting…" : "I paid"}
@@ -409,14 +393,13 @@ function MembershipDues() {
           />
         )
       ) : null}
-    </View>
+    </Card>
   );
 }
 
 /**
  * My ranks (spec S7, slice G.3 — ADR 41). Read-only: the student sees their rank
  * in each discipline plus a short promotion timeline. Only the gym sets rank.
- * Empty until a coach sets it.
  */
 function MyRanks() {
   const t = useTheme();
@@ -432,22 +415,14 @@ function MyRanks() {
   const { ranks: list, history } = ranks.data;
   if (list.length === 0) {
     return (
-      <Text style={{ fontSize: 14, color: t.mutedForeground }}>
+      <Txt size={14} tone="muted">
         Your gym hasn’t set your rank yet.
-      </Text>
+      </Txt>
     );
   }
 
   return (
-    <View
-      style={{
-        gap: 12,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: t.border,
-        padding: 16,
-      }}
-    >
+    <Card variant="outline" style={{ gap: 12 }}>
       {list.map((r) => (
         <View
           key={r.discipline}
@@ -458,12 +433,12 @@ function MyRanks() {
             gap: 12,
           }}
         >
-          <Text style={{ fontSize: 14, color: t.mutedForeground }}>
+          <Txt size={14} tone="muted">
             {disciplineLabel(r.discipline)}
-          </Text>
-          <Text style={{ fontSize: 16, fontWeight: "600", color: t.foreground }}>
+          </Txt>
+          <Txt size={16} weight={600}>
             {formatRank(r)}
-          </Text>
+          </Txt>
         </View>
       ))}
       {history.length > 0 && (
@@ -471,20 +446,12 @@ function MyRanks() {
           style={{
             gap: 6,
             borderTopWidth: 1,
+            borderStyle: "dashed",
             borderTopColor: t.border,
             paddingTop: 12,
           }}
         >
-          <Text
-            style={{
-              fontSize: 12,
-              fontWeight: "600",
-              textTransform: "uppercase",
-              color: t.mutedForeground,
-            }}
-          >
-            Promotions
-          </Text>
+          <Eyebrow>Promotions</Eyebrow>
           {history.slice(0, 5).map((h) => (
             <View
               key={h.id}
@@ -495,29 +462,29 @@ function MyRanks() {
                 gap: 8,
               }}
             >
-              <Text style={{ fontSize: 14, color: t.foreground }}>
+              <Txt size={14}>
                 {disciplineLabel(h.discipline)} ·{" "}
                 {formatRank({
                   discipline: h.discipline,
                   belt: h.toBelt,
                   stripes: h.toStripes,
                 })}
-              </Text>
-              <Text style={{ fontSize: 13, color: t.mutedForeground }}>
+              </Txt>
+              <Mono size={13} tone="muted">
                 {new Date(h.promotedAt).toLocaleDateString()}
-              </Text>
+              </Mono>
             </View>
           ))}
         </View>
       )}
-    </View>
+    </Card>
   );
 }
 
 /**
- * Profile / account (spec S7) — name, phone, current academy, switcher, and sign
- * out. The switcher appears only when the student trains at 2+ gyms. This is the
- * mobile student lens (docs/issues/18) — academies where the user is a student.
+ * Profile / account (spec S7) — name, phone, current academy, switcher,
+ * appearance, notifications, and sign out. The switcher appears only when the
+ * student trains at 2+ gyms. This is the mobile student lens (docs/issues/18).
  */
 export default function Profile() {
   const t = useTheme();
@@ -538,7 +505,6 @@ export default function Profile() {
   );
 
   const signOut = () => {
-    // Stop pushes to this device before the session cookie is gone (Phase 4).
     const token = storedPushToken();
     if (token) {
       unregisterPush.mutate({ token });
@@ -575,18 +541,18 @@ export default function Profile() {
         <Field label="Current academy" value={current.data?.name ?? "—"} />
 
         <Stack gap={8}>
-          <SectionLabel>My rank</SectionLabel>
+          <Eyebrow>My rank</Eyebrow>
           <MyRanks />
         </Stack>
 
         <Stack gap={8}>
-          <SectionLabel>Membership dues</SectionLabel>
+          <Eyebrow>Membership dues</Eyebrow>
           <MembershipDues />
         </Stack>
 
         {list.length >= 2 && (
           <Stack gap={8}>
-            <SectionLabel>Switch academy</SectionLabel>
+            <Eyebrow>Switch academy</Eyebrow>
             {list.map((a) => {
               const isActive = a.academyId === activeId;
               return (
@@ -598,24 +564,22 @@ export default function Profile() {
                     flexDirection: "row",
                     alignItems: "center",
                     justifyContent: "space-between",
-                    borderRadius: 8,
+                    borderRadius: 3,
                     padding: 16,
                     backgroundColor: isActive ? t.brand : t.muted,
                   }}
                 >
-                  <Text
-                    style={{
-                      fontSize: 16,
-                      fontWeight: isActive ? "500" : "400",
-                      color: isActive ? t.brandForeground : t.foreground,
-                    }}
+                  <Txt
+                    size={16}
+                    weight={isActive ? 500 : 400}
+                    color={isActive ? t.brandForeground : t.foreground}
                   >
                     {a.name}
-                  </Text>
+                  </Txt>
                   {isActive && (
-                    <Text style={{ fontSize: 16, color: t.brandForeground }}>
+                    <Txt size={16} color={t.brandForeground}>
                       ✓
-                    </Text>
+                    </Txt>
                   )}
                 </Pressable>
               );
@@ -624,7 +588,12 @@ export default function Profile() {
         )}
 
         <Stack gap={8}>
-          <SectionLabel>Notifications</SectionLabel>
+          <Eyebrow>Appearance</Eyebrow>
+          <AppearanceControl />
+        </Stack>
+
+        <Stack gap={8}>
+          <Eyebrow>Notifications</Eyebrow>
           <NotificationToggle />
         </Stack>
 

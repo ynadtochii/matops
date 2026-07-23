@@ -1,6 +1,7 @@
 import { View } from "react-native";
 import { Tabs } from "expo-router";
 
+import { sans } from "~/components/fonts";
 import { useTheme } from "~/components/ui";
 
 /**
@@ -23,7 +24,7 @@ export default function TabsLayout() {
           backgroundColor: t.background,
           borderTopColor: t.border,
         },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
+        tabBarLabelStyle: { fontSize: 11, fontFamily: sans(600) },
       }}
     >
       <Tabs.Screen
@@ -61,9 +62,24 @@ export default function TabsLayout() {
 function ScheduleIcon({ color }: { color: string }) {
   return (
     <View
-      style={{ width: 18, height: 18, borderRadius: 4, borderWidth: 1.8, borderColor: color }}
+      style={{
+        width: 18,
+        height: 18,
+        borderRadius: 4,
+        borderWidth: 1.8,
+        borderColor: color,
+      }}
     >
-      <View style={{ position: "absolute", top: 3.5, left: 1, right: 1, height: 1.6, backgroundColor: color }} />
+      <View
+        style={{
+          position: "absolute",
+          top: 3.5,
+          left: 1,
+          right: 1,
+          height: 1.6,
+          backgroundColor: color,
+        }}
+      />
     </View>
   );
 }
@@ -80,9 +96,25 @@ function TrainingIcon({ color }: { color: string }) {
         justifyContent: "space-between",
       }}
     >
-      <View style={{ width: 4, height: 8, borderRadius: 1, backgroundColor: color }} />
-      <View style={{ width: 4, height: 13, borderRadius: 1, backgroundColor: color }} />
-      <View style={{ width: 4, height: 18, borderRadius: 1, backgroundColor: color }} />
+      <View
+        style={{ width: 4, height: 8, borderRadius: 1, backgroundColor: color }}
+      />
+      <View
+        style={{
+          width: 4,
+          height: 13,
+          borderRadius: 1,
+          backgroundColor: color,
+        }}
+      />
+      <View
+        style={{
+          width: 4,
+          height: 18,
+          borderRadius: 1,
+          backgroundColor: color,
+        }}
+      />
     </View>
   );
 }
@@ -100,7 +132,9 @@ function CheckinIcon({ color }: { color: string }) {
         justifyContent: "center",
       }}
     >
-      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />
+      <View
+        style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }}
+      />
     </View>
   );
 }
@@ -108,7 +142,15 @@ function CheckinIcon({ color }: { color: string }) {
 function ProfileIcon({ color }: { color: string }) {
   return (
     <View style={{ width: 18, height: 18, alignItems: "center" }}>
-      <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: color, marginTop: 1 }} />
+      <View
+        style={{
+          width: 7,
+          height: 7,
+          borderRadius: 4,
+          backgroundColor: color,
+          marginTop: 1,
+        }}
+      />
       <View
         style={{
           width: 14,

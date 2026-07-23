@@ -1,10 +1,6 @@
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { useRouter } from "expo-router";
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { nextClass, splitMyClasses } from "@matops/domain";
 
@@ -12,66 +8,41 @@ import type { RouterOutputs } from "~/utils/api";
 import { MyTrainingCard } from "~/components/my-training-card";
 import {
   Button,
+  Card,
   EmptyState,
   ErrorState,
+  Eyebrow,
   Heading,
   Loading,
   Mark,
+  Mono,
   Screen,
-  useTheme,
+  Txt,
 } from "~/components/ui";
 import { trpc } from "~/utils/api";
 import { dayLongFmt, timeFmt } from "~/utils/format";
 
 type MyClass = RouterOutputs["booking"]["mine"][number];
 
-function SectionLabel({ children }: { children: string }) {
-  const t = useTheme();
-  return (
-    <Text
-      style={{
-        fontSize: 12,
-        fontWeight: "600",
-        textTransform: "uppercase",
-        letterSpacing: 0.3,
-        color: t.mutedForeground,
-      }}
-    >
-      {children}
-    </Text>
-  );
-}
-
 /** The next upcoming class, shown large at the top of the tab (slice B.2 / C). */
 function NextClassCard({ c, onPress }: { c: MyClass; onPress: () => void }) {
-  const t = useTheme();
   const start = new Date(c.startsAt);
   return (
     <View style={{ gap: 12 }}>
-      <SectionLabel>Next class</SectionLabel>
-      <Pressable
-        onPress={onPress}
-        style={{
-          borderRadius: 8,
-          borderWidth: 1,
-          borderColor: t.brand,
-          backgroundColor: t.brandWash,
-          padding: 16,
-          gap: 4,
-        }}
-      >
-        <Text style={{ fontSize: 18, fontWeight: "700", color: t.foreground }}>
+      <Eyebrow>Next class</Eyebrow>
+      <Card variant="hero" onPress={onPress} style={{ gap: 4 }}>
+        <Txt size={18} weight={600}>
           {c.title}
-        </Text>
-        <Text style={{ fontSize: 14, color: t.foreground }}>
+        </Txt>
+        <Mono size={14}>
           {dayLongFmt.format(start)} · {timeFmt.format(start)}
-        </Text>
+        </Mono>
         {c.bookingTier === "provisional" ? (
-          <Text style={{ fontSize: 13, color: t.brandStrong }}>
+          <Txt size={13} tone="brand">
             Pending approval
-          </Text>
+          </Txt>
         ) : null}
-      </Pressable>
+      </Card>
     </View>
   );
 }
@@ -86,60 +57,58 @@ function ClassRow({
   onPress: () => void;
   action?: React.ReactNode;
 }) {
-  const t = useTheme();
   const start = new Date(c.startsAt);
   const cancelled = c.status === "cancelled";
   return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 12,
-        backgroundColor: t.muted,
-        borderRadius: 8,
-        padding: 16,
-      }}
-    >
-      <View style={{ flex: 1, gap: 4 }}>
-        <Text
-          style={{ fontSize: 16, fontWeight: "500", color: t.foreground }}
-          onPress={onPress}
-        >
-          {timeFmt.format(start)} · {c.title}
-        </Text>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <Text style={{ fontSize: 13, color: t.mutedForeground }}>
-            {dayLongFmt.format(start)}
-          </Text>
-          {cancelled ? (
-            <Text
-              style={{
-                fontSize: 12,
-                textTransform: "uppercase",
-                color: t.destructive,
-              }}
-            >
-              Cancelled
-            </Text>
-          ) : c.bookingTier === "provisional" ? (
-            <Text style={{ fontSize: 12, color: t.brandStrong }}>
-              Pending approval
-            </Text>
-          ) : null}
+    <Card variant="filled">
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+        }}
+      >
+        <View style={{ flex: 1, gap: 4 }}>
+          <Txt size={16} weight={500} onPress={onPress}>
+            <Mono size={16} weight={600}>
+              {timeFmt.format(start)}
+            </Mono>
+            {`  ${c.title}`}
+          </Txt>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <Mono size={13} tone="muted">
+              {dayLongFmt.format(start)}
+            </Mono>
+            {cancelled ? (
+              <Txt
+                data
+                size={11}
+                weight={600}
+                tone="error"
+                uppercase
+                tracking={0.4}
+              >
+                Cancelled
+              </Txt>
+            ) : c.bookingTier === "provisional" ? (
+              <Txt size={12} tone="brand">
+                Pending approval
+              </Txt>
+            ) : null}
+          </View>
         </View>
+        {action}
       </View>
-      {action}
-    </View>
+    </Card>
   );
 }
 
 /**
  * Training tab (spec S6 "My classes" + slice B.2, ADR 39). The student's own
  * view: the next class up top, a "My Training" stats card, then Upcoming
- * (still booked) and Past (attended) lists. Booking data comes from
- * `booking.mine`; the pure `splitMyClasses` / `nextClass` divide it. Cancel
- * reuses `booking.cancel`; tapping a row opens the class detail (S5).
+ * (still booked) and Past (attended) lists. `splitMyClasses` / `nextClass`
+ * divide the `booking.mine` data; cancel reuses `booking.cancel`.
  */
 export default function Training() {
   const router = useRouter();
@@ -158,7 +127,9 @@ export default function Training() {
   const now = new Date();
   const { upcoming, past } = splitMyClasses(mine.data ?? [], now);
   const next = nextClass(upcoming, now);
-  const rest = next ? upcoming.filter((c) => c.classId !== next.classId) : upcoming;
+  const rest = next
+    ? upcoming.filter((c) => c.classId !== next.classId)
+    : upcoming;
 
   const openClass = (id: string) =>
     router.push({ pathname: "/class/[id]", params: { id } });
@@ -195,7 +166,7 @@ export default function Training() {
 
           {upcoming.length === 0 ? (
             <View style={{ gap: 8 }}>
-              <SectionLabel>Upcoming</SectionLabel>
+              <Eyebrow>Upcoming</Eyebrow>
               <EmptyState
                 title="Nothing booked yet."
                 body="Book a class from the schedule and it shows up here."
@@ -203,7 +174,7 @@ export default function Training() {
             </View>
           ) : rest.length > 0 ? (
             <View style={{ gap: 8 }}>
-              <SectionLabel>Upcoming</SectionLabel>
+              <Eyebrow>Upcoming</Eyebrow>
               {rest.map((c) => (
                 <ClassRow
                   key={c.classId}
@@ -225,7 +196,7 @@ export default function Training() {
 
           {past.length > 0 ? (
             <View style={{ gap: 8 }}>
-              <SectionLabel>Past</SectionLabel>
+              <Eyebrow>Past</Eyebrow>
               {past.map((c) => (
                 <ClassRow
                   key={c.classId}

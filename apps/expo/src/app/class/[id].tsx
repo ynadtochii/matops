@@ -1,6 +1,5 @@
-import type { ReactNode } from "react";
 import { useState } from "react";
-import { Alert, Text, View } from "react-native";
+import { Alert } from "react-native";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -8,35 +7,18 @@ import {
   Banner,
   Button,
   ErrorState,
+  Eyebrow,
+  Field,
   Heading,
   Loading,
+  Mono,
   Muted,
   Screen,
+  Txt,
   Stack as UIStack,
-  useTheme,
 } from "~/components/ui";
 import { trpc } from "~/utils/api";
 import { dayLongFmt, timeFmt } from "~/utils/format";
-
-/** One labelled fact row on the detail screen. */
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  const t = useTheme();
-  return (
-    <View style={{ gap: 4 }}>
-      <Text
-        style={{
-          fontSize: 12,
-          fontWeight: "600",
-          textTransform: "uppercase",
-          color: t.mutedForeground,
-        }}
-      >
-        {label}
-      </Text>
-      <Text style={{ fontSize: 16, color: t.foreground }}>{children}</Text>
-    </View>
-  );
-}
 
 /**
  * Class detail (spec S5) — title, discipline, day/time, duration, instructor,
@@ -45,7 +27,6 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
  * capacity the count turns red and Book asks to confirm.
  */
 export default function ClassDetail() {
-  const t = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
@@ -117,45 +98,34 @@ export default function ClassDetail() {
       <UIStack gap={24}>
         <UIStack gap={6}>
           <Heading>{c.title}</Heading>
-          {c.discipline && (
-            <Text
-              style={{ fontSize: 12, textTransform: "uppercase", color: t.mutedForeground }}
-            >
-              {c.discipline}
-            </Text>
-          )}
+          {c.discipline ? <Eyebrow>{c.discipline}</Eyebrow> : null}
         </UIStack>
 
         {cancelled && <Banner tone="warning">This class is cancelled.</Banner>}
 
         <UIStack gap={20}>
-          <Field label="Day">{dayLongFmt.format(start)}</Field>
+          <Field label="Day" value={dayLongFmt.format(start)} />
           <Field label="Time">
-            {timeFmt.format(start)} · {c.durationMinutes} min
+            <Txt size={16}>
+              <Mono size={16} weight={600}>
+                {timeFmt.format(start)}
+              </Mono>
+              {` · ${c.durationMinutes} min`}
+            </Txt>
           </Field>
-          <Field label="Instructor">{c.instructorName ?? "—"}</Field>
-          <View style={{ gap: 4 }}>
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: "600",
-                textTransform: "uppercase",
-                color: t.mutedForeground,
-              }}
-            >
-              Capacity
-            </Text>
-            <Text
-              style={{ fontSize: 16, color: over ? t.destructive : t.foreground }}
-            >
+          <Field label="Instructor" value={c.instructorName ?? "—"} />
+          <Field label="Capacity">
+            <Mono size={16} tone={over ? "error" : "default"}>
               {capacityLabel}
               {over ? " · may be busy" : ""}
-            </Text>
-          </View>
+            </Mono>
+          </Field>
         </UIStack>
 
         {error && (
-          <Text style={{ fontSize: 14, color: t.destructive }}>{error}</Text>
+          <Txt size={14} tone="error">
+            {error}
+          </Txt>
         )}
 
         {cancelled ? (
@@ -165,9 +135,9 @@ export default function ClassDetail() {
         ) : booked ? (
           <UIStack gap={8}>
             {provisional && (
-              <Text style={{ fontSize: 14, color: t.brandStrong }}>
+              <Txt size={14} tone="brand">
                 Booked · pending approval
-              </Text>
+              </Txt>
             )}
             <Button
               label={cancel.isPending ? "Cancelling…" : "Cancel booking"}

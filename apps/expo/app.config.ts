@@ -43,15 +43,17 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   plugins: [
     "expo-router",
+    "expo-font",
     "expo-secure-store",
     "expo-web-browser",
     [
+      // Dark-first: launch on the canonical pure-black surface.
       "expo-splash-screen",
       {
-        backgroundColor: "#E4E4E7",
-        image: "./assets/icon-light.png",
+        backgroundColor: "#000000",
+        image: "./assets/icon-dark.png",
         dark: {
-          backgroundColor: "#18181B",
+          backgroundColor: "#000000",
           image: "./assets/icon-dark.png",
         },
       },

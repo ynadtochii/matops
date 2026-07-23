@@ -1,37 +1,63 @@
-import { useColorScheme } from "react-native";
+import { useEffect } from "react";
+import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { QueryClientProvider } from "@tanstack/react-query";
 
+import { fontAssets, sans } from "~/components/fonts";
 import { PushSync } from "~/components/push-sync";
-import { headerColors } from "~/components/ui";
+import { ThemeProvider, useThemeMode } from "~/components/theme";
 import { queryClient } from "~/utils/api";
 
 import "../styles.css";
 
+void SplashScreen.preventAutoHideAsync();
+
 /**
- * Root layout — wraps every screen in the tRPC/React Query provider and a
- * neutral Stack whose header follows the shared light/dark palette (the Stack
- * needs hex, not NativeWind classes).
+ * The navigation chrome — a neutral Stack whose header follows the resolved
+ * (dark-first) palette and Geist. Lives inside the ThemeProvider so it can read
+ * the active theme; the tab group owns its own chrome (screens render headings).
  */
-export default function RootLayout() {
-  const scheme = useColorScheme() === "dark" ? "dark" : "light";
-  const c = headerColors[scheme];
+function Chrome() {
+  const { resolved, theme } = useThemeMode();
   return (
-    <QueryClientProvider client={queryClient}>
-      <PushSync />
+    <>
       <Stack
         screenOptions={{
-          headerStyle: { backgroundColor: c.bg },
-          headerTintColor: c.tint,
+          headerStyle: { backgroundColor: theme.background },
+          headerTintColor: theme.foreground,
+          headerTitleStyle: { fontFamily: sans(600) },
           headerShadowVisible: false,
-          contentStyle: { backgroundColor: c.bg },
+          contentStyle: { backgroundColor: theme.background },
         }}
       >
-        {/* The tab group owns its own chrome (screens render their headings). */}
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       </Stack>
-      <StatusBar />
+      <StatusBar style={resolved === "dark" ? "light" : "dark"} />
+    </>
+  );
+}
+
+/**
+ * Root layout — loads Geist / Geist Mono (holding the splash until ready), then
+ * wraps every screen in the tRPC/React Query provider and the dark-first theme.
+ */
+export default function RootLayout() {
+  const [fontsLoaded] = useFonts(fontAssets);
+
+  useEffect(() => {
+    if (fontsLoaded) void SplashScreen.hideAsync();
+  }, [fontsLoaded]);
+
+  if (!fontsLoaded) return null;
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <PushSync />
+        <Chrome />
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

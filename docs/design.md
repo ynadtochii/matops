@@ -113,7 +113,10 @@ scale exists for the few things that float.
 ## 2. Motifs
 
 Blueprint background textures. On web they are utilities in
-`apps/nextjs/src/app/styles.css`; **mobile needs an RN/SVG equivalent (todo).**
+`apps/nextjs/src/app/styles.css`; on mobile the `Blueprint` primitive
+(`apps/expo/src/components/ui.tsx`) tiles the same hairline grid with Views
+(ADR [44](issues/44-mobile-dark-first-design-system.md)), used behind the
+sign-in hero.
 
 | Utility | Pattern | Size |
 |---|---|---|
@@ -199,13 +202,15 @@ reference: `docs/design-system/matops-design-system.html`. Rationale in ADR 37.
 | Piece | State |
 |---|---|
 | Color tokens (light+dark), **brand (violet)**, callout accents, radius, shadow, fonts | **done** — `theme.css` |
-| Motif utilities (`.bg-grid` / `-small` / `.bg-dot`) | **done (web)** — `styles.css` |
+| Motif utilities (`.bg-grid` / `-small` / `.bg-dot`) | **done** — web `styles.css`; mobile `Blueprint` (ADR 44) |
 | Heading treatment, mono-as-clock, voice | **this doc** — apply when building |
 | Cross-platform component pattern + reference Button | **done** — ADR [32](issues/32-cross-platform-ui.md) |
 | `@matops/ui/tokens` (literal colors for RN) | **done** |
 | Remaining components (input…alerts) to Better Auth taxonomy | **todo** — `packages/ui`, follow the Button pattern |
 | Overlays on mobile via react-native-reusables | **todo** — verify nativewind-5 compat |
-| Retire `apps/expo/src/components/ui.tsx` local kit | **todo** — migrate onto `@matops/ui` |
-| Mobile Geist via `expo-font` + RN motif equivalent | **todo** |
+| Mobile **dark-first** theme (tri-state, persisted) | **done** — `components/theme.tsx`, ADR 44 |
+| Mobile Geist via `expo-font` (Geist + Geist Mono) | **done** — `components/fonts.ts`, ADR 44 |
+| Mobile kit derived from `@matops/ui/tokens` + web vocabulary (`Eyebrow`/`Stat`/`Card`/`Callout`) | **done** — ADR 44 |
+| Retire `apps/expo/src/components/ui.tsx` local kit | **partial** — token-derived + aligned (ADR 44); full merge onto `@matops/ui` RN primitives pending |
 | matops `● status` states (booking/attendance) | **Phase 3**, onto callout accents |
 | matops basketweave mark + wordmark | **done** — `@matops/ui/logo`, `app/icon.svg` |
