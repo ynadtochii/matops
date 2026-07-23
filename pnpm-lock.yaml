@@ -404,6 +404,9 @@ importers:
       '@matops/db':
         specifier: workspace:*
         version: link:../db
+      '@matops/notifications':
+        specifier: workspace:*
+        version: link:../notifications
       '@t3-oss/env-core':
         specifier: ^0.13.8
         version: 0.13.11(typescript@5.9.3)(zod@4.4.3)

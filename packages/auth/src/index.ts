@@ -6,6 +6,7 @@ import { magicLink, oAuthProxy, organization } from "better-auth/plugins";
 
 import { generateAcademyCode, setMemberActive } from "@matops/db";
 import { db } from "@matops/db/client";
+import { sendEmail } from "@matops/notifications";
 
 import { ac, roles } from "./permissions";
 
@@ -129,9 +130,12 @@ export function initAuth<
         },
       }),
       magicLink({
-        sendMagicLink: ({ email, token, url }) => {
-          // Phase 4 wires Resend (packages/notifications). For now, log the link
-          // so dev sign-in works with no email provider configured.
+        sendMagicLink: async ({ email, token, url }) => {
+          // Always log the link so dev sign-in works with no email provider
+          // configured. `sendEmail` additionally delivers via Resend when
+          // RESEND_API_KEY / RESEND_FROM are set; it no-ops (logged) otherwise
+          // and never throws, so an unconfigured or failing transport can never
+          // break sign-in.
           //
           // WEB opens `url` directly. MOBILE cannot: the session cookie is set on
           // the verify response, and if the link opens in the system browser that
@@ -143,7 +147,12 @@ export function initAuth<
           console.log(
             `[auth] mobile deep link for ${email}: matops://magic-link?token=${token}`,
           );
-          return Promise.resolve();
+          await sendEmail({
+            to: email,
+            subject: "Your matops sign-in link",
+            text: `Sign in to matops by opening this link:\n\n${url}\n\nThis link expires shortly. If you didn't request it, you can ignore this email.`,
+            html: `<p>Sign in to matops by clicking the link below:</p><p><a href="${url}">Sign in to matops</a></p><p>This link expires shortly. If you didn't request it, you can ignore this email.</p>`,
+          });
         },
       }),
       expo(),
