@@ -4,8 +4,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   Button,
+  confirm,
   Heading,
-  Loading,
+  InlineLoading,
   Logo,
   Muted,
   Screen,
@@ -76,8 +77,10 @@ export default function Onboarding() {
     </Txt>
   );
 
+  const codeValid = CODE_RE.test(code.trim());
+
   return (
-    <Screen center>
+    <Screen center avoidKeyboard>
       <Stack.Screen options={{ title: "Join a gym" }} />
 
       <UIStack gap={24}>
@@ -113,11 +116,9 @@ export default function Onboarding() {
               {error && errText(error)}
               <Button
                 label={join.isPending ? "Joining…" : `Join ${academy.name}`}
+                loading={join.isPending}
                 disabled={
-                  join.isPending ||
-                  !firstName.trim() ||
-                  !lastName.trim() ||
-                  !phone.trim()
+                  !firstName.trim() || !lastName.trim() || !phone.trim()
                 }
                 onPress={() => {
                   setError(null);
@@ -151,14 +152,15 @@ export default function Onboarding() {
                 label="Gym ID"
                 value={code}
                 onChangeText={(next) => {
-                  setCode(next);
+                  setCode(next.replace(/\D/g, ""));
                   if (query !== null) reset();
                 }}
                 placeholder="482913"
                 keyboardType="phone-pad"
                 autoCapitalize="none"
+                maxLength={6}
               />
-              {query !== null && found.isFetching && <Loading />}
+              {query !== null && found.isFetching && <InlineLoading />}
               {query !== null &&
                 !found.isFetching &&
                 !academy &&
@@ -172,7 +174,8 @@ export default function Onboarding() {
               <Button
                 label="Find gym"
                 onPress={search}
-                disabled={code.trim().length === 0 || found.isFetching}
+                loading={found.isFetching}
+                disabled={!codeValid || found.isFetching}
               />
             </UIStack>
           </UIStack>
@@ -181,10 +184,17 @@ export default function Onboarding() {
         <Button
           label="Sign out"
           variant="ghost"
-          onPress={() => {
-            void authClient.signOut();
-            router.replace("/");
-          }}
+          onPress={() =>
+            confirm({
+              title: "Sign out?",
+              message: "You'll need your email sign-in link to get back in.",
+              confirmLabel: "Sign out",
+              onConfirm: () => {
+                void authClient.signOut();
+                router.replace("/");
+              },
+            })
+          }
         />
       </UIStack>
     </Screen>

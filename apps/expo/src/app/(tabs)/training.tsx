@@ -11,14 +11,16 @@ import { useToast } from "~/components/toast";
 import {
   Button,
   Card,
+  confirm,
   EmptyState,
   ErrorState,
   Eyebrow,
   Heading,
-  Loading,
+  InlineLoading,
   Mark,
   Mono,
   Screen,
+  StatusPill,
   Txt,
 } from "~/components/ui";
 import { trpc } from "~/utils/api";
@@ -83,16 +85,7 @@ function ClassRow({
               {dayLongFmt.format(start)}
             </Mono>
             {cancelled ? (
-              <Txt
-                data
-                size={11}
-                weight={600}
-                tone="error"
-                uppercase
-                tracking={0.4}
-              >
-                Cancelled
-              </Txt>
+              <StatusPill tone="error" label="Cancelled" />
             ) : c.bookingTier === "provisional" ? (
               <Txt size={12} tone="brand">
                 Pending approval
@@ -155,7 +148,7 @@ export default function Training() {
       </View>
 
       {mine.isPending ? (
-        <Loading />
+        <InlineLoading />
       ) : mine.isError ? (
         <ErrorState label="your classes" onRetry={() => void mine.refetch()} />
       ) : (
@@ -190,8 +183,22 @@ export default function Training() {
                     c.status === "cancelled" ? undefined : (
                       <Button
                         label="Cancel"
-                        variant="outline"
-                        onPress={() => cancel.mutate({ classId: c.classId })}
+                        variant="destructive"
+                        loading={
+                          cancel.isPending &&
+                          cancel.variables.classId === c.classId
+                        }
+                        onPress={() =>
+                          confirm({
+                            title: "Cancel this booking?",
+                            message:
+                              "You'll lose your spot. If the class is full, you may not get it back.",
+                            confirmLabel: "Cancel booking",
+                            cancelLabel: "Keep it",
+                            onConfirm: () =>
+                              cancel.mutate({ classId: c.classId }),
+                          })
+                        }
                       />
                     )
                   }

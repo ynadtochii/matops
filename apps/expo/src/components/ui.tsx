@@ -8,6 +8,9 @@ import type {
 import { useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   Text,
   TextInput,
@@ -209,25 +212,40 @@ export function Stat({ value, label }: { value: string; label: string }) {
 export function Screen({
   children,
   center = false,
+  avoidKeyboard = false,
   style,
 }: {
   children: ReactNode;
   /** Centre content vertically (auth/onboarding screens). */
   center?: boolean;
+  /** Lift content above the keyboard — for screens whose submit sits low. */
+  avoidKeyboard?: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
   const t = useTheme();
+  const inner = (
+    <View
+      style={[
+        { flex: 1, padding: 16 },
+        center && { justifyContent: "center" },
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: t.background }}>
-      <View
-        style={[
-          { flex: 1, padding: 16 },
-          center && { justifyContent: "center" },
-          style,
-        ]}
-      >
-        {children}
-      </View>
+      {avoidKeyboard ? (
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          {inner}
+        </KeyboardAvoidingView>
+      ) : (
+        inner
+      )}
     </SafeAreaView>
   );
 }
@@ -259,7 +277,7 @@ export function Stack({
   );
 }
 
-/** Centred spinner — the loading state between auth/query resolutions. */
+/** Full-screen centred spinner — the loading state for a whole route/gate. */
 export function Loading() {
   const t = useTheme();
   return (
@@ -273,6 +291,27 @@ export function Loading() {
     >
       <ActivityIndicator color={t.brand} />
     </SafeAreaView>
+  );
+}
+
+/**
+ * Inline spinner — the loading state for a section or a screen body that already
+ * sits inside a `Screen`. Unlike `Loading` it paints no new full-screen surface,
+ * so it centres in the space it's given instead of covering the header.
+ */
+export function InlineLoading() {
+  const t = useTheme();
+  return (
+    <View
+      style={{
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 24,
+      }}
+    >
+      <ActivityIndicator color={t.brand} />
+    </View>
   );
 }
 
@@ -539,11 +578,14 @@ export function Button({
   onPress,
   variant = "primary",
   disabled = false,
+  loading = false,
 }: {
   label: string;
   onPress: () => void;
   variant?: ButtonVariant;
   disabled?: boolean;
+  /** Shows a spinner + disables while a mutation is in flight. */
+  loading?: boolean;
 }) {
   const t = useTheme();
   const bg =
@@ -560,10 +602,12 @@ export function Button({
       : variant === "destructive"
         ? t.destructiveForeground
         : t.foreground;
+  const isDisabled = disabled || loading;
   return (
     <Pressable
       accessibilityRole="button"
-      disabled={disabled}
+      accessibilityState={{ disabled: isDisabled, busy: loading }}
+      disabled={isDisabled}
       onPress={onPress}
       style={({ pressed }) => [
         {
@@ -576,11 +620,12 @@ export function Button({
           justifyContent: "center",
           gap: 8,
           backgroundColor: bg,
-          opacity: disabled ? 0.5 : pressed ? 0.85 : 1,
+          opacity: isDisabled ? 0.5 : pressed ? 0.85 : 1,
         },
         variant === "outline" && { borderWidth: 1, borderColor: t.input },
       ]}
     >
+      {loading ? <ActivityIndicator size="small" color={textColor} /> : null}
       <Text style={{ fontFamily: sans(600), fontSize: 15, color: textColor }}>
         {label}
       </Text>
@@ -596,6 +641,10 @@ export function TextField({
   autoCapitalize = "sentences",
   keyboardType = "default",
   autoFocus = false,
+  maxLength,
+  textContentType,
+  returnKeyType,
+  onSubmitEditing,
 }: {
   label: string;
   value: string;
@@ -604,6 +653,11 @@ export function TextField({
   autoCapitalize?: "none" | "sentences" | "words" | "characters";
   keyboardType?: "default" | "email-address" | "phone-pad";
   autoFocus?: boolean;
+  maxLength?: number;
+  /** iOS autofill hint (e.g. "emailAddress", "givenName", "telephoneNumber"). */
+  textContentType?: React.ComponentProps<typeof TextInput>["textContentType"];
+  returnKeyType?: React.ComponentProps<typeof TextInput>["returnKeyType"];
+  onSubmitEditing?: () => void;
 }) {
   const t = useTheme();
   const [focused, setFocused] = useState(false);
@@ -612,6 +666,7 @@ export function TextField({
       {/* UPPERCASE mono field label (design.md §4). */}
       <Eyebrow>{label}</Eyebrow>
       <TextInput
+        accessibilityLabel={label}
         style={{
           minHeight: 48,
           borderRadius: RADIUS,
@@ -633,6 +688,10 @@ export function TextField({
         autoCapitalize={autoCapitalize}
         keyboardType={keyboardType}
         autoFocus={autoFocus}
+        maxLength={maxLength}
+        textContentType={textContentType}
+        returnKeyType={returnKeyType}
+        onSubmitEditing={onSubmitEditing}
       />
     </View>
   );
@@ -834,6 +893,113 @@ export function ErrorState({
       {onRetry ? (
         <Button label="Try again" variant="outline" onPress={onRetry} />
       ) : null}
+    </View>
+  );
+}
+
+/* --------------------------------------------------------------- confirm --- */
+
+/**
+ * A destructive-action confirm — the native twin of the web `ConfirmDialog`.
+ * There's no in-app modal on mobile; the platform `Alert` is the right guard, so
+ * every irreversible tap (cancel a booking, sign out, submit a payment claim)
+ * routes through this instead of firing straight away. The confirm button is
+ * styled `destructive` on iOS by default.
+ */
+export function confirm({
+  title,
+  message,
+  confirmLabel = "Confirm",
+  cancelLabel = "Cancel",
+  destructive = true,
+  onConfirm,
+}: {
+  title: string;
+  message?: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  destructive?: boolean;
+  onConfirm: () => void;
+}) {
+  Alert.alert(title, message, [
+    { text: cancelLabel, style: "cancel" },
+    {
+      text: confirmLabel,
+      style: destructive ? "destructive" : "default",
+      onPress: onConfirm,
+    },
+  ]);
+}
+
+/* ------------------------------------------------------------------ copy --- */
+
+/**
+ * Copy-to-clipboard control — the native twin of the web `CopyButton`. A real
+ * 44px tap target, an accessible name, and a brief "Copied ✓" state so the tap
+ * has a visible result. `expo-clipboard` is imported lazily + guarded so a dev
+ * client built before it was added doesn't crash the route (a top-level import
+ * would); the copy is a quiet no-op there.
+ */
+export function CopyButton({
+  value,
+  label = "Copy",
+}: {
+  value: string;
+  label?: string;
+}) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+    void import("expo-clipboard")
+      .then((Clipboard) => Clipboard.setStringAsync(value))
+      .catch(() => undefined);
+  };
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={copied ? "Copied" : `Copy ${label.toLowerCase()}`}
+      onPress={copy}
+      hitSlop={12}
+      style={{ minHeight: 44, justifyContent: "center" }}
+    >
+      <Txt size={14} weight={600} tone="brand">
+        {copied ? "Copied ✓" : label}
+      </Txt>
+    </Pressable>
+  );
+}
+
+/** A labelled value with a copy control — Eyebrow label over value + `CopyButton`. */
+export function CopyField({
+  label,
+  value,
+  data = false,
+}: {
+  label: string;
+  value: string;
+  data?: boolean;
+}) {
+  return (
+    <View style={{ gap: 4 }}>
+      <Eyebrow>{label}</Eyebrow>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+        }}
+      >
+        {data ? (
+          <Mono size={16}>{value}</Mono>
+        ) : (
+          <Txt size={16} selectable style={{ flex: 1 }}>
+            {value}
+          </Txt>
+        )}
+        <CopyButton value={value} />
+      </View>
     </View>
   );
 }

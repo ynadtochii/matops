@@ -40,20 +40,25 @@ export default function SignIn() {
   const send = async () => {
     setPending(true);
     setError(null);
-    const res = await authClient.signIn.magicLink({
-      email: email.trim(),
-      callbackURL,
-    });
-    setPending(false);
-    if (res.error) {
-      setError(res.error.message ?? "Could not send the link. Try again.");
-      return;
+    try {
+      const res = await authClient.signIn.magicLink({
+        email: email.trim(),
+        callbackURL,
+      });
+      if (res.error) {
+        setError(res.error.message ?? "Could not send the link. Try again.");
+        return;
+      }
+      setSent(true);
+    } catch {
+      setError("Could not send the link. Check your connection and try again.");
+    } finally {
+      setPending(false);
     }
-    setSent(true);
   };
 
   return (
-    <Screen center>
+    <Screen center avoidKeyboard>
       <RouterStack.Screen options={{ title: "Sign in" }} />
 
       {/* Signature backdrop — grid + a bled-off mark, behind the form. */}
@@ -80,11 +85,24 @@ export default function SignIn() {
             <Card variant="outline" style={{ gap: 4 }}>
               <Title>Check your email</Title>
               <Muted>
-                Open the sign-in link we sent to {email.trim()}. In development,
-                copy the “[auth] magic link …” line from the Next.js terminal
-                and open it.
+                Open the sign-in link we sent to {email.trim()}. The link expires
+                soon — if it doesn&apos;t arrive, resend it.
+                {__DEV__
+                  ? " In development, copy the “[auth] magic link …” line from the Next.js terminal and open it."
+                  : ""}
               </Muted>
             </Card>
+            {error ? (
+              <Txt size={14} tone="error">
+                {error}
+              </Txt>
+            ) : null}
+            <Button
+              label={pending ? "Resending…" : "Resend link"}
+              variant="outline"
+              loading={pending}
+              onPress={send}
+            />
             <Button
               label="Use a different email"
               variant="ghost"
@@ -112,6 +130,7 @@ export default function SignIn() {
             <Button
               label={pending ? "Sending…" : "Send magic link"}
               onPress={send}
+              loading={pending}
               disabled={!canSend}
             />
           </Stack>

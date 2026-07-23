@@ -83,10 +83,7 @@ export function MyTrainingCard() {
         <View style={{ flexDirection: "row", gap: 12 }}>
           <Stat value={String(s.total)} label="Sessions" />
           <Stat value={String(s.thisMonth)} label="This month" />
-          <Stat
-            value={String(s.streakWeeks)}
-            label={s.streakWeeks === 1 ? "Week streak" : "Weeks streak"}
-          />
+          <Stat value={String(s.streakWeeks)} label="Week streak" />
         </View>
         <View style={{ gap: 4 }}>
           {favorite ? (

@@ -23,6 +23,7 @@ export default function MagicLink() {
   const { token } = useLocalSearchParams<{ token?: string }>();
   const router = useRouter();
   const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [slow, setSlow] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -43,6 +44,13 @@ export default function MagicLink() {
     };
   }, [token, router]);
 
+  // Failsafe: if verify hasn't resolved after a few seconds, offer an escape so
+  // the student is never stranded on a spinner.
+  useEffect(() => {
+    const timer = setTimeout(() => setSlow(true), 8000);
+    return () => clearTimeout(timer);
+  }, []);
+
   const error = !token
     ? "This sign-in link is missing its token."
     : verifyError;
@@ -56,6 +64,26 @@ export default function MagicLink() {
           <Muted>{error} Request a fresh link and try again.</Muted>
           <Button
             label="Back to sign in"
+            onPress={() => router.replace("/sign-in")}
+          />
+        </UIStack>
+      </Screen>
+    );
+  }
+
+  if (slow) {
+    return (
+      <Screen center>
+        <Stack.Screen options={{ title: "Signing in…" }} />
+        <UIStack gap={16}>
+          <Heading>Signing you in…</Heading>
+          <Muted>
+            This is taking longer than usual. If nothing happens, request a fresh
+            link.
+          </Muted>
+          <Button
+            label="Back to sign in"
+            variant="outline"
             onPress={() => router.replace("/sign-in")}
           />
         </UIStack>

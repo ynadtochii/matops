@@ -2,11 +2,14 @@ import { useEffect, useState } from "react";
 import { Redirect, Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { View } from "react-native";
+
 import {
   Banner,
   Button,
   Card,
   Heading,
+  InlineLoading,
   Loading,
   Mono,
   Muted,
@@ -117,7 +120,7 @@ export default function WalkInCheckin() {
             — they can also mark you present.
           </Muted>
         ) : !scoped || today.isPending ? (
-          <Loading />
+          <InlineLoading />
         ) : today.isError ? (
           <Muted>
             Couldn&apos;t reach this gym. Check your connection and scan again.
@@ -138,17 +141,32 @@ export default function WalkInCheckin() {
               const done = doneId === c.id;
               return (
                 <Card key={c.id} variant="outline" style={{ gap: 12 }}>
-                  <Txt size={16} weight={500}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 10,
+                    }}
+                  >
                     <Mono size={16} weight={600}>
                       {timeFmt.format(new Date(c.startsAt))}
                     </Mono>
-                    {`  ${c.title}`}
-                  </Txt>
+                    <Txt size={16} weight={500} style={{ flex: 1 }}>
+                      {c.title}
+                    </Txt>
+                  </View>
                   {done ? (
-                    <Banner tone="success">You&apos;re checked in ✓</Banner>
+                    <Banner tone="success">You&apos;re checked in.</Banner>
                   ) : (
                     <Button
-                      label={checkIn.isPending ? "Checking in…" : "Check in"}
+                      label={
+                        checkIn.isPending && checkIn.variables.classId === c.id
+                          ? "Checking in…"
+                          : "Check in"
+                      }
+                      loading={
+                        checkIn.isPending && checkIn.variables.classId === c.id
+                      }
                       disabled={checkIn.isPending}
                       onPress={() => {
                         setError(null);

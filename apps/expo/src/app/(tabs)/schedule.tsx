@@ -13,10 +13,11 @@ import {
   ErrorState,
   Eyebrow,
   Heading,
-  Loading,
+  InlineLoading,
   Mark,
   Mono,
   Screen,
+  StatusPill,
   Txt,
   useTheme,
 } from "~/components/ui";
@@ -90,16 +91,7 @@ function ClassCard({
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
             {c.discipline ? <Eyebrow>{c.discipline}</Eyebrow> : null}
             {cancelled ? (
-              <Txt
-                data
-                size={11}
-                weight={600}
-                tone="error"
-                uppercase
-                tracking={0.4}
-              >
-                Cancelled
-              </Txt>
+              <StatusPill tone="error" label="Cancelled" />
             ) : (
               <Mono size={13} tone="muted">
                 {spotsLeftLabel(c.capacity, c.bookingCount)}
@@ -179,7 +171,7 @@ export default function Schedule() {
       )}
 
       {week.isPending ? (
-        <Loading />
+        <InlineLoading />
       ) : week.isError ? (
         <ErrorState label="your schedule" onRetry={() => void week.refetch()} />
       ) : byDay.length === 0 ? (

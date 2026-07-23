@@ -7,6 +7,7 @@ import { useToast } from "~/components/toast";
 import {
   Banner,
   Button,
+  confirm,
   ErrorState,
   Eyebrow,
   Field,
@@ -90,14 +91,25 @@ export default function ClassDetail() {
       )}
       <Button
         label={cancel.isPending ? "Cancelling…" : "Cancel booking"}
-        variant="outline"
+        variant="destructive"
+        loading={cancel.isPending}
         disabled={busy}
-        onPress={() => cancel.mutate({ classId: c.id })}
+        onPress={() =>
+          confirm({
+            title: "Cancel this booking?",
+            message:
+              "You'll lose your spot. If the class is full, you may not get it back.",
+            confirmLabel: "Cancel booking",
+            cancelLabel: "Keep it",
+            onConfirm: () => cancel.mutate({ classId: c.id }),
+          })
+        }
       />
     </UIStack>
   ) : (
     <Button
       label={booking ? "Booking…" : "Book"}
+      loading={booking}
       disabled={busy}
       onPress={() => onBook(c)}
     />

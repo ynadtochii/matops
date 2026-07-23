@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pressable, Switch, View } from "react-native";
+import { Alert, Pressable, Switch, View } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import { useMutation } from "@tanstack/react-query";
 
@@ -7,6 +7,7 @@ import type { ThemeMode } from "~/components/theme";
 import { useThemeMode } from "~/components/theme";
 import {
   Button,
+  confirm,
   Eyebrow,
   Heading,
   Screen,
@@ -35,16 +36,31 @@ function NotificationToggle() {
   const register = useMutation(trpc.pushToken.register.mutationOptions());
   const unregister = useMutation(trpc.pushToken.unregister.mutationOptions());
 
+  // Turning the switch back off after a failure, so the UI never claims push is
+  // on while nothing is actually registered.
+  const revert = (message: string) => {
+    setOn(false);
+    void setPushEnabled(false);
+    Alert.alert("Notifications off", message);
+  };
+
   const toggle = (next: boolean) => {
     setOn(next);
     void setPushEnabled(next);
     if (next) {
       void getPushToken().then((reg) => {
-        if (reg) {
-          register.mutate(reg, {
-            onSuccess: () => void rememberPushToken(reg.token),
-          });
+        if (!reg) {
+          // Permission denied or no device token — don't leave the switch "on".
+          revert(
+            "We couldn't turn on notifications. Check that notifications are allowed for matops in your phone's Settings.",
+          );
+          return;
         }
+        register.mutate(reg, {
+          onSuccess: () => void rememberPushToken(reg.token),
+          onError: () =>
+            revert("We couldn't register this device. Try again in a moment."),
+        });
       });
     } else {
       const token = storedPushToken();
@@ -71,6 +87,7 @@ function NotificationToggle() {
         </Txt>
       </View>
       <Switch
+        accessibilityLabel="Push notifications"
         value={on}
         onValueChange={toggle}
         trackColor={{ true: t.brand, false: t.input }}
@@ -104,10 +121,13 @@ function AppearanceControl() {
         return (
           <Pressable
             key={o.key}
+            accessibilityRole="button"
+            accessibilityLabel={`${o.label} appearance`}
+            accessibilityState={{ selected: active }}
             onPress={() => setMode(o.key)}
             style={{
               flex: 1,
-              paddingVertical: 10,
+              paddingVertical: 12,
               alignItems: "center",
               backgroundColor: active ? t.brandWash : "transparent",
             }}
@@ -133,19 +153,32 @@ function AppearanceControl() {
  */
 export default function Settings() {
   const router = useRouter();
+  const [signingOut, setSigningOut] = useState(false);
   const unregisterPush = useMutation(
     trpc.pushToken.unregister.mutationOptions(),
   );
 
-  const signOut = () => {
+  const doSignOut = async () => {
+    setSigningOut(true);
     const token = storedPushToken();
     if (token) {
       unregisterPush.mutate({ token });
       void forgetPushToken();
     }
-    void authClient.signOut();
-    router.replace("/");
+    try {
+      await authClient.signOut();
+    } finally {
+      router.replace("/");
+    }
   };
+
+  const confirmSignOut = () =>
+    confirm({
+      title: "Sign out?",
+      message: "You'll need your email sign-in link to get back in.",
+      confirmLabel: "Sign out",
+      onConfirm: () => void doSignOut(),
+    });
 
   return (
     <Screen>
@@ -163,7 +196,12 @@ export default function Settings() {
           <NotificationToggle />
         </UIStack>
 
-        <Button label="Sign out" variant="outline" onPress={signOut} />
+        <Button
+          label={signingOut ? "Signing out…" : "Sign out"}
+          variant="outline"
+          loading={signingOut}
+          onPress={confirmSignOut}
+        />
       </UIStack>
     </Screen>
   );

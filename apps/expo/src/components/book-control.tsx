@@ -29,7 +29,10 @@ export interface BookableClass {
  * Kept as a hook so callers own their own pending / error state — a list of rows
  * each gets an independent control without a shared spinner.
  */
-export function useBookClass(onBooked?: () => void) {
+export function useBookClass(
+  onBooked?: () => void,
+  opts?: { toastError?: boolean },
+) {
   const queryClient = useQueryClient();
   const toast = useToast();
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +45,13 @@ export function useBookClass(onBooked?: () => void) {
         await queryClient.invalidateQueries(trpc.booking.pathFilter());
         onBooked?.();
       },
-      onError: (err) => setError(err.message || "Could not book"),
+      onError: (err) => {
+        const message = err.message || "Could not book";
+        setError(message);
+        // The inline schedule pill has no room to show the error text, so it
+        // opts into a toast; the detail screen renders `error` inline instead.
+        if (opts?.toastError) toast.show(message);
+      },
     }),
   );
 
@@ -78,16 +87,19 @@ export function useBookClass(onBooked?: () => void) {
  */
 export function BookButton({ c }: { c: BookableClass }) {
   const t = useTheme();
-  const { onBook, isPending } = useBookClass();
+  const { onBook, isPending } = useBookClass(undefined, { toastError: true });
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel="Book class"
+      accessibilityState={{ disabled: isPending, busy: isPending }}
       disabled={isPending}
       onPress={() => onBook(c)}
-      hitSlop={6}
+      hitSlop={10}
       style={({ pressed }) => ({
         minHeight: 36,
-        paddingHorizontal: 14,
+        minWidth: 64,
+        paddingHorizontal: 16,
         borderRadius: 3,
         alignItems: "center",
         justifyContent: "center",

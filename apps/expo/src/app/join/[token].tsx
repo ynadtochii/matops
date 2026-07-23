@@ -60,11 +60,18 @@ export default function JoinScreen() {
     return (
       <Screen center>
         <Stack.Screen options={{ title: "Invite" }} />
-        <UIStack gap={12}>
-          <Heading>Invite not valid</Heading>
-          <Muted>
-            This invite isn&apos;t valid — ask your gym for a new link.
-          </Muted>
+        <UIStack gap={16}>
+          <UIStack gap={8}>
+            <Heading>Invite not valid</Heading>
+            <Muted>
+              This invite isn&apos;t valid or has expired — ask your gym for a
+              new link, or enter their 6-digit ID instead.
+            </Muted>
+          </UIStack>
+          <Button
+            label="Enter a gym ID"
+            onPress={() => router.replace("/onboarding")}
+          />
         </UIStack>
       </Screen>
     );
@@ -74,7 +81,7 @@ export default function JoinScreen() {
   const roleLabel = role === "instructor" ? "an instructor" : "a student";
 
   return (
-    <Screen>
+    <Screen avoidKeyboard>
       <Stack.Screen options={{ title: "Join" }} />
 
       <UIStack gap={24}>
@@ -113,11 +120,9 @@ export default function JoinScreen() {
             ) : null}
             <Button
               label={join.isPending ? "Joining…" : `Join ${academyName}`}
+              loading={join.isPending}
               disabled={
-                join.isPending ||
-                !firstName.trim() ||
-                !lastName.trim() ||
-                !phone.trim()
+                !firstName.trim() || !lastName.trim() || !phone.trim()
               }
               onPress={() => {
                 setError(null);

@@ -10,10 +10,13 @@ import { OverdueBanner } from "~/components/overdue-banner";
 import {
   Button,
   Card,
+  confirm,
+  CopyField,
   ErrorState,
   Eyebrow,
   Field,
   Heading,
+  InlineLoading,
   Loading,
   Mono,
   Screen,
@@ -114,7 +117,8 @@ function ProfileDetails({
       <Stack row gap={8}>
         <Button
           label={update.isPending ? "Saving…" : "Save"}
-          disabled={!canSave || update.isPending}
+          loading={update.isPending}
+          disabled={!canSave}
           onPress={() =>
             update.mutate({
               firstName: firstName.trim(),
@@ -147,60 +151,13 @@ const STATUS_TONE: Record<
   overdue: { label: "Overdue", tone: "error" },
 };
 
-/** A labelled value with a Copy button (the load-bearing manual-transfer step). */
-function CopyRow({
-  label,
-  value,
-  data = false,
-}: {
-  label: string;
-  value: string;
-  data?: boolean;
-}) {
-  const [copied, setCopied] = useState(false);
-  const copy = () => {
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1200);
-    // Loaded lazily + guarded: a dev client built before `expo-clipboard` was
-    // added has no native module, and a top-level import would crash this route.
-    void import("expo-clipboard")
-      .then((Clipboard) => Clipboard.setStringAsync(value))
-      .catch(() => undefined);
-  };
-  return (
-    <View style={{ gap: 4 }}>
-      <Eyebrow>{label}</Eyebrow>
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-        }}
-      >
-        {data ? (
-          <Mono size={16}>{value}</Mono>
-        ) : (
-          <Txt size={16} selectable style={{ flex: 1 }}>
-            {value}
-          </Txt>
-        )}
-        <Pressable onPress={copy} hitSlop={8}>
-          <Txt size={14} weight={600} tone="brand">
-            {copied ? "Copied ✓" : "Copy"}
-          </Txt>
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-
 /**
  * Membership dues (spec S9, ADR 40) — manual bank transfer. Shows what you owe +
  * status, the gym's requisites with a fixed reference code to copy, and an
  * "I paid" button that raises a claim the owner confirms. No card on file.
  */
 function MembershipDues() {
+  const [error, setError] = useState<string | null>(null);
   const dues = useQuery(trpc.payments.myDues.queryOptions());
   const claim = useMutation(
     trpc.payments.claim.mutationOptions({
@@ -208,9 +165,8 @@ function MembershipDues() {
       onError: (err) => setError(err.message || "Could not submit"),
     }),
   );
-  const [error, setError] = useState<string | null>(null);
 
-  if (dues.isPending) return <Loading />;
+  if (dues.isPending) return <InlineLoading />;
   if (dues.isError) {
     return <ErrorState label="your dues" onRetry={() => void dues.refetch()} />;
   }
@@ -248,8 +204,8 @@ function MembershipDues() {
 
       {requisites.bankDetails ? (
         <View style={{ gap: 12 }}>
-          <CopyRow label="Bank details" value={requisites.bankDetails} />
-          <CopyRow
+          <CopyField label="Bank details" value={requisites.bankDetails} />
+          <CopyField
             label="Reference (add to your transfer)"
             value={requisites.reference}
             data
@@ -275,11 +231,21 @@ function MembershipDues() {
         ) : (
           <Button
             label={claim.isPending ? "Submitting…" : "I paid"}
-            disabled={!canPay || claim.isPending || !requisites.bankDetails}
-            onPress={() => {
-              setError(null);
-              claim.mutate({});
-            }}
+            loading={claim.isPending}
+            disabled={!canPay || !requisites.bankDetails}
+            onPress={() =>
+              confirm({
+                title: "Mark this as paid?",
+                message:
+                  "This tells your gym you sent the transfer. They'll confirm it once the money arrives.",
+                confirmLabel: "I paid",
+                destructive: false,
+                onConfirm: () => {
+                  setError(null);
+                  claim.mutate({});
+                },
+              })
+            }
           />
         )
       ) : null}
@@ -295,7 +261,7 @@ function MyRanks() {
   const t = useTheme();
   const ranks = useQuery(trpc.rank.mine.queryOptions());
 
-  if (ranks.isPending) return <Loading />;
+  if (ranks.isPending) return <InlineLoading />;
   if (ranks.isError) {
     return (
       <ErrorState label="your ranks" onRetry={() => void ranks.refetch()} />
@@ -482,6 +448,12 @@ export default function Profile() {
               return (
                 <Pressable
                   key={a.academyId}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Switch to ${a.name}`}
+                  accessibilityState={{
+                    selected: isActive,
+                    disabled: isActive || setActive.isPending,
+                  }}
                   disabled={isActive || setActive.isPending}
                   onPress={() => setActive.mutate({ academyId: a.academyId })}
                   style={{

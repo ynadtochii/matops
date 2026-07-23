@@ -1,7 +1,7 @@
 import { Redirect, Stack } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 
-import { Loading } from "~/components/ui";
+import { ErrorState, Loading, Screen } from "~/components/ui";
 import { trpc } from "~/utils/api";
 import { authClient } from "~/utils/auth";
 
@@ -26,6 +26,18 @@ export default function Index() {
     if (sessionPending) return <Loading />;
     if (!session) return <Redirect href="/sign-in" />;
     if (current.isPending) return <Loading />;
+    // A failed load is NOT "no gym" — retry instead of dumping a member who
+    // already belongs somewhere into the join screen.
+    if (current.isError) {
+      return (
+        <Screen center>
+          <ErrorState
+            label="your account"
+            onRetry={() => void current.refetch()}
+          />
+        </Screen>
+      );
+    }
     if (!current.data) return <Redirect href="/onboarding" />;
     return <Redirect href="/schedule" />;
   };
