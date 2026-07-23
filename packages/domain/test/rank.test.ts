@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  compareRank,
   disciplineLabel,
   formatRank,
   hasRankSystem,
   isRankChange,
+  isRankRegression,
   isValidRank,
   RANK_SYSTEMS,
   rankDisciplines,
@@ -111,5 +113,100 @@ describe("isRankChange", () => {
     expect(
       isRankChange({ belt: "Blue", stripes: 2 }, { belt: "Blue", stripes: 2 }),
     ).toBe(false);
+  });
+});
+
+describe("compareRank", () => {
+  it("orders by belt position first", () => {
+    const white = { belt: "White", stripes: 0 };
+    const blue = { belt: "Blue", stripes: 0 };
+    expect(compareRank("bjj", white, blue)).toBeLessThan(0);
+    expect(compareRank("bjj", blue, white)).toBeGreaterThan(0);
+  });
+
+  it("breaks a same-belt tie by stripes", () => {
+    const one = { belt: "Blue", stripes: 1 };
+    const two = { belt: "Blue", stripes: 2 };
+    expect(compareRank("bjj", one, two)).toBeLessThan(0);
+    expect(compareRank("bjj", two, two)).toBe(0);
+  });
+
+  it("puts a higher belt above a fully-striped lower belt", () => {
+    // White · 4 stripes is still below Blue · 0 — belt dominates stripes.
+    expect(
+      compareRank(
+        "bjj",
+        { belt: "White", stripes: 4 },
+        { belt: "Blue", stripes: 0 },
+      ),
+    ).toBeLessThan(0);
+  });
+});
+
+describe("isRankRegression", () => {
+  it("allows a first rank (no current)", () => {
+    expect(
+      isRankRegression("bjj", null, { belt: "White", stripes: 0 }),
+    ).toBe(false);
+  });
+
+  it("allows a stripe bump on the same belt", () => {
+    expect(
+      isRankRegression(
+        "bjj",
+        { belt: "Blue", stripes: 1 },
+        { belt: "Blue", stripes: 2 },
+      ),
+    ).toBe(false);
+  });
+
+  it("allows a belt promotion even when stripes reset to zero", () => {
+    expect(
+      isRankRegression(
+        "bjj",
+        { belt: "White", stripes: 4 },
+        { belt: "Blue", stripes: 0 },
+      ),
+    ).toBe(false);
+  });
+
+  it("allows setting the same rank (no-op, not a regression)", () => {
+    expect(
+      isRankRegression(
+        "bjj",
+        { belt: "Blue", stripes: 2 },
+        { belt: "Blue", stripes: 2 },
+      ),
+    ).toBe(false);
+  });
+
+  it("rejects dropping a stripe on the same belt", () => {
+    expect(
+      isRankRegression(
+        "bjj",
+        { belt: "Blue", stripes: 2 },
+        { belt: "Blue", stripes: 1 },
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects dropping to a lower belt", () => {
+    expect(
+      isRankRegression(
+        "bjj",
+        { belt: "Purple", stripes: 0 },
+        { belt: "Blue", stripes: 4 },
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects a demotion in a no-stripe system (Judo)", () => {
+    expect(
+      isRankRegression(
+        "judo",
+        { belt: "Green", stripes: 0 },
+        { belt: "Yellow", stripes: 0 },
+      ),
+    ).toBe(true);
   });
 });

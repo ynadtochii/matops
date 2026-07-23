@@ -64,3 +64,15 @@ All rank math is pure (no I/O, no clock) and tested in isolation:
 - Verified by the `rank.ts` domain unit tests first (delivery.md §5) + a PGlite RLS leak test on the three tables; owner/student surfaces ride slices G.2–G.4.
 - **Riskiest assumption:** owners promote in-app often enough to keep rank fresh — if they don't, ranks go stale and students stop trusting the timeline. Cheapest test: watch one real gym through a promotion cycle before investing further. If rank goes stale, the student surface (G.3) is the first thing to reconsider.
 - Deferred: progress automation, custom ladders, bulk promote, the student journal, certificates, kids profiles.
+
+## Addendum — rank only goes up (monotonic promotion)
+
+The original G.2 `set` control accepted a rank change in **any** direction — a demotion was as valid as a promotion. That is wrong for how belts work: in BJJ (and Judo) a rank is **never taken away** as part of normal grading. A downward "set" is almost always a typo (wrong belt or one stripe too many), not an intended demotion.
+
+**Decision:** `rank.set` is now **monotonic** — a rank may be **bumped, never lowered**. Two pure helpers in `rank.ts` enforce it:
+- `compareRank(discipline, a, b)` — orders two ranks in one ladder. Belt position dominates; the stripe count only breaks a tie within one belt (so *White · 4 stripes* is still below *Blue · 0*). A belt not in the ladder sorts below every real belt, so a retired belt can't block a fresh valid one.
+- `isRankRegression(discipline, current, next)` — true only when there is a current rank **and** `next` sits strictly below it. The `set` mutation throws `BAD_REQUEST` on a regression.
+
+**Escape hatch for mistakes:** the correction path is **clear-then-set**, not demote. `rank.clear` removes the member's rank in a discipline (the append-only `rank_promotion` history is kept); with no current rank, the next `set` is unconstrained. The web O4 panel now surfaces a per-discipline **Clear** control (it existed in the router but was never wired into the UI), seeds the Set form to the member's current rank, and disables belt/stripe options below it — so the guard is a safety net, not the primary UX.
+
+This is behavior hardening inside the existing G.2 slice — no schema change, no new domain, the tenant seam untouched. Covered by new `compareRank` / `isRankRegression` unit tests in `rank.test.ts`.

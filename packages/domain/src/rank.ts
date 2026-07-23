@@ -128,3 +128,40 @@ export function isRankChange(
   if (!current) return true;
   return current.belt !== next.belt || current.stripes !== next.stripes;
 }
+
+/**
+ * Order of two ranks in the same discipline's ladder. Returns a negative number
+ * when `a` sits BELOW `b`, `0` when they are the same level, a positive number
+ * when `a` sits ABOVE `b`. Belt position in the ladder dominates; the stripe
+ * count only breaks a tie within one belt (so White · 4 stripes is still below
+ * Blue · 0). A belt not in the ladder sorts as index `-1` (below every real
+ * belt), so a retired belt never blocks a fresh, valid one.
+ */
+export function compareRank(
+  discipline: string,
+  a: { belt: string; stripes: number },
+  b: { belt: string; stripes: number },
+): number {
+  const system = RANK_SYSTEMS[discipline];
+  const ai = system ? system.belts.indexOf(a.belt) : -1;
+  const bi = system ? system.belts.indexOf(b.belt) : -1;
+  if (ai !== bi) return ai - bi;
+  return a.stripes - b.stripes;
+}
+
+/**
+ * Is setting `next` a REGRESSION from `current` — a demotion the owner control
+ * must refuse? Rank only ever goes up (ADR 41): a belt or stripe count may be
+ * bumped, never lowered. True only when there IS a current rank AND `next` sits
+ * strictly below it in the ladder. No current rank, an equal rank, or any
+ * promotion returns false. (A genuine mistake is undone with the clear control,
+ * not by demoting — clearing drops `current`, so the next set is unconstrained.)
+ */
+export function isRankRegression(
+  discipline: string,
+  current: { belt: string; stripes: number } | null,
+  next: { belt: string; stripes: number },
+): boolean {
+  if (!current) return false;
+  return compareRank(discipline, next, current) < 0;
+}

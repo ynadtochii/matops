@@ -10,7 +10,7 @@ import {
   listMembersOf,
 } from "@matops/db";
 import { memberRank, rankPromotion } from "@matops/db/schema";
-import { isRankChange, isValidRank } from "@matops/domain";
+import { isRankChange, isRankRegression, isValidRank } from "@matops/domain";
 import {
   ClearMemberRankSchema,
   MemberActionSchema,
@@ -84,9 +84,11 @@ export const rankRouter = {
 
   /**
    * Set (or change) a member's rank in one discipline (spec O4). Validates the
-   * belt + stripes against the seeded rank system, upserts the current rank, and
-   * appends a promotion record when the rank actually changed (`isRankChange`) —
-   * both writes in the one RLS transaction `ctx.db` already is.
+   * belt + stripes against the seeded rank system, refuses a demotion (rank only
+   * goes up — `isRankRegression`; a mistake is undone with `clear`, not by
+   * lowering), upserts the current rank, and appends a promotion record when the
+   * rank actually changed (`isRankChange`) — both writes in the one RLS
+   * transaction `ctx.db` already is.
    */
   set: staffProcedure
     .input(SetMemberRankSchema)
@@ -110,6 +112,14 @@ export const rankRouter = {
           )
           .limit(1)
       )[0];
+
+      if (isRankRegression(input.discipline, current ?? null, input)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Rank can only go up. To fix a mistake, clear the rank first, then set it again.",
+        });
+      }
 
       if (!isRankChange(current ?? null, input)) {
         return { ok: true as const, changed: false };
