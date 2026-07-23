@@ -7,8 +7,9 @@ import Constants from "expo-constants";
  * devices on the same network can reach the local API.
  */
 export const getBaseUrl = () => {
-  if (process.env.EXPO_PUBLIC_API_URL) {
-    return process.env.EXPO_PUBLIC_API_URL;
+  const apiUrl = process.env.EXPO_PUBLIC_API_URL as string | undefined;
+  if (apiUrl) {
+    return apiUrl;
   }
 
   /**
