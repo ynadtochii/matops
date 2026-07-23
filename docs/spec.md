@@ -163,7 +163,7 @@ No blank waiting screen. A **slim banner** on the schedule: "Pending approval �
 - **Membership plan + dues:** the owner sets a plan (name, price, currency, cycle) and each member's next-due date. No card processor, no auto-charge — this is manual reconciliation.
 - **Who paid / who's overdue:** the O4 roster shows a **status dot** per member — **paid** / **due soon** / **overdue** (derived from the due date, ADR 40) — with an **Overdue** filter. Member detail shows next-due + last confirmed payment.
 - **Confirm claims:** a "claims to confirm" list of student **"I paid"** submissions (S9). One tap to **confirm** (rolls the member's next-due date forward by the cycle) or **reject**. The student's reference code matches the bank-transfer note.
-- **Payment reminders:** automatic **push + email** ~3 days before and on the due day — no owner effort (reuses the Phase-4 notify engine + the daily reminder cron; ADR 34).
+- **Payment reminders:** the engine (push + email, due-soon + on the due day, one per period) is **built**, but v1 ships **no scheduler** (ADR 46), so reminders **do not fire automatically in v1** — they return with the first post-v1 host scheduler. For the pilot the owner is present and nudges in person.
 
 ### O8 · Install as an app (PWA)  *(v1.5 — owner on the mat; ADR 42)*
 - The owner/instructor web app is an **installable PWA**: add it to the iOS / Android home screen and it opens **standalone** (no browser chrome), with the matops icon + brand splash. No app store, no separate binary — the same web app earns its keep on the phone.
@@ -183,7 +183,7 @@ No blank waiting screen. A **slim banner** on the schedule: "Pending approval �
 - **Drop-in / lead form (public web, first visit):** the same gym QR opens a short **public page** (no login): first name, second name, phone, email (optional), and a **consent checkbox** ("OK for the gym to contact me"). Saved as a **lead + attendance**, no capacity impact. The owner follows up with an app link. QR-inside-the-gym is the anti-spam.
 - **Notifications (v1 — push + email, no full comms domain):** a thin helper sends:
   - **Class cancelled** → **push + email** to every booked student (high-stakes — both channels).
-  - **Class reminder** → push, ~2h before (a scheduled job).
+  - **Class reminder** → push, ~2h before (a scheduled job — engine built, but **deferred in v1: no scheduler runs, ADR 46**).
   - **Membership approved** → push ("You're in at {Academy}").
   - Delivered via Expo Push (mobile) + Resend (email). *No live in-app updates (WebSockets) in v1* — screens stay fresh by light polling.
 - **Time zones:** every academy has one; classes render in it. No per-user tz in v1.

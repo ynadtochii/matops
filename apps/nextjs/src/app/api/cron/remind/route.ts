@@ -13,12 +13,13 @@ import { env } from "~/env";
  *   - DUES reminders (v1.3 R.1) — claim members due-soon / overdue not yet
  *     reminded this period (`dues_reminder_period`) and push + email them.
  *
- * This route now runs DAILY (vercel.json `crons`) — enough for dues. The
- * *frequent* (~15 min) cadence that class reminders really want still needs a
- * sub-daily cron / Vercel Pro and stays a Phase-5 concern. Also callable by hand:
+ * v1 runs NO scheduler (ADR 46): this route is a dormant seam, wired to no cron,
+ * so reminders do NOT fire automatically in v1. The sweep logic is built + tested;
+ * re-attach this route to any host scheduler post-v1 (daily is enough for dues,
+ * ~15 min for class reminders). Callable by hand meanwhile:
  *   curl -H "Authorization: Bearer $CRON_SECRET" .../api/cron/remind
  *
- * Protected by CRON_SECRET, exactly like the materialize route.
+ * Protected by CRON_SECRET when set, exactly like the materialize route.
  */
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

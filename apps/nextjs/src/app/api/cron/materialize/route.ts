@@ -13,8 +13,13 @@ import { env } from "~/env";
  * run (row limit + soft time budget) so it never approaches the serverless
  * duration ceiling; leftovers resume on the next tick.
  *
- * Protected by CRON_SECRET: Vercel Cron sends `Authorization: Bearer <secret>`
- * when the env var is set. Wire the schedule in vercel.json.
+ * v1 runs NO scheduler (ADR 46) — this route is a dormant seam, not wired to any
+ * cron. The schedule stays filled by lazy-on-save materialization (6-week horizon);
+ * this endpoint exists to re-extend the horizon cross-academy when a host scheduler
+ * is re-attached post-v1 (or via a manual authenticated call meanwhile).
+ *
+ * Protected by CRON_SECRET when set: a caller sends `Authorization: Bearer <secret>`.
+ * CRON_SECRET is optional now; if unset, the route still refuses to run in production.
  */
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
