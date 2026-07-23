@@ -8,6 +8,7 @@ import { generateAcademyCode, setMemberActive } from "@matops/db";
 import { db } from "@matops/db/client";
 import { sendEmail } from "@matops/notifications";
 
+import { authEnv } from "../env";
 import { ac, roles } from "./permissions";
 
 export function initAuth<
@@ -131,11 +132,11 @@ export function initAuth<
       }),
       magicLink({
         sendMagicLink: async ({ email, token, url }) => {
-          // Always log the link so dev sign-in works with no email provider
-          // configured. `sendEmail` additionally delivers via Resend when
-          // RESEND_API_KEY / RESEND_FROM are set; it no-ops (logged) otherwise
-          // and never throws, so an unconfigured or failing transport can never
-          // break sign-in.
+          // Log the link only in dev so sign-in works with no email provider
+          // configured — production must never write a live magic-link token to
+          // server logs. `sendEmail` delivers via Resend when RESEND_API_KEY /
+          // RESEND_FROM are set; it no-ops (logged) otherwise and never throws,
+          // so an unconfigured or failing transport can never break sign-in.
           //
           // WEB opens `url` directly. MOBILE cannot: the session cookie is set on
           // the verify response, and if the link opens in the system browser that
@@ -143,10 +144,12 @@ export function initAuth<
           // verify the token itself (authClient.magicLink.verify → the expo
           // client stores the returned cookie). We emit a deep link the app
           // handles at `app/magic-link.tsx`.
-          console.log(`[auth] magic link for ${email}: ${url}`);
-          console.log(
-            `[auth] mobile deep link for ${email}: matops://magic-link?token=${token}`,
-          );
+          if (authEnv().NODE_ENV !== "production") {
+            console.log(`[auth] magic link for ${email}: ${url}`);
+            console.log(
+              `[auth] mobile deep link for ${email}: matops://magic-link?token=${token}`,
+            );
+          }
           await sendEmail({
             to: email,
             subject: "Your matops sign-in link",

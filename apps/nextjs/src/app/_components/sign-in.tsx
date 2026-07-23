@@ -8,15 +8,18 @@ import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
 import { Spinner } from "@matops/ui/spinner";
 
+import { env } from "~/env";
 import type { MagicLinkState } from "./sign-in-actions";
 import { sendMagicLinkAction, signInSocialAction } from "./sign-in-actions";
 
 /**
  * Passwordless sign-in (spec S1 / owner onboarding A3). Two ways in, per S1:
  * **Continue with Google** (social) or **email + magic link**. The magic link
- * prints to the dev console until email ships. `callbackURL` returns the user
- * to where they started — e.g. an invite/join page. A social sign-in creates a
- * user with no academy membership, so it lands on the same join gate (ADR 35).
+ * is delivered via Resend; in local dev (no Resend creds needed) it also
+ * prints to the console, so the idle-state copy only mentions that fallback
+ * when `NODE_ENV === "development"`. `callbackURL` returns the user to where
+ * they started — e.g. an invite/join page. A social sign-in creates a user
+ * with no academy membership, so it lands on the same join gate (ADR 35).
  *
  * Both buttons show a pending state (`useFormStatus`) so a submit can't be
  * fired twice and the user sees it working; the magic-link form confirms "check
@@ -110,12 +113,14 @@ export function SignIn({ callbackURL = "/" }: { callbackURL?: string }) {
           <span className="text-destructive">
             Couldn&apos;t send the link. Check the address and try again.
           </span>
-        ) : (
+        ) : env.NODE_ENV === "development" ? (
           <>
             We&apos;ll email you a sign-in link. In development, copy the{" "}
             <code className="text-xs">[auth] magic link …</code> URL from the
             terminal.
           </>
+        ) : (
+          "We'll email you a sign-in link."
         )}
       </p>
     </div>
