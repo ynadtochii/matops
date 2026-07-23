@@ -71,13 +71,26 @@ wins the Apple + PCI + legal points. It does **not** make a Vercel Hobby deploy
 compliant; move the money-making deployment off Hobby (self-host is cheapest and
 de-locks) or buy Pro.
 
+## Hosting decision (2026-07-23)
+
+**Stay on Vercel.** Start on Hobby; **upgrade to Pro ($20/mo) reactively** if an
+issue arrives (Vercel flags commercial use, a limit is hit, or a sub-daily cron is
+wanted). Self-host stays the documented escape hatch (§ lock-in above,
+architecture.md §9) but is **not** the plan for the pilot. Portability was kept
+cheap on purpose, so this is a low-risk default.
+
+Caveat kept honest: Hobby is non-commercial, and a live gym using the dues screen
+meets Vercel's commercial definition from day one — so "if an issue arrives"
+realistically means "if Vercel flags it." Enforcement is usually warned-first;
+Pro removes the question entirely.
+
 ## Recommended pilot stack
 
-- **Web:** self-host on **Railway / Render** (no commercial trap, no Vercel-Cron
-  lock) — or stay on Vercel and budget **$20/mo Pro** once real dues go live.
+- **Web:** **Vercel** — Hobby now, Pro ($20/mo) if flagged / a limit hits / a
+  sub-daily cron is wanted (decision above).
 - **DB:** **Neon Free.**
 - **Email:** **Resend Free** on a dedicated `login.` subdomain (SPF/DKIM/DMARC).
 - **Mobile:** **Android first, $0** (APK via EAS). iOS only when paying **$99/yr**.
 
-**Start cost: $0.** **+$99/yr** for iPhones. **+$20/mo** if staying on Vercel with
-live dues.
+**Start cost: $0.** **+$99/yr** for iPhones. **+$20/mo** for Vercel Pro when a real
+gym runs live dues.
