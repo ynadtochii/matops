@@ -1,0 +1,170 @@
+import { useState } from "react";
+import { Pressable, Switch, View } from "react-native";
+import { Stack, useRouter } from "expo-router";
+import { useMutation } from "@tanstack/react-query";
+
+import type { ThemeMode } from "~/components/theme";
+import { useThemeMode } from "~/components/theme";
+import {
+  Button,
+  Eyebrow,
+  Heading,
+  Screen,
+  Txt,
+  Stack as UIStack,
+  useTheme,
+} from "~/components/ui";
+import { trpc } from "~/utils/api";
+import { authClient } from "~/utils/auth";
+import {
+  forgetPushToken,
+  getPushToken,
+  pushEnabled,
+  rememberPushToken,
+  setPushEnabled,
+  storedPushToken,
+} from "~/utils/push";
+
+/**
+ * Notification setting (spec S12) — one switch that registers or drops this
+ * device's push token, so "off" means nothing is sent. No server preference.
+ */
+function NotificationToggle() {
+  const t = useTheme();
+  const [on, setOn] = useState(pushEnabled());
+  const register = useMutation(trpc.pushToken.register.mutationOptions());
+  const unregister = useMutation(trpc.pushToken.unregister.mutationOptions());
+
+  const toggle = (next: boolean) => {
+    setOn(next);
+    void setPushEnabled(next);
+    if (next) {
+      void getPushToken().then((reg) => {
+        if (reg) {
+          register.mutate(reg, {
+            onSuccess: () => void rememberPushToken(reg.token),
+          });
+        }
+      });
+    } else {
+      const token = storedPushToken();
+      if (token) {
+        unregister.mutate({ token });
+        void forgetPushToken();
+      }
+    }
+  };
+
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 16,
+      }}
+    >
+      <View style={{ flex: 1 }}>
+        <Txt size={16}>Push notifications</Txt>
+        <Txt size={14} tone="muted">
+          Class reminders and cancellations.
+        </Txt>
+      </View>
+      <Switch
+        value={on}
+        onValueChange={toggle}
+        trackColor={{ true: t.brand, false: t.input }}
+        thumbColor="#ffffff"
+      />
+    </View>
+  );
+}
+
+/** Light / Dark / System selector (mirrors the web ThemeToggle). */
+function AppearanceControl() {
+  const t = useTheme();
+  const { mode, setMode } = useThemeMode();
+  const options: { key: ThemeMode; label: string }[] = [
+    { key: "dark", label: "Dark" },
+    { key: "light", label: "Light" },
+    { key: "auto", label: "System" },
+  ];
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        borderWidth: 1,
+        borderColor: t.input,
+        borderRadius: 3,
+        overflow: "hidden",
+      }}
+    >
+      {options.map((o) => {
+        const active = mode === o.key;
+        return (
+          <Pressable
+            key={o.key}
+            onPress={() => setMode(o.key)}
+            style={{
+              flex: 1,
+              paddingVertical: 10,
+              alignItems: "center",
+              backgroundColor: active ? t.brandWash : "transparent",
+            }}
+          >
+            <Txt
+              size={14}
+              weight={active ? 600 : 400}
+              tone={active ? "brand" : "muted"}
+            >
+              {o.label}
+            </Txt>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/**
+ * Settings (spec S12, v1.8 slice 5) — appearance, push notifications, and sign
+ * out, split out of Profile (S7) so Profile holds only identity + membership.
+ * Reached via the gear in the Profile header; a pushed screen, not a tab.
+ */
+export default function Settings() {
+  const router = useRouter();
+  const unregisterPush = useMutation(
+    trpc.pushToken.unregister.mutationOptions(),
+  );
+
+  const signOut = () => {
+    const token = storedPushToken();
+    if (token) {
+      unregisterPush.mutate({ token });
+      void forgetPushToken();
+    }
+    void authClient.signOut();
+    router.replace("/");
+  };
+
+  return (
+    <Screen>
+      <Stack.Screen options={{ title: "Settings" }} />
+      <UIStack gap={24}>
+        <Heading>Settings</Heading>
+
+        <UIStack gap={8}>
+          <Eyebrow>Appearance</Eyebrow>
+          <AppearanceControl />
+        </UIStack>
+
+        <UIStack gap={8}>
+          <Eyebrow>Notifications</Eyebrow>
+          <NotificationToggle />
+        </UIStack>
+
+        <Button label="Sign out" variant="outline" onPress={signOut} />
+      </UIStack>
+    </Screen>
+  );
+}

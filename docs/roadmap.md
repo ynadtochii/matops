@@ -95,6 +95,16 @@ One row per slice. This is the single answer to *"what's left, on which surface?
 | G.2 | Owner: set + promote rank per discipline, history (O4) | — | done | done | — | done | — |
 | G.3 | Student: view ranks + promotion timeline (S7) | — | done | — | done | — | — |
 | G.4 | Staff-private notes on a member (O4) | — | done | done | — | — | — |
+| **v1.8** | **Mobile ease-of-use** *(IA + core-flow friction; no domain / migration / back-end; ADR 45)* | | | | | | |
+| M.1 | Inline booking on schedule row (shared `useBookClass`) | — | — | — | done | — | — |
+| M.2 | De-dupe class tabs (Training → My classes) | — | — | — | done | — | — |
+| M.3 | Overdue warning header (S11) | — | — | — | done | — | — |
+| M.4 | QR walk-in = book+attend; remove Check-in tab (S8) | — | — | done | done | — | — |
+| M.5 | Split Settings from Profile (S12) | — | — | — | done | — | — |
+| M.6 | Booking toast + sticky S5 CTA | — | — | — | done | — | — |
+| M.7 | Dark-theme warmth (mobile-only override) | — | — | — | done² | — | — |
+
+² Static gates green; the QR deep-link round-trip, overdue strip, toast, and dark-warmth tweak want a **real-device pass** (no simulator in the build env) — flagged in ADR 45.
 
 ---
 
@@ -205,6 +215,21 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 - **U.2 Geist typography + aligned kit** — **DONE.** `@expo-google-fonts/geist` + `-geist-mono` via `useFonts` (splash held); `Txt` / `Mono` / `Eyebrow` / `Stat` apply Geist + tabular mono to every data value. `components/ui.tsx` rebuilt to the web vocabulary — `Card` (filled/outline), dashed `Callout`, `StatusPill`, `CountBadge`, mono field labels, input focus ring, 3px radius — plus a `Blueprint` sign-in hero (the RN motif). Green: `pnpm -F @matops/expo typecheck · lint · format`; `expo export` bundles clean. **Dev-client rebuild + device check pending** (new font dep; no simulator — the standing handoff pattern).
 
 **Cut:** none — full scope shipped. The remaining follow-up is collapsing the local `components/ui.tsx` kit onto the shared `@matops/ui` RN primitives (`button.native` / `logo.native`); the screens import behind `~/components/ui`, which is the seam.
+
+---
+
+### v1.8 — Mobile ease-of-use (IA + core-flow friction)
+**Exit test:** a student books any bookable class from the Schedule list in **one tap**; the two class tabs read as "all" (Schedule) vs "mine" (My classes) with a single next-class card; an **overdue** member sees a thin, self-clearing warning strip on the tab screens that taps through to dues; there is **no Check-in tab** — a walk-in scans the gym poster and the app books + marks them attended; **appearance / notifications / sign out** live on a Settings screen behind a Profile gear; booking shows a toast and the S5 action sits in the thumb zone. Decision: **ADR [45](issues/45-mobile-ease-of-use.md)**. **No domain / migration / back-end change** — reuses `booking` / `checkin` / `payments` / `academy` as-is.
+
+- **M.1 Inline booking** — **DONE.** Shared `components/book-control.tsx` (`useBookClass` hook + `BookButton`) de-dupes the book rule (schedule + detail); each bookable Schedule row books in one tap (soft-cap confirm kept). Spec: S4/S5.
+- **M.2 De-dupe class tabs** — **DONE.** Rename Training → **My classes** (display only; route file kept); remove Schedule's duplicate next-class card. Spec: S4/S6.
+- **M.3 Overdue header (S11)** — **DONE.** `components/overdue-banner.tsx` — thin dashed error strip on Schedule / My classes / Profile when `payments.myDues.status === "overdue"`; taps to Profile dues; self-clears on confirm. Spec: new S11.
+- **M.4 QR walk-in (S8 redefined)** — **DONE.** Removed the Check-in tab; new pushed `app/checkin/[academyId].tsx` (deep link `matops://checkin/<id>`) sets active academy → resolves the live class → book + attend. Web: the public `/checkin/<id>` page keeps the drop-in form + gains an "Open the app" deep link. No back-end change. Spec: S8.
+- **M.5 Settings split (S12)** — **DONE.** `app/settings.tsx` (appearance + push toggle + sign out) behind a ⚙ gear in the Profile header; Profile now scrollable, identity + membership only. Spec: S7 + new S12.
+- **M.6 Booking feedback** — **DONE.** Minimal `components/toast.tsx` provider (booking / cancel toast) + sticky bottom Book/Cancel bar on S5. Spec: S4/S5.
+- **M.7 Dark-theme warmth** — **DONE (needs device).** Mobile-only override in `theme.tsx` warms the dark `card`/`popover` surfaces; shared web tokens untouched.
+
+**Verify:** `pnpm -F @matops/expo typecheck · lint` green; repo-wide typecheck 17/17, lint 15/15, tests 50 pass. Real-device pass deferred (no simulator) — flagged in ADR 45.
 
 ---
 

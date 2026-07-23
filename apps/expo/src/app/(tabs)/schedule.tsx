@@ -1,14 +1,13 @@
-import { useMemo, useState } from "react";
-import { Alert, ScrollView, View } from "react-native";
+import { useMemo } from "react";
+import { ScrollView, View } from "react-native";
 import { useRouter } from "expo-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-
-import { nextBookableClass } from "@matops/domain";
+import { useQuery } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "~/utils/api";
+import { BookButton } from "~/components/book-control";
+import { OverdueBanner } from "~/components/overdue-banner";
 import {
   Banner,
-  Button,
   Card,
   EmptyState,
   ErrorState,
@@ -52,10 +51,25 @@ function BookedPill() {
   );
 }
 
-/** One class row (spec S4: time · title · N spots left; a Booked pill if booked). */
-function ClassCard({ c, onPress }: { c: ClassRow; onPress: () => void }) {
+/**
+ * One class row (spec S4: time · title · N spots left; a Booked pill if booked).
+ * Since v1.8 (slice 1) a bookable row carries a compact inline **Book** button,
+ * so booking is one tap here — the detail (S5) is no longer required to book.
+ * Tapping the row still opens the detail for full info + Cancel.
+ */
+function ClassCard({
+  c,
+  onPress,
+  now,
+}: {
+  c: ClassRow;
+  onPress: () => void;
+  now: Date;
+}) {
   const cancelled = c.status === "cancelled";
   const booked = c.myBooking === "booked";
+  const past = new Date(c.startsAt).getTime() <= now.getTime();
+  const bookable = !cancelled && !booked && !past;
   return (
     <Card variant="filled" onPress={onPress}>
       <View
@@ -94,79 +108,14 @@ function ClassCard({ c, onPress }: { c: ClassRow; onPress: () => void }) {
             {booked && !cancelled ? <BookedPill /> : null}
           </View>
         </View>
-        <Txt size={18} tone="muted">
-          ›
-        </Txt>
+        {bookable ? (
+          <BookButton c={c} />
+        ) : (
+          <Txt size={18} tone="muted">
+            ›
+          </Txt>
+        )}
       </View>
-    </Card>
-  );
-}
-
-/** "Today · 18:00" style label for the featured card. */
-function whenLabel(startsAt: Date | string): string {
-  const d = new Date(startsAt);
-  const isToday = dayKey(d) === dayKey(new Date());
-  return `${isToday ? "Today" : dayFmt.format(d)} · ${timeFmt.format(d)}`;
-}
-
-/**
- * The one-tap "Next class" card (v1.3, F.1 — spec S4). Features the class the
- * student would book next, with a single Book button and the soft-capacity
- * confirm — no search, no navigation. Reuses `booking.book` + the schedule data.
- */
-function NextClassCard({ c }: { c: ClassRow }) {
-  const queryClient = useQueryClient();
-  const [error, setError] = useState<string | null>(null);
-  const book = useMutation(
-    trpc.booking.book.mutationOptions({
-      onSuccess: () => queryClient.invalidateQueries(trpc.class.pathFilter()),
-      onError: (err) => setError(err.message || "Could not book"),
-    }),
-  );
-  const booked = c.myBooking === "booked";
-  const over = c.capacity > 0 && c.bookingCount >= c.capacity;
-  const doBook = () => {
-    setError(null);
-    book.mutate({ classId: c.id });
-  };
-  const onBook = () => {
-    if (over) {
-      Alert.alert("This class looks full", "Book anyway?", [
-        { text: "Cancel", style: "cancel" },
-        { text: "Book anyway", onPress: doBook },
-      ]);
-    } else {
-      doBook();
-    }
-  };
-
-  return (
-    <Card variant="hero" style={{ gap: 12, marginBottom: 20 }}>
-      <Eyebrow>{booked ? "Your next class" : "Book your next class"}</Eyebrow>
-      <View style={{ gap: 4 }}>
-        <Txt size={18} weight={600}>
-          {c.title}
-        </Txt>
-        <Mono size={14} tone="muted">
-          {whenLabel(c.startsAt)} · {spotsLeftLabel(c.capacity, c.bookingCount)}
-        </Mono>
-      </View>
-      {error ? (
-        <Txt size={14} tone="error">
-          {error}
-        </Txt>
-      ) : null}
-      {booked ? (
-        <Txt size={16} weight={600} tone="brand">
-          ✓ You&apos;re booked
-        </Txt>
-      ) : (
-        <Button
-          label={book.isPending ? "Booking…" : "Book"}
-          disabled={book.isPending}
-          onPress={onBook}
-        />
-      )}
     </Card>
   );
 }
@@ -189,12 +138,8 @@ export default function Schedule() {
 
   const week = useQuery(trpc.class.mine.queryOptions({ from, to }));
 
-  const featured = useMemo(
-    () => nextBookableClass(week.data ?? [], new Date()),
-    [week.data],
-  );
-
-  const todayKey = dayKey(new Date());
+  const now = new Date();
+  const todayKey = dayKey(now);
   const byDay = useMemo(() => {
     const groups = new Map<string, ClassRow[]>();
     for (const c of week.data ?? []) {
@@ -210,6 +155,8 @@ export default function Schedule() {
 
   return (
     <Screen>
+      <OverdueBanner />
+
       <View
         style={{
           flexDirection: "row",
@@ -246,7 +193,6 @@ export default function Schedule() {
           contentContainerStyle={{ paddingBottom: 24 }}
           showsVerticalScrollIndicator={false}
         >
-          {featured && <NextClassCard c={featured} />}
           <View style={{ gap: 20 }}>
             {byDay.map(([key, rows]) => (
               <View key={key} style={{ gap: 8 }}>
@@ -259,6 +205,7 @@ export default function Schedule() {
                   <ClassCard
                     key={c.id}
                     c={c}
+                    now={now}
                     onPress={() =>
                       router.push({
                         pathname: "/class/[id]",

@@ -1,6 +1,7 @@
 import { Logo } from "@matops/ui/logo";
 
 import { DropInForm } from "./drop-in-form";
+import { OpenInApp } from "./open-in-app";
 
 /**
  * Public drop-in / check-in page (spec §4, slice 3.5). No login — the gym QR
@@ -17,6 +18,7 @@ export default async function DropInPage({
     <main className="container flex min-h-screen flex-col items-center justify-center gap-8 py-16">
       <Logo size={26} />
       <DropInForm academyId={academyId} />
+      <OpenInApp academyId={academyId} />
     </main>
   );
 }

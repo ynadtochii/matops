@@ -27,6 +27,26 @@ const STORE_KEY = "theme-mode";
 /** Dark-first: the palette shown until the stored preference (if any) loads. */
 const DEFAULT_MODE: ThemeMode = "dark";
 
+/**
+ * Mobile-only dark surface warmth (v1.8 slice 7). The shared dark palette pairs a
+ * warm stone `muted`/`border` (#292524) with a near-neutral `card` (#0a0a0a),
+ * which can read a touch cold on device against the pure-black background. We warm
+ * the card/popover surfaces into the same stone family — a warm near-black that
+ * also lifts them slightly off pure black for separation. The pure-black
+ * `background`, the mono data legibility, and the shared web palette are all
+ * untouched. NOTE: tuned without a device (no simulator in this env) — confirm on
+ * real hardware, per the plan.
+ */
+const DARK: Theme = {
+  ...tokens.dark,
+  card: "#0f0d0c",
+  popover: "#0f0d0c",
+};
+
+/** The palette for the resolved scheme, with the mobile dark warmth applied. */
+const palette = (resolved: ResolvedTheme): Theme =>
+  resolved === "dark" ? DARK : tokens.light;
+
 const isMode = (v: string | null): v is ThemeMode =>
   v === "light" || v === "dark" || v === "auto";
 
@@ -82,7 +102,7 @@ export function ThemeProvider({ children }: React.PropsWithChildren) {
   }, []);
 
   const value = React.useMemo<ThemeContextValue>(
-    () => ({ mode, resolved, theme: tokens[resolved], setMode }),
+    () => ({ mode, resolved, theme: palette(resolved), setMode }),
     [mode, resolved, setMode],
   );
 
@@ -99,5 +119,5 @@ export function useThemeMode(): ThemeContextValue {
 /** The active palette (design tokens for the resolved scheme). Dark by default. */
 export function useTheme(): Theme {
   const ctx = React.use(ThemeContext);
-  return ctx ? ctx.theme : tokens.dark;
+  return ctx ? ctx.theme : DARK;
 }

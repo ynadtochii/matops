@@ -8,6 +8,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { fontAssets, sans } from "~/components/fonts";
 import { PushSync } from "~/components/push-sync";
 import { ThemeProvider, useThemeMode } from "~/components/theme";
+import { ToastProvider } from "~/components/toast";
 import { queryClient } from "~/utils/api";
 
 import "../styles.css";
@@ -55,8 +56,10 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <PushSync />
-        <Chrome />
+        <ToastProvider>
+          <PushSync />
+          <Chrome />
+        </ToastProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );

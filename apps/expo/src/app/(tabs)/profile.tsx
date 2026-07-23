@@ -1,13 +1,12 @@
-import { useState } from "react";
-import { Pressable, Switch, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useEffect, useRef, useState } from "react";
+import { Pressable, ScrollView, View } from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { PaymentStatus } from "@matops/domain";
 import { disciplineLabel, formatRank } from "@matops/domain";
 
-import type { ThemeMode } from "~/components/theme";
-import { useThemeMode } from "~/components/theme";
+import { OverdueBanner } from "~/components/overdue-banner";
 import {
   Button,
   Card,
@@ -26,115 +25,6 @@ import {
 } from "~/components/ui";
 import { trpc } from "~/utils/api";
 import { authClient } from "~/utils/auth";
-import {
-  forgetPushToken,
-  getPushToken,
-  pushEnabled,
-  rememberPushToken,
-  setPushEnabled,
-  storedPushToken,
-} from "~/utils/push";
-
-/**
- * Notification setting (spec S7) — one switch that registers or drops this
- * device's push token, so "off" means nothing is sent. No server preference.
- */
-function NotificationToggle() {
-  const t = useTheme();
-  const [on, setOn] = useState(pushEnabled());
-  const register = useMutation(trpc.pushToken.register.mutationOptions());
-  const unregister = useMutation(trpc.pushToken.unregister.mutationOptions());
-
-  const toggle = (next: boolean) => {
-    setOn(next);
-    void setPushEnabled(next);
-    if (next) {
-      void getPushToken().then((reg) => {
-        if (reg) {
-          register.mutate(reg, {
-            onSuccess: () => void rememberPushToken(reg.token),
-          });
-        }
-      });
-    } else {
-      const token = storedPushToken();
-      if (token) {
-        unregister.mutate({ token });
-        void forgetPushToken();
-      }
-    }
-  };
-
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 16,
-      }}
-    >
-      <View style={{ flex: 1 }}>
-        <Txt size={16}>Push notifications</Txt>
-        <Txt size={14} tone="muted">
-          Class reminders and cancellations.
-        </Txt>
-      </View>
-      <Switch
-        value={on}
-        onValueChange={toggle}
-        trackColor={{ true: t.brand, false: t.input }}
-        thumbColor="#ffffff"
-      />
-    </View>
-  );
-}
-
-/** Light / Dark / System selector (mirrors the web ThemeToggle). */
-function AppearanceControl() {
-  const t = useTheme();
-  const { mode, setMode } = useThemeMode();
-  const options: { key: ThemeMode; label: string }[] = [
-    { key: "dark", label: "Dark" },
-    { key: "light", label: "Light" },
-    { key: "auto", label: "System" },
-  ];
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        borderWidth: 1,
-        borderColor: t.input,
-        borderRadius: 3,
-        overflow: "hidden",
-      }}
-    >
-      {options.map((o) => {
-        const active = mode === o.key;
-        return (
-          <Pressable
-            key={o.key}
-            onPress={() => setMode(o.key)}
-            style={{
-              flex: 1,
-              paddingVertical: 10,
-              alignItems: "center",
-              backgroundColor: active ? t.brandWash : "transparent",
-            }}
-          >
-            <Txt
-              size={14}
-              weight={active ? 600 : 400}
-              tone={active ? "brand" : "muted"}
-            >
-              {o.label}
-            </Txt>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
 
 /**
  * Editable personal details (spec S7, slice B.3). Name + phone are editable;
@@ -481,15 +371,33 @@ function MyRanks() {
   );
 }
 
+/** Gear glyph for the header — opens Settings (S12). Emoji renders from the
+ * system font, independent of Geist, so no icon-font dependency is added. */
+function SettingsButton({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Settings"
+      hitSlop={10}
+      onPress={onPress}
+    >
+      <Txt size={22}>⚙️</Txt>
+    </Pressable>
+  );
+}
+
 /**
- * Profile / account (spec S7) — name, phone, current academy, switcher,
- * appearance, notifications, and sign out. The switcher appears only when the
- * student trains at 2+ gyms. This is the mobile student lens (docs/issues/18).
+ * Profile / account (spec S7) — identity (name/phone/email), rank, membership
+ * dues, and the multi-academy switcher (2+ gyms only). Appearance, notifications,
+ * and sign out moved to Settings (S12, v1.8 slice 5), reached via the header gear.
+ * The overdue strip (S11) can deep-link here with `?focus=dues` to land on the
+ * pay section. This is the mobile student lens (docs/issues/18).
  */
 export default function Profile() {
   const t = useTheme();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { focus } = useLocalSearchParams<{ focus?: string }>();
   const { data: session, refetch: refetchSession } = authClient.useSession();
   const current = useQuery(trpc.academy.current.queryOptions());
   const academies = useQuery(trpc.academy.listMineStudent.queryOptions());
@@ -500,19 +408,14 @@ export default function Profile() {
     }),
   );
 
-  const unregisterPush = useMutation(
-    trpc.pushToken.unregister.mutationOptions(),
-  );
-
-  const signOut = () => {
-    const token = storedPushToken();
-    if (token) {
-      unregisterPush.mutate({ token });
-      void forgetPushToken();
+  // Best-effort scroll to the dues section when arriving from the overdue strip.
+  const scrollRef = useRef<ScrollView>(null);
+  const duesY = useRef<number | null>(null);
+  useEffect(() => {
+    if (focus === "dues" && duesY.current != null) {
+      scrollRef.current?.scrollTo({ y: duesY.current, animated: true });
     }
-    void authClient.signOut();
-    router.replace("/");
-  };
+  }, [focus, session]);
 
   if (!session) {
     return <Loading />;
@@ -526,9 +429,27 @@ export default function Profile() {
 
   return (
     <Screen>
-      <Stack gap={24}>
-        <Heading>{user.name || user.email}</Heading>
+      <OverdueBanner />
 
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          marginBottom: 16,
+        }}
+      >
+        <Heading>{user.name || user.email}</Heading>
+        <SettingsButton onPress={() => router.push("/settings")} />
+      </View>
+
+      <ScrollView
+        ref={scrollRef}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ gap: 24, paddingBottom: 24 }}
+        showsVerticalScrollIndicator={false}
+      >
         <ProfileDetails
           name={user.name || ""}
           phone={phone}
@@ -545,10 +466,13 @@ export default function Profile() {
           <MyRanks />
         </Stack>
 
-        <Stack gap={8}>
+        <View
+          style={{ gap: 8 }}
+          onLayout={(e) => (duesY.current = e.nativeEvent.layout.y)}
+        >
           <Eyebrow>Membership dues</Eyebrow>
           <MembershipDues />
-        </Stack>
+        </View>
 
         {list.length >= 2 && (
           <Stack gap={8}>
@@ -586,19 +510,7 @@ export default function Profile() {
             })}
           </Stack>
         )}
-
-        <Stack gap={8}>
-          <Eyebrow>Appearance</Eyebrow>
-          <AppearanceControl />
-        </Stack>
-
-        <Stack gap={8}>
-          <Eyebrow>Notifications</Eyebrow>
-          <NotificationToggle />
-        </Stack>
-
-        <Button label="Sign out" variant="outline" onPress={signOut} />
-      </Stack>
+      </ScrollView>
     </Screen>
   );
 }

@@ -61,50 +61,59 @@ No blank waiting screen. A **slim banner** on the schedule: "Pending approval �
 
 ### S4 · Schedule  *(home — the core screen)*
 - This week's classes, grouped by day (Today first). Each row: **title · time · instructor · "N spots left"**.
-- **Today / next card** *(v1.3, F.1):* a card at the top shows the one class you'd book next, with a single **Book** button — the common case is one tap, no navigation.
+- **Inline book** *(v1.8, slice 1):* each upcoming, bookable row has a compact **Book** control — booking is **one tap from the list** (plus the "looks full — book anyway?" confirm when over capacity). A booked row shows the **Booked** pill; cancelled / past rows show no control. *(This replaced the old v1.3 top "Today / next" card, which moved to S6 so the two class tabs don't duplicate it — v1.8 slice 2.)*
 - Optional discipline filter chip row (BJJ / No-Gi / …) — only if the academy uses disciplines.
-- Tap a class → **S5**. Your already-booked classes show a **Booked** pill inline.
+- Tap a class → **S5** (full info + cancel; no longer required to book).
 - Empty state: "No classes scheduled this week."
 
 ### S5 · Class detail + book/cancel
 - Title, discipline, day/time, duration, instructor, capacity ("8 / 12").
-- **Booking is never blocked.** Primary button:
-  - Not booked → **Book** (optimistic; success toast). Pending members can book too; theirs is tagged **"pending approval"**.
+- **Booking is never blocked.** Primary action, in a **sticky bottom bar** (thumb zone; v1.8 slice 6) while the details scroll above:
+  - Not booked → **Book** (success **toast**, e.g. "Booked — Tue · 18:00"). Pending members can book too; theirs is tagged **"pending approval"**.
   - When the class is at/over capacity → the count shows **red** ("**22/20 · may be busy**") and Book asks **"This class looks full — book anyway?"** → user decides; the owner manages the room.
-  - Booked → **Cancel booking**.
+  - Booked → **Cancel booking** (also toasts).
+  - *Booking here is optional — the S4 schedule row books inline (v1.8). The shared `useBookClass` rule drives both surfaces.*
 - **Who's in the class:** **approved members** can see the **names** of other approved attendees. **Pending members and drop-ins show only as a count** (e.g. "+3 others"). A pending viewer sees only counts, no names. *(Owner/coach see everyone by name for attendance.)*
 - Cancelled class → shown read-only as **Cancelled**.
 
-### S6 · My classes  *(its own **Training** tab — v1.2 B.2)*
-- A **next-class card** at the top (the soonest upcoming booked class; provisional labelled "pending approval").
+### S6 · My classes  *(its own tab — v1.2 B.2; renamed **Training → My classes** in v1.8 slice 2)*
+- A **next-class card** at the top (the soonest upcoming booked class; provisional labelled "pending approval"). This is the **only** "next class" card in the app now — Schedule (S4) no longer duplicates it (v1.8 slice 2), so "all classes" (S4) vs "mine" (S6) is self-explaining.
 - A **My Training** stats card (see S7 — total · this month · streak · favorite · days since last class).
 - **Upcoming** classes (confirmed and provisional, clearly labelled; cancel from here too).
 - **Past** (attended) — a light history; read-only.
 - *(Reads `booking.mine`; the pure `splitMyClasses` / `nextClass` divide the list — ADR 39. Built in v1.2; was previously "folded into the schedule".)*
 
 ### S7 · Profile / account
-- Name, phone, current academy, sign out. **Name and phone are editable** (edit → save; email is read-only — it's the login identity + notification channel). *(v1.2 B.3.)*
-- **My Training stats** (v1.2 B.1 — surfaced on the Training tab, S6): total attended sessions · this month · week **streak** · favorite discipline + weekday · days since last class. Per-academy, from attendance already stored (ADR 39). Empty state until the first check-in.
+- Identity + membership only (v1.8 slice 5 moved app settings to **S12**). Name, phone, email, current academy. **Name and phone are editable** (edit → save; email is read-only — it's the login identity + notification channel). *(v1.2 B.3.)* Content **scrolls**; a **⚙ gear** in the header opens Settings (S12).
+- **My Training stats** (v1.2 B.1 — surfaced on the My classes tab, S6): total attended sessions · this month · week **streak** · favorite discipline + weekday · days since last class. Per-academy, from attendance already stored (ADR 39). Empty state until the first check-in.
 - **My rank** (v1.4 G.3, ADR 41): your rank in each discipline (e.g. *BJJ · Blue · 2 stripes*) plus a short **promotion timeline** (when you were promoted). **Read-only** — only the gym sets rank. Empty until a coach sets it.
+- **Membership dues** (S9) live here (quiet). Arriving from the S11 overdue strip scrolls to this section.
 - **Academy switcher** — shown only if the student belongs to >1 academy; switching changes the active academy and all data follows.
-- **Notification settings** (thin): a single **Push notifications** on/off toggle (v1 — one switch covers reminders and cancellation alerts; turning it off drops this device's push token so nothing is sent). Separate per-event toggles are a later iteration.
 
-### S8 · Check in (QR)
-- Tap **Check in** (or scan the gym's poster) → the app reads the **gym QR** → confirms *"Check in to {today's class}?"* → one tap → marked **present**.
-- If not booked, this **books + attends** in the same tap. Works **even if the class is full** — you're physically there; capacity only governs reservations.
-- The single lowest-friction action in the product: show up, one tap, tracked.
+### S8 · Check in (QR walk-in)  *(redefined in v1.8 slice 4 — booking is the pre-commit; the owner marks attendance after class)*
+- **No in-app Check-in tab or list** (removed v1.8). The only surviving check-in path is the **gym QR walk-in** for a student who did **not** book.
+- The gym's poster QR encodes the public **`https://…/checkin/<academyId>`** page. A first-time, no-app visitor uses the **drop-in form** (§4). A **member with the app** taps **"Open the app to check in"** there → a deep link `matops://checkin/<academyId>` opens the app → it **books + marks attended** for the class happening now → *"You're checked in ✓"*. Native camera + deep link — **no in-app scanner, no camera permission**.
+- Works **even if the class is full** (you're physically there); **already booked → attend, no double-book**; **pending member → allowed** (provisional). Edge messages, never a dead end: not signed in → sign in then complete; no class live → *"No class to check into right now."*; not a member → clear message (owner can still mark present, O5).
 
 ### S9 · Pay (dues + requisites)  *(v1.3 — manual bank transfer; ADR 40)*
-- **What you owe, at a glance:** your plan, amount, and next-due date, with a status — **paid** / **due soon** / **overdue** (derived from the due date, ADR 40). Empty until the gym sets up your dues.
+- **What you owe, at a glance:** your plan, amount, and next-due date, with a status — **paid** / **due soon** / **overdue** (derived from the due date, ADR 40). Empty until the gym sets up your dues. *(When **overdue**, a global header (S11) also promotes it across the tab screens.)*
 - **How to pay → requisites card:** the gym's bank details plus a **reference code** to put in the transfer note (copy buttons on each). You pay in your own bank app. *(No card on file, no in-app card payment in v1.3 — manual bank transfer only.)*
 - **"I paid":** after you transfer, tap **I paid** (optionally attach a screenshot as proof). This raises a claim the owner confirms (O7); when they confirm, the status turns to paid and the next-due date rolls forward.
 - One open claim per period (you can't double-claim); the reference code is what lets the owner match your transfer fast.
 
 ### S10 · Home-screen widget  *(v1.3 — native, fast-follow; ADR 27 promoted)*
-- The next class you'd book, on the **phone home screen** — one tap to book **without opening the app**. Mirrors the S4 "Today / next" card.
+- The next class you'd book, on the **phone home screen** — one tap to book **without opening the app**. Mirrors the S6 next-class card.
 - Native widget code (iOS WidgetKit / Android); ships as a fast-follow, last in the wave, off the payments critical path.
 
-**Student v1 = 8 screens** (S1–S8). **v1.3 adds S9 (pay) + S10 (home widget).** Core loop (S4 → S5 → booked) is two taps from open; checking in is one; the S4 "Today / next" card makes the common booking one tap.
+### S11 · Overdue warning header  *(v1.8 slice 4 / ADR 45)*
+- A **thin, persistent strip** at the top of the main tab screens (Schedule / My classes / Profile) shown **only** when the member's dues are **overdue** (status derived from `next_due_at`, ADR 40 — never stored). Copy is plain, non-shaming: *"Membership payment overdue — tap to pay."*
+- **Non-dismissible while overdue**; it **self-clears** within one refetch after the owner confirms payment (status leaves `overdue`). A paid / due-soon member never sees it.
+- **Tap → S7 Profile**, landing on the dues section (bank details + reference ready to copy). Thin by design — it never stacks as a heavy block beside the S3 pending banner.
+
+### S12 · Settings  *(v1.8 slice 5 / ADR 45 — split out of S7)*
+- A **pushed screen** reached via the ⚙ gear in the Profile header (not a tab — the app stays at 3 tabs). Holds **appearance** (light / dark / system), the **push notifications** on/off toggle (one switch covers reminders + cancellation alerts; off drops this device's token), and **sign out**.
+
+**Student v1 = 8 screens** (S1–S8). **v1.3 adds S9 (pay) + S10 (home widget); v1.8 adds S11 (overdue header) + S12 (settings), removes the in-app Check-in tab and redefines S8 as the QR walk-in (ADR 45).** Core loop (S4 → booked) is now **one tap** from the schedule list; the two class tabs (all vs mine) are self-explaining.
 
 ---
 

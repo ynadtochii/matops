@@ -6,6 +6,8 @@ import { nextClass, splitMyClasses } from "@matops/domain";
 
 import type { RouterOutputs } from "~/utils/api";
 import { MyTrainingCard } from "~/components/my-training-card";
+import { OverdueBanner } from "~/components/overdue-banner";
+import { useToast } from "~/components/toast";
 import {
   Button,
   Card,
@@ -113,11 +115,13 @@ function ClassRow({
 export default function Training() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const toast = useToast();
   const mine = useQuery(trpc.booking.mine.queryOptions());
 
   const cancel = useMutation(
     trpc.booking.cancel.mutationOptions({
       onSuccess: async () => {
+        toast.show("Booking cancelled");
         await queryClient.invalidateQueries(trpc.booking.pathFilter());
         await queryClient.invalidateQueries(trpc.class.pathFilter());
       },
@@ -136,6 +140,8 @@ export default function Training() {
 
   return (
     <Screen>
+      <OverdueBanner />
+
       <View
         style={{
           flexDirection: "row",
@@ -144,7 +150,7 @@ export default function Training() {
           marginBottom: 16,
         }}
       >
-        <Heading>Training</Heading>
+        <Heading>My classes</Heading>
         <Mark size={26} />
       </View>
 

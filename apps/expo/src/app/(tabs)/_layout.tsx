@@ -5,12 +5,14 @@ import { sans } from "~/components/fonts";
 import { useTheme } from "~/components/ui";
 
 /**
- * The student tab bar (mobile structure, ticket 05; Training added in v1.2
- * B.2). Four tabs: Schedule (S4, home) → Training (S6, my classes + stats) →
- * Check in (S8) → Profile (S7). Class detail (S5)
- * and the pre-join stack (sign-in, join) push over the tabs from the root Stack.
- * Screens own their own headings (like the web), so the tab header is hidden.
- * Icons are simple monochrome View shapes — no icon-font dependency.
+ * The student tab bar (mobile structure, ticket 05; v1.8 slice 4). Three tabs:
+ * Schedule (S4, home) → My classes (S6, booked + next + stats) → Profile (S7).
+ * The Check-in tab was removed in v1.8 — booking is the pre-commit and the owner
+ * marks attendance after class; the only surviving check-in path is the gym QR
+ * walk-in, a deep-linked pushed screen (`checkin/[academyId]`), not a tab (S8).
+ * Class detail (S5), Settings (S12), and the pre-join stack push over the tabs
+ * from the root Stack. Screens own their own headings (like the web), so the tab
+ * header is hidden. Icons are simple monochrome View shapes — no icon-font dep.
  */
 export default function TabsLayout() {
   const t = useTheme();
@@ -37,15 +39,8 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="training"
         options={{
-          title: "Training",
+          title: "My classes",
           tabBarIcon: ({ color }) => <TrainingIcon color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="checkin"
-        options={{
-          title: "Check in",
-          tabBarIcon: ({ color }) => <CheckinIcon color={color} />,
         }}
       />
       <Tabs.Screen
@@ -114,26 +109,6 @@ function TrainingIcon({ color }: { color: string }) {
           borderRadius: 1,
           backgroundColor: color,
         }}
-      />
-    </View>
-  );
-}
-
-function CheckinIcon({ color }: { color: string }) {
-  return (
-    <View
-      style={{
-        width: 18,
-        height: 18,
-        borderRadius: 4,
-        borderWidth: 1.8,
-        borderColor: color,
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <View
-        style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }}
       />
     </View>
   );
