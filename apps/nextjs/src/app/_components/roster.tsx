@@ -6,14 +6,19 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
 import {
+  compareRank,
   disciplineLabel,
   formatRank,
   RANK_SYSTEMS,
   rankDisciplines,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
+import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
+import { CopyButton } from "@matops/ui/copy-button";
 import { Select } from "@matops/ui/select";
+import { Spinner } from "@matops/ui/spinner";
+import { Textarea } from "@matops/ui/textarea";
 import { toast } from "@matops/ui/toast";
 
 import { formatMoney } from "~/lib/money";
@@ -29,6 +34,10 @@ type DuesStatus = Dues["status"];
 
 /** Weekday labels, 0 = Sun … 6 = Sat — mirrors `@matops/domain` DAY_LABELS. */
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** Roster row action buttons get a finger-friendly height on mobile, the
+ * compact `sm` height on desktop — matches the attendance screen. */
+const ROW_BTN = "min-h-11 sm:min-h-8";
 
 const DRIFT_LABEL: Record<DriftStatus, string> = {
   active: "Active",
@@ -96,13 +105,31 @@ export function Roster() {
     }),
   );
   const reject = useMutation(
-    trpc.membership.reject.mutationOptions({ onSuccess: invalidate, onError }),
+    trpc.membership.reject.mutationOptions({
+      onSuccess: async () => {
+        await invalidate();
+        toast.success("Request declined");
+      },
+      onError,
+    }),
   );
   const remove = useMutation(
-    trpc.membership.remove.mutationOptions({ onSuccess: invalidate, onError }),
+    trpc.membership.remove.mutationOptions({
+      onSuccess: async () => {
+        await invalidate();
+        toast.success("Member removed");
+      },
+      onError,
+    }),
   );
   const suspend = useMutation(
-    trpc.membership.suspend.mutationOptions({ onSuccess: invalidate, onError }),
+    trpc.membership.suspend.mutationOptions({
+      onSuccess: async () => {
+        await invalidate();
+        toast.success("Member suspended");
+      },
+      onError,
+    }),
   );
   const promote = useMutation(
     trpc.membership.promote.mutationOptions({
@@ -123,12 +150,14 @@ export function Roster() {
   const shownActive = overdueOnly
     ? active.filter((m) => m.dues?.status === "overdue")
     : active;
-  const busy =
-    approve.isPending ||
-    reject.isPending ||
-    remove.isPending ||
-    suspend.isPending ||
-    promote.isPending;
+  // Pending state is scoped to the member being acted on, so approving one
+  // person doesn't grey out every other row's buttons.
+  const rowBusy = (id: string) =>
+    (approve.isPending && approve.variables.memberId === id) ||
+    (reject.isPending && reject.variables.memberId === id) ||
+    (remove.isPending && remove.variables.memberId === id) ||
+    (suspend.isPending && suspend.variables.memberId === id) ||
+    (promote.isPending && promote.variables.memberId === id);
 
   if (roster.isPending) {
     return (
@@ -157,25 +186,42 @@ export function Roster() {
             New sign-ups land here for you to approve.
           </EmptyState>
         ) : (
-          pending.map((m) => (
-            <MemberRow key={m.memberId} m={m} label={roleLabel(m)}>
-              <Button
-                size="sm"
-                disabled={busy}
-                onClick={() => approve.mutate({ memberId: m.memberId })}
-              >
-                Approve
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={busy}
-                onClick={() => reject.mutate({ memberId: m.memberId })}
-              >
-                Reject
-              </Button>
-            </MemberRow>
-          ))
+          pending.map((m) => {
+            const approving =
+              approve.isPending && approve.variables.memberId === m.memberId;
+            return (
+              <MemberRow key={m.memberId} m={m} label={roleLabel(m)}>
+                <Button
+                  size="sm"
+                  className={ROW_BTN}
+                  disabled={rowBusy(m.memberId)}
+                  onClick={() => approve.mutate({ memberId: m.memberId })}
+                >
+                  {approving && <Spinner size="sm" className="text-current" />}
+                  {approving ? "Approving…" : "Approve"}
+                </Button>
+                <ConfirmDialog
+                  title={`Decline ${m.name}?`}
+                  description="They won't join the academy. You can invite them again later with an invite link."
+                  confirmLabel="Decline request"
+                  variant="destructive"
+                  onConfirm={async () => {
+                    await reject.mutateAsync({ memberId: m.memberId });
+                  }}
+                  trigger={
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className={ROW_BTN}
+                      disabled={rowBusy(m.memberId)}
+                    >
+                      Decline
+                    </Button>
+                  }
+                />
+              </MemberRow>
+            );
+          })
         )}
       </div>
 
@@ -219,34 +265,66 @@ export function Roster() {
                 onToggle={() => toggle(m.memberId)}
               >
                 {m.role !== "owner" && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={busy}
-                    onClick={() => promote.mutate({ memberId: m.memberId })}
-                  >
-                    Make owner
-                  </Button>
+                  <ConfirmDialog
+                    title={`Make ${m.name} an owner?`}
+                    description="Owners have full control — schedule, roster, payments, and settings. This can't be undone from here."
+                    confirmLabel="Make owner"
+                    variant="default"
+                    onConfirm={async () => {
+                      await promote.mutateAsync({ memberId: m.memberId });
+                    }}
+                    trigger={
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className={ROW_BTN}
+                        disabled={rowBusy(m.memberId)}
+                      >
+                        Make owner
+                      </Button>
+                    }
+                  />
                 )}
                 {m.status === "active" && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={busy}
-                    onClick={() => suspend.mutate({ memberId: m.memberId })}
-                  >
-                    Suspend
-                  </Button>
+                  <ConfirmDialog
+                    title={`Suspend ${m.name}?`}
+                    description="They keep their place on the roster but can't book classes until you restore them."
+                    confirmLabel="Suspend"
+                    variant="destructive"
+                    onConfirm={async () => {
+                      await suspend.mutateAsync({ memberId: m.memberId });
+                    }}
+                    trigger={
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className={ROW_BTN}
+                        disabled={rowBusy(m.memberId)}
+                      >
+                        Suspend
+                      </Button>
+                    }
+                  />
                 )}
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="text-destructive"
-                  disabled={busy}
-                  onClick={() => remove.mutate({ memberId: m.memberId })}
-                >
-                  Remove
-                </Button>
+                <ConfirmDialog
+                  title={`Remove ${m.name}?`}
+                  description="They lose access to the academy and drop off the roster. Their attendance history stays. You can invite them again later."
+                  confirmLabel="Remove member"
+                  variant="destructive"
+                  onConfirm={async () => {
+                    await remove.mutateAsync({ memberId: m.memberId });
+                  }}
+                  trigger={
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      className={ROW_BTN}
+                      disabled={rowBusy(m.memberId)}
+                    >
+                      Remove
+                    </Button>
+                  }
+                />
               </MemberRow>
               {openId === m.memberId && <MemberDetail m={m} />}
             </div>
@@ -275,7 +353,7 @@ export function Roster() {
                 "flex flex-wrap items-center justify-between gap-3",
               )}
             >
-              <div className="flex flex-col">
+              <div className="flex flex-col gap-0.5">
                 <span className="font-medium">
                   {l.firstName} {l.lastName}
                   {l.visitCount > 1 && (
@@ -284,9 +362,30 @@ export function Roster() {
                     </span>
                   )}
                 </span>
-                <span className="text-muted-foreground text-sm">
-                  {l.phone}
-                  {l.email ? ` · ${l.email}` : ""}
+                <span className="text-muted-foreground flex flex-wrap items-center gap-x-1.5 text-sm">
+                  <span>{l.phone}</span>
+                  <CopyButton
+                    value={l.phone}
+                    iconOnly
+                    variant="ghost"
+                    label={`Copy phone ${l.phone}`}
+                    toastMessage="Phone copied"
+                    className="size-6"
+                  />
+                  {l.email && (
+                    <>
+                      <span>·</span>
+                      <span>{l.email}</span>
+                      <CopyButton
+                        value={l.email}
+                        iconOnly
+                        variant="ghost"
+                        label={`Copy email ${l.email}`}
+                        toastMessage="Email copied"
+                        className="size-6"
+                      />
+                    </>
+                  )}
                 </span>
               </div>
             </div>
@@ -355,7 +454,7 @@ function MemberRow({
       ) : (
         <div className="flex flex-col">{name}</div>
       )}
-      <div className="flex gap-2">{children}</div>
+      <div className="flex flex-wrap justify-end gap-2">{children}</div>
     </div>
   );
 }
@@ -434,6 +533,26 @@ function RankTab({ memberId }: { memberId: string }) {
   const [belt, setBelt] = useState(system?.belts[0] ?? "");
   const [stripes, setStripes] = useState(0);
 
+  // The member's current rank in the selected discipline (rank only goes up).
+  const current = ranks.data?.ranks.find((r) => r.discipline === discipline);
+  const wouldRegress =
+    !!current && compareRank(discipline, { belt, stripes }, current) < 0;
+
+  // Seed the form to the current rank so the natural next action is a bump, not
+  // an accidental demotion (the API refuses those anyway). This runs during
+  // render — the React-recommended way to reset state when a value changes —
+  // re-seeding whenever the discipline switches or the member's rank loads /
+  // changes (never mid-edit, since the seed key only moves when `current` does).
+  const seedKey = ranks.data
+    ? `${discipline}:${current ? `${current.belt}/${current.stripes}` : "none"}`
+    : null;
+  const [seededKey, setSeededKey] = useState<string | null>(null);
+  if (seedKey && seedKey !== seededKey) {
+    setSeededKey(seedKey);
+    setBelt(current?.belt ?? system?.belts[0] ?? "");
+    setStripes(current?.stripes ?? 0);
+  }
+
   const invalidate = () =>
     queryClient.invalidateQueries(trpc.rank.forMember.pathFilter());
 
@@ -447,12 +566,17 @@ function RankTab({ memberId }: { memberId: string }) {
     }),
   );
 
-  // Keep the belt valid when the discipline changes.
-  const onDiscipline = (next: string) => {
-    setDiscipline(next);
-    setBelt(RANK_SYSTEMS[next]?.belts[0] ?? "");
-    setStripes(0);
-  };
+  const clear = useMutation(
+    trpc.rank.clear.mutationOptions({
+      onSuccess: async () => {
+        await invalidate();
+        toast.success("Rank cleared");
+      },
+      onError: (err) => toast.error(err.message || "Could not clear rank"),
+    }),
+  );
+
+  const onDiscipline = (next: string) => setDiscipline(next);
 
   return (
     <div className="flex flex-col gap-5">
@@ -469,11 +593,31 @@ function RankTab({ memberId }: { memberId: string }) {
         ) : (
           <ul className="flex flex-col gap-1 text-sm">
             {ranks.data.ranks.map((r) => (
-              <li key={r.discipline} className="flex justify-between">
+              <li key={r.discipline} className="flex items-center gap-3">
                 <span className="text-muted-foreground">
                   {disciplineLabel(r.discipline)}
                 </span>
-                <span className="font-medium">{formatRank(r)}</span>
+                <span className="ml-auto font-medium">{formatRank(r)}</span>
+                <ConfirmDialog
+                  title={`Clear ${disciplineLabel(r.discipline)} rank?`}
+                  description="This removes the rank so you can set it fresh — use it to fix a mistake. The promotion history is kept."
+                  confirmLabel="Clear rank"
+                  onConfirm={async () => {
+                    await clear.mutateAsync({
+                      memberId,
+                      discipline: r.discipline,
+                    });
+                  }}
+                  trigger={
+                    <button
+                      type="button"
+                      disabled={clear.isPending}
+                      className="text-muted-foreground hover:text-foreground shrink-0 text-xs underline underline-offset-2 disabled:opacity-50"
+                    >
+                      Clear
+                    </button>
+                  }
+                />
               </li>
             ))}
           </ul>
@@ -502,7 +646,19 @@ function RankTab({ memberId }: { memberId: string }) {
             <span className="text-muted-foreground text-xs">Belt</span>
             <Select value={belt} onChange={(e) => setBelt(e.target.value)}>
               {(system?.belts ?? []).map((b) => (
-                <option key={b} value={b}>
+                <option
+                  key={b}
+                  value={b}
+                  disabled={
+                    !!current &&
+                    !!system &&
+                    compareRank(
+                      discipline,
+                      { belt: b, stripes: system.maxStripes },
+                      current,
+                    ) < 0
+                  }
+                >
                   {b}
                 </option>
               ))}
@@ -516,7 +672,14 @@ function RankTab({ memberId }: { memberId: string }) {
                 onChange={(e) => setStripes(Number(e.target.value))}
               >
                 {Array.from({ length: system.maxStripes + 1 }, (_, i) => (
-                  <option key={i} value={i}>
+                  <option
+                    key={i}
+                    value={i}
+                    disabled={
+                      !!current &&
+                      compareRank(discipline, { belt, stripes: i }, current) < 0
+                    }
+                  >
                     {i}
                   </option>
                 ))}
@@ -525,12 +688,19 @@ function RankTab({ memberId }: { memberId: string }) {
           )}
           <Button
             size="sm"
-            disabled={set.isPending || !belt}
+            disabled={set.isPending || !belt || wouldRegress}
             onClick={() => set.mutate({ memberId, discipline, belt, stripes })}
           >
-            Save rank
+            {set.isPending && <Spinner size="sm" className="text-current" />}
+            {set.isPending ? "Saving…" : "Save rank"}
           </Button>
         </div>
+        {current && (
+          <p className="text-muted-foreground text-xs">
+            Rank only goes up. To fix a mistake, clear it first, then set it
+            again.
+          </p>
+        )}
       </div>
 
       {ranks.data && ranks.data.history.length > 0 && (
@@ -594,13 +764,13 @@ function NotesTab({ memberId }: { memberId: string }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
-        <textarea
+        <Textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}
           rows={2}
           maxLength={2000}
+          aria-label="New staff note"
           placeholder="Private note for staff — injuries, goals, readiness…"
-          className="border-border bg-background rounded-md border px-3 py-2 text-sm"
         />
         <Button
           size="sm"
@@ -608,7 +778,8 @@ function NotesTab({ memberId }: { memberId: string }) {
           disabled={add.isPending || body.trim().length === 0}
           onClick={() => add.mutate({ memberId, body: body.trim() })}
         >
-          Add note
+          {add.isPending && <Spinner size="sm" className="text-current" />}
+          {add.isPending ? "Adding…" : "Add note"}
         </Button>
       </div>
 
@@ -634,14 +805,26 @@ function NotesTab({ memberId }: { memberId: string }) {
                   {n.authorName ?? "Staff"} ·{" "}
                   {dateFmt.format(new Date(n.createdAt))}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => remove.mutate({ noteId: n.id })}
-                  disabled={remove.isPending}
-                  className="text-destructive hover:underline"
-                >
-                  Delete
-                </button>
+                <ConfirmDialog
+                  title="Delete this note?"
+                  description="It's removed for all staff. This can't be undone."
+                  confirmLabel="Delete note"
+                  variant="destructive"
+                  onConfirm={async () => {
+                    await remove.mutateAsync({ noteId: n.id });
+                  }}
+                  trigger={
+                    <button
+                      type="button"
+                      disabled={
+                        remove.isPending && remove.variables.noteId === n.id
+                      }
+                      className="text-destructive font-medium hover:underline disabled:opacity-50"
+                    >
+                      Delete
+                    </button>
+                  }
+                />
               </div>
             </div>
           ))}
@@ -702,8 +885,8 @@ function Overview({ m, data }: { m: Member; data: MemberHistory }) {
 
       <dl className="text-sm">
         <Detail term="Role" value={m.role} />
-        <Detail term="Email" value={m.email} />
-        {m.phone ? <Detail term="Phone" value={m.phone} /> : null}
+        <Detail term="Email" value={m.email} copy={m.email} />
+        {m.phone ? <Detail term="Phone" value={m.phone} copy={m.phone} /> : null}
         {favorite ? <Detail term="Favorite" value={favorite} /> : null}
         {m.dues ? (
           <>
@@ -729,11 +912,31 @@ function Overview({ m, data }: { m: Member; data: MemberHistory }) {
   );
 }
 
-function Detail({ term, value }: { term: string; value: string }) {
+function Detail({
+  term,
+  value,
+  copy,
+}: {
+  term: string;
+  value: string;
+  copy?: string;
+}) {
   return (
-    <div className="border-border flex justify-between border-b py-1.5 last:border-0">
+    <div className="border-border flex items-center justify-between gap-2 border-b py-1.5 last:border-0">
       <dt className="text-muted-foreground">{term}</dt>
-      <dd className="font-medium">{value}</dd>
+      <dd className="flex items-center gap-1 font-medium">
+        <span className="break-all">{value}</span>
+        {copy && (
+          <CopyButton
+            value={copy}
+            iconOnly
+            variant="ghost"
+            label={`Copy ${term.toLowerCase()}`}
+            toastMessage={`${term} copied`}
+            className="size-6 shrink-0"
+          />
+        )}
+      </dd>
     </div>
   );
 }

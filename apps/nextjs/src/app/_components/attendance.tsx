@@ -22,6 +22,28 @@ const dateTimeFmt = new Intl.DateTimeFormat(undefined, {
   minute: "2-digit",
 });
 
+type AttendanceStatus = "present" | "absent" | "unmarked";
+
+/**
+ * Recompute the present/absent/unmarked tallies from the rows after an
+ * optimistic mark. The booking-derived counts (provisional, walkIn) don't move
+ * when attendance changes, so they carry over from the previous counts.
+ */
+function recount<
+  R extends { attendanceStatus: AttendanceStatus },
+  C extends { present: number; absent: number; unmarked: number },
+>(rows: R[], base: C): C {
+  let present = 0;
+  let absent = 0;
+  let unmarked = 0;
+  for (const r of rows) {
+    if (r.attendanceStatus === "present") present++;
+    else if (r.attendanceStatus === "absent") absent++;
+    else unmarked++;
+  }
+  return { ...base, present, absent, unmarked };
+}
+
 /**
  * O5 Attendance (spec O5, slice 3.3). Staff pick a class from the backfill
  * window (today back 14 days), see everyone on it (booked + walk-ins) with their
@@ -54,10 +76,34 @@ export function Attendance() {
   const onError = (err: { message: string }) =>
     toast.error(err.message || "Action failed");
 
+  // Optimistic marking: the roster for the active class updates instantly so
+  // tapping through attendance feels immediate, then the background refetch
+  // (onSettled) reconciles with the server. On error we roll the cache back.
+  const rosterKey = (id: string) =>
+    trpc.attendance.roster.queryKey({ id });
+
   const mark = useMutation(
     trpc.attendance.mark.mutationOptions({
-      onSuccess: async () => await invalidate(),
-      onError,
+      onMutate: async (vars) => {
+        const key = rosterKey(vars.classId);
+        await queryClient.cancelQueries({ queryKey: key });
+        const prev = queryClient.getQueryData(key);
+        queryClient.setQueryData(key, (old) => {
+          if (!old) return old;
+          const rows = old.rows.map((r) =>
+            r.studentId === vars.studentId
+              ? { ...r, attendanceStatus: vars.status }
+              : r,
+          );
+          return { ...old, rows, counts: recount(rows, old.counts) };
+        });
+        return { key, prev };
+      },
+      onError: (err, _vars, ctx) => {
+        if (ctx) queryClient.setQueryData(ctx.key, ctx.prev);
+        onError(err);
+      },
+      onSettled: () => invalidate(),
     }),
   );
   const addWalkIn = useMutation(
@@ -72,15 +118,33 @@ export function Attendance() {
   );
   const markAll = useMutation(
     trpc.attendance.markAll.mutationOptions({
-      onSuccess: async ({ marked }) => {
-        await invalidate();
+      onMutate: async (vars) => {
+        const key = rosterKey(vars.id);
+        await queryClient.cancelQueries({ queryKey: key });
+        const prev = queryClient.getQueryData(key);
+        queryClient.setQueryData(key, (old) => {
+          if (!old) return old;
+          const rows = old.rows.map((r) =>
+            r.bookingStatus === "booked" && r.attendanceStatus === "unmarked"
+              ? { ...r, attendanceStatus: "present" as const }
+              : r,
+          );
+          return { ...old, rows, counts: recount(rows, old.counts) };
+        });
+        return { key, prev };
+      },
+      onError: (err, _vars, ctx) => {
+        if (ctx) queryClient.setQueryData(ctx.key, ctx.prev);
+        onError(err);
+      },
+      onSuccess: ({ marked }) => {
         toast.success(
           marked === 0
             ? "Everyone was already marked"
             : `Marked ${marked} present`,
         );
       },
-      onError,
+      onSettled: () => invalidate(),
     }),
   );
 
@@ -201,7 +265,6 @@ export function Attendance() {
                         size="sm"
                         className="min-h-11 flex-1 sm:min-h-8 sm:flex-none"
                         variant={present ? "default" : "outline"}
-                        disabled={mark.isPending}
                         onClick={() =>
                           mark.mutate({
                             classId,
@@ -216,7 +279,6 @@ export function Attendance() {
                         size="sm"
                         className="min-h-11 flex-1 sm:min-h-8 sm:flex-none"
                         variant={absent ? "destructive" : "outline"}
-                        disabled={mark.isPending}
                         onClick={() =>
                           mark.mutate({
                             classId,

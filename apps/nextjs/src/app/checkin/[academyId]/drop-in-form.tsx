@@ -6,6 +6,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button } from "@matops/ui/button";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
+import { Spinner } from "@matops/ui/spinner";
 
 import { useTRPC } from "~/trpc/react";
 
@@ -149,9 +150,14 @@ export function DropInForm({ academyId }: { academyId: string }) {
         <span>OK for the gym to contact me about training.</span>
       </label>
 
-      {error && <p className="text-destructive text-sm">{error}</p>}
+      {error && (
+        <p role="alert" className="text-destructive text-sm">
+          {error}
+        </p>
+      )}
 
       <Button type="submit" disabled={!canSubmit}>
+        {submit.isPending && <Spinner size="sm" className="text-current" />}
         {submit.isPending ? "Checking in…" : "Check in"}
       </Button>
     </form>

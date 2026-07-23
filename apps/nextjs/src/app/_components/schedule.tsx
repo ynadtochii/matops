@@ -5,10 +5,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
 import { cn } from "@matops/ui";
+import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
 import { Select } from "@matops/ui/select";
+import { Spinner } from "@matops/ui/spinner";
 import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
@@ -19,6 +21,35 @@ type ClassRow = RouterOutputs["class"]["week"][number];
 
 const DISCIPLINES = ["bjj", "nogi", "judo", "mma", "other"] as const;
 type Discipline = (typeof DISCIPLINES)[number];
+
+const ChevronLeft = () => (
+  <svg
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={1.5}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className="size-4"
+    aria-hidden
+  >
+    <path d="M10 3.5L5.5 8l4.5 4.5" />
+  </svg>
+);
+const ChevronRight = () => (
+  <svg
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={1.5}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className="size-4"
+    aria-hidden
+  >
+    <path d="M6 3.5L10.5 8 6 12.5" />
+  </svg>
+);
 
 const browserTz = () => {
   try {
@@ -111,13 +142,27 @@ export function Schedule() {
       onError,
     }),
   );
+  // Optimistic cancel: flip the class to cancelled in the visible week straight
+  // away (it re-renders read-only), reconcile on settle, roll back on error.
   const cancel = useMutation(
     trpc.class.cancel.mutationOptions({
-      onSuccess: async () => {
-        await invalidate();
-        toast.success("Class cancelled");
+      onMutate: async (vars) => {
+        const key = trpc.class.week.queryKey({ from, to });
+        await queryClient.cancelQueries({ queryKey: key });
+        const prev = queryClient.getQueryData(key);
+        queryClient.setQueryData(key, (old) =>
+          old?.map((c) =>
+            c.id === vars.id ? { ...c, status: "cancelled" as const } : c,
+          ),
+        );
+        return { key, prev };
       },
-      onError,
+      onError: (err, _vars, ctx) => {
+        if (ctx) queryClient.setQueryData(ctx.key, ctx.prev);
+        onError(err);
+      },
+      onSuccess: () => toast.success("Class cancelled"),
+      onSettled: () => invalidate(),
     }),
   );
 
@@ -156,26 +201,30 @@ export function Schedule() {
   return (
     <section className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <Button
-            size="sm"
+            size="icon"
             variant="ghost"
+            aria-label="Previous week"
             onClick={() => setOffset(offset - 1)}
           >
-            ‹
+            <ChevronLeft />
           </Button>
           <button
-            className="text-muted-foreground text-sm"
+            type="button"
+            title="Back to this week"
+            className="text-muted-foreground hover:text-foreground rounded-md px-1 text-sm font-medium transition-colors"
             onClick={() => setOffset(0)}
           >
             {rangeLabel}
           </button>
           <Button
-            size="sm"
+            size="icon"
             variant="ghost"
+            aria-label="Next week"
             onClick={() => setOffset(offset + 1)}
           >
-            ›
+            <ChevronRight />
           </Button>
           {form === null && (
             <Button
@@ -231,7 +280,7 @@ export function Schedule() {
                         )}
                       </span>
                       <span
-                        className={`text-sm ${full ? "text-destructive" : "text-muted-foreground"}`}
+                        className={`text-sm ${full ? "text-warning" : "text-muted-foreground"}`}
                       >
                         {c.bookingCount}/{c.capacity}
                         {full ? " · may be busy" : " booked"}
@@ -242,15 +291,28 @@ export function Schedule() {
                       </span>
                     </div>
                     {!cancelled && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-destructive"
-                        disabled={cancel.isPending}
-                        onClick={() => cancel.mutate({ id: c.id })}
-                      >
-                        Cancel
-                      </Button>
+                      <ConfirmDialog
+                        title="Cancel this class?"
+                        description={`${c.title} on ${dayFmt.format(new Date(c.startsAt))} at ${timeFmt.format(new Date(c.startsAt))}. Everyone booked in loses their spot. This can't be undone.`}
+                        confirmLabel="Cancel class"
+                        cancelLabel="Keep class"
+                        variant="destructive"
+                        onConfirm={async () => {
+                          await cancel.mutateAsync({ id: c.id });
+                        }}
+                        trigger={
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-destructive min-h-11 sm:min-h-8"
+                            disabled={
+                              cancel.isPending && cancel.variables.id === c.id
+                            }
+                          >
+                            Cancel
+                          </Button>
+                        }
+                      />
                     )}
                   </div>
                 );
@@ -361,6 +423,7 @@ export function Schedule() {
           </div>
           <div className="flex gap-2">
             <Button type="submit" disabled={create.isPending}>
+              {create.isPending && <Spinner size="sm" className="text-current" />}
               {create.isPending ? "Adding…" : "Add class"}
             </Button>
             <Button type="button" variant="ghost" onClick={() => setForm(null)}>

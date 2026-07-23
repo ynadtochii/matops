@@ -23,6 +23,19 @@ interface NavItem {
 
 const iconClass = "size-[18px] shrink-0";
 
+/** Two-letter avatar fallback: initials of the first two name words, else the
+ * first two letters of the name, else the email — never blank. */
+function initials(name: string, email: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  const first = words[0];
+  const second = words[1];
+  if (first && second) {
+    return (first.charAt(0) + second.charAt(0)).toUpperCase();
+  }
+  if (first) return first.slice(0, 2).toUpperCase();
+  return email.slice(0, 2).toUpperCase();
+}
+
 const DashboardIcon = () => (
   <svg
     viewBox="0 0 16 16"
@@ -274,7 +287,7 @@ function ShellChrome({
           )}
         </div>
 
-        <nav className="flex flex-col gap-0.5">
+        <nav aria-label="Primary" className="flex flex-col gap-0.5">
           {items.map((i) => (
             <NavLink key={i.href} item={i} active={isCurrent(i.href)} />
           ))}
@@ -282,7 +295,7 @@ function ShellChrome({
 
         <div className="border-sidebar-border mt-auto flex items-center gap-2 border-t pt-3">
           <div className="bg-muted text-muted-foreground flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold uppercase">
-            {user.name.slice(0, 2)}
+            {initials(user.name, user.email)}
           </div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium">{user.name}</p>
@@ -320,24 +333,33 @@ function ShellChrome({
 
       {/* Mobile bottom tabs — bottom padding clears the home indicator when
           installed as a PWA (viewport-fit=cover; ADR 42). env() is 0 elsewhere. */}
-      <nav className="bg-sidebar border-sidebar-border fixed inset-x-0 bottom-0 z-20 flex border-t pb-[env(safe-area-inset-bottom)] md:hidden">
-        {items.map((i) => (
-          <Link
-            key={i.href}
-            href={i.href}
-            className={`relative flex flex-1 flex-col items-center gap-1 py-2 font-mono text-[9px] tracking-wide uppercase ${
-              isCurrent(i.href) ? "text-brand-strong" : "text-muted-foreground"
-            }`}
-          >
-            {i.icon}
-            {i.label}
-            {!!i.badge && i.badge > 0 && (
-              <span className="bg-brand text-brand-foreground absolute top-1 right-1/2 mr-1 translate-x-full rounded-full px-1 text-[8px]">
-                {i.badge}
+      <nav
+        aria-label="Primary"
+        className="bg-sidebar border-sidebar-border fixed inset-x-0 bottom-0 z-20 flex border-t pb-[env(safe-area-inset-bottom)] md:hidden"
+      >
+        {items.map((i) => {
+          const active = isCurrent(i.href);
+          return (
+            <Link
+              key={i.href}
+              href={i.href}
+              aria-current={active ? "page" : undefined}
+              className={`flex min-h-14 flex-1 flex-col items-center justify-center gap-1 px-1 py-2 text-[10px] font-medium tracking-tight ${
+                active ? "text-brand-strong" : "text-muted-foreground"
+              }`}
+            >
+              <span className="relative">
+                {i.icon}
+                {!!i.badge && i.badge > 0 && (
+                  <span className="bg-brand text-brand-foreground absolute -top-1.5 -right-2 flex min-w-4 items-center justify-center rounded-full px-1 py-px font-mono text-[10px] leading-none tabular-nums">
+                    {i.badge > 9 ? "9+" : i.badge}
+                  </span>
+                )}
               </span>
-            )}
-          </Link>
-        ))}
+              <span className="max-w-full truncate">{i.label}</span>
+            </Link>
+          );
+        })}
       </nav>
     </div>
   );
@@ -347,6 +369,7 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   return (
     <Link
       href={item.href}
+      aria-current={active ? "page" : undefined}
       className={`relative flex items-center gap-3 rounded-md px-2.5 py-2 text-sm transition-colors ${
         active
           ? "bg-brand-wash text-brand-strong font-medium"

@@ -3,13 +3,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { cn } from "@matops/ui";
+import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
+import { CopyButton } from "@matops/ui/copy-button";
 import { Input } from "@matops/ui/input";
 import { toast } from "@matops/ui/toast";
 
 import { shareLink, useCanShare } from "~/lib/share";
 import { useTRPC } from "~/trpc/react";
 import { cardClass, SectionHeading } from "./primitives";
+import { ErrorState, SkeletonRows } from "./states";
 
 type InviteRole = "student" | "instructor";
 const ROLES: { role: InviteRole; label: string; hint: string }[] = [
@@ -59,8 +62,6 @@ export function Invites() {
     }),
   );
 
-  const busy = create.isPending || rotate.isPending;
-
   return (
     <section className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
@@ -70,68 +71,94 @@ export function Invites() {
           approve them — a forwarded link never grants access on its own.
         </p>
       </div>
-      <div className="flex flex-col gap-4">
-        {ROLES.map(({ role, label, hint }) => {
-          const invite = invites.data?.find((i) => i.role === role);
-          return (
-            <div key={role} className={cn(cardClass(), "flex flex-col gap-2")}>
-              <div className="flex items-center justify-between">
-                <span className="font-medium">{label}</span>
-                {invite ? (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={busy}
-                    onClick={() => rotate.mutate({ role })}
-                  >
-                    Rotate
-                  </Button>
-                ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={busy}
-                    onClick={() => create.mutate({ role })}
-                  >
-                    Create link
-                  </Button>
-                )}
-              </div>
-              <p className="text-muted-foreground text-sm">{hint}</p>
-              {invite && (
-                <div className="flex gap-2">
-                  <Input readOnly value={joinUrl(invite.token)} />
-                  {shareable && (
-                    <Button
-                      variant="secondary"
-                      onClick={() =>
-                        void shareLink({
-                          url: joinUrl(invite.token),
-                          title: "Join our academy on matops",
-                          text: "Here's your link to join our academy:",
-                        })
+      {invites.isPending ? (
+        <SkeletonRows rows={2} />
+      ) : invites.isError ? (
+        <ErrorState
+          label="your invite links"
+          onRetry={() => void invites.refetch()}
+        />
+      ) : (
+        <div className="flex flex-col gap-4">
+          {ROLES.map(({ role, label, hint }) => {
+            const invite = invites.data.find((i) => i.role === role);
+            // Scope the pending state to the role being acted on, so rotating the
+            // student link doesn't grey out the instructor link's button.
+            const creating =
+              create.isPending && create.variables.role === role;
+            const rotating =
+              rotate.isPending && rotate.variables.role === role;
+            const url = invite ? joinUrl(invite.token) : "";
+            return (
+              <div key={role} className={cn(cardClass(), "flex flex-col gap-2")}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium">{label}</span>
+                  {invite ? (
+                    <ConfirmDialog
+                      title="Rotate this link?"
+                      description="The current link stops working for everyone you already sent it to. A new link takes its place."
+                      confirmLabel="Rotate link"
+                      variant="destructive"
+                      onConfirm={async () => {
+                        await rotate.mutateAsync({ role });
+                      }}
+                      trigger={
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={rotating}
+                        >
+                          {rotating ? "Rotating…" : "Rotate"}
+                        </Button>
                       }
+                    />
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={creating}
+                      onClick={() => create.mutate({ role })}
                     >
-                      Share
+                      {creating ? "Creating…" : "Create link"}
                     </Button>
                   )}
-                  <Button
-                    variant="secondary"
-                    onClick={async () => {
-                      await navigator.clipboard.writeText(
-                        joinUrl(invite.token),
-                      );
-                      toast.success("Link copied");
-                    }}
-                  >
-                    Copy
-                  </Button>
                 </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                <p className="text-muted-foreground text-sm">{hint}</p>
+                {invite && (
+                  <div className="flex flex-wrap gap-2">
+                    <Input
+                      readOnly
+                      value={url}
+                      aria-label={`${label} URL`}
+                      className="min-w-0 flex-1"
+                    />
+                    {shareable && (
+                      <Button
+                        variant="secondary"
+                        onClick={() =>
+                          void shareLink({
+                            url,
+                            title: "Join our academy on matops",
+                            text: "Here's your link to join our academy:",
+                          })
+                        }
+                      >
+                        Share
+                      </Button>
+                    )}
+                    <CopyButton
+                      value={url}
+                      variant="secondary"
+                      size="default"
+                      toastMessage="Link copied"
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }

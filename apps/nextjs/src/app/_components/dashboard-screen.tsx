@@ -109,35 +109,62 @@ export function DashboardScreen() {
     (r) => r.status !== "cancelled",
   ).length;
 
+  // Don't show "0" while the numbers are still loading — a skeleton reads as
+  // "counting", a bare 0 reads as "nothing to do".
+  const triageLoading =
+    roster.isPending || leads.isPending || week.isPending;
+  const numbersLoading =
+    week.isPending || (isOwner && roster.isPending);
+
   return (
     <div className="space-y-8">
       <PageHeader title="This week" subtitle={dateFmt.format(today)} />
 
       {/* Triage — what needs you now (owner only) */}
-      {isOwner && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <TriageCard
-            href="/roster"
-            value={pendingCount}
-            label="Pending approvals"
-            active={pendingCount > 0}
-          />
-          <TriageCard
-            href="/roster"
-            value={leadCount}
-            label="Drop-in leads"
-            active={leadCount > 0}
-          />
-          <TriageCard href="/attendance" value={todays.length} label="Classes today" />
-        </div>
-      )}
+      {isOwner &&
+        (triageLoading ? (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="bg-muted h-[5.5rem] animate-pulse rounded-lg motion-reduce:animate-none"
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <TriageCard
+              href="/roster"
+              value={pendingCount}
+              label="Pending approvals"
+              active={pendingCount > 0}
+            />
+            <TriageCard
+              href="/roster"
+              value={leadCount}
+              label="Drop-in leads"
+              active={leadCount > 0}
+            />
+            <TriageCard
+              href="/attendance"
+              value={todays.length}
+              label="Classes today"
+            />
+          </div>
+        ))}
 
       {/* Glanceable numbers */}
-      <div className="border-border flex flex-wrap gap-x-8 gap-y-3 border-b pb-6">
-        {isOwner && <Stat value={activeCount} label="Active members" />}
-        <Stat value={weekCount} label="Classes this week" />
-        <Stat value={todays.length} label="On today" />
-      </div>
+      {numbersLoading ? (
+        <div className="border-border border-b pb-6">
+          <div className="bg-muted h-10 w-full max-w-sm animate-pulse rounded-md motion-reduce:animate-none" />
+        </div>
+      ) : (
+        <div className="border-border flex flex-wrap gap-x-8 gap-y-3 border-b pb-6">
+          {isOwner && <Stat value={activeCount} label="Active members" />}
+          <Stat value={weekCount} label="Classes this week" />
+          <Stat value={todays.length} label="On today" />
+        </div>
+      )}
 
       {/* Today's classes */}
       <div className="flex flex-col gap-3">
@@ -258,7 +285,7 @@ function TodayRow({ c }: { c: ClassRow }) {
       </span>
       <span className="flex-1 font-medium">{c.title}</span>
       <span
-        className={`font-mono text-xs tabular-nums ${full ? "text-error" : "text-muted-foreground"}`}
+        className={`font-mono text-xs tabular-nums ${full ? "text-warning" : "text-muted-foreground"}`}
       >
         {c.bookingCount}/{c.capacity}
         {c.pendingCount > 0 ? ` · +${c.pendingCount}` : ""}

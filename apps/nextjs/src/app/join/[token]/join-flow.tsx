@@ -7,6 +7,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button } from "@matops/ui/button";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
+import { Spinner } from "@matops/ui/spinner";
 import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
@@ -45,7 +46,12 @@ export function JoinFlow({
   );
 
   if (invite.isPending) {
-    return <p className="text-muted-foreground text-sm">Loading invite…</p>;
+    return (
+      <div className="flex items-center gap-2">
+        <Spinner label="Loading invite" />
+        <span className="text-muted-foreground text-sm">Loading invite…</span>
+      </div>
+    );
   }
 
   if (invite.isError) {
@@ -90,6 +96,8 @@ export function JoinFlow({
               id="firstName"
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
+              autoComplete="given-name"
+              maxLength={60}
               required
             />
           </div>
@@ -99,6 +107,8 @@ export function JoinFlow({
               id="lastName"
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
+              autoComplete="family-name"
+              maxLength={60}
               required
             />
           </div>
@@ -109,10 +119,13 @@ export function JoinFlow({
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
+              autoComplete="tel"
+              maxLength={30}
               required
             />
           </div>
           <Button type="submit" size="lg" disabled={join.isPending}>
+            {join.isPending && <Spinner size="sm" className="text-current" />}
             {join.isPending ? "Joining…" : `Join ${academyName}`}
           </Button>
         </form>

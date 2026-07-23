@@ -44,6 +44,7 @@ export function Onboarding({ academies = [] }: { academies?: Academy[] }) {
         await queryClient.invalidateQueries();
         router.refresh();
       },
+      onError: () => toast.error("Could not open the academy"),
     }),
   );
 
@@ -86,16 +87,21 @@ export function Onboarding({ academies = [] }: { academies?: Academy[] }) {
           <p className="text-muted-foreground text-sm">
             Or open an academy you belong to:
           </p>
-          {academies.map((a) => (
-            <Button
-              key={a.academyId}
-              variant="outline"
-              onClick={() => setActive.mutate({ academyId: a.academyId })}
-              disabled={setActive.isPending}
-            >
-              {a.name}
-            </Button>
-          ))}
+          {academies.map((a) => {
+            const opening =
+              setActive.isPending &&
+              setActive.variables.academyId === a.academyId;
+            return (
+              <Button
+                key={a.academyId}
+                variant="outline"
+                onClick={() => setActive.mutate({ academyId: a.academyId })}
+                disabled={setActive.isPending}
+              >
+                {opening ? "Opening…" : a.name}
+              </Button>
+            );
+          })}
         </div>
       )}
     </div>

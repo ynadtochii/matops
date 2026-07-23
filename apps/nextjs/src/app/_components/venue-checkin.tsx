@@ -4,7 +4,7 @@ import { useSyncExternalStore } from "react";
 import { QRCodeSVG } from "qrcode.react";
 
 import { Button } from "@matops/ui/button";
-import { toast } from "@matops/ui/toast";
+import { CopyButton } from "@matops/ui/copy-button";
 
 import { shareLink, useCanShare } from "~/lib/share";
 import { SectionHeading } from "./primitives";
@@ -51,6 +51,7 @@ export function VenueCheckin({
           marginSize={4}
           bgColor="#ffffff"
           fgColor="#000000"
+          title={`Check-in QR code for ${academyName}`}
         />
         <div>
           <p className="text-lg font-semibold text-black">{academyName}</p>
@@ -76,16 +77,7 @@ export function VenueCheckin({
               Share
             </Button>
           )}
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              void navigator.clipboard.writeText(url);
-              toast.success("Link copied");
-            }}
-          >
-            Copy link
-          </Button>
+          <CopyButton value={url} label="Copy link" toastMessage="Link copied" />
           <Button size="sm" onClick={() => window.print()}>
             Print poster
           </Button>

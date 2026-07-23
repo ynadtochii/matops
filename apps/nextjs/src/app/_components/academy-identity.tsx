@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@matops/ui/button";
+import { CopyButton } from "@matops/ui/copy-button";
 import { Input } from "@matops/ui/input";
 import { toast } from "@matops/ui/toast";
 
@@ -107,21 +108,12 @@ export function AcademyIdentity({
             Students type this into the app to join. Permanent — it never changes.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="font-mono text-2xl tracking-[0.2em] tabular-nums">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="font-mono text-xl tracking-[0.2em] tabular-nums sm:text-2xl">
             {code}
           </span>
           {code && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                void navigator.clipboard.writeText(code);
-                toast.success("Code copied");
-              }}
-            >
-              Copy
-            </Button>
+            <CopyButton value={code} toastMessage="Code copied" />
           )}
         </div>
       </div>

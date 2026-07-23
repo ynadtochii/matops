@@ -5,9 +5,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
 import { cn } from "@matops/ui";
+import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
+import { CopyButton } from "@matops/ui/copy-button";
 import { Input } from "@matops/ui/input";
+import { Label } from "@matops/ui/label";
 import { Select } from "@matops/ui/select";
+import { Spinner } from "@matops/ui/spinner";
 import { toast } from "@matops/ui/toast";
 
 import { formatMoney } from "~/lib/money";
@@ -65,9 +69,14 @@ function ClaimsToConfirm() {
     }),
   );
   const reject = useMutation(
-    trpc.payments.reject.mutationOptions({ onSuccess: invalidate, onError }),
+    trpc.payments.reject.mutationOptions({
+      onSuccess: async () => {
+        await invalidate();
+        toast.success("Claim rejected");
+      },
+      onError,
+    }),
   );
-  const busy = confirm.isPending || reject.isPending;
 
   return (
     <section className="flex flex-col gap-3">
@@ -83,45 +92,68 @@ function ClaimsToConfirm() {
           When a student taps “I paid”, their claim shows up here to confirm.
         </EmptyState>
       ) : (
-        claims.data.map((c) => (
-          <div
-            key={c.id}
-            className={cn(
-              cardClass(),
-              "flex flex-wrap items-center justify-between gap-3",
-            )}
-          >
-            <div className="flex flex-col">
-              <span className="font-medium">
-                {c.memberName}
-                <span className="text-muted-foreground ml-2 text-sm font-normal">
-                  {formatMoney(c.amountMinor, c.currency)} · {c.period}
+        claims.data.map((c) => {
+          const confirming =
+            confirm.isPending && confirm.variables.claimId === c.id;
+          const rejecting =
+            reject.isPending && reject.variables.claimId === c.id;
+          const rowBusy = confirming || rejecting;
+          return (
+            <div
+              key={c.id}
+              className={cn(
+                cardClass(),
+                "flex flex-wrap items-center justify-between gap-3",
+              )}
+            >
+              <div className="flex flex-col gap-1">
+                <span className="font-medium">
+                  {c.memberName}
+                  <span className="text-muted-foreground ml-2 text-sm font-normal">
+                    {formatMoney(c.amountMinor, c.currency)} · {c.period}
+                  </span>
                 </span>
-              </span>
-              <span className="text-muted-foreground text-sm">
-                Ref: <span className="font-mono">{c.reference}</span> · said
-                paid {dateFmt.format(new Date(c.claimedAt))}
-              </span>
+                <span className="text-muted-foreground flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm">
+                  <span>Ref:</span>
+                  <span className="font-mono">{c.reference}</span>
+                  <CopyButton
+                    value={c.reference}
+                    iconOnly
+                    variant="ghost"
+                    label={`Copy reference ${c.reference}`}
+                    toastMessage="Reference copied"
+                    className="size-6"
+                  />
+                  <span>· said paid {dateFmt.format(new Date(c.claimedAt))}</span>
+                </span>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  disabled={rowBusy}
+                  onClick={() => confirm.mutate({ claimId: c.id })}
+                >
+                  {confirming && <Spinner size="sm" className="text-current" />}
+                  {confirming ? "Confirming…" : "Confirm"}
+                </Button>
+                <ConfirmDialog
+                  title="Reject this claim?"
+                  description={`${c.memberName} said they paid ${formatMoney(c.amountMinor, c.currency)}. Rejecting removes the claim — they'll need to send it again.`}
+                  confirmLabel="Reject claim"
+                  variant="destructive"
+                  onConfirm={async () => {
+                    await reject.mutateAsync({ claimId: c.id });
+                  }}
+                  trigger={
+                    <Button size="sm" variant="outline" disabled={rowBusy}>
+                      Reject
+                    </Button>
+                  }
+                />
+              </div>
             </div>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                disabled={busy}
-                onClick={() => confirm.mutate({ claimId: c.id })}
-              >
-                Confirm
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={busy}
-                onClick={() => reject.mutate({ claimId: c.id })}
-              >
-                Reject
-              </Button>
-            </div>
-          </div>
-        ))
+          );
+        })
       )}
     </section>
   );
@@ -159,90 +191,150 @@ function MemberDues() {
   );
 }
 
-/** Today as "YYYY-MM-DD" in the browser's local date (for the date input). */
-function todayIso(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+/** A `Date` as "YYYY-MM-DD" in the browser's local date (for the date input). */
+function toIsoDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/**
+ * One member's dues. Reads as a plain summary ("Monthly · due Aug 3") with an
+ * Edit button; the plan + date form only opens on Edit, so the roster isn't a
+ * wall of open forms. Saving or clearing both call `setMemberDues` (a null plan
+ * clears it), so one mutation covers both.
+ */
 function MemberDuesRow({ member, plans }: { member: Member; plans: Plan[] }) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const [planId, setPlanId] = useState<string>(plans[0]?.id ?? "");
-  const [date, setDate] = useState<string>(todayIso());
+  const [editing, setEditing] = useState(false);
+  // Preselect the member's current plan (matched by name — the roster row
+  // carries the plan name, not its id), else the first plan.
+  const currentPlanId =
+    plans.find((p) => p.name === member.dues?.planName)?.id ?? plans[0]?.id ?? "";
+  const [planId, setPlanId] = useState<string>(currentPlanId);
+  const [date, setDate] = useState<string>(
+    member.dues ? toIsoDate(new Date(member.dues.nextDueAt)) : toIsoDate(new Date()),
+  );
 
   const invalidate = () =>
     queryClient.invalidateQueries(trpc.membership.roster.pathFilter());
   const onError = (err: { message: string }) =>
     toast.error(err.message || "Could not save");
 
-  const set = useMutation(
+  const save = useMutation(
     trpc.payments.setMemberDues.mutationOptions({
       onSuccess: async () => {
         await invalidate();
-        toast.success("Dues updated");
+        setEditing(false);
       },
       onError,
     }),
   );
-  const clear = useMutation(
-    trpc.payments.setMemberDues.mutationOptions({
-      onSuccess: invalidate,
-      onError,
-    }),
-  );
-  const busy = set.isPending || clear.isPending;
+
+  const startEdit = () => {
+    setPlanId(currentPlanId);
+    setDate(
+      member.dues
+        ? toIsoDate(new Date(member.dues.nextDueAt))
+        : toIsoDate(new Date()),
+    );
+    setEditing(true);
+  };
+
+  const dateId = `due-${member.memberId}`;
+
+  if (!editing) {
+    return (
+      <div
+        className={cn(
+          cardClass(),
+          "flex flex-wrap items-center justify-between gap-2",
+        )}
+      >
+        <div className="flex flex-col">
+          <span className="font-medium">{member.name}</span>
+          {member.dues ? (
+            <span className="text-muted-foreground text-sm">
+              {member.dues.planName} · due{" "}
+              {dateFmt.format(new Date(member.dues.nextDueAt))}
+            </span>
+          ) : (
+            <span className="text-muted-foreground text-sm">No dues set</span>
+          )}
+        </div>
+        <Button size="sm" variant="outline" onClick={startEdit}>
+          {member.dues ? "Edit dues" : "Set dues"}
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className={cn(cardClass(), "flex flex-col gap-3")}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="font-medium">{member.name}</span>
-        {member.dues ? (
-          <span className="text-muted-foreground text-sm">
-            {member.dues.planName} · due{" "}
-            {dateFmt.format(new Date(member.dues.nextDueAt))}
-          </span>
-        ) : (
-          <span className="text-muted-foreground text-sm">No dues set</span>
-        )}
+      <span className="font-medium">{member.name}</span>
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-col gap-1">
+          <Label htmlFor={`plan-${member.memberId}`} className="text-xs">
+            Plan
+          </Label>
+          <Select
+            id={`plan-${member.memberId}`}
+            value={planId}
+            onChange={(e) => setPlanId(e.target.value)}
+          >
+            {plans.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name} · {formatMoney(p.priceMinor, p.currency)}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label htmlFor={dateId} className="text-xs">
+            Next due
+          </Label>
+          <Input
+            id={dateId}
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="h-9 w-auto"
+          />
+        </div>
       </div>
-      <div className="flex flex-wrap items-end gap-2">
-        <Select value={planId} onChange={(e) => setPlanId(e.target.value)}>
-          {plans.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name} · {formatMoney(p.priceMinor, p.currency)}
-            </option>
-          ))}
-        </Select>
-        <Input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className="h-9 w-auto"
-        />
+      <div className="flex flex-wrap gap-2">
         <Button
           size="sm"
-          disabled={busy || !planId}
+          disabled={save.isPending || !planId}
           onClick={() =>
-            set.mutate({ memberId: member.memberId, planId, nextDueAt: date })
+            save.mutate({ memberId: member.memberId, planId, nextDueAt: date })
           }
         >
-          {member.dues ? "Update" : "Set dues"}
+          {save.isPending && <Spinner size="sm" className="text-current" />}
+          {save.isPending ? "Saving…" : "Save"}
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={save.isPending}
+          onClick={() => setEditing(false)}
+        >
+          Cancel
         </Button>
         {member.dues && (
           <Button
             size="sm"
             variant="ghost"
-            disabled={busy}
+            className="text-destructive ml-auto"
+            disabled={save.isPending}
             onClick={() =>
-              clear.mutate({
+              save.mutate({
                 memberId: member.memberId,
                 planId: null,
                 nextDueAt: date,
               })
             }
           >
-            Clear
+            Clear dues
           </Button>
         )}
       </div>
@@ -315,15 +407,26 @@ function Plans() {
                 {formatMoney(p.priceMinor, p.currency)} / month
               </span>
             </span>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="text-destructive"
-              disabled={remove.isPending}
-              onClick={() => remove.mutate({ id: p.id })}
-            >
-              Delete
-            </Button>
+            <ConfirmDialog
+              title={`Delete the ${p.name} plan?`}
+              description="Members already on this plan keep their due dates. You just can't assign it to anyone new."
+              confirmLabel="Delete plan"
+              variant="destructive"
+              onConfirm={async () => {
+                await remove.mutateAsync({ id: p.id });
+              }}
+              trigger={
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  disabled={
+                    remove.isPending && remove.variables.id === p.id
+                  }
+                >
+                  Delete
+                </Button>
+              }
+            />
           </div>
         ))
       )}
@@ -369,7 +472,8 @@ function Plans() {
             })
           }
         >
-          Add plan
+          {create.isPending && <Spinner size="sm" className="text-current" />}
+          {create.isPending ? "Adding…" : "Add plan"}
         </Button>
       </div>
     </section>

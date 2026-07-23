@@ -19,33 +19,50 @@ export function ScheduleScreen() {
         title="Schedule"
         subtitle="Run the week — concrete classes and the recurring engine behind them."
       />
-      <div className="border-border mb-6 flex gap-1 border-b">
-        <TabButton active={tab === "week"} onClick={() => setTab("week")}>
+      <div
+        role="tablist"
+        aria-label="Schedule view"
+        className="border-border mb-6 flex gap-1 border-b"
+      >
+        <TabButton
+          id="tab-week"
+          active={tab === "week"}
+          onClick={() => setTab("week")}
+        >
           This week
         </TabButton>
         <TabButton
+          id="tab-templates"
           active={tab === "templates"}
           onClick={() => setTab("templates")}
         >
           Templates
         </TabButton>
       </div>
-      {tab === "week" ? <Schedule /> : <Templates />}
+      <div role="tabpanel" aria-labelledby={`tab-${tab}`}>
+        {tab === "week" ? <Schedule /> : <Templates />}
+      </div>
     </>
   );
 }
 
 function TabButton({
+  id,
   active,
   onClick,
   children,
 }: {
+  id: string;
   active: boolean;
   onClick: () => void;
   children: React.ReactNode;
 }) {
   return (
     <button
+      id={id}
+      type="button"
+      role="tab"
+      aria-selected={active}
       onClick={onClick}
       className={`relative -mb-px px-3 py-2 text-sm transition-colors ${
         active

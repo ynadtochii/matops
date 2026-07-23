@@ -1,44 +1,77 @@
-import { headers } from "next/headers";
-import { redirect } from "next/navigation";
+"use client";
+
+import { useActionState } from "react";
+import { useFormStatus } from "react-dom";
 
 import { Button } from "@matops/ui/button";
 import { Input } from "@matops/ui/input";
+import { Label } from "@matops/ui/label";
+import { Spinner } from "@matops/ui/spinner";
 
-import { auth } from "~/auth/server";
+import type { MagicLinkState } from "./sign-in-actions";
+import { sendMagicLinkAction, signInSocialAction } from "./sign-in-actions";
 
 /**
  * Passwordless sign-in (spec S1 / owner onboarding A3). Two ways in, per S1:
  * **Continue with Google** (social) or **email + magic link**. The magic link
- * prints to the dev console until email ships (Phase 4). `callbackURL` returns
- * the user to where they started — e.g. an invite/join page. A social sign-in
- * creates a user with no academy membership, so it lands on the same join gate
- * as magic-link (ADR 35).
+ * prints to the dev console until email ships. `callbackURL` returns the user
+ * to where they started — e.g. an invite/join page. A social sign-in creates a
+ * user with no academy membership, so it lands on the same join gate (ADR 35).
  *
- * Google is shown only when the server has OAuth creds configured (its
- * `signInSocial` returns no url otherwise); the button no-ops rather than 500s.
+ * Both buttons show a pending state (`useFormStatus`) so a submit can't be
+ * fired twice and the user sees it working; the magic-link form confirms "check
+ * your email" via `useActionState` instead of resolving silently.
  */
+
+/** A submit button that shows a spinner + disables while its form is pending. */
+function SubmitButton({
+  children,
+  pendingLabel,
+  variant,
+  className,
+}: {
+  children: React.ReactNode;
+  pendingLabel: string;
+  variant?: "default" | "outline";
+  className?: string;
+}) {
+  const { pending } = useFormStatus();
+  return (
+    <Button
+      type="submit"
+      size="lg"
+      variant={variant}
+      className={className}
+      disabled={pending}
+    >
+      {pending ? (
+        <>
+          <Spinner size="sm" className="text-current" />
+          {pendingLabel}
+        </>
+      ) : (
+        children
+      )}
+    </Button>
+  );
+}
+
 export function SignIn({ callbackURL = "/" }: { callbackURL?: string }) {
+  const [state, formAction] = useActionState<MagicLinkState, FormData>(
+    sendMagicLinkAction.bind(null, callbackURL),
+    { status: "idle" },
+  );
+
   return (
     <div className="flex w-full max-w-sm flex-col gap-3">
-      <form>
-        <Button
-          type="submit"
+      <form action={signInSocialAction.bind(null, callbackURL)}>
+        <SubmitButton
           variant="outline"
-          size="lg"
           className="w-full"
-          formAction={async () => {
-            "use server";
-            const res = await auth.api.signInSocial({
-              body: { provider: "google", callbackURL },
-              headers: await headers(),
-            });
-            // `url` is set only when Google creds are configured; redirect to
-            // Google's consent screen, which returns to /api/auth/callback/google.
-            if (res.url) redirect(res.url);
-          }}
+          pendingLabel="Connecting…"
         >
           Continue with Google
-        </Button>
+        </SubmitButton>
       </form>
 
       <div className="flex items-center gap-3">
@@ -47,33 +80,43 @@ export function SignIn({ callbackURL = "/" }: { callbackURL?: string }) {
         <span className="bg-border h-px flex-1" />
       </div>
 
-      <form className="flex flex-col gap-2">
-        <Input
-          name="email"
-          type="email"
-          required
-          placeholder="you@example.com"
-          aria-label="Email"
-        />
-        <Button
-          size="lg"
-          formAction={async (formData) => {
-            "use server";
-            const value = formData.get("email");
-            const email = typeof value === "string" ? value : "";
-            await auth.api.signInMagicLink({
-              body: { email, callbackURL },
-              headers: await headers(),
-            });
-          }}
-        >
+      <form action={formAction} className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            name="email"
+            type="email"
+            required
+            autoComplete="email"
+            placeholder="you@example.com"
+            aria-invalid={state.status === "error"}
+          />
+        </div>
+        <SubmitButton className="w-full" pendingLabel="Sending…">
           Send magic link
-        </Button>
+        </SubmitButton>
       </form>
-      <p className="text-muted-foreground text-center text-sm">
-        We&apos;ll email you a sign-in link. In development, copy the{" "}
-        <code className="text-xs">[auth] magic link …</code> URL from the
-        terminal.
+
+      <p
+        aria-live="polite"
+        className="text-muted-foreground text-center text-sm"
+      >
+        {state.status === "sent" ? (
+          <span className="text-foreground font-medium">
+            Check your email — we sent a sign-in link to {state.email}.
+          </span>
+        ) : state.status === "error" ? (
+          <span className="text-destructive">
+            Couldn&apos;t send the link. Check the address and try again.
+          </span>
+        ) : (
+          <>
+            We&apos;ll email you a sign-in link. In development, copy the{" "}
+            <code className="text-xs">[auth] magic link …</code> URL from the
+            terminal.
+          </>
+        )}
       </p>
     </div>
   );

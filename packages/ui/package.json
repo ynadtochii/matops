@@ -14,12 +14,16 @@
       "react-native": "./src/logo.native.tsx",
       "default": "./src/logo.tsx"
     },
+    "./alert-dialog": "./src/alert-dialog.tsx",
+    "./copy-button": "./src/copy-button.tsx",
     "./dropdown-menu": "./src/dropdown-menu.tsx",
     "./field": "./src/field.tsx",
     "./input": "./src/input.tsx",
     "./label": "./src/label.tsx",
     "./select": "./src/select.tsx",
     "./separator": "./src/separator.tsx",
+    "./spinner": "./src/spinner.tsx",
+    "./textarea": "./src/textarea.tsx",
     "./theme": "./src/theme.tsx",
     "./toast": "./src/toast.tsx"
   },

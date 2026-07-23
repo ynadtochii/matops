@@ -19,6 +19,28 @@ interface Academy {
   name: string;
 }
 
+const iconProps = {
+  viewBox: "0 0 16 16",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 1.5,
+  strokeLinecap: "round",
+  strokeLinejoin: "round",
+  className: "size-3.5 shrink-0",
+  "aria-hidden": true,
+} as const;
+
+const ChevronDown = () => (
+  <svg {...iconProps}>
+    <path d="M4 6.5l4 4 4-4" />
+  </svg>
+);
+const Check = () => (
+  <svg {...iconProps}>
+    <path d="M3.5 8.5l3 3 6-7" />
+  </svg>
+);
+
 /**
  * Multi-academy switcher (docs/issues/18). Only rendered when the user runs 2+
  * academies. Switching sets the active organization; every scoped query then
@@ -53,20 +75,25 @@ export function AcademySwitcher({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="sm">
-          {active?.name ?? "Switch academy"} ▾
+          {active?.name ?? "Switch academy"}
+          <ChevronDown />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        {academies.map((a) => (
-          <DropdownMenuItem
-            key={a.academyId}
-            disabled={a.academyId === activeId || setActive.isPending}
-            onClick={() => setActive.mutate({ academyId: a.academyId })}
-          >
-            {a.name}
-            {a.academyId === activeId ? " ✓" : ""}
-          </DropdownMenuItem>
-        ))}
+        {academies.map((a) => {
+          const current = a.academyId === activeId;
+          return (
+            <DropdownMenuItem
+              key={a.academyId}
+              aria-current={current ? "true" : undefined}
+              disabled={current || setActive.isPending}
+              onClick={() => setActive.mutate({ academyId: a.academyId })}
+            >
+              <span className="flex-1">{a.name}</span>
+              {current && <Check />}
+            </DropdownMenuItem>
+          );
+        })}
       </DropdownMenuContent>
     </DropdownMenu>
   );

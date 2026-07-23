@@ -9,12 +9,17 @@ import {
   describeRecurrence,
   formatStartMinutes,
 } from "@matops/domain";
+import { cn } from "@matops/ui";
+import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
+import { Select } from "@matops/ui/select";
+import { Spinner } from "@matops/ui/spinner";
 import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
+import { cardClass } from "./primitives";
 import { EmptyState, ErrorState, SkeletonRows } from "./states";
 
 type Template = RouterOutputs["template"]["list"][number];
@@ -109,8 +114,27 @@ export function Templates() {
       onError,
     }),
   );
+  // Optimistic pause/resume: flip the template's status in the list cache
+  // straight away, reconcile on settle, roll back on error.
   const setStatus = useMutation(
-    trpc.template.setStatus.mutationOptions({ onSuccess: invalidate, onError }),
+    trpc.template.setStatus.mutationOptions({
+      onMutate: async (vars) => {
+        const key = trpc.template.list.queryKey();
+        await queryClient.cancelQueries({ queryKey: key });
+        const prev = queryClient.getQueryData(key);
+        queryClient.setQueryData(key, (old) =>
+          old?.map((t) =>
+            t.id === vars.id ? { ...t, status: vars.status } : t,
+          ),
+        );
+        return { key, prev };
+      },
+      onError: (err, _vars, ctx) => {
+        if (ctx) queryClient.setQueryData(ctx.key, ctx.prev);
+        onError(err);
+      },
+      onSettled: () => invalidate(),
+    }),
   );
   const remove = useMutation(
     trpc.template.delete.mutationOptions({ onSuccess: invalidate, onError }),
@@ -169,7 +193,10 @@ export function Templates() {
           {templates.map((t) => (
             <div
               key={t.id}
-              className="bg-muted flex flex-wrap items-center justify-between gap-3 rounded-lg p-4"
+              className={cn(
+                cardClass(),
+                "flex flex-wrap items-center justify-between gap-3",
+              )}
             >
               <div className="flex flex-col">
                 <span className="font-medium">
@@ -190,10 +217,11 @@ export function Templates() {
                   {t.durationMinutes}min · cap {t.capacity}
                 </span>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap justify-end gap-2">
                 <Button
                   size="sm"
-                  variant="ghost"
+                  variant="outline"
+                  className="min-h-11 sm:min-h-8"
                   onClick={() => {
                     setEditingId(t.id);
                     setForm(formFromTemplate(t));
@@ -204,7 +232,10 @@ export function Templates() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  disabled={setStatus.isPending}
+                  className="min-h-11 sm:min-h-8"
+                  disabled={
+                    setStatus.isPending && setStatus.variables.id === t.id
+                  }
                   onClick={() =>
                     setStatus.mutate({
                       id: t.id,
@@ -214,15 +245,27 @@ export function Templates() {
                 >
                   {t.status === "active" ? "Pause" : "Resume"}
                 </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="text-destructive"
-                  disabled={remove.isPending}
-                  onClick={() => remove.mutate({ id: t.id })}
-                >
-                  Delete
-                </Button>
+                <ConfirmDialog
+                  title={`Delete the ${t.title} template?`}
+                  description="Future classes from this template stop being scheduled. Classes already on the calendar stay. This can't be undone."
+                  confirmLabel="Delete template"
+                  variant="destructive"
+                  onConfirm={async () => {
+                    await remove.mutateAsync({ id: t.id });
+                  }}
+                  trigger={
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      className="min-h-11 sm:min-h-8"
+                      disabled={
+                        remove.isPending && remove.variables.id === t.id
+                      }
+                    >
+                      Delete
+                    </Button>
+                  }
+                />
               </div>
             </div>
           ))}
@@ -231,7 +274,7 @@ export function Templates() {
 
       {form !== null && (
         <form
-          className="bg-muted flex flex-col gap-4 rounded-lg p-4"
+          className={cn(cardClass(), "flex flex-col gap-4")}
           onSubmit={(e) => {
             e.preventDefault();
             submit();
@@ -321,7 +364,7 @@ export function Templates() {
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="tpl-discipline">Discipline</Label>
-              <select
+              <Select
                 id="tpl-discipline"
                 value={form.discipline}
                 onChange={(e) =>
@@ -330,7 +373,6 @@ export function Templates() {
                     discipline: e.target.value as Discipline | "",
                   })
                 }
-                className="border-input bg-background h-9 rounded-md border px-3 text-sm"
               >
                 <option value="">None</option>
                 {DISCIPLINES.map((d) => (
@@ -338,7 +380,7 @@ export function Templates() {
                     {d.toUpperCase()}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
           </div>
 
@@ -355,6 +397,7 @@ export function Templates() {
 
           <div className="flex gap-2">
             <Button type="submit" disabled={busy}>
+              {busy && <Spinner size="sm" className="text-current" />}
               {busy
                 ? "Saving…"
                 : editingId
