@@ -13,7 +13,7 @@ import "~/app/styles.css";
 export const metadata: Metadata = {
   metadataBase: new URL(
     env.VERCEL_ENV === "production"
-      ? "https://turbo.t3.gg"
+      ? "https://matops.grapplerscollective.com"
       : "http://localhost:3004",
   ),
   title: "matops",
