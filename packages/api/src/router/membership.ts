@@ -10,6 +10,7 @@ import {
   getMemberById,
   listMembersOf,
   resolveInviteToken,
+  setMemberRoleIfNotLastOwner,
   setMemberRoleStatus,
   setMemberStatus,
   setMemberStatusIfNotLastOwner,
@@ -28,6 +29,7 @@ import {
   canApprove,
   classifyDrift,
   CODE_JOIN_ROLE,
+  isSuspended,
   paymentStatus,
   trainingStats,
 } from "@matops/domain";
@@ -114,6 +116,26 @@ async function setStatusOrRejectLastOwner(
     memberId,
     status,
   );
+  if (!ok) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "Promote a co-owner first — an academy can't be left without an owner.",
+    });
+  }
+}
+
+/**
+ * Set a member's role, but reject the change if it would leave the academy
+ * ownerless (§4) — used to step an owner DOWN to instructor. Atomic (one locked
+ * transaction) in `setMemberRoleIfNotLastOwner`, the sibling of the status path.
+ */
+async function setRoleOrRejectLastOwner(
+  academyId: string,
+  memberId: string,
+  role: string,
+) {
+  const { ok } = await setMemberRoleIfNotLastOwner(academyId, memberId, role);
   if (!ok) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
@@ -349,6 +371,21 @@ export const membershipRouter = {
       return { ok: true as const };
     }),
 
+  /** Restore a suspended member → active again (reverses `suspend`, §4). */
+  restore: ownerProcedure
+    .input(MemberActionSchema)
+    .mutation(async ({ ctx, input }) => {
+      const m = await requireMember(ctx.academyId, input.memberId);
+      if (!isSuspended(m)) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "This member is not suspended.",
+        });
+      }
+      await setMemberStatus(input.memberId, "active");
+      return { ok: true as const };
+    }),
+
   /** Promote a member to co-owner (so a gym is never left ownerless — §4). */
   promote: ownerProcedure
     .input(MemberActionSchema)
@@ -360,4 +397,36 @@ export const membershipRouter = {
       });
       return { ok: true as const };
     }),
+
+  /**
+   * Step an owner DOWN to instructor (spec O6). Atomic never-ownerless check —
+   * the last active owner can't be demoted (promote a co-owner first, §4).
+   */
+  demote: ownerProcedure
+    .input(MemberActionSchema)
+    .mutation(async ({ ctx, input }) => {
+      await requireMember(ctx.academyId, input.memberId);
+      await setRoleOrRejectLastOwner(ctx.academyId, input.memberId, "instructor");
+      return { ok: true as const };
+    }),
+
+  /**
+   * The academy's staff — active owners + instructors (spec O6). A lean read for
+   * the Settings staff list; no dues/visit joins (that's the roster's job).
+   */
+  staff: ownerProcedure.query(async ({ ctx }) => {
+    const rows = await listMembersOf(ctx.academyId);
+    return rows
+      .filter(
+        (r) =>
+          r.status === "active" &&
+          (r.role === "owner" || r.role === "instructor"),
+      )
+      .map((r) => ({
+        memberId: r.memberId,
+        name: r.name,
+        email: r.email,
+        role: r.role,
+      }));
+  }),
 } satisfies TRPCRouterRecord;

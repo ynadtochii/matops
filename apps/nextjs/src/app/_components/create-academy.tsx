@@ -1,0 +1,72 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+
+import { Button } from "@matops/ui/button";
+import { Input } from "@matops/ui/input";
+import { Label } from "@matops/ui/label";
+import { toast } from "@matops/ui/toast";
+
+import { useTRPC } from "~/trpc/react";
+
+/**
+ * "Start a gym" (spec 1.1). Its own deliberate step now (ADR 49) — reached from
+ * the "Start a gym" link on the landing page, not shown to everyone after login.
+ * Creating an academy makes you its active owner at once (the
+ * afterCreateOrganization hook activates the creator), so on success we send the
+ * new owner straight to the console.
+ */
+export function CreateAcademy() {
+  const trpc = useTRPC();
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const [name, setName] = useState("");
+
+  const create = useMutation(
+    trpc.academy.create.mutationOptions({
+      onSuccess: async () => {
+        await queryClient.invalidateQueries();
+        router.replace("/");
+        router.refresh();
+      },
+      onError: () => toast.error("Could not create the academy"),
+    }),
+  );
+
+  return (
+    <div className="flex w-full max-w-sm flex-col gap-6">
+      <div className="flex flex-col gap-2">
+        <h1 className="text-2xl font-semibold tracking-tight">Start a gym</h1>
+        <p className="text-muted-foreground text-sm">
+          Create your academy — you&apos;ll be its owner right away, no approval
+          needed.
+        </p>
+      </div>
+      <form
+        className="flex flex-col gap-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (name.trim().length >= 2) create.mutate({ name: name.trim() });
+        }}
+      >
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="academy-name">Academy name</Label>
+          <Input
+            id="academy-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Gracie Barra HQ"
+            minLength={2}
+            maxLength={80}
+            required
+          />
+        </div>
+        <Button type="submit" size="lg" disabled={create.isPending}>
+          {create.isPending ? "Creating…" : "Create academy"}
+        </Button>
+      </form>
+    </div>
+  );
+}

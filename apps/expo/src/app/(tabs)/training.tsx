@@ -7,6 +7,7 @@ import { nextClass, splitMyClasses } from "@matops/domain";
 import type { RouterOutputs } from "~/utils/api";
 import { MyTrainingCard } from "~/components/my-training-card";
 import { OverdueBanner } from "~/components/overdue-banner";
+import { SuspendedNotice } from "~/components/suspended-notice";
 import { useToast } from "~/components/toast";
 import {
   Button,
@@ -109,7 +110,12 @@ export default function Training() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const toast = useToast();
-  const mine = useQuery(trpc.booking.mine.queryOptions());
+  const current = useQuery(trpc.academy.current.queryOptions());
+  // Suspended members have no enrolled access — gate the query + show a notice.
+  const suspended = current.data?.status === "suspended";
+  const mine = useQuery(
+    trpc.booking.mine.queryOptions(undefined, { enabled: !suspended }),
+  );
 
   const cancel = useMutation(
     trpc.booking.cancel.mutationOptions({
@@ -130,6 +136,8 @@ export default function Training() {
 
   const openClass = (id: string) =>
     router.push({ pathname: "/class/[id]", params: { id } });
+
+  if (suspended) return <SuspendedNotice name={current.data?.name} />;
 
   return (
     <Screen>

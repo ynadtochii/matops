@@ -19,7 +19,10 @@ Foundations, the identity join loop (Phase 1), the scheduling core (Phase 2), **
 - `pnpm install`, then `pnpm dev:next` → **http://localhost:3004** (port 3000 is kept free on purpose). Sign in via the magic-link form; copy the `[auth] magic link …` URL from the terminal into the browser (no email provider needed — it prints to the terminal).
 - **`pnpm dev:ios`** — one command to prepare + run the whole iOS stack: installs deps if needed, starts the web/API on 3004, then boots the Expo app in the iOS Simulator (Metro + dev-client build). Env-tolerant: missing email (Resend) / push (EAS) config just no-ops. `pnpm dev:ios "iPhone Air"` picks a simulator.
 - `pnpm test` — PGlite RLS leak tests (probe + `class_template` + `class`) + health + pure domain logic (access, approval, invite, schedule, DST materialization, edit rules); no database needed.
-- `pnpm -F @matops/db migrate` applies migrations to `POSTGRES_URL`; `pnpm -F @matops/db seed` writes a probe row.
+- `pnpm -F @matops/db migrate` applies migrations to `POSTGRES_URL`; `pnpm -F @matops/db seed:health` writes a probe row.
+- **Demo data (ADR 51):** two modes.
+  - **Fill your real academy (recommended):** `pnpm -F @matops/db seed fill <code>` adds ~20 fake students (+ dues/bookings/attendance/ranks) around the real owner of the academy with that 6-digit code, using its **existing** plans + classes — your real data is never touched. `seed clear <code>` removes only the fakes; `seed status <code>` counts them.
+  - **Separate fake academies:** `seed up <your-email>` builds two isolated demo gyms attached to your user (owner of one, student of the other — sign in once first). `seed down` / `seed reset`. Also `pnpm db:seed` / `db:seed:down` / `db:seed:reset` from the root.
 - `.env` holds `POSTGRES_URL` (Neon **pooled** string, `sslmode=verify-full`) + `AUTH_SECRET`. **`CRON_SECRET`** is now **optional** (ADR 46 removed the scheduler); set it only to guard the manually-callable `/api/cron/*` seams. Note: `.env.example` still shows a Supabase placeholder (it was permission-locked during scaffolding).
 
 ## Phase 0 gotchas (do not "fix" these)

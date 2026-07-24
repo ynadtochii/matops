@@ -131,16 +131,15 @@ export function Roster() {
       onError,
     }),
   );
-  const promote = useMutation(
-    trpc.membership.promote.mutationOptions({
+  const restore = useMutation(
+    trpc.membership.restore.mutationOptions({
       onSuccess: async () => {
         await invalidate();
-        toast.success("Promoted to owner");
+        toast.success("Member restored");
       },
       onError,
     }),
   );
-
   const members = roster.data ?? [];
   const pending = members.filter((m) => m.status === "pending");
   const active = members.filter((m) => m.status !== "pending");
@@ -157,7 +156,7 @@ export function Roster() {
     (reject.isPending && reject.variables.memberId === id) ||
     (remove.isPending && remove.variables.memberId === id) ||
     (suspend.isPending && suspend.variables.memberId === id) ||
-    (promote.isPending && promote.variables.memberId === id);
+    (restore.isPending && restore.variables.memberId === id);
 
   if (roster.isPending) {
     return (
@@ -264,27 +263,6 @@ export function Roster() {
                 open={openId === m.memberId}
                 onToggle={() => toggle(m.memberId)}
               >
-                {m.role !== "owner" && (
-                  <ConfirmDialog
-                    title={`Make ${m.name} an owner?`}
-                    description="Owners have full control — schedule, roster, payments, and settings. This can't be undone from here."
-                    confirmLabel="Make owner"
-                    variant="default"
-                    onConfirm={async () => {
-                      await promote.mutateAsync({ memberId: m.memberId });
-                    }}
-                    trigger={
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className={ROW_BTN}
-                        disabled={rowBusy(m.memberId)}
-                      >
-                        Make owner
-                      </Button>
-                    }
-                  />
-                )}
                 {m.status === "active" && (
                   <ConfirmDialog
                     title={`Suspend ${m.name}?`}
@@ -305,6 +283,23 @@ export function Roster() {
                       </Button>
                     }
                   />
+                )}
+                {m.status === "suspended" && (
+                  <Button
+                    size="sm"
+                    className={ROW_BTN}
+                    disabled={rowBusy(m.memberId)}
+                    onClick={() => restore.mutate({ memberId: m.memberId })}
+                  >
+                    {restore.isPending &&
+                      restore.variables.memberId === m.memberId && (
+                        <Spinner size="sm" className="text-current" />
+                      )}
+                    {restore.isPending &&
+                    restore.variables.memberId === m.memberId
+                      ? "Restoring…"
+                      : "Restore"}
+                  </Button>
                 )}
                 <ConfirmDialog
                   title={`Remove ${m.name}?`}

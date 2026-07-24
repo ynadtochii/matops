@@ -22,7 +22,13 @@ import { trpc } from "~/utils/api";
 export function OverdueBanner() {
   const t = useTheme();
   const router = useRouter();
-  const dues = useQuery(trpc.payments.myDues.queryOptions());
+  // A suspended member has no enrolled access — `payments.myDues` is rejected.
+  // Gate the query off so the strip stays quiet without a 403 on every screen.
+  const current = useQuery(trpc.academy.current.queryOptions());
+  const suspended = current.data?.status === "suspended";
+  const dues = useQuery(
+    trpc.payments.myDues.queryOptions(undefined, { enabled: !suspended }),
+  );
 
   if (dues.data?.dues?.status !== "overdue") return null;
 

@@ -59,6 +59,8 @@ The owner is the buyer, but the **student is the user**. The owner's data only e
 ### S3 · Pending banner  *(not a blocker)*
 No blank waiting screen. A **slim banner** on the schedule: "Pending approval — you can browse and book; your gym will confirm you soon." Bookings made now are **provisional** (§4). When the owner approves, the banner clears and a **push** ("You're in at {Academy}") lands.
 
+**Suspended member (§4):** a suspended member has **no** enrolled access — the server rejects the schedule / dues / stats reads. Instead of a scary "couldn't load" error, the student sees a **calm notice** ("Your membership is paused — contact your gym to restore your access") on Schedule and My classes; Profile stays reachable (edit details, switch academy, sign out) with the same notice in place of the rank + dues sections. An owner reverses this with **Restore** (O4).
+
 ### S4 · Schedule  *(home — the core screen)*
 - This week's classes, grouped by day (Today first). Each row: **title · time · instructor · "N spots left"**.
 - **Inline book** *(v1.8, slice 1):* each upcoming, bookable row has a compact **Book** control — booking is **one tap from the list** (plus the "looks full — book anyway?" confirm when over capacity). A booked row shows the **Booked** pill; cancelled / past rows show no control. *(This replaced the old v1.3 top "Today / next" card, which moved to S6 so the two class tabs don't duplicate it — v1.8 slice 2.)*
@@ -119,7 +121,9 @@ No blank waiting screen. A **slim banner** on the schedule: "Pending approval �
 
 ## 3. Owner / instructor web app (Next.js)
 
-**Owner onboarding is seamless too (A3).** Same low-friction sign-in (social or email + magic link, minimal fields). "Start a gym" makes you the active owner at once — no waiting. Schedule setup has quick tools so building a week isn't a chore: **duplicate a template**, **copy a day**, and a "typical week" starter. The owner should reach a working schedule + printable QR in minutes.
+**Owner onboarding is seamless too (A3).** Same low-friction sign-in (social or email + magic link, minimal fields). Schedule setup has quick tools so building a week isn't a chore: **duplicate a template**, **copy a day**, and a "typical week" starter. The owner should reach a working schedule + printable QR in minutes.
+
+**Signing in lands you in your academy (ADR 49).** Creating a gym is rare, so it is **not** pushed at everyone on login — it's a separate **"Start a gym"** link on the sign-in page (→ `/start`), and "Start a gym" makes you the active owner at once, no waiting. On a normal sign-in the web routes you by what you belong to: **one** academy → it opens automatically; **several** → pick which one; **none** (a brand-new member) → **"Join your gym"** — type the academy's 6-digit code, add name + phone, and land **pending** as a student (same gate as an invite link).
 
 ### O1 · Dashboard  *(the "run the week" home)*
 - **This week at a glance:** today's classes with booking counts; **pending-approvals** badge; quick counts (active members, upcoming classes).
@@ -140,12 +144,12 @@ No blank waiting screen. A **slim banner** on the schedule: "Pending approval �
 
 ### O4 · Roster (members + leads)
 - **Pending approvals** section: approve / reject. This covers **both students and coaches** — approving assigns the intended role (student → member features; instructor → schedule + attendance tools) and activates them. A pending person's bookings simply become normal bookings on approval.
-- **Active members** list → **member detail** (v1.2 C.2): a tabbed panel — **Overview** (role, contact, attendance stats, drift band), **Attendance** (the member's full present-session history, paginated), **Rank** (v1.4 G.2), and **Notes** (v1.4 G.4) — plus remove/suspend. Opening a member from the O1 "who's drifting" widget deep-links straight to their detail. *(Activity/audit tab deferred — needs the audit log.)*
+- **Active members** list → **member detail** (v1.2 C.2): a tabbed panel — **Overview** (role, contact, attendance stats, drift band), **Attendance** (the member's full present-session history, paginated), **Rank** (v1.4 G.2), and **Notes** (v1.4 G.4) — plus remove/suspend — and, on an already-suspended member, a **Restore** action (`membership.restore`) that reverses the suspend and makes them active again (a suspend was never a dead end). Opening a member from the O1 "who's drifting" widget deep-links straight to their detail. *(Activity/audit tab deferred — needs the audit log.)* *(Making/stepping-down **owners** moved to **Settings → Staff** — ADR 50; the roster no longer has a "Make owner" button.)*
   - **Rank (v1.4 G.2, ADR 41):** the coach sets/changes the member's rank **per discipline** (e.g. *BJJ · Blue · 2 stripes*, *Judo · Green*), picking from the **seeded** rank systems (BJJ belts + stripes, Judo belts). Belt + stripes are validated against the system. **Rank only goes up** — a belt or stripe can be **bumped, never lowered**; to fix a mistake the coach **clears** the rank (removes it, keeps the history) and sets it fresh. Changing rank records a **promotion history** (from → to · date · who) shown below. **No automation, no progress bar** — the coach decides. Disciplines with no belt ladder (boxing, MMA) have no rank control.
   - **Notes (v1.4 G.4, ADR 41):** **staff-private** coaching notes on the member (injuries, goals, readiness). Visible to **all staff at this academy**, timestamped + authored; **never** shown to the member.
 - **Drop-in leads** section: **first-time visitors** who checked in via the gym QR without an account (name, phone, email, which class, consent flag). Kept for **follow-up** — the owner can send them an **app invite link (deep-linked to this gym)** to convert them into a member. Repeat visitors are nudged to register, so the form stays a first touch.
-- **Academy ID:** a plain **6-digit number** shown to copy + share. Students enter it in the app to find and join the gym (S2, mobile v1 — docs/issues/32). Joining by ID lands **pending/view-only** as a student, same as an invite link.
-- **Invite links:** generate/copy a shareable link **per role** (student / instructor). Either way the joiner lands **pending/view-only** until the owner approves — so a forwarded link never grants access on its own. One active link per role.
+- **Academy ID:** a plain **6-digit number** shown to copy + share. Members enter it — in the mobile app (S2, docs/issues/32) or on the **web** sign-in gate ("Join your gym", ADR 49) — to find and join the gym. Joining by ID lands **pending/view-only** as a student, same as an invite link.
+- **Invite links:** live in **Settings** (O6, ADR 50) — the **student** link under "How students join", the **instructor** link in the **Staff** section. Either way the joiner lands **pending/view-only** until the owner approves — so a forwarded link never grants access on its own. One active link per role.
 
 ### O5 · Attendance
 - Pick a class (today / recent past, ≤14-day backfill window) → see everyone present: **booked members** (confirmed + provisional), **self check-ins** (via QR), and **drop-ins** (from the public form).
@@ -155,12 +159,13 @@ No blank waiting screen. A **slim banner** on the schedule: "Pending approval �
 
 ### O6 · Settings
 - **Academy name** — the owner can **rename** it: a mutable label, *not* unique-constrained. Identity is the **Academy code** — a unique, permanent 6-digit number shown read-only (students type it to join; it never changes) — plus the internal org id. *(Time zone + disciplines toggle: later.)* **Owner-only.**
+- **Staff** *(ADR 50):* the academy's whole staff — active **owners + instructors** (name, email, role). **Add an instructor** by sharing the **instructor invite link** here (they land pending until approved — no owner-created accounts). Owner changes are rare, so they sit behind a quiet per-person **⋯ menu**, not a loud button: **make a co-owner** (an academy can have several owners, all with full rights), or **step an owner down** to instructor. The **last active owner can't be stepped down** (never ownerless, §4). Owner-only.
 - **Venue QR:** view / print the gym's check-in QR poster (one static code per gym — covers both app check-in and the drop-in form).
 - **Payment requisites** *(v1.3, ADR 40):* the owner enters the gym's **bank details** here — these feed the student's requisites card (S9). Owner-only.
-- *(Invite links live in O4 Roster.)*
+- **How students join:** the **student invite link** — a shareable link; the joiner lands **pending/view-only** until the owner approves, so a forwarded link never grants access on its own. One active link per role. *(The instructor link lives in the Staff section above.)*
 
 ### O7 · Payments  *(v1.3 — manual bank transfer; ADR 40)*
-- **Membership plan + dues:** the owner sets a plan (name, price, currency, cycle) and each member's next-due date. No card processor, no auto-charge — this is manual reconciliation.
+- **Membership plan + dues:** the owner sets a plan (name, price, currency, cycle) and each member's next-due date. The date defaults to the **1st of next month** — billing is anchored to the start of the month for everyone, so the day a member joins never changes when their dues fall due. The owner can still pick any date. No card processor, no auto-charge — this is manual reconciliation.
 - **Who paid / who's overdue:** the O4 roster shows a **status dot** per member — **paid** / **due soon** / **overdue** (derived from the due date, ADR 40) — with an **Overdue** filter. Member detail shows next-due + last confirmed payment.
 - **Confirm claims:** a "claims to confirm" list of student **"I paid"** submissions (S9). One tap to **confirm** (rolls the member's next-due date forward by the cycle) or **reject**. The student's reference code matches the bank-transfer note.
 - **Payment reminders:** the engine (push + email, due-soon + on the due day, one per period) is **built**, but v1 ships **no scheduler** (ADR 46), so reminders **do not fire automatically in v1** — they return with the first post-v1 host scheduler. For the pilot the owner is present and nudges in person.

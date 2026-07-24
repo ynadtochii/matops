@@ -238,6 +238,41 @@ export async function setMemberRole(
 }
 
 /**
+ * Set a member's ROLE (demote an owner → instructor) ATOMICALLY with the "never
+ * ownerless" check (spec §4). The sibling of `setMemberStatusIfNotLastOwner`:
+ * same locked transaction, same `canRemoveOrDemote` re-check on the freshly
+ * locked rows — so two owners stepping each other down at the same time cannot
+ * both pass and strand the gym. Writes the role only when the change keeps at
+ * least one active owner; returns `{ ok: false }` (no write) otherwise.
+ */
+export async function setMemberRoleIfNotLastOwner(
+  academyId: string,
+  memberId: string,
+  role: string,
+): Promise<{ ok: boolean }> {
+  return db.transaction(async (tx) => {
+    const rows = await tx
+      .select({ id: member.id, role: member.role, status: member.status })
+      .from(member)
+      .where(eq(member.organizationId, academyId))
+      .for("update");
+
+    const members = rows.map((r) => ({
+      id: r.id,
+      role: r.role,
+      status: r.status ?? "pending",
+    }));
+
+    if (!canRemoveOrDemote(members, memberId)) {
+      return { ok: false };
+    }
+
+    await tx.update(member).set({ role }).where(eq(member.id, memberId));
+    return { ok: true };
+  });
+}
+
+/**
  * Create — or re-open — a PENDING membership for a self-joining user
  * (docs/issues/14, 20). The member holds the harmless Better Auth default role
  * (`member`, not an academy role); the real role is granted only at approval. The

@@ -38,6 +38,26 @@ export const academyRouter = {
     return all.filter(isStudentLensMembership);
   }),
 
+  /**
+   * The post-login gate list (ADR 49): every academy this user has a LIVE tie to
+   * — pending or active, any role. Drives where a fresh session lands: 0 → join
+   * by code, 1 → open it automatically, 2+ → pick one. Broader than `listMine`
+   * (the web-lens switcher) on purpose, so a returning student is not re-asked
+   * for a code; it drops `removed`/`suspended` memberships, where the user has no
+   * standing to land on.
+   */
+  memberships: protectedProcedure.query(async ({ ctx }) => {
+    const all = await listMembershipsForUser(ctx.session.user.id);
+    return all
+      .filter((a) => a.status === "pending" || a.status === "active")
+      .map((a) => ({
+        academyId: a.academyId,
+        name: a.name,
+        role: a.role,
+        status: a.status,
+      }));
+  }),
+
   /** The active academy (name, the caller's role/status, and the shareable code
    * an owner gives students to join in the app — docs/issues/32), or null. */
   current: protectedProcedure.query(async ({ ctx }) => {

@@ -197,6 +197,18 @@ function toIsoDate(d: Date): string {
 }
 
 /**
+ * The default next-due date for a member the owner is setting up: the 1st of next
+ * month, local time. Billing is anchored to the start of the month for everyone,
+ * so the day a member joins never changes when their dues fall due (ADR 40). A
+ * mid-month join defaults to the coming 1st, not to today. `new Date(y, m+1, 1)`
+ * rolls the year over correctly in December.
+ */
+function defaultDueDate(): string {
+  const now = new Date();
+  return toIsoDate(new Date(now.getFullYear(), now.getMonth() + 1, 1));
+}
+
+/**
  * One member's dues. Reads as a plain summary ("Monthly · due Aug 3") with an
  * Edit button; the plan + date form only opens on Edit, so the roster isn't a
  * wall of open forms. Saving or clearing both call `setMemberDues` (a null plan
@@ -212,7 +224,7 @@ function MemberDuesRow({ member, plans }: { member: Member; plans: Plan[] }) {
     plans.find((p) => p.name === member.dues?.planName)?.id ?? plans[0]?.id ?? "";
   const [planId, setPlanId] = useState<string>(currentPlanId);
   const [date, setDate] = useState<string>(
-    member.dues ? toIsoDate(new Date(member.dues.nextDueAt)) : toIsoDate(new Date()),
+    member.dues ? toIsoDate(new Date(member.dues.nextDueAt)) : defaultDueDate(),
   );
 
   const invalidate = () =>
@@ -235,7 +247,7 @@ function MemberDuesRow({ member, plans }: { member: Member; plans: Plan[] }) {
     setDate(
       member.dues
         ? toIsoDate(new Date(member.dues.nextDueAt))
-        : toIsoDate(new Date()),
+        : defaultDueDate(),
     );
     setEditing(true);
   };

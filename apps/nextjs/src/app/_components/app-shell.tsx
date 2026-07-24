@@ -8,8 +8,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Logo } from "@matops/ui/logo";
 
 import { useTRPC } from "~/trpc/react";
+import { AcademyGate } from "./academy-gate";
 import { AcademySwitcher } from "./academy-switcher";
-import { Onboarding } from "./onboarding";
 import { SignOutButton } from "./sign-out";
 import { ErrorState, SkeletonRows } from "./states";
 
@@ -158,13 +158,10 @@ export function AppShell({
     name: a.name,
   }));
 
-  // No active academy → onboarding, no shell.
+  // No active academy → the post-login gate decides where to land (ADR 49):
+  // open the one academy, pick among several, or join a new one by code.
   if (!current.data) {
-    return (
-      <div className="flex min-h-screen items-center justify-center p-6">
-        <Onboarding academies={academies} />
-      </div>
-    );
+    return <AcademyGate />;
   }
 
   const c = current.data;

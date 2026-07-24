@@ -80,6 +80,27 @@ describe("never ownerless", () => {
   });
 });
 
+describe("owner step-down (demote → instructor)", () => {
+  // Demote reuses `canRemoveOrDemote`: stepping an owner down to instructor is
+  // only allowed while a co-owner remains, so the gym is never left ownerless.
+  it("blocks stepping down the only active owner", () => {
+    const members = [
+      rm("a", "owner", "active"),
+      rm("b", "instructor", "active"),
+    ];
+    expect(canRemoveOrDemote(members, "a")).toBe(false);
+  });
+
+  it("allows stepping down an owner when a co-owner remains", () => {
+    const members = [
+      rm("a", "owner", "active"),
+      rm("b", "owner", "active"),
+      rm("c", "instructor", "active"),
+    ];
+    expect(canRemoveOrDemote(members, "a")).toBe(true);
+  });
+});
+
 describe("web lens (docs/issues/18)", () => {
   it("includes owners, instructors, and pending instructors", () => {
     expect(isWebLensMembership({ role: "owner" })).toBe(true);

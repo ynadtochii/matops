@@ -1,0 +1,179 @@
+/**
+ * Seed CLI.
+ *
+ * Fill YOUR real academy (recommended — the mode you use day to day):
+ *   fill <code>   add ~20 fake students + dues/bookings/attendance/ranks to the
+ *                 academy with that 6-digit code. Uses its EXISTING plans +
+ *                 classes; your real data is untouched. Refuses if already filled.
+ *   clear <code>  remove ONLY the fake students + their data from that academy.
+ *
+ * Separate fake demo academies (isolated, deleted by academy id):
+ *   up      insert the two-academy demo dataset, attached to YOUR real user.
+ *   down    remove every seed academy (never your real user or a real academy).
+ *   reset   down, then up.
+ *
+ *   status [code]  show the demo academies (and, with a code, that academy's fakes).
+ *
+ * The email (arg or SEED_EMAIL) is only needed by up/reset. Sign in once at
+ * http://localhost:3004 first so your `user` row exists.
+ */
+import { eq } from "drizzle-orm";
+
+import { db, pool } from "../client";
+import { user } from "../schema";
+import {
+  academyFakeCount,
+  clearAcademy,
+  fillAcademy,
+  findAcademyByPublicCode,
+} from "./augment";
+import { assertSeedableTarget, resolveOwnerEmail } from "./registry";
+import { seedAll } from "./run";
+import { removeAll, seedStatus } from "./teardown";
+
+type Command = "up" | "down" | "reset" | "status" | "fill" | "clear";
+
+function parseArgs(argv: string[]): {
+  command: Command;
+  email?: string;
+  code?: string;
+} {
+  const rest = argv.slice(2);
+  const known: Command[] = ["up", "down", "reset", "status", "fill", "clear"];
+  const command = (
+    known.includes(rest[0] as Command) ? rest[0] : "up"
+  ) as Command;
+  // The email is the first arg that looks like one (so `seed up you@x.com` works).
+  const email = rest.find((a) => a.includes("@"));
+  // The code is the first bare 6-digit arg (the academy public code).
+  const code = rest.find((a) => /^\d{6}$/.test(a));
+  return { command, email, code };
+}
+
+/** Resolve the academy a `fill`/`clear` targets, or exit with guidance. */
+async function requireAcademy(code: string | undefined) {
+  if (!code) {
+    throw new Error(
+      "Pass the academy's 6-digit code, e.g.  pnpm -F @matops/db seed fill 860275",
+    );
+  }
+  const academy = await findAcademyByPublicCode(db, code);
+  if (!academy) throw new Error(`No academy found with code ${code}.`);
+  return academy;
+}
+
+/** Look up the real user you attach the demo data to. Never created here. */
+async function resolveRealUser(email: string) {
+  const rows = await db
+    .select({ id: user.id, name: user.name })
+    .from(user)
+    .where(eq(user.email, email))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+function printStatus(rows: Awaited<ReturnType<typeof seedStatus>>): void {
+  console.log("\nSeed status:");
+  for (const r of rows) {
+    const mark = r.present ? "✓" : "·";
+    console.log(
+      `  ${mark} ${r.name}  (${r.academyId})` +
+        (r.present
+          ? `  — ${r.members} members, ${r.classes} classes, ${r.dues} dues`
+          : "  — not seeded"),
+    );
+  }
+  console.log("");
+}
+
+async function main(): Promise<void> {
+  const { command, email, code } = parseArgs(process.argv);
+  assertSeedableTarget();
+  const exec = db;
+
+  // --- Fill / clear a REAL academy (the recommended mode) -------------------
+  if (command === "fill") {
+    const academy = await requireAcademy(code);
+    if ((await academyFakeCount(exec, academy.id)) > 0) {
+      console.log(
+        `[seed] "${academy.name}" already has demo students — run ` +
+          `\`seed clear ${code}\` first to rebuild.`,
+      );
+      return;
+    }
+    const report = await fillAcademy(exec, { academyId: academy.id });
+    console.log(`[seed] filled "${academy.name}" (${code}):`, report);
+    return;
+  }
+
+  if (command === "clear") {
+    const academy = await requireAcademy(code);
+    const report = await clearAcademy(exec, { academyId: academy.id });
+    console.log(
+      `[seed] cleared demo students from "${academy.name}" (${code}):`,
+      report,
+    );
+    return;
+  }
+
+  if (command === "status") {
+    if (code) {
+      const academy = await findAcademyByPublicCode(exec, code);
+      if (!academy) {
+        console.log(`No academy found with code ${code}.`);
+      } else {
+        const fakes = await academyFakeCount(exec, academy.id);
+        console.log(
+          `\n"${academy.name}" (${code}) — ${fakes} demo student(s) present.\n`,
+        );
+      }
+    }
+    printStatus(await seedStatus(exec));
+    return;
+  }
+
+  if (command === "down") {
+    const report = await removeAll(exec);
+    console.log("[seed] removed:", report);
+    return;
+  }
+
+  // up / reset need YOUR real user.
+  const realEmail = resolveOwnerEmail(email);
+  const realUser = await resolveRealUser(realEmail);
+  if (!realUser) {
+    throw new Error(
+      `No user found for ${realEmail}.\n` +
+        `Sign in once at http://localhost:3004 with that email (this creates your\n` +
+        `user row), then re-run:  pnpm -F @matops/db seed ${command} ${realEmail}`,
+    );
+  }
+
+  if (command === "reset") {
+    const removed = await removeAll(exec);
+    console.log("[seed] removed:", removed);
+  } else {
+    // up: refuse to double-seed (child tables without a natural unique key would
+    // duplicate). Rebuild with `reset` instead.
+    const status = await seedStatus(exec);
+    if (status.some((s) => s.present)) {
+      console.log(
+        "[seed] already seeded — run `pnpm -F @matops/db seed reset` to rebuild.",
+      );
+      printStatus(status);
+      return;
+    }
+  }
+
+  const report = await seedAll(exec, { realUser });
+  console.log(`[seed] done for ${realUser.name} <${realEmail}>:`, report);
+  printStatus(await seedStatus(exec));
+}
+
+main()
+  .then(() => pool.end())
+  .catch((err: unknown) => {
+    console.error("[seed] failed:", err instanceof Error ? err.message : err);
+    void pool.end();
+    process.exit(1);
+  });

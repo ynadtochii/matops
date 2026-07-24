@@ -12,7 +12,13 @@ import { z, ZodError } from "zod/v4";
 
 import type { Auth } from "@matops/auth";
 import { getMembership, withTenant } from "@matops/db";
-import { canEnroll, isActiveMember, isOwner, isStaff } from "@matops/domain";
+import {
+  canEnroll,
+  isActiveMember,
+  isOwner,
+  isStaff,
+  isSuspended,
+} from "@matops/domain";
 
 /**
  * 1. CONTEXT
@@ -180,7 +186,11 @@ const enforceTenant = t.middleware(async ({ ctx, next }) => {
   if (!canEnroll(membership)) {
     throw new TRPCError({
       code: "FORBIDDEN",
-      message: "Your access to this academy has been removed",
+      // A suspended member is reversible (an owner can restore them), so say so
+      // rather than the harsher "removed" — the mobile app also gates on this.
+      message: isSuspended(membership)
+        ? "Your membership is suspended — contact your gym to restore access."
+        : "Your access to this academy has been removed",
     });
   }
   return withTenant(academyId, (tx) =>

@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { RouterOutputs } from "~/utils/api";
 import { BookButton } from "~/components/book-control";
 import { OverdueBanner } from "~/components/overdue-banner";
+import { SuspendedNotice } from "~/components/suspended-notice";
 import {
   Banner,
   Card,
@@ -128,7 +129,12 @@ export default function Schedule() {
     return { from: start.toISOString(), to: end.toISOString() };
   }, []);
 
-  const week = useQuery(trpc.class.mine.queryOptions({ from, to }));
+  // A suspended member has no enrolled access — the server rejects `class.mine`.
+  // Gate the query off and show a calm notice instead of a load error (§4).
+  const suspended = current.data?.status === "suspended";
+  const week = useQuery(
+    trpc.class.mine.queryOptions({ from, to }, { enabled: !suspended }),
+  );
 
   const now = new Date();
   const todayKey = dayKey(now);
@@ -144,6 +150,8 @@ export default function Schedule() {
   }, [week.data]);
 
   const isPending = current.data?.status === "pending";
+
+  if (suspended) return <SuspendedNotice name={current.data?.name} />;
 
   return (
     <Screen>

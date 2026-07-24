@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import type { Membership } from "../src/access";
-import { canEnroll, isActiveMember, isOwner, isStaff } from "../src/access";
+import {
+  canEnroll,
+  isActiveMember,
+  isOwner,
+  isStaff,
+  isSuspended,
+} from "../src/access";
 
 const m = (role: string, status: string): Membership => ({ role, status });
 
@@ -43,5 +49,14 @@ describe("access predicates", () => {
     const o = m("owner", "active");
     expect(isStaff(o)).toBe(true);
     expect(isOwner(o)).toBe(true);
+  });
+
+  it("isSuspended is true only for suspended rows (drives restore)", () => {
+    for (const role of ["owner", "instructor", "student"]) {
+      expect(isSuspended(m(role, "suspended"))).toBe(true);
+      expect(isSuspended(m(role, "active"))).toBe(false);
+      expect(isSuspended(m(role, "pending"))).toBe(false);
+      expect(isSuspended(m(role, "removed"))).toBe(false);
+    }
   });
 });

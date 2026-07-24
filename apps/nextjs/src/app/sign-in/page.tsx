@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Logo, Mark } from "@matops/ui/logo";
@@ -65,6 +66,18 @@ export default async function SignInPage() {
             </p>
           </div>
           <SignIn callbackURL="/" />
+
+          {/* Owners start here. A rare, deliberate action, so it is its own link
+              off the sign-in form — not offered to everyone after login (ADR 49). */}
+          <p className="text-muted-foreground mt-6 text-center text-sm">
+            Running a gym?{" "}
+            <Link
+              href="/start"
+              className="text-brand-strong font-medium underline-offset-4 hover:underline"
+            >
+              Start a gym
+            </Link>
+          </p>
         </div>
       </div>
     </main>

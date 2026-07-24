@@ -8,6 +8,7 @@ import { disciplineLabel, formatRank } from "@matops/domain";
 
 import { OverdueBanner } from "~/components/overdue-banner";
 import {
+  Banner,
   Button,
   Card,
   confirm,
@@ -392,6 +393,10 @@ export default function Profile() {
     typeof user.phone === "string" && user.phone.length > 0 ? user.phone : "";
   const list = academies.data ?? [];
   const activeId = current.data?.academyId;
+  // Suspended → the enrolled rank + dues reads are rejected by the server. Hide
+  // those sections behind a calm banner, but keep Profile itself (sign out /
+  // switch academy stay reachable). §4.
+  const suspended = current.data?.status === "suspended";
 
   return (
     <Screen>
@@ -427,18 +432,26 @@ export default function Profile() {
 
         <Field label="Current academy" value={current.data?.name ?? "—"} />
 
-        <Stack gap={8}>
-          <Eyebrow>My rank</Eyebrow>
-          <MyRanks />
-        </Stack>
+        {suspended ? (
+          <Banner tone="warning">
+            Your membership is paused. Contact your gym to restore your access.
+          </Banner>
+        ) : (
+          <>
+            <Stack gap={8}>
+              <Eyebrow>My rank</Eyebrow>
+              <MyRanks />
+            </Stack>
 
-        <View
-          style={{ gap: 8 }}
-          onLayout={(e) => (duesY.current = e.nativeEvent.layout.y)}
-        >
-          <Eyebrow>Membership dues</Eyebrow>
-          <MembershipDues />
-        </View>
+            <View
+              style={{ gap: 8 }}
+              onLayout={(e) => (duesY.current = e.nativeEvent.layout.y)}
+            >
+              <Eyebrow>Membership dues</Eyebrow>
+              <MembershipDues />
+            </View>
+          </>
+        )}
 
         {list.length >= 2 && (
           <Stack gap={8}>
