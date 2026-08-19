@@ -3,7 +3,7 @@
 **Status:** accepted
 **Date:** 2026-08-19
 **Supersedes:** nothing. Amends the fail-closed context rule in
-[33](33-tenant-seam-hardening.md) and the testing note in
+[33](33-tenant-seam-enforcement.md) and the testing note in
 [architecture.md](../architecture.md) §0.
 
 ## Context

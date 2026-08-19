@@ -107,5 +107,49 @@ id (lands with the Phase 5 launch infra), so all of this is device-only.
 
 ---
 
+## Waves that have never been on a device
+
+Everything below shipped static-gates-green only. Each item is here because no
+simulator exists in the build environment, not because it is known broken.
+
+**v1.8 mobile IA (ADR 45)**
+
+- [ ] Booking is **one tap** from the schedule row; the over-capacity row asks
+      "book anyway?" first.
+- [ ] The **Check-in tab is gone**; a `matops://checkin/<academyId>` deep link
+      still opens the walk-in screen.
+- [ ] The **overdue header** (S11) appears on Schedule / Training when dues are
+      past due, and clears once the owner confirms a claim.
+- [ ] **Settings** (S12) opens from the gear in the Profile header.
+
+**v2.0 / v2.1 mobile waves (ADR 54, 55)**
+
+- [ ] Booking a class schedules a **local reminder** ~2h before it starts;
+      cancelling the booking drops it. Needs a class more than 2h out.
+- [ ] The notification **permission prompt** appears on the first booking, and a
+      denied prompt does not crash the booking.
+- [ ] Turning the **push toggle off** clears the scheduled reminders too.
+- [ ] **Pull to refresh** works on Schedule, Training and Profile; returning to
+      the app after hours shows fresh spots-left, not a stale count.
+- [ ] Opening a class shows **who is in it** — names for an approved viewer,
+      counts for a pending one, drop-ins always a count.
+
+**v2.4 frontend review fixes (ADR 59)**
+
+- [ ] **Sign out, then sign in as a different student on the same device:** the
+      schedule, training tab and academy name are the **new** user's
+      immediately. This is the cache-clear fix; the old bug showed the previous
+      user's data for ~30 seconds.
+- [ ] Same check after a **magic-link verify** (open a second student's link on a
+      device already signed in as someone else).
+- [ ] **Cancel a booking from the Training tab** with the backend stopped: a
+      "Could not cancel" toast appears (it used to fail silently there).
+- [ ] **Book two classes quickly, then cancel one:** the cancelled class sends no
+      reminder, and the other one still does.
+- [ ] The Training tab shows the **error state alone** when `booking.mine` fails,
+      not the error and "Nothing booked yet" together.
+
+---
+
 *Report: build (iOS/Android + version), which items passed/failed, and any repro
 steps for failures.*

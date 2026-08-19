@@ -2,7 +2,7 @@
 
 **Status:** accepted
 **Date:** 2026-08-19
-**Supersedes:** nothing. Amends the boundary rules in [33](33-tenant-seam-hardening.md).
+**Supersedes:** nothing. Amends the boundary rules in [33](33-tenant-seam-enforcement.md).
 
 ## Context
 

@@ -47,7 +47,7 @@ The **only** behavior that truly needed a scheduler was the reminders.
   (`curl -H "Authorization: Bearer $CRON_SECRET" …`) and are trivial to re-attach
   to any host's scheduler (system cron, GitHub Actions, Upstash QStash, a Railway
   cron) later — nothing about them is Vercel-specific. The reminder /
-  materialization logic in `packages/db` + `packages/api/notify.ts` stays intact
+  materialization logic in `packages/db` + `packages/api/src/notify.ts` stays intact
   and tested; no code is deleted.
 - **`CRON_SECRET` becomes optional in production** (it only protects the manual
   endpoints now). The routes still refuse to run unprotected in production if it

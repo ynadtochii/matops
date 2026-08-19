@@ -1,6 +1,6 @@
 # 39 · Attendance-derived stats — per-academy, read-time, one pure engine
 
-*(v1.2 "Personal & Insight" foundation, plan `.scratch/v1.2/plan.md`. Builds on the Phase-3 booking/attendance schema and the roster `visitCount` — [08](08-data-model.md), [22](22-provisional-booking-capacity.md). Reference only, not borrowed as-is: MAT's cached `users.stats` + refresh cron.)*
+*(v1.2 "Personal & Insight" foundation, plan `.scratch/v1.2/plan.md`. Builds on the Phase-3 booking/attendance schema and the roster `visitCount` — [08](08-mvp-domain-model.md), [22](22-provisional-booking-capacity.md). Reference only, not borrowed as-is: MAT's cached `users.stats` + refresh cron.)*
 
 ## Context
 

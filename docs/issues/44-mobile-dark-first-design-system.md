@@ -1,7 +1,7 @@
 # ADR 44 — Mobile dark-first design pass: Geist + token-derived kit
 
 **Status:** accepted · **Date:** 2026-07-22 · **Supersedes:** none (extends ADR
-[37](37-brand-identity.md) brand, ADR [38](38-mobile-ux-pass.md) mobile UX, ADR
+[37](37-brand-identity.md) brand, ADR [38](38-app-navigation-shells.md) mobile UX, ADR
 [43](43-web-design-system-primitives.md) web primitives)
 
 ## Context

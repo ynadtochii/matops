@@ -1,6 +1,6 @@
 # 40 · Manual-transfer payments — owner-confirmed dues, no card processor
 
-*(v1.3 "Frictionless & Pay" foundation, plan `.scratch/frictionless-pay/plan.md`. **Promotes** payments/billing out of the Parked "deferred domains" list — [roadmap.md](../roadmap.md#parked--next-iteration-do-not-build-in-v1), map "out of scope". Builds on the Phase-3 booking/attendance schema and the tenant seam — [08](08-data-model.md), [33](33-tenant-seam-enforcement.md). Reference only, not borrowed: MAT's Stripe/subscription integration.)*
+*(v1.3 "Frictionless & Pay" foundation, plan `.scratch/frictionless-pay/plan.md`. **Promotes** payments/billing out of the Parked "deferred domains" list — [roadmap.md](../roadmap.md#parked--next-iteration-do-not-build-in-v1), map "out of scope". Builds on the Phase-3 booking/attendance schema and the tenant seam — [08](08-mvp-domain-model.md), [33](33-tenant-seam-enforcement.md). Reference only, not borrowed: MAT's Stripe/subscription integration.)*
 
 ## Context
 

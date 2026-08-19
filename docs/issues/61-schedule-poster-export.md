@@ -1,4 +1,4 @@
-# 54 — Export the weekly schedule as a shareable poster
+# 61 — Export the weekly schedule as a shareable poster
 
 **Status:** accepted · **Date:** 2026-08-19 · **Area:** staff web / O3 templates
 
