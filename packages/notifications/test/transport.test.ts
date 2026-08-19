@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { sendEmail } from "../src/resend";
 import { sendPush } from "../src/expo-push";
+import { sendEmail } from "../src/resend";
 
 /**
  * Guard-path tests only — the network paths are exercised on real infra (see the

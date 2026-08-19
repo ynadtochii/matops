@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useActionState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
@@ -10,29 +10,35 @@ import { Label } from "@matops/ui/label";
 import { Spinner } from "@matops/ui/spinner";
 import { toast } from "@matops/ui/toast";
 
+import type { MagicLinkState } from "~/app/_components/sign-in-actions";
+import {
+  OrDivider,
+  SocialSignIn,
+  SubmitButton,
+} from "~/app/_components/sign-in";
+import { sendJoinLinkAction } from "~/app/_components/sign-in-actions";
 import { useTRPC } from "~/trpc/react";
 
-/**
- * The invite landing (spec S2). Resolves the token to the academy + intended
- * role. Signed-in users get the minimal profile form → a pending membership;
- * signed-out users see the academy and are prompted to sign in below.
- */
+export interface JoinProfile {
+  firstName: string;
+  lastName: string;
+  phone: string;
+}
+
 export function JoinFlow({
   token,
   signedIn,
+  profile,
 }: {
   token: string;
   signedIn: boolean;
+  profile?: JoinProfile;
 }) {
   const trpc = useTRPC();
   const router = useRouter();
   const invite = useQuery(
     trpc.invite.resolve.queryOptions({ token }, { retry: false }),
   );
-
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [phone, setPhone] = useState("");
 
   const join = useMutation(
     trpc.membership.join.mutationOptions({
@@ -57,7 +63,9 @@ export function JoinFlow({
   if (invite.isError) {
     return (
       <div className="flex flex-col items-center gap-3 text-center">
-        <h1 className="text-2xl font-semibold tracking-tight">Invite not valid</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          Invite not valid
+        </h1>
         <p className="text-muted-foreground text-sm">
           This invite isn&apos;t valid — ask your gym for a new link.
         </p>
@@ -70,70 +78,162 @@ export function JoinFlow({
   return (
     <div className="flex w-full max-w-sm flex-col gap-5">
       <div className="flex flex-col gap-1 text-center">
-        <h1 className="text-2xl font-semibold tracking-tight">Join {academyName}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          Join {academyName}
+        </h1>
         <p className="text-muted-foreground text-sm">
           You&apos;re joining as a{role === "instructor" ? "n" : ""} {role}.
           Your gym confirms you after you join.
         </p>
       </div>
 
-      {signedIn ? (
-        <form
-          className="flex flex-col gap-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            join.mutate({
-              token,
-              firstName: firstName.trim(),
-              lastName: lastName.trim(),
-              phone: phone.trim(),
-            });
-          }}
-        >
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="firstName">First name</Label>
-            <Input
-              id="firstName"
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-              autoComplete="given-name"
-              maxLength={60}
-              required
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="lastName">Last name</Label>
-            <Input
-              id="lastName"
-              value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
-              autoComplete="family-name"
-              maxLength={60}
-              required
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="phone">Phone</Label>
-            <Input
-              id="phone"
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              autoComplete="tel"
-              maxLength={30}
-              required
-            />
-          </div>
-          <Button type="submit" size="lg" disabled={join.isPending}>
-            {join.isPending && <Spinner size="sm" className="text-current" />}
-            {join.isPending ? "Joining…" : `Join ${academyName}`}
-          </Button>
-        </form>
+      {!signedIn ? (
+        <SignUp token={token} academyName={academyName} />
       ) : (
-        <p className="text-muted-foreground text-center text-sm">
-          Sign in below to join.
-        </p>
+        <ProfileForm
+          academyName={academyName}
+          defaults={profile}
+          pending={join.isPending}
+          onSubmit={(p) => join.mutate({ token, ...p })}
+        />
       )}
     </div>
+  );
+}
+
+function SignUp({
+  token,
+  academyName,
+}: {
+  token: string;
+  academyName: string;
+}) {
+  const [state, formAction] = useActionState<MagicLinkState, FormData>(
+    sendJoinLinkAction.bind(null, token),
+    { status: "idle" },
+  );
+
+  if (state.status === "sent") {
+    return (
+      <div className="flex flex-col gap-2 text-center">
+        <p className="font-medium">Check your email.</p>
+        <p className="text-muted-foreground text-sm">
+          We sent a link to {state.email}. Open it to confirm your email and
+          finish joining.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <SocialSignIn callbackURL={`/join/${token}`} />
+      <OrDivider />
+      <form action={formAction} className="flex flex-col gap-3">
+        <NameFields />
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            placeholder="you@example.com"
+            required
+            aria-invalid={state.status === "error"}
+          />
+        </div>
+        <SubmitButton className="w-full" pendingLabel="Sending…">
+          Join {academyName}
+        </SubmitButton>
+        <p aria-live="polite" className="text-muted-foreground text-sm">
+          {state.status === "error" ? (
+            <span className="text-error">
+              Couldn&apos;t send the link. Check your details and try again.
+            </span>
+          ) : (
+            "We'll email you a link to confirm it's you. That's the last step."
+          )}
+        </p>
+      </form>
+    </div>
+  );
+}
+
+function ProfileForm({
+  academyName,
+  defaults,
+  pending,
+  onSubmit,
+}: {
+  academyName: string;
+  defaults?: JoinProfile;
+  pending: boolean;
+  onSubmit: (profile: JoinProfile) => void;
+}) {
+  return (
+    <form
+      className="flex flex-col gap-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const data = new FormData(e.currentTarget);
+        const read = (key: string) => {
+          const value = data.get(key);
+          return typeof value === "string" ? value.trim() : "";
+        };
+        onSubmit({
+          firstName: read("firstName"),
+          lastName: read("lastName"),
+          phone: read("phone"),
+        });
+      }}
+    >
+      <NameFields defaults={defaults} />
+      <Button type="submit" size="lg" disabled={pending}>
+        {pending && <Spinner size="sm" className="text-current" />}
+        {pending ? "Joining\u2026" : `Join ${academyName}`}
+      </Button>
+    </form>
+  );
+}
+
+function NameFields({ defaults }: { defaults?: JoinProfile }) {
+  return (
+    <>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="firstName">First name</Label>
+        <Input
+          id="firstName"
+          name="firstName"
+          defaultValue={defaults?.firstName}
+          autoComplete="given-name"
+          maxLength={60}
+          required
+        />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="lastName">Last name</Label>
+        <Input
+          id="lastName"
+          name="lastName"
+          defaultValue={defaults?.lastName}
+          autoComplete="family-name"
+          maxLength={60}
+          required
+        />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="phone">Phone</Label>
+        <Input
+          id="phone"
+          name="phone"
+          type="tel"
+          defaultValue={defaults?.phone}
+          autoComplete="tel"
+          maxLength={30}
+          required
+        />
+      </div>
+    </>
   );
 }

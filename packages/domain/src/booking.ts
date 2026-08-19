@@ -82,3 +82,24 @@ export function capacityDisplay(
     isOver: bookingCount >= capacity,
   };
 }
+
+/**
+ * "N spots left" for a schedule row (spec S4). Capacity 0 means no cap, so it
+ * never reads as full. Shared by both clients so one rule paints every row.
+ */
+export function spotsLeftLabel(capacity: number, bookingCount: number): string {
+  if (capacity <= 0) return "Open";
+  const left = capacity - bookingCount;
+  if (left <= 0) return "Full";
+  return `${left} spot${left === 1 ? "" : "s"} left`;
+}
+
+/**
+ * How full the class is, for a student who already holds a spot ("12/20", or
+ * "12 in" when the gym set no cap). Spots-left is the number that helps someone
+ * decide to book; once booked, the useful number is who else is coming.
+ */
+export function fillLabel(capacity: number, bookingCount: number): string {
+  if (capacity <= 0) return `${bookingCount} in`;
+  return `${bookingCount}/${capacity}`;
+}

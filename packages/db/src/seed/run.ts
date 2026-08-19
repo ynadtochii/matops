@@ -24,6 +24,8 @@ import {
   memberDues,
   memberNote,
   memberRank,
+  memberReferral,
+  memberReferralAudit,
   membershipPlan,
   organization,
   paymentClaim,
@@ -115,6 +117,20 @@ export async function seedAll(
   await insert(report, "rank_promotion", exec, rankPromotion, graph.promotions);
   await insert(report, "member_note", exec, memberNote, graph.notes);
   await insert(report, "drop_in", exec, dropIn, graph.dropIns);
+  await insert(
+    report,
+    "member_referral",
+    exec,
+    memberReferral,
+    graph.referrals,
+  );
+  await insert(
+    report,
+    "member_referral_audit",
+    exec,
+    memberReferralAudit,
+    graph.referralAudits,
+  );
 
   // 5. Materialize FUTURE classes from the seeded templates (reuses the real
   //    engine — fills [now, horizon) with no overlap against the past classes).
@@ -138,9 +154,40 @@ export async function seedAll(
       now,
       ids,
     );
+    report["class(cancelled)"] = await cancelOneUpcoming(exec, now, ids);
   }
 
   return report;
+}
+
+/** Cancel the LAST upcoming class of each academy, so the cancelled state shows. */
+async function cancelOneUpcoming(
+  exec: SeedExec,
+  now: Date,
+  academyIds: string[],
+): Promise<number> {
+  let cancelled = 0;
+  for (const academyId of academyIds) {
+    const rows = await exec
+      .select({ id: classInstance.id })
+      .from(classInstance)
+      .where(
+        and(
+          eq(classInstance.academyId, academyId),
+          gte(classInstance.startsAt, new Date(now.getTime() + 3 * DAY_MS)),
+        ),
+      )
+      .orderBy(classInstance.startsAt)
+      .limit(1);
+    const target = rows[0];
+    if (!target) continue;
+    await exec
+      .update(classInstance)
+      .set({ status: "cancelled" })
+      .where(eq(classInstance.id, target.id));
+    cancelled += 1;
+  }
+  return cancelled;
 }
 
 /**
@@ -187,11 +234,17 @@ async function bookFutureClasses(
 
   const bookings: (typeof classParticipation.$inferInsert)[] = [];
   const countByClass = new Map<string, number>();
+  const packedAcademies = new Set<string>();
   upcoming.forEach((cls, ci) => {
     if (cls.startsAt > horizon) return;
     const active = activeByAcademy.get(cls.academyId) ?? [];
-    // A deterministic ~60% of active students book each class.
-    const booked = active.filter((_, si) => (si + ci) % 5 < 3);
+    // A deterministic ~60% of active students book each class. The first small
+    // class of an academy gets EVERYONE, so the over-capacity (red) count shows.
+    const packed = cls.capacity <= 12 && !packedAcademies.has(cls.academyId);
+    if (packed) packedAcademies.add(cls.academyId);
+    const booked = packed
+      ? active
+      : active.filter((_, si) => (si + ci) % 5 < 3);
     booked.forEach((userId) => {
       bookings.push({
         id: randomUUID(),

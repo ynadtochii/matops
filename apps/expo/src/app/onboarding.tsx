@@ -88,7 +88,7 @@ export default function Onboarding() {
 
         {query !== null && academy ? (
           /* Phase 2 — a gym was found: confirm + fill the profile. */
-          <UIStack gap={24}>
+          <UIStack key="profile" gap={24}>
             <UIStack gap={8}>
               <Heading>Join {academy.name}</Heading>
               <Muted>Your gym confirms you after you join.</Muted>
@@ -139,7 +139,7 @@ export default function Onboarding() {
           </UIStack>
         ) : (
           /* Phase 1 — enter the gym's ID. */
-          <UIStack gap={24}>
+          <UIStack key="code" gap={24}>
             <UIStack gap={8}>
               <Heading>Join a gym</Heading>
               <Muted>

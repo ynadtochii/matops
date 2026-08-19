@@ -64,7 +64,7 @@ Navigation / state
 Second academy + approval loop
 - [ ] While signed in, join a **second** gym by its code → another pending
       membership → it appears in the **S7 switcher** (shown once 2+).
-- [ ] On the web roster, the pending student appears → **approve** → on the next
+- [ ] On the web member list, the pending student appears → **approve** → on the next
       app load/refresh the **banner clears** (now active).
 - [ ] Reject a student on the web, then re-enter the same code on the device →
       lands **pending again** (re-open, not blocked).

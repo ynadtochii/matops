@@ -145,9 +145,9 @@ describe("compareRank", () => {
 
 describe("isRankRegression", () => {
   it("allows a first rank (no current)", () => {
-    expect(
-      isRankRegression("bjj", null, { belt: "White", stripes: 0 }),
-    ).toBe(false);
+    expect(isRankRegression("bjj", null, { belt: "White", stripes: 0 })).toBe(
+      false,
+    );
   });
 
   it("allows a stripe bump on the same belt", () => {

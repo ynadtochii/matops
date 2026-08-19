@@ -2,10 +2,13 @@ import { useState } from "react";
 import { Alert, Pressable } from "react-native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
+import { capacityDisplay } from "@matops/domain";
+
 import { useToast } from "~/components/toast";
-import { Txt, useTheme } from "~/components/ui";
+import { confirm, Txt, useTheme } from "~/components/ui";
 import { trpc } from "~/utils/api";
 import { dayFmt, timeFmt } from "~/utils/format";
+import { cancelClassReminder, scheduleClassReminder } from "~/utils/reminders";
 
 /**
  * The minimum a class needs to be booked from any surface (schedule row, hero
@@ -14,20 +17,18 @@ import { dayFmt, timeFmt } from "~/utils/format";
  */
 export interface BookableClass {
   id: string;
+  title: string;
   capacity: number;
   bookingCount: number;
   startsAt: string | Date;
 }
 
 /**
- * Shared booking action (v1.8 slice 1). One place for the rule that lived twice
- * (the schedule hero card + the class detail): call `booking.book`, and when the
- * class looks full ask **"Book anyway?"** first — soft capacity, never blocked.
- * On success it invalidates the class + booking caches so every list reflects the
- * new booking, then runs the optional `onBooked` (used for the slice-6 toast).
+ * Shared booking action (v1.8 slice 1): call `booking.book`, and when the class
+ * looks full ask "Book anyway?" first — soft capacity, never blocked.
  *
- * Kept as a hook so callers own their own pending / error state — a list of rows
- * each gets an independent control without a shared spinner.
+ * A hook, not a component, so callers own their own pending / error state: a
+ * list of rows each gets an independent control without a shared spinner.
  */
 export function useBookClass(
   onBooked?: () => void,
@@ -59,13 +60,21 @@ export function useBookClass(
   const doBook = (c: BookableClass) => {
     const start = new Date(c.startsAt);
     const label = `Booked — ${dayFmt.format(start)} · ${timeFmt.format(start)}`;
-    book.mutate({ classId: c.id }, { onSuccess: () => toast.show(label) });
+    book.mutate(
+      { classId: c.id },
+      {
+        onSuccess: () => {
+          toast.show(label);
+          void scheduleClassReminder(c);
+        },
+      },
+    );
   };
 
   /** Book `c`, asking to confirm first when it is at/over capacity. */
   const onBook = (c: BookableClass) => {
     setError(null);
-    const over = c.capacity > 0 && c.bookingCount >= c.capacity;
+    const over = capacityDisplay(c.bookingCount, c.capacity).isOver;
     if (over) {
       Alert.alert("This class looks full", "Book anyway?", [
         { text: "Cancel", style: "cancel" },
@@ -77,6 +86,43 @@ export function useBookClass(
   };
 
   return { onBook, isPending: book.isPending, error };
+}
+
+/**
+ * Shared cancel action: confirm, then drop the local reminder and refresh every
+ * list that shows the class.
+ */
+export function useCancelBooking() {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  const cancel = useMutation(
+    trpc.booking.cancel.mutationOptions({
+      onSuccess: async (_data, variables) => {
+        toast.show("Booking cancelled");
+        void cancelClassReminder(variables.classId);
+        await queryClient.invalidateQueries(trpc.class.pathFilter());
+        await queryClient.invalidateQueries(trpc.booking.pathFilter());
+      },
+      onError: (err) => toast.show(err.message || "Could not cancel"),
+    }),
+  );
+
+  const onCancel = (classId: string) =>
+    confirm({
+      title: "Cancel this booking?",
+      message:
+        "You'll lose your spot. If the class is full, you may not get it back.",
+      confirmLabel: "Cancel booking",
+      cancelLabel: "Keep it",
+      onConfirm: () => cancel.mutate({ classId }),
+    });
+
+  return {
+    onCancel,
+    isPending: cancel.isPending,
+    pendingClassId: cancel.isPending ? cancel.variables.classId : null,
+  };
 }
 
 /**
@@ -109,6 +155,40 @@ export function BookButton({ c }: { c: BookableClass }) {
     >
       <Txt size={14} weight={600} color={t.primaryForeground}>
         {isPending ? "…" : "Book"}
+      </Txt>
+    </Pressable>
+  );
+}
+
+/**
+ * The compact **Cancel** pill for a booked schedule row — the twin of
+ * `BookButton`, so a student drops a class without opening the detail.
+ */
+export function CancelButton({ classId }: { classId: string }) {
+  const t = useTheme();
+  const { onCancel, isPending } = useCancelBooking();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Cancel booking"
+      accessibilityState={{ disabled: isPending, busy: isPending }}
+      disabled={isPending}
+      onPress={() => onCancel(classId)}
+      hitSlop={10}
+      style={({ pressed }) => ({
+        minHeight: 36,
+        minWidth: 64,
+        paddingHorizontal: 14,
+        borderRadius: 3,
+        borderWidth: 1,
+        borderColor: t.error,
+        alignItems: "center",
+        justifyContent: "center",
+        opacity: isPending ? 0.5 : pressed ? 0.85 : 1,
+      })}
+    >
+      <Txt size={14} weight={600} tone="error">
+        {isPending ? "…" : "Cancel"}
       </Txt>
     </Pressable>
   );

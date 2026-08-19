@@ -8,8 +8,8 @@ import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
 import { Spinner } from "@matops/ui/spinner";
 
-import { env } from "~/env";
 import type { MagicLinkState } from "./sign-in-actions";
+import { env } from "~/env";
 import { sendMagicLinkAction, signInSocialAction } from "./sign-in-actions";
 
 /**
@@ -27,7 +27,7 @@ import { sendMagicLinkAction, signInSocialAction } from "./sign-in-actions";
  */
 
 /** A submit button that shows a spinner + disables while its form is pending. */
-function SubmitButton({
+export function SubmitButton({
   children,
   pendingLabel,
   variant,
@@ -35,7 +35,7 @@ function SubmitButton({
 }: {
   children: React.ReactNode;
   pendingLabel: string;
-  variant?: "default" | "outline";
+  variant?: "primary" | "outline";
   className?: string;
 }) {
   const { pending } = useFormStatus();
@@ -59,6 +59,30 @@ function SubmitButton({
   );
 }
 
+export function SocialSignIn({ callbackURL }: { callbackURL: string }) {
+  return (
+    <form action={signInSocialAction.bind(null, callbackURL)}>
+      <SubmitButton
+        variant="outline"
+        className="w-full"
+        pendingLabel="Connecting…"
+      >
+        Continue with Google
+      </SubmitButton>
+    </form>
+  );
+}
+
+export function OrDivider() {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="bg-border h-px flex-1" />
+      <span className="text-muted-foreground text-xs">or</span>
+      <span className="bg-border h-px flex-1" />
+    </div>
+  );
+}
+
 export function SignIn({ callbackURL = "/" }: { callbackURL?: string }) {
   const [state, formAction] = useActionState<MagicLinkState, FormData>(
     sendMagicLinkAction.bind(null, callbackURL),
@@ -67,21 +91,8 @@ export function SignIn({ callbackURL = "/" }: { callbackURL?: string }) {
 
   return (
     <div className="flex w-full max-w-sm flex-col gap-3">
-      <form action={signInSocialAction.bind(null, callbackURL)}>
-        <SubmitButton
-          variant="outline"
-          className="w-full"
-          pendingLabel="Connecting…"
-        >
-          Continue with Google
-        </SubmitButton>
-      </form>
-
-      <div className="flex items-center gap-3">
-        <span className="bg-border h-px flex-1" />
-        <span className="text-muted-foreground text-xs">or</span>
-        <span className="bg-border h-px flex-1" />
-      </div>
+      <SocialSignIn callbackURL={callbackURL} />
+      <OrDivider />
 
       <form action={formAction} className="flex flex-col gap-2">
         <div className="flex flex-col gap-1.5">
@@ -110,7 +121,7 @@ export function SignIn({ callbackURL = "/" }: { callbackURL?: string }) {
             Check your email — we sent a sign-in link to {state.email}.
           </span>
         ) : state.status === "error" ? (
-          <span className="text-destructive">
+          <span className="text-error">
             Couldn&apos;t send the link. Check the address and try again.
           </span>
         ) : env.NODE_ENV === "development" ? (

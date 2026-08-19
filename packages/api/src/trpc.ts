@@ -11,7 +11,9 @@ import superjson from "superjson";
 import { z, ZodError } from "zod/v4";
 
 import type { Auth } from "@matops/auth";
+import type { DbExec } from "@matops/db/client";
 import { getMembership, withTenant } from "@matops/db";
+import { db } from "@matops/db/client";
 import {
   canEnroll,
   isActiveMember,
@@ -36,6 +38,14 @@ import {
 export const createTRPCContext = async (opts: {
   headers: Headers;
   auth: Auth;
+  /**
+   * The base (non-RLS) connection. The ONE injection point the router tests use:
+   * they pass a PGlite-backed handle, so the whole seam (`withTenant`, the
+   * membership lookup, every `member`-table helper) runs its REAL query against
+   * an ephemeral Postgres instead of a hand-written double. Production passes
+   * nothing and gets the singleton pool. See docs/issues/60.
+   */
+  baseDb?: DbExec;
 }) => {
   const authApi = opts.auth.api;
   const session = await authApi.getSession({
@@ -44,16 +54,17 @@ export const createTRPCContext = async (opts: {
   return {
     authApi,
     session,
-    // NOTE: the base context deliberately carries NO database handle. The only
-    // db handle a resolver ever sees is `ctx.db` — the RLS-scoped transaction
-    // injected by the tenant middleware (`enforceTenant`) below. So a resolver
-    // on a NON-tenant procedure (public/protected) has no `ctx.db` at all and
-    // fails at typecheck if it reaches for one, instead of silently getting an
-    // RLS-bypassing owner connection. The raw owner `db` (from
-    // `@matops/db/client`) is reserved for the tenant seam, the auth package,
-    // migrations, and the materialization cron — a lint rule blocks importing it
-    // inside routers. See docs/issues/33 and docs/architecture.md §5.
-    //
+    // Two db handles, two jobs. `ctx.db` (added by `enforceTenant` below) is the
+    // RLS-scoped transaction and is the ONLY handle that may touch a tenant
+    // table: a resolver on a non-tenant procedure has no `ctx.db` at all and
+    // fails at typecheck if it reaches for one. `ctx.baseDb` is the base
+    // connection, and exists solely for the Better Auth identity tables
+    // (`member`, `user`, `organization`), which carry no RLS policy and so can
+    // never be read through the tenant transaction. Migration 0020 revokes
+    // matops_app's write access to those tables, and a lint rule blocks routers
+    // from importing the raw `db` directly, so `ctx.baseDb` stays the only door.
+    // See docs/issues/33, 60 and docs/architecture.md §5.
+    baseDb: opts.baseDb ?? db,
     // Forwarded so resolvers can call Better Auth server APIs (createOrganization,
     // setActiveOrganization, …) on behalf of the signed-in user.
     headers: opts.headers,
@@ -172,7 +183,7 @@ const enforceTenant = t.middleware(async ({ ctx, next }) => {
   const user = ctx.session.user;
   // Membership lookup on the base connection (member table has no RLS), BEFORE
   // opening the scoped transaction.
-  const membership = await getMembership(user.id, academyId);
+  const membership = await getMembership(user.id, academyId, ctx.baseDb);
   if (!membership) {
     throw new TRPCError({
       code: "FORBIDDEN",
@@ -193,16 +204,30 @@ const enforceTenant = t.middleware(async ({ ctx, next }) => {
         : "Your access to this academy has been removed",
     });
   }
-  return withTenant(academyId, (tx) =>
-    next({
-      ctx: {
-        db: tx,
-        academyId,
-        membership,
-        session: { ...ctx.session, user },
-      },
-    }),
+  // Work that must NOT run inside the tenant transaction: push + email sends,
+  // which are slow network calls and would otherwise hold a pooled Postgres
+  // connection open for their whole duration. Resolvers hand them here and they
+  // fire after COMMIT, so a notification can also never resurrect a rolled-back
+  // mutation. See docs/issues/60.
+  const afterCommit: (() => Promise<void>)[] = [];
+  const result = await withTenant(
+    academyId,
+    (tx) =>
+      next({
+        ctx: {
+          db: tx,
+          academyId,
+          membership,
+          afterCommit: (task: () => Promise<void>) => {
+            afterCommit.push(task);
+          },
+          session: { ...ctx.session, user },
+        },
+      }),
+    ctx.baseDb,
   );
+  if (result.ok) for (const task of afterCommit) await task();
+  return result;
 });
 
 /**
@@ -233,7 +258,7 @@ export const staffProcedure = memberProcedure.use(({ ctx, next }) => {
   return next();
 });
 
-/** Owner procedure — active owner: academy settings, invites, roster. */
+/** Owner procedure — active owner: academy settings, invites, members. */
 export const ownerProcedure = memberProcedure.use(({ ctx, next }) => {
   if (!isOwner(ctx.membership)) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Owner only" });

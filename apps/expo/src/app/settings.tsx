@@ -15,7 +15,7 @@ import {
   Stack as UIStack,
   useTheme,
 } from "~/components/ui";
-import { trpc } from "~/utils/api";
+import { queryClient, trpc } from "~/utils/api";
 import { authClient } from "~/utils/auth";
 import {
   forgetPushToken,
@@ -25,6 +25,7 @@ import {
   setPushEnabled,
   storedPushToken,
 } from "~/utils/push";
+import { clearClassReminders } from "~/utils/reminders";
 
 /**
  * Notification setting (spec S12) — one switch that registers or drops this
@@ -63,6 +64,7 @@ function NotificationToggle() {
         });
       });
     } else {
+      void clearClassReminders();
       const token = storedPushToken();
       if (token) {
         unregister.mutate({ token });
@@ -160,6 +162,7 @@ export default function Settings() {
 
   const doSignOut = async () => {
     setSigningOut(true);
+    void clearClassReminders();
     const token = storedPushToken();
     if (token) {
       unregisterPush.mutate({ token });
@@ -168,6 +171,9 @@ export default function Settings() {
     try {
       await authClient.signOut();
     } finally {
+      // Query keys carry no user id, so anything left cached would be served to
+      // the next person who signs in on this device.
+      queryClient.clear();
       router.replace("/");
     }
   };

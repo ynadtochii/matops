@@ -2,7 +2,14 @@ import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
 import type { TenantTx } from "@matops/db";
-import { and, eq, getMembership, inArray, listMembersOf } from "@matops/db";
+import {
+  and,
+  createDropIn,
+  eq,
+  getMembership,
+  inArray,
+  listMembersOf,
+} from "@matops/db";
 import {
   classInstance,
   classParticipation,
@@ -13,8 +20,10 @@ import {
   attendanceCounts,
   bulkMarkTargets,
   canMarkAttendance,
+  normalizePhone,
 } from "@matops/domain";
 import {
+  AddVisitorSchema,
   AddWalkInSchema,
   ClassIdSchema,
   MarkAttendanceSchema,
@@ -33,7 +42,7 @@ export const attendanceRouter = {
   /** Active members of the academy (id = user.id, name) for the walk-in picker. */
   members: staffProcedure.query(async ({ ctx }) => {
     // Members live in the auth `member` table (no RLS); list + filter to active.
-    const members = await listMembersOf(ctx.academyId);
+    const members = await listMembersOf(ctx.academyId, ctx.baseDb);
     return members
       .filter((m) => m.status === "active")
       .map((m) => ({ id: m.userId, name: m.name }));
@@ -44,7 +53,7 @@ export const attendanceRouter = {
    * (from `class_participation`) plus no-app drop-ins (from `drop_in`, slice 3.5),
    * with names and marks. Plus the summary counts for the header.
    */
-  roster: staffProcedure.input(ClassIdSchema).query(async ({ ctx, input }) => {
+  list: staffProcedure.input(ClassIdSchema).query(async ({ ctx, input }) => {
     const rows = await ctx.db
       .select({
         studentId: classParticipation.studentId,
@@ -147,7 +156,11 @@ export const attendanceRouter = {
       await assertMarkable(ctx.db, input.classId);
       // Defense-in-depth: the RLS WITH CHECK only scopes academy_id, not that the
       // student is a member — so verify membership before recording a walk-in.
-      const membership = await getMembership(input.studentId, ctx.academyId);
+      const membership = await getMembership(
+        input.studentId,
+        ctx.academyId,
+        ctx.baseDb,
+      );
       if (!membership) {
         throw new TRPCError({
           code: "NOT_FOUND",
@@ -177,6 +190,30 @@ export const attendanceRouter = {
           },
         });
       return { ok: true as const };
+    }),
+
+  /**
+   * Record a visitor who is NOT a member on this class (spec O5, slice 3.5's
+   * `drop_in` table). Same lead the public QR form writes, so a person the gym
+   * signs in at the door and a person who fills the form themselves dedupe onto
+   * one row by phone. Staff cannot give contact consent for someone else, so
+   * this writes `consent: false`; the `OR` in `createDropIn` means it never
+   * clears a consent the visitor gave earlier.
+   */
+  addVisitor: staffProcedure
+    .input(AddVisitorSchema)
+    .mutation(async ({ ctx, input }) => {
+      await assertMarkable(ctx.db, input.classId);
+      const { visitCount } = await createDropIn({
+        academyId: ctx.academyId,
+        firstName: input.firstName,
+        lastName: input.lastName,
+        phone: normalizePhone(input.phone),
+        email: null,
+        classId: input.classId,
+        consent: false,
+      });
+      return { firstVisit: visitCount === 1, visitCount };
     }),
 } satisfies TRPCRouterRecord;
 

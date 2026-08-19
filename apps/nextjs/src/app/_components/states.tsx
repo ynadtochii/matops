@@ -59,7 +59,7 @@ export function ErrorState({
   onRetry?: () => void;
 }) {
   return (
-    <div className="border-destructive/30 bg-destructive/5 flex flex-col items-start gap-2 rounded-lg border p-4">
+    <div className="border-error/30 bg-error/5 flex flex-col items-start gap-2 rounded-lg border p-4">
       <p className="text-foreground text-sm font-medium">
         Couldn&apos;t load {label}.
       </p>

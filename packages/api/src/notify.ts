@@ -23,9 +23,12 @@ import { sendEmail, sendPush } from "@matops/notifications";
  * connection (push tokens are user-global, outside RLS — docs/issues/34), builds
  * the message text with the pure domain builders, and sends.
  *
- * Every function swallows its own errors: a notification must NEVER fail the
- * mutation that triggered it. Sends are awaited so they complete before the
- * serverless response returns (the runtime may freeze after the response).
+ * Every function swallows its own errors, END TO END: a notification must NEVER
+ * fail the mutation that triggered it, so the academy-name lookup sits inside
+ * the same try as the send. Sends are awaited so they complete before the
+ * serverless response returns (the runtime may freeze after the response), but
+ * routers hand them to `ctx.afterCommit` so they run OUTSIDE the tenant
+ * transaction rather than holding a pooled connection open (docs/issues/60).
  */
 
 interface Delivery {
@@ -41,18 +44,27 @@ async function deliver(studentIds: string[], msg: Delivery): Promise<void> {
     const targets = await getPushTargets(studentIds);
     const tokens = targets.flatMap((t) => t.tokens);
     await sendPush(tokens, { ...msg.push, data: msg.data });
-    if (msg.email) {
+    const email = msg.email;
+    if (email) {
       const emails = targets.map((t) => t.email).filter((e) => e.length > 0);
-      if (emails.length > 0) await sendEmail({ to: emails, ...msg.email });
+      // ONE send per recipient. Putting the whole class in a single `to:` shows
+      // every booked student every other student's address (spec S4 privacy).
+      await Promise.all(emails.map((to) => sendEmail({ to, ...email })));
     }
   } catch (err) {
     console.error("[notify] delivery failed", err);
   }
 }
 
+/** The gym's display name, or a neutral fallback. Never throws. */
 async function academyName(academyId: string): Promise<string> {
-  const academy = await getAcademyPublic(academyId);
-  return academy?.name ?? "your gym";
+  try {
+    const academy = await getAcademyPublic(academyId);
+    return academy?.name ?? "your gym";
+  } catch (err) {
+    console.error("[notify] academy lookup failed", err);
+    return "your gym";
+  }
 }
 
 export interface ClassEventInput {
@@ -124,18 +136,21 @@ export async function runReminderSweep(
   duesSent: number;
 }> {
   const claimed = await claimDueReminderClasses(opts);
-  let sent = 0;
-  for (const c of claimed) {
-    const push = buildReminderMessage({
-      className: c.title,
-      whenLabel: formatWhen(c.startsAt, c.timeZone ?? undefined),
-    });
-    await deliver(c.studentIds, {
-      push,
-      data: { type: "class", classId: c.classId },
-    });
-    sent += 1;
-  }
+  // Claiming already stamped these rows, so a claimed-but-unsent reminder is
+  // lost for good. Send the batch concurrently rather than one HTTP round trip
+  // at a time, so the run finishes inside the serverless limit.
+  await Promise.all(
+    claimed.map((c) =>
+      deliver(c.studentIds, {
+        push: buildReminderMessage({
+          className: c.title,
+          whenLabel: formatWhen(c.startsAt, c.timeZone ?? undefined),
+        }),
+        data: { type: "class", classId: c.classId },
+      }),
+    ),
+  );
+  const sent = claimed.length;
   const dues = await sweepDuesReminders(opts);
   return {
     processed: claimed.length,
@@ -168,20 +183,23 @@ async function sweepDuesReminders(
     now: opts.now,
     limit: opts.limit,
   });
-  let sent = 0;
-  for (const d of claimed) {
-    const msg = buildDuesReminderMessage({
-      academyName: d.academyName,
-      amountLabel: `${d.currency} ${(d.priceMinor / 100).toFixed(2)}`,
-      dueLabel: formatDueLabel(d.nextDueAt),
-      overdue: d.overdue,
-    });
-    await deliver([d.userId], {
-      push: msg.push,
-      email: msg.email,
-      data: { type: "dues" },
-    });
-    sent += 1;
-  }
-  return { processed: claimed.length, sent };
+  // Same as the class sweep: the period stamp is already written, so every
+  // claimed member has to be attempted in this run. Serial sends would need
+  // three round trips per member and time out long before 500 of them.
+  await Promise.all(
+    claimed.map((d) => {
+      const msg = buildDuesReminderMessage({
+        academyName: d.academyName,
+        amountLabel: `${d.currency} ${(d.priceMinor / 100).toFixed(2)}`,
+        dueLabel: formatDueLabel(d.nextDueAt),
+        overdue: d.overdue,
+      });
+      return deliver([d.userId], {
+        push: msg.push,
+        email: msg.email,
+        data: { type: "dues" },
+      });
+    }),
+  );
+  return { processed: claimed.length, sent: claimed.length };
 }

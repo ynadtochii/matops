@@ -48,7 +48,9 @@ export function DropInForm({ academyId }: { academyId: string }) {
   if (submit.isSuccess) {
     return (
       <div className="flex max-w-sm flex-col gap-3 text-center">
-        <h1 className="text-2xl font-semibold tracking-tight">You&apos;re checked in 🥋</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          You&apos;re checked in 🥋
+        </h1>
         <p className="text-muted-foreground text-sm">
           {submit.data.firstVisit
             ? "Welcome! The gym will follow up with you."
@@ -151,12 +153,12 @@ export function DropInForm({ academyId }: { academyId: string }) {
       </label>
 
       {error && (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-error text-sm">
           {error}
         </p>
       )}
 
-      <Button type="submit" disabled={!canSubmit}>
+      <Button type="submit" size="lg" disabled={!canSubmit}>
         {submit.isPending && <Spinner size="sm" className="text-current" />}
         {submit.isPending ? "Checking in…" : "Check in"}
       </Button>

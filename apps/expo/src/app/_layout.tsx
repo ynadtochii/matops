@@ -1,9 +1,10 @@
 import { useEffect } from "react";
+import { AppState } from "react-native";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { focusManager, QueryClientProvider } from "@tanstack/react-query";
 
 import { fontAssets, sans } from "~/components/fonts";
 import { PushSync } from "~/components/push-sync";
@@ -28,6 +29,7 @@ function Chrome() {
         screenOptions={{
           headerStyle: { backgroundColor: theme.background },
           headerTintColor: theme.foreground,
+          headerBackTitle: "Back",
           headerTitleStyle: { fontFamily: sans(600) },
           headerShadowVisible: false,
           contentStyle: { backgroundColor: theme.background },
@@ -50,6 +52,13 @@ export default function RootLayout() {
   useEffect(() => {
     if (fontsLoaded) void SplashScreen.hideAsync();
   }, [fontsLoaded]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (status) =>
+      focusManager.setFocused(status === "active"),
+    );
+    return () => sub.remove();
+  }, []);
 
   if (!fontsLoaded) return null;
 

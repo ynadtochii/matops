@@ -58,7 +58,7 @@ export async function claimDueDuesReminders(
 
   // Atomic claim: flip the period for the eligible rows and return their ids.
   // A bounded subselect caps the batch (UPDATE has no LIMIT of its own).
-  const claimed = (await db.execute(sql`
+  const claimed = await db.execute<{ id: string }>(sql`
     UPDATE "member_dues" AS md
     SET "dues_reminder_period" = to_char(md."next_due_at" AT TIME ZONE 'UTC', 'YYYY-MM'),
         "updated_at" = now()
@@ -71,7 +71,7 @@ export async function claimDueDuesReminders(
       LIMIT ${limit}
     )
     RETURNING md."id"
-  `)) as unknown as { rows: { id: string }[] };
+  `);
 
   const ids = claimed.rows.map((r) => r.id);
   if (ids.length === 0) return [];

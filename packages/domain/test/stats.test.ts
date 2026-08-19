@@ -5,6 +5,7 @@ import {
   classifyDrift,
   DRIFT_THRESHOLDS,
   gymInsights,
+  monthBucket,
   nextClass,
   splitMyClasses,
   trainingStats,
@@ -161,11 +162,18 @@ describe("gymInsights", () => {
     iso: string,
     status: "present" | "absent",
     title = "BJJ Fundamentals",
-  ): MarkedParticipation => ({ startsAt: new Date(iso), title, status });
+    discipline: string | null = "bjj",
+  ): MarkedParticipation => ({
+    startsAt: new Date(iso),
+    title,
+    discipline,
+    status,
+  });
 
   it("returns zeros and a null rate for no data", () => {
     expect(gymInsights([], new Date("2024-06-12T12:00:00Z"), UTC)).toEqual({
       visitsThisWeek: 0,
+      visitsLastWeek: 0,
       visitsThisMonth: 0,
       attendanceRate: null,
       busiest: [],
@@ -186,10 +194,11 @@ describe("gymInsights", () => {
       UTC,
     );
     expect(insights.visitsThisWeek).toBe(2);
+    expect(insights.visitsLastWeek).toBe(1); // the Jun 3 NoGi
     expect(insights.visitsThisMonth).toBe(3); // three June presents
     expect(insights.busiest).toEqual([
-      { title: "BJJ", count: 3 },
-      { title: "NoGi", count: 1 },
+      { title: "BJJ", discipline: "bjj", count: 3 },
+      { title: "NoGi", discipline: "bjj", count: 1 },
     ]);
   });
 
@@ -296,5 +305,68 @@ describe("nextClass", () => {
     expect(
       nextClass([{ startsAt: new Date("2024-06-01T18:00:00Z") }], now),
     ).toBeNull();
+  });
+});
+
+describe("monthBucket", () => {
+  it("gives consecutive months consecutive numbers", () => {
+    const jun = monthBucket(new Date("2024-06-12T12:00:00Z"), UTC);
+    const jul = monthBucket(new Date("2024-07-01T00:00:00Z"), UTC);
+    expect(jul - jun).toBe(1);
+  });
+
+  it("crosses the year boundary by one", () => {
+    const dec = monthBucket(new Date("2024-12-31T23:00:00Z"), UTC);
+    const jan = monthBucket(new Date("2025-01-01T01:00:00Z"), UTC);
+    expect(jan - dec).toBe(1);
+  });
+
+  it("reads the month in the academy zone, not UTC", () => {
+    // 23:30 on Jun 30 UTC is already Jul 1 in Kyiv (UTC+3).
+    const instant = new Date("2024-06-30T23:30:00Z");
+    expect(monthBucket(instant, "Europe/Kyiv")).toBe(
+      monthBucket(instant, UTC) + 1,
+    );
+  });
+});
+
+describe("gymInsights — the last-week baseline is a like-for-like slice", () => {
+  const at = (iso: string): MarkedParticipation => ({
+    startsAt: new Date(iso),
+    title: "BJJ",
+    discipline: "bjj",
+    status: "present",
+  });
+  // Wed Jun 12 2024, noon. This week = Sun Jun 9 onward; last week = Jun 2-8.
+  const now = new Date("2024-06-12T12:00:00Z");
+
+  it("counts last week only as far in as this week has got", () => {
+    const insights = gymInsights(
+      [
+        at("2024-06-03T18:00:00Z"), // Mon, before last Wed noon — counts
+        at("2024-06-05T09:00:00Z"), // Wed morning, before the cutoff — counts
+        at("2024-06-05T18:00:00Z"), // Wed evening, past the cutoff — does not
+        at("2024-06-07T18:00:00Z"), // Fri, this week has not reached it — does not
+      ],
+      now,
+      UTC,
+    );
+    expect(insights.visitsLastWeek).toBe(2);
+  });
+
+  it("does not report a collapse mid-week when both weeks match", () => {
+    const insights = gymInsights(
+      [
+        at("2024-06-10T18:00:00Z"), // this Mon
+        at("2024-06-11T18:00:00Z"), // this Tue
+        at("2024-06-03T18:00:00Z"), // last Mon
+        at("2024-06-04T18:00:00Z"), // last Tue
+        at("2024-06-07T18:00:00Z"), // last Fri — outside the matched slice
+      ],
+      now,
+      UTC,
+    );
+    expect(insights.visitsThisWeek).toBe(2);
+    expect(insights.visitsLastWeek).toBe(2);
   });
 });

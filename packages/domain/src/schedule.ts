@@ -83,3 +83,19 @@ export function nextBookableClass<T extends SchedulableClass>(
     );
   return upcoming.find((c) => c.myBooking !== "booked") ?? upcoming[0] ?? null;
 }
+
+/** The three visual families a discipline collapses to (ADR 53). */
+export type DisciplineTone = "gi" | "nogi" | "other";
+
+/**
+ * Which family a class's discipline belongs to. Cool for gi, warm for no-gi,
+ * neutral for open mat because it is both. Every surface that paints a class
+ * (the O2 week grid, the O1 day rail, the mobile schedule, the printed poster)
+ * maps its own colours off this, so the same kind of training reads the same
+ * everywhere.
+ */
+export function disciplineTone(discipline: string | null): DisciplineTone {
+  if (discipline === "nogi" || discipline === "mma") return "nogi";
+  if (discipline === "other") return "other";
+  return "gi";
+}

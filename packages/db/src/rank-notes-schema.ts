@@ -68,9 +68,7 @@ export const rankPromotion = pgTable(
     promotedBy: t.text().notNull(), // → user.id of the staff member
     promotedAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
   }),
-  (table) => [
-    index("rp_by_member").on(table.academyId, table.memberId),
-  ],
+  (table) => [index("rp_by_member").on(table.academyId, table.memberId)],
 );
 
 /**

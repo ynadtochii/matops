@@ -20,7 +20,7 @@
   /* --- surfaces & text (light = warm stone) --- */
   --background: #ffffff;
   --foreground: #0c0a09; /* stone-950 */
-  --card: #ffffff;
+  --card: #fafaf9; /* stone-50 — a whisper off the page, read with the hairline */
   --card-foreground: #0c0a09;
   --popover: #ffffff;
   --popover-foreground: #0c0a09;
@@ -48,6 +48,13 @@
   --brand-strong: #5a3cf0; /* text-on-light / links */
   --brand-foreground: #ffffff; /* text + seams on a brand fill */
   --brand-wash: #f1eeff; /* tint surface: pending banner, active nav */
+
+  /* --- discipline hues: a CATEGORY encoder (gi vs no-gi on the schedule
+   * grid), never a status. Cool vs warm reads at a glance, sits clear of the
+   * brand violet and of the callout hues below, and separates for red-green
+   * color blindness. See ADR 53. --- */
+  --gi: #0f766e;
+  --nogi: #b45309;
 
   /* --- lines & focus --- */
   --border: #e7e5e4; /* stone-200 */
@@ -112,19 +119,19 @@
     /* --- canonical Better Auth dark: pure-black surface --- */
     --background: #000000;
     --foreground: #fafaf9;
-    --card: #0a0a0a;
+    --card: #0f0d0c; /* warm near-black: lifts off pure black, edge does the work */
     --card-foreground: #fafaf9;
-    --popover: #0a0a0a;
+    --popover: #0f0d0c;
     --popover-foreground: #fafaf9;
 
     --primary: #fafaf9;
     --primary-foreground: #1c1917;
 
-    --secondary: #292524; /* stone-800 */
+    --secondary: #292524; /* stone-800 — button fill, not a surface */
     --secondary-foreground: #fafaf9;
-    --muted: #292524;
+    --muted: #1a1917; /* quiet fill: chips, hover, skeletons. Never a whole card */
     --muted-foreground: #a6a09b; /* stone-400 */
-    --accent: #292524;
+    --accent: #1a1917;
     --accent-foreground: #fafaf9;
 
     --destructive: #82181a; /* red-900 */
@@ -135,6 +142,9 @@
     --brand-strong: #a390ff;
     --brand-foreground: #12091f;
     --brand-wash: #17122e;
+
+    --gi: #2dd4bf;
+    --nogi: #f5a524;
 
     --border: #292524;
     --input: #292524;
@@ -147,11 +157,11 @@
     --chart-4: #79716b;
     --chart-5: #44403c;
 
-    --sidebar: #0a0a0a;
+    --sidebar: #0f0d0c;
     --sidebar-foreground: #d6d3d1;
     --sidebar-primary: #fafaf9;
     --sidebar-primary-foreground: #1c1917;
-    --sidebar-accent: #292524;
+    --sidebar-accent: #1a1917;
     --sidebar-accent-foreground: #fafaf9;
     --sidebar-border: #292524;
     --sidebar-ring: #79716b;
@@ -199,6 +209,10 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
+  /* discipline categories */
+  --color-gi: var(--gi);
+  --color-nogi: var(--nogi);
 
   /* callout accents */
   --color-info: var(--info);

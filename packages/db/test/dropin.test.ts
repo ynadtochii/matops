@@ -74,16 +74,16 @@ describe("drop_in dedupe by phone (slice 3.5)", () => {
   let pg: PGlite;
 
   // The exact upsert createDropIn runs (on the base connection here = superuser).
-  async function submit(phone: string, first = "Sam") {
+  async function submit(phone: string, first = "Sam", consent = true) {
     await pg.query(
       `INSERT INTO "drop_in" (academy_id, first_name, last_name, phone, consent)
-         VALUES ('academy_A', $1, 'Lee', $2, true)
+         VALUES ('academy_A', $1, 'Lee', $2, $3)
        ON CONFLICT (academy_id, phone) DO UPDATE SET
          first_name = excluded.first_name,
          consent = "drop_in".consent OR excluded.consent,
          visit_count = "drop_in".visit_count + 1,
          last_visit_at = now()`,
-      [first, phone],
+      [first, phone, consent],
     );
   }
 
@@ -113,5 +113,22 @@ describe("drop_in dedupe by phone (slice 3.5)", () => {
     expect(rows.rows.length).toBe(1);
     expect(single(rows).visit_count).toBe(2);
     expect(single(rows).first_name).toBe("Samuel");
+  });
+
+  it("a staff-recorded visitor never clears a consent the visitor gave", async () => {
+    await submit("5551234", "Sam", true);
+    await submit("5551234", "Sam", false); // staff adds them at the mat
+    const rows = await pg.query<{ consent: boolean }>(
+      `SELECT consent FROM "drop_in" WHERE phone='5551234'`,
+    );
+    expect(single(rows).consent).toBe(true);
+  });
+
+  it("a staff-recorded visitor starts without consent", async () => {
+    await submit("5559999", "Alex", false);
+    const rows = await pg.query<{ consent: boolean }>(
+      `SELECT consent FROM "drop_in" WHERE phone='5559999'`,
+    );
+    expect(single(rows).consent).toBe(false);
   });
 });

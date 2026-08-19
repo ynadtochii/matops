@@ -8,7 +8,7 @@ import { DAY_LABELS } from "./schedule";
  *
  * A "session" is one attended class — a `class_participation` row with
  * `attendance_status = 'present'`, joined to its `class` for time/title/
- * discipline. Same basis as the roster's `visitCount`. Bookings without a
+ * discipline. Same basis as the member list's `visitCount`. Bookings without a
  * present mark do NOT count (docs/issues/39).
  *
  * Week and month boundaries are computed in the ACADEMY time zone (passed in),
@@ -58,6 +58,15 @@ function localDate(instant: Date, timeZone: string): LocalDate {
     // 1970-01-01 (day 0) is a Thursday (weekday 4).
     weekday: ((((dayNumber % 7) + 4) % 7) + 7) % 7,
   };
+}
+
+/**
+ * Calendar-month index of an instant in `timeZone` (`year * 12 + month - 1`).
+ * Consecutive months differ by one, so callers compare growth month over month
+ * without any date arithmetic of their own.
+ */
+export function monthBucket(instant: Date, timeZone: string): number {
+  return localDate(instant, timeZone).monthBucket;
 }
 
 /** Pick the key with the highest count; ties keep the first-seen key. */
@@ -208,6 +217,8 @@ export interface MarkedParticipation {
   startsAt: Date;
   /** Class title. */
   title: string;
+  /** Class discipline, so `busiest` can be read by category (ADR 53). */
+  discipline: string | null;
   /** Owner/coach mark. Only these two states feed the rate. */
   status: "present" | "absent";
 }
@@ -215,6 +226,8 @@ export interface MarkedParticipation {
 /** A class ranked by attendance (part of `GymInsights`). */
 export interface BusiestClass {
   title: string;
+  /** First discipline seen for this title — the colour encoder on the O1 list. */
+  discipline: string | null;
   count: number;
 }
 
@@ -222,6 +235,13 @@ export interface BusiestClass {
 export interface GymInsights {
   /** Present marks in the current week (academy zone). */
   visitsThisWeek: number;
+  /**
+   * Present marks in the week before this one, counted only up to the **same
+   * point** in that week. `visitsThisWeek` is a part-week until Saturday night,
+   * so measuring it against a whole previous week reported a collapse every day
+   * of the week. Wednesday noon is compared with last Wednesday noon.
+   */
+  visitsLastWeek: number;
   /** Present marks in the current calendar month (academy zone). */
   visitsThisMonth: number;
   /**
@@ -247,9 +267,14 @@ export function gymInsights(
   timeZone: string,
 ): GymInsights {
   const nowLocal = localDate(now, timeZone);
+  // The same clock position one week back: last week's visits are counted only
+  // this far in, so both sides cover the same slice of a week.
+  const samePointLastWeek = now.getTime() - 7 * DAY_MS;
   const byWeekday = [0, 0, 0, 0, 0, 0, 0];
   const titleCounts = new Map<string, number>();
+  const titleDiscipline = new Map<string, string | null>();
   let visitsThisWeek = 0;
+  let visitsLastWeek = 0;
   let visitsThisMonth = 0;
   let present = 0;
   let absent = 0;
@@ -263,16 +288,29 @@ export function gymInsights(
     const local = localDate(m.startsAt, timeZone);
     byWeekday[local.weekday] = (byWeekday[local.weekday] ?? 0) + 1;
     titleCounts.set(m.title, (titleCounts.get(m.title) ?? 0) + 1);
+    if (!titleDiscipline.has(m.title))
+      titleDiscipline.set(m.title, m.discipline);
     if (local.weekBucket === nowLocal.weekBucket) visitsThisWeek += 1;
+    if (
+      local.weekBucket === nowLocal.weekBucket - 1 &&
+      m.startsAt.getTime() <= samePointLastWeek
+    ) {
+      visitsLastWeek += 1;
+    }
     if (local.monthBucket === nowLocal.monthBucket) visitsThisMonth += 1;
   }
 
   const busiest = [...titleCounts.entries()]
-    .map(([title, count]) => ({ title, count }))
+    .map(([title, count]) => ({
+      title,
+      discipline: titleDiscipline.get(title) ?? null,
+      count,
+    }))
     .sort((a, b) => b.count - a.count);
 
   return {
     visitsThisWeek,
+    visitsLastWeek,
     visitsThisMonth,
     attendanceRate: absent === 0 ? null : present / (present + absent),
     busiest,

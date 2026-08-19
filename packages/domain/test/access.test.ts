@@ -22,7 +22,6 @@ describe("access predicates", () => {
     }
   });
 
-
   it("pending members are never active/staff/owner (view-only)", () => {
     for (const role of ["owner", "instructor", "student"]) {
       const pending = m(role, "pending");

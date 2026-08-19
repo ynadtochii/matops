@@ -26,6 +26,8 @@ import {
   memberDues,
   memberNote,
   memberRank,
+  memberReferral,
+  memberReferralAudit,
   membershipPlan,
   organization,
   paymentClaim,
@@ -112,7 +114,7 @@ function fillUserPrefix(academyId: string): string {
   return `${SEED_MARKER}user_fill_${academyKey(academyId)}_`;
 }
 
-/** Build the fake-student roster for one academy (varied statuses for the UI). */
+/** Build the fake-student list for one academy (varied statuses for the UI). */
 function buildFakeStudents(academyId: string, count = 20): FakeStudent[] {
   const key = academyKey(academyId);
   return Array.from({ length: count }, (_, i) => {
@@ -138,7 +140,7 @@ function buildFakeStudents(academyId: string, count = 20): FakeStudent[] {
       userId: `${SEED_MARKER}user_${handle}`,
       memberId: `${SEED_MARKER}mem_${handle}`,
       name,
-      email: `${SEED_MARKER}user_${handle}@demo.matops.test`,
+      email: `${name.toLowerCase().replace(/[^a-z]+/g, ".")}.${key}${i + 1}@example.com`,
       phone: `+38050${String(2000000 + i).slice(-7)}`,
       status,
       role,
@@ -302,7 +304,7 @@ export async function fillAcademy(
       .onConflictDoNothing();
     report.member_dues = duesTargets.length;
 
-    // One fake open "I paid" claim awaiting the owner's confirm.
+    // One fake open claim plus confirmed history for referral reporting.
     if (active[0]) {
       await exec.insert(paymentClaim).values({
         id: randomUUID(),
@@ -314,8 +316,95 @@ export async function fillAcademy(
         period: paymentPeriod(now),
         status: "pending",
       });
-      report.payment_claim = 1;
+      const confirmed = active.slice(0, 8).flatMap((student, index) => {
+        const plan = plans[index % plans.length] ?? primary;
+        return [
+          {
+            id: randomUUID(),
+            academyId,
+            memberId: student.memberId,
+            planId: plan.id,
+            amountMinor: plan.priceMinor,
+            currency: plan.currency,
+            period: paymentPeriod(now),
+            status: "confirmed" as const,
+            confirmedBy: staffId,
+            confirmedAt: now,
+            claimedAt: new Date(now.getTime() - DAY_MS),
+          },
+          {
+            id: randomUUID(),
+            academyId,
+            memberId: student.memberId,
+            planId: plan.id,
+            amountMinor: plan.priceMinor,
+            currency: plan.currency,
+            period: paymentPeriod(new Date(now.getTime() - 45 * DAY_MS)),
+            status: "confirmed" as const,
+            confirmedBy: staffId,
+            confirmedAt: new Date(now.getTime() - 45 * DAY_MS),
+            claimedAt: new Date(now.getTime() - 46 * DAY_MS),
+          },
+        ];
+      });
+      if (confirmed.length > 0) {
+        await exec.insert(paymentClaim).values(confirmed);
+      }
+      let rejectedCount = 0;
+      // A rejected claim — the third claim state, so a demo shows all three.
+      if (active[1]) {
+        await exec.insert(paymentClaim).values({
+          id: randomUUID(),
+          academyId,
+          memberId: active[1].memberId,
+          planId: primary.id,
+          amountMinor: primary.priceMinor,
+          currency: primary.currency,
+          period: paymentPeriod(new Date(now.getTime() - 32 * DAY_MS)),
+          status: "rejected",
+          claimedAt: new Date(now.getTime() - 30 * DAY_MS),
+        });
+        rejectedCount = 1;
+      }
+      report.payment_claim = 1 + confirmed.length + rejectedCount;
     }
+  }
+
+  // Multiple referrers + unassigned examples. All referral rows target fakes,
+  // which keeps `clear` surgical even though the actor is the real owner.
+  const referralCandidates = active.slice(-2);
+  const referralTargets = active
+    .slice(0, Math.max(0, active.length - referralCandidates.length))
+    .slice(0, 10);
+  const referralRows = referralTargets.map((student, index) => ({
+    id: randomUUID(),
+    academyId,
+    studentMemberId: student.memberId,
+    referrerMemberId:
+      referralCandidates[index % referralCandidates.length]?.memberId,
+    assignedBy: staffId,
+    createdAt: new Date(now.getTime() - 60 * DAY_MS),
+    updatedAt: new Date(now.getTime() - 60 * DAY_MS),
+  }));
+  if (
+    referralRows.length > 0 &&
+    referralRows.every((row) => row.referrerMemberId)
+  ) {
+    await exec.insert(memberReferral).values(referralRows);
+    await exec.insert(memberReferralAudit).values(
+      referralRows.map((row) => ({
+        id: randomUUID(),
+        academyId,
+        studentMemberId: row.studentMemberId,
+        oldReferrerMemberId: null,
+        newReferrerMemberId: row.referrerMemberId,
+        action: "assigned" as const,
+        actorId: staffId,
+        occurredAt: row.createdAt,
+      })),
+    );
+    report.member_referral = referralRows.length;
+    report.member_referral_audit = referralRows.length;
   }
 
   // 3. Bookings + attendance on the academy's EXISTING classes.
@@ -332,11 +421,33 @@ export async function fillAcademy(
     .orderBy(classInstance.startsAt);
   const bookHorizon = new Date(now.getTime() + 10 * DAY_MS);
   const parts: (typeof classParticipation.$inferInsert)[] = [];
+  const lastPastIndex = classes.reduce(
+    (last, cls, i) => (cls.startsAt < now ? i : last),
+    -1,
+  );
   classes.forEach((cls, ci) => {
     const isPast = cls.startsAt < now;
+    // The most recent past class stays unmarked, so the owner can demo
+    // "mark all present" on it.
+    const leaveUnmarked = ci === lastPastIndex;
     const isBookable = !isPast && cls.startsAt <= bookHorizon;
     if (!isPast && !isBookable) return; // far-future stays empty
     const takers = active.filter((_, si) => (si + ci) % 3 !== 0);
+    // Every 4th class keeps a cancelled booking (student booked, then bailed).
+    const quitter = active.find((_, si) => (si + ci) % 3 === 0);
+    if (ci % 4 === 0 && quitter) {
+      parts.push({
+        id: randomUUID(),
+        academyId,
+        classId: cls.id,
+        studentId: quitter.userId,
+        bookingStatus: "cancelled",
+        bookingTier: "confirmed",
+        bookedAt: new Date(cls.startsAt.getTime() - 2 * DAY_MS),
+        cancelledAt: new Date(cls.startsAt.getTime() - DAY_MS),
+        attendanceStatus: "unmarked",
+      });
+    }
     takers.forEach((s, ti) => {
       const present = (ti + ci) % 5 !== 0;
       parts.push({
@@ -347,13 +458,14 @@ export async function fillAcademy(
         bookingStatus: "booked",
         bookingTier: "confirmed",
         bookedAt: new Date(cls.startsAt.getTime() - DAY_MS),
-        attendanceStatus: isPast
-          ? present
-            ? "present"
-            : "absent"
-          : "unmarked",
-        attendedAt: isPast && present ? cls.startsAt : null,
-        markedBy: isPast && present ? staffId : null,
+        attendanceStatus:
+          isPast && !leaveUnmarked
+            ? present
+              ? "present"
+              : "absent"
+            : "unmarked",
+        attendedAt: isPast && !leaveUnmarked && present ? cls.startsAt : null,
+        markedBy: isPast && !leaveUnmarked && present ? staffId : null,
       });
     });
   });
@@ -481,6 +593,26 @@ export async function clearAcademy(
         and(
           eq(paymentClaim.academyId, academyId),
           like(paymentClaim.memberId, seedLike),
+        ),
+      ),
+  );
+  await del("member_referral_audit", () =>
+    exec
+      .delete(memberReferralAudit)
+      .where(
+        and(
+          eq(memberReferralAudit.academyId, academyId),
+          like(memberReferralAudit.studentMemberId, seedLike),
+        ),
+      ),
+  );
+  await del("member_referral", () =>
+    exec
+      .delete(memberReferral)
+      .where(
+        and(
+          eq(memberReferral.academyId, academyId),
+          like(memberReferral.studentMemberId, seedLike),
         ),
       ),
   );

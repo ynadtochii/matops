@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { bookingTier, canBook, capacityDisplay } from "../src/booking";
+import {
+  bookingTier,
+  canBook,
+  capacityDisplay,
+  fillLabel,
+  spotsLeftLabel,
+} from "../src/booking";
 
 describe("bookingTier", () => {
   it("an active member books confirmed (holds a spot)", () => {
@@ -70,5 +76,31 @@ describe("capacityDisplay", () => {
 
   it("is over above capacity", () => {
     expect(capacityDisplay(22, 20)).toEqual({ label: "22 / 20", isOver: true });
+  });
+});
+
+describe("spotsLeftLabel", () => {
+  it("reads Open when the gym set no cap", () => {
+    expect(spotsLeftLabel(0, 12)).toBe("Open");
+  });
+
+  it("counts the spots that are left", () => {
+    expect(spotsLeftLabel(20, 18)).toBe("2 spots left");
+    expect(spotsLeftLabel(20, 19)).toBe("1 spot left");
+  });
+
+  it("reads Full at and over the cap", () => {
+    expect(spotsLeftLabel(20, 20)).toBe("Full");
+    expect(spotsLeftLabel(20, 22)).toBe("Full");
+  });
+});
+
+describe("fillLabel", () => {
+  it("shows the count alone when there is no cap", () => {
+    expect(fillLabel(0, 12)).toBe("12 in");
+  });
+
+  it("shows count over capacity otherwise", () => {
+    expect(fillLabel(20, 12)).toBe("12/20");
   });
 });

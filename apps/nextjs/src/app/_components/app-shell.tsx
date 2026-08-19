@@ -5,7 +5,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
+import { isOwner as isOwnerOf, isStaff as isStaffOf } from "@matops/domain";
 import { Logo } from "@matops/ui/logo";
+import { ThemeToggle } from "@matops/ui/theme";
 
 import { useTRPC } from "~/trpc/react";
 import { AcademyGate } from "./academy-gate";
@@ -22,6 +24,10 @@ interface NavItem {
 }
 
 const iconClass = "size-[18px] shrink-0";
+
+function contentWidth(pathname: string): string {
+  return pathname.startsWith("/schedule") ? "max-w-[1600px]" : "max-w-6xl";
+}
 
 /** Two-letter avatar fallback: initials of the first two name words, else the
  * first two letters of the name, else the email — never blank. */
@@ -62,7 +68,7 @@ const ScheduleIcon = () => (
     <path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3" />
   </svg>
 );
-const RosterIcon = () => (
+const MembersIcon = () => (
   <svg
     viewBox="0 0 16 16"
     fill="none"
@@ -72,18 +78,6 @@ const RosterIcon = () => (
   >
     <circle cx="6" cy="6" r="2.4" />
     <path d="M2 13.5c0-2.2 1.8-3.5 4-3.5s4 1.3 4 3.5M11 5.2a2.2 2.2 0 010 4.2M12.5 13.5c0-1.7-.9-2.9-2.2-3.3" />
-  </svg>
-);
-const AttendanceIcon = () => (
-  <svg
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth={1.5}
-    className={iconClass}
-  >
-    <rect x="2" y="2" width="12" height="12" rx="2" />
-    <path d="M5 8.2l2 2 4-4.4" />
   </svg>
 );
 const SettingsIcon = () => (
@@ -109,6 +103,20 @@ const PaymentsIcon = () => (
   >
     <rect x="2" y="4" width="12" height="8" rx="1.5" />
     <path d="M2 7h12" />
+  </svg>
+);
+const ReferralsIcon = () => (
+  <svg
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={1.5}
+    className={iconClass}
+  >
+    <circle cx="4" cy="5" r="2" />
+    <circle cx="12" cy="5" r="2" />
+    <circle cx="8" cy="12" r="2" />
+    <path d="M5.7 6.2l1.2 3.6M10.3 6.2L9.1 9.8" />
   </svg>
 );
 
@@ -165,9 +173,8 @@ export function AppShell({
   }
 
   const c = current.data;
-  const isActive = c.status === "active";
-  const isOwner = c.role === "owner" && isActive;
-  const isStaff = isActive && (c.role === "owner" || c.role === "instructor");
+  const isOwner = isOwnerOf(c);
+  const isStaff = isStaffOf(c);
   const isPending = c.status === "pending";
 
   return (
@@ -211,14 +218,14 @@ function ShellChrome({
   children: ReactNode;
 }) {
   const trpc = useTRPC();
-  // Owner badge: how many are waiting for approval. Dedupes with the Roster
+  // Owner badge: how many are waiting for approval. Dedupes with the Members
   // screen's own query, so it costs nothing extra.
-  const roster = useQuery({
-    ...trpc.membership.roster.queryOptions(),
+  const memberList = useQuery({
+    ...trpc.membership.members.queryOptions(),
     enabled: isOwner,
   });
   const pendingCount =
-    roster.data?.filter((m) => m.status === "pending").length ?? 0;
+    memberList.data?.filter((m) => m.status === "pending").length ?? 0;
 
   // Payments badge: how many "I paid" claims are waiting for the owner (ADR 40).
   const claims = useQuery({
@@ -236,16 +243,16 @@ function ShellChrome({
       show: isStaff,
     },
     {
-      href: "/roster",
-      label: "Roster",
-      icon: <RosterIcon />,
+      href: "/members",
+      label: "Members",
+      icon: <MembersIcon />,
       show: isOwner,
       badge: pendingCount,
     },
     {
-      href: "/attendance",
-      label: "Attendance",
-      icon: <AttendanceIcon />,
+      href: "/referrals",
+      label: "Referrals",
+      icon: <ReferralsIcon />,
       show: isStaff,
     },
     {
@@ -267,9 +274,9 @@ function ShellChrome({
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
   return (
-    <div className="flex min-h-screen">
-      {/* Desktop sidebar */}
-      <aside className="bg-sidebar border-sidebar-border hidden w-60 shrink-0 flex-col border-r p-3 md:flex">
+    <div className="flex h-dvh overflow-hidden">
+      {/* Desktop sidebar — pinned full height, never scrolls */}
+      <aside className="bg-sidebar border-sidebar-border hidden h-full w-60 shrink-0 flex-col overflow-hidden border-r p-3 md:flex">
         <div className="flex items-center gap-2 px-2 pt-1 pb-4">
           <Logo size={22} />
         </div>
@@ -284,37 +291,50 @@ function ShellChrome({
           )}
         </div>
 
-        <nav aria-label="Primary" className="flex flex-col gap-0.5">
-          {items.map((i) => (
-            <NavLink key={i.href} item={i} active={isCurrent(i.href)} />
-          ))}
-        </nav>
+        {items.length > 1 && (
+          <nav aria-label="Primary" className="flex flex-col gap-0.5">
+            {items.map((i) => (
+              <NavLink key={i.href} item={i} active={isCurrent(i.href)} />
+            ))}
+          </nav>
+        )}
 
-        <div className="border-sidebar-border mt-auto flex items-center gap-2 border-t pt-3">
-          <div className="bg-muted text-muted-foreground flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold uppercase">
-            {initials(user.name, user.email)}
+        <div className="border-sidebar-border mt-auto space-y-2 border-t pt-3">
+          <div className="flex items-center gap-2">
+            <div className="bg-muted text-muted-foreground flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold uppercase">
+              {initials(user.name, user.email)}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">{user.name}</p>
+              <p className="text-muted-foreground font-mono text-[10px] capitalize">
+                {isPending ? "pending" : role}
+              </p>
+            </div>
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium">{user.name}</p>
-            <p className="text-muted-foreground font-mono text-[10px] capitalize">
-              {isPending ? "pending" : role}
-            </p>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <SignOutButton />
           </div>
-          <SignOutButton />
         </div>
       </aside>
 
       {/* Main column */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* Mobile top bar — top padding clears the status-bar notch when installed
             as a PWA (viewport-fit=cover; ADR 42). env() is 0 elsewhere. */}
-        <header className="bg-sidebar border-sidebar-border flex items-center justify-between border-b px-4 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-3 md:hidden">
-          <Logo size={20} />
-          {academies.length >= 2 ? (
-            <AcademySwitcher academies={academies} activeId={activeId} />
-          ) : (
-            <span className="text-sm font-medium">{academyName}</span>
-          )}
+        <header className="bg-sidebar border-sidebar-border flex items-center gap-2 border-b px-4 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-3 md:hidden">
+          <Logo size={22} withWordmark={false} />
+          <div className="min-w-0 flex-1">
+            {academies.length >= 2 ? (
+              <AcademySwitcher academies={academies} activeId={activeId} />
+            ) : (
+              <span className="block truncate text-sm font-medium">
+                {academyName}
+              </span>
+            )}
+          </div>
+          <ThemeToggle />
+          <SignOutButton iconOnly />
         </header>
 
         {isPending && (
@@ -323,41 +343,47 @@ function ShellChrome({
           </div>
         )}
 
-        <main className="mx-auto w-full max-w-5xl flex-1 p-6 pb-24 md:p-8 md:pb-8">
-          {children}
+        <main className="min-h-0 flex-1 overflow-y-auto">
+          <div
+            className={`mx-auto w-full ${contentWidth(pathname)} p-6 pb-24 md:p-8 md:pb-8`}
+          >
+            {children}
+          </div>
         </main>
       </div>
 
       {/* Mobile bottom tabs — bottom padding clears the home indicator when
           installed as a PWA (viewport-fit=cover; ADR 42). env() is 0 elsewhere. */}
-      <nav
-        aria-label="Primary"
-        className="bg-sidebar border-sidebar-border fixed inset-x-0 bottom-0 z-20 flex border-t pb-[env(safe-area-inset-bottom)] md:hidden"
-      >
-        {items.map((i) => {
-          const active = isCurrent(i.href);
-          return (
-            <Link
-              key={i.href}
-              href={i.href}
-              aria-current={active ? "page" : undefined}
-              className={`flex min-h-14 flex-1 flex-col items-center justify-center gap-1 px-1 py-2 text-[10px] font-medium tracking-tight ${
-                active ? "text-brand-strong" : "text-muted-foreground"
-              }`}
-            >
-              <span className="relative">
-                {i.icon}
-                {!!i.badge && i.badge > 0 && (
-                  <span className="bg-brand text-brand-foreground absolute -top-1.5 -right-2 flex min-w-4 items-center justify-center rounded-full px-1 py-px font-mono text-[10px] leading-none tabular-nums">
-                    {i.badge > 9 ? "9+" : i.badge}
-                  </span>
-                )}
-              </span>
-              <span className="max-w-full truncate">{i.label}</span>
-            </Link>
-          );
-        })}
-      </nav>
+      {items.length > 1 && (
+        <nav
+          aria-label="Primary"
+          className="bg-sidebar border-sidebar-border fixed inset-x-0 bottom-0 z-20 flex border-t pb-[env(safe-area-inset-bottom)] md:hidden"
+        >
+          {items.map((i) => {
+            const active = isCurrent(i.href);
+            return (
+              <Link
+                key={i.href}
+                href={i.href}
+                aria-current={active ? "page" : undefined}
+                className={`flex min-h-14 flex-1 flex-col items-center justify-center gap-1 px-1 py-2 text-[10px] font-medium tracking-tight ${
+                  active ? "text-brand-strong" : "text-muted-foreground"
+                }`}
+              >
+                <span className="relative">
+                  {i.icon}
+                  {!!i.badge && i.badge > 0 && (
+                    <span className="bg-brand text-brand-foreground absolute -top-1.5 -right-2 flex min-w-4 items-center justify-center rounded-full px-1 py-px font-mono text-[10px] leading-none tabular-nums">
+                      {i.badge > 9 ? "9+" : i.badge}
+                    </span>
+                  )}
+                </span>
+                <span className="max-w-full truncate">{i.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+      )}
     </div>
   );
 }

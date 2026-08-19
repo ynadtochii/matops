@@ -21,6 +21,8 @@ import {
   memberDues,
   memberNote,
   memberRank,
+  memberReferral,
+  memberReferralAudit,
   membershipPlan,
   organization,
   paymentClaim,
@@ -60,6 +62,14 @@ export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
     exec
       .delete(classParticipation)
       .where(inArray(classParticipation.academyId, ids)),
+  );
+  await del("member_referral_audit", () =>
+    exec
+      .delete(memberReferralAudit)
+      .where(inArray(memberReferralAudit.academyId, ids)),
+  );
+  await del("member_referral", () =>
+    exec.delete(memberReferral).where(inArray(memberReferral.academyId, ids)),
   );
   await del("drop_in", () =>
     exec.delete(dropIn).where(inArray(dropIn.academyId, ids)),

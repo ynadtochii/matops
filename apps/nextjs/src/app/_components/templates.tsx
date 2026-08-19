@@ -12,6 +12,7 @@ import {
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
+import { Dialog, DialogContent, DialogTitle } from "@matops/ui/dialog";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
 import { Select } from "@matops/ui/select";
@@ -20,6 +21,7 @@ import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
 import { cardClass } from "./primitives";
+import { SchedulePoster } from "./schedule-poster";
 import { EmptyState, ErrorState, SkeletonRows } from "./states";
 
 type Template = RouterOutputs["template"]["list"][number];
@@ -142,6 +144,16 @@ export function Templates() {
 
   const busy = create.isPending || update.isPending;
   const templates = list.data ?? [];
+  const posterClasses = templates
+    .filter((t) => t.status === "active")
+    .map((t) => ({
+      title: t.title,
+      discipline: t.discipline,
+      daysOfWeek: t.daysOfWeek,
+      startsAtMinutes: t.startsAtMinutes,
+      durationMinutes: t.durationMinutes,
+      instructorName: t.instructorName,
+    }));
 
   const submit = () => {
     if (!form) return;
@@ -164,9 +176,10 @@ export function Templates() {
 
   return (
     <section className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <h2 className="text-lg font-semibold">Recurring classes</h2>
-        {form === null && (
+        <div className="flex items-center gap-2">
+          <SchedulePoster classes={posterClasses} />
           <Button
             size="sm"
             variant="outline"
@@ -177,14 +190,17 @@ export function Templates() {
           >
             New template
           </Button>
-        )}
+        </div>
       </div>
 
       {list.isPending ? (
         <SkeletonRows rows={3} />
       ) : list.isError ? (
-        <ErrorState label="your templates" onRetry={() => void list.refetch()} />
-      ) : templates.length === 0 && form === null ? (
+        <ErrorState
+          label="your templates"
+          onRetry={() => void list.refetch()}
+        />
+      ) : templates.length === 0 ? (
         <EmptyState title="No recurring classes yet.">
           Create a weekly template and matops fills the calendar for you.
         </EmptyState>
@@ -221,7 +237,6 @@ export function Templates() {
                 <Button
                   size="sm"
                   variant="outline"
-                  className="min-h-11 sm:min-h-8"
                   onClick={() => {
                     setEditingId(t.id);
                     setForm(formFromTemplate(t));
@@ -231,8 +246,7 @@ export function Templates() {
                 </Button>
                 <Button
                   size="sm"
-                  variant="ghost"
-                  className="min-h-11 sm:min-h-8"
+                  variant="outline"
                   disabled={
                     setStatus.isPending && setStatus.variables.id === t.id
                   }
@@ -256,8 +270,7 @@ export function Templates() {
                   trigger={
                     <Button
                       size="sm"
-                      variant="destructive"
-                      className="min-h-11 sm:min-h-8"
+                      variant="destructive-outline"
                       disabled={
                         remove.isPending && remove.variables.id === t.id
                       }
@@ -272,144 +285,159 @@ export function Templates() {
         </div>
       )}
 
-      {form !== null && (
-        <form
-          className={cn(cardClass(), "flex flex-col gap-4")}
-          onSubmit={(e) => {
-            e.preventDefault();
-            submit();
-          }}
-        >
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="tpl-title">Title</Label>
-            <Input
-              id="tpl-title"
-              value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
-              placeholder="Evening No-Gi"
-              maxLength={80}
-              required
-            />
-          </div>
+      <Dialog
+        open={form !== null}
+        onOpenChange={(next) => !next && closeForm()}
+      >
+        <DialogContent>
+          {form !== null && (
+            <form
+              className="flex flex-col gap-4"
+              onSubmit={(e) => {
+                e.preventDefault();
+                submit();
+              }}
+            >
+              <DialogTitle>
+                {editingId ? "Edit template" : "New template"}
+              </DialogTitle>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="tpl-title">Title</Label>
+                <Input
+                  id="tpl-title"
+                  value={form.title}
+                  onChange={(e) => setForm({ ...form, title: e.target.value })}
+                  placeholder="Evening No-Gi"
+                  maxLength={80}
+                  required
+                />
+              </div>
 
-          <div className="flex flex-col gap-1.5">
-            <Label>Days</Label>
-            <div className="flex flex-wrap gap-1.5">
-              {DAY_LABELS.map((label, day) => {
-                const on = form.daysOfWeek.includes(day);
-                return (
-                  <button
-                    key={day}
-                    type="button"
-                    aria-pressed={on}
-                    onClick={() =>
+              <div className="flex flex-col gap-1.5">
+                <Label>Days</Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {DAY_LABELS.map((label, day) => {
+                    const on = form.daysOfWeek.includes(day);
+                    return (
+                      <button
+                        key={day}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() =>
+                          setForm({
+                            ...form,
+                            daysOfWeek: on
+                              ? form.daysOfWeek.filter((d) => d !== day)
+                              : [...form.daysOfWeek, day],
+                          })
+                        }
+                        className={`rounded-md border px-3 py-1.5 text-sm ${
+                          on
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-background"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="tpl-time">Start</Label>
+                  <Input
+                    id="tpl-time"
+                    type="time"
+                    value={form.time}
+                    onChange={(e) => setForm({ ...form, time: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="tpl-duration">Duration (min)</Label>
+                  <Input
+                    id="tpl-duration"
+                    type="number"
+                    min={5}
+                    max={600}
+                    value={form.durationMinutes}
+                    onChange={(e) =>
                       setForm({
                         ...form,
-                        daysOfWeek: on
-                          ? form.daysOfWeek.filter((d) => d !== day)
-                          : [...form.daysOfWeek, day],
+                        durationMinutes: e.target.valueAsNumber,
                       })
                     }
-                    className={`rounded-md border px-3 py-1.5 text-sm ${
-                      on
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "bg-background"
-                    }`}
+                    required
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="tpl-capacity">Capacity</Label>
+                  <Input
+                    id="tpl-capacity"
+                    type="number"
+                    min={0}
+                    max={1000}
+                    value={form.capacity}
+                    onChange={(e) =>
+                      setForm({ ...form, capacity: e.target.valueAsNumber })
+                    }
+                    required
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="tpl-discipline">Discipline</Label>
+                  <Select
+                    id="tpl-discipline"
+                    value={form.discipline}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        discipline: e.target.value as Discipline | "",
+                      })
+                    }
                   >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+                    <option value="">None</option>
+                    {DISCIPLINES.map((d) => (
+                      <option key={d} value={d}>
+                        {d.toUpperCase()}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              </div>
 
-          <div className="flex flex-wrap gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="tpl-time">Start</Label>
-              <Input
-                id="tpl-time"
-                type="time"
-                value={form.time}
-                onChange={(e) => setForm({ ...form, time: e.target.value })}
-                required
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="tpl-duration">Duration (min)</Label>
-              <Input
-                id="tpl-duration"
-                type="number"
-                min={5}
-                max={600}
-                value={form.durationMinutes}
-                onChange={(e) =>
-                  setForm({ ...form, durationMinutes: e.target.valueAsNumber })
-                }
-                required
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="tpl-capacity">Capacity</Label>
-              <Input
-                id="tpl-capacity"
-                type="number"
-                min={0}
-                max={1000}
-                value={form.capacity}
-                onChange={(e) =>
-                  setForm({ ...form, capacity: e.target.valueAsNumber })
-                }
-                required
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="tpl-discipline">Discipline</Label>
-              <Select
-                id="tpl-discipline"
-                value={form.discipline}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    discipline: e.target.value as Discipline | "",
-                  })
-                }
-              >
-                <option value="">None</option>
-                {DISCIPLINES.map((d) => (
-                  <option key={d} value={d}>
-                    {d.toUpperCase()}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="tpl-tz">Time zone</Label>
+                <Input
+                  id="tpl-tz"
+                  value={form.timeZone}
+                  onChange={(e) =>
+                    setForm({ ...form, timeZone: e.target.value })
+                  }
+                  placeholder="Europe/Kyiv"
+                  required
+                />
+              </div>
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="tpl-tz">Time zone</Label>
-            <Input
-              id="tpl-tz"
-              value={form.timeZone}
-              onChange={(e) => setForm({ ...form, timeZone: e.target.value })}
-              placeholder="Europe/Kyiv"
-              required
-            />
-          </div>
-
-          <div className="flex gap-2">
-            <Button type="submit" disabled={busy}>
-              {busy && <Spinner size="sm" className="text-current" />}
-              {busy
-                ? "Saving…"
-                : editingId
-                  ? "Save changes"
-                  : "Create template"}
-            </Button>
-            <Button type="button" variant="ghost" onClick={closeForm}>
-              Cancel
-            </Button>
-          </div>
-        </form>
-      )}
+              <div className="flex gap-2">
+                <Button type="submit" disabled={busy}>
+                  {busy && <Spinner size="sm" className="text-current" />}
+                  {busy
+                    ? "Saving…"
+                    : editingId
+                      ? "Save changes"
+                      : "Create template"}
+                </Button>
+                <Button type="button" variant="ghost" onClick={closeForm}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

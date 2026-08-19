@@ -85,8 +85,8 @@ export default function SignIn() {
             <Card variant="outline" style={{ gap: 4 }}>
               <Title>Check your email</Title>
               <Muted>
-                Open the sign-in link we sent to {email.trim()}. The link expires
-                soon — if it doesn&apos;t arrive, resend it.
+                Open the sign-in link we sent to {email.trim()}. The link
+                expires soon — if it doesn&apos;t arrive, resend it.
                 {__DEV__
                   ? " In development, copy the “[auth] magic link …” line from the Next.js terminal and open it."
                   : ""}

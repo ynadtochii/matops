@@ -4,7 +4,8 @@ import { useState } from "react";
 import { AlertDialog as AlertDialogPrimitive } from "radix-ui";
 
 import { cn } from "@matops/ui";
-import { buttonContainerVariants, buttonTextVariants } from "./button-variants";
+
+import { buttonClass } from "./button";
 import { Spinner } from "./spinner";
 
 /**
@@ -124,12 +125,7 @@ export function AlertDialogCancel({
   return (
     <AlertDialogPrimitive.Cancel
       data-slot="alert-dialog-cancel"
-      className={cn(
-        buttonContainerVariants({ variant: "outline", size: "default" }),
-        buttonTextVariants({ variant: "outline" }),
-        "hover:bg-muted disabled:pointer-events-none disabled:opacity-50",
-        className,
-      )}
+      className={cn(buttonClass({ variant: "outline" }), className)}
       {...props}
     />
   );
@@ -140,20 +136,12 @@ export function AlertDialogAction({
   variant = "destructive",
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Action> & {
-  variant?: "destructive" | "default";
+  variant?: "destructive" | "primary";
 }) {
   return (
     <AlertDialogPrimitive.Action
       data-slot="alert-dialog-action"
-      className={cn(
-        buttonContainerVariants({ variant, size: "default" }),
-        buttonTextVariants({ variant }),
-        variant === "destructive"
-          ? "hover:bg-destructive/90"
-          : "hover:bg-primary/90",
-        "disabled:pointer-events-none disabled:opacity-50",
-        className,
-      )}
+      className={cn(buttonClass({ variant }), className)}
       {...props}
     />
   );
@@ -180,7 +168,7 @@ export function ConfirmDialog({
   description?: React.ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
-  variant?: "destructive" | "default";
+  variant?: "destructive" | "primary";
   onConfirm: () => void | Promise<void>;
 }) {
   const [open, setOpen] = useState(false);

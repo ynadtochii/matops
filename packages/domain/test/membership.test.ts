@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { RosterMember } from "../src/membership";
+import type { MemberRow } from "../src/membership";
 import {
   activeOwnerCount,
   approveMembership,
@@ -11,7 +11,7 @@ import {
   wouldLeaveOwnerless,
 } from "../src/membership";
 
-const rm = (id: string, role: string, status: string): RosterMember => ({
+const rm = (id: string, role: string, status: string): MemberRow => ({
   id,
   role,
   status,

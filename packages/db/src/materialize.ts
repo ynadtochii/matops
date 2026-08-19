@@ -35,6 +35,14 @@ export interface MaterializeOptions {
   /** "Now" — injected so callers/tests control the clock (default: real now). */
   now?: Date;
   horizonDays?: number;
+  /**
+   * Bring a CANCELLED instance at a generated instant back to `scheduled` and
+   * refresh its content. Only the template TIMING edit passes this: it cancels
+   * the future instances first (it must not delete them, since bookings and
+   * drop-ins reference `class.id`), then re-materializes; the occurrences the
+   * new timing still covers have to come back with their bookings intact.
+   */
+  reviveCancelled?: boolean;
 }
 
 /**
@@ -48,6 +56,7 @@ export async function materializeTemplate(
   {
     now = new Date(),
     horizonDays = MATERIALIZATION_HORIZON_DAYS,
+    reviveCancelled = false,
   }: MaterializeOptions = {},
 ): Promise<number> {
   if (template.status !== "active" || template.deletedAt) return 0;
@@ -69,24 +78,35 @@ export async function materializeTemplate(
 
   let inserted = 0;
   if (occurrences.length > 0) {
-    const rows = await exec
-      .insert(classInstance)
-      .values(
-        occurrences.map((startsAt) => ({
-          academyId: template.academyId,
-          templateId: template.id,
-          instructorId: template.instructorId,
-          title: template.title,
-          discipline: template.discipline,
-          startsAt,
-          durationMinutes: template.durationMinutes,
-          capacity: template.capacity,
-        })),
-      )
-      // A concurrent run or a prior tick may already hold this instant; only the
-      // rows actually inserted come back, so this is the true created count.
-      .onConflictDoNothing()
-      .returning({ id: classInstance.id });
+    const values = occurrences.map((startsAt) => ({
+      academyId: template.academyId,
+      templateId: template.id,
+      instructorId: template.instructorId,
+      title: template.title,
+      discipline: template.discipline,
+      startsAt,
+      durationMinutes: template.durationMinutes,
+      capacity: template.capacity,
+    }));
+    const insert = exec.insert(classInstance).values(values);
+    // A concurrent run or a prior tick may already hold this instant; only the
+    // rows actually inserted (or revived) come back, so this is the true count.
+    const rows = await (
+      reviveCancelled
+        ? insert.onConflictDoUpdate({
+            target: [classInstance.templateId, classInstance.startsAt],
+            setWhere: eq(classInstance.status, "cancelled"),
+            set: {
+              status: "scheduled",
+              instructorId: template.instructorId,
+              title: template.title,
+              discipline: template.discipline,
+              durationMinutes: template.durationMinutes,
+              capacity: template.capacity,
+            },
+          })
+        : insert.onConflictDoNothing()
+    ).returning({ id: classInstance.id });
     inserted = rows.length;
   }
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   describeRecurrence,
+  disciplineTone,
   formatStartMinutes,
   isValidStartMinutes,
   nextBookableClass,
@@ -93,5 +94,23 @@ describe("nextBookableClass", () => {
         now,
       ),
     ).toBeNull();
+  });
+});
+
+describe("disciplineTone", () => {
+  it("folds mma in with nogi", () => {
+    expect(disciplineTone("nogi")).toBe("nogi");
+    expect(disciplineTone("mma")).toBe("nogi");
+  });
+
+  it("keeps open mat neutral", () => {
+    expect(disciplineTone("other")).toBe("other");
+  });
+
+  it("treats every gi discipline, and no discipline at all, as gi", () => {
+    expect(disciplineTone("bjj")).toBe("gi");
+    expect(disciplineTone("judo")).toBe("gi");
+    expect(disciplineTone(null)).toBe("gi");
+    expect(disciplineTone("wrestling")).toBe("gi");
   });
 });

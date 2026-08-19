@@ -1,14 +1,7 @@
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
-import {
-  and,
-  desc,
-  eq,
-  getMemberById,
-  getMemberIdForUser,
-  listMembersOf,
-} from "@matops/db";
+import { and, desc, eq, getMemberIdForUser, listMembersOf } from "@matops/db";
 import { memberRank, rankPromotion } from "@matops/db/schema";
 import { isRankChange, isRankRegression, isValidRank } from "@matops/domain";
 import {
@@ -17,6 +10,7 @@ import {
   SetMemberRankSchema,
 } from "@matops/validators";
 
+import { requireMember } from "../members";
 import { enrolledProcedure, staffProcedure } from "../trpc";
 
 /**
@@ -28,15 +22,6 @@ import { enrolledProcedure, staffProcedure } from "../trpc";
  * resolved on the base connection where needed.
  */
 
-/** Assert the target member exists and belongs to the caller's academy. */
-async function requireMember(academyId: string, memberId: string) {
-  const m = await getMemberById(memberId);
-  if (m?.academyId !== academyId) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "Member not found" });
-  }
-  return m;
-}
-
 export const rankRouter = {
   // ─── Staff: read + set a member's ranks ─────────────────────────────────────
 
@@ -47,7 +32,7 @@ export const rankRouter = {
   forMember: staffProcedure
     .input(MemberActionSchema)
     .query(async ({ ctx, input }) => {
-      await requireMember(ctx.academyId, input.memberId);
+      await requireMember(ctx, input.memberId);
       const ranks = await ctx.db
         .select({
           discipline: memberRank.discipline,
@@ -71,7 +56,10 @@ export const rankRouter = {
         .where(eq(rankPromotion.memberId, input.memberId))
         .orderBy(desc(rankPromotion.promotedAt));
       const nameByUser = new Map(
-        (await listMembersOf(ctx.academyId)).map((r) => [r.userId, r.name]),
+        (await listMembersOf(ctx.academyId, ctx.baseDb)).map((r) => [
+          r.userId,
+          r.name,
+        ]),
       );
       return {
         ranks,
@@ -93,7 +81,7 @@ export const rankRouter = {
   set: staffProcedure
     .input(SetMemberRankSchema)
     .mutation(async ({ ctx, input }) => {
-      await requireMember(ctx.academyId, input.memberId);
+      await requireMember(ctx, input.memberId);
       if (!isValidRank(input.discipline, input.belt, input.stripes)) {
         throw new TRPCError({
           code: "BAD_REQUEST",
@@ -161,7 +149,7 @@ export const rankRouter = {
   clear: staffProcedure
     .input(ClearMemberRankSchema)
     .mutation(async ({ ctx, input }) => {
-      await requireMember(ctx.academyId, input.memberId);
+      await requireMember(ctx, input.memberId);
       await ctx.db
         .delete(memberRank)
         .where(
@@ -184,6 +172,7 @@ export const rankRouter = {
     const memberId = await getMemberIdForUser(
       ctx.session.user.id,
       ctx.academyId,
+      ctx.baseDb,
     );
     if (!memberId) return { ranks: [], history: [] };
     const ranks = await ctx.db

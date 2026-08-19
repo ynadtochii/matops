@@ -14,6 +14,10 @@
     "./schema": {
       "types": "./dist/schema.d.ts",
       "default": "./src/schema.ts"
+    },
+    "./testing": {
+      "types": "./test/helpers.ts",
+      "default": "./test/helpers.ts"
     }
   },
   "license": "MIT",

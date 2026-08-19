@@ -5,8 +5,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { PaymentStatus } from "@matops/domain";
 import { disciplineLabel, formatRank } from "@matops/domain";
+import { UpdateProfileSchema } from "@matops/validators";
 
 import { OverdueBanner } from "~/components/overdue-banner";
+import { useRefreshControl } from "~/components/refresh";
 import {
   Banner,
   Button,
@@ -72,10 +74,12 @@ function ProfileDetails({
     setEditing(true);
   };
 
-  const canSave =
-    firstName.trim().length > 0 &&
-    lastName.trim().length > 0 &&
-    phoneValue.trim().length >= 3;
+  // The same rules the server enforces, so Save and the API agree.
+  const canSave = UpdateProfileSchema.safeParse({
+    firstName,
+    lastName,
+    phone: phoneValue,
+  }).success;
 
   if (!editing) {
     return (
@@ -369,6 +373,8 @@ export default function Profile() {
   const current = useQuery(trpc.academy.current.queryOptions());
   const academies = useQuery(trpc.academy.listMineStudent.queryOptions());
 
+  const refreshControl = useRefreshControl();
+
   const setActive = useMutation(
     trpc.academy.setActive.mutationOptions({
       onSuccess: () => queryClient.invalidateQueries(),
@@ -397,6 +403,10 @@ export default function Profile() {
   // those sections behind a calm banner, but keep Profile itself (sign out /
   // switch academy stay reachable). §4.
   const suspended = current.data?.status === "suspended";
+  // Dues (and the gym's bank details) are for approved members only, so the
+  // server rejects the read while a join is still pending. Hide the section
+  // rather than showing an error where nothing is wrong yet.
+  const approved = current.data?.status === "active";
 
   return (
     <Screen>
@@ -420,6 +430,7 @@ export default function Profile() {
         style={{ flex: 1 }}
         contentContainerStyle={{ gap: 24, paddingBottom: 24 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={refreshControl}
       >
         <ProfileDetails
           name={user.name || ""}
@@ -443,13 +454,15 @@ export default function Profile() {
               <MyRanks />
             </Stack>
 
-            <View
-              style={{ gap: 8 }}
-              onLayout={(e) => (duesY.current = e.nativeEvent.layout.y)}
-            >
-              <Eyebrow>Membership dues</Eyebrow>
-              <MembershipDues />
-            </View>
+            {approved && (
+              <View
+                style={{ gap: 8 }}
+                onLayout={(e) => (duesY.current = e.nativeEvent.layout.y)}
+              >
+                <Eyebrow>Membership dues</Eyebrow>
+                <MembershipDues />
+              </View>
+            )}
           </>
         )}
 

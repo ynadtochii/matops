@@ -1,12 +1,12 @@
 /**
- * Pure roster + approval rules. No I/O — the owner tRPC procedures call these so
+ * Pure member-list + approval rules. No I/O — the owner tRPC procedures call these so
  * the transitions live in one tested place (docs/issues/14, 20; spec O4, §4).
  */
 import type { Membership } from "./access";
 import { isOwner } from "./access";
 
-/** A member row as the roster rules see it. */
-export interface RosterMember extends Membership {
+/** A member row as the membership rules see it. */
+export interface MemberRow extends Membership {
   id: string;
 }
 
@@ -39,7 +39,7 @@ export function approveMembership(m: PendingMembership): {
 // --- Never ownerless (spec §4) -----------------------------------------------
 
 /** How many members are currently ACTIVE owners. */
-export function activeOwnerCount(members: RosterMember[]): number {
+export function activeOwnerCount(members: MemberRow[]): number {
   return members.filter((m) => isOwner(m)).length;
 }
 
@@ -49,7 +49,7 @@ export function activeOwnerCount(members: RosterMember[]): number {
  * but the last active owner cannot be dropped (spec §4 "never ownerless").
  */
 export function wouldLeaveOwnerless(
-  members: RosterMember[],
+  members: MemberRow[],
   targetId: string,
 ): boolean {
   const target = members.find((m) => m.id === targetId);
@@ -59,7 +59,7 @@ export function wouldLeaveOwnerless(
 
 /** Guard for remove / suspend / demote actions. */
 export function canRemoveOrDemote(
-  members: RosterMember[],
+  members: MemberRow[],
   targetId: string,
 ): boolean {
   return !wouldLeaveOwnerless(members, targetId);

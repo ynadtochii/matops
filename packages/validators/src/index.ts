@@ -7,9 +7,105 @@ import { z } from "zod/v4";
  * and bound the input at the boundary.
  */
 
+// ─── Shared field primitives (sanitize, then bound) ──────────────────────────
+
+/**
+ * Characters a person never types into a form but an attacker does: C0/C1
+ * controls, zero-width joiners/spaces, and the bidi overrides that let a value
+ * render in a different order than it is stored. Tab and newline are left in —
+ * the cleaners below fold them.
+ */
+const INVISIBLE =
+  // eslint-disable-next-line no-control-regex
+  /[\u0000-\u0008\u000B-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/g;
+
+/** One-line field: drop invisibles, fold every whitespace run to one space. */
+function singleLine(raw: string): string {
+  return raw.replace(INVISIBLE, "").replace(/\s+/g, " ").trim();
+}
+
+/** Multi-line field: keep paragraphs, drop invisibles, cap the blank runs. */
+function multiLine(raw: string): string {
+  return raw
+    .replace(INVISIBLE, "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/[^\S\n]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/**
+ * A sanitized single-line string. The pre-transform `.max()` is a cheap guard so
+ * a megabyte of junk is rejected before any regex touches it; the post-transform
+ * bounds are the real limits, measured on the cleaned value.
+ */
+const lineText = (min: number, max: number) =>
+  z
+    .string()
+    .max(max * 4)
+    .transform(singleLine)
+    .pipe(z.string().min(min).max(max));
+
+/** A sanitized multi-line string (notes, bank details). */
+const blockText = (min: number, max: number) =>
+  z
+    .string()
+    .max(max * 2)
+    .transform(multiLine)
+    .pipe(z.string().min(min).max(max));
+
+/** A person's given/family name. */
+export const NameSchema = lineText(1, 60);
+
+/**
+ * A phone number. Deliberately loose on format (international numbers vary) but
+ * strict on charset, so a name, a URL, or a script tag can never land in the
+ * field the gym dials. At least 5 digits after the punctuation is stripped.
+ */
+export const PhoneSchema = z
+  .string()
+  .max(120)
+  .transform(singleLine)
+  .pipe(
+    z
+      .string()
+      .max(30)
+      .regex(/^[+\d][\d\s().-]*$/, "Use digits and + ( ) - . only")
+      .refine(
+        (v) => (v.match(/\d/g) ?? []).length >= 5,
+        "Enter a full phone number",
+      ),
+  );
+
+/** An email address, lower-cased so one person is one identity. */
+export const EmailSchema = z
+  .string()
+  .max(320)
+  .transform((v) => singleLine(v).toLowerCase())
+  .pipe(z.email().max(160));
+
+/**
+ * A link we may later render as an `href`. `z.url()` alone accepts `javascript:`
+ * and `data:`, so the scheme is pinned to http/https.
+ */
+export const HttpUrlSchema = z
+  .string()
+  .max(500)
+  .pipe(z.url())
+  .refine(
+    (v) => /^https?:\/\//i.test(v),
+    "Link must start with http:// or https://",
+  );
+
+/** An opaque Better Auth id (user, member, organization, invite). Bounded only. */
+export const IdSchema = z.string().trim().min(1).max(64);
+
+/** A single-use secret from a link (invite token, push token). */
+export const OpaqueTokenSchema = z.string().trim().min(1).max(200);
+
 /** Owner onboarding — "Start a gym" (spec 1.1 / O6). */
 export const CreateAcademySchema = z.object({
-  name: z.string().trim().min(2).max(80),
+  name: lineText(2, 80),
 });
 export type CreateAcademyInput = z.infer<typeof CreateAcademySchema>;
 
@@ -23,10 +119,10 @@ export type InviteRole = z.infer<typeof InviteRoleSchema>;
  * magic-link sign-in that precedes joining. Minimal fields only.
  */
 export const JoinAcademySchema = z.object({
-  token: z.string().min(1),
-  firstName: z.string().trim().min(1).max(60),
-  lastName: z.string().trim().min(1).max(60),
-  phone: z.string().trim().min(3).max(30),
+  token: OpaqueTokenSchema,
+  firstName: NameSchema,
+  lastName: NameSchema,
+  phone: PhoneSchema,
 });
 export type JoinAcademyInput = z.infer<typeof JoinAcademySchema>;
 
@@ -36,27 +132,31 @@ export type JoinAcademyInput = z.infer<typeof JoinAcademySchema>;
  * channel). Same field shapes as the join schemas.
  */
 export const UpdateProfileSchema = z.object({
-  firstName: z.string().trim().min(1).max(60),
-  lastName: z.string().trim().min(1).max(60),
-  phone: z.string().trim().min(3).max(30),
+  firstName: NameSchema,
+  lastName: NameSchema,
+  phone: PhoneSchema,
 });
 export type UpdateProfileInput = z.infer<typeof UpdateProfileSchema>;
 
 /** A single member action (approve / reject / remove / suspend / promote). */
 export const MemberActionSchema = z.object({
-  memberId: z.string().min(1),
+  memberId: IdSchema,
 });
 export type MemberActionInput = z.infer<typeof MemberActionSchema>;
 
 /** Resolve an invite token on the public join screen. */
 export const InviteTokenSchema = z.object({
-  token: z.string().min(1),
+  token: OpaqueTokenSchema,
 });
 
 /** The 6-digit academy code a student types to find a gym on mobile (S2,
  * docs/issues/32). Exactly six digits — matches `isValidAcademyCode` in domain. */
 export const AcademyCodeSchema = z.object({
-  code: z.string().regex(/^\d{6}$/, "Enter your gym's 6-digit ID"),
+  code: z
+    .string()
+    .trim()
+    .max(20)
+    .regex(/^\d{6}$/, "Enter your gym's 6-digit ID"),
 });
 export type AcademyCodeInput = z.infer<typeof AcademyCodeSchema>;
 
@@ -66,9 +166,9 @@ export type AcademyCodeInput = z.infer<typeof AcademyCodeSchema>;
  * so there is no role field here. Email is already verified via magic-link.
  */
 export const JoinByCodeSchema = AcademyCodeSchema.extend({
-  firstName: z.string().trim().min(1).max(60),
-  lastName: z.string().trim().min(1).max(60),
-  phone: z.string().trim().min(3).max(30),
+  firstName: NameSchema,
+  lastName: NameSchema,
+  phone: PhoneSchema,
 });
 export type JoinByCodeInput = z.infer<typeof JoinByCodeSchema>;
 
@@ -89,6 +189,14 @@ function isValidTimeZone(tz: string): boolean {
   }
 }
 
+/** An IANA zone name the runtime knows. Bounded before the lookup. */
+const TimeZoneSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(60)
+  .refine(isValidTimeZone, "Unknown time zone");
+
 /**
  * Recurring class template (spec O3, docs/issues/08). Days are 0=Sun…6=Sat; the
  * start time is LOCAL minutes-from-midnight in `timeZone` (the DST-aware UTC
@@ -96,9 +204,9 @@ function isValidTimeZone(tz: string): boolean {
  * write — the router defaults it to the acting staff member.
  */
 export const CreateClassTemplateSchema = z.object({
-  title: z.string().trim().min(1).max(80),
+  title: lineText(1, 80),
   discipline: DisciplineSchema.nullish(),
-  instructorId: z.string().min(1).optional(),
+  instructorId: IdSchema.optional(),
   daysOfWeek: z
     .array(z.number().int().min(0).max(6))
     .min(1, "Pick at least one day")
@@ -106,7 +214,7 @@ export const CreateClassTemplateSchema = z.object({
     .refine((d) => new Set(d).size === d.length, "Days must be unique"),
   startsAtMinutes: z.number().int().min(0).max(1439),
   durationMinutes: z.number().int().min(5).max(600),
-  timeZone: z.string().min(1).refine(isValidTimeZone, "Unknown time zone"),
+  timeZone: TimeZoneSchema,
   capacity: z.number().int().min(0).max(1000),
 });
 export type CreateClassTemplateInput = z.infer<
@@ -136,13 +244,13 @@ export const TemplateIdSchema = z.object({ id: z.uuid() });
  * the same DST-aware rule the recurring engine uses.
  */
 export const CreateClassSchema = z.object({
-  title: z.string().trim().min(1).max(80),
+  title: lineText(1, 80),
   discipline: DisciplineSchema.nullish(),
-  instructorId: z.string().min(1).optional(),
+  instructorId: IdSchema.optional(),
   date: z.iso.date(), // "YYYY-MM-DD"
   startsAtMinutes: z.number().int().min(0).max(1439),
   durationMinutes: z.number().int().min(5).max(600),
-  timeZone: z.string().min(1).refine(isValidTimeZone, "Unknown time zone"),
+  timeZone: TimeZoneSchema,
   capacity: z.number().int().min(0).max(1000),
 });
 export type CreateClassInput = z.infer<typeof CreateClassSchema>;
@@ -156,14 +264,14 @@ export type CreateClassInput = z.infer<typeof CreateClassSchema>;
 export const UpdateClassSchema = z
   .object({
     id: z.uuid(),
-    title: z.string().trim().min(1).max(80),
+    title: lineText(1, 80),
     discipline: DisciplineSchema.nullish(),
-    instructorId: z.string().min(1),
+    instructorId: IdSchema,
     durationMinutes: z.number().int().min(5).max(600),
     capacity: z.number().int().min(0).max(1000),
     date: z.iso.date().optional(),
     startsAtMinutes: z.number().int().min(0).max(1439).optional(),
-    timeZone: z.string().min(1).optional(),
+    timeZone: TimeZoneSchema.optional(),
   })
   .refine(
     // Reschedule is all-or-nothing: need date + minutes + zone together.
@@ -203,7 +311,7 @@ export type AttendanceStatusInput = z.infer<typeof AttendanceStatusSchema>;
 /** Mark one participant present/absent/unmarked on a class (spec O5). */
 export const MarkAttendanceSchema = z.object({
   classId: z.uuid(),
-  studentId: z.string().min(1),
+  studentId: IdSchema,
   status: AttendanceStatusSchema,
 });
 export type MarkAttendanceInput = z.infer<typeof MarkAttendanceSchema>;
@@ -211,9 +319,24 @@ export type MarkAttendanceInput = z.infer<typeof MarkAttendanceSchema>;
 /** Add a walk-in: mark a member present who never booked (spec O5). */
 export const AddWalkInSchema = z.object({
   classId: z.uuid(),
-  studentId: z.string().min(1),
+  studentId: IdSchema,
 });
 export type AddWalkInInput = z.infer<typeof AddWalkInSchema>;
+
+/**
+ * Record a visitor who is not a member, from the class roster (spec O5/O4).
+ * Staff type this at the mat, so it asks for the least that still identifies a
+ * person: a name and the phone the lead is deduped by. Last name is optional
+ * and `consent` is absent by design — the visitor is not at the keyboard, so
+ * the gym cannot tick a contact-consent box on their behalf.
+ */
+export const AddVisitorSchema = z.object({
+  classId: z.uuid(),
+  firstName: NameSchema,
+  lastName: lineText(0, 60).default(""),
+  phone: PhoneSchema,
+});
+export type AddVisitorInput = z.infer<typeof AddVisitorSchema>;
 
 // ─── QR check-in (Phase 3, slice 3.4) ────────────────────────────────────────
 
@@ -224,7 +347,7 @@ export type CheckInInput = z.infer<typeof CheckInSchema>;
 // ─── Public drop-in / lead (Phase 3, slice 3.5) ──────────────────────────────
 
 /** Address one academy publicly (drop-in page header). */
-export const AcademyPublicSchema = z.object({ academyId: z.string().min(1) });
+export const AcademyPublicSchema = z.object({ academyId: IdSchema });
 
 /**
  * Public drop-in form (spec O4/§4, docs/issues/25). First-time, no-app visitor.
@@ -232,11 +355,11 @@ export const AcademyPublicSchema = z.object({ academyId: z.string().min(1) });
  * rejects an unchecked box. `classId` is resolved server-side, not submitted.
  */
 export const DropInSchema = z.object({
-  academyId: z.string().min(1),
-  firstName: z.string().trim().min(1).max(60),
-  lastName: z.string().trim().min(1).max(60),
-  phone: z.string().trim().min(3).max(30),
-  email: z.email().max(120).optional(),
+  academyId: IdSchema,
+  firstName: NameSchema,
+  lastName: NameSchema,
+  phone: PhoneSchema,
+  email: EmailSchema.optional(),
   consent: z.literal(true, "Please tick the consent box to continue"),
 });
 export type DropInInput = z.infer<typeof DropInSchema>;
@@ -249,15 +372,15 @@ export type DropInInput = z.infer<typeof DropInSchema>;
  * like `ExponentPushToken[xxxxxxxx]`.
  */
 export const RegisterPushTokenSchema = z.object({
-  token: z.string().trim().min(1).max(200),
+  token: OpaqueTokenSchema,
   platform: z.enum(["ios", "android"]),
-  deviceId: z.string().trim().max(200).optional(),
+  deviceId: lineText(0, 200).optional(),
 });
 export type RegisterPushTokenInput = z.infer<typeof RegisterPushTokenSchema>;
 
 /** Remove a device's push token (on sign-out). */
 export const UnregisterPushTokenSchema = z.object({
-  token: z.string().trim().min(1).max(200),
+  token: OpaqueTokenSchema,
 });
 export type UnregisterPushTokenInput = z.infer<
   typeof UnregisterPushTokenSchema
@@ -275,7 +398,7 @@ export type BillingCycleInput = z.infer<typeof BillingCycleSchema>;
  * is a 3-letter ISO-4217 code, upper-cased at the boundary.
  */
 export const CreateMembershipPlanSchema = z.object({
-  name: z.string().trim().min(1).max(80),
+  name: lineText(1, 80),
   priceMinor: z.number().int().min(0).max(100_000_000),
   currency: z
     .string()
@@ -306,7 +429,7 @@ export const PlanIdSchema = z.object({ id: z.uuid() });
  * clears the dues record entirely.
  */
 export const SetMemberDuesSchema = z.object({
-  memberId: z.string().min(1),
+  memberId: IdSchema,
   planId: z.uuid().nullable(),
   nextDueAt: z.iso.date(), // "YYYY-MM-DD"
 });
@@ -317,7 +440,7 @@ export type SetMemberDuesInput = z.infer<typeof SetMemberDuesSchema>;
  * Free text (IBAN, card number, bank name); may be blank to clear it.
  */
 export const UpdatePaymentRequisitesSchema = z.object({
-  bankDetails: z.string().trim().max(2000),
+  bankDetails: blockText(0, 2000),
 });
 export type UpdatePaymentRequisitesInput = z.infer<
   typeof UpdatePaymentRequisitesSchema
@@ -329,7 +452,7 @@ export type UpdatePaymentRequisitesInput = z.infer<
  * input is a proof screenshot URL.
  */
 export const CreatePaymentClaimSchema = z.object({
-  proofUrl: z.url().max(500).optional(),
+  proofUrl: HttpUrlSchema.optional(),
 });
 export type CreatePaymentClaimInput = z.infer<typeof CreatePaymentClaimSchema>;
 
@@ -346,27 +469,49 @@ export type ClaimIdInput = z.infer<typeof ClaimIdSchema>;
  * the model stays general (a new belted art needs no validator change).
  */
 export const SetMemberRankSchema = z.object({
-  memberId: z.string().min(1),
-  discipline: z.string().trim().min(1).max(40),
-  belt: z.string().trim().min(1).max(40),
+  memberId: IdSchema,
+  discipline: lineText(1, 40),
+  belt: lineText(1, 40),
   stripes: z.number().int().min(0).max(20),
 });
 export type SetMemberRankInput = z.infer<typeof SetMemberRankSchema>;
 
 /** Clear a member's rank in one discipline (spec O4 — a correction). */
 export const ClearMemberRankSchema = z.object({
-  memberId: z.string().min(1),
-  discipline: z.string().trim().min(1).max(40),
+  memberId: IdSchema,
+  discipline: lineText(1, 40),
 });
 export type ClearMemberRankInput = z.infer<typeof ClearMemberRankSchema>;
 
 /** Staff add a private note about a member (spec O4). Never member-visible. */
 export const AddMemberNoteSchema = z.object({
-  memberId: z.string().min(1),
-  body: z.string().trim().min(1).max(2000),
+  memberId: IdSchema,
+  body: blockText(1, 2000),
 });
 export type AddMemberNoteInput = z.infer<typeof AddMemberNoteSchema>;
 
 /** Address a single staff note by id (delete). */
 export const NoteIdSchema = z.object({ noteId: z.uuid() });
 export type NoteIdInput = z.infer<typeof NoteIdSchema>;
+
+// ─── Internal referral tracking (O9, ADR 52) ────────────────────────────────
+
+/** Staff make a permanent initial student → referrer attribution. */
+export const AssignReferralSchema = z.object({
+  studentMemberId: IdSchema,
+  referrerMemberId: IdSchema,
+});
+export type AssignReferralInput = z.infer<typeof AssignReferralSchema>;
+
+/** Owners correct an attribution or clear it while retaining the audit trail. */
+export const CorrectReferralSchema = z.object({
+  studentMemberId: IdSchema,
+  referrerMemberId: IdSchema.nullable(),
+});
+export type CorrectReferralInput = z.infer<typeof CorrectReferralSchema>;
+
+/** Owner-only audit history for one student membership. */
+export const ReferralHistorySchema = z.object({
+  studentMemberId: IdSchema,
+});
+export type ReferralHistoryInput = z.infer<typeof ReferralHistorySchema>;

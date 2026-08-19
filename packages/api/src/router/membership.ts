@@ -7,7 +7,6 @@ import {
   desc,
   eq,
   findAcademyByCode,
-  getMemberById,
   listMembersOf,
   resolveInviteToken,
   setMemberRoleIfNotLastOwner,
@@ -41,6 +40,7 @@ import {
 
 import type { createTRPCContext } from "../trpc";
 import { academyTimeZone } from "../academy-tz";
+import { requireMember } from "../members";
 import { notifyMembershipApproved } from "../notify";
 import { ownerProcedure, protectedProcedure } from "../trpc";
 
@@ -89,15 +89,6 @@ async function joinPending(
     status: result.status,
     alreadyMember: result.alreadyMember,
   };
-}
-
-/** Load the target member and assert it belongs to the caller's academy. */
-async function requireMember(academyId: string, memberId: string) {
-  const m = await getMemberById(memberId);
-  if (m?.academyId !== academyId) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "Member not found" });
-  }
-  return m;
 }
 
 /**
@@ -200,13 +191,13 @@ export const membershipRouter = {
     }),
 
   /**
-   * The roster for the active academy (spec O4). Owner-only. Removed rows are
+   * The member list for the active academy (spec O4). Owner-only. Removed rows are
    * hidden; history is kept. `visitCount` (slice 3.3) = how many classes the
    * member attended (present), powering the "attended 3×" nudge on pending rows
    * (§4). Counted on the RLS-scoped `ctx.db`, grouped by student.
    */
-  roster: ownerProcedure.query(async ({ ctx }) => {
-    const rows = await listMembersOf(ctx.academyId);
+  members: ownerProcedure.query(async ({ ctx }) => {
+    const rows = await listMembersOf(ctx.academyId, ctx.baseDb);
     const visits = await ctx.db
       .select({
         studentId: classParticipation.studentId,
@@ -220,10 +211,11 @@ export const membershipRouter = {
     // Per-member dues + derived payment status (slice P.2, ADR 40). All three
     // reads run on the RLS-scoped `ctx.db` (the payment tables carry academy_id
     // policies), so no explicit academy pin is needed here. `member_dues.memberId`
-    // is the `member.id`, aligning with the roster row's `memberId`.
+    // is the `member.id`, aligning with the member row's `memberId`.
     const duesRows = await ctx.db
       .select({
         memberId: memberDues.memberId,
+        planId: memberDues.planId,
         nextDueAt: memberDues.nextDueAt,
         priceMinor: membershipPlan.priceMinor,
         currency: membershipPlan.currency,
@@ -264,6 +256,7 @@ export const membershipRouter = {
           dues: d
             ? {
                 status: paymentStatus(d.nextDueAt, now),
+                planId: d.planId,
                 nextDueAt: d.nextDueAt,
                 priceMinor: d.priceMinor,
                 currency: d.currency,
@@ -279,13 +272,13 @@ export const membershipRouter = {
    * One member's attendance history + derived stats (spec O4 "member detail",
    * slice C.2 — ADR 39). Owner-only. Resolves the member to its user, lists
    * their `present` sessions (newest first), and reuses the pure `trainingStats`
-   * + `classifyDrift` for the Overview tab. Contact/role come from the roster
+   * + `classifyDrift` for the Overview tab. Contact/role come from the member list
    * row the web already holds — this returns only the history + numbers.
    */
   memberHistory: ownerProcedure
     .input(MemberActionSchema)
     .query(async ({ ctx, input }) => {
-      const m = await requireMember(ctx.academyId, input.memberId);
+      const m = await requireMember(ctx, input.memberId);
       const history = await ctx.db
         .select({
           classId: classInstance.id,
@@ -320,7 +313,7 @@ export const membershipRouter = {
   approve: ownerProcedure
     .input(MemberActionSchema)
     .mutation(async ({ ctx, input }) => {
-      const m = await requireMember(ctx.academyId, input.memberId);
+      const m = await requireMember(ctx, input.memberId);
       if (!canApprove(m)) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
@@ -329,10 +322,12 @@ export const membershipRouter = {
       }
       await setMemberRoleStatus(input.memberId, approveMembership(m));
       // Welcome push to the newly approved member (§4/S3, docs/issues/17).
-      await notifyMembershipApproved({
-        academyId: ctx.academyId,
-        userId: m.userId,
-      });
+      ctx.afterCommit(() =>
+        notifyMembershipApproved({
+          academyId: ctx.academyId,
+          userId: m.userId,
+        }),
+      );
       return { ok: true as const };
     }),
 
@@ -340,7 +335,7 @@ export const membershipRouter = {
   reject: ownerProcedure
     .input(MemberActionSchema)
     .mutation(async ({ ctx, input }) => {
-      await requireMember(ctx.academyId, input.memberId);
+      await requireMember(ctx, input.memberId);
       await setMemberStatus(input.memberId, "removed");
       return { ok: true as const };
     }),
@@ -349,7 +344,7 @@ export const membershipRouter = {
   remove: ownerProcedure
     .input(MemberActionSchema)
     .mutation(async ({ ctx, input }) => {
-      await requireMember(ctx.academyId, input.memberId);
+      await requireMember(ctx, input.memberId);
       await setStatusOrRejectLastOwner(
         ctx.academyId,
         input.memberId,
@@ -362,7 +357,7 @@ export const membershipRouter = {
   suspend: ownerProcedure
     .input(MemberActionSchema)
     .mutation(async ({ ctx, input }) => {
-      await requireMember(ctx.academyId, input.memberId);
+      await requireMember(ctx, input.memberId);
       await setStatusOrRejectLastOwner(
         ctx.academyId,
         input.memberId,
@@ -375,7 +370,7 @@ export const membershipRouter = {
   restore: ownerProcedure
     .input(MemberActionSchema)
     .mutation(async ({ ctx, input }) => {
-      const m = await requireMember(ctx.academyId, input.memberId);
+      const m = await requireMember(ctx, input.memberId);
       if (!isSuspended(m)) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
@@ -390,7 +385,7 @@ export const membershipRouter = {
   promote: ownerProcedure
     .input(MemberActionSchema)
     .mutation(async ({ ctx, input }) => {
-      await requireMember(ctx.academyId, input.memberId);
+      await requireMember(ctx, input.memberId);
       await setMemberRoleStatus(input.memberId, {
         role: "owner",
         status: "active",
@@ -405,17 +400,21 @@ export const membershipRouter = {
   demote: ownerProcedure
     .input(MemberActionSchema)
     .mutation(async ({ ctx, input }) => {
-      await requireMember(ctx.academyId, input.memberId);
-      await setRoleOrRejectLastOwner(ctx.academyId, input.memberId, "instructor");
+      await requireMember(ctx, input.memberId);
+      await setRoleOrRejectLastOwner(
+        ctx.academyId,
+        input.memberId,
+        "instructor",
+      );
       return { ok: true as const };
     }),
 
   /**
    * The academy's staff — active owners + instructors (spec O6). A lean read for
-   * the Settings staff list; no dues/visit joins (that's the roster's job).
+   * the Settings staff list; no dues/visit joins (that's the member list's job).
    */
   staff: ownerProcedure.query(async ({ ctx }) => {
-    const rows = await listMembersOf(ctx.academyId);
+    const rows = await listMembersOf(ctx.academyId, ctx.baseDb);
     return rows
       .filter(
         (r) =>

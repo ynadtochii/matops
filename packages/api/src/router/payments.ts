@@ -5,7 +5,6 @@ import {
   and,
   desc,
   eq,
-  getMemberById,
   getMemberIdForUser,
   isNull,
   listMembersOf,
@@ -29,10 +28,12 @@ import {
   CreatePaymentClaimSchema,
   PlanIdSchema,
   SetMemberDuesSchema,
+  UpdateMembershipPlanSchema,
   UpdatePaymentRequisitesSchema,
 } from "@matops/validators";
 
-import { enrolledProcedure, ownerProcedure } from "../trpc";
+import { requireMember } from "../members";
+import { memberProcedure, ownerProcedure } from "../trpc";
 
 /** Parse a "YYYY-MM-DD" due date to a UTC-midnight instant. */
 function parseDueDate(date: string): Date {
@@ -79,7 +80,38 @@ export const paymentsRouter = {
           cycle: input.cycle,
         })
         .returning({ id: membershipPlan.id });
-      return { id: row?.id };
+      if (!row) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Could not create the plan",
+        });
+      }
+      return { id: row.id };
+    }),
+
+  /** Edit a plan in place — members on it pick up the new name/price. */
+  updatePlan: ownerProcedure
+    .input(UpdateMembershipPlanSchema)
+    .mutation(async ({ ctx, input }) => {
+      const rows = await ctx.db
+        .update(membershipPlan)
+        .set({
+          name: input.name,
+          priceMinor: input.priceMinor,
+          currency: input.currency,
+          cycle: input.cycle,
+        })
+        .where(
+          and(
+            eq(membershipPlan.id, input.id),
+            isNull(membershipPlan.deletedAt),
+          ),
+        )
+        .returning({ id: membershipPlan.id });
+      if (rows.length === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Plan not found" });
+      }
+      return { ok: true as const };
     }),
 
   /** Soft-delete a plan (keeps claim history valid). */
@@ -104,10 +136,7 @@ export const paymentsRouter = {
   setMemberDues: ownerProcedure
     .input(SetMemberDuesSchema)
     .mutation(async ({ ctx, input }) => {
-      const m = await getMemberById(input.memberId);
-      if (m?.academyId !== ctx.academyId) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Member not found" });
-      }
+      await requireMember(ctx, input.memberId);
       if (input.planId === null) {
         await ctx.db
           .delete(memberDues)
@@ -116,17 +145,24 @@ export const paymentsRouter = {
       }
       const plan = (
         await ctx.db
-          .select({ id: membershipPlan.id })
+          .select({
+            id: membershipPlan.id,
+            deletedAt: membershipPlan.deletedAt,
+          })
           .from(membershipPlan)
-          .where(
-            and(
-              eq(membershipPlan.id, input.planId),
-              isNull(membershipPlan.deletedAt),
-            ),
-          )
+          .where(eq(membershipPlan.id, input.planId))
           .limit(1)
       )[0];
-      if (!plan) {
+      const current = (
+        await ctx.db
+          .select({ planId: memberDues.planId })
+          .from(memberDues)
+          .where(eq(memberDues.memberId, input.memberId))
+          .limit(1)
+      )[0];
+      // An archived plan stays selectable for the member already on it, so
+      // editing only their due date does not force a plan change.
+      if (!plan || (plan.deletedAt && plan.id !== current?.planId)) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Plan not found" });
       }
       const nextDueAt = parseDueDate(input.nextDueAt);
@@ -190,7 +226,10 @@ export const paymentsRouter = {
       .where(eq(paymentClaim.status, "pending"))
       .orderBy(desc(paymentClaim.claimedAt));
     const nameByMember = new Map(
-      (await listMembersOf(ctx.academyId)).map((r) => [r.memberId, r.name]),
+      (await listMembersOf(ctx.academyId, ctx.baseDb)).map((r) => [
+        r.memberId,
+        r.name,
+      ]),
     );
     return rows.map((r) => {
       const memberName = nameByMember.get(r.memberId) ?? "Member";
@@ -294,15 +333,18 @@ export const paymentsRouter = {
   // ─── Student: my dues + requisites + "I paid" ───────────────────────────────
 
   /**
-   * The caller's dues line + requisites for the S9 pay screen (enrolled). Returns
+   * The caller's dues line + requisites for the S9 pay screen. APPROVED members
+   * only: `requisites` carries the gym's bank details, which a pending joiner
+   * (anyone who typed a public academy code) must not be able to read.  Returns
    * `dues: null` until the gym sets up the member's dues. `requisites` carries the
    * academy bank details + the caller's fixed reference code; `canPay` is false
    * while a claim for the period is already awaiting confirmation.
    */
-  myDues: enrolledProcedure.query(async ({ ctx }) => {
+  myDues: memberProcedure.query(async ({ ctx }) => {
     const memberId = await getMemberIdForUser(
       ctx.session.user.id,
       ctx.academyId,
+      ctx.baseDb,
     );
     const reference = memberId
       ? paymentReference(ctx.session.user.name, memberId)
@@ -373,12 +415,13 @@ export const paymentsRouter = {
    * claim per period (`canClaim` + the DB partial unique index), and records the
    * claim with a snapshot of the plan price. Optional proof screenshot URL.
    */
-  claim: enrolledProcedure
+  claim: memberProcedure
     .input(CreatePaymentClaimSchema)
     .mutation(async ({ ctx, input }) => {
       const memberId = await getMemberIdForUser(
         ctx.session.user.id,
         ctx.academyId,
+        ctx.baseDb,
       );
       if (!memberId) {
         throw new TRPCError({

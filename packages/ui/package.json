@@ -15,6 +15,7 @@
       "default": "./src/logo.tsx"
     },
     "./alert-dialog": "./src/alert-dialog.tsx",
+    "./dialog": "./src/dialog.tsx",
     "./copy-button": "./src/copy-button.tsx",
     "./dropdown-menu": "./src/dropdown-menu.tsx",
     "./field": "./src/field.tsx",

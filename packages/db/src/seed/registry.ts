@@ -47,8 +47,8 @@ export const SEED_ACADEMIES = {
   alpha: {
     key: "alpha",
     id: "seed_org_alpha",
-    name: "[SEED] Gracie Barra Demo",
-    slug: "seed-gracie-barra-demo",
+    name: "Ironside BJJ Academy",
+    slug: "seed-ironside-bjj",
     publicCode: "990001",
     timeZone: "Europe/Kyiv",
     currency: "EUR",
@@ -56,8 +56,8 @@ export const SEED_ACADEMIES = {
   beta: {
     key: "beta",
     id: "seed_org_beta",
-    name: "[SEED] Tiny Dojo Demo",
-    slug: "seed-tiny-dojo-demo",
+    name: "Northside Grappling Club",
+    slug: "seed-northside-grappling",
     publicCode: "990002",
     timeZone: "Europe/Kyiv",
     currency: "EUR",

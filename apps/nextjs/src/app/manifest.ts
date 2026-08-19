@@ -13,7 +13,8 @@ export default function manifest(): MetadataRoute.Manifest {
     id: "/",
     name: "matops",
     short_name: "matops",
-    description: "Schedule, roster, and attendance for grappling academies.",
+    description:
+      "Book your classes, run your schedule, take attendance — for grappling academies.",
     start_url: "/",
     scope: "/",
     display: "standalone",
@@ -21,8 +22,18 @@ export default function manifest(): MetadataRoute.Manifest {
     background_color: "#ffffff",
     theme_color: "#6a4dff",
     icons: [
-      { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
-      { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+      {
+        src: "/icon-192.png",
+        sizes: "192x192",
+        type: "image/png",
+        purpose: "any",
+      },
+      {
+        src: "/icon-512.png",
+        sizes: "512x512",
+        type: "image/png",
+        purpose: "any",
+      },
       {
         src: "/icon-maskable-512.png",
         sizes: "512x512",

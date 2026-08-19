@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
+import { View } from "react-native";
 import { Redirect, Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-
-import { View } from "react-native";
 
 import {
   Banner,

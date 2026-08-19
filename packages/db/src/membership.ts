@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 
 import { canRemoveOrDemote } from "@matops/domain";
 
+import type { DbExec } from "./client";
 import { member, organization, user } from "./auth-schema";
 import { db } from "./client";
 
@@ -15,15 +16,20 @@ export interface Membership {
 
 /**
  * Look up the caller's membership in one academy. Reads Better Auth's `member`
- * table with the base connection (that table has no RLS policy — RLS is only on
+ * table on the base connection (that table has no RLS policy, RLS is only on
  * our domain tables, see docs/issues/12), scoped explicitly by user + academy.
  * Returns null if the user is not a member of that academy.
+ *
+ * `exec` is REQUIRED on every base-connection reader in this module, and no
+ * default falls back to the module singleton: a missed call site has to be a
+ * compile error, not a silent connection swap (docs/issues/60).
  */
 export async function getMembership(
   userId: string,
   academyId: string,
+  exec: DbExec,
 ): Promise<Membership | null> {
-  const rows = await db
+  const rows = await exec
     .select({ role: member.role, status: member.status })
     .from(member)
     .where(and(eq(member.userId, userId), eq(member.organizationId, academyId)))
@@ -43,8 +49,9 @@ export async function getMembership(
 export async function getMemberIdForUser(
   userId: string,
   academyId: string,
+  exec: DbExec,
 ): Promise<string | null> {
-  const rows = await db
+  const rows = await exec
     .select({ id: member.id })
     .from(member)
     .where(and(eq(member.userId, userId), eq(member.organizationId, academyId)))
@@ -105,8 +112,8 @@ export async function updateUserProfile(
     .where(eq(user.id, userId));
 }
 
-/** A full member row plus the joined user profile, for the roster (spec O4). */
-export interface RosterRow {
+/** A full member row plus the joined user profile, for the member list (spec O4). */
+export interface MemberRow {
   memberId: string;
   userId: string;
   role: string;
@@ -119,8 +126,11 @@ export interface RosterRow {
 }
 
 /** Every member of one academy, newest first, with the user profile joined. */
-export async function listMembersOf(academyId: string): Promise<RosterRow[]> {
-  const rows = await db
+export async function listMembersOf(
+  academyId: string,
+  exec: DbExec,
+): Promise<MemberRow[]> {
+  const rows = await exec
     .select({
       memberId: member.id,
       userId: member.userId,
@@ -143,7 +153,10 @@ export async function listMembersOf(academyId: string): Promise<RosterRow[]> {
 
 /** One member row by id, or null. Includes the academy id so owner mutations can
  * verify the target belongs to the caller's academy (the table has no RLS). */
-export async function getMemberById(memberId: string): Promise<{
+export async function getMemberById(
+  memberId: string,
+  exec: DbExec,
+): Promise<{
   id: string;
   academyId: string;
   userId: string;
@@ -151,7 +164,7 @@ export async function getMemberById(memberId: string): Promise<{
   status: string;
   invitedRole: string | null;
 } | null> {
-  const rows = await db
+  const rows = await exec
     .select({
       id: member.id,
       academyId: member.organizationId,

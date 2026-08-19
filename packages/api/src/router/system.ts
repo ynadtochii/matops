@@ -15,9 +15,9 @@ export const systemRouter = {
    * arrive with the scheduling tables in Phase 2.
    */
   ping: enrolledProcedure.query(async ({ ctx }) => {
-    const scoped = (await ctx.db.execute(
+    const scoped = await ctx.db.execute<{ academy_id: string | null }>(
       sql`select current_setting('app.academy_id', true) as academy_id`,
-    )) as unknown as { rows: { academy_id: string | null }[] };
+    );
 
     return {
       academyId: ctx.academyId,

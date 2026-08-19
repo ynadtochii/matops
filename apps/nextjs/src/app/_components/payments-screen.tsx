@@ -13,15 +13,16 @@ import { Label } from "@matops/ui/label";
 import { Select } from "@matops/ui/select";
 import { Spinner } from "@matops/ui/spinner";
 import { toast } from "@matops/ui/toast";
+import { CreateMembershipPlanSchema } from "@matops/validators";
 
 import { formatMoney } from "~/lib/money";
 import { useTRPC } from "~/trpc/react";
 import { PageHeader } from "./page-header";
-import { cardClass, SectionHeading } from "./primitives";
+import { cardClass, Section, Tabs } from "./primitives";
 import { EmptyState, ErrorState, SkeletonRows } from "./states";
 
 type Plan = RouterOutputs["payments"]["plans"][number];
-type Member = RouterOutputs["membership"]["roster"][number];
+type Member = RouterOutputs["membership"]["members"][number];
 
 const dateFmt = new Intl.DateTimeFormat(undefined, {
   month: "short",
@@ -31,16 +32,35 @@ const dateFmt = new Intl.DateTimeFormat(undefined, {
 
 /** The owner Payments screen (spec O7, ADR 40) — manual bank-transfer dues. */
 export function PaymentsScreen() {
+  const trpc = useTRPC();
+  const claims = useQuery(trpc.payments.claims.queryOptions());
+  const [tab, setTab] = useState<"claims" | "dues" | "plans">("claims");
+
   return (
     <>
       <PageHeader
         title="Payments"
         subtitle="Membership dues by bank transfer — confirm what students paid, set plans and due dates."
       />
-      <div className="flex flex-col gap-10">
-        <ClaimsToConfirm />
-        <MemberDues />
-        <Plans />
+      <Tabs
+        label="Payments view"
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          { id: "claims", label: "To confirm", count: claims.data?.length },
+          { id: "dues", label: "Member dues" },
+          { id: "plans", label: "Plans" },
+        ]}
+        className="mb-6"
+      />
+      <div>
+        {tab === "claims" ? (
+          <ClaimsToConfirm />
+        ) : tab === "dues" ? (
+          <MemberDues />
+        ) : (
+          <Plans />
+        )}
       </div>
     </>
   );
@@ -54,7 +74,7 @@ function ClaimsToConfirm() {
 
   const invalidate = async () => {
     await queryClient.invalidateQueries(trpc.payments.pathFilter());
-    await queryClient.invalidateQueries(trpc.membership.roster.pathFilter());
+    await queryClient.invalidateQueries(trpc.membership.members.pathFilter());
   };
   const onError = (err: { message: string }) =>
     toast.error(err.message || "Action failed");
@@ -80,9 +100,6 @@ function ClaimsToConfirm() {
 
   return (
     <section className="flex flex-col gap-3">
-      <SectionHeading count={claims.data?.length}>
-        Claims to confirm
-      </SectionHeading>
       {claims.isPending ? (
         <SkeletonRows rows={2} />
       ) : claims.isError ? (
@@ -124,12 +141,15 @@ function ClaimsToConfirm() {
                     toastMessage="Reference copied"
                     className="size-6"
                   />
-                  <span>· said paid {dateFmt.format(new Date(c.claimedAt))}</span>
+                  <span>
+                    · said paid {dateFmt.format(new Date(c.claimedAt))}
+                  </span>
                 </span>
               </div>
               <div className="flex gap-2">
                 <Button
                   size="sm"
+                  variant="secondary"
                   disabled={rowBusy}
                   onClick={() => confirm.mutate({ claimId: c.id })}
                 >
@@ -145,7 +165,11 @@ function ClaimsToConfirm() {
                     await reject.mutateAsync({ claimId: c.id });
                   }}
                   trigger={
-                    <Button size="sm" variant="outline" disabled={rowBusy}>
+                    <Button
+                      size="sm"
+                      variant="destructive-outline"
+                      disabled={rowBusy}
+                    >
                       Reject
                     </Button>
                   }
@@ -159,33 +183,56 @@ function ClaimsToConfirm() {
   );
 }
 
-/** Assign each member to a plan + next-due date (spec O7). */
+const DUES_GROUPS = [
+  { key: "overdue", label: "Overdue" },
+  { key: "due_soon", label: "Due soon" },
+  { key: "paid", label: "Paid" },
+  { key: "none", label: "No plan set" },
+] as const;
+
+/** Assign each member to a plan + next-due date (spec O7), grouped by status. */
 function MemberDues() {
   const trpc = useTRPC();
-  const roster = useQuery(trpc.membership.roster.queryOptions());
+  const memberList = useQuery(trpc.membership.members.queryOptions());
   const plans = useQuery(trpc.payments.plans.queryOptions());
 
-  const active = (roster.data ?? []).filter((m) => m.status !== "pending");
+  const active = (memberList.data ?? []).filter((m) => m.status !== "pending");
 
   return (
-    <section className="flex flex-col gap-3">
-      <SectionHeading>Member dues</SectionHeading>
-      {roster.isPending || plans.isPending ? (
+    <section className="flex flex-col gap-8">
+      {memberList.isPending || plans.isPending ? (
         <SkeletonRows rows={3} />
-      ) : roster.isError ? (
-        <ErrorState label="members" onRetry={() => void roster.refetch()} />
+      ) : memberList.isError ? (
+        <ErrorState label="members" onRetry={() => void memberList.refetch()} />
       ) : (plans.data?.length ?? 0) === 0 ? (
         <EmptyState title="Add a plan first.">
-          Create a membership plan below, then set each member’s due date here.
+          Create a membership plan on the Plans tab, then set each member’s due
+          date here.
         </EmptyState>
       ) : active.length === 0 ? (
         <EmptyState title="No active members yet.">
-          Approve members in the Roster, then set their dues here.
+          Approve members on the Members screen, then set their dues here.
         </EmptyState>
       ) : (
-        active.map((m) => (
-          <MemberDuesRow key={m.memberId} member={m} plans={plans.data ?? []} />
-        ))
+        DUES_GROUPS.map((g) => {
+          const rows = active.filter(
+            (m) => (m.dues?.status ?? "none") === g.key,
+          );
+          if (rows.length === 0) return null;
+          return (
+            <Section key={g.key} label={g.label} meta={`${rows.length}`}>
+              <div className="flex flex-col gap-3">
+                {rows.map((m) => (
+                  <MemberDuesRow
+                    key={m.memberId}
+                    member={m}
+                    plans={plans.data ?? []}
+                  />
+                ))}
+              </div>
+            </Section>
+          );
+        })
       )}
     </section>
   );
@@ -210,7 +257,7 @@ function defaultDueDate(): string {
 
 /**
  * One member's dues. Reads as a plain summary ("Monthly · due Aug 3") with an
- * Edit button; the plan + date form only opens on Edit, so the roster isn't a
+ * Edit button; the plan + date form only opens on Edit, so the list isn't a
  * wall of open forms. Saving or clearing both call `setMemberDues` (a null plan
  * clears it), so one mutation covers both.
  */
@@ -218,17 +265,17 @@ function MemberDuesRow({ member, plans }: { member: Member; plans: Plan[] }) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
-  // Preselect the member's current plan (matched by name — the roster row
-  // carries the plan name, not its id), else the first plan.
-  const currentPlanId =
-    plans.find((p) => p.name === member.dues?.planName)?.id ?? plans[0]?.id ?? "";
+  const dues = member.dues;
+  const archivedPlan =
+    dues && !plans.some((p) => p.id === dues.planId) ? dues : null;
+  const currentPlanId = dues?.planId ?? plans[0]?.id ?? "";
   const [planId, setPlanId] = useState<string>(currentPlanId);
   const [date, setDate] = useState<string>(
     member.dues ? toIsoDate(new Date(member.dues.nextDueAt)) : defaultDueDate(),
   );
 
   const invalidate = () =>
-    queryClient.invalidateQueries(trpc.membership.roster.pathFilter());
+    queryClient.invalidateQueries(trpc.membership.members.pathFilter());
   const onError = (err: { message: string }) =>
     toast.error(err.message || "Could not save");
 
@@ -293,6 +340,13 @@ function MemberDuesRow({ member, plans }: { member: Member; plans: Plan[] }) {
             value={planId}
             onChange={(e) => setPlanId(e.target.value)}
           >
+            {archivedPlan && (
+              <option value={archivedPlan.planId}>
+                {archivedPlan.planName} ·{" "}
+                {formatMoney(archivedPlan.priceMinor, archivedPlan.currency)} ·
+                archived
+              </option>
+            )}
             {plans.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name} · {formatMoney(p.priceMinor, p.currency)}
@@ -335,8 +389,8 @@ function MemberDuesRow({ member, plans }: { member: Member; plans: Plan[] }) {
         {member.dues && (
           <Button
             size="sm"
-            variant="ghost"
-            className="text-destructive ml-auto"
+            variant="destructive-outline"
+            className="ml-auto"
             disabled={save.isPending}
             onClick={() =>
               save.mutate({
@@ -354,27 +408,102 @@ function MemberDuesRow({ member, plans }: { member: Member; plans: Plan[] }) {
   );
 }
 
-/** The academy's membership plans — list, create, soft-delete. */
-function Plans() {
+function planPriceMinor(price: string): number {
+  return Math.round(parseFloat(price) * 100);
+}
+
+/** The same rules the server enforces, so the button and the API agree. */
+function planFieldsValid(name: string, price: string, currency: string) {
+  return CreateMembershipPlanSchema.safeParse({
+    name,
+    priceMinor: planPriceMinor(price),
+    currency,
+    cycle: "monthly",
+  }).success;
+}
+
+function PlanFields({
+  idPrefix,
+  name,
+  setName,
+  price,
+  setPrice,
+  currency,
+  setCurrency,
+}: {
+  idPrefix: string;
+  name: string;
+  setName: (v: string) => void;
+  price: string;
+  setPrice: (v: string) => void;
+  currency: string;
+  setCurrency: (v: string) => void;
+}) {
+  return (
+    <>
+      <div className="flex flex-col gap-1">
+        <Label htmlFor={`${idPrefix}-name`} className="text-xs">
+          Name
+        </Label>
+        <Input
+          id={`${idPrefix}-name`}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Adult"
+          className="h-9 w-40"
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        <Label htmlFor={`${idPrefix}-price`} className="text-xs">
+          Price / month
+        </Label>
+        <Input
+          id={`${idPrefix}-price`}
+          value={price}
+          onChange={(e) => setPrice(e.target.value)}
+          inputMode="decimal"
+          placeholder="50"
+          className="h-9 w-28"
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        <Label htmlFor={`${idPrefix}-currency`} className="text-xs">
+          Currency
+        </Label>
+        <Input
+          id={`${idPrefix}-currency`}
+          value={currency}
+          onChange={(e) => setCurrency(e.target.value.toUpperCase())}
+          maxLength={3}
+          className="h-9 w-20"
+        />
+      </div>
+    </>
+  );
+}
+
+/** One plan — a summary row that swaps to an edit form on Edit. */
+function PlanRow({ plan }: { plan: Plan }) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const plans = useQuery(trpc.payments.plans.queryOptions());
-  const [name, setName] = useState("");
-  const [price, setPrice] = useState("");
-  const [currency, setCurrency] = useState("USD");
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(plan.name);
+  const [price, setPrice] = useState((plan.priceMinor / 100).toString());
+  const [currency, setCurrency] = useState(plan.currency);
 
-  const invalidate = () =>
-    queryClient.invalidateQueries(trpc.payments.plans.pathFilter());
+  const invalidate = async () => {
+    await queryClient.invalidateQueries(trpc.payments.plans.pathFilter());
+    await queryClient.invalidateQueries(trpc.membership.members.pathFilter());
+  };
   const onError = (err: { message: string }) =>
     toast.error(err.message || "Could not save");
 
-  const create = useMutation(
-    trpc.payments.createPlan.mutationOptions({
+  const update = useMutation(
+    trpc.payments.updatePlan.mutationOptions({
       onSuccess: async () => {
         await invalidate();
-        setName("");
-        setPrice("");
-        toast.success("Plan added");
+        setEditing(false);
+        toast.success("Plan updated");
       },
       onError,
     }),
@@ -386,16 +515,123 @@ function Plans() {
     }),
   );
 
-  const priceMinor = Math.round(parseFloat(price) * 100);
-  const canAdd =
-    name.trim().length > 0 &&
-    Number.isFinite(priceMinor) &&
-    priceMinor >= 0 &&
-    /^[A-Za-z]{3}$/.test(currency.trim());
+  const startEdit = () => {
+    setName(plan.name);
+    setPrice((plan.priceMinor / 100).toString());
+    setCurrency(plan.currency);
+    setEditing(true);
+  };
+
+  if (editing) {
+    return (
+      <div className={cn(cardClass(), "flex flex-col gap-3")}>
+        <div className="flex flex-wrap items-end gap-3">
+          <PlanFields
+            idPrefix={`plan-${plan.id}`}
+            name={name}
+            setName={setName}
+            price={price}
+            setPrice={setPrice}
+            currency={currency}
+            setCurrency={setCurrency}
+          />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            disabled={
+              update.isPending || !planFieldsValid(name, price, currency)
+            }
+            onClick={() =>
+              update.mutate({
+                id: plan.id,
+                name: name.trim(),
+                priceMinor: planPriceMinor(price),
+                currency: currency.trim().toUpperCase(),
+                cycle: plan.cycle,
+              })
+            }
+          >
+            {update.isPending && <Spinner size="sm" className="text-current" />}
+            {update.isPending ? "Saving…" : "Save"}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={update.isPending}
+            onClick={() => setEditing(false)}
+          >
+            Cancel
+          </Button>
+        </div>
+        <p className="text-muted-foreground text-xs">
+          Members on this plan see the new name and price right away. Payments
+          already confirmed keep the amount they were paid at.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={cn(cardClass(), "flex items-center justify-between gap-3")}>
+      <span className="font-medium">
+        {plan.name}
+        <span className="text-muted-foreground ml-2 text-sm font-normal">
+          {formatMoney(plan.priceMinor, plan.currency)} / month
+        </span>
+      </span>
+      <div className="flex gap-2">
+        <Button size="sm" variant="outline" onClick={startEdit}>
+          Edit
+        </Button>
+        <ConfirmDialog
+          title={`Delete the ${plan.name} plan?`}
+          description="Members already on this plan keep their due dates. You just can't assign it to anyone new."
+          confirmLabel="Delete plan"
+          variant="destructive"
+          onConfirm={async () => {
+            await remove.mutateAsync({ id: plan.id });
+          }}
+          trigger={
+            <Button
+              size="sm"
+              variant="destructive-outline"
+              disabled={remove.isPending}
+            >
+              Delete
+            </Button>
+          }
+        />
+      </div>
+    </div>
+  );
+}
+
+/** The academy's membership plans — list, create, edit, soft-delete. */
+function Plans() {
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  const plans = useQuery(trpc.payments.plans.queryOptions());
+  const [name, setName] = useState("");
+  const [price, setPrice] = useState("");
+  const [currency, setCurrency] = useState("USD");
+
+  const create = useMutation(
+    trpc.payments.createPlan.mutationOptions({
+      onSuccess: async () => {
+        await queryClient.invalidateQueries(trpc.payments.plans.pathFilter());
+        setName("");
+        setPrice("");
+        toast.success("Plan added");
+      },
+      onError: (err) => toast.error(err.message || "Could not save"),
+    }),
+  );
+
+  const canAdd = planFieldsValid(name, price, currency);
 
   return (
     <section className="flex flex-col gap-3">
-      <SectionHeading>Plans</SectionHeading>
       {plans.isPending ? (
         <SkeletonRows rows={2} />
       ) : plans.isError ? (
@@ -405,80 +641,26 @@ function Plans() {
           Add your monthly membership price below (e.g. “Adult · 50”).
         </EmptyState>
       ) : (
-        plans.data.map((p) => (
-          <div
-            key={p.id}
-            className={cn(
-              cardClass(),
-              "flex items-center justify-between gap-3",
-            )}
-          >
-            <span className="font-medium">
-              {p.name}
-              <span className="text-muted-foreground ml-2 text-sm font-normal">
-                {formatMoney(p.priceMinor, p.currency)} / month
-              </span>
-            </span>
-            <ConfirmDialog
-              title={`Delete the ${p.name} plan?`}
-              description="Members already on this plan keep their due dates. You just can't assign it to anyone new."
-              confirmLabel="Delete plan"
-              variant="destructive"
-              onConfirm={async () => {
-                await remove.mutateAsync({ id: p.id });
-              }}
-              trigger={
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  disabled={
-                    remove.isPending && remove.variables.id === p.id
-                  }
-                >
-                  Delete
-                </Button>
-              }
-            />
-          </div>
-        ))
+        plans.data.map((p) => <PlanRow key={p.id} plan={p} />)
       )}
 
       <div className="border-border flex flex-wrap items-end gap-2 rounded-lg border border-dashed p-4">
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-muted-foreground text-xs">Name</span>
-          <Input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Adult"
-            className="h-9 w-40"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-muted-foreground text-xs">Price / month</span>
-          <Input
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            inputMode="decimal"
-            placeholder="50"
-            className="h-9 w-28"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-muted-foreground text-xs">Currency</span>
-          <Input
-            value={currency}
-            onChange={(e) => setCurrency(e.target.value.toUpperCase())}
-            maxLength={3}
-            className="h-9 w-20"
-          />
-        </label>
+        <PlanFields
+          idPrefix="new-plan"
+          name={name}
+          setName={setName}
+          price={price}
+          setPrice={setPrice}
+          currency={currency}
+          setCurrency={setCurrency}
+        />
         <Button
           size="sm"
           disabled={!canAdd || create.isPending}
           onClick={() =>
             create.mutate({
               name: name.trim(),
-              priceMinor,
+              priceMinor: planPriceMinor(price),
               currency: currency.trim().toUpperCase(),
               cycle: "monthly",
             })

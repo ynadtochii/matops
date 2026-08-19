@@ -1,3 +1,5 @@
+import type { BookingTier } from "./booking";
+
 /**
  * Pure attendance rules (spec O5, §4; docs/issues/08, 24). No I/O — the
  * attendance resolvers call these to gate marking to the backfill window and to
@@ -12,6 +14,9 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Attendance axis — mirrors the `attendance_status` DB enum. */
 export type AttendanceStatus = "unmarked" | "present" | "absent";
+
+/** Booking axis — mirrors the `booking_status` DB enum. */
+export type BookingStatus = "booked" | "cancelled" | "none";
 
 export interface MarkableClass {
   status: string; // "scheduled" | "cancelled"
@@ -40,17 +45,54 @@ export function canMarkAttendance(c: MarkableClass, now: Date): boolean {
   return true;
 }
 
+/** How far back the dashboard hunts for classes nobody ever marked. */
+export const UNMARKED_LOOKBACK_DAYS = 7;
+
+export interface AttendanceCandidate {
+  status: string; // "scheduled" | "cancelled"
+  startsAt: Date; // resolved UTC instant
+  durationMinutes: number;
+  bookingCount: number; // confirmed bookings
+  pendingCount: number; // provisional bookings (a pending member's)
+  markedCount: number; // participations already marked present or absent
+}
+
+/**
+ * Did this class finish without anyone marking the register (spec O1)? Every
+ * later number the gym reads — visits, attendance rate, the drift bands that
+ * decide who gets chased — is built on marks, so a forgotten class quietly
+ * corrupts all of them.
+ *
+ * A class only counts as unmarked once it has **ended**, is live, and somebody
+ * had actually booked it. A class nobody booked is skipped on purpose: there is
+ * no way to mark an empty register, so flagging it would leave an item in the
+ * dashboard queue that can never be cleared, and an owner who learns the queue
+ * lies stops reading it. A partly marked class is skipped too — leaving the
+ * no-shows unmarked is how coaches normally work.
+ *
+ * The window is shorter than `ATTENDANCE_BACKFILL_DAYS` so every class it
+ * reports is still inside the window `canMarkAttendance` will accept.
+ */
+export function needsAttendance(c: AttendanceCandidate, now: Date): boolean {
+  if (c.status === "cancelled") return false;
+  if (c.markedCount > 0) return false;
+  if (c.bookingCount + c.pendingCount === 0) return false;
+  const endedAt = c.startsAt.getTime() + c.durationMinutes * 60 * 1000;
+  if (endedAt > now.getTime()) return false;
+  return now.getTime() - endedAt <= UNMARKED_LOOKBACK_DAYS * DAY_MS;
+}
+
 export interface ParticipationRow {
-  bookingStatus: string; // "booked" | "cancelled" | "none"
-  bookingTier: string; // "confirmed" | "provisional"
-  attendanceStatus: string; // "unmarked" | "present" | "absent"
+  bookingStatus: BookingStatus;
+  bookingTier: BookingTier;
+  attendanceStatus: AttendanceStatus;
 }
 
 /** A participation row reduced to what bulk marking needs (F.2). */
 export interface BulkMarkRow {
   studentId: string; // user.id
-  bookingStatus: string; // "booked" | "cancelled" | "none"
-  attendanceStatus: string; // "unmarked" | "present" | "absent"
+  bookingStatus: BookingStatus;
+  attendanceStatus: AttendanceStatus;
 }
 
 /**
@@ -104,10 +146,53 @@ export function attendanceCounts(rows: ParticipationRow[]): AttendanceCounts {
     else c.unmarked++;
 
     if (r.bookingStatus === "none") c.walkIn++;
-    else if (r.bookingStatus === "booked") {
-      if (r.bookingTier === "confirmed") c.confirmed++;
-      else if (r.bookingTier === "provisional") c.provisional++;
-    }
+    else if (r.bookingStatus === "booked") c[r.bookingTier]++;
   }
   return c;
+}
+
+export interface ClassAttendee {
+  studentId: string;
+  name: string | null;
+  bookingStatus: string;
+}
+
+export interface AttendeeView {
+  names: string[];
+  othersCount: number;
+  namesHidden: boolean;
+}
+
+/**
+ * Who a student may see on a class (spec S5, §4 schedule privacy, ADR 55). Only
+ * an APPROVED viewer sees names; they then see every booked member by name,
+ * pending ones included, because a pending member trains on the same mat. What
+ * stays a count is the people who are not members: drop-in leads, plus anyone
+ * with no name on file. A pending viewer sees counts alone, with `namesHidden`
+ * set so the UI can say why. The viewer is never listed to themselves.
+ */
+export function visibleAttendees(
+  attendees: ClassAttendee[],
+  dropInCount: number,
+  viewer: { id: string; approved: boolean },
+): AttendeeView {
+  const booked = attendees.filter(
+    (a) => a.bookingStatus === "booked" && a.studentId !== viewer.id,
+  );
+  if (!viewer.approved) {
+    return {
+      names: [],
+      othersCount: booked.length + dropInCount,
+      namesHidden: booked.length > 0,
+    };
+  }
+  const names = booked
+    .map((a) => a.name?.trim())
+    .filter((n): n is string => !!n)
+    .sort((a, b) => a.localeCompare(b));
+  return {
+    names,
+    othersCount: booked.length - names.length + dropInCount,
+    namesHidden: false,
+  };
 }

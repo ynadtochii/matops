@@ -32,8 +32,8 @@ export default async function StartPage() {
             Open your academy in a minute.
           </h1>
           <p className="text-muted-foreground mt-4 max-w-sm text-[15px] leading-relaxed">
-            Name your gym and you&apos;re its owner right away — then invite your
-            instructors and students and start taking attendance.
+            Name your gym and you&apos;re its owner right away — then invite
+            your instructors and students and start taking attendance.
           </p>
         </div>
 

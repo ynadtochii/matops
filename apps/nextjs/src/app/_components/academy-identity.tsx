@@ -105,16 +105,15 @@ export function AcademyIdentity({
         <div>
           <p className="text-sm font-medium">Academy code</p>
           <p className="text-muted-foreground text-sm">
-            Students type this into the app to join. Permanent — it never changes.
+            Students type this into the app to join. Permanent — it never
+            changes.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <span className="font-mono text-xl tracking-[0.2em] tabular-nums sm:text-2xl">
             {code}
           </span>
-          {code && (
-            <CopyButton value={code} toastMessage="Code copied" />
-          )}
+          {code && <CopyButton value={code} toastMessage="Code copied" />}
         </div>
       </div>
     </section>

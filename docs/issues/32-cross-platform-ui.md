@@ -62,7 +62,7 @@ three separable parts; only the primitive is platform-bound.
   `"customConditions": ["react-native"]` so type resolution matches Metro; the
   web app falls through to `default`. Verified: `pnpm -F @matops/expo typecheck`
   sees the native props (`onPress`, string children); `pnpm -F @matops/nextjs
-  typecheck` sees the web props.
+typecheck` sees the web props.
 
 ### RN specifics handled (that the old local kit missed)
 
@@ -118,3 +118,30 @@ three separable parts; only the primitive is platform-bound.
   duplication. Accepted: it is the irreducible platform delta (DOM vs RN).
 - **−** Event props differ by nature (`onClick` vs `onPress`); call sites are
   per-platform screens anyway, so only the visual language is shared, not events.
+
+## Amendment (2026-08-19) — the button taxonomy is named by loudness
+
+The recipe's variants were the shadcn defaults, and the app had drifted around
+them: `default` on web meant `primary` on mobile, a row's Remove was a solid red
+fill in three screens and a bare red text link in two others, and the 44px touch
+floor for `size="sm"` was pasted at eight call sites as
+`className="min-h-11 sm:min-h-8"`.
+
+Changes, all style-only (no API, domain, or migration change):
+
+1. `default` is renamed **`primary`**, the name the mobile Button already used.
+2. New **`destructive-outline`**: a hairline plus a red label, for the row action
+   that opens a confirm dialog. The solid `destructive` fill is now only the
+   confirm button inside that dialog. It paints with `--error`, not
+   `--destructive`, which on the black theme is a dark maroon meant to sit
+   behind white text.
+3. `link` paints with `--brand-strong`, matching the link colour design.md
+   already specified.
+4. The 44px floor moved into the web Button as a per-size adornment, so `sm`
+   carries it everywhere and no call site repeats it.
+5. New `buttonClass()` export. `alert-dialog.tsx` had hand-copied the recipe and
+   in doing so had lost the focus ring on its confirm and cancel buttons; it now
+   asks for the same class string every `<Button>` gets.
+
+The rule this encodes: loudness is a function of **place**, not of danger. See
+design.md §1.5.

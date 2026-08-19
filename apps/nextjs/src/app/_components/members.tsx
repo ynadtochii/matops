@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { RouterOutputs } from "@matops/api";
 import {
   compareRank,
+  DAY_LABELS,
   disciplineLabel,
   formatRank,
   RANK_SYSTEMS,
@@ -23,28 +24,18 @@ import { toast } from "@matops/ui/toast";
 
 import { formatMoney } from "~/lib/money";
 import { useTRPC } from "~/trpc/react";
-import { cardClass, SectionHeading, Stat } from "./primitives";
+import { cardClass, DriftBadge, Eyebrow, Stat, Tabs } from "./primitives";
 import { EmptyState, ErrorState, SkeletonRows } from "./states";
 
-type Member = RouterOutputs["membership"]["roster"][number];
+type Member = RouterOutputs["membership"]["members"][number];
 type MemberHistory = RouterOutputs["membership"]["memberHistory"];
-type DriftStatus = MemberHistory["drift"];
+
+type MemberTab = "requests" | "members" | "leads";
+
+const isMemberTab = (v: string | null): v is MemberTab =>
+  v === "requests" || v === "members" || v === "leads";
 type Dues = NonNullable<Member["dues"]>;
 type DuesStatus = Dues["status"];
-
-/** Weekday labels, 0 = Sun … 6 = Sat — mirrors `@matops/domain` DAY_LABELS. */
-const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-/** Roster row action buttons get a finger-friendly height on mobile, the
- * compact `sm` height on desktop — matches the attendance screen. */
-const ROW_BTN = "min-h-11 sm:min-h-8";
-
-const DRIFT_LABEL: Record<DriftStatus, string> = {
-  active: "Active",
-  cooling: "Cooling",
-  at_risk: "At risk",
-  dormant: "Dormant",
-};
 
 /** Payment status → dot colour + label (spec O7, ADR 40). */
 const DUES_TONE: Record<DuesStatus, string> = {
@@ -71,26 +62,35 @@ function roleLabel(m: Member): string {
   return m.role;
 }
 
-export function Roster() {
+export function Members() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const roster = useQuery(trpc.membership.roster.queryOptions());
+  const memberList = useQuery(trpc.membership.members.queryOptions());
   const leads = useQuery(trpc.dropIn.list.queryOptions());
 
   // A member id from `?member=` (the dashboard "who's drifting" widget links
   // here) opens that member's detail on first render.
   const searchParams = useSearchParams();
-  const [openId, setOpenId] = useState<string | null>(
-    searchParams.get("member"),
-  );
+  const overdueParam = searchParams.get("filter") === "overdue";
+  const memberParam = searchParams.get("member");
+  const [openId, setOpenId] = useState<string | null>(memberParam);
   const toggle = (id: string) =>
     setOpenId((current) => (current === id ? null : id));
 
+  const tabParam = searchParams.get("tab");
+  const [tab, setTab] = useState<MemberTab>(
+    isMemberTab(tabParam)
+      ? tabParam
+      : memberParam !== null || overdueParam
+        ? "members"
+        : "requests",
+  );
+
   // "Overdue" filter chip on the Members list (spec O7, ADR 40).
-  const [overdueOnly, setOverdueOnly] = useState(false);
+  const [overdueOnly, setOverdueOnly] = useState(overdueParam);
 
   const invalidate = () =>
-    queryClient.invalidateQueries(trpc.membership.roster.pathFilter());
+    queryClient.invalidateQueries(trpc.membership.members.pathFilter());
 
   const onError = (err: { message: string }) =>
     toast.error(err.message || "Action failed");
@@ -140,7 +140,7 @@ export function Roster() {
       onError,
     }),
   );
-  const members = roster.data ?? [];
+  const members = memberList.data ?? [];
   const pending = members.filter((m) => m.status === "pending");
   const active = members.filter((m) => m.status !== "pending");
   const overdueCount = active.filter(
@@ -158,236 +158,247 @@ export function Roster() {
     (suspend.isPending && suspend.variables.memberId === id) ||
     (restore.isPending && restore.variables.memberId === id);
 
-  if (roster.isPending) {
-    return (
-      <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold">Members</h2>
-        <SkeletonRows rows={4} />
-      </section>
-    );
-  }
-
-  if (roster.isError) {
-    return (
-      <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold">Members</h2>
-        <ErrorState label="the roster" onRetry={() => void roster.refetch()} />
-      </section>
-    );
-  }
+  const listState = memberList.isPending ? (
+    <SkeletonRows rows={4} />
+  ) : memberList.isError ? (
+    <ErrorState
+      label="the member list"
+      onRetry={() => void memberList.refetch()}
+    />
+  ) : null;
 
   return (
-    <section className="flex flex-col gap-8">
-      <div className="flex flex-col gap-3">
-        <SectionHeading count={pending.length}>Pending approvals</SectionHeading>
-        {pending.length === 0 ? (
-          <EmptyState title="No one is waiting.">
-            New sign-ups land here for you to approve.
-          </EmptyState>
-        ) : (
-          pending.map((m) => {
-            const approving =
-              approve.isPending && approve.variables.memberId === m.memberId;
-            return (
-              <MemberRow key={m.memberId} m={m} label={roleLabel(m)}>
-                <Button
-                  size="sm"
-                  className={ROW_BTN}
-                  disabled={rowBusy(m.memberId)}
-                  onClick={() => approve.mutate({ memberId: m.memberId })}
-                >
-                  {approving && <Spinner size="sm" className="text-current" />}
-                  {approving ? "Approving…" : "Approve"}
-                </Button>
-                <ConfirmDialog
-                  title={`Decline ${m.name}?`}
-                  description="They won't join the academy. You can invite them again later with an invite link."
-                  confirmLabel="Decline request"
-                  variant="destructive"
-                  onConfirm={async () => {
-                    await reject.mutateAsync({ memberId: m.memberId });
-                  }}
-                  trigger={
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className={ROW_BTN}
-                      disabled={rowBusy(m.memberId)}
-                    >
-                      Decline
-                    </Button>
-                  }
-                />
-              </MemberRow>
-            );
-          })
-        )}
-      </div>
-
-      <div className="flex flex-col gap-3">
-        <SectionHeading
-          action={
-            active.some((m) => m.dues) && (
-              <button
-                type="button"
-                onClick={() => setOverdueOnly((v) => !v)}
-                aria-pressed={overdueOnly}
-                className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                  overdueOnly
-                    ? "border-error/40 bg-error/10 text-error"
-                    : "border-border text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Overdue{overdueCount > 0 ? ` (${overdueCount})` : ""}
-              </button>
-            )
-          }
-        >
-          Members
-        </SectionHeading>
-        {active.length === 0 ? (
-          <EmptyState title="No active members yet.">
-            Approve a pending sign-up, or share an invite link to bring people
-            in.
-          </EmptyState>
-        ) : shownActive.length === 0 ? (
-          <EmptyState title="No overdue members.">
-            Everyone&apos;s dues are up to date.
-          </EmptyState>
-        ) : (
-          shownActive.map((m) => (
-            <div key={m.memberId} className="flex flex-col">
-              <MemberRow
-                m={m}
-                label={roleLabel(m)}
-                open={openId === m.memberId}
-                onToggle={() => toggle(m.memberId)}
-              >
-                {m.status === "active" && (
-                  <ConfirmDialog
-                    title={`Suspend ${m.name}?`}
-                    description="They keep their place on the roster but can't book classes until you restore them."
-                    confirmLabel="Suspend"
-                    variant="destructive"
-                    onConfirm={async () => {
-                      await suspend.mutateAsync({ memberId: m.memberId });
-                    }}
-                    trigger={
+    <div className="flex flex-col gap-6">
+      <Tabs
+        label="Members view"
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          { id: "requests", label: "Requests", count: pending.length },
+          { id: "members", label: "Members" },
+          { id: "leads", label: "Drop-in leads" },
+        ]}
+      />
+      <div>
+        {tab === "requests" ? (
+          <div className="flex flex-col gap-3">
+            {listState ??
+              (pending.length === 0 ? (
+                <EmptyState title="No one is waiting.">
+                  New sign-ups land here for you to approve.
+                </EmptyState>
+              ) : (
+                pending.map((m) => {
+                  const approving =
+                    approve.isPending &&
+                    approve.variables.memberId === m.memberId;
+                  return (
+                    <MemberRow key={m.memberId} m={m} label={roleLabel(m)}>
                       <Button
                         size="sm"
-                        variant="outline"
-                        className={ROW_BTN}
+                        variant="secondary"
                         disabled={rowBusy(m.memberId)}
+                        onClick={() => approve.mutate({ memberId: m.memberId })}
                       >
-                        Suspend
+                        {approving && (
+                          <Spinner size="sm" className="text-current" />
+                        )}
+                        {approving ? "Approving…" : "Approve"}
                       </Button>
-                    }
-                  />
-                )}
-                {m.status === "suspended" && (
-                  <Button
-                    size="sm"
-                    className={ROW_BTN}
-                    disabled={rowBusy(m.memberId)}
-                    onClick={() => restore.mutate({ memberId: m.memberId })}
+                      <ConfirmDialog
+                        title={`Decline ${m.name}?`}
+                        description="They won't join the academy. You can invite them again later with an invite link."
+                        confirmLabel="Decline request"
+                        variant="destructive"
+                        onConfirm={async () => {
+                          await reject.mutateAsync({ memberId: m.memberId });
+                        }}
+                        trigger={
+                          <Button
+                            size="sm"
+                            variant="destructive-outline"
+                            disabled={rowBusy(m.memberId)}
+                          >
+                            Decline
+                          </Button>
+                        }
+                      />
+                    </MemberRow>
+                  );
+                })
+              ))}
+          </div>
+        ) : tab === "members" ? (
+          <div className="flex flex-col gap-3">
+            {!listState && active.length > 0 && (
+              <div className="flex items-center justify-between gap-3">
+                <Eyebrow>
+                  {overdueOnly
+                    ? `${shownActive.length} of ${active.length} people`
+                    : `${active.length} ${active.length === 1 ? "person" : "people"}`}
+                </Eyebrow>
+                {active.some((m) => m.dues) && (
+                  <button
+                    type="button"
+                    onClick={() => setOverdueOnly((v) => !v)}
+                    aria-pressed={overdueOnly}
+                    className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                      overdueOnly
+                        ? "border-error/40 bg-error/10 text-error"
+                        : "border-border text-muted-foreground hover:text-foreground"
+                    }`}
                   >
-                    {restore.isPending &&
-                      restore.variables.memberId === m.memberId && (
-                        <Spinner size="sm" className="text-current" />
-                      )}
-                    {restore.isPending &&
-                    restore.variables.memberId === m.memberId
-                      ? "Restoring…"
-                      : "Restore"}
-                  </Button>
+                    Overdue{overdueCount > 0 ? ` (${overdueCount})` : ""}
+                    {overdueOnly ? " \u00d7" : ""}
+                  </button>
                 )}
-                <ConfirmDialog
-                  title={`Remove ${m.name}?`}
-                  description="They lose access to the academy and drop off the roster. Their attendance history stays. You can invite them again later."
-                  confirmLabel="Remove member"
-                  variant="destructive"
-                  onConfirm={async () => {
-                    await remove.mutateAsync({ memberId: m.memberId });
-                  }}
-                  trigger={
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      className={ROW_BTN}
-                      disabled={rowBusy(m.memberId)}
+              </div>
+            )}
+            {listState ??
+              (active.length === 0 ? (
+                <EmptyState title="No active members yet.">
+                  Approve a pending sign-up, or share an invite link to bring
+                  people in.
+                </EmptyState>
+              ) : shownActive.length === 0 ? (
+                <EmptyState title="No overdue members.">
+                  Everyone&apos;s dues are up to date.
+                </EmptyState>
+              ) : (
+                shownActive.map((m) => (
+                  <div key={m.memberId} className="flex flex-col">
+                    <MemberRow
+                      m={m}
+                      label={roleLabel(m)}
+                      open={openId === m.memberId}
+                      onToggle={() => toggle(m.memberId)}
                     >
-                      Remove
-                    </Button>
-                  }
-                />
-              </MemberRow>
-              {openId === m.memberId && <MemberDetail m={m} />}
-            </div>
-          ))
-        )}
-      </div>
-
-      <div className="flex flex-col gap-3">
-        <SectionHeading>Drop-in leads</SectionHeading>
-        {leads.isError ? (
-          <ErrorState
-            label="drop-in leads"
-            onRetry={() => void leads.refetch()}
-          />
-        ) : (leads.data ?? []).length === 0 ? (
-          <EmptyState title="No drop-in leads yet.">
-            First-time visitors who check in via the gym QR show up here to
-            follow up.
-          </EmptyState>
+                      {m.status === "active" && (
+                        <ConfirmDialog
+                          title={`Suspend ${m.name}?`}
+                          description="They keep their place on the member list but can't book classes until you restore them."
+                          confirmLabel="Suspend"
+                          variant="primary"
+                          onConfirm={async () => {
+                            await suspend.mutateAsync({ memberId: m.memberId });
+                          }}
+                          trigger={
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={rowBusy(m.memberId)}
+                            >
+                              Suspend
+                            </Button>
+                          }
+                        />
+                      )}
+                      {m.status === "suspended" && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={rowBusy(m.memberId)}
+                          onClick={() =>
+                            restore.mutate({ memberId: m.memberId })
+                          }
+                        >
+                          {restore.isPending &&
+                            restore.variables.memberId === m.memberId && (
+                              <Spinner size="sm" className="text-current" />
+                            )}
+                          {restore.isPending &&
+                          restore.variables.memberId === m.memberId
+                            ? "Restoring…"
+                            : "Restore"}
+                        </Button>
+                      )}
+                      <ConfirmDialog
+                        title={`Remove ${m.name}?`}
+                        description="They lose access to the academy and drop off the member list. Their attendance history stays. You can invite them again later."
+                        confirmLabel="Remove member"
+                        variant="destructive"
+                        onConfirm={async () => {
+                          await remove.mutateAsync({ memberId: m.memberId });
+                        }}
+                        trigger={
+                          <Button
+                            size="sm"
+                            variant="destructive-outline"
+                            disabled={rowBusy(m.memberId)}
+                          >
+                            Remove
+                          </Button>
+                        }
+                      />
+                    </MemberRow>
+                    {openId === m.memberId && <MemberDetail m={m} />}
+                  </div>
+                ))
+              ))}
+          </div>
         ) : (
-          (leads.data ?? []).map((l) => (
-            <div
-              key={l.id}
-              className={cn(
-                cardClass(),
-                "flex flex-wrap items-center justify-between gap-3",
-              )}
-            >
-              <div className="flex flex-col gap-0.5">
-                <span className="font-medium">
-                  {l.firstName} {l.lastName}
-                  {l.visitCount > 1 && (
-                    <span className="text-muted-foreground ml-2 text-xs uppercase">
-                      visited {l.visitCount}×
-                    </span>
+          <div className="flex flex-col gap-3">
+            {leads.isError ? (
+              <ErrorState
+                label="drop-in leads"
+                onRetry={() => void leads.refetch()}
+              />
+            ) : (leads.data ?? []).length === 0 ? (
+              <EmptyState title="No drop-in leads yet.">
+                First-time visitors who check in via the gym QR show up here to
+                follow up.
+              </EmptyState>
+            ) : (
+              (leads.data ?? []).map((l) => (
+                <div
+                  key={l.id}
+                  className={cn(
+                    cardClass(),
+                    "flex flex-wrap items-center justify-between gap-3",
                   )}
-                </span>
-                <span className="text-muted-foreground flex flex-wrap items-center gap-x-1.5 text-sm">
-                  <span>{l.phone}</span>
-                  <CopyButton
-                    value={l.phone}
-                    iconOnly
-                    variant="ghost"
-                    label={`Copy phone ${l.phone}`}
-                    toastMessage="Phone copied"
-                    className="size-6"
-                  />
-                  {l.email && (
-                    <>
-                      <span>·</span>
-                      <span>{l.email}</span>
+                >
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-medium">
+                      {l.firstName} {l.lastName}
+                      {l.visitCount > 1 && (
+                        <span className="text-muted-foreground ml-2 text-xs uppercase">
+                          visited {l.visitCount}×
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-muted-foreground flex flex-wrap items-center gap-x-1.5 text-sm">
+                      <span>{l.phone}</span>
                       <CopyButton
-                        value={l.email}
+                        value={l.phone}
                         iconOnly
                         variant="ghost"
-                        label={`Copy email ${l.email}`}
-                        toastMessage="Email copied"
+                        label={`Copy phone ${l.phone}`}
+                        toastMessage="Phone copied"
                         className="size-6"
                       />
-                    </>
-                  )}
-                </span>
-              </div>
-            </div>
-          ))
+                      {l.email && (
+                        <>
+                          <span>·</span>
+                          <span>{l.email}</span>
+                          <CopyButton
+                            value={l.email}
+                            iconOnly
+                            variant="ghost"
+                            label={`Copy email ${l.email}`}
+                            toastMessage="Email copied"
+                            className="size-6"
+                          />
+                        </>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         )}
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -457,7 +468,7 @@ function MemberRow({
 /**
  * Expanded member detail (spec O4, slice C.2 — ADR 39). Two tabs: Overview
  * (contact + role + attendance stats + drift band) and Attendance (the full
- * present-session history, paginated). Contact/role come from the roster row;
+ * present-session history, paginated). Contact/role come from the member row;
  * `membership.memberHistory` supplies the numbers + list.
  */
 function MemberDetail({ m }: { m: Member }) {
@@ -471,43 +482,37 @@ function MemberDetail({ m }: { m: Member }) {
 
   return (
     <div className="border-border bg-background rounded-b-lg border border-t-0 p-4">
-      <div className="border-border mb-4 flex gap-1 border-b">
-        <TabButton
-          active={tab === "overview"}
-          onClick={() => setTab("overview")}
-        >
-          Overview
-        </TabButton>
-        <TabButton
-          active={tab === "attendance"}
-          onClick={() => setTab("attendance")}
-        >
-          Attendance
-        </TabButton>
-        <TabButton active={tab === "rank"} onClick={() => setTab("rank")}>
-          Rank
-        </TabButton>
-        <TabButton active={tab === "notes"} onClick={() => setTab("notes")}>
-          Notes
-        </TabButton>
-      </div>
+      <Tabs
+        label={`${m.name} detail`}
+        value={tab}
+        onChange={setTab}
+        className="mb-4"
+        tabs={[
+          { id: "overview", label: "Overview" },
+          { id: "attendance", label: "Attendance" },
+          { id: "rank", label: "Rank" },
+          { id: "notes", label: "Notes" },
+        ]}
+      />
 
-      {tab === "rank" ? (
-        <RankTab memberId={m.memberId} />
-      ) : tab === "notes" ? (
-        <NotesTab memberId={m.memberId} />
-      ) : detail.isPending ? (
-        <SkeletonRows rows={3} />
-      ) : detail.isError ? (
-        <ErrorState
-          label="member detail"
-          onRetry={() => void detail.refetch()}
-        />
-      ) : tab === "overview" ? (
-        <Overview m={m} data={detail.data} />
-      ) : (
-        <AttendanceHistory history={detail.data.history} />
-      )}
+      <div>
+        {tab === "rank" ? (
+          <RankTab memberId={m.memberId} />
+        ) : tab === "notes" ? (
+          <NotesTab memberId={m.memberId} />
+        ) : detail.isPending ? (
+          <SkeletonRows rows={3} />
+        ) : detail.isError ? (
+          <ErrorState
+            label="member detail"
+            onRetry={() => void detail.refetch()}
+          />
+        ) : tab === "overview" ? (
+          <Overview m={m} data={detail.data} />
+        ) : (
+          <AttendanceHistory history={detail.data.history} />
+        )}
+      </div>
     </div>
   );
 }
@@ -604,13 +609,14 @@ function RankTab({ memberId }: { memberId: string }) {
                     });
                   }}
                   trigger={
-                    <button
+                    <Button
                       type="button"
+                      size="sm"
+                      variant="destructive-outline"
                       disabled={clear.isPending}
-                      className="text-muted-foreground hover:text-foreground shrink-0 text-xs underline underline-offset-2 disabled:opacity-50"
                     >
                       Clear
-                    </button>
+                    </Button>
                   }
                 />
               </li>
@@ -809,15 +815,16 @@ function NotesTab({ memberId }: { memberId: string }) {
                     await remove.mutateAsync({ noteId: n.id });
                   }}
                   trigger={
-                    <button
+                    <Button
                       type="button"
+                      size="sm"
+                      variant="destructive-outline"
                       disabled={
                         remove.isPending && remove.variables.noteId === n.id
                       }
-                      className="text-destructive font-medium hover:underline disabled:opacity-50"
                     >
                       Delete
-                    </button>
+                    </Button>
                   }
                 />
               </div>
@@ -826,30 +833,6 @@ function NotesTab({ memberId }: { memberId: string }) {
         </div>
       )}
     </div>
-  );
-}
-
-function TabButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
-        active
-          ? "border-brand text-foreground"
-          : "text-muted-foreground hover:text-foreground border-transparent"
-      }`}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -881,7 +864,9 @@ function Overview({ m, data }: { m: Member; data: MemberHistory }) {
       <dl className="text-sm">
         <Detail term="Role" value={m.role} />
         <Detail term="Email" value={m.email} copy={m.email} />
-        {m.phone ? <Detail term="Phone" value={m.phone} copy={m.phone} /> : null}
+        {m.phone ? (
+          <Detail term="Phone" value={m.phone} copy={m.phone} />
+        ) : null}
         {favorite ? <Detail term="Favorite" value={favorite} /> : null}
         {m.dues ? (
           <>
@@ -960,13 +945,15 @@ function AttendanceHistory({ history }: { history: MemberHistory["history"] }) {
         </div>
       ))}
       {history.length > limit && (
-        <button
+        <Button
           type="button"
+          size="sm"
+          variant="link"
+          className="mt-2 self-start px-0"
           onClick={() => setLimit((n) => n + 15)}
-          className="text-brand-strong mt-2 self-start text-sm font-medium"
         >
           Show more ({history.length - limit})
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -984,24 +971,6 @@ function DuesDot({ dues }: { dues: Dues }) {
         aria-hidden
       />
       <span className="text-muted-foreground">{DUES_LABEL[dues.status]}</span>
-    </span>
-  );
-}
-
-function DriftBadge({ drift }: { drift: DriftStatus }) {
-  const tone =
-    drift === "dormant"
-      ? "text-error border-error/40"
-      : drift === "at_risk"
-        ? "text-warning border-warning/40"
-        : drift === "cooling"
-          ? "text-muted-foreground border-border"
-          : "text-success border-success/40";
-  return (
-    <span
-      className={`rounded-full border px-2 py-0.5 text-xs font-medium ${tone}`}
-    >
-      {DRIFT_LABEL[drift]}
     </span>
   );
 }

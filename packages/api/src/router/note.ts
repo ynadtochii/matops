@@ -1,10 +1,14 @@
 import type { TRPCRouterRecord } from "@trpc/server";
-import { TRPCError } from "@trpc/server";
 
-import { desc, eq, getMemberById } from "@matops/db";
+import { desc, eq } from "@matops/db";
 import { memberNote, user } from "@matops/db/schema";
-import { AddMemberNoteSchema, MemberActionSchema, NoteIdSchema } from "@matops/validators";
+import {
+  AddMemberNoteSchema,
+  MemberActionSchema,
+  NoteIdSchema,
+} from "@matops/validators";
 
+import { requireMember } from "../members";
 import { staffProcedure } from "../trpc";
 
 /**
@@ -15,21 +19,12 @@ import { staffProcedure } from "../trpc";
  * staff member of the academy shares the same notes.
  */
 
-/** Assert the target member exists and belongs to the caller's academy. */
-async function requireMember(academyId: string, memberId: string) {
-  const m = await getMemberById(memberId);
-  if (m?.academyId !== academyId) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "Member not found" });
-  }
-  return m;
-}
-
 export const noteRouter = {
   /** One member's staff notes, newest first, with the author's name (spec O4). */
   forMember: staffProcedure
     .input(MemberActionSchema)
     .query(async ({ ctx, input }) => {
-      await requireMember(ctx.academyId, input.memberId);
+      await requireMember(ctx, input.memberId);
       return ctx.db
         .select({
           id: memberNote.id,
@@ -47,7 +42,7 @@ export const noteRouter = {
   add: staffProcedure
     .input(AddMemberNoteSchema)
     .mutation(async ({ ctx, input }) => {
-      await requireMember(ctx.academyId, input.memberId);
+      await requireMember(ctx, input.memberId);
       await ctx.db.insert(memberNote).values({
         academyId: ctx.academyId,
         memberId: input.memberId,

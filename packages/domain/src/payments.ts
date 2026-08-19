@@ -1,7 +1,7 @@
 /**
  * @matops/domain/payments — manual bank-transfer dues (v1.3, ADR 40).
  * PURE — no I/O, no DB, no clock reading. The single engine behind the owner
- * roster status dots (P.2), the student dues line + "I paid" claim (P.3), and
+ * member-list status dots (P.2), the student dues line + "I paid" claim (P.3), and
  * the dues reminders (R.1).
  *
  * There is NO card processor. A payment is a two-sided confirm loop: the student
@@ -16,7 +16,7 @@
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** Derived money status shown on the roster and the student dues line (ADR 40). */
+/** Derived money status shown on the member list and the student dues line (ADR 40). */
 export type PaymentStatus = "paid" | "due_soon" | "overdue";
 
 /**

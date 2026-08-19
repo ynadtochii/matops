@@ -21,6 +21,7 @@
     "@legendapp/list": "^2.0.14",
     "@matops/domain": "workspace:*",
     "@matops/ui": "workspace:*",
+    "@matops/validators": "workspace:*",
     "@tanstack/react-query": "catalog:",
     "@trpc/client": "catalog:",
     "@trpc/server": "catalog:",

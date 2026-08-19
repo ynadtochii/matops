@@ -3,9 +3,14 @@ import { ScrollView, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 
+import type { DisciplineTone } from "@matops/domain";
+import { capacityDisplay, disciplineTone } from "@matops/domain";
+
+import type { Theme } from "~/components/theme";
 import type { RouterOutputs } from "~/utils/api";
-import { BookButton } from "~/components/book-control";
+import { BookButton, CancelButton } from "~/components/book-control";
 import { OverdueBanner } from "~/components/overdue-banner";
+import { useRefreshControl } from "~/components/refresh";
 import { SuspendedNotice } from "~/components/suspended-notice";
 import {
   Banner,
@@ -16,14 +21,19 @@ import {
   Heading,
   InlineLoading,
   Mark,
-  Mono,
   Screen,
   StatusPill,
   Txt,
   useTheme,
 } from "~/components/ui";
 import { trpc } from "~/utils/api";
-import { dayFmt, dayKey, spotsLeftLabel, timeFmt } from "~/utils/format";
+import {
+  clockParts,
+  dayFmt,
+  dayKey,
+  fillLabel,
+  spotsLeftLabel,
+} from "~/utils/format";
 
 type ClassRow = RouterOutputs["class"]["mine"][number];
 
@@ -34,22 +44,36 @@ function startOfToday(): Date {
   return d;
 }
 
-/** A small violet pill marking the student's own booking (identity, not status). */
-function BookedPill() {
+/** The discipline rail colour. Same tones the web schedule paints (ADR 53). */
+const toneColorOf = (t: Theme): Record<DisciplineTone, string> => ({
+  gi: t.gi,
+  nogi: t.nogi,
+  other: t.border,
+});
+
+function railColor(t: Theme, discipline: string | null, cancelled: boolean) {
+  if (cancelled) return `${t.error}66`;
+  return toneColorOf(t)[disciplineTone(discipline)];
+}
+
+/** The day rule — mono day label between hairlines, with the class count. */
+function DayRule({ label, meta }: { label: string; meta: string }) {
   const t = useTheme();
   return (
-    <View
-      style={{
-        backgroundColor: t.brandWash,
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: 999,
-      }}
-    >
-      <Txt data size={11} weight={600} tone="brand" uppercase tracking={0.4}>
-        Booked
-      </Txt>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+      <View style={{ width: 16, height: 1, backgroundColor: t.border }} />
+      <Eyebrow>{label}</Eyebrow>
+      <View style={{ flex: 1, height: 1, backgroundColor: t.border }} />
+      <Eyebrow>{meta}</Eyebrow>
     </View>
+  );
+}
+
+function Chevron() {
+  return (
+    <Txt size={18} tone="muted">
+      ›
+    </Txt>
   );
 }
 
@@ -68,66 +92,159 @@ function ClassCard({
   onPress: () => void;
   now: Date;
 }) {
+  const t = useTheme();
   const cancelled = c.status === "cancelled";
   const booked = c.myBooking === "booked";
   const past = new Date(c.startsAt).getTime() <= now.getTime();
   const bookable = !cancelled && !booked && !past;
-  return (
-    <Card variant="filled" onPress={onPress}>
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-        }}
-      >
-        <View style={{ flex: 1, gap: 6 }}>
-          <Txt size={16} weight={500}>
-            <Mono size={16} weight={600}>
-              {timeFmt.format(new Date(c.startsAt))}
-            </Mono>
-            {`  ${c.title}`}
-          </Txt>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            {c.discipline ? <Eyebrow>{c.discipline}</Eyebrow> : null}
-            {cancelled ? (
-              <StatusPill tone="error" label="Cancelled" />
-            ) : (
-              <Mono size={13} tone="muted">
-                {spotsLeftLabel(c.capacity, c.bookingCount)}
-              </Mono>
-            )}
-            {booked && !cancelled ? <BookedPill /> : null}
+  const { clock, period } = clockParts(new Date(c.startsAt));
+  const full = capacityDisplay(c.bookingCount, c.capacity).isOver;
+  const card = (
+    <Card
+      variant={cancelled ? "outline" : "filled"}
+      onPress={onPress}
+      padded={false}
+      style={[
+        { overflow: "hidden" },
+        booked && !cancelled ? { borderColor: t.brand } : null,
+      ]}
+    >
+      <View style={{ flexDirection: "row", alignItems: "stretch" }}>
+        <View
+          style={{
+            width: 3,
+            backgroundColor: railColor(t, c.discipline, cancelled),
+          }}
+        />
+        <View
+          style={{
+            flex: 1,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 12,
+            paddingVertical: 12,
+            paddingHorizontal: 12,
+          }}
+        >
+          <View style={{ width: 48, alignItems: "flex-end" }}>
+            <Txt
+              data
+              size={15}
+              weight={600}
+              tone={cancelled ? "muted" : "default"}
+              style={cancelled ? { textDecorationLine: "line-through" } : null}
+            >
+              {clock}
+            </Txt>
+            {period ? (
+              <Txt data size={10} weight={500} tone="muted">
+                {period}
+              </Txt>
+            ) : null}
           </View>
+
+          <View style={{ flex: 1, gap: 5 }}>
+            <Txt
+              size={15}
+              weight={500}
+              tone={cancelled ? "muted" : "default"}
+              numberOfLines={1}
+            >
+              {c.title}
+            </Txt>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+                flexWrap: "wrap",
+              }}
+            >
+              {cancelled ? (
+                <StatusPill tone="error" label="Cancelled" />
+              ) : booked ? (
+                <>
+                  <Txt
+                    data
+                    size={11}
+                    weight={600}
+                    uppercase
+                    tracking={0.8}
+                    tone="brand"
+                  >
+                    Booked
+                  </Txt>
+                  <Txt
+                    data
+                    size={11}
+                    weight={600}
+                    uppercase
+                    tracking={0.8}
+                    tone={full ? "warning" : "muted"}
+                  >
+                    {fillLabel(c.capacity, c.bookingCount)}
+                  </Txt>
+                </>
+              ) : past ? null : (
+                <Txt
+                  data
+                  size={11}
+                  weight={600}
+                  uppercase
+                  tracking={0.8}
+                  tone={full ? "warning" : "muted"}
+                >
+                  {spotsLeftLabel(c.capacity, c.bookingCount)}
+                </Txt>
+              )}
+              {c.discipline ? <Eyebrow>{c.discipline}</Eyebrow> : null}
+              {c.instructorName ? (
+                <Txt size={12} tone="muted" numberOfLines={1}>
+                  {c.instructorName}
+                </Txt>
+              ) : null}
+            </View>
+          </View>
+
+          {cancelled ? (
+            <Chevron />
+          ) : bookable ? (
+            <BookButton c={c} />
+          ) : booked && !past ? (
+            <CancelButton classId={c.id} />
+          ) : (
+            <Chevron />
+          )}
         </View>
-        {bookable ? (
-          <BookButton c={c} />
-        ) : (
-          <Txt size={18} tone="muted">
-            ›
-          </Txt>
-        )}
       </View>
     </Card>
+  );
+
+  // A class that has already started is no longer actionable — it stays
+  // readable (and tappable for the roster) but drops out of the scan.
+  return past && !cancelled ? (
+    <View style={{ opacity: 0.5 }}>{card}</View>
+  ) : (
+    card
   );
 }
 
 /**
  * Schedule home (spec S4) — the student's rolling week, grouped by day (Today
  * first). A pending member browses here behind the S3 banner (no waiting wall).
- * Tapping a class opens the detail (S5) where booking happens.
+ * Booking is one tap on the row; tapping the row body opens the detail (S5).
  */
 export default function Schedule() {
   const router = useRouter();
   const current = useQuery(trpc.academy.current.queryOptions());
 
-  const { from, to } = useMemo(() => {
-    const start = startOfToday();
-    const end = new Date(start);
-    end.setDate(end.getDate() + 7);
-    return { from: start.toISOString(), to: end.toISOString() };
-  }, []);
+  const now = new Date();
+  const todayKey = dayKey(now);
+  const windowStart = startOfToday();
+  const windowEnd = new Date(windowStart);
+  windowEnd.setDate(windowEnd.getDate() + 7);
+  const from = windowStart.toISOString();
+  const to = windowEnd.toISOString();
 
   // A suspended member has no enrolled access — the server rejects `class.mine`.
   // Gate the query off and show a calm notice instead of a load error (§4).
@@ -136,8 +253,6 @@ export default function Schedule() {
     trpc.class.mine.queryOptions({ from, to }, { enabled: !suspended }),
   );
 
-  const now = new Date();
-  const todayKey = dayKey(now);
   const byDay = useMemo(() => {
     const groups = new Map<string, ClassRow[]>();
     for (const c of week.data ?? []) {
@@ -150,6 +265,7 @@ export default function Schedule() {
   }, [week.data]);
 
   const isPending = current.data?.status === "pending";
+  const refreshControl = useRefreshControl();
 
   if (suspended) return <SuspendedNotice name={current.data?.name} />;
 
@@ -180,43 +296,50 @@ export default function Schedule() {
 
       {week.isPending ? (
         <InlineLoading />
-      ) : week.isError ? (
-        <ErrorState label="your schedule" onRetry={() => void week.refetch()} />
-      ) : byDay.length === 0 ? (
-        <EmptyState
-          title="No classes this week."
-          body="Check back soon — your gym adds classes here as they schedule them."
-        />
       ) : (
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingBottom: 24 }}
           showsVerticalScrollIndicator={false}
+          refreshControl={refreshControl}
         >
-          <View style={{ gap: 20 }}>
-            {byDay.map(([key, rows]) => (
-              <View key={key} style={{ gap: 8 }}>
-                <Eyebrow>
-                  {key === todayKey
-                    ? "Today"
-                    : dayFmt.format(new Date(`${key}T12:00:00`))}
-                </Eyebrow>
-                {rows.map((c) => (
-                  <ClassCard
-                    key={c.id}
-                    c={c}
-                    now={now}
-                    onPress={() =>
-                      router.push({
-                        pathname: "/class/[id]",
-                        params: { id: c.id },
-                      })
-                    }
+          {week.isError ? (
+            <ErrorState
+              label="your schedule"
+              onRetry={() => void week.refetch()}
+            />
+          ) : byDay.length === 0 ? (
+            <EmptyState
+              title="No classes this week."
+              body="Check back soon — your gym adds classes here as they schedule them."
+            />
+          ) : (
+            <View style={{ gap: 20 }}>
+              {byDay.map(([key, rows]) => (
+                <View key={key} style={{ gap: 10 }}>
+                  <DayRule
+                    label={dayFmt.format(new Date(`${key}T12:00:00`))}
+                    meta={`${key === todayKey ? "today · " : ""}${rows.length} ${
+                      rows.length === 1 ? "class" : "classes"
+                    }`}
                   />
-                ))}
-              </View>
-            ))}
-          </View>
+                  {rows.map((c) => (
+                    <ClassCard
+                      key={c.id}
+                      c={c}
+                      now={now}
+                      onPress={() =>
+                        router.push({
+                          pathname: "/class/[id]",
+                          params: { id: c.id },
+                        })
+                      }
+                    />
+                  ))}
+                </View>
+              ))}
+            </View>
+          )}
         </ScrollView>
       )}
     </Screen>

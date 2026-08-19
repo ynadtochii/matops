@@ -1,13 +1,15 @@
 <!-- matops — live implementation plan + scope matrix. Rules for this file live in delivery.md. -->
+
 # matops — Roadmap (live plan + scope matrix)
 
 > **How to use.** Build **top to bottom**. Each slice is vertical (DB → API → client) and ends shippable.
 > Flip cells as you go: **`—`** not needed · **`todo`** · **`wip`** · **`done`**. Every flip to `done` must pass the [Definition of Done](delivery.md#4-definition-of-done-the-anti-drift-gate).
 > Surfaces: **DB · API · Web · Mob · Sh(ared) · Inf(ra)**. Spec IDs trace up to [spec.md](spec.md); tickets to [map.md](map.md).
 
-**Status:** **Phases 2–3 complete + Expo student app shipped (mobile pass) + slice 1.7 (academy-code join).** All static gates are green — `lint` (13/13), `typecheck` (15/15), `test` (117 tests). Phase 3 (booking, attendance, QR check-in, public drop-in) is built and its migrations (`0011`–`0013`) are applied + verified on Neon. A tenant-seam hardening pass (ADR 33) then made the RLS seam fail-closed and fixed an enrolled-tier fail-open. Scheduling core is built: recurring class templates (O3), DST-aware materialization (lazy on save + a bounded daily Vercel Cron), one-off classes, edit/cancel with future-instance propagation, and the schedule reads (owner web `class.week`; student `class.mine`). The **Expo student app** shipped in the mobile pass (join → pending → schedule → detail → profile/switcher, Mob cells 1.3/1.4/1.6/2.4); mobile join is a 6-digit academy-code lookup (slice 1.7, ADR 32). **Phase 4 (notifications & polish) is now built** — a pure-transport `packages/notifications` (Expo Push + Resend), the three event sends (cancel/change/approved) wired into the mutations, the class-reminder sweep + `/api/cron/remind` route (its frequent cron schedule deferred to Phase 5); push tokens live outside the tenant seam (migration `0014`, ADR **34**); and (slice 4.3) a shared **states system** — skeleton / empty-as-invitation / error-with-retry on both clients — plus the thin S7 push toggle. **Not built yet:** Phase 5 (launch hardening incl. universal/App links + booking-count reconciliation + the reminder cron schedule). *(The venue check-in QR poster is built — `venue-checkin.tsx` via `qrcode.react`; the old "needs a QR lib" follow-up is resolved, v1.3 F.3.)* All of Phase 3 (book/cancel, provisional tier, attendance, QR check-in, public drop-in) is in. **A v1.1 "make-it-usable" UX pass then restructured both clients** on the same feature set (planned as the `.scratch/usable-v1/` wayfinder map, all tickets resolved; ADRs 37 brand + 38 shells): a fresh **matops brand** (violet + basketweave mark, shared tokens), a **web app shell** (sidebar + mobile bottom-tabs, 5 routed screens, owner/instructor role split, new O1 dashboard, venue QR poster), **academy rename** (name = mutable label; code = immutable identifier), and a **mobile tab bar** (Schedule/Check-in/Profile) with the screens ported to explicit RN styles + brand. Static gates green (`next build` all routes); device visual check pending. See architecture.md §0. **v1.2 "Personal & Insight"** (ADR 39) then shipped attendance-derived stats (student Training tab, owner gym insights + "who's drifting"). **v1.3 "Frictionless & Pay"** (ADR 40) is now **built** (rows below): the first **payments** domain — **manual bank transfer only** (dues status dot, requisites card + reference code, owner-confirmed "I paid" claim, dues-reminder engine — **no scheduler in v1, ADR 46**; migrations `0015`/`0016`) — plus a one-tap mobile home card (F.1) and mark-all-present (F.2); all verified live on Neon. **Only R.2 (the native home-screen widget) remains** — scaffolded (`nextBookableClass` + a handoff guide), native build deferred off the critical path. Plan: `.scratch/frictionless-pay/plan.md`.
+**Status:** **Phases 2–3 complete + Expo student app shipped (mobile pass) + slice 1.7 (academy-code join).** All static gates are green — `lint` (13/13), `typecheck` (15/15), `test` (117 tests). Phase 3 (booking, attendance, QR check-in, public drop-in) is built and its migrations (`0011`–`0013`) are applied + verified on Neon. A tenant-seam hardening pass (ADR 33) then made the RLS seam fail-closed and fixed an enrolled-tier fail-open. Scheduling core is built: recurring class templates (O3), DST-aware materialization (lazy on save + a bounded daily Vercel Cron), one-off classes, edit/cancel with future-instance propagation, and the schedule reads (owner web `class.week`; student `class.mine`). The **Expo student app** shipped in the mobile pass (join → pending → schedule → detail → profile/switcher, Mob cells 1.3/1.4/1.6/2.4); mobile join is a 6-digit academy-code lookup (slice 1.7, ADR 32). **Phase 4 (notifications & polish) is now built** — a pure-transport `packages/notifications` (Expo Push + Resend), the three event sends (cancel/change/approved) wired into the mutations, the class-reminder sweep + `/api/cron/remind` route (its frequent cron schedule deferred to Phase 5); push tokens live outside the tenant seam (migration `0014`, ADR **34**); and (slice 4.3) a shared **states system** — skeleton / empty-as-invitation / error-with-retry on both clients — plus the thin S7 push toggle. **Not built yet:** Phase 5 (launch hardening incl. universal/App links + booking-count reconciliation + the reminder cron schedule). _(The venue check-in QR poster is built — `venue-checkin.tsx` via `qrcode.react`; the old "needs a QR lib" follow-up is resolved, v1.3 F.3.)_ All of Phase 3 (book/cancel, provisional tier, attendance, QR check-in, public drop-in) is in. **A v1.1 "make-it-usable" UX pass then restructured both clients** on the same feature set (planned as the `.scratch/usable-v1/` wayfinder map, all tickets resolved; ADRs 37 brand + 38 shells): a fresh **matops brand** (violet + basketweave mark, shared tokens), a **web app shell** (sidebar + mobile bottom-tabs, 5 routed screens, owner/instructor role split, new O1 dashboard, venue QR poster), **academy rename** (name = mutable label; code = immutable identifier), and a **mobile tab bar** (Schedule/Check-in/Profile) with the screens ported to explicit RN styles + brand. Static gates green (`next build` all routes); device visual check pending. See architecture.md §0. **v1.2 "Personal & Insight"** (ADR 39) then shipped attendance-derived stats (student Training tab, owner gym insights + "who's drifting"). **v1.3 "Frictionless & Pay"** (ADR 40) is now **built** (rows below): the first **payments** domain — **manual bank transfer only** (dues status dot, requisites card + reference code, owner-confirmed "I paid" claim, dues-reminder engine — **no scheduler in v1, ADR 46**; migrations `0015`/`0016`) — plus a one-tap mobile home card (F.1) and mark-all-present (F.2); all verified live on Neon. **Only R.2 (the native home-screen widget) remains** — scaffolded (`nextBookableClass` + a handoff guide), native build deferred off the critical path. Plan: `.scratch/frictionless-pay/plan.md`.
 
 > **Verified live on Neon.**
+>
 > - **Phase 1 exit test** — sign in (magic link) → **Start a gym** → active **owner** (RLS scope set) → create/rotate an invite link → a second user joins **pending, holding no academy role** → owner **approves** → role granted + active. "Never ownerless" blocks removing the sole owner; a student is `FORBIDDEN` from owner-only routes.
 > - **Phase 2** — a Mon/Wed/Fri 18:00 Europe/Kyiv template **materialized 18 classes** over 6 weeks at 15:00 UTC (correct DST offset); re-run inserted **0** (idempotent); cursor advanced to now+42d. Template edits propagate: a content edit kept the rows + retitled; a timing edit regenerated Mon/Wed → Tue/Thu; one-off create + cancel worked.
 > - Migrations `0000`–`0017` applied (through the v1.4 rank + notes schema); RLS leak tests (probe + `class_template` + `class` + `drop_in` + payments + **rank/notes**) green. `0017` verified live on Neon: `member_rank`/`rank_promotion`/`member_note` all have RLS enabled + their `*_isolation` policy + the standard `matops_app` grant.
@@ -33,69 +35,69 @@ Solo-builder note: 0.5 (auth) and 0.6 (CI) can run beside 0.2–0.4. Everything 
 
 ## Live scope matrix
 
-One row per slice. This is the single answer to *"what's left, on which surface?"*
+One row per slice. This is the single answer to _"what's left, on which surface?"_
 
-| # | Slice | DB | API | Web | Mob | Sh | Inf |
-|---|---|---|---|---|---|---|---|
-| **0** | **Foundations** | | | | | | |
-| 0.1 | Monorepo scaffold (create-t3-turbo) | — | done | done | done | done | done |
-| 0.2 | DB package: Drizzle + Neon + migrate + seed | done | — | — | — | — | done |
-| 0.3 | Tenant seam: RLS role + per-req tx + `scopedDb` + leak test | done | done | — | — | — | done |
-| 0.4 | tRPC base + procedure tiers | — | done | — | — | done | — |
-| 0.5 | Better Auth (core + org + magic-link) | done | done | done | done | done | — |
-| 0.6 | CI/CD + env + preview builds | — | — | — | — | — | done |
-| **1** | **Identity & tenancy** | | | | | | |
-| 1.1 | Owner onboarding (create academy, magic link) | done | done | done | — | done | — |
-| 1.2 | Invite links (per-role, create/rotate) | done | done | done | — | done | — |
-| 1.3 | Student self-join → pending (min fields, email req.) | done | done | — | done | done | — |
-| 1.4 | Uniform approval gate + `enrolledProcedure` | — | done | done | done | done | — |
-| 1.5 | Roster (approve/remove/suspend, promote co-owner) | done | done | done | — | — | — |
-| 1.6 | Multi-academy switcher | — | done | done | done | — | — |
-| 1.7 | Numeric academy code join (mobile v1) | done | done | done | done | done | — |
-| 1.8 | Social login — Google (web; mobile deferred) | — | done | done | — | done | wip |
-| **2** | **Scheduling core** | | | | | | |
-| 2.1 | Class templates CRUD (recurring) | done | done | done | — | done | — |
-| 2.2 | Materialization (lazy on save; **cron removed** — ADR 46) | done | done | — | — | — | — |
-| 2.3 | Class instances (one-off + edit/cancel rules) | done | done | done | — | done | — |
-| 2.4 | Schedule read (owner web + student mobile) | — | done | done | done | done | — |
-| **3** | **Booking & attendance** | | | | | | |
-| 3.1 | Book / cancel (atomic write, soft capacity) | done | done | — | done | done | — |
-| 3.2 | Provisional booking for pending (display tag) | — | done | done | done | done | — |
-| 3.3 | Attendance marking (staff) | done | done | done | — | done | — |
-| 3.4 | QR self check-in (book + attend) | done | done | — | done | done | — |
-| 3.5 | Public drop-in / lead form (consent, dedupe) | done | done | done | — | done | done |
-| **4** | **Notifications & polish** | | | | | | |
-| 4.1 | `notifications` package (Expo Push + Resend) | done | done | — | done | done | done |
-| 4.2 | Events (cancel, reminder, approval, class change) | done | done | — | done | done | done¹ |
-| 4.3 | Empty/error/soft-capacity states, design pass | — | — | done | done | done | — |
+| #     | Slice                                                       | DB   | API  | Web  | Mob  | Sh   | Inf   |
+| ----- | ----------------------------------------------------------- | ---- | ---- | ---- | ---- | ---- | ----- |
+| **0** | **Foundations**                                             |      |      |      |      |      |       |
+| 0.1   | Monorepo scaffold (create-t3-turbo)                         | —    | done | done | done | done | done  |
+| 0.2   | DB package: Drizzle + Neon + migrate + seed                 | done | —    | —    | —    | —    | done  |
+| 0.3   | Tenant seam: RLS role + per-req tx + `scopedDb` + leak test | done | done | —    | —    | —    | done  |
+| 0.4   | tRPC base + procedure tiers                                 | —    | done | —    | —    | done | —     |
+| 0.5   | Better Auth (core + org + magic-link)                       | done | done | done | done | done | —     |
+| 0.6   | CI/CD + env + preview builds                                | —    | —    | —    | —    | —    | done  |
+| **1** | **Identity & tenancy**                                      |      |      |      |      |      |       |
+| 1.1   | Owner onboarding (create academy, magic link)               | done | done | done | —    | done | —     |
+| 1.2   | Invite links (per-role, create/rotate)                      | done | done | done | —    | done | —     |
+| 1.3   | Student self-join → pending (min fields, email req.)        | done | done | —    | done | done | —     |
+| 1.4   | Uniform approval gate + `enrolledProcedure`                 | —    | done | done | done | done | —     |
+| 1.5   | Members (approve/remove/suspend, promote co-owner)          | done | done | done | —    | —    | —     |
+| 1.6   | Multi-academy switcher                                      | —    | done | done | done | —    | —     |
+| 1.7   | Numeric academy code join (mobile v1)                       | done | done | done | done | done | —     |
+| 1.8   | Social login — Google (web; mobile deferred)                | —    | done | done | —    | done | wip   |
+| **2** | **Scheduling core**                                         |      |      |      |      |      |       |
+| 2.1   | Class templates CRUD (recurring)                            | done | done | done | —    | done | —     |
+| 2.2   | Materialization (lazy on save; **cron removed** — ADR 46)   | done | done | —    | —    | —    | —     |
+| 2.3   | Class instances (one-off + edit/cancel rules)               | done | done | done | —    | done | —     |
+| 2.4   | Schedule read (owner web + student mobile)                  | —    | done | done | done | done | —     |
+| **3** | **Booking & attendance**                                    |      |      |      |      |      |       |
+| 3.1   | Book / cancel (atomic write, soft capacity)                 | done | done | —    | done | done | —     |
+| 3.2   | Provisional booking for pending (display tag)               | —    | done | done | done | done | —     |
+| 3.3   | Attendance marking (staff)                                  | done | done | done | —    | done | —     |
+| 3.4   | QR self check-in (book + attend)                            | done | done | —    | done | done | —     |
+| 3.5   | Public drop-in / lead form (consent, dedupe)                | done | done | done | —    | done | done  |
+| **4** | **Notifications & polish**                                  |      |      |      |      |      |       |
+| 4.1   | `notifications` package (Expo Push + Resend)                | done | done | —    | done | done | done  |
+| 4.2   | Events (cancel, reminder, approval, class change)           | done | done | —    | done | done | done¹ |
+| 4.3   | Empty/error/soft-capacity states, design pass               | —    | —    | done | done | done | —     |
 
 ¹ Reminder sweep + `/api/cron/remind` route ship in 4.2; **v1 wires no `vercel.json` cron at all** (ADR 46) — the route is a dormant, manually-callable seam and reminders do not fire automatically in v1.
 | **5** | **Launch hardening** | | | | | | |
 | 5.1 | `booking_count` reconciliation cron | — | todo | — | — | — | todo |
 | 5.2 | Observability + errors + rate-limit public routes | — | todo | todo | todo | — | todo |
 | 5.3 | Production release (Vercel + Neon prod + EAS submit) | todo | — | todo | todo | — | todo |
-| **v1.2** | **Personal & Insight** *(no new domain, no migration, no cron)* | | | | | | |
+| **v1.2** | **Personal & Insight** _(no new domain, no migration, no cron)_ | | | | | | |
 | A.0 | `stats.ts` pure engine + tests (ADR 39) | — | — | — | — | done | — |
 | B.1 | My Training stats (student, `stats.me`) | — | done | — | done | — | — |
 | B.2 | Training tab + next-class card (`booking.mine`) | — | done | — | done | — | — |
 | B.3 | Edit profile (name / phone) | — | done | — | done | done | — |
 | C.1 | Gym insights + "who's drifting" (owner web) | — | done | done | — | — | — |
 | C.2 | Tabbed member detail (attendance history) | — | done | done | — | — | — |
-| **v1.3** | **Frictionless & Pay** *(payments = manual bank transfer; ADR 40)* | | | | | | |
+| **v1.3** | **Frictionless & Pay** _(payments = manual bank transfer; ADR 40)_ | | | | | | |
 | F.1 | Today / next-class one-tap home card | — | — | — | done | — | — |
 | F.2 | Mark-all-present (bulk attendance) | — | done | done | — | done | — |
 | F.3 | Scannable venue QR — reconcile docs (already built) | — | — | done | — | — | — |
 | P.1 | Dues + payment-claim schema & domain (ADR 40) | done | — | — | — | done | — |
-| P.2 | Owner: paid / overdue status on roster (O7) | — | done | done | — | — | — |
+| P.2 | Owner: paid / overdue status on member list (O7) | — | done | done | — | — | — |
 | P.3 | Student pay: requisites + "I paid" + confirm (S9, O7) | — | done | done | done | done | — |
 | R.1 | Payment reminders (engine built; **not scheduled in v1** — ADR 46) | done | done | — | — | done | — |
 | R.2 | Home-screen widget (S10, native) | — | — | — | todo | — | — |
-| **v1.4** | **Rank & Notes** *(un-parks belts/rank; ADR 41)* | | | | | | |
+| **v1.4** | **Rank & Notes** _(un-parks belts/rank; ADR 41)_ | | | | | | |
 | G.1 | Rank + notes schema & `rank.ts` engine (ADR 41) | done | — | — | — | done | — |
 | G.2 | Owner: set + promote rank per discipline, history (O4) | — | done | done | — | done | — |
 | G.3 | Student: view ranks + promotion timeline (S7) | — | done | — | done | — | — |
 | G.4 | Staff-private notes on a member (O4) | — | done | done | — | — | — |
-| **v1.8** | **Mobile ease-of-use** *(IA + core-flow friction; no domain / migration / back-end; ADR 45)* | | | | | | |
+| **v1.8** | **Mobile ease-of-use** _(IA + core-flow friction; no domain / migration / back-end; ADR 45)_ | | | | | | |
 | M.1 | Inline booking on schedule row (shared `useBookClass`) | — | — | — | done | — | — |
 | M.2 | De-dupe class tabs (Training → My classes) | — | — | — | done | — | — |
 | M.3 | Overdue warning header (S11) | — | — | — | done | — | — |
@@ -103,8 +105,34 @@ One row per slice. This is the single answer to *"what's left, on which surface?
 | M.5 | Split Settings from Profile (S12) | — | — | — | done | — | — |
 | M.6 | Booking toast + sticky S5 CTA | — | — | — | done | — | — |
 | M.7 | Dark-theme warmth (mobile-only override) | — | — | — | done² | — | — |
+| **v2.0** | **Mobile Wave A** _(student app: kept promises + freshness; ADR 54)_ | | | | | | |
+| N.1 | Local class reminders on book/cancel (S12) | — | — | — | done³ | — | — |
+| N.2 | Foreground refetch + pull to refresh on the tab screens | — | — | — | done³ | — | — |
+| N.3 | Rolling week window on the schedule (S4) | — | — | — | done | — | — |
+| N.4 | Instructor name on the schedule row (S4) | — | done | — | done | — | — |
+| N.5 | Who's in the class, privacy-gated (S5) | — | done | — | done | done | — |
+| **v1.9** | **Internal Referrals** _(staff attribution + reporting; ADR 52)_ | | | | | | |
+| J.1 | Referral schema, RLS, audit + pure rules | done | — | — | — | done | — |
+| J.2 | Staff dashboard/assign + owner correct/history router | — | done | — | — | done | — |
+| J.3 | Responsive O9 referrals ledger + role-aware navigation | — | — | done | — | — | — |
+| J.4 | Referral-rich demo seed + marker-safe cleanup | done | — | — | — | — | — |
+| J.5 | Referrer-first O9 rewrite, one write dialog (ADR 56) | — | — | done | — | — | — |
+| **v2.2** | **Student onboarding funnel** _(join at the gym, land somewhere real; ADR 57)_ | | | | | | |
+| E.1 | Join-link QR + shared printable poster (O6) | — | — | done | — | — | — |
+| E.2 | One-step join form, email hop last (S2) | — | done | done | — | — | — |
+| E.3 | Student web: schedule + book / cancel (S4, S5) | — | — | done | — | — | — |
+| E.4 | Student install-to-home-screen card (O8, S4) | — | — | done | — | — | — |
+| **v2.3** | **Frontend review fixes** _(no new feature; ADR 59)_ | | | | | | |
+| V.1 | Join link prefills, never joins (S2, ADR 59) | — | done | done | — | — | — |
+| V.2 | Dues form matches the plan by id, not by name (O7) | — | done | done | — | — | — |
+| V.3 | Keyed class roster + one class invalidation per close (O5) | — | — | done | — | — | — |
+| V.4 | Frontend copies of domain rules replaced by imports | — | — | done | done | done | — |
+| V.5 | Mobile cache cleared on sign-out / verify; shared cancel | — | — | — | done | — | — |
+| V.6 | Addressable member tabs, grid now-line, a11y on Tabs / Stat | — | — | done | — | — | — |
 
 ² Static gates green; the QR deep-link round-trip, overdue strip, toast, and dark-warmth tweak want a **real-device pass** (no simulator in the build env) — flagged in ADR 45.
+
+³ Static gates green. The reminder actually firing, the notification permission prompt, and the pull gesture want a **device pass** — flagged in ADR 54.
 
 ---
 
@@ -113,7 +141,8 @@ One row per slice. This is the single answer to *"what's left, on which surface?
 Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkboxes as you start each slice.
 
 ### Phase 0 — Foundations
-**Exit test:** web *and* mobile each make one authenticated, tenant-scoped tRPC call end to end.
+
+**Exit test:** web _and_ mobile each make one authenticated, tenant-scoped tRPC call end to end.
 
 - **0.1 Monorepo scaffold** — `create-t3-turbo` layout: `apps/{nextjs,expo}` + `packages/{api,db,auth,validators,domain,ui}` + `tooling/*`. Turborepo + pnpm. Refs: tickets 07, 01.
 - **0.2 DB package** — Drizzle, `pg` driver on Neon **`-pooler`** endpoint, drizzle-kit migrations, dev seed script, one `_health` table. Refs: tickets 03, 21.
@@ -123,13 +152,14 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 - **0.6 CI/CD** — typecheck + lint + `migrate --check` in CI; Vercel preview; EAS dev build; env/secrets convention. Refs: tickets 06, 15; roadmap "not yet specified" (CI/testing).
 
 ### Phase 1 — Identity & tenancy
+
 **Exit test:** a student joins from a link, lands view-only; owner approves; role is granted; both see it.
 
 - **1.1 Owner onboarding** — magic-link sign-in → create academy → immediately **active owner**. Seamless (session-12 decision). Spec: owner onboarding, O4.
 - **1.2 Invite links** — per-role, owner-managed, create/rotate. The link carries the intended role but grants nothing until approval. Spec: O6; ticket 20.
 - **1.3 Student self-join** — preselected academy · social or email+magic-link · minimal fields (name, surname, phone, **email required**) → `member status=pending`, **no role**. Spec: S1, S2; ticket 26.
 - **1.4 Uniform approval gate** — pending = view-only for **students and coaches** (browse + provisional book + check-in, no attendee names, no tools). Owner approval → grant role + `status=active`. `enrolledProcedure` guards pending capability. Spec: S3; tickets 20, 23, 14.
-- **1.5 Roster** — approve / remove / suspend; **promote a member to co-owner** (never ownerless); pending rows show **visit-count nudge**; removal keeps history + revokes access. Spec: §4 edge rules.
+- **1.5 Members** — approve / remove / suspend; **promote a member to co-owner** (never ownerless); pending rows show **visit-count nudge**; removal keeps history + revokes access. Spec: §4 edge rules.
 - **1.6 Multi-academy switcher** — `activeOrganizationId` drives RLS scope; switcher shown only if 2+; join 2nd via another link. Spec: ticket 18.
 - **1.7 Numeric academy code join (mobile v1)** — every academy gets a plain 6-digit `public_code` (migration `0010`, assigned by the auth hook). Owner shares the number; the student types it in the Expo app → `academy.findByCode` → `membership.joinByCode` → pending **student** (role fixed). Replaces the deep link on mobile v1; invite links + the `join/[token]` route stay for the web + next iteration. Spec: S2, O4; ticket [32](issues/32-academy-code-join.md).
 - **1.8 Social login — Google** — the "social login" half of S1. One server switch (`socialProviders.google`, fed by optional `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`) enables **Continue with Google** on both clients + **account linking** (`trustedProviders: ["google"]`, one identity per email). No migration (reuses the `account` table); no change to tenancy — a Google user has no academy membership, so it lands on the same join gate. Missing creds → provider not registered (magic-link only). **Status:** **Web = done** (server-side verified). **Mob = deferred (2026-07-21)** — mobile ships **magic-link only**; the Google button was removed from the Expo sign-in. Source analysis showed the server side is fine (the deep link does carry `?cookie=`); the break is the iOS `ASWebAuthenticationSession` return, whose reliable fix is the native idToken flow (iOS OAuth client + native module + rebuild) — out of scope now, revisit with Phase-5 native work. **Inf = wip** — dev redirect URI registered; prod URI + the full diagnosis are in ADR 35 + `docs/mobile-google-login-handoff.md`. Spec: S1; ADR [35](issues/35-social-login-google.md), [36](issues/36-mobile-ui-explicit-styles.md) (mobile UI + `dev:ios` fix).
@@ -137,6 +167,7 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 > **Shipped: mobile pass (Mob cells 1.3/1.4/1.6/2.4).** The Expo student app was built as one pass after Phase 2 (the pending student's home is the schedule S4 — Phase 2 — so a mobile-only pass would have landed on an empty home). Delivered slice by slice (M0–M5, see [CHANGELOG](../CHANGELOG.md)): (a) auth-gated student shell + the `post` demo retired (router + table dropped, migration `0009`), (b) magic-link sign-in with a `matops://` deep-link return, (c) `app/join/[token].tsx` (RN twin of the web join flow) + in-app paste + sign-in-first with the token preserved, (d) pending banner (S3), (e) schedule (S4) + read-only class detail (S5, new `class.get`), (f) profile + switcher (S7). **Deep links = custom scheme now** (`matops://join/<code>`); **universal links / AASA + Android assetlinks + EAS submit are deferred to a Phase 5 launch-infra task** (need Apple/Google/EAS accounts + a hosted domain) — ADR [31](issues/31-deep-link-approach.md). Verified by the static gates + code review; device-only checks (incl. the slice-1.7 code-join flow) live in the [mobile device-test checklist](mobile-device-test.md) (no simulator in the build env).
 
 ### Phase 2 — Scheduling core
+
 **Exit test:** owner defines a recurring week; concrete classes appear; both clients read the schedule.
 
 - **2.1 Class templates** — recurring weekly definition (days, local start minutes, duration, tz, capacity, discipline). Staff CRUD. Refs: ticket 08.
@@ -145,22 +176,25 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 - **2.4 Schedule read** — owner web (full) + student mobile (**own academy only**, can't see other academies). Refs: spec S-schedule. **As built (web-first):** owner web read = `class.week` (staff, shipped in 2.3); student read = `class.mine` on `enrolledProcedure` (pending may browse, RLS-scoped to own academy). Student-lens API ready (`isStudentLensMembership` + `academy.listMineStudent`). **Mob** (the Expo student schedule screen) stays `todo` — it lands in the deferred mobile pass, which is now unblocked.
 
 ### Phase 3 — Booking & attendance
+
 **Exit test:** student books/cancels (≤3 taps) + checks in via QR; walk-in via public form; staff sees attendance.
 
 - **3.1 Book / cancel** — **DONE.** New `class_participation` table (migration `0011` + RLS) + `booking` router (`book`/`cancel` on `enrolledProcedure`). Atomic conditional `UPDATE` increments `booking_count` (capacity guard **dropped** in v1); `UNIQUE(class_id, student_id)` stops double-book; re-book = ON CONFLICT flips cancelled→booked; cancel decrements floored. **Confirmed-only count:** an approved member's booking counts; a **pending** member's is `provisional` — recorded + tagged "pending approval", never counted. **Soft capacity:** never blocked; at/over shows red "22/20 · may be busy" + confirm (mobile S5). `class.get`/`class.mine` now return the caller's `myBooking`. Pure rules `bookingTier`/`canBook`/`capacityDisplay` in `@matops/domain`. Refs: tickets 13, 22.
-- **3.2 Provisional booking** — **DONE.** The provisional *tier* + the student-side "pending approval" tag shipped with 3.1; 3.2 added the **owner-side** view: `class.week` returns a `pendingCount` (provisional-only subquery) and the web schedule shows "N/cap · +M pending". Refs: tickets 22, 23.
-- **3.3 Attendance** — **DONE.** Migration `0012` adds the attendance axis to `class_participation` (`attendance_status` + `attended_at`/`marked_by`) and a `none` booking value for walk-ins. New `attendance` router (`staffProcedure`: `roster`/`mark`/`addWalkIn`/`members`) + the O5 web screen (pick a class in the 14-day backfill window → mark present/absent → add a walk-in). Walk-in = booking `none` + attendance `present`, never counted. Roster `visitCount` ("attended N×") now real. Pure rules `canMarkAttendance`/`attendanceCounts`. Refs: ticket 08, spec O5.
+- **3.2 Provisional booking** — **DONE.** The provisional _tier_ + the student-side "pending approval" tag shipped with 3.1; 3.2 added the **owner-side** view: `class.week` returns a `pendingCount` (provisional-only subquery) and the web schedule shows "N/cap · +M pending". Refs: tickets 22, 23.
+- **3.3 Attendance** — **DONE.** Migration `0012` adds the attendance axis to `class_participation` (`attendance_status` + `attended_at`/`marked_by`) and a `none` booking value for walk-ins. New `attendance` router (`staffProcedure`: `list`/`mark`/`addWalkIn`/`members`) + the O5 web screen (pick a class in the 14-day backfill window → mark present/absent → add a walk-in). Walk-in = booking `none` + attendance `present`, never counted. Members `visitCount` ("attended N×") now real. Pure rules `canMarkAttendance`/`attendanceCounts`. Refs: ticket 08, spec O5.
 - **3.4 QR self check-in** — **DONE.** New `checkin` router (`enrolledProcedure`: `today`/`checkIn`). Check-in = **book + attend** in one (soft cap — present even if full; pending → provisional). `resolveCheckInClass` (pure, server-side) picks the current/next class; mobile S8 `checkin` screen confirms + checks in. **No camera in v1** (D3): uses the active academy; the physical QR routes no-app visitors to 3.5. Refs: ticket 24; spec S8/§4.
-- **3.5 Public drop-in form** — **DONE.** New `drop_in` table (migration `0013` + owner-read RLS). The `dropIn` router's `submit` + `academyInfo` are the **first public (unauthenticated) procedures** — an enumerated tenant-seam exception (writes on the trusted base connection). Public web page `/checkin/[academyId]` (name, surname, phone, email optional, **required consent**), **dedupe by phone** (one lead + visit count), resolves today's class server-side (else general lead). Owner O4 leads section + O6 venue-link poster. Refs: ticket 25; spec §4. *(Follow-up resolved (v1.3 F.3): the O6 poster renders a scannable QR image via `qrcode.react` — `venue-checkin.tsx`.)*
+- **3.5 Public drop-in form** — **DONE.** New `drop_in` table (migration `0013` + owner-read RLS). The `dropIn` router's `submit` + `academyInfo` are the **first public (unauthenticated) procedures** — an enumerated tenant-seam exception (writes on the trusted base connection). Public web page `/checkin/[academyId]` (name, surname, phone, email optional, **required consent**), **dedupe by phone** (one lead + visit count), resolves today's class server-side (else general lead). Owner O4 leads section + O6 venue-link poster. Refs: ticket 25; spec §4. _(Follow-up resolved (v1.3 F.3): the O6 poster renders a scannable QR image via `qrcode.react` — `venue-checkin.tsx`.)_
 
 ### Phase 4 — Notifications & polish
+
 **Exit test:** every v1 event fires on the right channel; empty/error states are flawless.
 
 - **4.1 notifications package** — **DONE.** Thin `packages/notifications` = pure transport (`sendPush` batched Expo Push + `sendEmail` Resend, serverless HTTPS, never throws, no DB dep). Message text = pure builders in `@matops/domain/notify.ts` (+13 tests); resolution lives in the API layer (ADR **34**). Push tokens stored **outside the tenant seam** — `push_token` (migration `0014`, keyed by `user.id`, no `academy_id`/RLS); `pushToken.register`/`unregister` on `protectedProcedure`; mobile registers on sign-in via `expo-notifications` (`utils/push.ts` + `push-sync.tsx`). Refs: tickets 17, 34.
 - **4.2 Events** — **DONE (bar the reminder schedule).** The three `TODO(phase 4)` hooks are wired: class cancelled (**push + email**), class time/instructor change (**push + email**), membership approved (**push**) — via `packages/api/notify.ts`, awaited but error-swallowed so a send never fails the mutation. Class-reminder **sweep** (`claimDueReminderClasses`, atomic `reminder_sent_at` claim in `0014`) + `runReminderSweep` + the protected `/api/cron/remind` route ship now; the **frequent cron schedule** is a Phase 5 task (ADR 34). Mobile: tap-to-navigate handler. Refs: tickets 17, 34; spec §4.
-- **4.3 States + design pass** — **DONE.** A shared **state system** on both clients — `SkeletonRows` / `EmptyState` / `ErrorState` (web `_components/states.tsx`; mobile `components/ui.tsx`): loading skeletons, empties written as **invitations** (title + what-to-do), and errors with a **retry** that never masquerade as "no data". Applied across every data screen (web home/schedule/roster/attendance/templates; mobile schedule/class/check-in) — fixed two real bugs where a fetch error fell through to onboarding (web) / "no classes" (mobile). Soft-capacity red + ≤3-tap booking verified (already built in S5). Thin S7 **Push notifications** toggle on mobile profile (registers/unregisters this device's token — no server pref). NativeWind/Tailwind tokens already shared (ADR 11). Refs: tickets 09, 11.
+- **4.3 States + design pass** — **DONE.** A shared **state system** on both clients — `SkeletonRows` / `EmptyState` / `ErrorState` (web `_components/states.tsx`; mobile `components/ui.tsx`): loading skeletons, empties written as **invitations** (title + what-to-do), and errors with a **retry** that never masquerade as "no data". Applied across every data screen (web home/schedule/members/attendance/templates; mobile schedule/class/check-in) — fixed two real bugs where a fetch error fell through to onboarding (web) / "no classes" (mobile). Soft-capacity red + ≤3-tap booking verified (already built in S5). Thin S7 **Push notifications** toggle on mobile profile (registers/unregisters this device's token — no server pref). NativeWind/Tailwind tokens already shared (ADR 11). Refs: tickets 09, 11.
 
 ### Phase 5 — Launch hardening
+
 **Exit test:** v1 running in production, both apps published.
 
 - **5.1 Reconciliation** — periodic recompute of `booking_count` from participations (safety net for the denormalized count). Refs: ticket 13.
@@ -169,29 +203,32 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 - **5.3 Release** — Vercel prod, Neon prod branch + migration run, EAS build + store submit, env promotion.
 
 ### v1.2 — Personal & Insight
+
 **Exit test:** the student sees their own training (total/streak/next class); the owner sees gym activity + who's drifting; both read from attendance data already stored. Plan: `.scratch/v1.2/plan.md`; decision: ADR 39. **No migration, no cron.**
 
 - **A.0 stats engine** — **DONE.** `packages/domain/src/stats.ts` (pure, 20 tests): `trainingStats`, `classifyDrift` (+ `DRIFT_THRESHOLDS`), `gymInsights`, `splitMyClasses`, `nextClass`. Sessions = `present` participations; per-academy; academy-zone Sunday-start weeks. Refs: ADR 39.
 - **B.1 My Training stats** — **DONE.** `stats.me` on `enrolledProcedure` (present participations join `class` → `trainingStats`; academy zone resolved from templates, `academy-tz.ts`); mobile `MyTrainingCard` (total · month · streak · favorite · days since last). Refs: spec S7; ADR 39.
 - **B.2 Training tab + next-class card** — **DONE.** `booking.mine` (caller's participations join `class`) split client-side by `splitMyClasses`/`nextClass` (`@matops/domain` added to expo); new `(tabs)/training.tsx` = next-class card + stats + Upcoming (cancel)/Past; tabs are now Schedule · Training · Check-in · Profile. Refs: spec S6.
 - **B.3 Edit profile** — **DONE.** `UpdateProfileSchema` + `account.updateProfile` on `protectedProcedure` → `updateUserProfile`; email read-only; mobile profile Name/Phone editable, session refetched with `disableCookieCache` after save. Refs: spec S7.
-- **C.1 Gym insights + drifting** — **DONE.** `stats.gym` (staff, 30-day window → `gymInsights` + new-members-this-month) + `stats.drifting` (owner, `max(startsAt)` per student → `classifyDrift`, ≥1-session members only, stalest first); dashboard Insights block + "who's drifting" widget linking to `/roster?member=`. Refs: spec O1; ADR 39.
-- **C.2 Tabbed member detail** — **DONE.** `membership.memberHistory` (owner; member's present participations + `trainingStats`/`classifyDrift`); roster row expands to Overview · Attendance tabs (paginated), deep-linkable from C.1. Fulfils spec O4 "attendance history". Refs: spec O4.
+- **C.1 Gym insights + drifting** — **DONE.** `stats.gym` (staff, 30-day window → `gymInsights` + new-members-this-month) + `stats.drifting` (owner, `max(startsAt)` per student → `classifyDrift`, ≥1-session members only, stalest first); dashboard Insights block + "who's drifting" widget linking to `/members?member=`. Refs: spec O1; ADR 39.
+- **C.2 Tabbed member detail** — **DONE.** `membership.memberHistory` (owner; member's present participations + `trainingStats`/`classifyDrift`); member list row expands to Overview · Attendance tabs (paginated), deep-linkable from C.1. Fulfils spec O4 "attendance history". Refs: spec O4.
 
 ### v1.3 — Frictionless & Pay
+
 **Exit test:** the common booking is one tap (home card); the owner clears a class's attendance in one tap; the owner sees who paid / who's overdue and confirms an "I paid" claim; dues reminders fire. Payments = **manual bank transfer only** (no processor). Plan: `.scratch/frictionless-pay/plan.md`; decision: **ADR 40**. **Build order: F.3 → F.1/F.2 → P.1 → P.2 → P.3 → R.1 → R.2** (P.1 gates all payments; R.2 is a fast-follow, off the critical path). Only **P.1** has a migration (**0015**).
 
 - **F.1 Today / next-class card** — **DONE.** A brand-tinted card at the top of the mobile schedule (S4) features the class the student would book next (soonest upcoming unbooked, else the soonest upcoming — derived from the `class.mine` data already fetched) with a single **Book** button + the existing soft-capacity confirm; shows a "You're booked" state when done, and nothing when there's no upcoming class. Reuse only — `booking.book` + the schedule read; no new backend. Mobile device check pending. Spec: S4 (amended).
 - **F.2 Mark-all-present** — **DONE.** Domain-first: pure `bulkMarkTargets` in `attendance.ts` (booked+unmarked → present; leaves explicit absents + walk-ins) + 3 tests → `attendance.markAll` (staff, one bounded `UPDATE` in the RLS tx, respects the ≤14-day backfill via `canMarkAttendance`, returns the count) → web O5 **"Mark all present"** button (per-row Present toggle is the existing undo). Verified live on Neon (rolled-back tx). Mobile stays `—` (attendance is web/staff). Spec: O5 (amended).
 - **F.3 Scannable venue QR — DOC RECONCILIATION (no code).** Already built — `apps/nextjs/src/app/_components/venue-checkin.tsx` renders a printable QR poster via `qrcode.react` (`QRCodeSVG`); the roadmap/CLAUDE.md just never flipped. Task: flip this note + the Phase-3.5 follow-up + the status banner to reflect it, remove the "needs a QR lib" line, one CHANGELOG line. **Do not rebuild.**
 - **P.1 Dues + payment-claim schema & domain** — **DONE (foundation).** Migration `0015` adds four tenant-scoped tables (RLS `drop_in` pattern, **verified live on Neon** + a PGlite leak test): `membership_plan`, `member_dues` (a dedicated RLS dues row instead of a column on the RLS-less `member` table — ADR 40 implementation note), `payment_claim` (partial unique index = one open claim per member per `"YYYY-MM"` period), `payment_settings` (owner bank details). Pure `packages/domain/src/payments.ts` — `paymentStatus`/`rollNextDue` (UTC month math)/`paymentPeriod`/`claimDedupeKey`/`canClaim` + 13 tests. Validators added (`CreateMembershipPlanSchema`, `SetMemberDuesSchema`, `CreatePaymentClaimSchema`, `ClaimIdSchema`, …). Un-parked payments — ADR 40 written; spec §5/S9/O7 updated. Spec: O7, S9.
-- **P.2 Owner: paid / overdue status** — **DONE.** `membership.roster` (owner) now returns a per-member `dues` object — the RLS-scoped `member_dues`⋈`membership_plan` join + a last-confirmed-`payment_claim` aggregate, both on `ctx.db`, merged by `member.id`; status computed at read time via `paymentStatus` (never stored). Web O4: a payment-status **dot** (green/amber/red) per member, an **Overdue** filter chip, and plan / next-due / last-payment rows in the member-detail Overview. Verified live on Neon (rolled-back tx). Deps: P.1. Spec: O7.
+- **P.2 Owner: paid / overdue status** — **DONE.** `membership.members` (owner) now returns a per-member `dues` object — the RLS-scoped `member_dues`⋈`membership_plan` join + a last-confirmed-`payment_claim` aggregate, both on `ctx.db`, merged by `member.id`; status computed at read time via `paymentStatus` (never stored). Web O4: a payment-status **dot** (green/amber/red) per member, an **Overdue** filter chip, and plan / next-due / last-payment rows in the member-detail Overview. Verified live on Neon (rolled-back tx). Deps: P.1. Spec: O7.
 - **P.3 Student pay: requisites + "I paid" + confirm** — **DONE.** New **`payments` router** (all RLS-scoped `ctx.db`): owner `plans`/`createPlan`/`deletePlan`, `setMemberDues` (upsert plan + next-due), `getRequisites`/`updateRequisites` (bank details), `claims`/`confirm`/`reject` (confirm rolls `next_due_at` one cycle in the one RLS tx); student `myDues` (dues + requisites + derived reference code + `canPay`) + `claim` (one open claim per period via `canClaim` + the DB partial unique index; optional `proofUrl`). Reference code = pure `paymentReference` (derived, not stored). Web: new owner **Payments** screen (O7 — claims to confirm · member dues · plans) + nav item + waiting-claims badge; **bank-details** field on Settings (O6). Mobile S9: **Membership dues** card on Profile (status + amount + next-due, requisites with **copy** buttons via `expo-clipboard`, **"I paid"**). `expo-clipboard` is loaded **lazily + guarded** so a dev client built before it was added degrades to selectable text instead of dropping the whole Profile tab; a dev-client rebuild enables one-tap copy. Verified live on Neon (rolled-back tx: claim under RLS, double-submit blocked, confirm rolls the due date); **mobile device check pending**. Deps: P.1, P.2. Spec: S9, O7.
 - **R.1 Payment reminders** — **DONE.** Pure `buildDuesReminderMessage` (push + email, due-soon vs. overdue) + tests; `dues_reminder_period` column on `member_dues` (migration `0016`) = **one reminder per billing period** (auto-resets when a confirm rolls `next_due_at`); base-connection `claimDueDuesReminders` (atomic `UPDATE … RETURNING`, concurrency-safe) wired into `runReminderSweep`. **v1 wires no `vercel.json` cron (ADR 46)** — the sweep is built + tested but fires only via a manual `curl` in v1; automatic scheduling returns with the first host scheduler post-v1. Verified live on Neon (rolled-back tx: claims due-soon+overdue not paid, idempotent, re-eligible on a new period). Deps: P.1. Spec: O7; ADR 34/40.
 - **R.2 Home-screen widget** — native widget (iOS WidgetKit / Android) mirroring the F.1 card; deep-link "Book" into the app; a read-only snapshot in a shared store (App Group / SharedPreferences) — no auth/API in the widget. **Fast-follow, last, off the critical path.** **Scaffolded, native build deferred:** the shared selection `nextBookableClass` is built + tested in `@matops/domain` (reused by F.1); ticket 27 promoted; full native handoff written. The remaining WidgetKit/AppWidget/App-Group work is device-only (no simulator/Xcode in env). Guide: [`docs/home-widget-implementation.md`](home-widget-implementation.md). Deps: F.1. Spec: S10.
 
 ### v1.4 — Rank & Notes
-**Exit test:** a coach sets a member's belt (+ stripes) per discipline from the roster member detail, changing it records a promotion, and the student sees their rank + timeline read-only on Profile; a coach jots a staff-private note the student never sees. Rank is the coach's **judgment** — no automation, no progress prediction. Decision: **ADR 41**. Only **G.1** has a migration (**0017**). **Build order: G.1 → G.2 → G.3 → G.4.**
+
+**Exit test:** a coach sets a member's belt (+ stripes) per discipline from the member list member detail, changing it records a promotion, and the student sees their rank + timeline read-only on Profile; a coach jots a staff-private note the student never sees. Rank is the coach's **judgment** — no automation, no progress prediction. Decision: **ADR 41**. Only **G.1** has a migration (**0017**). **Build order: G.1 → G.2 → G.3 → G.4.**
 
 - **G.1 Rank + notes schema & domain** — **DONE (foundation).** Migration `0017` adds three tenant-scoped tables (RLS payments/`drop_in` pattern, PGlite leak test `rank-rls.test.ts`; **applied + verified live on Neon** — RLS + `*_isolation` policy + `matops_app` grant on all three): `member_rank` (one current rank per member+discipline, unique index = the upsert target), `rank_promotion` (append-only history), `member_note` (staff-private). Pure `packages/domain/src/rank.ts` — seeded `RANK_SYSTEMS` (BJJ belts + stripes, Judo belts), `isValidRank`/`formatRank`/`isRankChange`/`rankDisciplines`/`disciplineLabel` + 15 tests. Validators: `SetMemberRankSchema`, `ClearMemberRankSchema`, `AddMemberNoteSchema`, `NoteIdSchema`. Un-parked rank — ADR 41 written; spec O4/S7/§5 updated. Discipline stored as TEXT (validated in domain) so the model stays general. Spec: O4, S7.
 - **G.2 Owner: set + promote rank per discipline** — **DONE.** New **`rank` router**: `forMember` (staff — current ranks + promotion history with promoter names), `set` (staff — validates via `isValidRank`, upserts `member_rank`, appends `rank_promotion` only when `isRankChange`, both in the one RLS tx), `clear` (staff). Web O4 member detail gains a **Rank** tab: current ranks per discipline, a discipline/belt/stripes picker → **Save rank**, and the promotion history. Discipline picker is populated from the seeded systems (no owner rank-system config in v1.4 — custom ladders parked; this folds the drafted "G.5"). Staff-tier so an instructor can set rank via API even though the web surface is owner-only O4. Spec: O4; ADR 41.
@@ -199,16 +236,18 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 - **G.4 Staff-private notes** — **DONE.** New **`note` router** (all staff-tier, never read by a student-facing route): `forMember` (notes + author name), `add`, `remove`. Web O4 member detail gains a **Notes** tab (textarea + Add, list with author/date + Delete). RLS scopes notes to the academy so all staff share them; the member never sees them. Spec: O4; ADR 41.
 
 ### v1.5 — Owner on the mat (installable PWA)
+
 **Exit test:** the owner adds the web app to the phone home screen, it opens **standalone** (app icon, no browser chrome), and the four on-the-mat jobs — take attendance, cancel / edit a class, **share** the invite link + venue QR via the phone share sheet, approve a pending join — are thumb-reachable at phone size. Decision: **ADR [42](issues/42-owner-mobile-web-pwa.md)**. **No migration, no domain, no router change** — a client-shell + manifest concern; the tenant seam is untouched.
 
 - **W.1 PWA manifest + install** — **DONE.** Next App-Router manifest route `apps/nextjs/src/app/manifest.ts` (`/manifest.webmanifest` — `standalone`, brand `theme_color #6a4dff`, `start_url "/"`, `192`/`512`/maskable-`512` PNG icons in `public/`, generated from the brand basketweave mark) + iOS home-screen metadata in `layout.tsx` (`appleWebApp` + a 180px `apple-touch-icon`; Safari ignores the manifest for add-to-home-screen) + `viewport-fit=cover`. **No service worker / offline** — modern Chromium install no longer needs one, and offline + native push are the deferred-native tail (ADR 42 cuts). Spec: O8.
 - **W.2 On-the-mat interaction polish** — **DONE.** `env(safe-area-inset-*)` padding on the mobile shell (top-bar notch + bottom-tab home indicator; 0 on desktop, so desktop is untouched). O5 attendance **Present/Absent** become full-width ≥44px thumb targets on mobile (compact pair on desktop). Invite links + venue QR gain a **Share** button → the OS share sheet (`lib/share.ts` — `shareLink` + clipboard fallback; `useCanShare` reads `navigator` via `useSyncExternalStore` with a `false` server snapshot — no hydration hack, no effect). Spec: O8.
 
-**Cut (ADR 42):** the O1 dashboard analytics reflow, editing payments / plans / settings on mobile, native push / offline, and any **unified / native owner app** (student stays native, owner stays web / PWA; a separate native owner app is revisited only on a native-only mat need *and* the Apple-account / device-test blockers clearing). **Student web** stays out (Kano *Indifferent*). Verified: lint · typecheck · `next build` (the manifest route + all screens present). **Device install / visual check pending** (no simulator — the standing handoff pattern).
+**Cut (ADR 42):** the O1 dashboard analytics reflow, editing payments / plans / settings on mobile, native push / offline, and any **unified / native owner app** (student stays native, owner stays web / PWA; a separate native owner app is revisited only on a native-only mat need _and_ the Apple-account / device-test blockers clearing). **Student web** stays out (Kano _Indifferent_). Verified: lint · typecheck · `next build` (the manifest route + all screens present). **Device install / visual check pending** (no simulator — the standing handoff pattern).
 
 ---
 
 ### v1.7 — Mobile dark-first design pass (Geist + shared language)
+
 **Exit test:** the Expo student app opens **dark** (canonical pure black) with class times, capacity, prices and streaks set in **Geist Mono** (the "mat clock"), cards and callouts match the web (tight 3px radius, filled-vs-outline, dashed stripe), and Profile offers a **Light / Dark / System** toggle that persists. Decision: **ADR [44](issues/44-mobile-dark-first-design-system.md)**. **No domain / API / migration / router / token change** — presentation only, so the web can't regress.
 
 - **U.1 Dark-first theme + Appearance toggle** — **DONE.** Mobile `ThemeProvider` (`components/theme.tsx`) defaults to dark, tri-state (Light / Dark / System), persisted in `expo-secure-store`, applied via RN `Appearance.setColorScheme` (NativeWind follows). New **Appearance** control on Profile (S7). Palette now derived from `@matops/ui/tokens` (hand-copied drift removed). Spec: S1–S9.
@@ -219,6 +258,7 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 ---
 
 ### v1.8 — Mobile ease-of-use (IA + core-flow friction)
+
 **Exit test:** a student books any bookable class from the Schedule list in **one tap**; the two class tabs read as "all" (Schedule) vs "mine" (My classes) with a single next-class card; an **overdue** member sees a thin, self-clearing warning strip on the tab screens that taps through to dues; there is **no Check-in tab** — a walk-in scans the gym poster and the app books + marks them attended; **appearance / notifications / sign out** live on a Settings screen behind a Profile gear; booking shows a toast and the S5 action sits in the thumb zone. Decision: **ADR [45](issues/45-mobile-ease-of-use.md)**. **No domain / migration / back-end change** — reuses `booking` / `checkin` / `payments` / `academy` as-is.
 
 - **M.1 Inline booking** — **DONE.** Shared `components/book-control.tsx` (`useBookClass` hook + `BookButton`) de-dupes the book rule (schedule + detail); each bookable Schedule row books in one tap (soft-cap confirm kept). Spec: S4/S5.
@@ -233,6 +273,70 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 
 ---
 
+### v1.9 — Internal Referrals
+
+**Exit test:** staff attribute an eligible student once to any retained academy member and see confirmed current-month/lifetime payment performance by referrer; instructors cannot change an assignment, while owners can correct/clear it and inspect the complete audit. Decision: **ADR [52](issues/52-internal-referral-tracking.md)**. Migration `0018`; no student/mobile surface and no commission or payout behavior.
+
+- **J.1 Referral domain + persistence** — **DONE.** Pure target/referrer/self/currency/month rules; `member_referral` current state + append-only `member_referral_audit`, both RLS-scoped with tenant indexes, unique student key, and self-referral checks. Focused domain and PGlite tests written (not executed in this agent session).
+- **J.2 Staff API** — **DONE.** `referral.dashboard` aggregates contact-free membership/plan/dues data and confirmed claims by academy month/currency; `assign` is staff-tier and catches repeated/concurrent assignment as a precondition; `correct`/`history` are owner-tier. Corrections and audit writes share the tenant transaction.
+- **J.3 O9 web ledger** — **DONE.** `/referrals` for owners/instructors with metrics, selectable referrer summaries, search and five filter dimensions, removed-history toggle, one-time assignment confirm, instructor lock, owner correction warning, and on-demand audit history. No O4/O7 owner controls leak into the screen.
+- **J.5 Referrer-first rewrite** — **DONE.** J.3 shipped O9 as a student ledger: a referrer `<select>` and confirm button on every row, five filter dimensions above them. The screen now leads with the people who bring students in, ranked by how many, with their students as chips and the confirmed month/lifetime money they paid. Students nobody is credited for are a second section. **One dialog owns every write** — the header button, an uncredited student, or (owner only) a student chip on a card — and it says the permanence in words instead of nesting a `ConfirmDialog`. The picker only offers what the caller may do, so an instructor never reaches a locked state. Filters drop from six controls to search plus show-removed; plan and dues leave O9 for O4/O7; the metrics band becomes one sentence. No API, schema, or permission change: the client groups `referral.dashboard` students by referrer and reuses `groupMoneyByCurrency`, so the totals follow the rows on screen. Decision: **ADR [56](issues/56-referrer-first-referrals.md)**. Spec O9 updated.
+- **J.4 Demo continuity** — **DONE.** Both seed modes include multiple referrers, unassigned students, a removed historical attribution, and confirmed payment history from before attribution; both teardown modes remove only their referral rows under the existing cleanup guarantees.
+
+**Verify:** repo-wide typecheck (17/17), lint (15/15), and Drizzle migration check green. Focused tests are written but intentionally not run under the session rule. Manual desktop/PWA interaction pass remains.
+
+---
+
+### v2.0 — Mobile Wave A (kept promises + freshness)
+
+**Exit test:** a student who books a class gets a notification two hours before it starts, and cancelling the booking silently drops it; pulling down on Schedule / My classes / Profile refreshes them; reopening the app after hours away shows current spots-left, not a stale count; the schedule row names the coach; opening a class shows who else is on it, names for an approved viewer and counts for a pending one. Decision: **ADR [54](issues/54-local-class-reminders.md)**. **No migration / domain / token change**; one additive read field.
+
+- **N.1 Local class reminders** — **DONE (needs device).** `apps/expo/src/utils/reminders.ts` schedules an `expo-notifications` local notification 2h before a booked class, cancels it on cancel, and clears everything on sign-out or when the push toggle goes off. Payload matches the server push, so the existing tap router opens the class detail. Closes the gap ADR 46 left: the Settings copy promised reminders that nothing could send. Spec: S12 + §4.
+- **N.2 Freshness** — **DONE (needs device).** `AppState` drives React Query's `focusManager` in `app/_layout.tsx`, `staleTime` is 30s, and a shared `components/refresh.tsx` `useRefreshControl` adds pull-to-refresh to the three tab screens (also reachable from the empty and error states, which now sit inside the scroll view). Spec: §4.
+- **N.3 Rolling week window** — **DONE.** The Schedule query window was frozen in a `useMemo` with an empty dependency list; it is now computed per render, so midnight rollover is handled. Spec: S4.
+- **N.5 Who's in the class** — **DONE.** The §4 schedule-privacy rule was locked in session 12 and never built. New pure `visibleAttendees` (`packages/domain/src/attendance.ts`, 6 tests): an approved viewer sees **all booked members** by name alphabetically, **pending ones included** (ADR [55](issues/55-attendee-names-include-pending.md) amends §4 — the original approved-only rule hid an ordinary member who trains on the same mat, and the count told the viewer nothing); drop-ins and anyone with no name on file stay a count; a pending viewer gets counts only plus `namesHidden` so the UI can say why; the viewer is never listed to themselves. New enrolled `class.attendees` read joins names inside the RLS transaction and counts drop-ins — no member-table lookup, since attendee approval no longer changes the answer. Mobile S5 gains a "Who's in" field; the detail screen finally scrolls, which its sticky-bar comment already claimed. Spec: S5 + §4.
+- **N.4 Instructor on the row** — **DONE.** `class.mine` left-joins `user` for `instructorName` (the pattern `class.week` and `class.get` already use) and the Schedule row renders it, which is what S4 always said it did.
+
+**Verify:** repo-wide typecheck 17/17, lint 15/15, prettier green. Domain tests for `visibleAttendees` written but not run (session rule). Device pass outstanding.
+
+---
+
+### v2.1 — Dashboard as a queue, not a report (O1)
+
+**Exit test:** an owner opens the dashboard and, in five seconds, either sees a short list of things blocking them (each clickable, each able to reach zero) or one line saying the gym is clean. Nothing on the page is a number they cannot act on. **No migration; no new domain rule.**
+
+- **D.1 The "needs you" queue** — **DONE.** The three triage cards (one of which, "Classes today", was not a task and duplicated the stat row beneath it) are replaced by a queue of blockers: payments to confirm, pending approvals, overdue members with the total owed, and drop-in leads from the last 7 days. Items render only above zero; an empty queue collapses to one line. Money reaches the dashboard for the first time — `payments.claims` is a new call, and the overdue count and amount come from the `dues` field `membership.members` already returned and the screen was discarding. Today's rows now name the coach and mark the caller's own classes **You** (`academy.current` gains `userId`). `/members?filter=overdue` turns the Overdue chip on, matching the existing `?member=` deep link. "On today" and the "Approve members" quick action are gone as duplicates. Spec: O1, O4.
+- **D.2 Unmarked attendance** — **DONE.** Nothing told staff that a past class was never marked, so every downstream number (visits, attendance rate, drift bands) drifted wrong in silence. New pure `needsAttendance` + `UNMARKED_LOOKBACK_DAYS` (`packages/domain/src/attendance.ts`, 9 tests): a class is unmarked once it has ended, is live, somebody booked it, and nothing at all was marked. It deliberately skips a class **nobody booked** (an empty register cannot be marked, so the item could never clear) and a **partly marked** one (no-shows are normally left unmarked). `class.week` gains a `markedCount` subquery, the same shape `pendingCount` already had, so no second read is needed. The dashboard widens its window back over the look-back and computes `weekCount` from today forward. **This is the first queue item instructors get**, so the queue and its empty line are now staff-wide. Today's ended-but-unmarked classes also carry an **Unmarked** tag linking to O5. Spec: O1.
+- **D.3 Day block upgrade** — **DONE.** Rows open the shared `ClassRoster` modal (already built for the O2 grid — no new component, the same optimistic marking), so attendance is taken from the dashboard instead of two screens away. Each row carries its state: **Now** while running, **Unmarked** once ended with no register, a quiet title once done. The block rolls to **Tomorrow** after today's last class ends, so an evening check is not a dead page. Two fixes fell out of it: `ClassRoster` now invalidates the `class` path as well as `attendance.list`, without which marking from a modal left the D.2 queue counting a class that had just been marked (this bit the O2 modal too); and `now` moved out of the window `useMemo`, which had frozen the clock at mount and would have called an ended class "now" on a long-open tab. Spec: O1, O2, O5.
+- **D.4 Numbers with direction** — **DONE.** "84 visits this week" told the owner nothing without a baseline. `gymInsights` gains **`visitsLastWeek`**, counted in the same loop over the same 30-day window (no wider read: this week and last week both fit comfortably). New exported pure **`monthBucket`**, which also replaces the router's hand-rolled `sameMonth` string compare, lets `stats.gym` return **`newMembersLastMonth`** beside the existing this-month count. The `Stat` primitive gains an optional comparison line, painted **muted, never green or red** — a drop in visits is not an error, and hue-only direction fails both the callout vocabulary and colour blindness. The health row is three numbers now: visits this week vs last, new members this month vs last (owner), and the attendance rate. **`visitsLastMonth` was deliberately not built** — the previous calendar month does not fit inside the 30-day window, and widening the read would change what busiest / rate / by-weekday mean. Each stat states its own period instead of the section claiming one. Spec: O1.
+- **D.5 Money this month** — **DONE.** New owner-only `stats.revenue`: confirmed payment claims for the academy calendar month against last, one figure per currency. It reuses the pure `groupMoneyByCurrency` the referral ledger already had, and the `monthBucket` D.4 added, so no new domain rule was needed. The SQL bound is a coarse 70 days (this month plus last is at most 62 on any calendar, plus room for the academy zone shifting a boundary) purely to stop the query growing forever; the exact month split happens in code. Currencies are never summed, and a currency billed in either month appears in both so a drop to zero shows. It sits at the head of the health row for owners and is absent for instructors, who never see money. `Stat` gains an optional `formatDelta` so the comparison line reads `↑ €120 vs last month` rather than a raw minor-unit count. Spec: O1.
+
+**Series verify:** typecheck 17/17 · lint 15/15 · `next build` after every slice. Domain tests written across D.2 and D.4 (12 new) but not run under the session rule. **No browser pass** — the Chrome extension would not attach; the queue at 1 vs 5 cards, the day row at phone width, and the delta lines want an eyeball.
+
+**Not in this series:** charts. `byWeekday` is sitting there and would look good as bars, but it answers no question an owner asks daily.
+
+---
+
+### v2.2 — Student onboarding funnel (ADR 57)
+
+**Exit test:** a student standing in the gym scans a code, and a few minutes later has booked a class, without installing anything. **No migration; no new domain rule.**
+
+- **E.1 Join QR** — **DONE.** The invite link is now also a QR code, on both the student and the instructor card. The gym's own moment of joining is face to face, and the lowest-friction hand-off between two people in one room is a camera scan, not a copy-paste into WhatsApp. The poster markup, the print CSS and the `qrcode.react` call moved out of `venue-checkin.tsx` into a shared `QrPoster`, so the two posters are one component. Printing is now scoped per card (`data-printing` on the card the button belongs to) because the settings page can hold two posters at once and the old `.qr-print` class would have printed both. Spec: O6.
+- **E.2 One-step join** — **DONE.** The invite form asked for the magic-link email in the middle of the flow, so the student left for their mail app before committing anything, then came back to *more* form. Name, phone and email are one step now; opening the emailed link completes the join by itself. The profile rides in the `callbackURL` rather than in `sessionStorage`, because the mail app often opens a different browser than the form was typed in. It is **base64url**, not query pairs: better-auth decodes the `callbackURL` a second time on verify, so a phone typed as `+380…` arrived as a space (checked against its `originCheck` regex, which the opaque form also satisfies). `sign-in.tsx` gained `SocialSignIn` / `OrDivider` exports so the join page reuses the Google button without a second email form under it, and the page reads the carried profile server-side, so no `useSearchParams` Suspense boundary is needed. Spec: S2.
+- **E.3 Student web** — **DONE.** A student who joined on web landed on "You're almost in." forever, because every nav item is gated on `isStaff` / `isOwner`; the copy also lied to an **approved** student, who was never going to get staff tools. `dashboard-screen`'s non-staff branch now renders a **`StudentScreen`**: the rolling seven-day week grouped by day (Today first), time / title / discipline / coach / spots left, a **Booked** pill, and inline **Book** and **Cancel**. Over capacity it asks "book anyway?" through the existing `ConfirmDialog`, which is the soft-capacity rule the mobile `useBookClass` hook already applied. **No new procedure** — `class.mine` and `booking.book` / `cancel` are the calls the app makes, so the clients cannot drift. Two shell changes fell out of it: the nav renders only above one item (a one-tab bottom bar is not navigation), and **sign-out moved into the phone header**, which had never had one — a student on a phone, and an owner in the ADR 42 PWA, had no way to sign out. Suspended members get the §4 calm notice instead of a load error, with the query gated off. `now` is passed down from the screen rather than read per row, which `react-hooks/purity` rejects. Spec: S4.
+- **E.4 Install card** — **DONE.** The PWA manifest has covered `/` since W.1 (`scope: "/"`), so the student week was already installable and nothing said so. A quiet card at the foot of the screen now offers **Install** where `beforeinstallprompt` fires, and the **Share → Add to Home Screen** wording on iOS, where no prompt exists. It hides itself once `display-mode: standalone` matches, so an installed student never sees it, and the suspended branch returns before it. It advertises **installing**, not a download, because no store listing exists — see ADR 57 §Consequences. The manifest description was owner-only wording ("Schedule, members, and attendance") and now names booking too, since students read it in the install prompt.
+
+### v2.3: backend review fixes (ADR 60)
+
+**Exit test:** the API has tests that drive the real routers, and every finding from the backend review is closed. **Two migrations (`0019` index, `0020` grants); no new domain rule.**
+
+- **R.1 API test seam.** **DONE.** `packages/api/test` is a third test home: `appRouter.createCaller` over the real middleware and the real SQL, against PGlite injected as `ctx.baseDb`. `createTRPCContext` went from three injected functions to one handle, and `withTenant` / `getMembership` / `getMemberById` / `getMemberIdForUser` / `listMembersOf` now take `exec` as a **required** parameter, because the `exec = db` defaults were what let a missed call site keep hitting the production pool with no compile error.
+- **R.2 Critical fixes.** **DONE.** The auth error hook logged the Better Auth context, which carries the **app secret** (rotate it on deploy). A template timing edit hard-DELETEd classes that `class_participation` and `drop_in` reference with `ON DELETE no action`, so one booking locked that template's time forever; it cancels and revives now. Class emails went out with every recipient in one `to:` field.
+- **R.3 Defect sweep.** **DONE.** `payments.myDues` (bank details) was readable by a **pending** member; `deletePushToken` had no owner check; `class.update` / `class.cancel` told students the wrong local hour; `template.update` reassigned the instructor to whoever edited; both reminder sweeps stamped "reminded" then sent serially; notifications ran inside the tenant transaction; the drop-in upsert erased a returning visitor's class and double-counted the visit. Migration `0019` indexes `member (organization_id, user_id)`; `0020` revokes matops_app's write access to the identity tables.
+- **R.4 Deletion + types.** **DONE.** `referral.dashboard` lost `metrics`, `referrerSummaries`, `plans`, `currentMonth`, `timeZone` and the per-student `plan` / `dues` (nothing read them since ADR 56), which also removed a join. Five copies of the academy-membership guard became one `requireMember`. `ParticipationRow` / `BulkMarkRow` use the existing domain unions; two `as unknown as` casts became `execute<T>()`. `Membership.role` / `.status` stay `string` on purpose: the columns are free text Better Auth also writes.
+
+**Series verify:** typecheck 17/17 · lint 15/15 · `next build`. Router tests written (`template-edit.test.ts` added), **not run** under the session rule.
+
 ## Parked — next iteration (do NOT build in v1)
 
 Promote to a slice only on purpose (an ADR or a new roadmap row).
@@ -240,7 +344,7 @@ Promote to a slice only on purpose (an ADR or a new roadmap row).
 - **Capacity hygiene:** hard caps, booking priority, waitlists, no-show tracking, cancel cut-offs. (tickets 22, 13)
 - **Home widget:** ~~parked~~ **promoted to v1.3 R.2** (S10) — still a native fast-follow, off the launch critical path. (ticket 27, ADR 40 plan)
 - **Live UI:** SSE + Postgres LISTEN/NOTIFY via a separate always-on worker. (tickets 04, 15, 17)
-- **Card billing:** payment **processor / auto-subscription / Stripe**, invoicing, multi-currency tax. *(Manual-transfer dues are **promoted to v1.3** — ADR 40; only the card/recurring layer stays parked.)*
+- **Card billing:** payment **processor / auto-subscription / Stripe**, invoicing, multi-currency tax. _(Manual-transfer dues are **promoted to v1.3** — ADR 40; only the card/recurring layer stays parked.)_
 - **Deferred domains:** ~~belts/rank~~ (**promoted to v1.4** — ADR 41; only owner-defined **custom rank ladders** + **bulk** promotion stay parked), curriculum, announcements/DMs, cross-academy franchise views, i18n, super-admin. (map "out of scope")
 
 Each is additive by design (new schema file + router + pure logic; the tenant seam is untouched) — architecture.md §8.

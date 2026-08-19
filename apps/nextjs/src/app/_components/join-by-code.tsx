@@ -30,9 +30,10 @@ export function JoinByCode() {
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
   // The gym confirmed by the code lookup — null until "Find my gym" succeeds.
-  const [found, setFound] = useState<{ academyId: string; name: string } | null>(
-    null,
-  );
+  const [found, setFound] = useState<{
+    academyId: string;
+    name: string;
+  } | null>(null);
 
   // findByCode is a query procedure; fetch it on demand (not on every keystroke)
   // rather than subscribing, so a mutation wrapper drives the button state.
@@ -64,8 +65,8 @@ export function JoinByCode() {
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold tracking-tight">Join your gym</h1>
         <p className="text-muted-foreground text-sm">
-          Enter the 6-digit ID your gym gave you. Your gym confirms you after you
-          join.
+          Enter the 6-digit ID your gym gave you. Your gym confirms you after
+          you join.
         </p>
       </div>
 
@@ -114,7 +115,7 @@ export function JoinByCode() {
             });
           }}
         >
-          <div className="bg-muted flex items-center justify-between rounded-lg px-4 py-3">
+          <div className="border-border bg-card flex items-center justify-between rounded-lg border px-4 py-3">
             <div className="min-w-0">
               <p className="text-muted-foreground text-xs">Joining</p>
               <p className="truncate font-medium">{found.name}</p>

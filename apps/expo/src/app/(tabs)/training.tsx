@@ -1,18 +1,18 @@
 import { ScrollView, View } from "react-native";
 import { useRouter } from "expo-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 
 import { nextClass, splitMyClasses } from "@matops/domain";
 
 import type { RouterOutputs } from "~/utils/api";
+import { useCancelBooking } from "~/components/book-control";
 import { MyTrainingCard } from "~/components/my-training-card";
 import { OverdueBanner } from "~/components/overdue-banner";
+import { useRefreshControl } from "~/components/refresh";
 import { SuspendedNotice } from "~/components/suspended-notice";
-import { useToast } from "~/components/toast";
 import {
   Button,
   Card,
-  confirm,
   EmptyState,
   ErrorState,
   Eyebrow,
@@ -108,8 +108,6 @@ function ClassRow({
  */
 export default function Training() {
   const router = useRouter();
-  const queryClient = useQueryClient();
-  const toast = useToast();
   const current = useQuery(trpc.academy.current.queryOptions());
   // Suspended members have no enrolled access — gate the query + show a notice.
   const suspended = current.data?.status === "suspended";
@@ -117,16 +115,9 @@ export default function Training() {
     trpc.booking.mine.queryOptions(undefined, { enabled: !suspended }),
   );
 
-  const cancel = useMutation(
-    trpc.booking.cancel.mutationOptions({
-      onSuccess: async () => {
-        toast.show("Booking cancelled");
-        await queryClient.invalidateQueries(trpc.booking.pathFilter());
-        await queryClient.invalidateQueries(trpc.class.pathFilter());
-      },
-    }),
-  );
+  const { onCancel, pendingClassId } = useCancelBooking();
 
+  const refreshControl = useRefreshControl();
   const now = new Date();
   const { upcoming, past } = splitMyClasses(mine.data ?? [], now);
   const next = nextClass(upcoming, now);
@@ -157,76 +148,74 @@ export default function Training() {
 
       {mine.isPending ? (
         <InlineLoading />
-      ) : mine.isError ? (
-        <ErrorState label="your classes" onRetry={() => void mine.refetch()} />
       ) : (
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={{ gap: 24, paddingBottom: 24 }}
           showsVerticalScrollIndicator={false}
+          refreshControl={refreshControl}
         >
-          {next ? (
-            <NextClassCard c={next} onPress={() => openClass(next.classId)} />
-          ) : null}
-
-          <MyTrainingCard />
-
-          {upcoming.length === 0 ? (
-            <View style={{ gap: 8 }}>
-              <Eyebrow>Upcoming</Eyebrow>
-              <EmptyState
-                title="Nothing booked yet."
-                body="Book a class from the schedule and it shows up here."
-              />
-            </View>
-          ) : rest.length > 0 ? (
-            <View style={{ gap: 8 }}>
-              <Eyebrow>Upcoming</Eyebrow>
-              {rest.map((c) => (
-                <ClassRow
-                  key={c.classId}
-                  c={c}
-                  onPress={() => openClass(c.classId)}
-                  action={
-                    c.status === "cancelled" ? undefined : (
-                      <Button
-                        label="Cancel"
-                        variant="destructive"
-                        loading={
-                          cancel.isPending &&
-                          cancel.variables.classId === c.classId
-                        }
-                        onPress={() =>
-                          confirm({
-                            title: "Cancel this booking?",
-                            message:
-                              "You'll lose your spot. If the class is full, you may not get it back.",
-                            confirmLabel: "Cancel booking",
-                            cancelLabel: "Keep it",
-                            onConfirm: () =>
-                              cancel.mutate({ classId: c.classId }),
-                          })
-                        }
-                      />
-                    )
-                  }
+          {mine.isError ? (
+            <ErrorState
+              label="your classes"
+              onRetry={() => void mine.refetch()}
+            />
+          ) : (
+            <>
+              {next ? (
+                <NextClassCard
+                  c={next}
+                  onPress={() => openClass(next.classId)}
                 />
-              ))}
-            </View>
-          ) : null}
+              ) : null}
 
-          {past.length > 0 ? (
-            <View style={{ gap: 8 }}>
-              <Eyebrow>Past</Eyebrow>
-              {past.map((c) => (
-                <ClassRow
-                  key={c.classId}
-                  c={c}
-                  onPress={() => openClass(c.classId)}
-                />
-              ))}
-            </View>
-          ) : null}
+              <MyTrainingCard />
+
+              {upcoming.length === 0 ? (
+                <View style={{ gap: 8 }}>
+                  <Eyebrow>Upcoming</Eyebrow>
+                  <EmptyState
+                    title="Nothing booked yet."
+                    body="Book a class from the schedule and it shows up here."
+                  />
+                </View>
+              ) : rest.length > 0 ? (
+                <View style={{ gap: 8 }}>
+                  <Eyebrow>Upcoming</Eyebrow>
+                  {rest.map((c) => (
+                    <ClassRow
+                      key={c.classId}
+                      c={c}
+                      onPress={() => openClass(c.classId)}
+                      action={
+                        c.status === "cancelled" ? undefined : (
+                          <Button
+                            label="Cancel"
+                            variant="destructive"
+                            loading={pendingClassId === c.classId}
+                            onPress={() => onCancel(c.classId)}
+                          />
+                        )
+                      }
+                    />
+                  ))}
+                </View>
+              ) : null}
+
+              {past.length > 0 ? (
+                <View style={{ gap: 8 }}>
+                  <Eyebrow>Past</Eyebrow>
+                  {past.map((c) => (
+                    <ClassRow
+                      key={c.classId}
+                      c={c}
+                      onPress={() => openClass(c.classId)}
+                    />
+                  ))}
+                </View>
+              ) : null}
+            </>
+          )}
         </ScrollView>
       )}
     </Screen>

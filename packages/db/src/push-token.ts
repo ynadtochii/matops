@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { user } from "./auth-schema";
 import { db } from "./client";
@@ -44,9 +44,19 @@ export async function upsertPushToken(
     });
 }
 
-/** Remove a token (called on sign-out so a shared device stops receiving pushes). */
-export async function deletePushToken(token: string): Promise<void> {
-  await db.delete(pushToken).where(eq(pushToken.token, token));
+/**
+ * Remove one of a user's own tokens (called on sign-out so a shared device stops
+ * receiving pushes). Scoped by `userId` as well as the token: the token string is
+ * client-supplied, so without the owner filter any signed-in caller could silence
+ * anyone else's notifications.
+ */
+export async function deletePushToken(
+  userId: string,
+  token: string,
+): Promise<void> {
+  await db
+    .delete(pushToken)
+    .where(and(eq(pushToken.userId, userId), eq(pushToken.token, token)));
 }
 
 /** A notification target: contact channels resolved for one user. */

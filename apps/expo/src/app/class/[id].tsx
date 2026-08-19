@@ -1,13 +1,13 @@
-import { View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { Stack, useLocalSearchParams } from "expo-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 
-import { useBookClass } from "~/components/book-control";
-import { useToast } from "~/components/toast";
+import { capacityDisplay } from "@matops/domain";
+
+import { useBookClass, useCancelBooking } from "~/components/book-control";
 import {
   Banner,
   Button,
-  confirm,
   ErrorState,
   Eyebrow,
   Field,
@@ -23,6 +23,50 @@ import {
 import { trpc } from "~/utils/api";
 import { dayLongFmt, timeFmt } from "~/utils/format";
 
+function WhoIsIn({
+  classId,
+  viewerBooked,
+}: {
+  classId: string;
+  viewerBooked: boolean;
+}) {
+  const q = useQuery(trpc.class.attendees.queryOptions({ id: classId }));
+
+  if (q.isPending || q.isError) return null;
+
+  const { names, othersCount, namesHidden } = q.data;
+
+  if (names.length === 0 && othersCount === 0) {
+    return (
+      <Field label="Who's in">
+        <Muted>
+          {viewerBooked ? "Just you so far." : "No one booked yet."}
+        </Muted>
+      </Field>
+    );
+  }
+
+  return (
+    <Field label="Who's in">
+      <UIStack gap={4}>
+        {names.length > 0 ? <Txt size={16}>{names.join(", ")}</Txt> : null}
+        {othersCount > 0 ? (
+          <Txt
+            size={names.length > 0 ? 14 : 16}
+            tone={names.length > 0 ? "muted" : "default"}
+          >
+            {names.length > 0 ? "+" : ""}
+            {othersCount} {othersCount === 1 ? "other" : "others"}
+          </Txt>
+        ) : null}
+        {namesHidden ? (
+          <Muted>Names show once your gym approves you.</Muted>
+        ) : null}
+      </UIStack>
+    </Field>
+  );
+}
+
 /**
  * Class detail (spec S5) — title, discipline, day/time, duration, instructor,
  * capacity, and Book / Cancel. Enrolled tier, so a PENDING member may book too
@@ -33,22 +77,12 @@ import { dayLongFmt, timeFmt } from "~/utils/format";
  */
 export default function ClassDetail() {
   const t = useTheme();
-  const toast = useToast();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const queryClient = useQueryClient();
   const q = useQuery(trpc.class.get.queryOptions({ id }, { retry: false }));
 
   const { onBook, isPending: booking, error: bookError } = useBookClass();
-  const cancel = useMutation(
-    trpc.booking.cancel.mutationOptions({
-      onSuccess: async () => {
-        toast.show("Booking cancelled");
-        await queryClient.invalidateQueries(trpc.class.pathFilter());
-        await queryClient.invalidateQueries(trpc.booking.pathFilter());
-      },
-    }),
-  );
-  const busy = booking || cancel.isPending;
+  const { onCancel, isPending: cancelling } = useCancelBooking();
+  const busy = booking || cancelling;
 
   if (q.isPending) {
     return (
@@ -71,9 +105,10 @@ export default function ClassDetail() {
   const c = q.data;
   const cancelled = c.status === "cancelled";
   const start = new Date(c.startsAt);
-  const over = c.capacity > 0 && c.bookingCount >= c.capacity;
-  const capacityLabel =
-    c.capacity <= 0 ? "No limit" : `${c.bookingCount} / ${c.capacity}`;
+  const { label: capacityLabel, isOver: over } = capacityDisplay(
+    c.bookingCount,
+    c.capacity,
+  );
   const booked = c.myBooking === "booked";
   const provisional = booked && c.myBookingTier === "provisional";
   const past = start.getTime() <= new Date().getTime();
@@ -90,20 +125,11 @@ export default function ClassDetail() {
         </Txt>
       )}
       <Button
-        label={cancel.isPending ? "Cancelling…" : "Cancel booking"}
+        label={cancelling ? "Cancelling…" : "Cancel booking"}
         variant="destructive"
-        loading={cancel.isPending}
+        loading={cancelling}
         disabled={busy}
-        onPress={() =>
-          confirm({
-            title: "Cancel this booking?",
-            message:
-              "You'll lose your spot. If the class is full, you may not get it back.",
-            confirmLabel: "Cancel booking",
-            cancelLabel: "Keep it",
-            onConfirm: () => cancel.mutate({ classId: c.id }),
-          })
-        }
+        onPress={() => onCancel(c.id)}
       />
     </UIStack>
   ) : (
@@ -119,7 +145,11 @@ export default function ClassDetail() {
     <Screen>
       <Stack.Screen options={{ title: "Class" }} />
 
-      <View style={{ flex: 1 }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 16 }}
+        showsVerticalScrollIndicator={false}
+      >
         <UIStack gap={24}>
           <UIStack gap={6}>
             <Heading>{c.title}</Heading>
@@ -147,6 +177,7 @@ export default function ClassDetail() {
                 {over ? " · may be busy" : ""}
               </Mono>
             </Field>
+            <WhoIsIn classId={c.id} viewerBooked={booked} />
           </UIStack>
 
           {bookError && (
@@ -155,7 +186,7 @@ export default function ClassDetail() {
             </Txt>
           )}
         </UIStack>
-      </View>
+      </ScrollView>
 
       {/* Sticky bottom action bar — the primary action in the thumb zone. */}
       <View

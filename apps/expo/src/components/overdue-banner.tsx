@@ -22,12 +22,13 @@ import { trpc } from "~/utils/api";
 export function OverdueBanner() {
   const t = useTheme();
   const router = useRouter();
-  // A suspended member has no enrolled access — `payments.myDues` is rejected.
-  // Gate the query off so the strip stays quiet without a 403 on every screen.
+  // Only an APPROVED member may read their dues (a pending or suspended one is
+  // rejected). Gate the query so the strip stays quiet instead of firing a 403
+  // on every screen.
   const current = useQuery(trpc.academy.current.queryOptions());
-  const suspended = current.data?.status === "suspended";
+  const approved = current.data?.status === "active";
   const dues = useQuery(
-    trpc.payments.myDues.queryOptions(undefined, { enabled: !suspended }),
+    trpc.payments.myDues.queryOptions(undefined, { enabled: approved }),
   );
 
   if (dues.data?.dues?.status !== "overdue") return null;

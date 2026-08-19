@@ -90,9 +90,16 @@ export async function createDropIn(
         firstName: input.firstName,
         lastName: input.lastName,
         email: input.email,
-        classId: input.classId,
+        // Keep the class we already have when this submit resolved none, so a
+        // second form fill outside any class window does not erase the visit
+        // the lead was actually recorded against.
+        classId: sql`coalesce(${input.classId}::uuid, ${dropIn.classId})`,
         consent: sql`${dropIn.consent} OR ${input.consent}`,
-        visitCount: sql`${dropIn.visitCount} + 1`,
+        // A visit is a NEW class, not a new form submit: a double submit for the
+        // same class must not count twice.
+        // ponytail: one class per lead row. Real per-visit history needs its own
+        // table; add it when the gym asks to see a visitor's attendance list.
+        visitCount: sql`${dropIn.visitCount} + CASE WHEN ${input.classId}::uuid IS DISTINCT FROM ${dropIn.classId} AND ${input.classId}::uuid IS NOT NULL THEN 1 ELSE 0 END`,
         lastVisitAt: now,
       },
     })

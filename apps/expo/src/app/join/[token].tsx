@@ -121,9 +121,7 @@ export default function JoinScreen() {
             <Button
               label={join.isPending ? "Joining…" : `Join ${academyName}`}
               loading={join.isPending}
-              disabled={
-                !firstName.trim() || !lastName.trim() || !phone.trim()
-              }
+              disabled={!firstName.trim() || !lastName.trim() || !phone.trim()}
               onPress={() => {
                 setError(null);
                 join.mutate({

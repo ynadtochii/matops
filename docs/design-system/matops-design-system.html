@@ -43,13 +43,13 @@
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #000000; --fg: #fafaf9; --card: #0a0a0a; --muted: #1a1917;
+      --bg: #000000; --fg: #fafaf9; --card: #0f0d0c; --muted: #1a1917;
       --muted-fg: #a6a09b; --border: #292524; --ink: #fafaf9; --ink-fg: #1c1917;
       --brand: #8b72ff; --brand-strong: #a390ff; --brand-fg: #12091f; --brand-wash: #17122e;
     }
   }
   :root[data-theme="dark"] {
-    --bg: #000000; --fg: #fafaf9; --card: #0a0a0a; --muted: #1a1917;
+    --bg: #000000; --fg: #fafaf9; --card: #0f0d0c; --muted: #1a1917;
     --muted-fg: #a6a09b; --border: #292524; --ink: #fafaf9; --ink-fg: #1c1917;
     --brand: #8b72ff; --brand-strong: #a390ff; --brand-fg: #12091f; --brand-wash: #17122e;
   }
@@ -177,7 +177,12 @@
   .btn-ink { background: var(--ink); color: var(--ink-fg); }
   .btn-outline { background: transparent; color: var(--fg); border-color: var(--border); }
   .btn-ghost { background: transparent; color: var(--fg); }
+  .btn-secondary { background: var(--muted); color: var(--fg); }
   .btn-danger { background: var(--destructive); color: #fff; }
+  .btn-danger-outline { background: transparent; color: var(--error);
+    border-color: color-mix(in srgb, var(--error) 35%, transparent); }
+  .btn-link { background: transparent; color: var(--brand-strong); text-decoration: underline;
+    text-underline-offset: 3px; padding-left: 4px; padding-right: 4px; }
 
   /* badges + status dots */
   .badge { font-family: var(--mono); font-size: 11px; padding: 3px 8px; border-radius: 3px;
@@ -227,9 +232,9 @@
     --s-brandfg:#ffffff; --s-wash:#f1eeff; --s-side:#fafaf9;
   }
   .darkscope {
-    --s-bg:#000000; --s-fg:#fafaf9; --s-card:#0a0a0a; --s-muted:#1a1917; --s-mfg:#a6a09b;
+    --s-bg:#000000; --s-fg:#fafaf9; --s-card:#0f0d0c; --s-muted:#1a1917; --s-mfg:#a6a09b;
     --s-border:#292524; --s-ink:#fafaf9; --s-inkfg:#1c1917; --s-brand:#8b72ff; --s-brandstrong:#a390ff;
-    --s-brandfg:#12091f; --s-wash:#17122e; --s-side:#0a0a0a;
+    --s-brandfg:#12091f; --s-wash:#17122e; --s-side:#0f0d0c;
   }
   .device { border-color: var(--s-border); background: var(--s-bg); color: var(--s-fg); }
   .device .caption { border-color: var(--s-border); color: var(--s-mfg); background: var(--s-side); }
@@ -338,7 +343,7 @@
 <div class="wrap">
   <div class="hero">
     <p class="eyebrow">Brand &amp; design system · locked</p>
-    <h1>A grappling gym runs on a <span class="v">schedule</span>, a roster, and a clock.</h1>
+    <h1>A grappling gym runs on a <span class="v">schedule</span>, a member list, and a clock.</h1>
     <p class="lede">matops is the instrument that runs all three. Sharp, not loud — monochrome by default, with one signature spark: <span class="v">violet</span>. This is the locked system — the tokens, the mark, and the rules, on real screens.</p>
     <div class="hero-meta">
       <span class="chip">accent · <b>violet</b></span>
@@ -480,12 +485,13 @@
       <p>Sharp corners, flat cards, dashed meta rules, mono for every number.</p></div>
     </div>
 
-    <p class="note" style="margin-bottom:16px"><b>Restrained, locked.</b> Ink is the primary button. Violet is the spark — mark, active nav, links, focus, the pending tag. One solid primary per view; the accent stays quiet.</p>
+    <p class="note" style="margin-bottom:16px"><b>Restrained, locked.</b> Ink is the primary button, spent once per view. A row action is quiet: <code>secondary</code> for the affirmative one, <code>outline</code> for the neutral one, <code>destructive-outline</code> for the one that opens a confirm. The solid red belongs to the confirm button inside that dialog. Violet is the spark — mark, active nav, links, focus, the pending tag.</p>
 
     <div class="gallery">
       <div class="panel">
-        <p class="plab">Buttons · primary is ink</p>
-        <div class="row"><button class="btn btn-ink">Book class</button><button class="btn btn-outline">Cancel</button><button class="btn btn-ghost">Skip</button><button class="btn btn-danger">Remove</button></div>
+        <p class="plab">Buttons · loudness comes from place, not danger</p>
+        <div class="row"><button class="btn btn-ink">Book class</button><button class="btn btn-secondary">Approve</button><button class="btn btn-outline">Suspend</button><button class="btn btn-ghost">Skip</button><button class="btn btn-danger-outline">Remove</button><button class="btn btn-link">Show more</button></div>
+        <div class="row" style="margin-top:10px"><span style="font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted-fg)">inside the dialog →</span><button class="btn btn-danger">Remove member</button></div>
         <div class="row" style="margin-top:14px;align-items:center"><span style="font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted-fg)">the spark →</span><span class="lnk mono" style="color:var(--brand-strong);font-size:12.5px">Approve →</span><span class="badge brand">PENDING</span><span style="font-size:12px;padding:5px 10px;border-radius:var(--r);background:var(--brand-wash);color:var(--brand-strong);border-left:2px solid var(--brand)">Dashboard</span></div>
       </div>
       <div class="panel">
@@ -534,7 +540,7 @@
             <nav class="nav">
               <a class="on" href="#"><span class="ic"></span> Dashboard</a>
               <a href="#"><span class="ic"></span> Schedule</a>
-              <a href="#"><span class="ic"></span> Roster <span class="ct">3</span></a>
+              <a href="#"><span class="ic"></span> Members <span class="ct">3</span></a>
               <a href="#"><span class="ic"></span> Attendance</a>
               <a href="#"><span class="ic"></span> Settings</a>
             </nav>
@@ -571,7 +577,7 @@
             <nav class="nav">
               <a class="on" href="#"><span class="ic"></span> Dashboard</a>
               <a href="#"><span class="ic"></span> Schedule</a>
-              <a href="#"><span class="ic"></span> Roster <span class="ct">3</span></a>
+              <a href="#"><span class="ic"></span> Members <span class="ct">3</span></a>
               <a href="#"><span class="ic"></span> Attendance</a>
               <a href="#"><span class="ic"></span> Settings</a>
             </nav>

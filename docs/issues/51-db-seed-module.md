@@ -30,7 +30,7 @@ Two facts about the schema make this simple:
    academy id is the natural teardown key — remove a demo academy = delete every
    row whose `academy_id` is a seed academy. No per-row ledger table.
 2. **Auth rows the seed creates use a `seed_` id prefix.** Teardown removes fake
-   users by that prefix. The prefix *is* the marker.
+   users by that prefix. The prefix _is_ the marker.
 
 **You are a real user, not a seed row.** In the fake-academy mode the seed looks
 you up by email and attaches memberships (owner of "ALPHA", student of "BETA")
@@ -46,6 +46,7 @@ bookings on both fill and clear, so it stays correct as fakes come and go. Your
 academy, its plans, templates, real classes, and real members are never touched.
 
 **Architecture:**
+
 - `registry.ts` — the two demo academies, id helpers, the `seed_` marker, the
   email resolver, one soft `NODE_ENV=production` guard (`SEED_ALLOW=1` overrides).
 - `data.ts` — **pure** dataset builder (no I/O, no clock), given `now` + an
@@ -91,3 +92,12 @@ Verified live on Neon: `seed fill 860275` populated the "grapplers" academy with
 20 demo students (+ dues, 70 bookings/attendance, ranks, a pending claim).
 
 No product behavior changed (dev tooling only), so `spec.md` is unchanged.
+
+## 2026-08-19 addendum — referral examples
+
+ADR 52 extends both modes with referral data: multiple current referrers,
+deliberately unassigned students, a removed historical attribution in the fake
+academies, and confirmed payment history that predates attribution. The cleanup
+invariant is unchanged. Fake-academy teardown deletes both referral tables by
+seed academy id; fill-mode teardown deletes audit/current rows only when the
+student membership id is `seed_`-prefixed, before removing those fake members.

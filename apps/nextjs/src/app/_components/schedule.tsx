@@ -1,12 +1,26 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
+import type { DisciplineTone } from "@matops/domain";
+import {
+  capacityDisplay,
+  clockParts,
+  disciplineTone,
+  timeFmt,
+} from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@matops/ui/dialog";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
 import { Select } from "@matops/ui/select";
@@ -14,13 +28,22 @@ import { Spinner } from "@matops/ui/spinner";
 import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
-import { cardClass } from "./primitives";
+import { ClassRoster } from "./class-roster";
+import { Section } from "./primitives";
 import { EmptyState, ErrorState, SkeletonRows } from "./states";
+import { WeekGrid } from "./week-grid";
 
 type ClassRow = RouterOutputs["class"]["week"][number];
 
 const DISCIPLINES = ["bjj", "nogi", "judo", "mma", "other"] as const;
 type Discipline = (typeof DISCIPLINES)[number];
+
+/** The mobile list's discipline rail. The desktop grid paints its own map. */
+const TONE_RAIL: Record<DisciplineTone, string> = {
+  gi: "bg-gi",
+  nogi: "bg-nogi",
+  other: "bg-border",
+};
 
 const ChevronLeft = () => (
   <svg
@@ -51,6 +74,20 @@ const ChevronRight = () => (
   </svg>
 );
 
+const XMark = () => (
+  <svg
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={1.5}
+    strokeLinecap="round"
+    className="size-4"
+    aria-hidden
+  >
+    <path d="M4.5 4.5l7 7M11.5 4.5l-7 7" />
+  </svg>
+);
+
 const browserTz = () => {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -68,15 +105,16 @@ function weekStart(offset: number): Date {
   return d;
 }
 
-const timeFmt = new Intl.DateTimeFormat(undefined, {
-  hour: "2-digit",
-  minute: "2-digit",
-});
 const dayFmt = new Intl.DateTimeFormat(undefined, {
   weekday: "short",
   month: "short",
   day: "numeric",
 });
+const monthDayFmt = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "numeric",
+});
+const dayOnlyFmt = new Intl.DateTimeFormat(undefined, { day: "numeric" });
 const dayKeyFmt = new Intl.DateTimeFormat("en-CA", {
   year: "numeric",
   month: "2-digit",
@@ -118,6 +156,7 @@ export function Schedule() {
   const queryClient = useQueryClient();
   const [offset, setOffset] = useState(0);
   const [form, setForm] = useState<OneOffForm | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
 
   const { from, to } = useMemo(() => {
     const start = weekStart(offset);
@@ -194,14 +233,59 @@ export function Schedule() {
     });
   };
 
-  const rangeLabel = `${dayFmt.format(weekStart(offset))} – ${dayFmt.format(
-    new Date(weekStart(offset).getTime() + 6 * 86400000),
-  )}`;
+  const start = weekStart(offset);
+  const end = new Date(start.getTime() + 6 * 86400000);
+  const rangeLabel = `${monthDayFmt.format(start)} – ${
+    start.getMonth() === end.getMonth()
+      ? dayOnlyFmt.format(end)
+      : monthDayFmt.format(end)
+  }`;
+
+  const cancelDialog = (c: ClassRow, trigger: ReactNode) => (
+    <ConfirmDialog
+      title="Cancel this class?"
+      description={`${c.title} on ${dayFmt.format(new Date(c.startsAt))} at ${timeFmt.format(new Date(c.startsAt))}. Everyone booked in loses their spot. This can't be undone.`}
+      confirmLabel="Cancel class"
+      cancelLabel="Keep class"
+      variant="destructive"
+      onConfirm={async () => {
+        await cancel.mutateAsync({ id: c.id });
+      }}
+      trigger={trigger}
+    />
+  );
+
+  const detail = (week.data ?? []).find((c) => c.id === detailId);
+
+  const detailDialog = (
+    <Dialog
+      open={detail !== undefined}
+      onOpenChange={(next) => !next && setDetailId(null)}
+    >
+      <DialogContent>
+        {detail && (
+          <>
+            <DialogTitle>{detail.title}</DialogTitle>
+            <DialogDescription>
+              {dayFmt.format(new Date(detail.startsAt))} ·{" "}
+              {timeFmt.format(new Date(detail.startsAt))} ·{" "}
+              {detail.durationMinutes} min
+              {detail.discipline && ` · ${detail.discipline.toUpperCase()}`}
+              {detail.instructorName && ` · ${detail.instructorName}`}
+              {detail.status === "cancelled" && " · cancelled"}
+            </DialogDescription>
+            <ClassRoster key={detail.id} cls={detail} />
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
 
   return (
     <section className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-1">
+      {detailDialog}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-0.5">
           <Button
             size="icon"
             variant="ghost"
@@ -210,14 +294,19 @@ export function Schedule() {
           >
             <ChevronLeft />
           </Button>
-          <button
+          <Button
             type="button"
+            size="sm"
+            variant="ghost"
             title="Back to this week"
-            className="text-muted-foreground hover:text-foreground rounded-md px-1 text-sm font-medium transition-colors"
+            className={cn(
+              "px-2 font-mono text-xs tracking-wide uppercase tabular-nums",
+              offset === 0 ? "text-foreground" : "text-muted-foreground",
+            )}
             onClick={() => setOffset(0)}
           >
             {rangeLabel}
-          </button>
+          </Button>
           <Button
             size="icon"
             variant="ghost"
@@ -226,211 +315,285 @@ export function Schedule() {
           >
             <ChevronRight />
           </Button>
-          {form === null && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setForm(emptyOneOff())}
-            >
-              Add class
-            </Button>
-          )}
         </div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="shrink-0"
+          onClick={() => setForm(emptyOneOff())}
+        >
+          Add class
+        </Button>
       </div>
+
+      <Dialog
+        open={form !== null}
+        onOpenChange={(next) => !next && setForm(null)}
+      >
+        <DialogContent>
+          {form !== null && (
+            <form
+              className="flex flex-col gap-4"
+              onSubmit={(e) => {
+                e.preventDefault();
+                submitOneOff();
+              }}
+            >
+              <DialogTitle>One-off class</DialogTitle>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="cl-title">Title</Label>
+                <Input
+                  id="cl-title"
+                  value={form.title}
+                  onChange={(e) => setForm({ ...form, title: e.target.value })}
+                  placeholder="Open mat"
+                  maxLength={80}
+                  required
+                />
+              </div>
+              <div className="flex flex-wrap gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="cl-date">Date</Label>
+                  <Input
+                    id="cl-date"
+                    type="date"
+                    value={form.date}
+                    onChange={(e) => setForm({ ...form, date: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="cl-time">Start</Label>
+                  <Input
+                    id="cl-time"
+                    type="time"
+                    value={form.time}
+                    onChange={(e) => setForm({ ...form, time: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="cl-duration">Duration (min)</Label>
+                  <Input
+                    id="cl-duration"
+                    type="number"
+                    min={5}
+                    max={600}
+                    value={form.durationMinutes}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        durationMinutes: e.target.valueAsNumber,
+                      })
+                    }
+                    required
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="cl-capacity">Capacity</Label>
+                  <Input
+                    id="cl-capacity"
+                    type="number"
+                    min={0}
+                    max={1000}
+                    value={form.capacity}
+                    onChange={(e) =>
+                      setForm({ ...form, capacity: e.target.valueAsNumber })
+                    }
+                    required
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="cl-discipline">Discipline</Label>
+                  <Select
+                    id="cl-discipline"
+                    value={form.discipline}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        discipline: e.target.value as Discipline | "",
+                      })
+                    }
+                  >
+                    <option value="">None</option>
+                    {DISCIPLINES.map((d) => (
+                      <option key={d} value={d}>
+                        {d.toUpperCase()}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="cl-tz">Time zone</Label>
+                <Input
+                  id="cl-tz"
+                  value={form.timeZone}
+                  onChange={(e) =>
+                    setForm({ ...form, timeZone: e.target.value })
+                  }
+                  required
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button type="submit" disabled={create.isPending}>
+                  {create.isPending && (
+                    <Spinner size="sm" className="text-current" />
+                  )}
+                  {create.isPending ? "Adding…" : "Add class"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setForm(null)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {week.isPending ? (
         <SkeletonRows rows={3} />
       ) : week.isError ? (
-        <ErrorState label="this week's schedule" onRetry={() => void week.refetch()} />
+        <ErrorState
+          label="this week's schedule"
+          onRetry={() => void week.refetch()}
+        />
       ) : byDay.length === 0 ? (
         <EmptyState title="No classes this week.">
           Add a one-off class above, or set up a recurring template below.
         </EmptyState>
       ) : (
-        <div className="flex flex-col gap-4">
-          {byDay.map(([key, rows]) => (
-            <div key={key} className="flex flex-col gap-2">
-              <h3 className="text-muted-foreground text-xs font-semibold uppercase">
-                {dayFmt.format(new Date(`${key}T12:00:00`))}
-              </h3>
-              {rows.map((c) => {
-                const cancelled = c.status === "cancelled";
-                const full = c.bookingCount >= c.capacity && c.capacity > 0;
-                return (
-                  <div
-                    key={c.id}
-                    className={cn(
-                      cardClass(),
-                      "flex flex-wrap items-center justify-between gap-3",
-                      cancelled && "opacity-60",
-                    )}
-                  >
-                    <div className="flex flex-col">
-                      <span className="font-medium">
-                        {timeFmt.format(new Date(c.startsAt))} · {c.title}
-                        {c.discipline && (
-                          <span className="text-muted-foreground ml-2 text-xs uppercase">
-                            {c.discipline}
-                          </span>
-                        )}
-                        {cancelled && (
-                          <span className="text-destructive ml-2 text-xs uppercase">
-                            cancelled
-                          </span>
-                        )}
-                      </span>
-                      <span
-                        className={`text-sm ${full ? "text-warning" : "text-muted-foreground"}`}
-                      >
-                        {c.bookingCount}/{c.capacity}
-                        {full ? " · may be busy" : " booked"}
-                        {c.pendingCount > 0 &&
-                          ` · +${c.pendingCount} pending`}{" "}
-                        · {c.durationMinutes}
-                        min
-                      </span>
-                    </div>
-                    {!cancelled && (
-                      <ConfirmDialog
-                        title="Cancel this class?"
-                        description={`${c.title} on ${dayFmt.format(new Date(c.startsAt))} at ${timeFmt.format(new Date(c.startsAt))}. Everyone booked in loses their spot. This can't be undone.`}
-                        confirmLabel="Cancel class"
-                        cancelLabel="Keep class"
-                        variant="destructive"
-                        onConfirm={async () => {
-                          await cancel.mutateAsync({ id: c.id });
-                        }}
-                        trigger={
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-destructive min-h-11 sm:min-h-8"
-                            disabled={
-                              cancel.isPending && cancel.variables.id === c.id
-                            }
-                          >
-                            Cancel
-                          </Button>
-                        }
-                      />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {form !== null && (
-        <form
-          className={cn(cardClass(), "flex flex-col gap-4")}
-          onSubmit={(e) => {
-            e.preventDefault();
-            submitOneOff();
-          }}
-        >
-          <h3 className="font-medium">One-off class</h3>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="cl-title">Title</Label>
-            <Input
-              id="cl-title"
-              value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
-              placeholder="Open mat"
-              maxLength={80}
-              required
-            />
-          </div>
-          <div className="flex flex-wrap gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="cl-date">Date</Label>
-              <Input
-                id="cl-date"
-                type="date"
-                value={form.date}
-                onChange={(e) => setForm({ ...form, date: e.target.value })}
-                required
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="cl-time">Start</Label>
-              <Input
-                id="cl-time"
-                type="time"
-                value={form.time}
-                onChange={(e) => setForm({ ...form, time: e.target.value })}
-                required
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="cl-duration">Duration (min)</Label>
-              <Input
-                id="cl-duration"
-                type="number"
-                min={5}
-                max={600}
-                value={form.durationMinutes}
-                onChange={(e) =>
-                  setForm({ ...form, durationMinutes: e.target.valueAsNumber })
-                }
-                required
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="cl-capacity">Capacity</Label>
-              <Input
-                id="cl-capacity"
-                type="number"
-                min={0}
-                max={1000}
-                value={form.capacity}
-                onChange={(e) =>
-                  setForm({ ...form, capacity: e.target.valueAsNumber })
-                }
-                required
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="cl-discipline">Discipline</Label>
-              <Select
-                id="cl-discipline"
-                value={form.discipline}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    discipline: e.target.value as Discipline | "",
-                  })
+        <>
+          <WeekGrid
+            rows={week.data}
+            weekStart={weekStart(offset)}
+            onSelect={(c) => setDetailId(c.id)}
+            action={(c) =>
+              cancelDialog(
+                c,
+                <button
+                  type="button"
+                  aria-label={`Cancel ${c.title}`}
+                  title="Cancel class"
+                  className="border-border bg-card text-muted-foreground hover:text-error hover:border-error/50 flex size-5 items-center justify-center rounded-[3px] border text-[11px] leading-none"
+                  disabled={cancel.isPending && cancel.variables.id === c.id}
+                >
+                  ×
+                </button>,
+              )
+            }
+          />
+          <div className="flex flex-col gap-6 md:hidden">
+            {byDay.map(([key, rows]) => (
+              <Section
+                key={key}
+                label={dayFmt.format(new Date(`${key}T12:00:00`))}
+                meta={
+                  (key === dayKeyFmt.format(new Date()) ? "today · " : "") +
+                  `${rows.length} ${rows.length === 1 ? "class" : "classes"}`
                 }
               >
-                <option value="">None</option>
-                {DISCIPLINES.map((d) => (
-                  <option key={d} value={d}>
-                    {d.toUpperCase()}
-                  </option>
-                ))}
-              </Select>
-            </div>
+                <ul className="flex flex-col gap-2">
+                  {rows.map((c) => {
+                    const cancelled = c.status === "cancelled";
+                    const full = capacityDisplay(
+                      c.bookingCount,
+                      c.capacity,
+                    ).isOver;
+                    const tone = disciplineTone(c.discipline);
+                    const { clock, period } = clockParts(new Date(c.startsAt));
+                    return (
+                      <li
+                        key={c.id}
+                        className={cn(
+                          "border-border flex items-stretch gap-2 overflow-hidden rounded-lg border pr-1",
+                          cancelled ? "border-dashed" : "bg-card",
+                        )}
+                      >
+                        <span
+                          aria-hidden
+                          className={cn(
+                            "w-[3px] shrink-0",
+                            cancelled ? "bg-error/40" : TONE_RAIL[tone],
+                          )}
+                        />
+                        <button
+                          type="button"
+                          className="flex min-w-0 flex-1 items-start gap-3 py-3 pl-1.5 text-left"
+                          onClick={() => setDetailId(c.id)}
+                        >
+                          <span className="w-11 shrink-0 text-right">
+                            <span
+                              className={cn(
+                                "block font-mono text-sm leading-5 tabular-nums",
+                                cancelled &&
+                                  "text-muted-foreground line-through",
+                              )}
+                            >
+                              {clock}
+                            </span>
+                            {period && (
+                              <span className="text-muted-foreground block font-mono text-[10px] leading-none">
+                                {period}
+                              </span>
+                            )}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span
+                              className={cn(
+                                "block truncate text-sm leading-5 font-medium",
+                                cancelled && "text-muted-foreground",
+                              )}
+                            >
+                              {c.title}
+                            </span>
+                            <span className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-2 font-mono text-[10px] tracking-wide uppercase">
+                              {cancelled && (
+                                <span className="text-error">cancelled</span>
+                              )}
+                              {c.discipline && <span>{c.discipline}</span>}
+                              <span>
+                                {c.bookingCount}/{c.capacity} booked
+                              </span>
+                              {full && (
+                                <span className="text-warning">busy</span>
+                              )}
+                              {c.pendingCount > 0 && (
+                                <span className="text-brand-strong">
+                                  +{c.pendingCount} pending
+                                </span>
+                              )}
+                              <span>{c.durationMinutes} min</span>
+                            </span>
+                          </span>
+                        </button>
+                        {!cancelled &&
+                          cancelDialog(
+                            c,
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              aria-label={`Cancel ${c.title}`}
+                              className="text-muted-foreground hover:text-error shrink-0 self-center"
+                              disabled={
+                                cancel.isPending && cancel.variables.id === c.id
+                              }
+                            >
+                              <XMark />
+                            </Button>,
+                          )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </Section>
+            ))}
           </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="cl-tz">Time zone</Label>
-            <Input
-              id="cl-tz"
-              value={form.timeZone}
-              onChange={(e) => setForm({ ...form, timeZone: e.target.value })}
-              required
-            />
-          </div>
-          <div className="flex gap-2">
-            <Button type="submit" disabled={create.isPending}>
-              {create.isPending && <Spinner size="sm" className="text-current" />}
-              {create.isPending ? "Adding…" : "Add class"}
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setForm(null)}>
-              Cancel
-            </Button>
-          </div>
-        </form>
+        </>
       )}
     </section>
   );

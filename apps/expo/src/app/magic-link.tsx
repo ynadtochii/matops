@@ -9,6 +9,7 @@ import {
   Screen,
   Stack as UIStack,
 } from "~/components/ui";
+import { queryClient } from "~/utils/api";
 import { authClient } from "~/utils/auth";
 
 /**
@@ -37,6 +38,9 @@ export default function MagicLink() {
         return;
       }
       // Session is now stored; the gate (index) routes to schedule / join.
+      // Drop anything the previous user of this device left cached first —
+      // query keys carry no user id.
+      queryClient.clear();
       router.replace("/");
     });
     return () => {
@@ -78,8 +82,8 @@ export default function MagicLink() {
         <UIStack gap={16}>
           <Heading>Signing you in…</Heading>
           <Muted>
-            This is taking longer than usual. If nothing happens, request a fresh
-            link.
+            This is taking longer than usual. If nothing happens, request a
+            fresh link.
           </Muted>
           <Button
             label="Back to sign in"

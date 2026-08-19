@@ -106,9 +106,7 @@ function OpenActive({ academyId, name }: { academyId: string; name: string }) {
       <Logo size={30} />
       <div className="flex items-center gap-2">
         <Spinner size="sm" />
-        <span className="text-muted-foreground text-sm">
-          Opening {name}…
-        </span>
+        <span className="text-muted-foreground text-sm">Opening {name}…</span>
       </div>
     </div>
   );

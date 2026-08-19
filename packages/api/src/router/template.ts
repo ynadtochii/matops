@@ -1,8 +1,16 @@
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
-import { and, desc, eq, gt, isNull, materializeTemplate } from "@matops/db";
-import { classInstance, classTemplate } from "@matops/db/schema";
+import {
+  and,
+  desc,
+  eq,
+  getTableColumns,
+  gt,
+  isNull,
+  materializeTemplate,
+} from "@matops/db";
+import { classInstance, classTemplate, user } from "@matops/db/schema";
 import { normalizeDaysOfWeek, templateTimingChanged } from "@matops/domain";
 import {
   CreateClassTemplateSchema,
@@ -26,8 +34,12 @@ export const templateRouter = {
   /** All live templates for the active academy, newest first. */
   list: staffProcedure.query(({ ctx }) => {
     return ctx.db
-      .select()
+      .select({
+        ...getTableColumns(classTemplate),
+        instructorName: user.name,
+      })
       .from(classTemplate)
+      .leftJoin(user, eq(user.id, classTemplate.instructorId))
       .where(isNull(classTemplate.deletedAt))
       .orderBy(desc(classTemplate.createdAt));
   }),
@@ -61,8 +73,8 @@ export const templateRouter = {
    *
    * Propagates to FUTURE, non-cancelled instances only (spec §4) — past and
    * cancelled classes are untouched. A TIMING change (days / start / zone) moves
-   * or adds/removes occurrences, so future scheduled instances are dropped and
-   * re-materialized. A content-only change (title / discipline / instructor /
+   * or adds/removes occurrences, so future scheduled instances are cancelled and
+   * re-materialized (the ones the new timing still covers are revived). A content-only change (title / discipline / instructor /
    * capacity / duration) is applied in place, preserving the instance rows.
    */
   update: staffProcedure
@@ -84,7 +96,10 @@ export const templateRouter = {
       const [row] = await ctx.db
         .update(classTemplate)
         .set({
-          instructorId: input.instructorId ?? ctx.session.user.id,
+          // On EDIT the fallback is the template's own instructor. No client
+          // sends `instructorId`, so `?? session.user` silently reassigned every
+          // template to whoever happened to open the edit form.
+          instructorId: input.instructorId ?? prev.instructorId,
           title: input.title,
           discipline: input.discipline ?? null,
           daysOfWeek: normalizeDaysOfWeek(input.daysOfWeek),
@@ -111,13 +126,21 @@ export const templateRouter = {
       );
 
       if (templateTimingChanged(prev, row)) {
-        // Regenerate: drop future scheduled instances, then re-materialize from
-        // now with the new timing (cursor reset via generatedUntil: null).
-        await ctx.db.delete(classInstance).where(futureScheduled);
+        // Regenerate. CANCEL the future scheduled instances rather than deleting
+        // them: `class_participation` and `drop_in` both reference `class.id`
+        // with ON DELETE no action, so a hard delete fails the moment one
+        // student has booked, and the owner could never move that template
+        // again. Re-materializing then REVIVES every instance the new timing
+        // still covers (bookings intact); the rest stay cancelled and show up
+        // as cancelled on the student's schedule.
+        await ctx.db
+          .update(classInstance)
+          .set({ status: "cancelled" })
+          .where(futureScheduled);
         await materializeTemplate(
           ctx.db,
           { ...row, generatedUntil: null },
-          { now },
+          { now, reviveCancelled: true },
         );
       } else {
         // Content-only: update the future scheduled instances in place.

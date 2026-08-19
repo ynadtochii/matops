@@ -99,20 +99,29 @@ describe("seed fill/clear — augment a real academy", () => {
         [ACAD],
       ),
     ).toBe(0);
-    for (const t of [
-      "member_dues",
-      "payment_claim",
-      "member_rank",
-      "rank_promotion",
-      "member_note",
-    ]) {
+    for (const [t, col] of [
+      ["member_dues", "member_id"],
+      ["payment_claim", "member_id"],
+      ["member_rank", "member_id"],
+      ["rank_promotion", "member_id"],
+      ["member_note", "member_id"],
+      ["member_referral", "student_member_id"],
+      ["member_referral_audit", "student_member_id"],
+    ] as const) {
       expect(
         await scalar(
-          `SELECT count(*)::int n FROM "${t}" WHERE academy_id=$1 AND member_id LIKE 'seed_%'`,
+          `SELECT count(*)::int n FROM "${t}" WHERE academy_id=$1 AND ${col} LIKE 'seed_%'`,
           [ACAD],
         ),
       ).toBe(0);
     }
+    // A fake cannot survive as someone else's referrer either.
+    expect(
+      await scalar(
+        `SELECT count(*)::int n FROM "member_referral" WHERE academy_id=$1 AND referrer_member_id LIKE 'seed_%'`,
+        [ACAD],
+      ),
+    ).toBe(0);
   });
 
   it("leaves the real owner, student, plan, class, and its booking untouched", async () => {

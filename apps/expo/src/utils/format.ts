@@ -1,12 +1,10 @@
 /**
- * Shared class-schedule formatting (spec S4/S5). Times render in the device's
- * zone, matching how the web schedule renders (apps/nextjs .../schedule.tsx).
+ * Schedule formatting for the mobile screens. The cross-client rules (time
+ * split, spots-left, fill) live in `@matops/domain` so web and mobile cannot
+ * drift; only the mobile-only day formats are local.
  */
 
-export const timeFmt = new Intl.DateTimeFormat(undefined, {
-  hour: "2-digit",
-  minute: "2-digit",
-});
+export { clockParts, fillLabel, spotsLeftLabel, timeFmt } from "@matops/domain";
 
 /** "Mon, Jul 21" — the schedule day header. */
 export const dayFmt = new Intl.DateTimeFormat(undefined, {
@@ -31,15 +29,4 @@ const dayKeyFmt = new Intl.DateTimeFormat("en-CA", {
 /** Stable local-day key ("YYYY-MM-DD") for grouping classes by day. */
 export function dayKey(d: Date): string {
   return dayKeyFmt.format(d);
-}
-
-/**
- * "N spots left" for the schedule row (spec S4). Capacity 0 means no cap (the
- * web treats 0 as uncapped), so it never reads as full.
- */
-export function spotsLeftLabel(capacity: number, bookingCount: number): string {
-  if (capacity <= 0) return "Open";
-  const left = capacity - bookingCount;
-  if (left <= 0) return "Full";
-  return `${left} spot${left === 1 ? "" : "s"} left`;
 }

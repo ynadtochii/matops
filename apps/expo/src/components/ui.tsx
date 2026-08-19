@@ -194,7 +194,7 @@ export function Mono({
   );
 }
 
-/** A big mono stat over a mono label — the web `Stat` (roster/dashboard). */
+/** A big mono stat over a mono label — the web `Stat` (members/dashboard). */
 export function Stat({ value, label }: { value: string; label: string }) {
   return (
     <View style={{ flex: 1, gap: 2 }}>
@@ -347,8 +347,8 @@ export function OrDivider() {
 type CardVariant = "filled" | "outline" | "hero";
 
 /**
- * A surface. `filled` = quiet muted row (default list item); `outline` = a
- * bordered card on the near-black surface (navigate / act); `hero` = the one
+ * A surface. `filled` = a card surface for a static list item (the default);
+ * `outline` = flush on the page background (navigate / act); `hero` = the one
  * featured brand-wash surface per screen. Flat — depth comes from the border,
  * never a shadow (design.md §1.4).
  */
@@ -374,14 +374,12 @@ export function Card({
           borderColor: t.brand,
           borderRadius: RADIUS_HERO,
         }
-      : variant === "outline"
-        ? {
-            backgroundColor: t.card,
-            borderWidth: 1,
-            borderColor: t.border,
-            borderRadius: RADIUS,
-          }
-        : { backgroundColor: t.muted, borderRadius: RADIUS };
+      : {
+          backgroundColor: variant === "outline" ? "transparent" : t.card,
+          borderWidth: 1,
+          borderColor: t.border,
+          borderRadius: RADIUS,
+        };
   const box = [base, padded && { padding: 16 }, style];
 
   if (onPress) {

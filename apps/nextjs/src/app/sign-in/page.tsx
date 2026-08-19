@@ -7,7 +7,7 @@ import { getSession } from "~/auth/server";
 import { Eyebrow } from "../_components/primitives";
 import { SignIn } from "../_components/sign-in";
 
-const ANCHORS = ["Schedule", "Roster", "Attendance", "Dues"];
+const ANCHORS = ["Schedule", "Members", "Attendance", "Dues"];
 
 /**
  * Signed-out entry (spec S1). The one branded moment: a blueprint panel — the
@@ -36,8 +36,8 @@ export default async function SignInPage() {
             Run the mat, not the paperwork.
           </h1>
           <p className="text-muted-foreground mt-4 max-w-sm text-[15px] leading-relaxed">
-            Schedule classes, keep your roster straight, and take attendance in
-            seconds — one console for the whole academy.
+            Schedule classes, keep your member list straight, and take
+            attendance in seconds — one console for the whole academy.
           </p>
           <div className="mt-10 flex flex-wrap gap-x-6 gap-y-2">
             {ANCHORS.map((a) => (

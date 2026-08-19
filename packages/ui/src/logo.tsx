@@ -6,7 +6,8 @@ import { cn } from "@matops/ui";
  * `--brand-foreground`. The one signature mark; restrained-violet per the
  * design system (docs/design.md §6, ADR 37). `logo.native.tsx` is the RN twin.
  */
-const SEAMS = "M16 1.6V30.4M1.6 16H30.4M8.5 1.6V16M16 8.5H30.4M1.6 23.5H16M23.5 16V30.4";
+const SEAMS =
+  "M16 1.6V30.4M1.6 16H30.4M8.5 1.6V16M16 8.5H30.4M1.6 23.5H16M23.5 16V30.4";
 
 export function Mark({
   size = 24,

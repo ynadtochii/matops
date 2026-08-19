@@ -88,6 +88,8 @@ describe("seed roundtrip — up then down", () => {
       "member_dues",
       "payment_claim",
       "member_rank",
+      "member_referral",
+      "member_referral_audit",
       "drop_in",
     ]) {
       expect(await countLike(table, "academy_id", "seed_org_%")).toBe(0);

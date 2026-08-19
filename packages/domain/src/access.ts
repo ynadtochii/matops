@@ -30,7 +30,7 @@ export function isStaff(m: Membership): boolean {
   return isActiveMember(m) && (m.role === "owner" || m.role === "instructor");
 }
 
-/** Active owner — academy settings, invites, roster. */
+/** Active owner — academy settings, invites, members. */
 export function isOwner(m: Membership): boolean {
   return isActiveMember(m) && m.role === "owner";
 }

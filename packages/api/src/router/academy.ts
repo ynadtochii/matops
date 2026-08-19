@@ -14,7 +14,11 @@ import {
   isWebLensMembership,
   slugify,
 } from "@matops/domain";
-import { AcademyCodeSchema, CreateAcademySchema } from "@matops/validators";
+import {
+  AcademyCodeSchema,
+  CreateAcademySchema,
+  IdSchema,
+} from "@matops/validators";
 
 import { ownerProcedure, protectedProcedure } from "../trpc";
 
@@ -68,6 +72,7 @@ export const academyRouter = {
     if (!academy) return null;
     return {
       academyId: academy.academyId,
+      userId: ctx.session.user.id,
       name: academy.name,
       role: academy.role,
       status: academy.status,
@@ -132,12 +137,13 @@ export const academyRouter = {
 
   /** Switch the active academy (multi-academy switcher, docs/issues/18). */
   setActive: protectedProcedure
-    .input(z.object({ academyId: z.string().min(1) }))
+    .input(z.object({ academyId: IdSchema }))
     .mutation(async ({ ctx, input }) => {
       // Only switch to an academy the caller actually belongs to.
       const membership = await getMembership(
         ctx.session.user.id,
         input.academyId,
+        ctx.baseDb,
       );
       if (!membership) {
         throw new TRPCError({

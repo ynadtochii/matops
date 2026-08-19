@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 
-import { db } from "./client";
+import type { db, DbExec } from "./client";
 
 /** Restricted, non-BYPASSRLS role the request transaction runs as. */
 export const APP_ROLE = "matops_app";
@@ -32,9 +32,10 @@ export type TenantTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 export async function withTenant<T>(
   academyId: string,
   fn: (tx: TenantTx) => Promise<T>,
+  exec: DbExec,
 ): Promise<T> {
   if (!academyId) throw new Error("withTenant: academyId is required");
-  return db.transaction(async (tx) => {
+  return exec.transaction(async (tx) => {
     // Identifier → must be raw (constant, shape-checked above). Value → bound param.
     await tx.execute(sql`SET LOCAL ROLE ${sql.raw(APP_ROLE)}`);
     await tx.execute(sql`SELECT set_config(${TENANT_GUC}, ${academyId}, true)`);

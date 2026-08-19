@@ -30,8 +30,8 @@ export const pushTokenRouter = {
 
   unregister: protectedProcedure
     .input(UnregisterPushTokenSchema)
-    .mutation(async ({ input }) => {
-      await deletePushToken(input.token);
+    .mutation(async ({ ctx, input }) => {
+      await deletePushToken(ctx.session.user.id, input.token);
       return { ok: true as const };
     }),
 } satisfies TRPCRouterRecord;

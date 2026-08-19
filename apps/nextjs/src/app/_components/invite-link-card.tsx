@@ -6,12 +6,20 @@ import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
 import { CopyButton } from "@matops/ui/copy-button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  DialogTrigger,
+} from "@matops/ui/dialog";
 import { Input } from "@matops/ui/input";
 import { toast } from "@matops/ui/toast";
 
 import { shareLink, useCanShare } from "~/lib/share";
 import { useTRPC } from "~/trpc/react";
 import { cardClass } from "./primitives";
+import { QrPoster } from "./qr-poster";
 import { ErrorState, SkeletonRows } from "./states";
 
 type InviteRole = "student" | "instructor";
@@ -39,6 +47,7 @@ export function InviteLinkCard({
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const invites = useQuery(trpc.invite.list.queryOptions());
+  const academy = useQuery(trpc.academy.current.queryOptions());
 
   // Offer the OS share sheet (ADR 42) only where it exists.
   const shareable = useCanShare();
@@ -65,11 +74,15 @@ export function InviteLinkCard({
   if (invites.isPending) return <SkeletonRows rows={1} />;
   if (invites.isError)
     return (
-      <ErrorState label="the invite link" onRetry={() => void invites.refetch()} />
+      <ErrorState
+        label="the invite link"
+        onRetry={() => void invites.refetch()}
+      />
     );
 
   const invite = invites.data.find((i) => i.role === role);
   const url = invite ? joinUrl(invite.token) : "";
+  const academyName = academy.data?.name ?? "your academy";
 
   return (
     <div className={cn(cardClass(), "flex flex-col gap-2")}>
@@ -85,7 +98,11 @@ export function InviteLinkCard({
               await rotate.mutateAsync({ role });
             }}
             trigger={
-              <Button variant="outline" size="sm" disabled={rotate.isPending}>
+              <Button
+                variant="destructive-outline"
+                size="sm"
+                disabled={rotate.isPending}
+              >
                 {rotate.isPending ? "Rotating…" : "Rotate"}
               </Button>
             }
@@ -110,6 +127,28 @@ export function InviteLinkCard({
             aria-label={`${label} URL`}
             className="min-w-0 flex-1"
           />
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="secondary">Show QR</Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-sm items-center">
+              <DialogTitle>Scan to join</DialogTitle>
+              <DialogDescription className="text-center">
+                Hold this up. They scan it with their phone camera and land on
+                the join form.
+              </DialogDescription>
+              <QrPoster
+                url={url}
+                title={academyName}
+                caption={
+                  role === "instructor"
+                    ? "Scan to join as a coach"
+                    : "Scan to join"
+                }
+                codeLabel={`Join QR code for ${academyName}`}
+              />
+            </DialogContent>
+          </Dialog>
           {shareable && (
             <Button
               variant="secondary"

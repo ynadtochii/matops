@@ -1,9 +1,10 @@
 "use client";
 
-import { CheckIcon, CopyIcon } from "@radix-ui/react-icons";
 import { useState } from "react";
+import { CheckIcon, CopyIcon } from "@radix-ui/react-icons";
 
 import { cn } from "@matops/ui";
+
 import { Button } from "./button";
 import { toast } from "./toast";
 

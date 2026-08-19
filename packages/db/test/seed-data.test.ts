@@ -50,7 +50,7 @@ describe("buildSeedGraph — pure dataset", () => {
     expect(g.members.some((m) => m.userId === realUser.id)).toBe(true);
   });
 
-  it("covers every member status on the ALPHA roster", () => {
+  it("covers every member status on the ALPHA member list", () => {
     const g = build();
     const alphaStatuses = new Set(
       g.members
@@ -81,10 +81,40 @@ describe("buildSeedGraph — pure dataset", () => {
   it("leaves YOU without an open claim, so 'I paid' stays testable", () => {
     const g = build();
     const yourBetaMember = seedMemberId(SEED_ACADEMIES.beta.key, "you");
-    expect(g.claims.some((c) => c.memberId === yourBetaMember)).toBe(false);
+    // Only a PENDING claim blocks the button (pc_uniq_open_claim is partial on
+    // status = 'pending'), so YOU may hold confirmed history and still tap it.
+    expect(
+      g.claims.some(
+        (c) => c.memberId === yourBetaMember && c.status === "pending",
+      ),
+    ).toBe(false);
     // But some fake member does have an open pending claim.
     expect(g.claims.length).toBeGreaterThan(0);
-    expect(g.claims.every((c) => c.status === "pending")).toBe(true);
+    expect(g.claims.some((c) => c.status === "pending")).toBe(true);
+    expect(g.claims.some((c) => c.status === "confirmed")).toBe(true);
+    expect(g.claims.some((c) => c.status === "rejected")).toBe(true);
+  });
+
+  it("covers the remaining demo states: unmarked, cancelled booking, paused, no plan", () => {
+    const g = build();
+    const pastIds = new Set(g.pastClasses.map((c) => c.id));
+    expect(
+      g.participations.some(
+        (p) =>
+          pastIds.has(p.classId) &&
+          p.bookingStatus === "booked" &&
+          p.attendanceStatus === "unmarked",
+      ),
+    ).toBe(true);
+    expect(g.participations.some((p) => p.bookingStatus === "cancelled")).toBe(
+      true,
+    );
+    expect(g.templates.some((t) => t.status === "paused")).toBe(true);
+    const withDues = new Set(g.dues.map((d) => d.memberId));
+    const activeStudents = g.members.filter(
+      (m) => m.role === "student" && m.status === "active",
+    );
+    expect(activeStudents.some((m) => !withDues.has(m.id))).toBe(true);
   });
 
   it("seeds attendance history with both present and absent marks", () => {
@@ -124,7 +154,24 @@ describe("buildSeedGraph — pure dataset", () => {
       ...g.promotions,
       ...g.notes,
       ...g.dropIns,
+      ...g.referrals,
+      ...g.referralAudits,
     ];
     expect(scoped.every((r) => ids.has(r.academyId))).toBe(true);
+  });
+
+  it("seeds assigned and unassigned referral examples", () => {
+    const g = build();
+    expect(g.referrals.length).toBeGreaterThan(0);
+    expect(g.referralAudits).toHaveLength(g.referrals.length);
+    const assignedStudents = new Set(
+      g.referrals.map((row) => row.studentMemberId),
+    );
+    const studentMembers = g.members.filter(
+      (member) => member.role === "student" || member.invitedRole === "student",
+    );
+    expect(
+      studentMembers.some((member) => !assignedStudents.has(member.id)),
+    ).toBe(true);
   });
 });

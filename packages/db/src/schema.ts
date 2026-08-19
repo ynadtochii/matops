@@ -17,4 +17,5 @@ export * from "./invite-schema";
 export * from "./payments-schema";
 export * from "./push-token-schema";
 export * from "./rank-notes-schema";
+export * from "./referrals-schema";
 export * from "./scheduling";

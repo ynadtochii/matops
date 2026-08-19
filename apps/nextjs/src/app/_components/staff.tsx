@@ -61,15 +61,15 @@ const COPY: Record<
     title: (name: string) => string;
     description: string;
     confirmLabel: string;
-    variant: "default" | "destructive";
+    variant: "primary" | "destructive";
   }
 > = {
   promote: {
     title: (name) => `Make ${name} a co-owner?`,
     description:
-      "Owners have full control — schedule, roster, payments, and settings. You can step them back down here later.",
+      "Owners have full control — schedule, members, payments, and settings. You can step them back down here later.",
     confirmLabel: "Make co-owner",
-    variant: "default",
+    variant: "primary",
   },
   demote: {
     title: (name) => `Step ${name} down to instructor?`,

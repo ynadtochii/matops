@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
 import { cn } from "@matops/ui";
-import { ThemeProvider, ThemeToggle } from "@matops/ui/theme";
+import { ThemeProvider } from "@matops/ui/theme";
 import { Toaster } from "@matops/ui/toast";
 
 import { env } from "~/env";
@@ -17,10 +17,10 @@ export const metadata: Metadata = {
       : "http://localhost:3004",
   ),
   title: "matops",
-  description: "Schedule, roster, and attendance for grappling academies.",
+  description: "Schedule, members, and attendance for grappling academies.",
   openGraph: {
     title: "matops",
-    description: "Schedule, roster, and attendance for grappling academies.",
+    description: "Schedule, members, and attendance for grappling academies.",
     siteName: "matops",
   },
   twitter: {
@@ -70,9 +70,6 @@ export default function RootLayout(props: { children: React.ReactNode }) {
       >
         <ThemeProvider>
           <TRPCReactProvider>{props.children}</TRPCReactProvider>
-          <div className="absolute right-4 bottom-4">
-            <ThemeToggle />
-          </div>
           <Toaster />
         </ThemeProvider>
       </body>

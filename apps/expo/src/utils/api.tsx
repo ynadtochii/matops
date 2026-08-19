@@ -11,7 +11,7 @@ import { getBaseUrl } from "./base-url";
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // ...
+      staleTime: 30_000,
     },
   },
 });

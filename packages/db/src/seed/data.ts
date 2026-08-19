@@ -22,6 +22,8 @@ import type {
   memberDues,
   memberNote,
   memberRank,
+  memberReferral,
+  memberReferralAudit,
   membershipPlan,
   organization,
   paymentClaim,
@@ -47,6 +49,8 @@ type NewRank = typeof memberRank.$inferInsert;
 type NewPromotion = typeof rankPromotion.$inferInsert;
 type NewNote = typeof memberNote.$inferInsert;
 type NewDropIn = typeof dropIn.$inferInsert;
+type NewReferral = typeof memberReferral.$inferInsert;
+type NewReferralAudit = typeof memberReferralAudit.$inferInsert;
 
 /** Everything the seed inserts, grouped by table. Future (materialized) classes
  * and their bookings are NOT here — run.ts adds those after materialization,
@@ -67,6 +71,8 @@ export interface SeedGraph {
   promotions: NewPromotion[];
   notes: NewNote[];
   dropIns: NewDropIn[];
+  referrals: NewReferral[];
+  referralAudits: NewReferralAudit[];
 }
 
 export interface SeedGraphOptions {
@@ -148,12 +154,13 @@ interface Persona {
   phone: string;
 }
 
-function persona(handle: string, seed: number): Persona {
+function persona(handle: string, seed: number, fixedName?: string): Persona {
+  const name = fixedName ?? personName(seed);
   return {
     handle,
     userId: seedUserId(handle),
-    name: personName(seed),
-    email: `${seedUserId(handle)}@demo.matops.test`,
+    name,
+    email: `${name.toLowerCase().replace(/[^a-z]+/g, ".")}${seed}@example.com`,
     phone: `+38050${String(1000000 + seed).slice(-7)}`,
   };
 }
@@ -178,6 +185,7 @@ interface TemplateSpec {
   capacity: number;
   /** Which persona/user teaches it. */
   instructorId: string;
+  status?: NewTemplate["status"];
 }
 
 /**
@@ -236,7 +244,7 @@ function buildAcademy(args: {
       durationMinutes: spec.durationMinutes,
       timeZone: academy.timeZone,
       capacity: spec.capacity,
-      status: "active",
+      status: spec.status ?? "active",
       // Cursor left null so materializeTemplate fills [now, horizon) with NO
       // overlap against the past classes we insert here.
       generatedUntil: null,
@@ -258,10 +266,13 @@ function buildAcademy(args: {
       const attendees = activeStudents.filter(
         (_, si) => (si + ti + oi) % 3 !== 0,
       );
+      // The latest class of the second template is left UNMARKED, so the owner
+      // has a past class to run "mark all present" on in a demo.
+      const unmarked = ti === 1 && oi === occurrences.length - 1;
       let bookingCount = 0;
       attendees.forEach((s, ai) => {
         // ~1 in 5 booked-but-absent; the rest present → realistic attendance %.
-        const present = (ai + oi) % 5 !== 0;
+        const present = !unmarked && (ai + oi) % 5 !== 0;
         bookingCount += 1;
         participations.push({
           id: newId(),
@@ -271,11 +282,30 @@ function buildAcademy(args: {
           bookingStatus: "booked",
           bookingTier: "confirmed",
           bookedAt: new Date(startsAt.getTime() - DAY_MS),
-          attendanceStatus: present ? "present" : "absent",
+          attendanceStatus: unmarked
+            ? "unmarked"
+            : present
+              ? "present"
+              : "absent",
           attendedAt: present ? startsAt : null,
           markedBy: present ? staffInstructorId : null,
         });
       });
+      // Every 4th class keeps a cancelled booking (student booked, then bailed).
+      const quitter = activeStudents.find((_, si) => (si + ti + oi) % 3 === 0);
+      if (oi % 4 === 0 && quitter) {
+        participations.push({
+          id: newId(),
+          academyId: academy.id,
+          classId,
+          studentId: quitter.persona.userId,
+          bookingStatus: "cancelled",
+          bookingTier: "confirmed",
+          bookedAt: new Date(startsAt.getTime() - 2 * DAY_MS),
+          cancelledAt: new Date(startsAt.getTime() - DAY_MS),
+          attendanceStatus: "unmarked",
+        });
+      }
       // One walk-in on the most recent class of the first template (booking
       // `none` + present) so the O5 walk-in path has data.
       const walkIn = activeStudents[activeStudents.length - 1];
@@ -330,11 +360,18 @@ function buildAcademy(args: {
   };
   const plans = [plan, planLite];
 
-  // Spread due dates so the roster shows paid / due-soon / overdue side by side.
+  // Spread due dates so the member list shows paid / due-soon / overdue side by side.
   // First offset is due-soon so YOU (index 0 of BETA's list) can test "I paid".
   const dueOffsets = [2, 22, -6, 40, -20]; // days from now
-  const dues: NewDues[] = students
-    .filter((s) => s.status === "active" || s.status === "suspended")
+  const duesEligible = students.filter(
+    (s) => s.status === "active" || s.status === "suspended",
+  );
+  // One active member is left with NO plan, so the "dues not set" state shows.
+  const noPlan = [...duesEligible]
+    .reverse()
+    .find((s) => s.persona.handle !== "you");
+  const dues: NewDues[] = duesEligible
+    .filter((s) => s !== noPlan)
     .map((s, i) => ({
       id: newId(),
       academyId: academy.id,
@@ -365,6 +402,60 @@ function buildAcademy(args: {
       status: "pending",
     });
   }
+  // A rejected claim (the owner dismissed it) — the third claim state.
+  const rejected = students.find(
+    (s) =>
+      s.status === "active" &&
+      s.persona.handle !== "you" &&
+      s.persona.handle !== claimant?.persona.handle,
+  );
+  if (rejected) {
+    claims.push({
+      id: newId(),
+      academyId: academy.id,
+      memberId: seedMemberId(academy.key, rejected.persona.handle),
+      planId,
+      amountMinor: plan.priceMinor,
+      currency: academy.currency,
+      period: paymentPeriod(new Date(now.getTime() - 32 * DAY_MS)),
+      status: "rejected",
+      claimedAt: new Date(now.getTime() - 30 * DAY_MS),
+    });
+  }
+  // Confirmed history powers the referral ledger. These claims intentionally
+  // predate attribution in the seed graph: reporting is retroactive (ADR 52).
+  activeStudents.slice(0, 8).forEach((student, index) => {
+    const selectedPlan = index % 3 === 0 ? planLite : plan;
+    const memberId = seedMemberId(academy.key, student.persona.handle);
+    claims.push(
+      {
+        id: newId(),
+        academyId: academy.id,
+        memberId,
+        planId: index % 3 === 0 ? planLiteId : planId,
+        amountMinor: selectedPlan.priceMinor,
+        currency: selectedPlan.currency,
+        period: paymentPeriod(now),
+        status: "confirmed",
+        confirmedBy: staffInstructorId,
+        confirmedAt: now,
+        claimedAt: new Date(now.getTime() - DAY_MS),
+      },
+      {
+        id: newId(),
+        academyId: academy.id,
+        memberId,
+        planId: index % 3 === 0 ? planLiteId : planId,
+        amountMinor: selectedPlan.priceMinor,
+        currency: selectedPlan.currency,
+        period: paymentPeriod(new Date(now.getTime() - 45 * DAY_MS)),
+        status: "confirmed",
+        confirmedBy: staffInstructorId,
+        confirmedAt: new Date(now.getTime() - 45 * DAY_MS),
+        claimedAt: new Date(now.getTime() - 46 * DAY_MS),
+      },
+    );
+  });
 
   const settings: NewSettings = {
     academyId: academy.id,
@@ -450,7 +541,7 @@ function buildAcademy(args: {
       firstName: "Pat",
       lastName: "Visitor",
       phone: "+380509998877",
-      email: "pat.visitor@demo.matops.test",
+      email: "pat.visitor@example.com",
       classId: null,
       consent: true,
       visitCount: 1,
@@ -498,11 +589,12 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
   const { alpha, beta } = academies;
 
   // ---- Fake personas -------------------------------------------------------
-  const alphaCoach = persona("a_coach1", 101);
+  const alphaCoach = persona("a_coach1", 101, "Rael Moreira");
+  const alphaCoach2 = persona("a_coach2", 102, "Fernando Costa");
   const betaOwner = persona("b_owner1", 201);
 
   // ALPHA students: mostly active, plus pending / pending-instructor / suspended
-  // / removed so the roster shows every status.
+  // / removed so the member list shows every status.
   const alphaStudentDefs: {
     status: string;
     role: string;
@@ -561,6 +653,7 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
   // ---- Auth rows (user / organization / member / invite) -------------------
   const users: NewUser[] = [
     userRow(alphaCoach),
+    userRow(alphaCoach2),
     userRow(betaOwner),
     ...alphaStudents.map((s) => userRow(s.persona)),
     ...betaStudents.map((s) => userRow(s.persona)),
@@ -594,6 +687,15 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
       status: "active",
       invitedRole: "instructor",
       createdAt: new Date(now.getTime() - 180 * DAY_MS),
+    },
+    {
+      id: seedMemberId(alpha.key, alphaCoach2.handle),
+      organizationId: alpha.id,
+      userId: alphaCoach2.userId,
+      role: "instructor",
+      status: "active",
+      invitedRole: "instructor",
+      createdAt: new Date(now.getTime() - 170 * DAY_MS),
     },
     // ALPHA students (varied statuses).
     ...alphaStudents.map((s, i) => ({
@@ -654,51 +756,156 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
   ];
 
   // ---- ALPHA domain data (you = owner; coach teaches) ----------------------
+  // The academy's real weekly board: Gi (bjj) / NoGi / Open Mat, taught by Rael
+  // and Fernando. Days are 1=Mon … 6=Sat.
+  const rael = alphaCoach.userId;
+  const fernando = alphaCoach2.userId;
   const alphaTemplates: TemplateSpec[] = [
     {
-      title: "BJJ Fundamentals",
+      title: "Gi · All levels",
       discipline: "bjj",
-      daysOfWeek: [1, 3],
-      startsAtMinutes: 18 * 60,
+      daysOfWeek: [2, 4],
+      startsAtMinutes: 8 * 60,
+      durationMinutes: 60,
+      capacity: 12,
+      instructorId: rael,
+    },
+    {
+      title: "Gi · All levels",
+      discipline: "bjj",
+      daysOfWeek: [1],
+      startsAtMinutes: 9 * 60,
       durationMinutes: 60,
       capacity: 20,
-      instructorId: alphaCoach.userId,
+      instructorId: fernando,
     },
     {
-      title: "No-Gi",
-      discipline: "nogi",
-      daysOfWeek: [2, 4],
-      startsAtMinutes: 19 * 60,
+      title: "Gi · All levels",
+      discipline: "bjj",
+      daysOfWeek: [2],
+      startsAtMinutes: 9 * 60,
       durationMinutes: 60,
-      capacity: 16,
-      instructorId: alphaCoach.userId,
+      capacity: 20,
+      instructorId: rael,
     },
     {
-      title: "Judo",
-      discipline: "judo",
-      daysOfWeek: [5],
-      startsAtMinutes: 18 * 60 + 30,
-      durationMinutes: 90,
-      capacity: 12,
-      instructorId: alphaCoach.userId,
+      title: "Gi · Beginner",
+      discipline: "bjj",
+      daysOfWeek: [3],
+      startsAtMinutes: 9 * 60,
+      durationMinutes: 60,
+      capacity: 20,
+      instructorId: fernando,
     },
     {
-      title: "Open Mat",
+      title: "Gi · Beginner",
+      discipline: "bjj",
+      daysOfWeek: [4],
+      startsAtMinutes: 9 * 60,
+      durationMinutes: 60,
+      capacity: 20,
+      instructorId: rael,
+    },
+    {
+      title: "Gi · Beginner",
+      discipline: "bjj",
+      daysOfWeek: [5, 6],
+      startsAtMinutes: 9 * 60,
+      durationMinutes: 60,
+      capacity: 20,
+      instructorId: fernando,
+    },
+    {
+      title: "Open Mat · Gi + NoGi",
       discipline: "other",
       daysOfWeek: [6],
       startsAtMinutes: 10 * 60,
       durationMinutes: 120,
-      capacity: 30,
+      capacity: 40,
       instructorId: opts.realUser.id,
     },
     {
-      title: "MMA Sparring",
-      discipline: "mma",
-      daysOfWeek: [3],
-      startsAtMinutes: 20 * 60,
+      title: "NoGi · Inter-Advanced",
+      discipline: "nogi",
+      daysOfWeek: [1],
+      startsAtMinutes: 12 * 60 + 30,
       durationMinutes: 60,
-      capacity: 14,
-      instructorId: alphaCoach.userId,
+      capacity: 20,
+      instructorId: rael,
+    },
+    {
+      title: "Gi · All levels",
+      discipline: "bjj",
+      daysOfWeek: [2, 4],
+      startsAtMinutes: 12 * 60 + 30,
+      durationMinutes: 60,
+      capacity: 20,
+      instructorId: rael,
+    },
+    {
+      title: "NoGi · All levels",
+      discipline: "nogi",
+      daysOfWeek: [3, 5],
+      startsAtMinutes: 12 * 60 + 30,
+      durationMinutes: 60,
+      capacity: 20,
+      instructorId: rael,
+    },
+    {
+      title: "NoGi · All levels",
+      discipline: "nogi",
+      daysOfWeek: [2, 4],
+      startsAtMinutes: 13 * 60 + 30,
+      durationMinutes: 60,
+      capacity: 20,
+      instructorId: fernando,
+    },
+    {
+      title: "Gi · All levels",
+      discipline: "bjj",
+      daysOfWeek: [1],
+      startsAtMinutes: 18 * 60 + 30,
+      durationMinutes: 60,
+      capacity: 24,
+      instructorId: rael,
+    },
+    {
+      title: "Gi · Inter-Advanced",
+      discipline: "bjj",
+      daysOfWeek: [3, 5],
+      startsAtMinutes: 18 * 60 + 30,
+      durationMinutes: 60,
+      capacity: 24,
+      instructorId: rael,
+    },
+    {
+      title: "NoGi · All levels",
+      discipline: "nogi",
+      daysOfWeek: [1],
+      startsAtMinutes: 19 * 60 + 30,
+      durationMinutes: 60,
+      capacity: 24,
+      instructorId: rael,
+    },
+    {
+      title: "NoGi · Inter-Advanced",
+      discipline: "nogi",
+      daysOfWeek: [3, 5],
+      startsAtMinutes: 19 * 60 + 30,
+      durationMinutes: 60,
+      capacity: 24,
+      instructorId: rael,
+    },
+    {
+      title: "Kids Gi",
+      discipline: "bjj",
+      daysOfWeek: [1, 3],
+      startsAtMinutes: 17 * 60,
+      durationMinutes: 45,
+      capacity: 16,
+      instructorId: fernando,
+      // Paused: past classes exist, but no new ones are generated (O3 state).
+      status: "paused",
     },
   ];
   const alphaData = buildAcademy({
@@ -711,7 +918,7 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
   });
 
   // ---- BETA domain data (you = student; fake owner teaches) -----------------
-  // Include YOU in BETA's student roster so your own attendance / dues / rank
+  // Include YOU in BETA's student list so your own attendance / dues / rank
   // get seeded (mobile Training + Profile screens).
   const betaMembersForData = [
     {
@@ -757,6 +964,67 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
     now,
   });
 
+  // Direct attributions with more than one referrer and deliberate unassigned
+  // students. ALPHA also includes an assigned removed student so the historical
+  // include toggle has a meaningful example.
+  const referrals: NewReferral[] = [];
+  const referralAudits: NewReferralAudit[] = [];
+  const addReferral = (
+    academyId: string,
+    studentMemberId: string,
+    referrerMemberId: string,
+    actorId: string,
+  ) => {
+    referrals.push({
+      id: newId(),
+      academyId,
+      studentMemberId,
+      referrerMemberId,
+      assignedBy: actorId,
+      createdAt: new Date(now.getTime() - 60 * DAY_MS),
+      updatedAt: new Date(now.getTime() - 60 * DAY_MS),
+    });
+    referralAudits.push({
+      id: newId(),
+      academyId,
+      studentMemberId,
+      oldReferrerMemberId: null,
+      newReferrerMemberId: referrerMemberId,
+      action: "assigned",
+      actorId,
+      occurredAt: new Date(now.getTime() - 60 * DAY_MS),
+    });
+  };
+  const alphaOwnerMemberId = seedMemberId(alpha.key, "you");
+  const alphaCoachMemberId = seedMemberId(alpha.key, alphaCoach.handle);
+  alphaStudents.slice(0, 8).forEach((student, index) => {
+    addReferral(
+      alpha.id,
+      seedMemberId(alpha.key, student.persona.handle),
+      index % 2 === 0 ? alphaCoachMemberId : alphaOwnerMemberId,
+      opts.realUser.id,
+    );
+  });
+  const removedAlphaStudent = alphaStudents.find(
+    (student) => student.status === "removed",
+  );
+  if (removedAlphaStudent) {
+    addReferral(
+      alpha.id,
+      seedMemberId(alpha.key, removedAlphaStudent.persona.handle),
+      alphaCoachMemberId,
+      opts.realUser.id,
+    );
+  }
+  betaStudents.slice(0, 3).forEach((student) => {
+    addReferral(
+      beta.id,
+      seedMemberId(beta.key, student.persona.handle),
+      seedMemberId(beta.key, betaOwner.handle),
+      betaOwner.userId,
+    );
+  });
+
   return {
     users,
     organizations,
@@ -773,5 +1041,7 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
     promotions: [...alphaData.promotions, ...betaData.promotions],
     notes: [...alphaData.notes, ...betaData.notes],
     dropIns: [...alphaData.dropIns, ...betaData.dropIns],
+    referrals,
+    referralAudits,
   };
 }

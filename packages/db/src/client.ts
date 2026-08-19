@@ -30,3 +30,10 @@ export const db = drizzle({
   schema,
   casing: "snake_case",
 });
+
+/**
+ * A base drizzle handle. Production passes the singleton `db`; tests pass a
+ * PGlite-backed handle so base-connection helpers run their REAL query against
+ * an ephemeral Postgres instead of a hand-written double.
+ */
+export type DbExec = typeof db;

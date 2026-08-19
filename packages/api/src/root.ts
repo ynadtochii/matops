@@ -12,6 +12,7 @@ import { noteRouter } from "./router/note";
 import { paymentsRouter } from "./router/payments";
 import { pushTokenRouter } from "./router/pushToken";
 import { rankRouter } from "./router/rank";
+import { referralRouter } from "./router/referral";
 import { statsRouter } from "./router/stats";
 import { systemRouter } from "./router/system";
 import { templateRouter } from "./router/template";
@@ -30,6 +31,7 @@ export const appRouter = createTRPCRouter({
   checkin: checkinRouter,
   payments: paymentsRouter,
   rank: rankRouter,
+  referral: referralRouter,
   note: noteRouter,
   dropIn: dropInRouter,
   pushToken: pushTokenRouter,

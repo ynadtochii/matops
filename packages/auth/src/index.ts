@@ -11,6 +11,20 @@ import { sendEmail } from "@matops/notifications";
 import { authEnv } from "../env";
 import { ac, roles } from "./permissions";
 
+/**
+ * The magic-link URL carries a caller-supplied `callbackURL`, so it is escaped
+ * before it goes into an href attribute — an unescaped quote would break out of
+ * the attribute and let a crafted sign-in request inject markup into the email.
+ */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export function initAuth<
   TExtraPlugins extends BetterAuthPlugin[] = [],
 >(options: {
@@ -83,7 +97,10 @@ export function initAuth<
           // checks uniqueness; the unique index is the final backstop on a race.
           beforeCreateOrganization: async ({ organization }) => {
             return {
-              data: { ...organization, publicCode: await generateAcademyCode() },
+              data: {
+                ...organization,
+                publicCode: await generateAcademyCode(),
+              },
             };
           },
           afterCreateOrganization: async ({ member }) => {
@@ -154,7 +171,7 @@ export function initAuth<
             to: email,
             subject: "Your matops sign-in link",
             text: `Sign in to matops by opening this link:\n\n${url}\n\nThis link expires shortly. If you didn't request it, you can ignore this email.`,
-            html: `<p>Sign in to matops by clicking the link below:</p><p><a href="${url}">Sign in to matops</a></p><p>This link expires shortly. If you didn't request it, you can ignore this email.</p>`,
+            html: `<p>Sign in to matops by clicking the link below:</p><p><a href="${escapeHtml(url)}">Sign in to matops</a></p><p>This link expires shortly. If you didn't request it, you can ignore this email.</p>`,
           });
         },
       }),
@@ -167,8 +184,14 @@ export function initAuth<
     // in development by the expo() plugin; the custom scheme is not, so list it.)
     trustedOrigins: ["matops://"],
     onAPIError: {
-      onError(error, ctx) {
-        console.error("BETTER AUTH API ERROR", error, ctx);
+      onError(error) {
+        // The MESSAGE only. The Better Auth context carries the app secret as a
+        // top-level property, so logging `ctx` wrote it to the production log on
+        // any unauthenticated bad request.
+        console.error(
+          "[auth] API error:",
+          error instanceof Error ? error.message : String(error),
+        );
       },
     },
   } satisfies BetterAuthOptions;

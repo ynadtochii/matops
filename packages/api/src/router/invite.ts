@@ -9,7 +9,11 @@ import {
   revokeInvite,
   rotateInvite,
 } from "@matops/db";
-import { InviteRoleSchema, InviteTokenSchema } from "@matops/validators";
+import {
+  IdSchema,
+  InviteRoleSchema,
+  InviteTokenSchema,
+} from "@matops/validators";
 
 import { ownerProcedure, publicProcedure } from "../trpc";
 
@@ -41,7 +45,7 @@ export const inviteRouter = {
 
   /** Revoke a specific link (kills it without minting a replacement). */
   revoke: ownerProcedure
-    .input(z.object({ inviteId: z.string().min(1) }))
+    .input(z.object({ inviteId: IdSchema }))
     .mutation(async ({ ctx, input }) => {
       await revokeInvite(ctx.academyId, input.inviteId);
       return { ok: true as const };

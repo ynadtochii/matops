@@ -1,6 +1,10 @@
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { PGlite } from "@electric-sql/pglite";
+import { drizzle } from "drizzle-orm/pglite";
+
+import type { DbExec } from "../src/client";
+import * as schema from "../src/schema";
 
 const MIGRATIONS_DIR = path.join(import.meta.dirname, "..", "migrations");
 
@@ -21,6 +25,13 @@ export async function freshDb(): Promise<PGlite> {
     await pg.exec(raw.replaceAll("--> statement-breakpoint", ""));
   }
   return pg;
+}
+
+export function execOn(pg: PGlite): DbExec {
+  return drizzle(pg, {
+    schema,
+    casing: "snake_case",
+  }) as unknown as DbExec;
 }
 
 /** Read the single row a query is expected to return (guarded for noUncheckedIndexedAccess). */
