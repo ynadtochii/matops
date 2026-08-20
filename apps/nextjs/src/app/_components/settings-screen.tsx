@@ -3,18 +3,19 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { useTRPC } from "~/trpc/react";
+import { AcademyDangerZone } from "./academy-danger-zone";
 import { AcademyIdentity } from "./academy-identity";
-import { Invites } from "./invites";
+import { AcademyLocation } from "./academy-location";
 import { PageHeader } from "./page-header";
-import { PaymentRequisites } from "./payment-requisites";
-import { Staff } from "./staff";
 import { ErrorState, SkeletonRows } from "./states";
-import { VenueCheckin } from "./venue-checkin";
 
 /**
- * Settings screen (IA ticket 02, spec O6) — academy identity (rename the name;
- * the code is fixed), the join mechanics (invite links), and the venue check-in
- * QR poster. Owner-only (guarded by the nav + server procedures).
+ * Settings screen (IA ticket 02, spec O6) — the academy itself: rename it, read
+ * its code, set the time zone and address, delete it (ADR 68). Everything that
+ * belongs to a job lives with that job now: staff and
+ * the instructor link on Coaches, the student link and the check-in poster on
+ * Members, bank details on Payments. Owner-only (guarded by the nav + server
+ * procedures).
  */
 export function SettingsScreen() {
   const trpc = useTRPC();
@@ -24,7 +25,7 @@ export function SettingsScreen() {
     <>
       <PageHeader
         title="Settings"
-        subtitle="Your academy, your staff, how people join it, your bank details, and the check-in poster."
+        subtitle="Your academy: name, code, time zone, and where you train."
       />
       {academy.isPending ? (
         <SkeletonRows rows={3} />
@@ -36,13 +37,8 @@ export function SettingsScreen() {
       ) : (
         <div className="flex flex-col gap-8">
           <AcademyIdentity name={academy.data.name} code={academy.data.code} />
-          <Staff />
-          <Invites />
-          <PaymentRequisites />
-          <VenueCheckin
-            academyId={academy.data.academyId}
-            academyName={academy.data.name}
-          />
+          <AcademyLocation address={academy.data.address} />
+          <AcademyDangerZone name={academy.data.name} />
         </div>
       )}
     </>

@@ -169,7 +169,13 @@ export const protectedProcedure = t.procedure
  *
  * See docs/issues/12 (RLS), 20 (roles), 23 (pending capability).
  */
-const enforceTenant = t.middleware(async ({ ctx, next }) => {
+async function resolveActiveMembership<U extends { id: string }>(ctx: {
+  session?: {
+    user?: U | null;
+    session: { activeOrganizationId?: string | null };
+  } | null;
+  baseDb: DbExec;
+}) {
   if (!ctx.session?.user) {
     throw new TRPCError({ code: "UNAUTHORIZED" });
   }
@@ -204,6 +210,11 @@ const enforceTenant = t.middleware(async ({ ctx, next }) => {
         : "Your access to this academy has been removed",
     });
   }
+  return { academyId, membership, user };
+}
+
+const enforceTenant = t.middleware(async ({ ctx, next }) => {
+  const { academyId, membership, user } = await resolveActiveMembership(ctx);
   // Work that must NOT run inside the tenant transaction: push + email sends,
   // which are slow network calls and would otherwise hold a pooled Postgres
   // connection open for their whole duration. Resolvers hand them here and they
@@ -265,3 +276,21 @@ export const ownerProcedure = memberProcedure.use(({ ctx, next }) => {
   }
   return next();
 });
+
+/**
+ * Owner procedure with NO tenant transaction — for the writes that touch the
+ * `organization` row itself (ADR 68). That table carries no RLS policy and
+ * migration `0020` revoked `matops_app`'s write access to it, so the write must
+ * run on the base connection; doing that from inside `withTenant` checks out a
+ * SECOND pool connection and holds both (ADR 66), which deadlocks outright on a
+ * single-connection PGlite. Same authorization as `ownerProcedure`, no `ctx.db`.
+ */
+export const ownerIdentityProcedure = protectedProcedure.use(
+  async ({ ctx, next }) => {
+    const { academyId, membership } = await resolveActiveMembership(ctx);
+    if (!isActiveMember(membership) || !isOwner(membership)) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Owner only" });
+    }
+    return next({ ctx: { academyId, membership } });
+  },
+);

@@ -4,11 +4,17 @@
  * fixed `now` + id generator (see seed/data.test.ts). The IO layer (run.ts) takes
  * these arrays and writes them.
  *
+ * ONE demo academy ("Alma beta"), owned by the real user, built for the beta
+ * test: an outside tester joins through the seeded instructor invite link.
+ *
  * The dataset is shaped to light up EVERY UI state at least once: member statuses
- * (active / pending / suspended / removed), payment dots (paid / due_soon /
- * overdue) + a pending claim, attendance history (present / absent / walk-in),
- * belts across disciplines with a promotion timeline, drop-in leads, and a live
- * invite link per role.
+ * (active / pending / suspended / removed), all four drift bands (active /
+ * cooling / at risk / dormant), payment dots (paid / due_soon / overdue) + every
+ * claim state + an archived plan, attendance history (present / absent /
+ * unmarked / walk-in), one-off and cancelled classes, all five disciplines,
+ * belts across disciplines with a promotion timeline, drop-in leads (general and
+ * class-linked), referrals in all three audit states, and a live invite link per
+ * role.
  */
 import { computeOccurrences, paymentPeriod } from "@matops/domain";
 
@@ -32,7 +38,7 @@ import type {
   user,
 } from "../schema";
 import type { SeedAcademy } from "./registry";
-import { SEED_ACADEMIES, seedMemberId, seedUserId } from "./registry";
+import { SEED_ACADEMY, seedMemberId, seedUserId } from "./registry";
 
 type NewUser = typeof user.$inferInsert;
 type NewOrganization = typeof organization.$inferInsert;
@@ -73,22 +79,27 @@ export interface SeedGraph {
   dropIns: NewDropIn[];
   referrals: NewReferral[];
   referralAudits: NewReferralAudit[];
+  /** Active students who stopped training — run.ts leaves them out of future
+   * bookings so their drift band is not contradicted by a booking tomorrow. */
+  quietStudentIds: string[];
 }
 
 export interface SeedGraphOptions {
-  /** The real, already-registered user you sign in as (owner of ALPHA, student of BETA). */
+  /** The real, already-registered user you sign in as (the academy owner). */
   realUser: { id: string; name: string };
   /** Injected id generator for uuid PKs — pass a counter in tests for determinism. */
   newId: () => string;
   /** "Now" — injected so the dataset is deterministic (default: real now). */
   now?: Date;
-  academies?: { alpha: SeedAcademy; beta: SeedAcademy };
+  academy?: SeedAcademy;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** How far back past classes go (attendance history for streaks + insights). */
-const PAST_WINDOW_DAYS = 28;
+/** How far back past classes go (attendance history for streaks + insights).
+ * Six weeks, so a member who stopped a month ago still has visible history and
+ * lands in the `dormant` drift band rather than looking like a never-joiner. */
+const PAST_WINDOW_DAYS = 42;
 
 const FIRST_NAMES = [
   "Sam",
@@ -189,20 +200,30 @@ interface TemplateSpec {
 }
 
 /**
- * Build one academy's slice of the graph. `staffInstructorId` teaches the classes
- * and stamps ranks/notes. `students` are the members whose attendance/dues/rank
- * data populates the screens. `you` is the real user's membership (owner of
- * ALPHA, student of BETA) — passed so their own bookings/dues/rank get seeded.
+ * One seeded membership: the persona plus the member row's state. `quietSince`
+ * drives the drift band — `undefined` trains right up to today, a number stops
+ * attending that many days ago, `null` never attended at all.
+ */
+export interface StudentDef {
+  persona: Persona;
+  status: string;
+  role: string;
+  invitedRole: string | null;
+  quietSince?: number | null;
+}
+
+/**
+ * Build the academy's domain slice. `staffInstructorId` is the real user (the
+ * owner): they teach the Open Mat and stamp every attendance mark, rank, and
+ * note. `students` are the members whose attendance/dues/rank data populates the
+ * screens.
  */
 function buildAcademy(args: {
   academy: SeedAcademy;
   templates: TemplateSpec[];
-  students: {
-    persona: Persona;
-    status: string;
-    role: string;
-    invitedRole: string | null;
-  }[];
+  students: StudentDef[];
+  /** Staff member ids that get a black-belt rank row (the coaches). */
+  staffRanks?: { memberHandle: string; belt: string }[];
   staffInstructorId: string;
   newId: () => string;
   now: Date;
@@ -263,9 +284,12 @@ function buildAcademy(args: {
     occurrences.forEach((startsAt, oi) => {
       const classId = newId();
       // A deterministic subset of active students attend each past class.
-      const attendees = activeStudents.filter(
-        (_, si) => (si + ti + oi) % 3 !== 0,
-      );
+      const attendees = activeStudents.filter((s, si) => {
+        if ((si + ti + oi) % 3 === 0) return false;
+        if (s.quietSince === undefined) return true;
+        if (s.quietSince === null) return false;
+        return startsAt.getTime() <= now.getTime() - s.quietSince * DAY_MS;
+      });
       // The latest class of the second template is left UNMARKED, so the owner
       // has a past class to run "mark all present" on in a demo.
       const unmarked = ti === 1 && oi === occurrences.length - 1;
@@ -308,7 +332,9 @@ function buildAcademy(args: {
       }
       // One walk-in on the most recent class of the first template (booking
       // `none` + present) so the O5 walk-in path has data.
-      const walkIn = activeStudents[activeStudents.length - 1];
+      const walkIn = [...activeStudents]
+        .reverse()
+        .find((s) => s.quietSince === undefined);
       if (ti === 0 && oi === occurrences.length - 1 && walkIn) {
         participations.push({
           id: newId(),
@@ -339,6 +365,84 @@ function buildAcademy(args: {
     });
   });
 
+  // --- One-off classes (template_id null) + a cancelled past class. ---------
+  // A seminar the owner added by hand, once in the past (with attendance) and
+  // once upcoming; plus a class that was called off, so the cancelled state and
+  // the coach's "cancelled" count both have data.
+  const regulars = activeStudents.filter((s) => s.quietSince === undefined);
+  const pastSeminarId = newId();
+  const pastSeminarStart = new Date(now.getTime() - 9 * DAY_MS);
+  pastClasses.push({
+    id: pastSeminarId,
+    academyId: academy.id,
+    templateId: null,
+    instructorId: staffInstructorId,
+    title: "Seminar · Guard passing",
+    discipline: "bjj",
+    startsAt: pastSeminarStart,
+    durationMinutes: 120,
+    capacity: 30,
+    bookingCount: Math.min(regulars.length, 8),
+    status: "scheduled",
+  });
+  regulars.slice(0, 8).forEach((s, i) => {
+    participations.push({
+      id: newId(),
+      academyId: academy.id,
+      classId: pastSeminarId,
+      studentId: s.persona.userId,
+      bookingStatus: "booked",
+      bookingTier: "confirmed",
+      bookedAt: new Date(pastSeminarStart.getTime() - 3 * DAY_MS),
+      attendanceStatus: i === 7 ? "absent" : "present",
+      attendedAt: i === 7 ? null : pastSeminarStart,
+      markedBy: i === 7 ? null : staffInstructorId,
+    });
+  });
+
+  const upcomingSeminarId = newId();
+  pastClasses.push({
+    id: upcomingSeminarId,
+    academyId: academy.id,
+    templateId: null,
+    instructorId: args.templates[0]?.instructorId ?? staffInstructorId,
+    title: "Seminar · Leg locks",
+    discipline: "nogi",
+    startsAt: new Date(now.getTime() + 6 * DAY_MS),
+    durationMinutes: 120,
+    capacity: 30,
+    bookingCount: 0,
+    status: "scheduled",
+  });
+
+  const cancelledPastId = newId();
+  const cancelledPastStart = new Date(now.getTime() - 3 * DAY_MS);
+  pastClasses.push({
+    id: cancelledPastId,
+    academyId: academy.id,
+    templateId: null,
+    instructorId: args.templates[0]?.instructorId ?? staffInstructorId,
+    title: "NoGi · All levels",
+    discipline: "nogi",
+    startsAt: cancelledPastStart,
+    durationMinutes: 60,
+    capacity: 20,
+    bookingCount: 0,
+    status: "cancelled",
+  });
+  regulars.slice(0, 4).forEach((s) => {
+    participations.push({
+      id: newId(),
+      academyId: academy.id,
+      classId: cancelledPastId,
+      studentId: s.persona.userId,
+      bookingStatus: "booked",
+      bookingTier: "confirmed",
+      bookedAt: new Date(cancelledPastStart.getTime() - 2 * DAY_MS),
+      attendanceStatus: "unmarked",
+    });
+  });
+
   // --- Payments: plans, per-member dues across all three dots, one open claim. -
   const planId = newId();
   const planLiteId = newId();
@@ -358,10 +462,22 @@ function buildAcademy(args: {
     currency: academy.currency,
     cycle: "monthly",
   };
-  const plans = [plan, planLite];
+  // An archived (soft-deleted) plan: gone from the price list, still legal on the
+  // dues of the one member who never moved off it (O7 "· archived" option).
+  const planArchivedId = newId();
+  const planArchived: NewPlan = {
+    id: planArchivedId,
+    academyId: academy.id,
+    name: "Legacy · Unlimited",
+    priceMinor: 4200,
+    currency: academy.currency,
+    cycle: "monthly",
+    deletedAt: new Date(now.getTime() - 60 * DAY_MS),
+  };
+  const plans = [plan, planLite, planArchived];
 
   // Spread due dates so the member list shows paid / due-soon / overdue side by side.
-  // First offset is due-soon so YOU (index 0 of BETA's list) can test "I paid".
+  // The first offset is due-soon, so the top of the list shows the amber dot.
   const dueOffsets = [2, 22, -6, 40, -20]; // days from now
   const duesEligible = students.filter(
     (s) => s.status === "active" || s.status === "suspended",
@@ -376,7 +492,7 @@ function buildAcademy(args: {
       id: newId(),
       academyId: academy.id,
       memberId: seedMemberId(academy.key, s.persona.handle),
-      planId: i % 3 === 0 ? planLiteId : planId,
+      planId: i === 4 ? planArchivedId : i % 3 === 0 ? planLiteId : planId,
       nextDueAt: new Date(
         now.getTime() + (dueOffsets[i % dueOffsets.length] ?? 0) * DAY_MS,
       ),
@@ -506,6 +622,32 @@ function buildAcademy(args: {
       });
     }
   });
+  // The coaches carry their own belts — the member detail of a staff member
+  // must not read as blank.
+  (args.staffRanks ?? []).forEach((r) => {
+    ranks.push({
+      id: newId(),
+      academyId: academy.id,
+      memberId: seedMemberId(academy.key, r.memberHandle),
+      discipline: "bjj",
+      belt: r.belt,
+      stripes: 0,
+      updatedBy: staffInstructorId,
+    });
+    promotions.push({
+      id: newId(),
+      academyId: academy.id,
+      memberId: seedMemberId(academy.key, r.memberHandle),
+      discipline: "bjj",
+      fromBelt: "Brown",
+      fromStripes: 4,
+      toBelt: r.belt,
+      toStripes: 0,
+      promotedBy: staffInstructorId,
+      promotedAt: new Date(now.getTime() - 700 * DAY_MS),
+    });
+  });
+
   // A judo rank on one member proves the second (no-stripe) system renders.
   if (activeStudents[0]) {
     ranks.push({
@@ -519,17 +661,27 @@ function buildAcademy(args: {
     });
   }
 
+  const NOTE_BODIES = [
+    "Recovering from a knee tweak. Go easy on leg locks for two weeks.",
+    "Cleared by the physio today. Back to full rounds.",
+    "Prepping for first competition next month, keen on extra rounds.",
+    "Asked about the kids class for their son (age 8).",
+    "Paid in cash at the desk on the 3rd, receipt in the folder.",
+  ];
+  // Member 0 gets a two-note history (the thread reads as a timeline); the next
+  // three get one each, so the empty-notes state still shows on everyone else.
+  const noteTargets = [0, 0, 1, 2, 3];
   const notes: NewNote[] = [];
-  activeStudents.slice(0, 2).forEach((s, i) => {
+  noteTargets.forEach((studentIndex, i) => {
+    const s = activeStudents[studentIndex];
+    if (!s) return;
     notes.push({
       id: newId(),
       academyId: academy.id,
       memberId: seedMemberId(academy.key, s.persona.handle),
-      body:
-        i === 0
-          ? "Recovering from a knee tweak — go easy on leg locks for two weeks."
-          : "Prepping for first competition next month; keen on extra rounds.",
+      body: NOTE_BODIES[i] ?? "",
       authorId: staffInstructorId,
+      createdAt: new Date(now.getTime() - (20 - i * 3) * DAY_MS),
     });
   });
 
@@ -557,6 +709,35 @@ function buildAcademy(args: {
       consent: true,
       visitCount: 2,
     },
+    {
+      // Walked into a specific class — shows on that class's O5 roster.
+      id: newId(),
+      academyId: academy.id,
+      firstName: "Dana",
+      lastName: "Guest",
+      phone: "+380509998855",
+      email: "dana.guest@example.com",
+      classId: pastSeminarId,
+      consent: true,
+      visitCount: 1,
+      firstVisitAt: pastSeminarStart,
+      lastVisitAt: pastSeminarStart,
+    },
+    {
+      // Did not consent to being contacted — the lead list must not offer to
+      // chase this one.
+      id: newId(),
+      academyId: academy.id,
+      firstName: "Lee",
+      lastName: "Onceoff",
+      phone: "+380509998844",
+      email: null,
+      classId: null,
+      consent: false,
+      visitCount: 4,
+      firstVisitAt: new Date(now.getTime() - 50 * DAY_MS),
+      lastVisitAt: new Date(now.getTime() - 5 * DAY_MS),
+    },
   ];
 
   return {
@@ -575,241 +756,148 @@ function buildAcademy(args: {
 }
 
 /**
- * Build the whole seed dataset: two demo academies with the real user as owner of
- * ALPHA and an active student of BETA, surrounded by fake members, classes,
- * payments, and ranks.
+ * Build the whole seed dataset: ONE demo academy ("Alma beta") with the real user
+ * as its owner, surrounded by fake staff, members, classes, payments, and ranks.
  */
 export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
   const now = opts.now ?? new Date();
   const newId = opts.newId;
-  const academies = opts.academies ?? {
-    alpha: SEED_ACADEMIES.alpha,
-    beta: SEED_ACADEMIES.beta,
-  };
-  const { alpha, beta } = academies;
+  const academy = opts.academy ?? SEED_ACADEMY;
 
   // ---- Fake personas -------------------------------------------------------
-  const alphaCoach = persona("a_coach1", 101, "Rael Moreira");
-  const alphaCoach2 = persona("a_coach2", 102, "Fernando Costa");
-  const betaOwner = persona("b_owner1", 201);
+  const coach1 = persona("coach1", 101, "Tomás Simão");
+  const coach2 = persona("coach2", 102, "Fernando Marques Gonzaga");
+  // A third coach who has not taught yet — the O10 roster must still show them,
+  // with zeros rather than a missing card.
+  const coach3 = persona("coach3", 103, "Marta Lindqvist");
 
-  // ALPHA students: mostly active, plus pending / pending-instructor / suspended
-  // / removed so the member list shows every status.
-  const alphaStudentDefs: {
-    status: string;
-    role: string;
-    invitedRole: string | null;
-  }[] = [];
-  for (let i = 0; i < 20; i++) {
-    if (i < 14)
-      alphaStudentDefs.push({
-        status: "active",
-        role: "student",
-        invitedRole: "student",
-      });
-    else if (i < 16)
-      alphaStudentDefs.push({
-        status: "pending",
-        role: "member",
-        invitedRole: "student",
-      });
-    else if (i === 16)
-      alphaStudentDefs.push({
-        status: "pending",
-        role: "member",
-        invitedRole: "instructor",
-      });
-    else if (i === 17)
-      alphaStudentDefs.push({
-        status: "suspended",
-        role: "student",
-        invitedRole: "student",
-      });
-    else if (i === 18)
-      alphaStudentDefs.push({
-        status: "removed",
-        role: "student",
-        invitedRole: "student",
-      });
-    else
-      alphaStudentDefs.push({
-        status: "active",
-        role: "student",
-        invitedRole: "student",
-      });
-  }
-  const alphaStudents = alphaStudentDefs.map((d, i) => ({
-    persona: persona(`a_s${String(i + 1).padStart(2, "0")}`, i + 1),
+  // Students: mostly active, plus pending / pending-instructor / suspended /
+  // removed so the member list shows every status, and four who stopped training
+  // at different points so all four drift bands appear on the O1 widget.
+  const ACTIVE = { status: "active", role: "student", invitedRole: "student" };
+  const studentDefs: Omit<StudentDef, "persona">[] = [
+    ...Array.from({ length: 10 }, () => ({ ...ACTIVE })),
+    { ...ACTIVE, quietSince: 10 }, // cooling  (8-13 days)
+    { ...ACTIVE, quietSince: 18 }, // at risk  (14-27 days)
+    { ...ACTIVE, quietSince: 32 }, // dormant  (28+ days)
+    { ...ACTIVE, quietSince: null }, // joined, never trained
+    { status: "pending", role: "member", invitedRole: "student" },
+    { status: "pending", role: "member", invitedRole: "student" },
+    { status: "pending", role: "member", invitedRole: "instructor" },
+    { status: "suspended", role: "student", invitedRole: "student" },
+    { status: "removed", role: "student", invitedRole: "student" },
+    { ...ACTIVE },
+  ];
+  const students: StudentDef[] = studentDefs.map((d, i) => ({
+    persona: persona(`s${String(i + 1).padStart(2, "0")}`, i + 1),
     ...d,
-  }));
-
-  const betaStudents = Array.from({ length: 5 }, (_, i) => ({
-    persona: persona(`b_s${String(i + 1).padStart(2, "0")}`, i + 50),
-    status: "active",
-    role: "student",
-    invitedRole: "student",
   }));
 
   // ---- Auth rows (user / organization / member / invite) -------------------
   const users: NewUser[] = [
-    userRow(alphaCoach),
-    userRow(alphaCoach2),
-    userRow(betaOwner),
-    ...alphaStudents.map((s) => userRow(s.persona)),
-    ...betaStudents.map((s) => userRow(s.persona)),
+    userRow(coach1),
+    userRow(coach2),
+    userRow(coach3),
+    ...students.map((s) => userRow(s.persona)),
   ];
 
-  const organizations: NewOrganization[] = [alpha, beta].map((a) => ({
-    id: a.id,
-    name: a.name,
-    slug: a.slug,
-    publicCode: a.publicCode,
-    createdAt: now,
-  }));
+  const organizations: NewOrganization[] = [
+    {
+      id: academy.id,
+      name: academy.name,
+      slug: academy.slug,
+      publicCode: academy.publicCode,
+      createdAt: now,
+    },
+  ];
 
   const members: NewMember[] = [
-    // YOU — owner of ALPHA, active.
+    // YOU — the owner.
     {
-      id: seedMemberId(alpha.key, "you"),
-      organizationId: alpha.id,
+      id: seedMemberId(academy.key, "you"),
+      organizationId: academy.id,
       userId: opts.realUser.id,
       role: "owner",
       status: "active",
       invitedRole: null,
       createdAt: new Date(now.getTime() - 200 * DAY_MS),
     },
-    // ALPHA instructor.
-    {
-      id: seedMemberId(alpha.key, alphaCoach.handle),
-      organizationId: alpha.id,
-      userId: alphaCoach.userId,
+    ...[coach1, coach2, coach3].map((c, i) => ({
+      id: seedMemberId(academy.key, c.handle),
+      organizationId: academy.id,
+      userId: c.userId,
       role: "instructor",
       status: "active",
       invitedRole: "instructor",
-      createdAt: new Date(now.getTime() - 180 * DAY_MS),
-    },
-    {
-      id: seedMemberId(alpha.key, alphaCoach2.handle),
-      organizationId: alpha.id,
-      userId: alphaCoach2.userId,
-      role: "instructor",
-      status: "active",
-      invitedRole: "instructor",
-      createdAt: new Date(now.getTime() - 170 * DAY_MS),
-    },
-    // ALPHA students (varied statuses).
-    ...alphaStudents.map((s, i) => ({
-      id: seedMemberId(alpha.key, s.persona.handle),
-      organizationId: alpha.id,
+      createdAt: new Date(now.getTime() - (180 - i * 10) * DAY_MS),
+    })),
+    ...students.map((s, i) => ({
+      id: seedMemberId(academy.key, s.persona.handle),
+      organizationId: academy.id,
       userId: s.persona.userId,
       role: s.role,
       status: s.status,
       invitedRole: s.invitedRole,
       createdAt: new Date(now.getTime() - (150 - i * 3) * DAY_MS),
     })),
-    // BETA owner (fake) — so BETA is never ownerless.
-    {
-      id: seedMemberId(beta.key, betaOwner.handle),
-      organizationId: beta.id,
-      userId: betaOwner.userId,
-      role: "owner",
-      status: "active",
-      invitedRole: null,
-      createdAt: new Date(now.getTime() - 120 * DAY_MS),
-    },
-    // YOU — active student of BETA.
-    {
-      id: seedMemberId(beta.key, "you"),
-      organizationId: beta.id,
-      userId: opts.realUser.id,
-      role: "student",
-      status: "active",
-      invitedRole: "student",
-      createdAt: new Date(now.getTime() - 90 * DAY_MS),
-    },
-    // BETA students.
-    ...betaStudents.map((s, i) => ({
-      id: seedMemberId(beta.key, s.persona.handle),
-      organizationId: beta.id,
-      userId: s.persona.userId,
-      role: s.role,
-      status: s.status,
-      invitedRole: s.invitedRole,
-      createdAt: new Date(now.getTime() - (80 - i * 5) * DAY_MS),
-    })),
   ];
 
-  // One live invite link per role on ALPHA (drives the invite/staff cards).
+  // One live invite link per role (drives the invite/staff cards). The tester
+  // joins the beta through the instructor link.
   const invites: NewInvite[] = [
     {
-      academyId: alpha.id,
+      academyId: academy.id,
       role: "student",
-      token: "seedtoken_alpha_student",
+      token: "seedtoken_alma_student",
       createdBy: opts.realUser.id,
     },
     {
-      academyId: alpha.id,
+      academyId: academy.id,
       role: "instructor",
-      token: "seedtoken_alpha_instructor",
+      token: "seedtoken_alma_instructor",
       createdBy: opts.realUser.id,
     },
   ];
 
-  // ---- ALPHA domain data (you = owner; coach teaches) ----------------------
-  // The academy's real weekly board: Gi (bjj) / NoGi / Open Mat, taught by Rael
-  // and Fernando. Days are 1=Mon … 6=Sat.
-  const rael = alphaCoach.userId;
-  const fernando = alphaCoach2.userId;
-  const alphaTemplates: TemplateSpec[] = [
+  // ---- Weekly board (you = owner; the coaches teach) -----------------------
+  // The real Alma timetable, Mon-Sat. Days are 1=Mon … 6=Sat.
+  const tomas = coach1.userId;
+  const fernando = coach2.userId;
+  const owner = opts.realUser.id;
+  const templateSpecs: TemplateSpec[] = [
     {
       title: "Gi · All levels",
       discipline: "bjj",
       daysOfWeek: [2, 4],
       startsAtMinutes: 8 * 60,
+      // The small morning class: run.ts books every active student into the
+      // first class under 12 places, so this is the over-capacity red count.
       durationMinutes: 60,
-      capacity: 12,
-      instructorId: rael,
+      capacity: 8,
+      instructorId: tomas,
     },
     {
       title: "Gi · All levels",
       discipline: "bjj",
-      daysOfWeek: [1],
+      daysOfWeek: [1, 2, 5],
       startsAtMinutes: 9 * 60,
       durationMinutes: 60,
       capacity: 20,
-      instructorId: fernando,
-    },
-    {
-      title: "Gi · All levels",
-      discipline: "bjj",
-      daysOfWeek: [2],
-      startsAtMinutes: 9 * 60,
-      durationMinutes: 60,
-      capacity: 20,
-      instructorId: rael,
+      instructorId: tomas,
     },
     {
       title: "Gi · Beginner",
       discipline: "bjj",
-      daysOfWeek: [3],
+      daysOfWeek: [3, 4],
       startsAtMinutes: 9 * 60,
       durationMinutes: 60,
       capacity: 20,
-      instructorId: fernando,
+      instructorId: tomas,
     },
     {
       title: "Gi · Beginner",
       discipline: "bjj",
-      daysOfWeek: [4],
-      startsAtMinutes: 9 * 60,
-      durationMinutes: 60,
-      capacity: 20,
-      instructorId: rael,
-    },
-    {
-      title: "Gi · Beginner",
-      discipline: "bjj",
-      daysOfWeek: [5, 6],
+      daysOfWeek: [6],
       startsAtMinutes: 9 * 60,
       durationMinutes: 60,
       capacity: 20,
@@ -822,7 +910,7 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
       startsAtMinutes: 10 * 60,
       durationMinutes: 120,
       capacity: 40,
-      instructorId: opts.realUser.id,
+      instructorId: owner,
     },
     {
       title: "NoGi · Inter-Advanced",
@@ -831,16 +919,7 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
       startsAtMinutes: 12 * 60 + 30,
       durationMinutes: 60,
       capacity: 20,
-      instructorId: rael,
-    },
-    {
-      title: "Gi · All levels",
-      discipline: "bjj",
-      daysOfWeek: [2, 4],
-      startsAtMinutes: 12 * 60 + 30,
-      durationMinutes: 60,
-      capacity: 20,
-      instructorId: rael,
+      instructorId: tomas,
     },
     {
       title: "NoGi · All levels",
@@ -849,13 +928,13 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
       startsAtMinutes: 12 * 60 + 30,
       durationMinutes: 60,
       capacity: 20,
-      instructorId: rael,
+      instructorId: tomas,
     },
     {
-      title: "NoGi · All levels",
-      discipline: "nogi",
+      title: "Gi · All levels",
+      discipline: "bjj",
       daysOfWeek: [2, 4],
-      startsAtMinutes: 13 * 60 + 30,
+      startsAtMinutes: 12 * 60 + 30,
       durationMinutes: 60,
       capacity: 20,
       instructorId: fernando,
@@ -867,7 +946,7 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
       startsAtMinutes: 18 * 60 + 30,
       durationMinutes: 60,
       capacity: 24,
-      instructorId: rael,
+      instructorId: tomas,
     },
     {
       title: "Gi · Inter-Advanced",
@@ -876,7 +955,7 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
       startsAtMinutes: 18 * 60 + 30,
       durationMinutes: 60,
       capacity: 24,
-      instructorId: rael,
+      instructorId: tomas,
     },
     {
       title: "NoGi · All levels",
@@ -885,7 +964,7 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
       startsAtMinutes: 19 * 60 + 30,
       durationMinutes: 60,
       capacity: 24,
-      instructorId: rael,
+      instructorId: owner,
     },
     {
       title: "NoGi · Inter-Advanced",
@@ -894,7 +973,7 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
       startsAtMinutes: 19 * 60 + 30,
       durationMinutes: 60,
       capacity: 24,
-      instructorId: rael,
+      instructorId: owner,
     },
     {
       title: "Kids Gi",
@@ -908,65 +987,24 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
       status: "paused",
     },
   ];
-  const alphaData = buildAcademy({
-    academy: alpha,
-    templates: alphaTemplates,
-    students: alphaStudents,
+  const data = buildAcademy({
+    academy,
+    templates: templateSpecs,
+    students,
+    staffRanks: [
+      { memberHandle: coach1.handle, belt: "Black" },
+      { memberHandle: coach2.handle, belt: "Black" },
+      { memberHandle: coach3.handle, belt: "Black" },
+    ],
     staffInstructorId: opts.realUser.id,
     newId,
     now,
   });
 
-  // ---- BETA domain data (you = student; fake owner teaches) -----------------
-  // Include YOU in BETA's student list so your own attendance / dues / rank
-  // get seeded (mobile Training + Profile screens).
-  const betaMembersForData = [
-    {
-      persona: {
-        handle: "you",
-        userId: opts.realUser.id,
-        name: opts.realUser.name,
-        email: "",
-        phone: "",
-      },
-      status: "active",
-      role: "student",
-      invitedRole: "student",
-    },
-    ...betaStudents,
-  ];
-  const betaTemplates: TemplateSpec[] = [
-    {
-      title: "BJJ",
-      discipline: "bjj",
-      daysOfWeek: [1],
-      startsAtMinutes: 18 * 60,
-      durationMinutes: 60,
-      capacity: 12,
-      instructorId: betaOwner.userId,
-    },
-    {
-      title: "No-Gi",
-      discipline: "nogi",
-      daysOfWeek: [4],
-      startsAtMinutes: 19 * 60,
-      durationMinutes: 60,
-      capacity: 10,
-      instructorId: betaOwner.userId,
-    },
-  ];
-  const betaData = buildAcademy({
-    academy: beta,
-    templates: betaTemplates,
-    students: betaMembersForData,
-    staffInstructorId: betaOwner.userId,
-    newId,
-    now,
-  });
-
   // Direct attributions with more than one referrer and deliberate unassigned
-  // students. ALPHA also includes an assigned removed student so the historical
-  // include toggle has a meaningful example.
+  // students, plus one corrected and one cleared attribution so the O9 history
+  // shows all three audit actions. An assigned removed student gives the
+  // historical include toggle a meaningful example.
   const referrals: NewReferral[] = [];
   const referralAudits: NewReferralAudit[] = [];
   const addReferral = (
@@ -995,53 +1033,99 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
       occurredAt: new Date(now.getTime() - 60 * DAY_MS),
     });
   };
-  const alphaOwnerMemberId = seedMemberId(alpha.key, "you");
-  const alphaCoachMemberId = seedMemberId(alpha.key, alphaCoach.handle);
-  alphaStudents.slice(0, 8).forEach((student, index) => {
+  const ownerMemberId = seedMemberId(academy.key, "you");
+  const coach1MemberId = seedMemberId(academy.key, coach1.handle);
+  students.slice(0, 8).forEach((student, index) => {
     addReferral(
-      alpha.id,
-      seedMemberId(alpha.key, student.persona.handle),
-      index % 2 === 0 ? alphaCoachMemberId : alphaOwnerMemberId,
+      academy.id,
+      seedMemberId(academy.key, student.persona.handle),
+      index % 2 === 0 ? coach1MemberId : ownerMemberId,
       opts.realUser.id,
     );
   });
-  const removedAlphaStudent = alphaStudents.find(
+  const removedStudent = students.find(
     (student) => student.status === "removed",
   );
-  if (removedAlphaStudent) {
+  if (removedStudent) {
     addReferral(
-      alpha.id,
-      seedMemberId(alpha.key, removedAlphaStudent.persona.handle),
-      alphaCoachMemberId,
+      academy.id,
+      seedMemberId(academy.key, removedStudent.persona.handle),
+      coach1MemberId,
       opts.realUser.id,
     );
   }
-  betaStudents.slice(0, 3).forEach((student) => {
-    addReferral(
-      beta.id,
-      seedMemberId(beta.key, student.persona.handle),
-      seedMemberId(beta.key, betaOwner.handle),
-      betaOwner.userId,
+
+  // Corrected: credited to the coach at first, moved to the owner a month later.
+  const correctedStudent = students[8];
+  if (correctedStudent) {
+    const studentMemberId = seedMemberId(
+      academy.key,
+      correctedStudent.persona.handle,
     );
-  });
+    addReferral(academy.id, studentMemberId, coach1MemberId, opts.realUser.id);
+    const row = referrals[referrals.length - 1];
+    if (row) {
+      row.referrerMemberId = ownerMemberId;
+      row.updatedAt = new Date(now.getTime() - 25 * DAY_MS);
+    }
+    referralAudits.push({
+      id: newId(),
+      academyId: academy.id,
+      studentMemberId,
+      oldReferrerMemberId: coach1MemberId,
+      newReferrerMemberId: ownerMemberId,
+      action: "corrected",
+      actorId: opts.realUser.id,
+      occurredAt: new Date(now.getTime() - 25 * DAY_MS),
+    });
+  }
+
+  // Cleared: the row is retained with a null referrer, which locks the student
+  // against a fresh guess by another staff member (ADR 52).
+  const clearedStudent = students[9];
+  if (clearedStudent) {
+    const studentMemberId = seedMemberId(
+      academy.key,
+      clearedStudent.persona.handle,
+    );
+    addReferral(academy.id, studentMemberId, coach1MemberId, opts.realUser.id);
+    const row = referrals[referrals.length - 1];
+    if (row) {
+      row.referrerMemberId = null;
+      row.updatedAt = new Date(now.getTime() - 15 * DAY_MS);
+    }
+    referralAudits.push({
+      id: newId(),
+      academyId: academy.id,
+      studentMemberId,
+      oldReferrerMemberId: coach1MemberId,
+      newReferrerMemberId: null,
+      action: "cleared",
+      actorId: opts.realUser.id,
+      occurredAt: new Date(now.getTime() - 15 * DAY_MS),
+    });
+  }
 
   return {
     users,
     organizations,
     members,
     invites,
-    templates: [...alphaData.templates, ...betaData.templates],
-    pastClasses: [...alphaData.pastClasses, ...betaData.pastClasses],
-    participations: [...alphaData.participations, ...betaData.participations],
-    plans: [...alphaData.plans, ...betaData.plans],
-    dues: [...alphaData.dues, ...betaData.dues],
-    claims: [...alphaData.claims, ...betaData.claims],
-    settings: [alphaData.settings, betaData.settings],
-    ranks: [...alphaData.ranks, ...betaData.ranks],
-    promotions: [...alphaData.promotions, ...betaData.promotions],
-    notes: [...alphaData.notes, ...betaData.notes],
-    dropIns: [...alphaData.dropIns, ...betaData.dropIns],
+    templates: data.templates,
+    pastClasses: data.pastClasses,
+    participations: data.participations,
+    plans: data.plans,
+    dues: data.dues,
+    claims: data.claims,
+    settings: [data.settings],
+    ranks: data.ranks,
+    promotions: data.promotions,
+    notes: data.notes,
+    dropIns: data.dropIns,
     referrals,
     referralAudits,
+    quietStudentIds: students
+      .filter((s) => s.quietSince !== undefined)
+      .map((s) => s.persona.userId),
   };
 }

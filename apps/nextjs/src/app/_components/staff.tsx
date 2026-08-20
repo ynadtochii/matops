@@ -205,7 +205,7 @@ export function Staff() {
     }),
   );
   const demote = useMutation(
-    trpc.membership.demote.mutationOptions({
+    trpc.membership.setRole.mutationOptions({
       onSuccess: async () => {
         await invalidate();
         toast.success("Stepped down to instructor");
@@ -217,7 +217,7 @@ export function Staff() {
   const busy = promote.isPending || demote.isPending;
   const onConfirm = async (action: Action, memberId: string) => {
     if (action === "promote") await promote.mutateAsync({ memberId });
-    else await demote.mutateAsync({ memberId });
+    else await demote.mutateAsync({ memberId, role: "instructor" });
   };
 
   const members = [...(staff.data ?? [])].sort(byRoleThenName);

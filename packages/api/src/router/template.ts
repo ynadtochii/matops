@@ -19,6 +19,7 @@ import {
   UpdateClassTemplateSchema,
 } from "@matops/validators";
 
+import { requireInstructor } from "../members";
 import { staffProcedure } from "../trpc";
 
 /**
@@ -48,11 +49,15 @@ export const templateRouter = {
   create: staffProcedure
     .input(CreateClassTemplateSchema)
     .mutation(async ({ ctx, input }) => {
+      const instructorId = input.instructorId ?? ctx.session.user.id;
+      if (instructorId !== ctx.session.user.id) {
+        await requireInstructor(ctx, instructorId);
+      }
       const [row] = await ctx.db
         .insert(classTemplate)
         .values({
           academyId: ctx.academyId,
-          instructorId: input.instructorId ?? ctx.session.user.id,
+          instructorId,
           title: input.title,
           discipline: input.discipline ?? null,
           daysOfWeek: normalizeDaysOfWeek(input.daysOfWeek),
@@ -93,13 +98,17 @@ export const templateRouter = {
         });
       }
 
+      const instructorId = input.instructorId ?? prev.instructorId;
+      if (instructorId !== prev.instructorId) {
+        await requireInstructor(ctx, instructorId);
+      }
+
       const [row] = await ctx.db
         .update(classTemplate)
         .set({
-          // On EDIT the fallback is the template's own instructor. No client
-          // sends `instructorId`, so `?? session.user` silently reassigned every
-          // template to whoever happened to open the edit form.
-          instructorId: input.instructorId ?? prev.instructorId,
+          // On EDIT the fallback is the template's own instructor. A client that
+          // sends nothing must not hand the template to whoever opened the form.
+          instructorId,
           title: input.title,
           discipline: input.discipline ?? null,
           daysOfWeek: normalizeDaysOfWeek(input.daysOfWeek),

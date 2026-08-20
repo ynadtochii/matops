@@ -20,6 +20,7 @@ import { Spinner } from "@matops/ui/spinner";
 import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
+import { InstructorOptions } from "./coach-select";
 import { cardClass } from "./primitives";
 import { SchedulePoster } from "./schedule-poster";
 import { EmptyState, ErrorState, SkeletonRows } from "./states";
@@ -45,6 +46,7 @@ const timeToMinutes = (t: string) => {
 
 interface FormState {
   title: string;
+  instructorId: string;
   discipline: Discipline | "";
   daysOfWeek: number[];
   time: string; // "HH:MM"
@@ -53,18 +55,20 @@ interface FormState {
   timeZone: string;
 }
 
-const emptyForm = (): FormState => ({
+const emptyForm = (instructorId: string, timeZone: string): FormState => ({
   title: "",
+  instructorId,
   discipline: "",
   daysOfWeek: [],
   time: "18:00",
   durationMinutes: 60,
   capacity: 20,
-  timeZone: browserTz(),
+  timeZone,
 });
 
 const formFromTemplate = (t: Template): FormState => ({
   title: t.title,
+  instructorId: t.instructorId,
   discipline: t.discipline ?? "",
   daysOfWeek: t.daysOfWeek,
   time: formatStartMinutes(t.startsAtMinutes),
@@ -75,16 +79,19 @@ const formFromTemplate = (t: Template): FormState => ({
 
 /**
  * Recurring class templates (spec O3). Staff define the weekly schedule here;
- * concrete classes are materialized from these (slice 2.2). The time zone
- * defaults to this browser's zone until academy settings (O6) ship.
+ * concrete classes are materialized from these (slice 2.2). A new template
+ * takes the academy time zone (O6); an existing one keeps its own until someone
+ * moves it on purpose (ADR 68).
  */
 export function Templates() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const list = useQuery(trpc.template.list.queryOptions());
+  const me = useQuery(trpc.academy.current.queryOptions());
 
   const [form, setForm] = useState<FormState | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const academyTz = me.data?.timeZone ?? browserTz();
 
   const invalidate = () =>
     queryClient.invalidateQueries(trpc.template.list.pathFilter());
@@ -155,6 +162,8 @@ export function Templates() {
       instructorName: t.instructorName,
     }));
 
+  const editingTemplate = list.data?.find((t) => t.id === editingId);
+
   const submit = () => {
     if (!form) return;
     if (form.title.trim().length < 1 || form.daysOfWeek.length === 0) {
@@ -163,6 +172,7 @@ export function Templates() {
     }
     const payload = {
       title: form.title.trim(),
+      instructorId: form.instructorId || undefined,
       discipline: form.discipline === "" ? null : form.discipline,
       daysOfWeek: form.daysOfWeek,
       startsAtMinutes: timeToMinutes(form.time),
@@ -185,7 +195,7 @@ export function Templates() {
             variant="outline"
             onClick={() => {
               setEditingId(null);
-              setForm(emptyForm());
+              setForm(emptyForm(me.data?.userId ?? "", academyTz));
             }}
           >
             New template
@@ -231,6 +241,7 @@ export function Templates() {
                 <span className="text-muted-foreground text-sm">
                   {describeRecurrence(t.daysOfWeek, t.startsAtMinutes)} ·{" "}
                   {t.durationMinutes}min · cap {t.capacity}
+                  {t.instructorName && ` · ${t.instructorName}`}
                 </span>
               </div>
               <div className="flex flex-wrap justify-end gap-2">
@@ -387,6 +398,21 @@ export function Templates() {
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="tpl-instructor">Coach</Label>
+                  <Select
+                    id="tpl-instructor"
+                    value={form.instructorId}
+                    onChange={(e) =>
+                      setForm({ ...form, instructorId: e.target.value })
+                    }
+                  >
+                    <InstructorOptions
+                      value={form.instructorId}
+                      fallbackLabel={editingTemplate?.instructorName ?? "You"}
+                    />
+                  </Select>
+                </div>
+                <div className="flex flex-col gap-1.5">
                   <Label htmlFor="tpl-discipline">Discipline</Label>
                   <Select
                     id="tpl-discipline"
@@ -409,16 +435,31 @@ export function Templates() {
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="tpl-tz">Time zone</Label>
-                <Input
-                  id="tpl-tz"
-                  value={form.timeZone}
-                  onChange={(e) =>
-                    setForm({ ...form, timeZone: e.target.value })
-                  }
-                  placeholder="Europe/Kyiv"
-                  required
-                />
+                <Label>Time zone</Label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-mono text-sm">{form.timeZone}</span>
+                  {form.timeZone === academyTz ? (
+                    <span className="text-muted-foreground text-xs">
+                      Your academy time zone, set in Settings.
+                    </span>
+                  ) : (
+                    <>
+                      <span className="text-muted-foreground text-xs">
+                        Your academy runs on {academyTz}.
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          setForm({ ...form, timeZone: academyTz })
+                        }
+                      >
+                        Move to {academyTz}
+                      </Button>
+                    </>
+                  )}
+                </div>
               </div>
 
               <div className="flex gap-2">

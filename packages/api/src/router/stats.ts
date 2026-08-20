@@ -1,6 +1,17 @@
 import type { TRPCRouterRecord } from "@trpc/server";
+import { TRPCError } from "@trpc/server";
 
-import { and, eq, gte, inArray, listMembersOf, sql } from "@matops/db";
+import type { ClassMark, CoachClass, CoachWindowKey } from "@matops/domain";
+import {
+  and,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  listMembersOf,
+  lt,
+  sql,
+} from "@matops/db";
 import {
   classInstance,
   classParticipation,
@@ -8,13 +19,23 @@ import {
 } from "@matops/db/schema";
 import {
   classifyDrift,
+  COACH_WINDOWS,
+  coachBreakdown,
+  coachWindowRange,
+  coachWorkload,
+  coachWorkloadFor,
   groupMoneyByCurrency,
   gymInsights,
+  isOwner,
   monthBucket,
   trainingStats,
 } from "@matops/domain";
+import { CoachDetailSchema, CoachStatsSchema } from "@matops/validators";
 
+import type { TimeZoneCtx } from "../academy-tz";
+import type { MemberScope } from "../members";
 import { academyTimeZone } from "../academy-tz";
+import { staffAmong } from "../members";
 import { enrolledProcedure, ownerProcedure, staffProcedure } from "../trpc";
 
 /**
@@ -27,6 +48,94 @@ const REVENUE_WINDOW_DAYS = 70;
 
 /** Days of marked attendance the gym-insights window looks back over. */
 const GYM_WINDOW_DAYS = 30;
+
+/**
+ * The rows every O10 read needs: classes whose START falls in the window, plus
+ * the attendance marks on them. Two bounded queries on the RLS-scoped `ctx.db`,
+ * both covered by `cl_by_academy_start` / `cp_by_academy_class`; the aggregation
+ * itself is the pure `@matops/domain` coach engine.
+ *
+ * Soft-deleted classes are excluded — they never happened as far as the gym is
+ * concerned. Cancelled ones are kept, because a cancellation is a fact the O10
+ * card reports.
+ */
+type TenantDb = TimeZoneCtx["db"];
+
+async function readCoachRows(
+  db: TenantDb,
+  range: { from: Date; to: Date },
+): Promise<{ classes: CoachClass[]; marks: ClassMark[] }> {
+  const rows = await db
+    .select({
+      id: classInstance.id,
+      instructorId: classInstance.instructorId,
+      startsAt: classInstance.startsAt,
+      durationMinutes: classInstance.durationMinutes,
+      title: classInstance.title,
+      discipline: classInstance.discipline,
+      status: classInstance.status,
+    })
+    .from(classInstance)
+    .where(
+      and(
+        gte(classInstance.startsAt, range.from),
+        lt(classInstance.startsAt, range.to),
+        isNull(classInstance.deletedAt),
+      ),
+    );
+  const marked = await db
+    .select({
+      classId: classParticipation.classId,
+      studentId: classParticipation.studentId,
+      status: classParticipation.attendanceStatus,
+    })
+    .from(classParticipation)
+    .innerJoin(classInstance, eq(classParticipation.classId, classInstance.id))
+    .where(
+      and(
+        inArray(classParticipation.attendanceStatus, ["present", "absent"]),
+        gte(classInstance.startsAt, range.from),
+        lt(classInstance.startsAt, range.to),
+        isNull(classInstance.deletedAt),
+      ),
+    );
+  return {
+    classes: rows.map(({ status, ...c }) => ({
+      ...c,
+      cancelled: status === "cancelled",
+    })),
+    // The `where` already excludes `unmarked`; narrow rather than assert so the
+    // compiler proves it instead of taking our word for it.
+    marks: marked.flatMap((m) =>
+      m.status === "unmarked" ? [] : [{ ...m, status: m.status }],
+    ),
+  };
+}
+
+/**
+ * Everything both O10 reads need, from one academy read: the resolved window,
+ * its classes and marks, the name-ordered active roster, and a name for every
+ * member so a coach who has left still shows their own.
+ */
+async function loadCoachContext(
+  ctx: MemberScope & { db: TenantDb },
+  windowKey: CoachWindowKey,
+) {
+  const now = new Date();
+  const timeZone = await academyTimeZone(ctx);
+  const range = coachWindowRange(COACH_WINDOWS[windowKey], now, timeZone);
+  const { classes, marks } = await readCoachRows(ctx.db, range);
+  const members = await listMembersOf(ctx.academyId, ctx.db);
+  return {
+    now,
+    timeZone,
+    range,
+    classes,
+    marks,
+    instructorIds: staffAmong(members).map((m) => m.userId),
+    nameByUser: new Map(members.map((m) => [m.userId, m.name])),
+  };
+}
 
 /**
  * Personal & gym statistics derived from stored attendance (v1.2 — ADR 39). A
@@ -58,7 +167,7 @@ export const statsRouter = {
           eq(classParticipation.attendanceStatus, "present"),
         ),
       );
-    const timeZone = await academyTimeZone(ctx.db);
+    const timeZone = await academyTimeZone(ctx);
     return trainingStats(sessions, new Date(), timeZone);
   }),
 
@@ -92,11 +201,11 @@ export const statsRouter = {
           gte(classInstance.startsAt, windowStart),
         ),
       );
-    const timeZone = await academyTimeZone(ctx.db);
+    const timeZone = await academyTimeZone(ctx);
     // Growth, this month against last. Both sides count only retained members,
     // so a joiner who has since been removed is missing from either — the two
     // numbers are biased the same way and stay comparable.
-    const members = await listMembersOf(ctx.academyId, ctx.baseDb);
+    const members = await listMembersOf(ctx.academyId, ctx.db);
     const thisMonth = monthBucket(now, timeZone);
     const joined = members
       .filter((m) => m.status !== "removed")
@@ -119,6 +228,63 @@ export const statsRouter = {
       newMembersLastMonth,
     };
   }),
+
+  /**
+   * Every coach's workload over the window (spec O10, K.3). Owner-only: the O10
+   * roster compares staff, and ADR 38/52 keeps cross-staff views with the owner.
+   * A coach reads their own card through `coach` below.
+   *
+   * Rows come back name-ordered, with any coach who has left the roster last —
+   * dropping their classes would make the per-coach figures stop adding up.
+   */
+  coaches: ownerProcedure
+    .input(CoachStatsSchema)
+    .query(async ({ ctx, input }) => {
+      const { now, range, classes, marks, instructorIds, nameByUser } =
+        await loadCoachContext(ctx, input.window);
+      const active = new Set(instructorIds);
+      return {
+        range,
+        coaches: coachWorkload({
+          classes,
+          marks,
+          instructorIds,
+          now,
+          range,
+        }).map((row) => ({
+          ...row,
+          name: nameByUser.get(row.instructorId) ?? "Former coach",
+          onStaff: active.has(row.instructorId),
+        })),
+      };
+    }),
+
+  /**
+   * One coach's card plus the breakdown behind it (spec O10, K.3). Staff-tier:
+   * omit `instructorId` to read your own. Only an owner may name someone else,
+   * so an instructor sees their own work and nobody else's.
+   */
+  coach: staffProcedure
+    .input(CoachDetailSchema)
+    .query(async ({ ctx, input }) => {
+      const instructorId = input.instructorId ?? ctx.session.user.id;
+      if (instructorId !== ctx.session.user.id && !isOwner(ctx.membership)) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only an owner can read another coach's figures",
+        });
+      }
+      const { now, timeZone, range, classes, marks, nameByUser } =
+        await loadCoachContext(ctx, input.window);
+      const base = { classes, marks, now, range };
+      return {
+        instructorId,
+        name: nameByUser.get(instructorId) ?? "Former coach",
+        range,
+        workload: coachWorkloadFor(base, instructorId),
+        breakdown: coachBreakdown({ ...base, instructorId, timeZone }),
+      };
+    }),
 
   /**
    * Owner-confirmed payment money for this academy month against last (spec O1,
@@ -149,7 +315,7 @@ export const statsRouter = {
           gte(paymentClaim.confirmedAt, windowStart),
         ),
       );
-    const timeZone = await academyTimeZone(ctx.db);
+    const timeZone = await academyTimeZone(ctx);
     const thisBucket = monthBucket(now, timeZone);
     const inMonth = (bucket: number) =>
       groupMoneyByCurrency(
@@ -200,7 +366,7 @@ export const statsRouter = {
       lastByStudent.map((r) => [r.studentId, new Date(r.last)]),
     );
 
-    const members = await listMembersOf(ctx.academyId, ctx.baseDb);
+    const members = await listMembersOf(ctx.academyId, ctx.db);
     const drifting = members
       .filter(
         (m) =>

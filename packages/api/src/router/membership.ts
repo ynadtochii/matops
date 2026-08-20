@@ -33,6 +33,7 @@ import {
   trainingStats,
 } from "@matops/domain";
 import {
+  InviteRoleSchema,
   JoinAcademySchema,
   JoinByCodeSchema,
   MemberActionSchema,
@@ -40,9 +41,9 @@ import {
 
 import type { createTRPCContext } from "../trpc";
 import { academyTimeZone } from "../academy-tz";
-import { requireMember } from "../members";
+import { requireMember, staffOf } from "../members";
 import { notifyMembershipApproved } from "../notify";
-import { ownerProcedure, protectedProcedure } from "../trpc";
+import { ownerProcedure, protectedProcedure, staffProcedure } from "../trpc";
 
 type BaseContext = Awaited<ReturnType<typeof createTRPCContext>>;
 /** Context inside a `protectedProcedure` — the session is guaranteed present. */
@@ -173,7 +174,7 @@ export const membershipRouter = {
   joinByCode: protectedProcedure
     .input(JoinByCodeSchema)
     .mutation(async ({ ctx, input }) => {
-      const academy = await findAcademyByCode(input.code);
+      const academy = await findAcademyByCode(input.code, ctx.baseDb);
       if (!academy) {
         throw new TRPCError({
           code: "NOT_FOUND",
@@ -197,7 +198,7 @@ export const membershipRouter = {
    * (§4). Counted on the RLS-scoped `ctx.db`, grouped by student.
    */
   members: ownerProcedure.query(async ({ ctx }) => {
-    const rows = await listMembersOf(ctx.academyId, ctx.baseDb);
+    const rows = await listMembersOf(ctx.academyId, ctx.db);
     const visits = await ctx.db
       .select({
         studentId: classParticipation.studentId,
@@ -299,7 +300,7 @@ export const membershipRouter = {
         )
         .orderBy(desc(classInstance.startsAt));
       const now = new Date();
-      const timeZone = await academyTimeZone(ctx.db);
+      const timeZone = await academyTimeZone(ctx);
       const lastAttendance = history[0]?.startsAt ?? null;
       return {
         stats: trainingStats(history, now, timeZone),
@@ -394,38 +395,42 @@ export const membershipRouter = {
     }),
 
   /**
-   * Step an owner DOWN to instructor (spec O6). Atomic never-ownerless check —
-   * the last active owner can't be demoted (promote a co-owner first, §4).
+   * Set a member's academy role: make a student an instructor, step a coach back
+   * to student, or step an owner down to instructor (spec O6). Atomic
+   * never-ownerless check: the last active owner can't be stepped down (promote
+   * a co-owner first, §4).
    */
-  demote: ownerProcedure
-    .input(MemberActionSchema)
+  setRole: ownerProcedure
+    .input(MemberActionSchema.extend({ role: InviteRoleSchema }))
     .mutation(async ({ ctx, input }) => {
       await requireMember(ctx, input.memberId);
-      await setRoleOrRejectLastOwner(
-        ctx.academyId,
-        input.memberId,
-        "instructor",
-      );
+      await setRoleOrRejectLastOwner(ctx.academyId, input.memberId, input.role);
       return { ok: true as const };
     }),
 
   /**
-   * The academy's staff — active owners + instructors (spec O6). A lean read for
-   * the Settings staff list; no dues/visit joins (that's the member list's job).
+   * Active staff as class-instructor options (spec O10, K.1). Deliberately NOT
+   * `staff` above: that one is owner-only and carries emails, while this feeds a
+   * picker every staff member opens. It returns `userId`, because
+   * `class.instructor_id` is a `user.id` and not a `member.id`.
+   */
+  instructors: staffProcedure.query(async ({ ctx }) => {
+    const rows = await staffOf(ctx);
+    return rows.map((r) => ({ userId: r.userId, name: r.name, role: r.role }));
+  }),
+
+  /**
+   * The academy's staff — active owners + instructors (spec O10, moved by ADR
+   * 63). A lean read for the Coaches staff list; no dues/visit joins (that's the
+   * member list's job). Carries emails, so owner-only.
    */
   staff: ownerProcedure.query(async ({ ctx }) => {
-    const rows = await listMembersOf(ctx.academyId, ctx.baseDb);
-    return rows
-      .filter(
-        (r) =>
-          r.status === "active" &&
-          (r.role === "owner" || r.role === "instructor"),
-      )
-      .map((r) => ({
-        memberId: r.memberId,
-        name: r.name,
-        email: r.email,
-        role: r.role,
-      }));
+    const rows = await staffOf(ctx);
+    return rows.map((r) => ({
+      memberId: r.memberId,
+      name: r.name,
+      email: r.email,
+      role: r.role,
+    }));
   }),
 } satisfies TRPCRouterRecord;

@@ -17,6 +17,7 @@ import { toast } from "@matops/ui/toast";
 import { AddVisitorSchema } from "@matops/validators";
 
 import { useTRPC } from "~/trpc/react";
+import { CoachSelect } from "./coach-select";
 import { cardClass } from "./primitives";
 import { EmptyState, ErrorState, SkeletonRows } from "./states";
 
@@ -231,6 +232,12 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
 
   return (
     <div className="flex flex-col gap-3">
+      <CoachSelect
+        classId={classId}
+        startsAt={cls.startsAt}
+        instructorId={cls.instructorId}
+        instructorName={cls.instructorName}
+      />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
           {canMark ? (

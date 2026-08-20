@@ -1,7 +1,8 @@
 import { TRPCError } from "@trpc/server";
 
-import type { DbExec } from "@matops/db/client";
-import { getMemberById } from "@matops/db";
+import type { DbReader, MemberRow } from "@matops/db";
+import { getMemberById, listMembersOf } from "@matops/db";
+import { isStaff } from "@matops/domain";
 
 /**
  * The one academy-membership guard (docs/issues/60). Five routers each kept a
@@ -15,10 +16,18 @@ export type MemberRecord = NonNullable<
   Awaited<ReturnType<typeof getMemberById>>
 >;
 
-/** The slice of a tenant context this guard needs. */
+/**
+ * The slice of a tenant context these guards need.
+ *
+ * `db` is the RLS-scoped transaction, not the base connection. The identity
+ * tables carry no policy and `matops_app` keeps SELECT on them, so the rows are
+ * the same either way — but reaching for the base connection here would check a
+ * SECOND connection out of the pool and hold it for the length of the
+ * transaction it sits inside (migration 0020, docs/issues/62).
+ */
 export interface MemberScope {
   academyId: string;
-  baseDb: DbExec;
+  db: DbReader;
 }
 
 /**
@@ -30,9 +39,45 @@ export async function requireMember(
   ctx: MemberScope,
   memberId: string,
 ): Promise<MemberRecord> {
-  const m = await getMemberById(memberId, ctx.baseDb);
+  const m = await getMemberById(memberId, ctx.db);
   if (m?.academyId !== ctx.academyId) {
     throw new TRPCError({ code: "NOT_FOUND", message: "Member not found" });
   }
   return m;
+}
+
+/**
+ * The academy's ACTIVE staff (owners + instructors), name-ordered. The one
+ * definition of "who may coach a class", read by the instructor picker, the
+ * O10 roster, and `requireInstructor`.
+ */
+export async function staffOf(ctx: MemberScope): Promise<MemberRow[]> {
+  return staffAmong(await listMembersOf(ctx.academyId, ctx.db));
+}
+
+/**
+ * The same filter over rows a caller already loaded. The O10 reads need every
+ * member's name as well as the roster, and one academy read should serve both.
+ */
+export function staffAmong(rows: MemberRow[]): MemberRow[] {
+  return rows.filter(isStaff).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Assert a user id may be credited as a class's instructor: an ACTIVE owner or
+ * instructor of the caller's academy. `class.instructor_id` is a plain text
+ * column with no FK and no RLS of its own, so nothing else stops a staff member
+ * writing an arbitrary user id there — and every O10 coach figure reads off it.
+ *
+ * Throws NOT_FOUND rather than FORBIDDEN so a caller cannot probe which users
+ * belong to other academies.
+ */
+export async function requireInstructor(
+  ctx: MemberScope,
+  userId: string,
+): Promise<void> {
+  const staff = await staffOf(ctx);
+  if (!staff.some((r) => r.userId === userId)) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Instructor not found" });
+  }
 }

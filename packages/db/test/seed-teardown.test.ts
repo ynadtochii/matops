@@ -53,7 +53,7 @@ describe("seed roundtrip — up then down", () => {
     await pg.close();
   });
 
-  it("seeds both demo academies with data", async () => {
+  it("seeds the demo academy with data", async () => {
     const status = await seedStatus(exec);
     expect(status.every((s) => s.present)).toBe(true);
     expect(status.every((s) => s.members > 0)).toBe(true);
@@ -67,8 +67,8 @@ describe("seed roundtrip — up then down", () => {
       `SELECT count(*)::int AS n FROM "member" WHERE user_id = $1`,
       [realUser.id],
     );
-    // Real academy (1) + owner of ALPHA + student of BETA = 3.
-    expect(members.rows[0]?.n).toBe(3);
+    // Real academy (1) + owner of the demo academy (1) = 2.
+    expect(members.rows[0]?.n).toBe(2);
   });
 
   it("removeAll deletes every seed row", async () => {

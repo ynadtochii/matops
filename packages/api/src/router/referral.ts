@@ -92,7 +92,7 @@ export const referralRouter = {
    */
   dashboard: staffProcedure.query(async ({ ctx }) => {
     const [members, referrals, confirmedClaims, timeZone] = await Promise.all([
-      listMembersOf(ctx.academyId, ctx.baseDb),
+      listMembersOf(ctx.academyId, ctx.db),
       ctx.db.select().from(memberReferral),
       ctx.db
         .select({
@@ -103,7 +103,7 @@ export const referralRouter = {
         })
         .from(paymentClaim)
         .where(eq(paymentClaim.status, "confirmed")),
-      academyTimeZone(ctx.db),
+      academyTimeZone(ctx),
     ]);
 
     const currentMonth = academyMonthKey(new Date(), timeZone);
@@ -306,7 +306,7 @@ export const referralRouter = {
           .from(memberReferralAudit)
           .where(eq(memberReferralAudit.studentMemberId, input.studentMemberId))
           .orderBy(desc(memberReferralAudit.occurredAt)),
-        listMembersOf(ctx.academyId, ctx.baseDb),
+        listMembersOf(ctx.academyId, ctx.db),
       ]);
       const nameByMember = new Map(
         members.map((member) => [member.memberId, member.name]),

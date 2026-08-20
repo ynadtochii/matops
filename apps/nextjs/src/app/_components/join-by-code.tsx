@@ -33,6 +33,7 @@ export function JoinByCode() {
   const [found, setFound] = useState<{
     academyId: string;
     name: string;
+    address: string | null;
   } | null>(null);
 
   // findByCode is a query procedure; fetch it on demand (not on every keystroke)
@@ -119,6 +120,11 @@ export function JoinByCode() {
             <div className="min-w-0">
               <p className="text-muted-foreground text-xs">Joining</p>
               <p className="truncate font-medium">{found.name}</p>
+              {found.address && (
+                <p className="text-muted-foreground text-xs whitespace-pre-wrap">
+                  {found.address}
+                </p>
+              )}
             </div>
             <Button
               type="button"

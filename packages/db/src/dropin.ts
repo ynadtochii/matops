@@ -1,5 +1,6 @@
 import { and, eq, gte, isNull, lt, sql } from "drizzle-orm";
 
+import type { DbReader } from "./tenant";
 import { organization } from "./auth-schema";
 import { db } from "./client";
 import { classInstance, dropIn } from "./scheduling";
@@ -15,11 +16,12 @@ import { classInstance, dropIn } from "./scheduling";
 /** Public academy info for the drop-in page header; null if the id is unknown. */
 export async function getAcademyPublic(
   academyId: string,
+  exec: DbReader = db,
 ): Promise<{ academyId: string; name: string } | null> {
-  const rows = await db
+  const rows = await exec
     .select({ academyId: organization.id, name: organization.name })
     .from(organization)
-    .where(eq(organization.id, academyId))
+    .where(and(eq(organization.id, academyId), isNull(organization.deletedAt)))
     .limit(1);
   return rows[0] ?? null;
 }

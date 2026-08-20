@@ -29,6 +29,7 @@ import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
 import { ClassRoster } from "./class-roster";
+import { InstructorOptions } from "./coach-select";
 import { Section } from "./primitives";
 import { EmptyState, ErrorState, SkeletonRows } from "./states";
 import { WeekGrid } from "./week-grid";
@@ -123,6 +124,7 @@ const dayKeyFmt = new Intl.DateTimeFormat("en-CA", {
 
 interface OneOffForm {
   title: string;
+  instructorId: string;
   discipline: Discipline | "";
   date: string; // YYYY-MM-DD
   time: string; // HH:MM
@@ -131,8 +133,9 @@ interface OneOffForm {
   timeZone: string;
 }
 
-const emptyOneOff = (): OneOffForm => ({
+const emptyOneOff = (instructorId: string): OneOffForm => ({
   title: "",
+  instructorId,
   discipline: "",
   date: dayKeyFmt.format(new Date()),
   time: "18:00",
@@ -166,6 +169,7 @@ export function Schedule() {
   }, [offset]);
 
   const week = useQuery(trpc.class.week.queryOptions({ from, to }));
+  const me = useQuery(trpc.academy.current.queryOptions());
   const invalidate = () =>
     queryClient.invalidateQueries(trpc.class.week.pathFilter());
   const onError = (err: { message: string }) =>
@@ -224,6 +228,7 @@ export function Schedule() {
     }
     create.mutate({
       title: form.title.trim(),
+      instructorId: form.instructorId || undefined,
       discipline: form.discipline === "" ? null : form.discipline,
       date: form.date,
       startsAtMinutes: timeToMinutes(form.time),
@@ -271,7 +276,6 @@ export function Schedule() {
               {timeFmt.format(new Date(detail.startsAt))} ·{" "}
               {detail.durationMinutes} min
               {detail.discipline && ` · ${detail.discipline.toUpperCase()}`}
-              {detail.instructorName && ` · ${detail.instructorName}`}
               {detail.status === "cancelled" && " · cancelled"}
             </DialogDescription>
             <ClassRoster key={detail.id} cls={detail} />
@@ -320,7 +324,7 @@ export function Schedule() {
           size="sm"
           variant="outline"
           className="shrink-0"
-          onClick={() => setForm(emptyOneOff())}
+          onClick={() => setForm(emptyOneOff(me.data?.userId ?? ""))}
         >
           Add class
         </Button>
@@ -402,6 +406,21 @@ export function Schedule() {
                     }
                     required
                   />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="cl-instructor">Coach</Label>
+                  <Select
+                    id="cl-instructor"
+                    value={form.instructorId}
+                    onChange={(e) =>
+                      setForm({ ...form, instructorId: e.target.value })
+                    }
+                  >
+                    <InstructorOptions
+                      value={form.instructorId}
+                      fallbackLabel="You"
+                    />
+                  </Select>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="cl-discipline">Discipline</Label>

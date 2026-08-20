@@ -2,6 +2,7 @@ import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod/v4";
 
+import type { Membership } from "@matops/domain";
 import {
   and,
   asc,
@@ -19,6 +20,7 @@ import {
   user,
 } from "@matops/db/schema";
 import {
+  canReassignCoach,
   classChange,
   instantFromLocalDate,
   isActiveMember,
@@ -27,10 +29,13 @@ import {
 import {
   ClassIdSchema,
   CreateClassSchema,
+  SetClassInstructorSchema,
   UpdateClassSchema,
 } from "@matops/validators";
 
+import type { TimeZoneCtx } from "../academy-tz";
 import { academyTimeZone } from "../academy-tz";
+import { requireInstructor } from "../members";
 import { notifyClassCancelled, notifyClassChanged } from "../notify";
 import { enrolledProcedure, staffProcedure } from "../trpc";
 
@@ -53,6 +58,66 @@ const WeekInput = z
  * `status` is `scheduled | cancelled` only — "past" is derived from
  * `starts_at + duration < now()` at read time (docs/issues/19), never stored.
  */
+/**
+ * Guard the K.2 rule on every path that can move credit: any staff member may
+ * set the coach on a class that has not started, but once it has, the field is
+ * reported history and only an owner may rewrite it (spec O10).
+ */
+function assertCanReassignCoach(
+  membership: Membership,
+  classStartsAt: Date,
+  now: Date,
+): void {
+  if (!canReassignCoach(membership, classStartsAt, now)) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Only an owner can change the coach on a past class",
+    });
+  }
+}
+
+/** The slice of a staff context the change-notification needs. */
+interface NotifyScope {
+  db: TimeZoneCtx["db"];
+  academyId: string;
+  afterCommit: (task: () => Promise<void>) => void;
+}
+
+/**
+ * Tell every booked student that a class moved or changed coach (§4,
+ * docs/issues/17). Shared by the full edit and the K.2 coach reassignment so
+ * the two can never drift apart. Callers decide WHETHER to notify via
+ * `classChange`; this only sends.
+ */
+async function notifyBookedOfChange(
+  ctx: NotifyScope,
+  row: { id: string; title: string; startsAt: Date },
+): Promise<void> {
+  const booked = await ctx.db
+    .select({ studentId: classParticipation.studentId })
+    .from(classParticipation)
+    .where(
+      and(
+        eq(classParticipation.classId, row.id),
+        eq(classParticipation.bookingStatus, "booked"),
+      ),
+    );
+  // Without a zone `formatWhen` labels the new time in UTC, so students would be
+  // told the wrong hour. The reminder sweep already resolves one.
+  const timeZone = await academyTimeZone(ctx);
+  const studentIds = booked.map((b) => b.studentId);
+  ctx.afterCommit(() =>
+    notifyClassChanged({
+      academyId: ctx.academyId,
+      className: row.title,
+      startsAt: row.startsAt,
+      timeZone,
+      classId: row.id,
+      studentIds,
+    }),
+  );
+}
+
 export const classRouter = {
   /**
    * Classes in [from, to) for the active academy, soonest first (O2 week view).
@@ -216,12 +281,16 @@ export const classRouter = {
         input.startsAtMinutes,
         input.timeZone,
       );
+      const instructorId = input.instructorId ?? ctx.session.user.id;
+      if (instructorId !== ctx.session.user.id) {
+        await requireInstructor(ctx, instructorId);
+      }
       const [row] = await ctx.db
         .insert(classInstance)
         .values({
           academyId: ctx.academyId,
           templateId: null,
-          instructorId: input.instructorId ?? ctx.session.user.id,
+          instructorId,
           title: input.title,
           discipline: input.discipline ?? null,
           startsAt,
@@ -244,6 +313,12 @@ export const classRouter = {
         );
       if (!before) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Class not found" });
+      }
+
+      const now = new Date();
+      if (input.instructorId !== before.instructorId) {
+        assertCanReassignCoach(ctx.membership, before.startsAt, now);
+        await requireInstructor(ctx, input.instructorId);
       }
 
       const startsAt =
@@ -276,33 +351,54 @@ export const classRouter = {
       const change = classChange(
         { startsAt: before.startsAt, instructorId: before.instructorId },
         { startsAt: row.startsAt, instructorId: row.instructorId },
+        now,
       );
-      if (change.shouldNotify) {
-        // Notify booked students of the time/instructor change (§4, docs/issues/17).
-        const booked = await ctx.db
-          .select({ studentId: classParticipation.studentId })
-          .from(classParticipation)
-          .where(
-            and(
-              eq(classParticipation.classId, row.id),
-              eq(classParticipation.bookingStatus, "booked"),
-            ),
-          );
-        // Without a zone `formatWhen` labels the new time in UTC, so students
-        // would be told the wrong hour. The reminder sweep already resolves one.
-        const timeZone = await academyTimeZone(ctx.db);
-        const studentIds = booked.map((b) => b.studentId);
-        ctx.afterCommit(() =>
-          notifyClassChanged({
-            academyId: ctx.academyId,
-            className: row.title,
-            startsAt: row.startsAt,
-            timeZone,
-            classId: row.id,
-            studentIds,
-          }),
+      if (change.shouldNotify) await notifyBookedOfChange(ctx, row);
+      return row;
+    }),
+
+  /**
+   * Change only who is credited for one class — the cover night (spec O10, K.2).
+   *
+   * Any staff member may set the coach on a class that has not started; once it
+   * has, the field is reported history and only an owner may rewrite it
+   * (`canReassignCoach`). Reassigning moves that class's O10 figures to the new
+   * coach, which is the point: credit always follows the current value.
+   */
+  setInstructor: staffProcedure
+    .input(SetClassInstructorSchema)
+    .mutation(async ({ ctx, input }) => {
+      const [before] = await ctx.db
+        .select()
+        .from(classInstance)
+        .where(
+          and(eq(classInstance.id, input.id), isNull(classInstance.deletedAt)),
         );
+      if (!before) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Class not found" });
       }
+      const now = new Date();
+      assertCanReassignCoach(ctx.membership, before.startsAt, now);
+      if (before.instructorId === input.instructorId) return before;
+      await requireInstructor(ctx, input.instructorId);
+
+      const [row] = await ctx.db
+        .update(classInstance)
+        .set({ instructorId: input.instructorId })
+        .where(
+          and(eq(classInstance.id, input.id), isNull(classInstance.deletedAt)),
+        )
+        .returning();
+      if (!row) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Class not found" });
+      }
+
+      const change = classChange(
+        { startsAt: before.startsAt, instructorId: before.instructorId },
+        { startsAt: row.startsAt, instructorId: row.instructorId },
+        now,
+      );
+      if (change.shouldNotify) await notifyBookedOfChange(ctx, row);
       return row;
     }),
 
@@ -341,7 +437,7 @@ export const classRouter = {
             eq(classParticipation.bookingStatus, "booked"),
           ),
         );
-      const timeZone = await academyTimeZone(ctx.db);
+      const timeZone = await academyTimeZone(ctx);
       const studentIds = booked.map((b) => b.studentId);
       ctx.afterCommit(() =>
         notifyClassCancelled({

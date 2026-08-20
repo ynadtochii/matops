@@ -129,6 +129,7 @@ export async function revokeInvite(
 export async function resolveInviteToken(token: string): Promise<{
   academyId: string;
   academyName: string;
+  academyAddress: string | null;
   role: string;
 } | null> {
   const rows = await db
@@ -136,10 +137,17 @@ export async function resolveInviteToken(token: string): Promise<{
       academyId: academyInvite.academyId,
       role: academyInvite.role,
       academyName: organization.name,
+      academyAddress: organization.address,
     })
     .from(academyInvite)
     .innerJoin(organization, eq(academyInvite.academyId, organization.id))
-    .where(and(eq(academyInvite.token, token), isNull(academyInvite.revokedAt)))
+    .where(
+      and(
+        eq(academyInvite.token, token),
+        isNull(academyInvite.revokedAt),
+        isNull(organization.deletedAt),
+      ),
+    )
     .limit(1);
 
   return rows[0] ?? null;

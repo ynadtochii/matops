@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { paymentStatus } from "@matops/domain";
+import { classifyDrift, paymentStatus } from "@matops/domain";
 
 import { buildSeedGraph } from "../src/seed/data";
-import { SEED_ACADEMIES, seedMemberId } from "../src/seed/registry";
+import { SEED_ACADEMY, seedMemberId } from "../src/seed/registry";
 
 /**
  * Pure coverage for the seed dataset builder — no DB. Locks the promise that the
@@ -22,24 +22,21 @@ describe("buildSeedGraph — pure dataset", () => {
     expect(JSON.stringify(build())).toEqual(JSON.stringify(build()));
   });
 
-  it("makes YOU owner of ALPHA and an active student of BETA", () => {
+  it("builds exactly one academy, owned by YOU", () => {
     const g = build();
-    const alphaYou = g.members.find(
-      (m) => m.id === seedMemberId(SEED_ACADEMIES.alpha.key, "you"),
-    );
-    const betaYou = g.members.find(
-      (m) => m.id === seedMemberId(SEED_ACADEMIES.beta.key, "you"),
-    );
-    expect(alphaYou).toMatchObject({
+    expect(g.organizations).toHaveLength(1);
+    expect(g.organizations[0]).toMatchObject({
+      id: SEED_ACADEMY.id,
+      name: "Alma beta",
+    });
+    expect(
+      g.members.find((m) => m.id === seedMemberId(SEED_ACADEMY.key, "you")),
+    ).toMatchObject({
       userId: realUser.id,
       role: "owner",
       status: "active",
     });
-    expect(betaYou).toMatchObject({
-      userId: realUser.id,
-      role: "student",
-      status: "active",
-    });
+    expect(g.members.filter((m) => m.role === "owner")).toHaveLength(1);
   });
 
   it("never gives YOUR real user a seed_ id (teardown must spare it)", () => {
@@ -50,15 +47,11 @@ describe("buildSeedGraph — pure dataset", () => {
     expect(g.members.some((m) => m.userId === realUser.id)).toBe(true);
   });
 
-  it("covers every member status on the ALPHA member list", () => {
+  it("covers every member status on the member list", () => {
     const g = build();
-    const alphaStatuses = new Set(
-      g.members
-        .filter((m) => m.organizationId === SEED_ACADEMIES.alpha.id)
-        .map((m) => m.status),
-    );
+    const statuses = new Set(g.members.map((m) => m.status));
     for (const s of ["active", "pending", "suspended", "removed"]) {
-      expect(alphaStatuses).toContain(s);
+      expect(statuses).toContain(s);
     }
     // A pending instructor exists (web-lens approval queue).
     expect(
@@ -78,17 +71,14 @@ describe("buildSeedGraph — pure dataset", () => {
     expect(statuses).toContain("overdue");
   });
 
-  it("leaves YOU without an open claim, so 'I paid' stays testable", () => {
+  it("covers every claim state without blocking YOUR own 'I paid'", () => {
     const g = build();
-    const yourBetaMember = seedMemberId(SEED_ACADEMIES.beta.key, "you");
+    const yourMember = seedMemberId(SEED_ACADEMY.key, "you");
     // Only a PENDING claim blocks the button (pc_uniq_open_claim is partial on
     // status = 'pending'), so YOU may hold confirmed history and still tap it.
     expect(
-      g.claims.some(
-        (c) => c.memberId === yourBetaMember && c.status === "pending",
-      ),
+      g.claims.some((c) => c.memberId === yourMember && c.status === "pending"),
     ).toBe(false);
-    // But some fake member does have an open pending claim.
     expect(g.claims.length).toBeGreaterThan(0);
     expect(g.claims.some((c) => c.status === "pending")).toBe(true);
     expect(g.claims.some((c) => c.status === "confirmed")).toBe(true);
@@ -142,7 +132,7 @@ describe("buildSeedGraph — pure dataset", () => {
 
   it("every tenant row is scoped to a seed academy id", () => {
     const g = build();
-    const ids = new Set([SEED_ACADEMIES.alpha.id, SEED_ACADEMIES.beta.id]);
+    const ids = new Set([SEED_ACADEMY.id]);
     const scoped = [
       ...g.templates,
       ...g.pastClasses,
@@ -163,7 +153,7 @@ describe("buildSeedGraph — pure dataset", () => {
   it("seeds assigned and unassigned referral examples", () => {
     const g = build();
     expect(g.referrals.length).toBeGreaterThan(0);
-    expect(g.referralAudits).toHaveLength(g.referrals.length);
+    expect(g.referralAudits.length).toBeGreaterThanOrEqual(g.referrals.length);
     const assignedStudents = new Set(
       g.referrals.map((row) => row.studentMemberId),
     );
@@ -173,5 +163,77 @@ describe("buildSeedGraph — pure dataset", () => {
     expect(
       studentMembers.some((member) => !assignedStudents.has(member.id)),
     ).toBe(true);
+  });
+
+  it("covers all three referral audit actions, cleared keeps a null referrer", () => {
+    const g = build();
+    const actions = new Set(g.referralAudits.map((a) => a.action));
+    expect(actions).toContain("assigned");
+    expect(actions).toContain("corrected");
+    expect(actions).toContain("cleared");
+    const clearedStudent = g.referralAudits.find(
+      (a) => a.action === "cleared",
+    )?.studentMemberId;
+    expect(
+      g.referrals.find((r) => r.studentMemberId === clearedStudent)
+        ?.referrerMemberId,
+    ).toBeNull();
+  });
+
+  it("puts an active member in each of the four drift bands", () => {
+    const g = build();
+    const lastPresent = new Map<string, Date>();
+    const started = new Map(g.pastClasses.map((c) => [c.id, c.startsAt]));
+    for (const p of g.participations) {
+      if (p.attendanceStatus !== "present") continue;
+      const startsAt = started.get(p.classId);
+      if (!startsAt) continue;
+      const seen = lastPresent.get(p.studentId);
+      if (!seen || startsAt > seen) lastPresent.set(p.studentId, startsAt);
+    }
+    const bands = new Set(
+      g.members
+        .filter((m) => m.role === "student" && m.status === "active")
+        .map((m) => classifyDrift(lastPresent.get(m.userId) ?? null, now)),
+    );
+    for (const band of ["active", "cooling", "at_risk", "dormant"]) {
+      expect(bands).toContain(band);
+    }
+  });
+
+  it("seeds a one-off class, a cancelled class, and every discipline", () => {
+    const g = build();
+    expect(g.pastClasses.some((c) => c.templateId === null)).toBe(true);
+    expect(g.pastClasses.some((c) => c.status === "cancelled")).toBe(true);
+    const disciplines = new Set(g.templates.map((t) => t.discipline));
+    for (const d of ["bjj", "nogi", "other"]) {
+      expect(disciplines).toContain(d);
+    }
+  });
+
+  it("seeds an archived plan that a member is still on", () => {
+    const g = build();
+    const archived = g.plans.find((p) => p.deletedAt != null);
+    expect(archived).toBeDefined();
+    expect(g.dues.some((d) => d.planId === archived?.id)).toBe(true);
+  });
+
+  it("seeds a coach who has taught nothing, and belts for the staff", () => {
+    const g = build();
+    const coaches = g.members.filter((m) => m.role === "instructor");
+    expect(coaches.length).toBeGreaterThanOrEqual(3);
+    const teaching = new Set(g.templates.map((t) => t.instructorId));
+    expect(coaches.some((c) => !teaching.has(c.userId))).toBe(true);
+    const coachIds = new Set(coaches.map((c) => c.id));
+    expect(g.ranks.some((r) => coachIds.has(r.memberId))).toBe(true);
+  });
+
+  it("seeds a class-linked lead and a lead with no contact consent", () => {
+    const g = build();
+    const classIds = new Set(g.pastClasses.map((c) => c.id));
+    expect(
+      g.dropIns.some((d) => d.classId != null && classIds.has(d.classId)),
+    ).toBe(true);
+    expect(g.dropIns.some((d) => !d.consent)).toBe(true);
   });
 });

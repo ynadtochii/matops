@@ -6,6 +6,7 @@ import {
   approveMembership,
   canApprove,
   canRemoveOrDemote,
+  isPendingCoach,
   isStudentLensMembership,
   isWebLensMembership,
   wouldLeaveOwnerless,
@@ -131,6 +132,26 @@ describe("student lens (docs/issues/18)", () => {
     expect(isStudentLensMembership({ role: "instructor" })).toBe(false);
     expect(
       isStudentLensMembership({ role: "member", invitedRole: "instructor" }),
+    ).toBe(false);
+  });
+});
+
+describe("pending coach requests", () => {
+  it("is a pending member invited as an instructor", () => {
+    expect(
+      isPendingCoach({ status: "pending", invitedRole: "instructor" }),
+    ).toBe(true);
+  });
+
+  it("is not a pending student, nor an approved instructor", () => {
+    expect(isPendingCoach({ status: "pending", invitedRole: "student" })).toBe(
+      false,
+    );
+    expect(isPendingCoach({ status: "pending", invitedRole: null })).toBe(
+      false,
+    );
+    expect(
+      isPendingCoach({ status: "active", invitedRole: "instructor" }),
     ).toBe(false);
   });
 });

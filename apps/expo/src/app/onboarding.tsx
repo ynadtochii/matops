@@ -91,6 +91,7 @@ export default function Onboarding() {
           <UIStack key="profile" gap={24}>
             <UIStack gap={8}>
               <Heading>Join {academy.name}</Heading>
+              {academy.address ? <Muted>{academy.address}</Muted> : null}
               <Muted>Your gym confirms you after you join.</Muted>
             </UIStack>
 

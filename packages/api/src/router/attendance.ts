@@ -42,7 +42,7 @@ export const attendanceRouter = {
   /** Active members of the academy (id = user.id, name) for the walk-in picker. */
   members: staffProcedure.query(async ({ ctx }) => {
     // Members live in the auth `member` table (no RLS); list + filter to active.
-    const members = await listMembersOf(ctx.academyId, ctx.baseDb);
+    const members = await listMembersOf(ctx.academyId, ctx.db);
     return members
       .filter((m) => m.status === "active")
       .map((m) => ({ id: m.userId, name: m.name }));
@@ -159,7 +159,7 @@ export const attendanceRouter = {
       const membership = await getMembership(
         input.studentId,
         ctx.academyId,
-        ctx.baseDb,
+        ctx.db,
       );
       if (!membership) {
         throw new TRPCError({

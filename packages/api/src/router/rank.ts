@@ -56,7 +56,7 @@ export const rankRouter = {
         .where(eq(rankPromotion.memberId, input.memberId))
         .orderBy(desc(rankPromotion.promotedAt));
       const nameByUser = new Map(
-        (await listMembersOf(ctx.academyId, ctx.baseDb)).map((r) => [
+        (await listMembersOf(ctx.academyId, ctx.db)).map((r) => [
           r.userId,
           r.name,
         ]),
@@ -172,7 +172,7 @@ export const rankRouter = {
     const memberId = await getMemberIdForUser(
       ctx.session.user.id,
       ctx.academyId,
-      ctx.baseDb,
+      ctx.db,
     );
     if (!memberId) return { ranks: [], history: [] };
     const ranks = await ctx.db

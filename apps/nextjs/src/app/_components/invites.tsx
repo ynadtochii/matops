@@ -5,8 +5,8 @@ import { SectionHeading } from "./primitives";
 
 /**
  * How students join (spec O6). One shareable student link; the link grants
- * nothing until an owner approves (docs/issues/20). The instructor link lives in
- * the Staff section — adding a coach is a staff action, not a student one.
+ * nothing until an owner approves (docs/issues/20). The instructor link lives on
+ * the Coaches screen — adding a coach is a staff action, not a student one.
  */
 export function Invites() {
   return (

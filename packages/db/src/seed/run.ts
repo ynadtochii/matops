@@ -40,7 +40,7 @@ export interface SeedOptions {
   /** The real, already-registered user you sign in as (looked up by the CLI). */
   realUser: { id: string; name: string };
   now?: Date;
-  academies?: { alpha: SeedAcademy; beta: SeedAcademy };
+  academy?: SeedAcademy;
 }
 
 /** Row counts written, per table — returned so the CLI can report the run. */
@@ -77,7 +77,7 @@ export async function seedAll(
   const graph = buildSeedGraph({
     realUser: opts.realUser,
     now,
-    academies: opts.academies,
+    academy: opts.academy,
     newId: () => randomUUID(),
   });
 
@@ -201,12 +201,15 @@ async function bookFutureClasses(
   now: Date,
   academyIds: string[],
 ): Promise<number> {
-  // Active students (incl. the real user's student membership) + pending students
-  // per academy, from the graph's member rows.
+  // Active students + pending students per academy, from the graph's member rows.
+  // Students the dataset marked as drifting are skipped: a booking tomorrow
+  // would contradict the "dormant" band the O1 widget shows for them.
+  const quiet = new Set(graph.quietStudentIds);
   const activeByAcademy = new Map<string, string[]>();
   const pendingByAcademy = new Map<string, string[]>();
   for (const m of graph.members) {
     const acad = m.organizationId;
+    if (quiet.has(m.userId)) continue;
     if (m.role === "student" && m.status === "active") {
       activeByAcademy.set(acad, [
         ...(activeByAcademy.get(acad) ?? []),

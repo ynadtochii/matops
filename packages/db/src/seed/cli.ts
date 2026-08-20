@@ -7,12 +7,13 @@
  *                 classes; your real data is untouched. Refuses if already filled.
  *   clear <code>  remove ONLY the fake students + their data from that academy.
  *
- * Separate fake demo academies (isolated, deleted by academy id):
- *   up      insert the two-academy demo dataset, attached to YOUR real user.
- *   down    remove every seed academy (never your real user or a real academy).
+ * A separate fake demo academy — "Alma beta", the one the beta test runs on
+ * (isolated, deleted by academy id):
+ *   up      insert the demo dataset, attached to YOUR real user as its owner.
+ *   down    remove the seed academy (never your real user or a real academy).
  *   reset   down, then up.
  *
- *   status [code]  show the demo academies (and, with a code, that academy's fakes).
+ *   status [code]  show the demo academy (and, with a code, that academy's fakes).
  *
  * The email (arg or SEED_EMAIL) is only needed by up/reset. Sign in once at
  * http://localhost:3004 first so your `user` row exists.

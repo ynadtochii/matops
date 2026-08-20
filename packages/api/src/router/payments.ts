@@ -226,7 +226,7 @@ export const paymentsRouter = {
       .where(eq(paymentClaim.status, "pending"))
       .orderBy(desc(paymentClaim.claimedAt));
     const nameByMember = new Map(
-      (await listMembersOf(ctx.academyId, ctx.baseDb)).map((r) => [
+      (await listMembersOf(ctx.academyId, ctx.db)).map((r) => [
         r.memberId,
         r.name,
       ]),
@@ -344,7 +344,7 @@ export const paymentsRouter = {
     const memberId = await getMemberIdForUser(
       ctx.session.user.id,
       ctx.academyId,
-      ctx.baseDb,
+      ctx.db,
     );
     const reference = memberId
       ? paymentReference(ctx.session.user.name, memberId)
@@ -421,7 +421,7 @@ export const paymentsRouter = {
       const memberId = await getMemberIdForUser(
         ctx.session.user.id,
         ctx.academyId,
-        ctx.baseDb,
+        ctx.db,
       );
       if (!memberId) {
         throw new TRPCError({

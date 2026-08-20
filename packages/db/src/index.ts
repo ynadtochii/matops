@@ -18,5 +18,7 @@ export * from "./materialize";
 export * from "./push-token";
 // Class-reminder claim (base-connection cron helper) — see ./reminder.ts.
 export * from "./reminder";
+// Academy settings (time zone, address, soft delete) — see ./academy-settings.ts.
+export * from "./academy-settings";
 // Dues-reminder claim (base-connection cron helper, R.1) — see ./dues-reminder.ts.
 export * from "./dues-reminder";

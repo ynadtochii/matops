@@ -13,15 +13,18 @@
  */
 
 export * from "./academy-code";
+export * from "./academy-settings";
 export * from "./access";
 export * from "./attendance";
 export * from "./booking";
 export * from "./checkin";
 export * from "./class-edit";
+export * from "./coach";
 export * from "./dropin";
 export * from "./format";
 export * from "./grid";
 export * from "./invite";
+export * from "./local-date";
 export * from "./materialize";
 export * from "./membership";
 export * from "./notify";

@@ -26,7 +26,7 @@ export const SEED_MARKER = "seed_";
 
 /** One demo academy the seed populates. `id` is a `text` org id (not a uuid). */
 export interface SeedAcademy {
-  /** Short key used to build deterministic child ids (e.g. "alpha"). */
+  /** Short key used to build deterministic child ids (e.g. "alma"). */
   key: string;
   /** Better Auth organization id (text PK) — the teardown key for every tenant row. */
   id: string;
@@ -39,34 +39,21 @@ export interface SeedAcademy {
 }
 
 /**
- * The demo academies:
- *  - ALPHA is the full gym — YOU own it (web admin), ~20 fake students around you.
- *  - BETA is a small gym a fake owner runs — YOU are a student there (mobile app).
+ * The single demo academy the beta test runs on. YOU own it; the tester joins
+ * through the seeded instructor invite link.
  */
-export const SEED_ACADEMIES = {
-  alpha: {
-    key: "alpha",
-    id: "seed_org_alpha",
-    name: "Ironside BJJ Academy",
-    slug: "seed-ironside-bjj",
-    publicCode: "990001",
-    timeZone: "Europe/Kyiv",
-    currency: "EUR",
-  },
-  beta: {
-    key: "beta",
-    id: "seed_org_beta",
-    name: "Northside Grappling Club",
-    slug: "seed-northside-grappling",
-    publicCode: "990002",
-    timeZone: "Europe/Kyiv",
-    currency: "EUR",
-  },
-} satisfies Record<string, SeedAcademy>;
+export const SEED_ACADEMY: SeedAcademy = {
+  key: "alma",
+  id: "seed_org_alma",
+  name: "Alma beta",
+  slug: "seed-alma-beta",
+  publicCode: "990001",
+  timeZone: "Europe/Kyiv",
+  currency: "EUR",
+};
 
-/** Every seed academy as a list (iteration order = insert order). */
-export const seedAcademyList: readonly SeedAcademy[] =
-  Object.values(SEED_ACADEMIES);
+/** Every seed academy as a list (one, kept as a list for the generic teardown). */
+export const seedAcademyList: readonly SeedAcademy[] = [SEED_ACADEMY];
 
 /** The org ids that scope every seed tenant row — the teardown `IN (...)` set. */
 export const seedAcademyIds: readonly string[] = seedAcademyList.map(
@@ -100,8 +87,8 @@ export function assertSeedableTarget(env = process.env): void {
 
 /**
  * The email of the real user YOU sign in as. The seed attaches the demo data to
- * this existing user (owner of ALPHA, student of BETA) — it never creates them,
- * so teardown never touches your real account. Resolved from the CLI arg or
+ * this existing user (owner of the demo academy) — it never creates them, so
+ * teardown never touches your real account. Resolved from the CLI arg or
  * `SEED_EMAIL`.
  */
 export function resolveOwnerEmail(

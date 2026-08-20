@@ -1,6 +1,7 @@
 import { randomInt } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
+import type { DbReader } from "./tenant";
 import { organization } from "./auth-schema";
 import { db } from "./client";
 
@@ -41,11 +42,18 @@ export async function generateAcademyCode(): Promise<string> {
  */
 export async function findAcademyByCode(
   code: string,
-): Promise<{ academyId: string; name: string } | null> {
-  const rows = await db
-    .select({ academyId: organization.id, name: organization.name })
+  exec: DbReader = db,
+): Promise<{ academyId: string; name: string; address: string | null } | null> {
+  const rows = await exec
+    .select({
+      academyId: organization.id,
+      name: organization.name,
+      address: organization.address,
+    })
     .from(organization)
-    .where(eq(organization.publicCode, code))
+    .where(
+      and(eq(organization.publicCode, code), isNull(organization.deletedAt)),
+    )
     .limit(1);
   return rows[0] ?? null;
 }
@@ -53,11 +61,12 @@ export async function findAcademyByCode(
 /** The shared code for one academy (owner display on the web), or null. */
 export async function getAcademyCode(
   academyId: string,
+  exec: DbReader = db,
 ): Promise<string | null> {
-  const rows = await db
+  const rows = await exec
     .select({ code: organization.publicCode })
     .from(organization)
-    .where(eq(organization.id, academyId))
+    .where(and(eq(organization.id, academyId), isNull(organization.deletedAt)))
     .limit(1);
   return rows[0]?.code ?? null;
 }

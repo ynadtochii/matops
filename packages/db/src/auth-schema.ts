@@ -86,6 +86,9 @@ export const organization = pgTable("organization", {
   // the mobile app (docs/issues/32). Assigned at creation by the auth hook,
   // unique across academies. Not secret — it only names the academy in search.
   publicCode: text("public_code").notNull().unique(),
+  timeZone: text("time_zone"),
+  address: text("address"),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
 
 export const member = pgTable(

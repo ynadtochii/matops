@@ -1,4 +1,5 @@
 import type { PGlite } from "@electric-sql/pglite";
+import { TRPCError } from "@trpc/server";
 
 import type { DbExec } from "@matops/db/client";
 import { execOn, freshDb } from "@matops/db/testing";
@@ -51,6 +52,24 @@ export async function harness(): Promise<Harness> {
         baseDb: exec,
       }),
   };
+}
+
+/**
+ * The tRPC error code a call rejects with, or a readable marker when it does
+ * not. Asserting the CODE keeps a permission test tied to the contract rather
+ * than to the wording of a message, which is user-facing copy and free to change.
+ */
+export async function rejectionCode(
+  promise: Promise<unknown>,
+): Promise<string> {
+  try {
+    await promise;
+    return "resolved without error";
+  } catch (err) {
+    return err instanceof TRPCError
+      ? err.code
+      : `non-tRPC error: ${String(err)}`;
+  }
 }
 
 function lit(value: string): string {
@@ -132,6 +151,29 @@ export async function seedClasses(
   );
   await pg.exec(`
     INSERT INTO "class" (id, academy_id, instructor_id, title, starts_at, duration_minutes, capacity, status, created_at, updated_at)
+      VALUES ${values.join(",")};
+  `);
+}
+
+export interface ParticipationSpec {
+  classId: string;
+  academyId: string;
+  studentId: string;
+  attendanceStatus?: "unmarked" | "present" | "absent";
+  bookingStatus?: "booked" | "cancelled" | "none";
+  bookingTier?: "confirmed" | "provisional";
+}
+
+export async function seedParticipations(
+  pg: PGlite,
+  rows: ParticipationSpec[],
+): Promise<void> {
+  const values = rows.map(
+    (r) =>
+      `(gen_random_uuid(), ${lit(r.academyId)}, ${lit(r.classId)}, ${lit(r.studentId)}, ${lit(r.bookingStatus ?? "booked")}, ${lit(r.bookingTier ?? "confirmed")}, ${lit(r.attendanceStatus ?? "unmarked")}, now(), now(), now())`,
+  );
+  await pg.exec(`
+    INSERT INTO "class_participation" (id, academy_id, class_id, student_id, booking_status, booking_tier, attendance_status, booked_at, created_at, updated_at)
       VALUES ${values.join(",")};
   `);
 }

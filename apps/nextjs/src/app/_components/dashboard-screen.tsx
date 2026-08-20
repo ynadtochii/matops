@@ -12,6 +12,7 @@ import {
   disciplineTone,
   groupMoneyByCurrency,
   isOwner as isOwnerOf,
+  isPendingCoach,
   isStaff as isStaffOf,
   needsAttendance,
   UNMARKED_LOOKBACK_DAYS,
@@ -185,7 +186,9 @@ export function DashboardScreen() {
     : dayList.filter((r) => new Date(r.startsAt).getTime() <= now.getTime())
         .length;
   const members = memberList.data ?? [];
-  const pendingCount = members.filter((m) => m.status === "pending").length;
+  const pendingCoaches = members.filter(isPendingCoach).length;
+  const pendingCount =
+    members.filter((m) => m.status === "pending").length - pendingCoaches;
   const activeCount = members.filter((m) => m.status === "active").length;
   const overdue = members.filter((m) => m.dues?.status === "overdue");
   const weekCount = (week.data ?? []).filter(
@@ -223,6 +226,12 @@ export function DashboardScreen() {
             href: "/members?tab=requests",
             count: pendingCount,
             label: "Pending approvals",
+          },
+          {
+            key: "coach-requests",
+            href: "/coaches",
+            count: pendingCoaches,
+            label: "Coach requests",
           },
           {
             key: "overdue",

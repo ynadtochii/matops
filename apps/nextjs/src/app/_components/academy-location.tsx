@@ -1,0 +1,178 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
+import { academyMapUrl, timeZoneOptions } from "@matops/domain";
+import { Button } from "@matops/ui/button";
+import { Label } from "@matops/ui/label";
+import { Select } from "@matops/ui/select";
+import { Textarea } from "@matops/ui/textarea";
+import { toast } from "@matops/ui/toast";
+
+import { useTRPC } from "~/trpc/react";
+import { SectionHeading } from "./primitives";
+import { ErrorState, SkeletonRows } from "./states";
+
+export function AcademyLocation({ address }: { address: string | null }) {
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  const settings = useQuery(trpc.academy.settings.queryOptions());
+  const current = settings.data?.timeZone;
+  const zones = useMemo(() => timeZoneOptions(current), [current]);
+
+  const [editingAddress, setEditingAddress] = useState(false);
+  const [draft, setDraft] = useState(address ?? "");
+
+  const save = useMutation(
+    trpc.academy.updateSettings.mutationOptions({
+      onSuccess: async () => {
+        await queryClient.invalidateQueries(trpc.academy.pathFilter());
+        setEditingAddress(false);
+      },
+      onError: () => toast.error("Could not save"),
+    }),
+  );
+
+  const mapUrl = academyMapUrl(address);
+
+  return (
+    <section className="flex flex-col gap-6">
+      <div className="flex flex-col gap-3">
+        <div>
+          <SectionHeading>Time zone</SectionHeading>
+          <p className="text-muted-foreground text-sm">
+            Class times, weeks, and stats are drawn in this zone for everyone.
+            New class templates use it; the ones you already have keep theirs.
+          </p>
+        </div>
+        {settings.isPending ? (
+          <SkeletonRows rows={1} />
+        ) : settings.isError ? (
+          <ErrorState
+            label="your time zone"
+            onRetry={() => void settings.refetch()}
+          />
+        ) : (
+          <div className="border-border flex flex-col gap-3 rounded-lg border p-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <Label htmlFor="academy-time-zone" className="sr-only">
+                Academy time zone
+              </Label>
+              <Select
+                id="academy-time-zone"
+                className="max-w-xs flex-1"
+                value={settings.data.timeZone}
+                disabled={save.isPending}
+                onChange={(e) => {
+                  save.mutate(
+                    { timeZone: e.target.value },
+                    { onSuccess: () => toast.success("Time zone saved") },
+                  );
+                }}
+              >
+                {zones.map((z) => (
+                  <option key={z} value={z}>
+                    {z}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            {settings.data.drifting.length > 0 && (
+              <p className="text-muted-foreground text-xs">
+                Some class templates still run on{" "}
+                {settings.data.drifting.join(", ")}. Changing this setting never
+                re-times a class that students have already booked. Edit those
+                templates on Schedule if they should move.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <div>
+          <SectionHeading>Address</SectionHeading>
+          <p className="text-muted-foreground text-sm">
+            Where the gym is. Students see it in the app and when they join.
+          </p>
+        </div>
+        {editingAddress ? (
+          <div className="flex flex-col gap-3">
+            <Label htmlFor="academy-address" className="sr-only">
+              Academy address
+            </Label>
+            <Textarea
+              id="academy-address"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              rows={3}
+              maxLength={200}
+              autoFocus
+              placeholder={"Sportyvna St 12, 2nd floor\nKyiv 01001, Ukraine"}
+            />
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                disabled={save.isPending}
+                onClick={() =>
+                  save.mutate(
+                    { address: draft.trim() },
+                    { onSuccess: () => toast.success("Address saved") },
+                  )
+                }
+              >
+                {save.isPending ? "Saving…" : "Save address"}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={save.isPending}
+                onClick={() => {
+                  setDraft(address ?? "");
+                  setEditingAddress(false);
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="border-border flex flex-wrap items-start justify-between gap-3 rounded-lg border p-4">
+            {address ? (
+              <div className="flex flex-col gap-1">
+                <p className="text-foreground text-sm whitespace-pre-wrap">
+                  {address}
+                </p>
+                {mapUrl && (
+                  <a
+                    href={mapUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2"
+                  >
+                    Open in Maps
+                  </a>
+                )}
+              </div>
+            ) : (
+              <p className="text-muted-foreground text-sm">
+                No address yet. Students have to ask where you train.
+              </p>
+            )}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setDraft(address ?? "");
+                setEditingAddress(true);
+              }}
+            >
+              {address ? "Edit" : "Add address"}
+            </Button>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}

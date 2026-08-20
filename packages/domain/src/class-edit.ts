@@ -46,6 +46,8 @@ export interface ClassNotifiable {
 export interface ClassChange {
   timeChanged: boolean;
   instructorChanged: boolean;
+  /** Both the old and the new start are in the past: this edit rewrites history. */
+  historyOnly: boolean;
   /** Booked students are notified when the time OR instructor changes (§4). */
   shouldNotify: boolean;
 }
@@ -54,16 +56,26 @@ export interface ClassChange {
  * What changed on a single class edit, and whether it warrants notifying booked
  * students (Phase 4 sends; this only decides). Time compares the absolute UTC
  * instant, so a no-op re-save does not spam.
+ *
+ * An edit where BOTH the old and the new start are in the past notifies nobody.
+ * Correcting who taught last Tuesday (K.2) is bookkeeping, and pushing "your
+ * class changed" for a class that already finished is noise a student cannot act
+ * on. `now` is required rather than optional so every call site has to decide.
  */
 export function classChange(
   before: ClassNotifiable,
   after: ClassNotifiable,
+  now: Date,
 ): ClassChange {
   const timeChanged = before.startsAt.getTime() !== after.startsAt.getTime();
   const instructorChanged = before.instructorId !== after.instructorId;
+  const historyOnly =
+    before.startsAt.getTime() <= now.getTime() &&
+    after.startsAt.getTime() <= now.getTime();
   return {
     timeChanged,
     instructorChanged,
-    shouldNotify: timeChanged || instructorChanged,
+    historyOnly,
+    shouldNotify: (timeChanged || instructorChanged) && !historyOnly,
   };
 }

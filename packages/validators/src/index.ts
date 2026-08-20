@@ -109,6 +109,21 @@ export const CreateAcademySchema = z.object({
 });
 export type CreateAcademyInput = z.infer<typeof CreateAcademySchema>;
 
+export const UpdateAcademySettingsSchema = z.object({
+  timeZone: lineText(1, 64)
+    .refine((v) => /^[A-Za-z0-9+_\-/]+$/.test(v), "Pick a zone from the list")
+    .optional(),
+  address: blockText(0, 200).optional(),
+});
+export type UpdateAcademySettingsInput = z.infer<
+  typeof UpdateAcademySettingsSchema
+>;
+
+export const DeleteAcademySchema = z.object({
+  confirm: lineText(1, 120),
+});
+export type DeleteAcademyInput = z.infer<typeof DeleteAcademySchema>;
+
 /** Roles a shareable invite link may carry — never "owner" (docs/issues/20). */
 export const InviteRoleSchema = z.enum(["student", "instructor"]);
 export type InviteRole = z.infer<typeof InviteRoleSchema>;
@@ -283,6 +298,34 @@ export const UpdateClassSchema = z
     "To reschedule, provide date, start time, and time zone together",
   );
 export type UpdateClassInput = z.infer<typeof UpdateClassSchema>;
+
+/**
+ * Change only who is credited for one class (spec O10, K.2). Narrow on purpose:
+ * a cover night must not require the caller to resend the whole class, which
+ * would let a stale form silently overwrite the title, capacity or time.
+ */
+export const SetClassInstructorSchema = z.object({
+  id: z.uuid(),
+  instructorId: IdSchema,
+});
+export type SetClassInstructorInput = z.infer<typeof SetClassInstructorSchema>;
+
+/**
+ * Which window the O10 coach figures cover (spec O10, K.3). An enum, not a free
+ * date range: three fixed choices keep the read bounded and mean the screen and
+ * the API can never disagree about where a month starts. The keys map to
+ * `COACH_WINDOWS` in @matops/domain.
+ */
+export const CoachStatsSchema = z.object({
+  window: z.enum(["this_month", "last_month", "last_90_days"]),
+});
+export type CoachStatsInput = z.infer<typeof CoachStatsSchema>;
+
+/** One coach's detail — omit `instructorId` to read your own (K.3). */
+export const CoachDetailSchema = CoachStatsSchema.extend({
+  instructorId: IdSchema.optional(),
+});
+export type CoachDetailInput = z.infer<typeof CoachDetailSchema>;
 
 /** Address a single class by id (cancel / get). */
 export const ClassIdSchema = z.object({ id: z.uuid() });

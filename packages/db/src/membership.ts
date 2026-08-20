@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import { canRemoveOrDemote } from "@matops/domain";
 
-import type { DbExec } from "./client";
+import type { DbReader } from "./tenant";
 import { member, organization, user } from "./auth-schema";
 import { db } from "./client";
 
@@ -27,12 +27,19 @@ export interface Membership {
 export async function getMembership(
   userId: string,
   academyId: string,
-  exec: DbExec,
+  exec: DbReader,
 ): Promise<Membership | null> {
   const rows = await exec
     .select({ role: member.role, status: member.status })
     .from(member)
-    .where(and(eq(member.userId, userId), eq(member.organizationId, academyId)))
+    .innerJoin(organization, eq(member.organizationId, organization.id))
+    .where(
+      and(
+        eq(member.userId, userId),
+        eq(member.organizationId, academyId),
+        isNull(organization.deletedAt),
+      ),
+    )
     .limit(1);
 
   const row = rows[0];
@@ -49,7 +56,7 @@ export async function getMembership(
 export async function getMemberIdForUser(
   userId: string,
   academyId: string,
-  exec: DbExec,
+  exec: DbReader,
 ): Promise<string | null> {
   const rows = await exec
     .select({ id: member.id })
@@ -76,27 +83,40 @@ export interface UserAcademy {
   academyId: string;
   name: string;
   slug: string;
+  timeZone: string | null;
+  address: string | null;
   role: string;
   status: string;
   invitedRole: string | null;
+  joinedAt: Date;
 }
 
-/** Every academy the user is a member of (any status), for the switcher lens. */
+/**
+ * Every academy the user is a member of (any status), for the switcher lens.
+ *
+ * `exec` is REQUIRED like every other reader in this module (docs/issues/60).
+ * It was the one helper still closing over the module singleton, so the router
+ * tests could not reach it and it hit the real pool from inside a test run.
+ */
 export async function listMembershipsForUser(
   userId: string,
+  exec: DbReader,
 ): Promise<UserAcademy[]> {
-  const rows = await db
+  const rows = await exec
     .select({
       academyId: organization.id,
       name: organization.name,
       slug: organization.slug,
+      timeZone: organization.timeZone,
+      address: organization.address,
       role: member.role,
       status: member.status,
       invitedRole: member.invitedRole,
+      joinedAt: member.createdAt,
     })
     .from(member)
     .innerJoin(organization, eq(member.organizationId, organization.id))
-    .where(eq(member.userId, userId));
+    .where(and(eq(member.userId, userId), isNull(organization.deletedAt)));
 
   return rows.map((r) => ({ ...r, status: r.status ?? "pending" }));
 }
@@ -128,7 +148,7 @@ export interface MemberRow {
 /** Every member of one academy, newest first, with the user profile joined. */
 export async function listMembersOf(
   academyId: string,
-  exec: DbExec,
+  exec: DbReader,
 ): Promise<MemberRow[]> {
   const rows = await exec
     .select({
@@ -155,7 +175,7 @@ export async function listMembersOf(
  * verify the target belongs to the caller's academy (the table has no RLS). */
 export async function getMemberById(
   memberId: string,
-  exec: DbExec,
+  exec: DbReader,
 ): Promise<{
   id: string;
   academyId: string;
@@ -314,8 +334,18 @@ export async function createPendingMembership(input: {
   const row = existing[0];
   if (row) {
     const status = row.status ?? "pending";
-    // Already pending or active → leave it (don't downgrade an active member).
-    if (status === "pending" || status === "active") {
+    // Still waiting: the newest link wins, so an instructor link opened after a
+    // student one is approved as an instructor, not as a stale student.
+    if (status === "pending") {
+      await db
+        .update(member)
+        .set({ invitedRole: input.invitedRole })
+        .where(eq(member.id, row.id));
+      return { status, alreadyMember: true };
+    }
+    // Already active: changing an approved member's role is the owner's call
+    // (membership.setRole), not a link's.
+    if (status === "active") {
       return { status, alreadyMember: true };
     }
     // Removed/rejected/suspended → re-open as pending with the fresh intent.

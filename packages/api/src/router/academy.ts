@@ -6,21 +6,35 @@ import { z } from "zod/v4";
 import {
   findAcademyByCode,
   getAcademyCode,
+  getAcademySettings,
   getMembership,
   listMembershipsForUser,
+  softDeleteAcademy,
+  updateAcademySettings,
 } from "@matops/db";
+import { classTemplate } from "@matops/db/schema";
 import {
+  driftingTemplateZones,
   isStudentLensMembership,
+  isValidTimeZone,
   isWebLensMembership,
+  matchesDeleteAcademyPhrase,
   slugify,
 } from "@matops/domain";
 import {
   AcademyCodeSchema,
   CreateAcademySchema,
+  DeleteAcademySchema,
   IdSchema,
+  UpdateAcademySettingsSchema,
 } from "@matops/validators";
 
-import { ownerProcedure, protectedProcedure } from "../trpc";
+import { academyTimeZone } from "../academy-tz";
+import {
+  ownerIdentityProcedure,
+  ownerProcedure,
+  protectedProcedure,
+} from "../trpc";
 
 export const academyRouter = {
   /**
@@ -28,7 +42,7 @@ export const academyRouter = {
    * plus a pending instructor still awaiting approval). Drives the switcher.
    */
   listMine: protectedProcedure.query(async ({ ctx }) => {
-    const all = await listMembershipsForUser(ctx.session.user.id);
+    const all = await listMembershipsForUser(ctx.session.user.id, ctx.baseDb);
     return all.filter(isWebLensMembership);
   }),
 
@@ -38,7 +52,7 @@ export const academyRouter = {
    * switcher + student home (the deferred mobile pass, docs/issues/18).
    */
   listMineStudent: protectedProcedure.query(async ({ ctx }) => {
-    const all = await listMembershipsForUser(ctx.session.user.id);
+    const all = await listMembershipsForUser(ctx.session.user.id, ctx.baseDb);
     return all.filter(isStudentLensMembership);
   }),
 
@@ -51,7 +65,7 @@ export const academyRouter = {
    * standing to land on.
    */
   memberships: protectedProcedure.query(async ({ ctx }) => {
-    const all = await listMembershipsForUser(ctx.session.user.id);
+    const all = await listMembershipsForUser(ctx.session.user.id, ctx.baseDb);
     return all
       .filter((a) => a.status === "pending" || a.status === "active")
       .map((a) => ({
@@ -67,7 +81,7 @@ export const academyRouter = {
   current: protectedProcedure.query(async ({ ctx }) => {
     const academyId = ctx.session.session.activeOrganizationId;
     if (!academyId) return null;
-    const mine = await listMembershipsForUser(ctx.session.user.id);
+    const mine = await listMembershipsForUser(ctx.session.user.id, ctx.baseDb);
     const academy = mine.find((a) => a.academyId === academyId);
     if (!academy) return null;
     return {
@@ -76,9 +90,69 @@ export const academyRouter = {
       name: academy.name,
       role: academy.role,
       status: academy.status,
-      code: await getAcademyCode(academyId),
+      joinedAt: academy.joinedAt,
+      timeZone: academy.timeZone,
+      address: academy.address,
+      code: await getAcademyCode(academyId, ctx.baseDb),
     };
   }),
+
+  settings: ownerProcedure.query(async ({ ctx }) => {
+    const timeZone = await academyTimeZone(ctx);
+    const zones = await ctx.db
+      .selectDistinct({ timeZone: classTemplate.timeZone })
+      .from(classTemplate);
+    return {
+      timeZone,
+      drifting: driftingTemplateZones(
+        timeZone,
+        zones.map((z) => z.timeZone),
+      ),
+    };
+  }),
+
+  updateSettings: ownerIdentityProcedure
+    .input(UpdateAcademySettingsSchema)
+    .mutation(async ({ ctx, input }) => {
+      if (input.timeZone !== undefined && !isValidTimeZone(input.timeZone)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "That is not a time zone we recognise",
+        });
+      }
+      await updateAcademySettings(ctx.academyId, input, ctx.baseDb);
+      return { ok: true as const };
+    }),
+
+  /**
+   * Soft delete (ADR 68): the rows survive, so the 6-digit code is never
+   * reissued to a different gym and a mistaken delete is reversible in SQL.
+   */
+  remove: ownerIdentityProcedure
+    .input(DeleteAcademySchema)
+    .mutation(async ({ ctx, input }) => {
+      const academy = await getAcademySettings(ctx.academyId, ctx.baseDb);
+      if (!academy) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Academy not found",
+        });
+      }
+      if (!matchesDeleteAcademyPhrase(input.confirm, academy.name)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Type "delete ${academy.name}" to confirm`,
+        });
+      }
+      const deleted = await softDeleteAcademy(ctx.academyId, ctx.baseDb);
+      if (!deleted) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Academy not found",
+        });
+      }
+      return { ok: true as const };
+    }),
 
   /**
    * Look up an academy by its shared 6-digit code — the mobile search step
@@ -88,8 +162,8 @@ export const academyRouter = {
    */
   findByCode: protectedProcedure
     .input(AcademyCodeSchema)
-    .query(async ({ input }) => {
-      return findAcademyByCode(input.code);
+    .query(async ({ ctx, input }) => {
+      return findAcademyByCode(input.code, ctx.baseDb);
     }),
 
   /**

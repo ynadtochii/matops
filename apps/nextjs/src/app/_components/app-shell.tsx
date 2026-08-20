@@ -5,7 +5,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
-import { isOwner as isOwnerOf, isStaff as isStaffOf } from "@matops/domain";
+import {
+  isOwner as isOwnerOf,
+  isPendingCoach,
+  isStaff as isStaffOf,
+} from "@matops/domain";
 import { Logo } from "@matops/ui/logo";
 import { ThemeToggle } from "@matops/ui/theme";
 
@@ -120,6 +124,18 @@ const ReferralsIcon = () => (
   </svg>
 );
 
+const CoachesIcon = () => (
+  <svg
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={1.5}
+    className={iconClass}
+  >
+    <path d="M2.5 13V9M6.5 13V5.5M10.5 13v-3M14.5 13V3" />
+  </svg>
+);
+
 /**
  * The owner/instructor web shell (IA ticket 02). A sidebar on desktop + a
  * bottom-tab bar on mobile, driven by one role-aware nav config. Fetches the
@@ -218,14 +234,15 @@ function ShellChrome({
   children: ReactNode;
 }) {
   const trpc = useTRPC();
-  // Owner badge: how many are waiting for approval. Dedupes with the Members
-  // screen's own query, so it costs nothing extra.
+  // Owner badges: student requests sit on Members, coach requests on Coaches —
+  // same split as the two screens (ADR 64). Dedupes with their own queries.
   const memberList = useQuery({
     ...trpc.membership.members.queryOptions(),
     enabled: isOwner,
   });
-  const pendingCount =
-    memberList.data?.filter((m) => m.status === "pending").length ?? 0;
+  const waiting = memberList.data?.filter((m) => m.status === "pending") ?? [];
+  const pendingCoachCount = waiting.filter(isPendingCoach).length;
+  const pendingStudentCount = waiting.length - pendingCoachCount;
 
   // Payments badge: how many "I paid" claims are waiting for the owner (ADR 40).
   const claims = useQuery({
@@ -247,7 +264,14 @@ function ShellChrome({
       label: "Members",
       icon: <MembersIcon />,
       show: isOwner,
-      badge: pendingCount,
+      badge: pendingStudentCount,
+    },
+    {
+      href: "/coaches",
+      label: "Coaches",
+      icon: <CoachesIcon />,
+      show: isStaff,
+      badge: isOwner ? pendingCoachCount : 0,
     },
     {
       href: "/referrals",
@@ -300,7 +324,13 @@ function ShellChrome({
         )}
 
         <div className="border-sidebar-border mt-auto space-y-2 border-t pt-3">
-          <div className="flex items-center gap-2">
+          <Link
+            href="/profile"
+            aria-current={isCurrent("/profile") ? "page" : undefined}
+            className={`flex items-center gap-2 rounded-md p-1 transition-colors ${
+              isCurrent("/profile") ? "bg-brand-wash" : "hover:bg-muted"
+            }`}
+          >
             <div className="bg-muted text-muted-foreground flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold uppercase">
               {initials(user.name, user.email)}
             </div>
@@ -310,7 +340,7 @@ function ShellChrome({
                 {isPending ? "pending" : role}
               </p>
             </div>
-          </div>
+          </Link>
           <div className="flex items-center gap-2">
             <ThemeToggle />
             <SignOutButton />
@@ -334,6 +364,14 @@ function ShellChrome({
             )}
           </div>
           <ThemeToggle />
+          <Link
+            href="/profile"
+            aria-label="Profile"
+            aria-current={isCurrent("/profile") ? "page" : undefined}
+            className="bg-muted text-muted-foreground flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold uppercase"
+          >
+            {initials(user.name, user.email)}
+          </Link>
           <SignOutButton iconOnly />
         </header>
 

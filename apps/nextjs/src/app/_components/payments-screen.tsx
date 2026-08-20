@@ -18,6 +18,7 @@ import { CreateMembershipPlanSchema } from "@matops/validators";
 import { formatMoney } from "~/lib/money";
 import { useTRPC } from "~/trpc/react";
 import { PageHeader } from "./page-header";
+import { PaymentRequisites } from "./payment-requisites";
 import { cardClass, Section, Tabs } from "./primitives";
 import { EmptyState, ErrorState, SkeletonRows } from "./states";
 
@@ -34,13 +35,15 @@ const dateFmt = new Intl.DateTimeFormat(undefined, {
 export function PaymentsScreen() {
   const trpc = useTRPC();
   const claims = useQuery(trpc.payments.claims.queryOptions());
-  const [tab, setTab] = useState<"claims" | "dues" | "plans">("claims");
+  const [tab, setTab] = useState<"claims" | "dues" | "plans" | "bank">(
+    "claims",
+  );
 
   return (
     <>
       <PageHeader
         title="Payments"
-        subtitle="Membership dues by bank transfer — confirm what students paid, set plans and due dates."
+        subtitle="Membership dues by bank transfer — confirm what students paid, set plans, due dates, and your bank details."
       />
       <Tabs
         label="Payments view"
@@ -50,6 +53,7 @@ export function PaymentsScreen() {
           { id: "claims", label: "To confirm", count: claims.data?.length },
           { id: "dues", label: "Member dues" },
           { id: "plans", label: "Plans" },
+          { id: "bank", label: "Bank details" },
         ]}
         className="mb-6"
       />
@@ -58,8 +62,10 @@ export function PaymentsScreen() {
           <ClaimsToConfirm />
         ) : tab === "dues" ? (
           <MemberDues />
-        ) : (
+        ) : tab === "plans" ? (
           <Plans />
+        ) : (
+          <PaymentRequisites />
         )}
       </div>
     </>

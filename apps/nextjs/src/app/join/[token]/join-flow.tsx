@@ -42,8 +42,12 @@ export function JoinFlow({
 
   const join = useMutation(
     trpc.membership.join.mutationOptions({
-      onSuccess: () => {
-        toast.success("You're in — pending approval");
+      onSuccess: (res) => {
+        toast.success(
+          res.alreadyMember && res.status === "active"
+            ? "You're already a member of this gym. Ask an owner to change your role."
+            : "You're in — pending approval",
+        );
         router.replace("/");
         router.refresh();
       },
@@ -73,7 +77,7 @@ export function JoinFlow({
     );
   }
 
-  const { academyName, role } = invite.data;
+  const { academyName, academyAddress, role } = invite.data;
 
   return (
     <div className="flex w-full max-w-sm flex-col gap-5">
@@ -85,6 +89,11 @@ export function JoinFlow({
           You&apos;re joining as a{role === "instructor" ? "n" : ""} {role}.
           Your gym confirms you after you join.
         </p>
+        {academyAddress && (
+          <p className="text-muted-foreground text-xs whitespace-pre-wrap">
+            {academyAddress}
+          </p>
+        )}
       </div>
 
       {!signedIn ? (

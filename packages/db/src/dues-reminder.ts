@@ -1,4 +1,4 @@
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { DUE_SOON_DAYS } from "@matops/domain";
 
@@ -90,7 +90,7 @@ export async function claimDueDuesReminders(
     .innerJoin(member, eq(member.id, memberDues.memberId))
     .innerJoin(membershipPlan, eq(membershipPlan.id, memberDues.planId))
     .innerJoin(organization, eq(organization.id, memberDues.academyId))
-    .where(inArray(memberDues.id, ids));
+    .where(and(inArray(memberDues.id, ids), isNull(organization.deletedAt)));
 
   return rows.map((r) => ({
     ...r,

@@ -36,6 +36,18 @@ export function approveMembership(m: PendingMembership): {
   return { role: m.invitedRole ?? "student", status: "active" };
 }
 
+/**
+ * A join request for a COACH seat: still pending, and the link they opened
+ * carried the instructor role. Owners handle these on the Coaches screen (O10),
+ * so the Members requests tab stays the student queue.
+ */
+export function isPendingCoach(m: {
+  status: string;
+  invitedRole?: string | null;
+}): boolean {
+  return m.status === "pending" && m.invitedRole === "instructor";
+}
+
 // --- Never ownerless (spec §4) -----------------------------------------------
 
 /** How many members are currently ACTIVE owners. */
