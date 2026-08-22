@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 
 import { appRouter, createTRPCContext } from "@matops/api";
@@ -34,8 +35,21 @@ const handler = async (req: NextRequest) => {
         auth: auth,
         headers: req.headers,
       }),
-    onError({ error, path }) {
+    onError({ error, path, type, ctx }) {
       console.error(`>>> tRPC Error on '${path}'`, error);
+      // tRPC converts every thrown error into a JSON response and never
+      // rethrows, so Next's onRequestError never sees these. Report here or
+      // the whole API is invisible.
+      if (error.code !== "INTERNAL_SERVER_ERROR") return;
+      Sentry.captureException(error.cause ?? error, {
+        tags: { trpcPath: path ?? "<no-path>", trpcType: type },
+        user: ctx?.session?.user
+          ? { id: ctx.session.user.id, email: ctx.session.user.email }
+          : undefined,
+        extra: {
+          academyId: ctx?.session?.session.activeOrganizationId ?? undefined,
+        },
+      });
     },
   });
 

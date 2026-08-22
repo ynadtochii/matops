@@ -82,8 +82,10 @@ One row per slice. This is the single answer to _"what's left, on which surface?
 ¹ Reminder sweep + `/api/cron/remind` route ship in 4.2; **v1 wires no `vercel.json` cron at all** (ADR 46) — the route is a dormant, manually-callable seam and reminders do not fire automatically in v1.
 | **5** | **Launch hardening** | | | | | | |
 | 5.1 | `booking_count` reconciliation cron | — | todo | — | — | — | todo |
-| 5.2 | Observability + errors + rate-limit public routes | — | todo | todo | todo | — | todo |
+| 5.2 | Observability + errors + rate-limit public routes | — | wip² | wip² | wip² | — | wip² |
 | 5.3 | Production release (Vercel + Neon prod + EAS submit) | todo | — | todo | todo | — | todo |
+
+² Sentry covers the **errors** half on the **web** only (ADR [72](issues/72-sentry-error-tracking.md)): all three Next runtimes plus source-map upload. **Rate limiting is untouched**, and the Expo app reports nothing.
 | **v1.2** | **Personal & Insight** _(no new domain, no migration, no cron)_ | | | | | | |
 | A.0 | `stats.ts` pure engine + tests (ADR 39) | — | — | — | — | done | — |
 | B.1 | My Training stats (student, `stats.me`) | — | done | — | done | — | — |

@@ -2,6 +2,7 @@
 
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import * as Sentry from "@sentry/nextjs";
 import { z } from "zod/v4";
 
 import { EmailSchema, NameSchema, PhoneSchema } from "@matops/validators";
@@ -91,7 +92,10 @@ export async function sendJoinLinkAction(
       headers: await headers(),
     });
     return { status: "sent", email };
-  } catch {
+  } catch (err) {
+    // The caller only ever sees "error", so without this the sign-in path
+    // fails silently and we lose the user with no signal.
+    Sentry.captureException(err, { tags: { action: "sendJoinLink" } });
     return { status: "error" };
   }
 }
@@ -113,7 +117,8 @@ export async function sendMagicLinkAction(
       headers: await headers(),
     });
     return { status: "sent", email };
-  } catch {
+  } catch (err) {
+    Sentry.captureException(err, { tags: { action: "sendMagicLink" } });
     return { status: "error" };
   }
 }
