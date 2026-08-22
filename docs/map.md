@@ -147,7 +147,7 @@ Reaching the end of this map means every decision below is locked and those two 
 <!-- ruled beyond the destination; never graduates -->
 
 - **Memberships, subscriptions, payments / billing** — past the standard MVP scope boundary; deferred. _(Update: **manual bank-transfer dues promoted to v1.3** — dues status + requisites + owner-confirmed "I paid" claim, ADR 40. Card processing / auto-subscription / Stripe stays out — see below.)_
-- **Belts / rank progression, curriculum planner, games library, comms (announcements/DMs)** — deferred; the architecture must leave room (see fog) but v1 does not build them.
+- **Belts / rank progression, curriculum planner, games library, comms (announcements/DMs)** — deferred; the architecture must leave room (see fog) but v1 does not build them. _(Update: rank came **in** with v1.4, ADR [41](issues/41-member-rank-and-notes.md). A product plan for the **curriculum** now sits in [curriculum-plan.md](curriculum-plan.md) — a plan only, no decision taken, still out of scope until it graduates to an ADR.)_
 - **Convex, Clerk** — ruled out by the vendor-lock decision (not "later work", simply not used).
 - **Card processing / Stripe, multi-academy franchise UI, i18n, super-admin UI** — inherited non-goals from the original product positioning; remain out.
 
