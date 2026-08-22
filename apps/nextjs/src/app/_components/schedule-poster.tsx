@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 
 import { Button } from "@matops/ui/button";
 import {
@@ -14,7 +13,7 @@ import { Spinner } from "@matops/ui/spinner";
 import { toast } from "@matops/ui/toast";
 
 import type { PosterClass } from "./poster-draw";
-import { useTRPC } from "~/trpc/react";
+import { useAcademy } from "./academy";
 import { drawPoster, POSTER_H, POSTER_W, posterBlob } from "./poster-draw";
 
 const updatedFmt = new Intl.DateTimeFormat("en-GB", {
@@ -30,15 +29,13 @@ const fileSlug = (name: string) =>
     .replace(/^-|-$/g, "") || "schedule";
 
 export function SchedulePoster({ classes }: { classes: PosterClass[] }) {
-  const trpc = useTRPC();
-  const academy = useQuery(trpc.academy.current.queryOptions());
+  const academy = useAcademy();
+  const name = academy.name;
+  const code = academy.code ?? "";
   const [open, setOpen] = useState(false);
   const [drawing, setDrawing] = useState(true);
   const [saving, setSaving] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  const name = academy.data?.name ?? "";
-  const code = academy.data?.code ?? "";
 
   const render = useCallback(async () => {
     await document.fonts.ready;

@@ -8,6 +8,7 @@ import {
   DAY_LABELS,
   disciplineLabel,
   formatRank,
+  PAYMENT_STATUS_LABEL,
   RANK_SYSTEMS,
   rankDisciplines,
 } from "@matops/domain";
@@ -21,9 +22,10 @@ import { Textarea } from "@matops/ui/textarea";
 import { toast } from "@matops/ui/toast";
 
 import type { Member, MemberHistory } from "./members";
+import { dateFmt } from "~/lib/format";
 import { formatMoney } from "~/lib/money";
 import { useTRPC } from "~/trpc/react";
-import { cardClass, DriftBadge, Stat, Tabs } from "./primitives";
+import { cardClass, DriftBadge, DUES_TONE, Stat, Tabs } from "./primitives";
 import { EmptyState, ErrorState, SkeletonRows } from "./states";
 
 /**
@@ -33,26 +35,6 @@ import { EmptyState, ErrorState, SkeletonRows } from "./states";
  */
 
 type Dues = NonNullable<Member["dues"]>;
-type DuesStatus = Dues["status"];
-
-/** Payment status → dot colour + label (spec O7, ADR 40). */
-const DUES_TONE: Record<DuesStatus, string> = {
-  paid: "bg-success",
-  due_soon: "bg-warning",
-  overdue: "bg-error",
-};
-const DUES_LABEL: Record<DuesStatus, string> = {
-  paid: "Paid",
-  due_soon: "Due soon",
-  overdue: "Overdue",
-};
-
-const dateFmt = new Intl.DateTimeFormat(undefined, {
-  weekday: "short",
-  month: "short",
-  day: "numeric",
-  year: "numeric",
-});
 
 export function MemberRow({
   m,
@@ -528,7 +510,7 @@ function Overview({ m, data }: { m: Member; data: MemberHistory }) {
             />
             <Detail
               term="Next due"
-              value={`${dateFmt.format(new Date(m.dues.nextDueAt))} · ${DUES_LABEL[m.dues.status]}`}
+              value={`${dateFmt.format(new Date(m.dues.nextDueAt))} · ${PAYMENT_STATUS_LABEL[m.dues.status]}`}
             />
             {m.dues.lastConfirmedAt ? (
               <Detail
@@ -664,13 +646,15 @@ function DuesDot({ dues }: { dues: Dues }) {
   return (
     <span
       className="ml-2 inline-flex items-center gap-1 align-middle text-xs font-normal"
-      title={`${DUES_LABEL[dues.status]} · ${formatMoney(dues.priceMinor, dues.currency)}`}
+      title={`${PAYMENT_STATUS_LABEL[dues.status]} · ${formatMoney(dues.priceMinor, dues.currency)}`}
     >
       <span
         className={`inline-block size-2 rounded-full ${DUES_TONE[dues.status]}`}
         aria-hidden
       />
-      <span className="text-muted-foreground">{DUES_LABEL[dues.status]}</span>
+      <span className="text-muted-foreground">
+        {PAYMENT_STATUS_LABEL[dues.status]}
+      </span>
     </span>
   );
 }

@@ -4,7 +4,12 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { PaymentStatus } from "@matops/domain";
-import { academyMapUrl, disciplineLabel, formatRank } from "@matops/domain";
+import {
+  academyMapUrl,
+  disciplineLabel,
+  formatRank,
+  PAYMENT_STATUS_LABEL,
+} from "@matops/domain";
 import { UpdateProfileSchema } from "@matops/validators";
 
 import { OverdueBanner } from "~/components/overdue-banner";
@@ -147,13 +152,10 @@ function money(minor: number, currency: string): string {
   return `${currency} ${(minor / 100).toFixed(2)}`;
 }
 
-const STATUS_TONE: Record<
-  PaymentStatus,
-  { label: string; tone: "success" | "warning" | "error" }
-> = {
-  paid: { label: "Paid", tone: "success" },
-  due_soon: { label: "Due soon", tone: "warning" },
-  overdue: { label: "Overdue", tone: "error" },
+const STATUS_TONE: Record<PaymentStatus, "success" | "warning" | "error"> = {
+  paid: "success",
+  due_soon: "warning",
+  overdue: "error",
 };
 
 /**
@@ -186,8 +188,6 @@ function MembershipDues() {
     );
   }
 
-  const meta = d ? STATUS_TONE[d.status] : null;
-
   return (
     <Card variant="outline" style={{ gap: 16 }}>
       {d ? (
@@ -196,7 +196,10 @@ function MembershipDues() {
             <Mono size={18} weight={600}>
               {money(d.amountMinor, d.currency)}
             </Mono>
-            {meta && <StatusPill tone={meta.tone} label={meta.label} />}
+            <StatusPill
+              tone={STATUS_TONE[d.status]}
+              label={PAYMENT_STATUS_LABEL[d.status]}
+            />
           </View>
           <Txt size={14} tone="muted">
             {d.planName} · due{" "}

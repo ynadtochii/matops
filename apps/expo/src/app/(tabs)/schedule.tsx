@@ -32,6 +32,7 @@ import {
   dayFmt,
   dayKey,
   fillLabel,
+  groupByDay,
   spotsLeftLabel,
 } from "~/utils/format";
 
@@ -253,16 +254,7 @@ export default function Schedule() {
     trpc.class.mine.queryOptions({ from, to }, { enabled: !suspended }),
   );
 
-  const byDay = useMemo(() => {
-    const groups = new Map<string, ClassRow[]>();
-    for (const c of week.data ?? []) {
-      const key = dayKey(new Date(c.startsAt));
-      const list = groups.get(key) ?? [];
-      list.push(c);
-      groups.set(key, list);
-    }
-    return [...groups.entries()];
-  }, [week.data]);
+  const byDay = useMemo(() => groupByDay(week.data ?? []), [week.data]);
 
   const isPending = current.data?.status === "pending";
   const refreshControl = useRefreshControl();

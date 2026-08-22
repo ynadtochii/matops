@@ -1,7 +1,7 @@
 import { ActivityIndicator, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 
-import { DAY_LABELS } from "@matops/domain";
+import { DAY_LABELS, lastClassLabel } from "@matops/domain";
 
 import {
   Card,
@@ -13,13 +13,6 @@ import {
   useTheme,
 } from "~/components/ui";
 import { trpc } from "~/utils/api";
-
-/** N-days-since phrasing for the "last class" line. */
-function lastClassLabel(days: number): string {
-  if (days <= 0) return "Today";
-  if (days === 1) return "Yesterday";
-  return `${days} days ago`;
-}
 
 /**
  * The student "My Training" card (spec S7, slice B.1 — ADR 39). Reads

@@ -13,18 +13,13 @@ import {
 } from "@matops/domain";
 import { cn } from "@matops/ui";
 
+import { time24Fmt, weekdayFmt } from "~/lib/format";
+
 type ClassRow = RouterOutputs["class"]["week"][number];
 
 const HOUR_H = 64;
 const GAP_H = 26;
 const DAY_MS = 86400000;
-
-const timeFmt = new Intl.DateTimeFormat(undefined, {
-  hour: "2-digit",
-  minute: "2-digit",
-  hourCycle: "h23",
-});
-const weekdayFmt = new Intl.DateTimeFormat(undefined, { weekday: "short" });
 
 /** The grid block paint for each tone. The Legend below reads the same map. */
 const TONE_SKIN: Record<DisciplineTone, string> = {
@@ -130,7 +125,7 @@ function buildSlots(rows: ClassRow[]): {
   };
 }
 
-const hourLabel = (h: number) => timeFmt.format(new Date(2000, 0, 1, h, 0));
+const hourLabel = (h: number) => time24Fmt.format(new Date(2000, 0, 1, h, 0));
 
 function Legend() {
   const items: { label: string; tone: DisciplineTone }[] = [
@@ -312,7 +307,7 @@ export function WeekGrid({
                     >
                       <p className="flex items-baseline gap-1 font-mono text-[10px] tabular-nums">
                         <span className="text-muted-foreground">
-                          {timeFmt.format(start)}
+                          {time24Fmt.format(start)}
                         </span>
                         {cancelled && (
                           <span className="text-error tracking-wide uppercase">
@@ -355,7 +350,7 @@ export function WeekGrid({
                         <button
                           type="button"
                           className="absolute inset-0 z-[1] cursor-pointer"
-                          aria-label={`${row.title} at ${timeFmt.format(start)} — open details`}
+                          aria-label={`${row.title} at ${time24Fmt.format(start)} — open details`}
                           onClick={() => onSelect(row)}
                         />
                       )}
@@ -379,7 +374,7 @@ export function WeekGrid({
             >
               <div className="bg-brand absolute right-0 left-[3.25rem] h-px" />
               <span className="bg-brand text-brand-foreground absolute top-1/2 left-0 -translate-y-1/2 rounded-[2px] px-1 font-mono text-[9px] tabular-nums">
-                {timeFmt.format(now)}
+                {time24Fmt.format(now)}
               </span>
             </div>
           )}

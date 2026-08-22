@@ -19,6 +19,7 @@ import { Label } from "@matops/ui/label";
 import { Select } from "@matops/ui/select";
 import { toast } from "@matops/ui/toast";
 
+import { dateTimeMediumFmt } from "~/lib/format";
 import { formatMoney } from "~/lib/money";
 import { useTRPC } from "~/trpc/react";
 import { PageHeader } from "./page-header";
@@ -38,11 +39,6 @@ interface BoardEntry {
   monthRevenue: Money[];
   lifetimeRevenue: Money[];
 }
-
-const dateTimeFmt = new Intl.DateTimeFormat(undefined, {
-  dateStyle: "medium",
-  timeStyle: "short",
-});
 
 const CLEAR = "__clear__";
 
@@ -611,7 +607,8 @@ function ReferralHistory({ studentMemberId }: { studentMemberId: string }) {
             {event.newReferrerName ?? "Nobody"}
           </span>
           <span className="text-muted-foreground block font-mono text-[10px]">
-            {dateTimeFmt.format(new Date(event.occurredAt))} · {event.actorName}
+            {dateTimeMediumFmt.format(new Date(event.occurredAt))} ·{" "}
+            {event.actorName}
           </span>
         </li>
       ))}

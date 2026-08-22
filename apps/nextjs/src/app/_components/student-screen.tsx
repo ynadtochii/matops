@@ -1,45 +1,31 @@
 "use client";
 
 import { useMemo } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
-import { capacityDisplay, spotsLeftLabel, timeFmt } from "@matops/domain";
+import { capacityDisplay, groupByDay, spotsLeftLabel } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
 import { Spinner } from "@matops/ui/spinner";
-import { toast } from "@matops/ui/toast";
 
+import { dayKey, dayMediumFmt, timeFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
+import { useAcademy } from "./academy";
 import { InstallAppCard } from "./install-app-card";
 import { PageHeader } from "./page-header";
-import { cardClass, Eyebrow } from "./primitives";
-import { EmptyState, ErrorState, SkeletonRows } from "./states";
+import { cardClass, disciplineDot, Section } from "./primitives";
+import { EmptyState, ErrorState, SkeletonRows, SuspendedState } from "./states";
+import { useBooking } from "./use-booking";
 
 type ClassRow = RouterOutputs["class"]["mine"][number];
 
-const dayFmt = new Intl.DateTimeFormat(undefined, {
-  weekday: "long",
-  month: "short",
-  day: "numeric",
-});
-const dayKeyFmt = new Intl.DateTimeFormat("en-CA", {
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-});
-
-export function StudentScreen({
-  academyName,
-  status,
-}: {
-  academyName: string;
-  status: string;
-}) {
+export function StudentScreen() {
   const trpc = useTRPC();
-  const queryClient = useQueryClient();
-  const suspended = status === "suspended";
+  const { book, cancel, busyFor } = useBooking();
+  const suspended = useAcademy().status === "suspended";
 
   const { from, to, todayKey } = useMemo(() => {
     const start = new Date();
@@ -49,7 +35,7 @@ export function StudentScreen({
     return {
       from: start.toISOString(),
       to: end.toISOString(),
-      todayKey: dayKeyFmt.format(start),
+      todayKey: dayKey(start),
     };
   }, []);
 
@@ -59,48 +45,13 @@ export function StudentScreen({
 
   const now = new Date();
 
-  const invalidate = () =>
-    queryClient.invalidateQueries(trpc.class.pathFilter());
-  const onError = (err: { message: string }) =>
-    toast.error(err.message || "Could not update your booking");
-
-  const book = useMutation(
-    trpc.booking.book.mutationOptions({
-      onSuccess: async () => {
-        await invalidate();
-        toast.success("Booked");
-      },
-      onError,
-    }),
-  );
-  const cancel = useMutation(
-    trpc.booking.cancel.mutationOptions({
-      onSuccess: async () => {
-        await invalidate();
-        toast.success("Booking cancelled");
-      },
-      onError,
-    }),
-  );
-
-  const byDay = useMemo(() => {
-    const groups = new Map<string, ClassRow[]>();
-    for (const c of week.data ?? []) {
-      const key = dayKeyFmt.format(new Date(c.startsAt));
-      const list = groups.get(key) ?? [];
-      list.push(c);
-      groups.set(key, list);
-    }
-    return [...groups.entries()];
-  }, [week.data]);
+  const byDay = useMemo(() => groupByDay(week.data ?? []), [week.data]);
 
   if (suspended) {
     return (
       <>
-        <PageHeader title={academyName} />
-        <EmptyState title="Your membership is paused.">
-          Contact your gym to restore your access.
-        </EmptyState>
+        <PageHeader title="Schedule" />
+        <SuspendedState />
       </>
     );
   }
@@ -108,7 +59,7 @@ export function StudentScreen({
   return (
     <>
       <PageHeader
-        title={academyName}
+        title="Schedule"
         subtitle="Your classes for the next seven days."
       />
       {week.isPending ? (
@@ -122,26 +73,28 @@ export function StudentScreen({
       ) : (
         <div className="flex flex-col gap-8">
           {byDay.map(([key, rows]) => (
-            <section key={key} className="flex flex-col gap-2">
-              <Eyebrow>
-                {key === todayKey
+            <Section
+              key={key}
+              label={
+                key === todayKey
                   ? "Today"
-                  : dayFmt.format(new Date(`${key}T12:00:00`))}
-              </Eyebrow>
-              {rows.map((c) => (
-                <ClassRowCard
-                  key={c.id}
-                  c={c}
-                  now={now}
-                  busy={
-                    (book.isPending && book.variables.classId === c.id) ||
-                    (cancel.isPending && cancel.variables.classId === c.id)
-                  }
-                  onBook={() => book.mutate({ classId: c.id })}
-                  onCancel={() => cancel.mutate({ classId: c.id })}
-                />
-              ))}
-            </section>
+                  : dayMediumFmt.format(new Date(`${key}T12:00:00`))
+              }
+              meta={`${rows.length} ${rows.length === 1 ? "class" : "classes"}`}
+            >
+              <div className="flex flex-col gap-2">
+                {rows.map((c) => (
+                  <ClassRowCard
+                    key={c.id}
+                    c={c}
+                    now={now}
+                    busy={busyFor(c.id)}
+                    onBook={() => book.mutate({ classId: c.id })}
+                    onCancel={() => cancel.mutate({ classId: c.id })}
+                  />
+                ))}
+              </div>
+            </Section>
           ))}
         </div>
       )}
@@ -174,35 +127,59 @@ function ClassRowCard({
   return (
     <div
       className={cn(
-        cardClass(),
+        cardClass({ interactive: true }),
         "flex flex-wrap items-center justify-between gap-3",
         cancelled && "opacity-60",
+        past && !cancelled && "opacity-70",
       )}
     >
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <p className="flex items-baseline gap-2">
-          <span className="font-mono text-sm font-semibold tabular-nums">
-            {timeFmt.format(start)}
+      <Link
+        href={`/class/${c.id}`}
+        className="flex min-w-0 flex-1 items-start gap-3"
+      >
+        <span
+          aria-hidden
+          className={cn(
+            "mt-1.5 size-2 shrink-0 rounded-full",
+            disciplineDot(c.discipline),
+          )}
+        />
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className="flex items-baseline gap-2">
+            <span className="font-mono text-sm font-semibold tabular-nums">
+              {timeFmt.format(start)}
+            </span>
+            <span
+              className={cn(
+                "truncate font-medium",
+                cancelled && "line-through",
+              )}
+            >
+              {c.title}
+            </span>
           </span>
-          <span className="truncate font-medium">{c.title}</span>
-        </p>
-        <p className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-          {c.discipline && <Eyebrow>{c.discipline}</Eyebrow>}
-          {c.instructorName && <span>{c.instructorName}</span>}
-          {cancelled ? (
-            <span className="text-error font-medium">Cancelled</span>
-          ) : (
-            <span className="font-mono text-xs">
-              {spotsLeftLabel(c.capacity, c.bookingCount)}
-            </span>
-          )}
-          {booked && !cancelled && (
-            <span className="bg-brand-wash text-brand-strong rounded-full px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wide uppercase">
-              Booked
-            </span>
-          )}
-        </p>
-      </div>
+          <span className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+            {c.discipline && (
+              <span className="font-mono text-[10px] tracking-wide uppercase">
+                {c.discipline}
+              </span>
+            )}
+            {c.instructorName && <span>{c.instructorName}</span>}
+            {cancelled ? (
+              <span className="text-error font-medium">Cancelled</span>
+            ) : (
+              <span className="font-mono text-xs">
+                {spotsLeftLabel(c.capacity, c.bookingCount)}
+              </span>
+            )}
+            {booked && !cancelled && (
+              <span className="bg-brand-wash text-brand-strong rounded-full px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wide uppercase">
+                Booked
+              </span>
+            )}
+          </span>
+        </span>
+      </Link>
 
       {cancelled || past ? null : booked ? (
         <Button variant="outline" size="sm" disabled={busy} onClick={onCancel}>

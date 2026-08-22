@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
 import {
+  isActiveMember,
   isOwner as isOwnerOf,
   isPendingCoach,
   isStaff as isStaffOf,
@@ -14,10 +15,12 @@ import { Logo } from "@matops/ui/logo";
 import { ThemeToggle } from "@matops/ui/theme";
 
 import { useTRPC } from "~/trpc/react";
+import { AcademyProvider, useAcademy } from "./academy";
 import { AcademyGate } from "./academy-gate";
 import { AcademySwitcher } from "./academy-switcher";
+import { canVisit } from "./routes";
 import { SignOutButton } from "./sign-out";
-import { ErrorState, SkeletonRows } from "./states";
+import { ErrorState, NoAccessState, SkeletonRows } from "./states";
 
 interface NavItem {
   href: string;
@@ -70,6 +73,30 @@ const ScheduleIcon = () => (
   >
     <rect x="2" y="3" width="12" height="11" rx="1.5" />
     <path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3" />
+  </svg>
+);
+const TrainingIcon = () => (
+  <svg
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={1.5}
+    className={iconClass}
+  >
+    <rect x="2" y="3" width="12" height="11" rx="1.5" />
+    <path d="M5.5 8.5l2 2 3.5-4" />
+  </svg>
+);
+const ProfileIcon = () => (
+  <svg
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={1.5}
+    className={iconClass}
+  >
+    <circle cx="8" cy="5.5" r="2.5" />
+    <path d="M3 13.5c0-2.2 2.2-3.5 5-3.5s5 1.3 5 3.5" />
   </svg>
 );
 const MembersIcon = () => (
@@ -140,8 +167,11 @@ const CoachesIcon = () => (
  * The owner/instructor web shell (IA ticket 02). A sidebar on desktop + a
  * bottom-tab bar on mobile, driven by one role-aware nav config. Fetches the
  * active academy: while it loads → a skeleton; if the user has no academy →
- * onboarding (no chrome); otherwise the shell wraps the routed screen. Nav
- * hiding is convenience only — every screen keeps its server-side role guard.
+ * onboarding (no chrome); otherwise the shell wraps the routed screen and puts
+ * the resolved academy in context, so no screen under it re-fetches or re-tests
+ * it. `routes.ts` says who may open which path: the sidebar hides what a person
+ * cannot use and the shell refuses to render it if they type the URL anyway.
+ * That is convenience, not security. The tRPC tier is the guard.
  */
 export function AppShell({
   user,
@@ -153,7 +183,7 @@ export function AppShell({
   const trpc = useTRPC();
   const pathname = usePathname();
   const current = useQuery(trpc.academy.current.queryOptions());
-  const mine = useQuery(trpc.academy.listMine.queryOptions());
+  const mine = useQuery(trpc.academy.memberships.queryOptions());
 
   if (current.isPending || mine.isPending) {
     return (
@@ -188,52 +218,32 @@ export function AppShell({
     return <AcademyGate />;
   }
 
-  const c = current.data;
-  const isOwner = isOwnerOf(c);
-  const isStaff = isStaffOf(c);
-  const isPending = c.status === "pending";
-
   return (
-    <ShellChrome
-      academyName={c.name}
-      academies={academies}
-      activeId={c.academyId}
-      isOwner={isOwner}
-      isStaff={isStaff}
-      isPending={isPending}
-      role={c.role}
-      user={user}
-      pathname={pathname}
-    >
-      {children}
-    </ShellChrome>
+    <AcademyProvider academy={current.data}>
+      <ShellChrome academies={academies} user={user} pathname={pathname}>
+        {children}
+      </ShellChrome>
+    </AcademyProvider>
   );
 }
 
 function ShellChrome({
-  academyName,
   academies,
-  activeId,
-  isOwner,
-  isStaff,
-  isPending,
-  role,
   user,
   pathname,
   children,
 }: {
-  academyName: string;
   academies: { academyId: string; name: string }[];
-  activeId: string;
-  isOwner: boolean;
-  isStaff: boolean;
-  isPending: boolean;
-  role: string;
   user: { name: string; email: string };
   pathname: string;
   children: ReactNode;
 }) {
   const trpc = useTRPC();
+  const academy = useAcademy();
+  const { name: academyName, academyId: activeId, role, status } = academy;
+  const isOwner = isOwnerOf(academy);
+  const isStaff = isStaffOf(academy);
+  const isPending = status === "pending";
   // Owner badges: student requests sit on Members, coach requests on Coaches —
   // same split as the two screens (ADR 64). Dedupes with their own queries.
   const memberList = useQuery({
@@ -251,46 +261,69 @@ function ShellChrome({
   });
   const claimsCount = claims.data?.length ?? 0;
 
+  const myDues = useQuery({
+    ...trpc.payments.myDues.queryOptions(),
+    enabled: !isStaff && isActiveMember({ status }),
+  });
+  const overdue = myDues.data?.dues?.status === "overdue";
+
   const items: NavItem[] = [
-    { href: "/", label: "Dashboard", icon: <DashboardIcon />, show: true },
+    {
+      href: "/",
+      label: isStaff ? "Dashboard" : "Schedule",
+      icon: isStaff ? <DashboardIcon /> : <ScheduleIcon />,
+      show: true,
+    },
+    {
+      href: "/training",
+      label: "My classes",
+      icon: <TrainingIcon />,
+      show: !isStaff,
+    },
     {
       href: "/schedule",
       label: "Schedule",
       icon: <ScheduleIcon />,
-      show: isStaff,
+      show: canVisit("/schedule", academy),
     },
     {
       href: "/members",
       label: "Members",
       icon: <MembersIcon />,
-      show: isOwner,
+      show: canVisit("/members", academy),
       badge: pendingStudentCount,
     },
     {
       href: "/coaches",
       label: "Coaches",
       icon: <CoachesIcon />,
-      show: isStaff,
+      show: canVisit("/coaches", academy),
       badge: isOwner ? pendingCoachCount : 0,
     },
     {
       href: "/referrals",
       label: "Referrals",
       icon: <ReferralsIcon />,
-      show: isOwner,
+      show: canVisit("/referrals", academy),
     },
     {
       href: "/payments",
-      label: "Payments",
+      label: isOwner ? "Payments" : "Dues",
       icon: <PaymentsIcon />,
-      show: isOwner,
-      badge: claimsCount,
+      show: isOwner || (!isStaff && !isPending),
+      badge: isOwner ? claimsCount : 0,
     },
     {
       href: "/settings",
       label: "Settings",
       icon: <SettingsIcon />,
-      show: isOwner,
+      show: canVisit("/settings", academy),
+    },
+    {
+      href: "/profile",
+      label: "Profile",
+      icon: <ProfileIcon />,
+      show: !isStaff,
     },
   ].filter((i) => i.show);
 
@@ -381,11 +414,20 @@ function ShellChrome({
           </div>
         )}
 
+        {overdue && (
+          <Link
+            href="/payments"
+            className="border-warning/25 bg-warning/10 hover:bg-warning/15 block border-b px-6 py-2.5 text-sm transition-colors"
+          >
+            Membership payment overdue — tap to pay.
+          </Link>
+        )}
+
         <main className="min-h-0 flex-1 overflow-y-auto">
           <div
             className={`mx-auto w-full ${contentWidth(pathname)} p-6 pb-24 md:p-8 md:pb-8`}
           >
-            {children}
+            {canVisit(pathname, academy) ? children : <NoAccessState />}
           </div>
         </main>
       </div>

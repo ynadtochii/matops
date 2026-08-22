@@ -17,7 +17,9 @@ import { Button } from "@matops/ui/button";
 import { Spinner } from "@matops/ui/spinner";
 import { toast } from "@matops/ui/toast";
 
+import { dateTimeFmt, monthDayFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
+import { useAcademy } from "./academy";
 import { PageHeader } from "./page-header";
 import { cardClass, Eyebrow, SectionHeading, Stat, Tabs } from "./primitives";
 import { Staff } from "./staff";
@@ -32,18 +34,6 @@ const WINDOW_TABS: { id: CoachWindowKey; label: string }[] = [
   { id: "last_month", label: "Last month" },
   { id: "last_90_days", label: "Last 90 days" },
 ];
-
-const rangeFmt = new Intl.DateTimeFormat(undefined, {
-  month: "short",
-  day: "numeric",
-});
-const classFmt = new Intl.DateTimeFormat(undefined, {
-  weekday: "short",
-  month: "short",
-  day: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-});
 
 const percent = (rate: number | null) =>
   rate === null ? "—" : `${Math.round(rate * 100)}%`;
@@ -149,7 +139,7 @@ function BreakdownPanel({ breakdown }: { breakdown: Breakdown }) {
             >
               <span>
                 <span className="text-muted-foreground font-mono text-xs tabular-nums">
-                  {classFmt.format(new Date(c.startsAt))}
+                  {dateTimeFmt.format(new Date(c.startsAt))}
                 </span>{" "}
                 {c.title}
               </span>
@@ -369,20 +359,20 @@ export function CoachesScreen() {
   const [window, setWindow] = useState<CoachWindowKey>("this_month");
   const [openId, setOpenId] = useState<string | null>(null);
 
-  const me = useQuery(trpc.academy.current.queryOptions());
-  const isOwner = me.data ? isOwnerOf(me.data) : false;
+  const me = useAcademy();
+  const isOwner = isOwnerOf(me);
   const roster = useQuery({
     ...trpc.stats.coaches.queryOptions({ window }),
     enabled: isOwner,
   });
   const mine = useQuery({
     ...trpc.stats.coach.queryOptions({ window }),
-    enabled: me.data != null && !isOwner,
+    enabled: !isOwner,
   });
 
   const range = isOwner ? roster.data?.range : mine.data?.range;
   const rangeLabel = range
-    ? `${rangeFmt.format(new Date(range.from))} – ${rangeFmt.format(
+    ? `${monthDayFmt.format(new Date(range.from))} – ${monthDayFmt.format(
         new Date(new Date(range.to).getTime() - 1),
       )}`
     : undefined;

@@ -6,12 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
 import type { DisciplineTone } from "@matops/domain";
-import {
-  capacityDisplay,
-  clockParts,
-  disciplineTone,
-  timeFmt,
-} from "@matops/domain";
+import { capacityDisplay, disciplineTone, groupByDay } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
@@ -27,7 +22,16 @@ import { Select } from "@matops/ui/select";
 import { Spinner } from "@matops/ui/spinner";
 import { toast } from "@matops/ui/toast";
 
+import {
+  clockParts,
+  dayKey,
+  dayNumFmt,
+  dayShortFmt,
+  monthDayFmt,
+  timeFmt,
+} from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
+import { useAcademy } from "./academy";
 import { ClassRoster } from "./class-roster";
 import { InstructorOptions } from "./coach-select";
 import { Section } from "./primitives";
@@ -106,22 +110,6 @@ function weekStart(offset: number): Date {
   return d;
 }
 
-const dayFmt = new Intl.DateTimeFormat(undefined, {
-  weekday: "short",
-  month: "short",
-  day: "numeric",
-});
-const monthDayFmt = new Intl.DateTimeFormat(undefined, {
-  month: "short",
-  day: "numeric",
-});
-const dayOnlyFmt = new Intl.DateTimeFormat(undefined, { day: "numeric" });
-const dayKeyFmt = new Intl.DateTimeFormat("en-CA", {
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-});
-
 interface OneOffForm {
   title: string;
   instructorId: string;
@@ -137,7 +125,7 @@ const emptyOneOff = (instructorId: string): OneOffForm => ({
   title: "",
   instructorId,
   discipline: "",
-  date: dayKeyFmt.format(new Date()),
+  date: dayKey(new Date()),
   time: "18:00",
   durationMinutes: 60,
   capacity: 20,
@@ -169,7 +157,7 @@ export function Schedule() {
   }, [offset]);
 
   const week = useQuery(trpc.class.week.queryOptions({ from, to }));
-  const me = useQuery(trpc.academy.current.queryOptions());
+  const me = useAcademy();
   const invalidate = () =>
     queryClient.invalidateQueries(trpc.class.week.pathFilter());
   const onError = (err: { message: string }) =>
@@ -209,16 +197,7 @@ export function Schedule() {
     }),
   );
 
-  const byDay = useMemo(() => {
-    const groups = new Map<string, ClassRow[]>();
-    for (const c of week.data ?? []) {
-      const key = dayKeyFmt.format(new Date(c.startsAt));
-      const list = groups.get(key) ?? [];
-      list.push(c);
-      groups.set(key, list);
-    }
-    return [...groups.entries()];
-  }, [week.data]);
+  const byDay = useMemo(() => groupByDay(week.data ?? []), [week.data]);
 
   const submitOneOff = () => {
     if (!form) return;
@@ -242,14 +221,14 @@ export function Schedule() {
   const end = new Date(start.getTime() + 6 * 86400000);
   const rangeLabel = `${monthDayFmt.format(start)} – ${
     start.getMonth() === end.getMonth()
-      ? dayOnlyFmt.format(end)
+      ? dayNumFmt.format(end)
       : monthDayFmt.format(end)
   }`;
 
   const cancelDialog = (c: ClassRow, trigger: ReactNode) => (
     <ConfirmDialog
       title="Cancel this class?"
-      description={`${c.title} on ${dayFmt.format(new Date(c.startsAt))} at ${timeFmt.format(new Date(c.startsAt))}. Everyone booked in loses their spot. This can't be undone.`}
+      description={`${c.title} on ${dayShortFmt.format(new Date(c.startsAt))} at ${timeFmt.format(new Date(c.startsAt))}. Everyone booked in loses their spot. This can't be undone.`}
       confirmLabel="Cancel class"
       cancelLabel="Keep class"
       variant="destructive"
@@ -272,7 +251,7 @@ export function Schedule() {
           <>
             <DialogTitle>{detail.title}</DialogTitle>
             <DialogDescription>
-              {dayFmt.format(new Date(detail.startsAt))} ·{" "}
+              {dayShortFmt.format(new Date(detail.startsAt))} ·{" "}
               {timeFmt.format(new Date(detail.startsAt))} ·{" "}
               {detail.durationMinutes} min
               {detail.discipline && ` · ${detail.discipline.toUpperCase()}`}
@@ -324,7 +303,7 @@ export function Schedule() {
           size="sm"
           variant="outline"
           className="shrink-0"
-          onClick={() => setForm(emptyOneOff(me.data?.userId ?? ""))}
+          onClick={() => setForm(emptyOneOff(me.userId))}
         >
           Add class
         </Button>
@@ -510,9 +489,9 @@ export function Schedule() {
             {byDay.map(([key, rows]) => (
               <Section
                 key={key}
-                label={dayFmt.format(new Date(`${key}T12:00:00`))}
+                label={dayShortFmt.format(new Date(`${key}T12:00:00`))}
                 meta={
-                  (key === dayKeyFmt.format(new Date()) ? "today · " : "") +
+                  (key === dayKey(new Date()) ? "today · " : "") +
                   `${rows.length} ${rows.length === 1 ? "class" : "classes"}`
                 }
               >

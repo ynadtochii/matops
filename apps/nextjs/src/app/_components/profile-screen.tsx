@@ -1,9 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
+import {
+  academyMapUrl,
+  disciplineLabel,
+  formatRank,
+  isStaff,
+} from "@matops/domain";
 import { Button } from "@matops/ui/button";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
@@ -11,16 +18,13 @@ import { ThemeToggle } from "@matops/ui/theme";
 import { toast } from "@matops/ui/toast";
 import { UpdateProfileSchema } from "@matops/validators";
 
+import { dateYearFmt, monthYearFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
+import { useAcademy } from "./academy";
 import { PageHeader } from "./page-header";
-import { Section } from "./primitives";
+import { cardClass, Eyebrow, Section } from "./primitives";
 import { SignOutButton } from "./sign-out";
-import { ErrorState, SkeletonRows } from "./states";
-
-const joinedFmt = new Intl.DateTimeFormat(undefined, {
-  month: "short",
-  year: "numeric",
-});
+import { EmptyState, ErrorState, SkeletonRows, SuspendedState } from "./states";
 
 function splitName(name: string): { firstName: string; lastName: string } {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -153,8 +157,8 @@ export function ProfileScreen({
   email: string;
   phone: string;
 }) {
-  const trpc = useTRPC();
-  const academy = useQuery(trpc.academy.current.queryOptions());
+  const academy = useAcademy();
+  const mapUrl = academyMapUrl(academy.address, academy.mapUrl);
 
   return (
     <>
@@ -168,29 +172,56 @@ export function ProfileScreen({
         </Section>
 
         <Section label="In this academy">
-          {academy.isPending ? (
-            <SkeletonRows rows={1} />
-          ) : academy.isError ? (
-            <ErrorState
-              label="your academy"
-              onRetry={() => void academy.refetch()}
-            />
-          ) : academy.data ? (
+          <div className="flex flex-col gap-3">
             <div className="border-border flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
               <div>
-                <p className="text-base font-medium">{academy.data.name}</p>
+                <p className="text-base font-medium">{academy.name}</p>
                 <p className="text-muted-foreground text-sm capitalize">
-                  {academy.data.status === "pending"
+                  {academy.status === "pending"
                     ? "pending approval"
-                    : academy.data.role}
+                    : academy.role}
                 </p>
+                {academy.address && (
+                  <p className="text-muted-foreground mt-1 text-sm">
+                    {academy.address}
+                    {mapUrl && (
+                      <>
+                        {" · "}
+                        <a
+                          href={mapUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-brand-strong underline underline-offset-2"
+                        >
+                          Open in maps
+                        </a>
+                      </>
+                    )}
+                  </p>
+                )}
               </div>
               <p className="text-muted-foreground text-sm">
-                Member since {joinedFmt.format(new Date(academy.data.joinedAt))}
+                Member since {monthYearFmt.format(new Date(academy.joinedAt))}
               </p>
             </div>
-          ) : null}
+            {!isStaff(academy) && academy.status === "active" && (
+              <Button
+                asChild
+                variant="outline"
+                size="sm"
+                className="self-start"
+              >
+                <Link href="/payments">Membership dues</Link>
+              </Button>
+            )}
+          </div>
         </Section>
+
+        {!isStaff(academy) && (
+          <Section label="My rank">
+            {academy.status === "suspended" ? <SuspendedState /> : <MyRank />}
+          </Section>
+        )}
 
         <Section label="Appearance">
           <div className="border-border flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
@@ -209,5 +240,69 @@ export function ProfileScreen({
         </div>
       </div>
     </>
+  );
+}
+
+function MyRank() {
+  const trpc = useTRPC();
+  const ranks = useQuery(trpc.rank.mine.queryOptions());
+
+  if (ranks.isPending) return <SkeletonRows rows={1} />;
+  if (ranks.isError) {
+    return (
+      <ErrorState label="your rank" onRetry={() => void ranks.refetch()} />
+    );
+  }
+
+  const { ranks: list, history } = ranks.data;
+  if (list.length === 0) {
+    return (
+      <EmptyState title="Your gym hasn't set your rank yet.">
+        Only a coach can set it.
+      </EmptyState>
+    );
+  }
+
+  return (
+    <div className={cardClass()}>
+      <div className="flex flex-col gap-2">
+        {list.map((r) => (
+          <div
+            key={r.discipline}
+            className="flex flex-wrap items-center justify-between gap-3"
+          >
+            <span className="text-muted-foreground text-sm">
+              {disciplineLabel(r.discipline)}
+            </span>
+            <span className="font-medium">{formatRank(r)}</span>
+          </div>
+        ))}
+      </div>
+      {history.length > 0 && (
+        <div className="border-border mt-4 border-t border-dashed pt-4">
+          <Eyebrow>Promotions</Eyebrow>
+          <div className="mt-2 flex flex-col gap-1.5">
+            {history.slice(0, 5).map((h) => (
+              <div
+                key={h.id}
+                className="flex flex-wrap items-center justify-between gap-3 text-sm"
+              >
+                <span>
+                  {disciplineLabel(h.discipline)} ·{" "}
+                  {formatRank({
+                    discipline: h.discipline,
+                    belt: h.toBelt,
+                    stripes: h.toStripes,
+                  })}
+                </span>
+                <span className="text-muted-foreground font-mono text-xs tabular-nums">
+                  {dateYearFmt.format(new Date(h.promotedAt))}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

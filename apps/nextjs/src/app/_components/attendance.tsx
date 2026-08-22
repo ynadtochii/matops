@@ -5,19 +5,12 @@ import { useQuery } from "@tanstack/react-query";
 
 import { Select } from "@matops/ui/select";
 
+import { dateTimeFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { ClassRoster } from "./class-roster";
 import { EmptyState, ErrorState } from "./states";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-
-const dateTimeFmt = new Intl.DateTimeFormat(undefined, {
-  weekday: "short",
-  month: "short",
-  day: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-});
 
 /**
  * O5 Attendance (spec O5, slice 3.3). Staff pick a class from the backfill

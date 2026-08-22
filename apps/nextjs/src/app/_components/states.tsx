@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 
 import { Button } from "@matops/ui/button";
 
@@ -43,6 +44,34 @@ export function EmptyState({
       {children && <p className="text-muted-foreground text-sm">{children}</p>}
       {action && <div className="pt-1">{action}</div>}
     </div>
+  );
+}
+
+/** A paused membership: the same dead end on every student screen (ADR 68). */
+export function SuspendedState() {
+  return (
+    <EmptyState title="Your membership is paused.">
+      Contact your gym to restore your access.
+    </EmptyState>
+  );
+}
+
+/**
+ * A page this account does not have. The sidebar never offers it; this is what
+ * a typed URL lands on, instead of a screen full of forbidden queries (ADR 73).
+ */
+export function NoAccessState() {
+  return (
+    <EmptyState
+      title="That page isn't part of your account."
+      action={
+        <Button asChild size="sm" variant="outline">
+          <Link href="/">Go to your home page</Link>
+        </Button>
+      }
+    >
+      Ask your academy owner if you think you should have it.
+    </EmptyState>
   );
 }
 

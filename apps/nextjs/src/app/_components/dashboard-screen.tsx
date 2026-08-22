@@ -26,25 +26,25 @@ import {
   DialogTitle,
 } from "@matops/ui/dialog";
 
+import { dayLongFmt, timeFmt } from "~/lib/format";
 import { formatMoney } from "~/lib/money";
 import { useTRPC } from "~/trpc/react";
+import { useAcademy } from "./academy";
 import { ClassRoster } from "./class-roster";
 import { PageHeader } from "./page-header";
-import { cardClass, DriftBadge, Eyebrow, Section, Stat } from "./primitives";
+import {
+  cardClass,
+  disciplineDot,
+  DriftBadge,
+  Eyebrow,
+  Section,
+  Stat,
+} from "./primitives";
 import { EmptyState, ErrorState, SkeletonRows } from "./states";
 import { StudentScreen } from "./student-screen";
 
 type ClassRow = RouterOutputs["class"]["week"][number];
 
-const timeFmt = new Intl.DateTimeFormat(undefined, {
-  hour: "2-digit",
-  minute: "2-digit",
-});
-const dateFmt = new Intl.DateTimeFormat(undefined, {
-  weekday: "long",
-  month: "long",
-  day: "numeric",
-});
 const endsAt = (c: ClassRow) =>
   new Date(c.startsAt).getTime() + c.durationMinutes * 60 * 1000;
 const sameDay = (value: Date | string, d: Date) => {
@@ -91,12 +91,11 @@ function outstanding(
  */
 export function DashboardScreen() {
   const trpc = useTRPC();
-  const current = useQuery(trpc.academy.current.queryOptions());
+  const c = useAcademy();
   const [detailId, setDetailId] = useState<string | null>(null);
 
-  const c = current.data;
-  const isOwner = c ? isOwnerOf(c) : false;
-  const isStaff = c ? isStaffOf(c) : false;
+  const isOwner = isOwnerOf(c);
+  const isStaff = isStaffOf(c);
 
   const { weekFrom, weekTo, today, tomorrow, leadsSince } = useMemo(() => {
     const t = new Date();
@@ -152,18 +151,7 @@ export function DashboardScreen() {
     enabled: isOwner,
   });
 
-  if (current.isPending) return <SkeletonRows rows={5} />;
-  if (current.isError || !c)
-    return (
-      <ErrorState
-        label="your dashboard"
-        onRetry={() => void current.refetch()}
-      />
-    );
-
-  if (!isStaff) {
-    return <StudentScreen academyName={c.name} status={c.status} />;
-  }
+  if (!isStaff) return <StudentScreen />;
 
   const onDay = (d: Date) =>
     (week.data ?? [])
@@ -281,7 +269,7 @@ export function DashboardScreen() {
       </Dialog>
 
       <div>
-        <PageHeader title="This week" subtitle={dateFmt.format(today)} />
+        <PageHeader title="This week" subtitle={dayLongFmt.format(today)} />
 
         {/* Needs you — one instrument panel of equal channels on a hairline
             grid; a job at zero is dropped, not drawn empty. The violet lives in
@@ -463,17 +451,6 @@ function QueueSegment({ href, count, label, sub }: Omit<QueueItem, "key">) {
   );
 }
 
-/**
- * Which discipline a class is, as a dot on the time rail. A dot rather than a
- * tinted row: a list of tinted bars would drown the page, and the category is a
- * whisper, not the point.
- */
-const DOT_SKIN: Record<DisciplineTone, string> = {
-  gi: "bg-gi",
-  nogi: "bg-nogi",
-  other: "border-border bg-background border",
-};
-
 /** Where the gym is right now — the same marker the O2 week grid draws. */
 function NowLine({ now }: { now: Date }) {
   return (
@@ -517,7 +494,7 @@ function DayRow({
         aria-hidden
         className={cn(
           "relative z-10 size-2 shrink-0 rounded-full",
-          DOT_SKIN[disciplineTone(c.discipline)],
+          disciplineDot(c.discipline),
         )}
       />
       <span className="text-muted-foreground w-11 shrink-0 font-mono tabular-nums">

@@ -133,6 +133,13 @@ export function trainingStats(
   };
 }
 
+/** N-days-since phrasing for the "last class" line. */
+export function lastClassLabel(days: number): string {
+  if (days <= 0) return "Today";
+  if (days === 1) return "Yesterday";
+  return `${days} days ago`;
+}
+
 /** Attendance-recency band for a member (C.1 "who's drifting", C.2 detail). */
 export type DriftStatus = "active" | "cooling" | "at_risk" | "dormant";
 

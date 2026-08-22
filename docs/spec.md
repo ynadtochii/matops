@@ -68,7 +68,7 @@ No blank waiting screen. A **slim banner** on the schedule: "Pending approval �
 
 ### S4 · Schedule _(home — the core screen)_
 
-**On the web too** _(v2.2, ADR 57):_ a student signed in on the web gets this same week — grouped by day, Today first, with **Book** and **Cancel** on the row and the same "looks full, book anyway?" confirm. It reads `class.mine` and the `booking` router, the same calls the app makes, so the two clients cannot drift apart. The web student has **one screen**, so the shell drops its nav bar and moves sign-out into the phone header. Dues, training stats and QR check-in stay app-only. A **suspended** member sees the calm notice here as well, and the query is not sent.
+**On the web too** _(v2.2, ADR 57; brought to parity in v3.2, ADR 73):_ a student signed in on the web gets this same week — grouped by day, Today first, with **Book** and **Cancel** on the row and the same "looks full, book anyway?" confirm. It reads `class.mine` and the `booking` router, the same calls the app makes, so the two clients cannot drift apart. Since **v3.2** the web student has the app's own tabs minus Scan — **Schedule** (`/`) · **My classes** (`/training`, S6) · **Dues** (`/payments`, S9) · **Profile** (`/profile`, S7 + S12) — in the same shell the owner uses (sidebar on desktop, bottom tabs on a phone), plus the **class detail** screen (`/class/<id>`, S5) and the **overdue strip** (S11). Only the in-app QR scan (S8) and push / class reminders stay app-only. A **suspended** member sees the calm notice here as well, and the query is not sent.
 
 - This week's classes, grouped by day (Today first). Each row: **title · time · instructor · "N spots left"**. The week window rolls with the day, so an app left open past midnight still opens on today.
 - **Inline book** _(v1.8, slice 1):_ each upcoming, bookable row has a compact **Book** control — booking is **one tap from the list** (plus the "looks full — book anyway?" confirm when over capacity). A booked row shows the **Booked** pill; cancelled / past rows show no control. _(This replaced the old v1.3 top "Today / next" card, which moved to S6 so the two class tabs don't duplicate it — v1.8 slice 2.)_
@@ -77,6 +77,8 @@ No blank waiting screen. A **slim banner** on the schedule: "Pending approval �
 - Empty state: "No classes scheduled this week."
 
 ### S5 · Class detail + book/cancel
+
+**On the web too** _(v3.2, ADR 73):_ `/class/<id>`, reached by tapping any row on the schedule or on My classes. Same reads (`class.get` + `class.attendees`), same capacity label, same soft-capacity confirm, same who's-in privacy rule. The action sits under the details rather than in a sticky bar, because a browser page scrolls to it. A cancelled class says booking is closed and a class that already started says so, so the screen is never a dead end with no action and no reason.
 
 - Title, discipline, day/time, duration, instructor, capacity ("8 / 12").
 - **Booking is never blocked.** Primary action, in a **sticky bottom bar** (thumb zone; v1.8 slice 6) while the details scroll above:
@@ -89,6 +91,8 @@ No blank waiting screen. A **slim banner** on the schedule: "Pending approval �
 
 ### S6 · My classes _(its own tab — v1.2 B.2; renamed **Training → My classes** in v1.8 slice 2)_
 
+**On the web too** _(v3.2, ADR 73):_ `/training`, with the same next-class card, the same My Training stats, Upcoming with Cancel, and the full read-only Past list. Reads `booking.mine` + `stats.me` and splits them with the same pure `splitMyClasses` / `nextClass` the app calls, and labels the last class with the same `lastClassLabel`. A class the gym cancelled shows no Cancel control, matching S4.
+
 - A **next-class card** at the top (the soonest upcoming booked class; provisional labelled "pending approval"). This is the **only** "next class" card in the app now — Schedule (S4) no longer duplicates it (v1.8 slice 2), so "all classes" (S4) vs "mine" (S6) is self-explaining.
 - A **My Training** stats card (see S7 — total · this month · streak · favorite · days since last class).
 - **Upcoming** classes (confirmed and provisional, clearly labelled; cancel from here too).
@@ -96,6 +100,8 @@ No blank waiting screen. A **slim banner** on the schedule: "Pending approval �
 - _(Reads `booking.mine`; the pure `splitMyClasses` / `nextClass` divide the list — ADR 39. Built in v1.2; was previously "folded into the schedule".)_
 
 ### S7 · Profile / account
+
+**On the web** _(v2.8 for identity, ADR 67; v3.2 for the rest, ADR 73):_ `/profile` holds the same identity edit (name and phone; email read-only), the academy with its **address** and **Open in maps** link, **My rank** with the promotion timeline, and a link across to dues. Appearance and sign out are S12 on the app and live on this page on the web. The **academy switcher** is in the shell, not on this page, and now appears for a student in two gyms as well.
 
 - Identity + membership only (v1.8 slice 5 moved app settings to **S12**). Name, phone, email, current academy — with the gym's **address** and an **Open in Maps** link under it when the owner has set one _(v2.9, ADR 68)_. The link opens the owner's pinned map when there is one, otherwise the phone's own map app on the address (`maps://` on iOS, `geo:` on Android) rather than the browser _(v3.1, ADR 71)_. **Name and phone are editable** (edit → save; email is read-only — it's the login identity + notification channel). _(v1.2 B.3.)_ Content **scrolls**; a **⚙ gear** in the header opens Settings (S12).
 - **My Training stats** (v1.2 B.1 — surfaced on the My classes tab, S6): total attended sessions · this month · week **streak** · favorite discipline + weekday · days since last class. Per-academy, from attendance already stored (ADR 39). Empty state until the first check-in.
@@ -108,9 +114,12 @@ No blank waiting screen. A **slim banner** on the schedule: "Pending approval �
 - **No Check-in list** (removed v1.8). The only check-in path is the **gym QR walk-in** for a student who did **not** book.
 - **The member path is the Scan tab** _(v3.0, ADR 70)_. Tap **Scan** → the phone's own scanner sheet opens → point it at the gym poster → the app **books + marks attended** for the class happening now → _"You're checked in ✓"_. Camera permission is asked on the first tap, not at launch; refused for good → the tab says so and offers system settings. A phone that cannot present the OS scanner (iOS 15, Android without Play Services) is told to use its camera app on the poster. Any other code (a wifi QR, the gym's own `/join` poster) **closes the scanner** and says what to scan instead — the sheet covers the screen, so a message left behind it is a message nobody reads.
 - **The poster is unchanged:** it encodes the public **`https://…/checkin/<academyId>`** page, so a first-time, no-app visitor still lands on the **drop-in form** (§4), and **"Open the app to check in"** stays there as the deep-link fallback (`matops://checkin/<academyId>`) for anyone who scans with the camera app. The scanner accepts either form and refuses anything else, including the gym's `/join/<token>` invite poster.
+- **The web has no scanner** _(v3.2, ADR 73)_. It does not need one: the poster's own URL is a web page, so a student who scans it with their phone's camera app lands on `/checkin/<academyId>` and checks in there. Only scanning from **inside** the app is app-only.
 - Works **even if the class is full** (you're physically there); **already booked → attend, no double-book**; **pending member → allowed** (provisional). Edge messages, never a dead end: not signed in → sign in then complete; no class live → _"No class to check into right now."_; not a member → clear message (owner can still mark present, O5).
 
 ### S9 · Pay (dues + requisites) _(v1.3 — manual bank transfer; ADR 40)_
+
+**On the web too** _(v3.2, ADR 73):_ `/payments` serves the owner screen (O7) to an owner and this one to everyone else, so a student who lands on the URL sees their own dues rather than a load error. Same amount, status, bank details, copyable reference and **I paid** claim. A **pending** member has no read on `payments.myDues`, so the tab is hidden and the page says dues appear after approval.
 
 - **Approved members only.** The requisites card carries the gym's bank details, so a **pending** joiner does not see this section at all (it appears once the owner approves them). ADR 60.
 - **What you owe, at a glance:** your plan, amount, and next-due date, with a status — **paid** / **due soon** / **overdue** (derived from the due date, ADR 40). Empty until the gym sets up your dues. _(When **overdue**, a global header (S11) also promotes it across the tab screens.)_
@@ -125,15 +134,19 @@ No blank waiting screen. A **slim banner** on the schedule: "Pending approval �
 
 ### S11 · Overdue warning header _(v1.8 slice 4 / ADR 45)_
 
+**On the web too** _(v3.2, ADR 73):_ the same thin strip, in the shell under the pending banner, so it shows on every student screen and links to `/payments`. It matters more here than on the phone: the web has no push and no class reminders, so this strip is the only thing that can chase a payment.
+
 - A **thin, persistent strip** at the top of the main tab screens (Schedule / My classes / Profile) shown **only** when the member's dues are **overdue** (status derived from `next_due_at`, ADR 40 — never stored). Copy is plain, non-shaming: _"Membership payment overdue — tap to pay."_
 - **Non-dismissible while overdue**; it **self-clears** within one refetch after the owner confirms payment (status leaves `overdue`). A paid / due-soon member never sees it.
 - **Tap → S7 Profile**, landing on the dues section (bank details + reference ready to copy). Thin by design — it never stacks as a heavy block beside the S3 pending banner.
 
 ### S12 · Settings _(v1.8 slice 5 / ADR 45 — split out of S7)_
 
+**On the web** _(ADR 73):_ there is no separate settings screen. Appearance and sign out sit on `/profile` and in the shell footer, and there is no push toggle because the web registers no push token.
+
 - A **pushed screen** reached via the ⚙ gear in the Profile header (not a tab — the tab bar is reserved for the four jobs in §S8). Holds **appearance** (light / dark / system), the **push notifications** on/off toggle (one switch covers reminders + cancellation alerts; off drops this device's token **and clears the scheduled local class reminders**, ADR [54](issues/54-local-class-reminders.md)), and **sign out**.
 
-**Student v1 = 8 screens** (S1–S8). **v1.3 adds S9 (pay) + S10 (home widget); v1.8 adds S11 (overdue header) + S12 (settings), removes the in-app Check-in tab and redefines S8 as the QR walk-in (ADR 45); v3.0 gives S8 its own Scan tab with an in-app scanner (ADR 70), so the tabs are Schedule · My classes · Scan · Profile.** Core loop (S4 → booked) is now **one tap** from the schedule list; the two class tabs (all vs mine) are self-explaining.
+**Student v1 = 8 screens** (S1–S8). **v1.3 adds S9 (pay) + S10 (home widget); v1.8 adds S11 (overdue header) + S12 (settings), removes the in-app Check-in tab and redefines S8 as the QR walk-in (ADR 45); v3.0 gives S8 its own Scan tab with an in-app scanner (ADR 70), so the tabs are Schedule · My classes · Scan · Profile.** Core loop (S4 → booked) is now **one tap** from the schedule list; the two class tabs (all vs mine) are self-explaining. **v3.2 gives the web student the same set minus Scan (ADR 73)**, so S4-S7, S9, S11 and S12 all describe two clients now, not one.
 
 ---
 
@@ -248,7 +261,7 @@ No blank waiting screen. A **slim banner** on the schedule: "Pending approval �
 - **Appearance and sign out** live here too, next to the account they belong to. Both stay in the sidebar as well: the theme toggle and sign out are one click from anywhere and are not worth a detour.
 - **Not in this release:** avatar upload, email change, password or passkey management, per-academy notification preferences, and any student-facing bio.
 
-**Owner web includes O1–O11.** **O11 Profile is for every role, students included.** Instructors see O1–O3, O5 and **O10** (their own card only; no O4 Members, O6 Settings, O7 Payments controls, or O9 Referrals) — the shell hides those nav items and the server procedure tiers guard them. O8 describes installability rather than a separate data screen. _(ADR 38 role split, extended by ADR 52, narrowed by ADR 69.)_
+**Owner web includes O1–O11.** **O11 Profile is for every role, students included.** Instructors see O1–O3, O5 and **O10** (their own card only; no O4 Members, O6 Settings, O7 Payments controls, or O9 Referrals) — the shell hides those nav items and the server procedure tiers guard them. _(v3.3, ADR 74:_ typing the URL of a page your role does not have no longer renders it. The shell says the page is not part of your account and offers the way home, rather than filling the screen with refused queries. The tiers are still the guard; this only decides what a person is offered.) O8 describes installability rather than a separate data screen. _(ADR 38 role split, extended by ADR 52, narrowed by ADR 69.)_
 
 ---
 

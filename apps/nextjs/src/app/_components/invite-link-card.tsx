@@ -18,6 +18,7 @@ import { toast } from "@matops/ui/toast";
 
 import { shareLink, useCanShare } from "~/lib/share";
 import { useTRPC } from "~/trpc/react";
+import { useAcademy } from "./academy";
 import { cardClass } from "./primitives";
 import { QrPoster } from "./qr-poster";
 import { ErrorState, SkeletonRows } from "./states";
@@ -47,7 +48,7 @@ export function InviteLinkCard({
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const invites = useQuery(trpc.invite.list.queryOptions());
-  const academy = useQuery(trpc.academy.current.queryOptions());
+  const academyName = useAcademy().name;
 
   // Offer the OS share sheet (ADR 42) only where it exists.
   const shareable = useCanShare();
@@ -82,7 +83,6 @@ export function InviteLinkCard({
 
   const invite = invites.data.find((i) => i.role === role);
   const url = invite ? joinUrl(invite.token) : "";
-  const academyName = academy.data?.name ?? "your academy";
 
   return (
     <div className={cn(cardClass(), "flex flex-col gap-2")}>

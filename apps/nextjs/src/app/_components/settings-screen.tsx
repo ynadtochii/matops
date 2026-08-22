@@ -1,13 +1,10 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-
-import { useTRPC } from "~/trpc/react";
+import { useAcademy } from "./academy";
 import { AcademyDangerZone } from "./academy-danger-zone";
 import { AcademyIdentity } from "./academy-identity";
 import { AcademyLocation } from "./academy-location";
 import { PageHeader } from "./page-header";
-import { ErrorState, SkeletonRows } from "./states";
 
 /**
  * Settings screen (IA ticket 02, spec O6) — the academy itself: rename it, read
@@ -18,8 +15,7 @@ import { ErrorState, SkeletonRows } from "./states";
  * procedures).
  */
 export function SettingsScreen() {
-  const trpc = useTRPC();
-  const academy = useQuery(trpc.academy.current.queryOptions());
+  const academy = useAcademy();
 
   return (
     <>
@@ -27,23 +23,11 @@ export function SettingsScreen() {
         title="Settings"
         subtitle="Your academy: name, code, time zone, and where you train."
       />
-      {academy.isPending ? (
-        <SkeletonRows rows={3} />
-      ) : academy.isError || !academy.data ? (
-        <ErrorState
-          label="your settings"
-          onRetry={() => void academy.refetch()}
-        />
-      ) : (
-        <div className="flex flex-col gap-8">
-          <AcademyIdentity name={academy.data.name} code={academy.data.code} />
-          <AcademyLocation
-            address={academy.data.address}
-            mapUrl={academy.data.mapUrl}
-          />
-          <AcademyDangerZone name={academy.data.name} />
-        </div>
-      )}
+      <div className="flex flex-col gap-8">
+        <AcademyIdentity name={academy.name} code={academy.code} />
+        <AcademyLocation address={academy.address} mapUrl={academy.mapUrl} />
+        <AcademyDangerZone name={academy.name} />
+      </div>
     </>
   );
 }

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
+import { isOwner } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
@@ -15,8 +16,11 @@ import { Spinner } from "@matops/ui/spinner";
 import { toast } from "@matops/ui/toast";
 import { CreateMembershipPlanSchema } from "@matops/validators";
 
+import { dateYearFmt } from "~/lib/format";
 import { formatMoney } from "~/lib/money";
 import { useTRPC } from "~/trpc/react";
+import { useAcademy } from "./academy";
+import { MyDues } from "./my-dues";
 import { PageHeader } from "./page-header";
 import { PaymentRequisites } from "./payment-requisites";
 import { cardClass, Section, Tabs } from "./primitives";
@@ -25,14 +29,13 @@ import { EmptyState, ErrorState, SkeletonRows } from "./states";
 type Plan = RouterOutputs["payments"]["plans"][number];
 type Member = RouterOutputs["membership"]["members"][number];
 
-const dateFmt = new Intl.DateTimeFormat(undefined, {
-  month: "short",
-  day: "numeric",
-  year: "numeric",
-});
+export function PaymentsScreen() {
+  const academy = useAcademy();
+  return isOwner(academy) ? <OwnerPayments /> : <MyDues />;
+}
 
 /** The owner Payments screen (spec O7, ADR 40) — manual bank-transfer dues. */
-export function PaymentsScreen() {
+function OwnerPayments() {
   const trpc = useTRPC();
   const claims = useQuery(trpc.payments.claims.queryOptions());
   const [tab, setTab] = useState<"claims" | "dues" | "plans" | "bank">(
@@ -148,7 +151,7 @@ function ClaimsToConfirm() {
                     className="size-6"
                   />
                   <span>
-                    · said paid {dateFmt.format(new Date(c.claimedAt))}
+                    · said paid {dateYearFmt.format(new Date(c.claimedAt))}
                   </span>
                 </span>
               </div>
@@ -320,7 +323,7 @@ function MemberDuesRow({ member, plans }: { member: Member; plans: Plan[] }) {
           {member.dues ? (
             <span className="text-muted-foreground text-sm">
               {member.dues.planName} · due{" "}
-              {dateFmt.format(new Date(member.dues.nextDueAt))}
+              {dateYearFmt.format(new Date(member.dues.nextDueAt))}
             </span>
           ) : (
             <span className="text-muted-foreground text-sm">No dues set</span>

@@ -134,3 +134,13 @@ export interface ClaimableMember {
 export function canClaim(m: ClaimableMember): boolean {
   return m.hasPlan && !m.hasOpenClaim;
 }
+
+/**
+ * What every client calls each status. The tone (colour) is per-client, the
+ * words are not: the phone app and the web must say the same thing (ADR 40).
+ */
+export const PAYMENT_STATUS_LABEL: Record<PaymentStatus, string> = {
+  paid: "Paid",
+  due_soon: "Due soon",
+  overdue: "Overdue",
+};

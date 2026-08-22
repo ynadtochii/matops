@@ -15,6 +15,7 @@ import { Spinner } from "@matops/ui/spinner";
 import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
+import { useAcademy } from "./academy";
 import { MemberDetail, MemberRow } from "./member-detail";
 import { cardClass, Eyebrow, Tabs } from "./primitives";
 import { EmptyState, ErrorState, SkeletonRows } from "./states";
@@ -38,7 +39,7 @@ export function Members() {
   const queryClient = useQueryClient();
   const memberList = useQuery(trpc.membership.members.queryOptions());
   const leads = useQuery(trpc.dropIn.list.queryOptions());
-  const academy = useQuery(trpc.academy.current.queryOptions());
+  const academy = useAcademy();
 
   // A member id from `?member=` (the dashboard "who's drifting" widget links
   // here) opens that member's detail on first render.
@@ -334,12 +335,10 @@ export function Members() {
           </div>
         ) : (
           <div className="flex flex-col gap-6">
-            {academy.data && (
-              <VenueCheckin
-                academyId={academy.data.academyId}
-                academyName={academy.data.name}
-              />
-            )}
+            <VenueCheckin
+              academyId={academy.academyId}
+              academyName={academy.name}
+            />
             {leads.isError ? (
               <ErrorState
                 label="drop-in leads"

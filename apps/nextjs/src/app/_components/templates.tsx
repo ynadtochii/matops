@@ -20,6 +20,7 @@ import { Spinner } from "@matops/ui/spinner";
 import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
+import { useAcademy } from "./academy";
 import { InstructorOptions } from "./coach-select";
 import { cardClass } from "./primitives";
 import { SchedulePoster } from "./schedule-poster";
@@ -87,11 +88,11 @@ export function Templates() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const list = useQuery(trpc.template.list.queryOptions());
-  const me = useQuery(trpc.academy.current.queryOptions());
+  const me = useAcademy();
 
   const [form, setForm] = useState<FormState | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const academyTz = me.data?.timeZone ?? browserTz();
+  const academyTz = me.timeZone ?? browserTz();
 
   const invalidate = () =>
     queryClient.invalidateQueries(trpc.template.list.pathFilter());
@@ -195,7 +196,7 @@ export function Templates() {
             variant="outline"
             onClick={() => {
               setEditingId(null);
-              setForm(emptyForm(me.data?.userId ?? "", academyTz));
+              setForm(emptyForm(me.userId, academyTz));
             }}
           >
             New template
