@@ -88,6 +88,7 @@ export const organization = pgTable("organization", {
   publicCode: text("public_code").notNull().unique(),
   timeZone: text("time_zone"),
   address: text("address"),
+  mapUrl: text("map_url"),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
 

@@ -6,11 +6,11 @@
 > Flip cells as you go: **`—`** not needed · **`todo`** · **`wip`** · **`done`**. Every flip to `done` must pass the [Definition of Done](delivery.md#4-definition-of-done-the-anti-drift-gate).
 > Surfaces: **DB · API · Web · Mob · Sh(ared) · Inf(ra)**. Spec IDs trace up to [spec.md](spec.md); tickets to [map.md](map.md).
 
-**Status:** **Phases 0-4 complete, plus every product wave through v2.9.** Static gates green: `lint` 15/15 · `typecheck` 17/17. **`next build` was last run for v2.4** — v2.5 to v2.7 are lint + typecheck only (no `AUTH_SECRET` in this environment), and the per-wave verify lines below say so. Tests live in three homes now — `packages/db/test` (PGlite RLS), `packages/domain/test` (pure rules) and, since ADR [60](issues/60-backend-review-fixes.md), `packages/api/test` (real routers + real middleware + real SQL over PGlite).
+**Status:** **Phases 0-4 complete, plus every product wave through v2.10.** Static gates green: `lint` 15/15 · `typecheck` 17/17 · `pnpm test` **449 green** (domain 268 · db 82 · api 72 · validators 24 · notifications 3). **`next build` was last run for v2.4** — v2.5 to v2.7 are lint + typecheck only (no `AUTH_SECRET` in this environment), and the per-wave verify lines below say so. Tests live in three homes now — `packages/db/test` (PGlite RLS), `packages/domain/test` (pure rules) and, since ADR [60](issues/60-backend-review-fixes.md), `packages/api/test` (real routers + real middleware + real SQL over PGlite).
 
-What is built: the identity join loop (Phase 1), the scheduling core (Phase 2), booking & attendance (Phase 3), notifications (Phase 4 — engine only, **no scheduler**, ADR [46](issues/46-no-scheduler-v1.md)), the Expo student app, and the waves below — v1.1 UX, v1.2 stats, v1.3 payments, v1.4 rank & notes, v1.5 PWA, v1.7 mobile design, v1.8 mobile IA, v1.9 referrals, v2.0/v2.1 mobile waves, v2.2 student web funnel, v2.3/v2.4 review fixes, v2.5 coach workload, v2.6 the Settings split, v2.7 invite roles + the coach queue, v2.8 the web Profile, v2.9 academy time zone / address / delete.
+What is built: the identity join loop (Phase 1), the scheduling core (Phase 2), booking & attendance (Phase 3), notifications (Phase 4 — engine only, **no scheduler**, ADR [46](issues/46-no-scheduler-v1.md)), the Expo student app, and the waves below — v1.1 UX, v1.2 stats, v1.3 payments, v1.4 rank & notes, v1.5 PWA, v1.7 mobile design, v1.8 mobile IA, v1.9 referrals, v2.0/v2.1 mobile waves, v2.2 student web funnel, v2.3/v2.4 review fixes, v2.5 coach workload, v2.6 the Settings split, v2.7 invite roles + the coach queue, v2.8 the web Profile, v2.9 academy time zone / address / delete, v2.10 referrals owner-only.
 
-**Not built yet:** **Phase 5** launch hardening (universal/App links — the app still uses a custom scheme; booking-count reconciliation; rate limiting, ADR [58](issues/58-input-validation-and-sanitization.md)), **any scheduler** (both cron routes stay dormant and manually callable), and **R.2** the native home-screen widget (scaffolded, guide in [home-widget-implementation.md](home-widget-implementation.md)).
+**Not built yet:** **Phase 5** launch hardening (universal/App links — the app still uses a custom scheme; booking-count reconciliation; rate limiting, ADR [58](issues/58-input-validation-and-sanitization.md)), **any scheduler** (both cron routes stay dormant and manually callable), and **v1.3 R.2** the native home-screen widget (scaffolded, guide in [home-widget-implementation.md](home-widget-implementation.md)).
 
 **Open operational items:** migrations `0019`/`0020` are **written but not applied to Neon**; **`AUTH_SECRET` needs rotating** on the next deploy (the old auth error hook logged it — ADR 60); the mobile **Google browser→app session hand-off** still does not land ([mobile-google-login-handoff.md](mobile-google-login-handoff.md)); and every mobile wave since v1.8 is **static-gates-green only** — no simulator in this environment, so the checks in [mobile-device-test.md](mobile-device-test.md) are outstanding.
 
@@ -113,6 +113,10 @@ One row per slice. This is the single answer to _"what's left, on which surface?
 | M.5 | Split Settings from Profile (S12) | — | — | — | done | — | — |
 | M.6 | Booking toast + sticky S5 CTA | — | — | — | done | — | — |
 | M.7 | Dark-theme warmth (mobile-only override) | — | — | — | done² | — | — |
+| **v3.0** | **In-app QR scan** _(Scan tab + OS scanner; no migration, no router change; ADR 70)_ | | | | | | |
+| X.1 | Scan tab (tabs 3 → 4, S8) | — | — | — | done | — | — |
+| X.2 | OS scanner via `expo-camera` `launchScanner` | — | — | — | done² | — | — |
+| X.3 | `parseCheckInLink` pure parser + tests | — | — | — | — | done | — |
 | **v2.0** | **Mobile Wave A** _(student app: kept promises + freshness; ADR 54)_ | | | | | | |
 | N.1 | Local class reminders on book/cancel (S12) | — | — | — | done³ | — | — |
 | N.2 | Foreground refetch + pull to refresh on the tab screens | — | — | — | done³ | — | — |
@@ -165,8 +169,19 @@ One row per slice. This is the single answer to _"what's left, on which surface?
 | N.3 | Template form inherits the academy zone, offers a one-click move | — | — | done | — | — | — |
 | N.4 | Address on mobile Profile + both join confirm steps | — | done | done | done | — | — |
 | N.5 | `academy.remove` soft delete + typed phrase; seven soft-delete filters + router tests | done | done | done | — | done | — |
+| N.6 | `ownerIdentityProcedure` tier (no tenant tx) + `exec` on the three singleton readers | — | done | — | — | — | — |
+| **v3.1** | **A pinned map link for the academy** _(O6 / S7; ADR 71)_ | | | | | | |
+| P.1 | Migration `0022` (`map_url` on `organization`) + `MapUrlSchema` host allowlist | done | — | — | — | done | done |
+| P.2 | `academyMapUrl(address, mapUrl)` prefers the pin; `academy.current` returns `mapUrl` | — | done | — | — | done | — |
+| P.3 | Settings card: map-link input + live **Check the pin ↗** preview, gated on an address | — | — | done | — | — | — |
+| P.4 | Mobile Profile opens the pin, or the phone's own map app on the address | — | — | — | done | — | — |
+| **v2.10** | **Referrals go owner-only** _(O9 / O1; ADR 69)_ | | | | | | |
+| R.1 | `referral.dashboard` / `assign` move to `ownerProcedure`; nav item hidden for instructors | — | done | done | — | — | — |
+| R.2 | Instructor-only branches deleted from the screen (locked chips, owner-only hints, `isOwner`) | — | — | done | — | — | — |
+| R.3 | `stats.gym` returns owner-only `newMembers` (null for an instructor) instead of two always-on fields | — | done | done | — | — | — |
+| R.4 | Tier tests: referrals refused to an instructor, `newMembers` null on their insights | — | done | — | — | — | — |
 
-² Static gates green; the QR deep-link round-trip, overdue strip, toast, and dark-warmth tweak want a **real-device pass** (no simulator in the build env) — flagged in ADR 45.
+² Static gates green; the QR deep-link round-trip, overdue strip, toast, dark-warmth tweak, and the v3.0 in-app scan want a **real-device pass** (no simulator in the build env, and a camera never works in one) — flagged in ADR 45 and ADR 70.
 
 ³ Static gates green. The reminder actually firing, the notification permission prompt, and the pull gesture want a **device pass** — flagged in ADR 54.
 
@@ -419,6 +434,16 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 - **M.3 A role can be changed both ways.** **DONE.** `membership.demote` only stepped an owner down, so anyone who joined by code or by the student link was a student for good. It becomes **`setRole`**: same `ownerProcedure`, same locked never-ownerless transaction, input `InviteRoleSchema` so it sets `student` or `instructor` and can never grant `owner` (that stays `promote`). The member detail Overview gains the picker; Coaches → Staff calls the same procedure for "step down". Spec: O6.
 
 **Series verify:** typecheck 17/17 · lint 15/15. `next build` **not run** (no `AUTH_SECRET` here). Domain tests cover `isPendingCoach`; the never-ownerless guard over the wider role set is covered by the existing `membership.test.ts` cases.
+
+### v3.0 — In-app QR scan (ADR 70)
+
+**Exit test:** a member standing at the gym door opens the app, taps **Scan**, points the phone at the poster, and is booked + marked present. No browser, no deep link. **No migration, no router change.**
+
+- **X.1 The Scan tab.** **DONE.** A fourth tab whose only job is check-in: Schedule · My classes · **Scan** · Profile. This reverses ADR 45's three-tab rule, because the old member path cost four taps and a browser round trip through a custom-scheme hand-off that a browser is free to ignore (the same hand-off that already fails for Google sign-in). A tab, not a header button, because check-in is a moment with its own intent. Spec: S8.
+- **X.2 The phone's own scanner, not ours.** **DONE.** `CameraView.launchScanner()` from **`expo-camera`** presents the OS sheet (`DataScannerViewController` on iOS 16+, the Google code scanner on Android), so there is no camera preview, overlay, or torch of ours to own untested. `CameraView.isModernBarcodeScannerAvailable` covers the phones that cannot present one (iOS 15, Android without Play Services): they are told to use their camera app on the poster, which is the old flow. Camera permission is asked on the first tap, and a permanent refusal shows a link to system settings. Spec: S8.
+- **X.3 One pure parser, nothing else new.** **DONE.** `parseCheckInLink` (domain, tested) pulls the academy id out of the scanned string and returns `null` for anything else, including the gym's own `/join/<token>` invite poster. A regex rather than `new URL()`, because Hermes does not parse custom schemes. The poster, the URL it encodes, the public drop-in page, its "Open the app" deep link, `checkin.today` / `checkin.checkIn`, and the `checkin/[academyId]` screen are all untouched. Spec: S8, §4.
+
+**Series verify:** `@matops/expo` typecheck + lint green; repo typecheck 17/17 · lint 15/15. **Not verifiable here:** `expo-camera` is a native module and a camera never works in the iOS Simulator, so the scan itself needs a real phone. Queued in `docs/mobile-device-test.md`.
 
 ## Parked — next iteration (do NOT build in v1)
 

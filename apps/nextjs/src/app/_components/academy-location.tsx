@@ -5,16 +5,24 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { academyMapUrl, timeZoneOptions } from "@matops/domain";
 import { Button } from "@matops/ui/button";
+import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
 import { Select } from "@matops/ui/select";
 import { Textarea } from "@matops/ui/textarea";
 import { toast } from "@matops/ui/toast";
+import { MapUrlSchema } from "@matops/validators";
 
 import { useTRPC } from "~/trpc/react";
 import { SectionHeading } from "./primitives";
 import { ErrorState, SkeletonRows } from "./states";
 
-export function AcademyLocation({ address }: { address: string | null }) {
+export function AcademyLocation({
+  address,
+  mapUrl,
+}: {
+  address: string | null;
+  mapUrl: string | null;
+}) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const settings = useQuery(trpc.academy.settings.queryOptions());
@@ -23,6 +31,11 @@ export function AcademyLocation({ address }: { address: string | null }) {
 
   const [editingAddress, setEditingAddress] = useState(false);
   const [draft, setDraft] = useState(address ?? "");
+  const [linkDraft, setLinkDraft] = useState(mapUrl ?? "");
+  const linkError =
+    linkDraft.trim() && !MapUrlSchema.safeParse(linkDraft.trim()).success
+      ? "Paste a share link from Google Maps, Apple Maps, OpenStreetMap, or Waze."
+      : null;
 
   const save = useMutation(
     trpc.academy.updateSettings.mutationOptions({
@@ -34,7 +47,8 @@ export function AcademyLocation({ address }: { address: string | null }) {
     }),
   );
 
-  const mapUrl = academyMapUrl(address);
+  const savedUrl = academyMapUrl(address, mapUrl);
+  const draftUrl = academyMapUrl(draft, linkError ? null : linkDraft);
 
   return (
     <section className="flex flex-col gap-6">
@@ -111,13 +125,56 @@ export function AcademyLocation({ address }: { address: string | null }) {
               autoFocus
               placeholder={"Sportyvna St 12, 2nd floor\nKyiv 01001, Ukraine"}
             />
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="academy-map-url" className="text-sm">
+                Map link (optional)
+              </Label>
+              <Input
+                id="academy-map-url"
+                value={linkDraft}
+                onChange={(e) => setLinkDraft(e.target.value)}
+                maxLength={500}
+                inputMode="url"
+                placeholder="https://maps.app.goo.gl/…"
+                aria-invalid={!!linkError}
+                disabled={!draft.trim()}
+              />
+              <p className="text-muted-foreground text-xs">
+                {!draft.trim()
+                  ? "Type the address first. Students tap the address text, so a pin with nothing to read shows up nowhere."
+                  : (linkError ??
+                    "Open your gym in Google or Apple Maps, tap Share, and paste the link here. Use it when searching the address alone lands on the wrong door.")}
+              </p>
+            </div>
+            <p className="text-muted-foreground text-xs">
+              {draftUrl ? (
+                <>
+                  Students tap the address and land here.{" "}
+                  <a
+                    href={draftUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-foreground underline underline-offset-2"
+                  >
+                    Check the pin ↗
+                  </a>{" "}
+                  before you save. If it is wrong, add a landmark or paste a map
+                  link.
+                </>
+              ) : (
+                "Students tap the address and land on a map."
+              )}
+            </p>
             <div className="flex items-center gap-2">
               <Button
                 size="sm"
-                disabled={save.isPending}
+                disabled={save.isPending || !!linkError}
                 onClick={() =>
                   save.mutate(
-                    { address: draft.trim() },
+                    {
+                      address: draft.trim(),
+                      mapUrl: draft.trim() ? linkDraft.trim() : "",
+                    },
                     { onSuccess: () => toast.success("Address saved") },
                   )
                 }
@@ -130,6 +187,7 @@ export function AcademyLocation({ address }: { address: string | null }) {
                 disabled={save.isPending}
                 onClick={() => {
                   setDraft(address ?? "");
+                  setLinkDraft(mapUrl ?? "");
                   setEditingAddress(false);
                 }}
               >
@@ -144,14 +202,14 @@ export function AcademyLocation({ address }: { address: string | null }) {
                 <p className="text-foreground text-sm whitespace-pre-wrap">
                   {address}
                 </p>
-                {mapUrl && (
+                {savedUrl && (
                   <a
-                    href={mapUrl}
+                    href={savedUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2"
                   >
-                    Open in Maps
+                    {mapUrl ? "Open the pinned map" : "Open in Maps"}
                   </a>
                 )}
               </div>
@@ -165,6 +223,7 @@ export function AcademyLocation({ address }: { address: string | null }) {
               variant="outline"
               onClick={() => {
                 setDraft(address ?? "");
+                setLinkDraft(mapUrl ?? "");
                 setEditingAddress(true);
               }}
             >

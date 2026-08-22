@@ -40,3 +40,14 @@ export function resolveCheckInClass<T extends CheckInClass>(
     })
     .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
 }
+
+const CHECK_IN_LINK = /\/checkin\/([A-Za-z0-9_-]{1,64})\/?(?:[?#].*)?$/;
+
+/**
+ * The academy id inside a scanned check-in QR, or `null` for anything else.
+ * Accepts both `https://<host>/checkin/<id>` and `matops://checkin/<id>`. A regex
+ * rather than `new URL()`: Hermes does not parse custom schemes.
+ */
+export function parseCheckInLink(value: string): string | null {
+  return CHECK_IN_LINK.exec(value.trim())?.[1] ?? null;
+}

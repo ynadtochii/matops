@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Linking, Pressable, ScrollView, View } from "react-native";
+import { Linking, Platform, Pressable, ScrollView, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -357,8 +357,22 @@ function SettingsButton({ onPress }: { onPress: () => void }) {
   );
 }
 
-function AcademyAddress({ address }: { address: string }) {
-  const mapUrl = academyMapUrl(address);
+function AcademyAddress({
+  address,
+  pinned,
+}: {
+  address: string;
+  pinned: string | null;
+}) {
+  const webUrl = academyMapUrl(address, pinned);
+  const mapUrl =
+    pinned || !webUrl
+      ? webUrl
+      : Platform.select({
+          ios: `maps://?q=${encodeURIComponent(address)}`,
+          android: `geo:0,0?q=${encodeURIComponent(address)}`,
+          default: webUrl,
+        });
   return (
     <View style={{ gap: 2 }}>
       <Txt size={14} tone="muted">
@@ -368,7 +382,11 @@ function AcademyAddress({ address }: { address: string }) {
         <Txt
           size={13}
           tone="brand"
-          onPress={() => void Linking.openURL(mapUrl)}
+          onPress={() => {
+            void Linking.openURL(mapUrl).catch(
+              () => void Linking.openURL(webUrl ?? mapUrl),
+            );
+          }}
         >
           Open in Maps
         </Txt>
@@ -464,7 +482,10 @@ export default function Profile() {
         <Field label="Current academy">
           <Txt size={16}>{current.data?.name ?? "—"}</Txt>
           {current.data?.address ? (
-            <AcademyAddress address={current.data.address} />
+            <AcademyAddress
+              address={current.data.address}
+              pinned={current.data.mapUrl}
+            />
           ) : null}
         </Field>
 

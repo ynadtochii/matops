@@ -84,6 +84,39 @@ still resolves:
 - [ ] After a successful join, re-opening the app skips onboarding and lands on
       the schedule (active-academy gate).
 
+## S8 · Scan to check in (v3.0, ADR 70) — REAL PHONE ONLY
+
+The iOS Simulator has no camera, so none of this can be checked there. Use a
+physical phone: `cd apps/expo && npx expo run:ios --device`, or an EAS
+`development` build. Print or open the poster first: web → **Settings** → the
+venue check-in QR.
+
+Happy path
+- [ ] The tab bar shows **four** tabs: Schedule · My classes · **Scan** · Profile.
+- [ ] First tap on **Scan** → iOS asks for camera access with "Scan your gym's QR
+      poster to check in to a class." → allow → the OS scanner sheet opens.
+- [ ] Point at the poster with a class running now → the sheet closes → the
+      check-in screen shows **"You're checked in."**
+- [ ] The web attendance roster (O5) for that class now lists you as present.
+- [ ] Scan again → still present, still one booking (idempotent).
+
+Edges, none of which may dead-end
+- [ ] No class in the window → **"No class to check into right now."**
+- [ ] Scan a gym you are not a member of → the front-desk message.
+- [ ] Scan the **join** poster (`/join/<token>`) → "That's not a check-in code."
+- [ ] Scan any other QR (a Wi-Fi code, a random link) → the same message, no crash.
+- [ ] Cancel the scanner sheet → the Scan screen is there with a **Scan gym QR**
+      button that reopens it.
+- [ ] Deny camera access, reopen the tab → the "camera access is off" copy plus
+      **Open settings**, which lands in the app's settings page.
+- [ ] Leave the Scan tab mid-scan, come back → the sheet reopens, and a code
+      scanned after leaving does not navigate a screen you already left.
+
+Still-working fallbacks (unchanged by this wave)
+- [ ] Scanning the poster with the **phone's camera app** still opens the public
+      page, and **"Open the app to check in"** still deep-links into the app.
+- [ ] A visitor with no app still gets the drop-in form on that page.
+
 ## Push notifications (Phase 4 — device-only; needs a dev build + an EAS project id)
 
 Simulators cannot receive push, and `getExpoPushTokenAsync` needs an EAS project

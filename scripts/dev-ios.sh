@@ -15,13 +15,13 @@
 # One Ctrl-C stops everything (web server + Metro).
 #
 # Usage:
-#   pnpm dev:ios                 # default simulator (iPhone 17 Pro)
+#   pnpm dev:ios                 # an iPhone on the newest installed iOS
 #   pnpm dev:ios "iPhone Air"    # pick a simulator
 #
 set -uo pipefail
 
 WEB_PORT=3004
-DEVICE="${1:-iPhone 17 Pro}"
+DEVICE="${1:-}"
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
@@ -80,8 +80,8 @@ for _ in $(seq 1 60); do
 done
 
 # ── 3. iOS Simulator: boot, Metro, build/launch the dev client ──────────────
-echo "▶ Booting the iOS app on: $DEVICE"
-bash "$ROOT_DIR/apps/expo/scripts/run-ios.sh" "$DEVICE"
+echo "▶ Booting the iOS app…"
+bash "$ROOT_DIR/apps/expo/scripts/run-ios.sh" ${DEVICE:+"$DEVICE"}
 
 echo ""
 echo "✓ Web + API: http://localhost:${WEB_PORT}   ·   iOS app: running in the Simulator."

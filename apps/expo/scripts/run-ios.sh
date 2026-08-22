@@ -12,12 +12,27 @@
 # exit with an error even though the build succeeded. simctl does not need it.
 #
 # Usage:
-#   pnpm -F @matops/expo mobile                 # default device
+#   pnpm -F @matops/expo mobile                 # an iPhone on the newest installed iOS
 #   pnpm -F @matops/expo mobile "iPhone Air"    # pick a device
 #
 set -euo pipefail
 
-DEVICE="${1:-iPhone 17 Pro}"
+DEVICE="${1:-}"
+if [ -z "$DEVICE" ] || ! xcrun simctl list devices available | grep -qF "$DEVICE ("; then
+  REQUESTED="$DEVICE"
+  DEVICE="$(xcrun simctl list devices available | awk '
+    /^-- / { in_ios = /iOS/; seen = 0; next }
+    in_ios && !seen && /iPhone/ { sub(/^ +/, ""); sub(/ \(.*/, ""); pick = $0; seen = 1 }
+    END { print pick }')"
+  if [ -z "$DEVICE" ]; then
+    echo "No iPhone simulator is installed. Install one with:" >&2
+    echo "  xcodebuild -downloadPlatform iOS" >&2
+    exit 1
+  fi
+  if [ -n "$REQUESTED" ]; then
+    echo "  '$REQUESTED' is not installed, using $DEVICE instead"
+  fi
+fi
 APP_ID="com.matops.app"                  # matches app.config.ts bundleIdentifier
 APP_SCHEME="matops"                      # matches app.config.ts `scheme`
 METRO_URL="http://localhost:8081"

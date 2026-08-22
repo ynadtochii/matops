@@ -12,8 +12,7 @@ export function isValidTimeZone(zone: string): boolean {
 
 export function timeZoneOptions(current?: string | null): string[] {
   const supported = Intl.supportedValuesOf as
-    | ((key: "timeZone") => string[])
-    | undefined;
+    ((key: "timeZone") => string[]) | undefined;
   const zones = new Set(
     supported ? supported("timeZone") : [FALLBACK_TIME_ZONE],
   );
@@ -42,7 +41,10 @@ export function driftingTemplateZones(
 
 export function academyMapUrl(
   address: string | null | undefined,
+  mapUrl?: string | null,
 ): string | null {
+  const pinned = (mapUrl ?? "").trim();
+  if (pinned) return pinned;
   const q = (address ?? "").trim();
   if (!q) return null;
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;

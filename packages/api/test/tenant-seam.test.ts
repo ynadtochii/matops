@@ -110,6 +110,20 @@ describe("tenant seam", () => {
     ).resolves.toBeTruthy();
   });
 
+  it("refuses the referral ledger to an instructor", async () => {
+    await expect(h.as(INSTRUCTOR_A, A).referral.dashboard()).rejects.toThrow(
+      /Owner only/,
+    );
+    await expect(h.as(OWNER_A, A).referral.dashboard()).resolves.toBeTruthy();
+  });
+
+  it("keeps the new-member figures off an instructor's insights", async () => {
+    const forInstructor = await h.as(INSTRUCTOR_A, A).stats.gym();
+    expect(forInstructor.newMembers).toBeNull();
+    const forOwner = await h.as(OWNER_A, A).stats.gym();
+    expect(forOwner.newMembers?.thisMonth).toBeGreaterThan(0);
+  });
+
   it("RLS hides another academy's classes from the week read", async () => {
     const mine = await h.as(STUDENT_A, A).class.mine(WEEK);
     expect(mine.map((c) => c.id)).toEqual([CLASS_A]);

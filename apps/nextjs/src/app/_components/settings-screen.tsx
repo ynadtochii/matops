@@ -37,7 +37,10 @@ export function SettingsScreen() {
       ) : (
         <div className="flex flex-col gap-8">
           <AcademyIdentity name={academy.data.name} code={academy.data.code} />
-          <AcademyLocation address={academy.data.address} />
+          <AcademyLocation
+            address={academy.data.address}
+            mapUrl={academy.data.mapUrl}
+          />
           <AcademyDangerZone name={academy.data.name} />
         </div>
       )}

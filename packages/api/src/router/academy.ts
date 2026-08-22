@@ -93,6 +93,7 @@ export const academyRouter = {
       joinedAt: academy.joinedAt,
       timeZone: academy.timeZone,
       address: academy.address,
+      mapUrl: academy.mapUrl,
       code: await getAcademyCode(academyId, ctx.baseDb),
     };
   }),

@@ -48,6 +48,28 @@ describe("academy settings", () => {
     expect(current?.timeZone).toBe("Europe/Kyiv");
   });
 
+  it("stores the pinned map link and clears it when emptied", async () => {
+    await h
+      .as(OWNER_A, A)
+      .academy.updateSettings({ mapUrl: "https://maps.app.goo.gl/abc123" });
+    expect((await h.as(STUDENT_A, A).academy.current())?.mapUrl).toBe(
+      "https://maps.app.goo.gl/abc123",
+    );
+
+    await h.as(OWNER_A, A).academy.updateSettings({ mapUrl: "" });
+    expect((await h.as(STUDENT_A, A).academy.current())?.mapUrl).toBeNull();
+  });
+
+  it("refuses a link that is not from a map app", async () => {
+    expect(
+      await rejectionCode(
+        h
+          .as(OWNER_A, A)
+          .academy.updateSettings({ mapUrl: "https://evil.example.com/pay" }),
+      ),
+    ).toBe("BAD_REQUEST");
+  });
+
   it("refuses a time zone the runtime cannot resolve", async () => {
     expect(
       await rejectionCode(

@@ -175,8 +175,9 @@ export const statsRouter = {
    * Gym-activity insights for the owner dashboard (spec O1, C.1). Marked
    * attendance (present + absent) over a 30-day window → the pure `gymInsights`
    * (visits this week/month, busiest classes, attendance rate — null unless
-   * absent marks exist, by-weekday), plus new members this month from the
-   * member list. Staff-visible; every value is an aggregate count, no names.
+   * absent marks exist, by-weekday). Staff-visible; every value is an aggregate
+   * count, no names. `newMembers` is the one owner-only figure (spec O1, D.4),
+   * so it comes back null for an instructor and the member read is skipped.
    */
   gym: staffProcedure.query(async ({ ctx }) => {
     const now = new Date();
@@ -205,15 +206,18 @@ export const statsRouter = {
     // Growth, this month against last. Both sides count only retained members,
     // so a joiner who has since been removed is missing from either — the two
     // numbers are biased the same way and stay comparable.
-    const members = await listMembersOf(ctx.academyId, ctx.db);
+    const owner = isOwner(ctx.membership);
+    const members = owner ? await listMembersOf(ctx.academyId, ctx.db) : [];
     const thisMonth = monthBucket(now, timeZone);
     const joined = members
       .filter((m) => m.status !== "removed")
       .map((m) => monthBucket(m.createdAt, timeZone));
-    const newMembersThisMonth = joined.filter((b) => b === thisMonth).length;
-    const newMembersLastMonth = joined.filter(
-      (b) => b === thisMonth - 1,
-    ).length;
+    const newMembers = owner
+      ? {
+          thisMonth: joined.filter((b) => b === thisMonth).length,
+          lastMonth: joined.filter((b) => b === thisMonth - 1).length,
+        }
+      : null;
     return {
       ...gymInsights(
         // The `where` already excludes `unmarked`; narrow rather than assert so
@@ -224,8 +228,7 @@ export const statsRouter = {
         now,
         timeZone,
       ),
-      newMembersThisMonth,
-      newMembersLastMonth,
+      newMembers,
     };
   }),
 

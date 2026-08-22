@@ -11,6 +11,7 @@ export interface AcademySettings {
   code: string;
   timeZone: string | null;
   address: string | null;
+  mapUrl: string | null;
 }
 
 export async function getAcademySettings(
@@ -24,6 +25,7 @@ export async function getAcademySettings(
       code: organization.publicCode,
       timeZone: organization.timeZone,
       address: organization.address,
+      mapUrl: organization.mapUrl,
     })
     .from(organization)
     .where(and(eq(organization.id, academyId), isNull(organization.deletedAt)))
@@ -33,12 +35,17 @@ export async function getAcademySettings(
 
 export async function updateAcademySettings(
   academyId: string,
-  patch: { timeZone?: string; address?: string },
+  patch: { timeZone?: string; address?: string; mapUrl?: string },
   exec: DbExec = db,
 ): Promise<void> {
-  const next: { timeZone?: string; address?: string | null } = {};
+  const next: {
+    timeZone?: string;
+    address?: string | null;
+    mapUrl?: string | null;
+  } = {};
   if (patch.timeZone !== undefined) next.timeZone = patch.timeZone;
   if (patch.address !== undefined) next.address = patch.address || null;
+  if (patch.mapUrl !== undefined) next.mapUrl = patch.mapUrl.trim() || null;
   if (Object.keys(next).length === 0) return;
   await exec
     .update(organization)
@@ -50,9 +57,10 @@ export async function softDeleteAcademy(
   academyId: string,
   exec: DbExec = db,
 ): Promise<boolean> {
-  const res = await exec
+  const rows = await exec
     .update(organization)
     .set({ deletedAt: new Date() })
-    .where(and(eq(organization.id, academyId), isNull(organization.deletedAt)));
-  return (res.rowCount ?? 0) > 0;
+    .where(and(eq(organization.id, academyId), isNull(organization.deletedAt)))
+    .returning({ id: organization.id });
+  return rows.length > 0;
 }

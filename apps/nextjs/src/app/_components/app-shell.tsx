@@ -277,7 +277,7 @@ function ShellChrome({
       href: "/referrals",
       label: "Referrals",
       icon: <ReferralsIcon />,
-      show: isStaff,
+      show: isOwner,
     },
     {
       href: "/payments",

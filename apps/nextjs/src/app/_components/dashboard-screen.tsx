@@ -80,7 +80,7 @@ function outstanding(
     ),
   );
   const only = totals.length === 1 ? totals[0] : undefined;
-  return only ? formatMoney(only.amountMinor, only.currency) : null;
+  return only ? `${formatMoney(only.amountMinor, only.currency)} owed` : null;
 }
 
 /**
@@ -283,8 +283,9 @@ export function DashboardScreen() {
       <div>
         <PageHeader title="This week" subtitle={dateFmt.format(today)} />
 
-        {/* Needs you — one instrument panel, divided by hairlines. The violet
-            lives in the counts only: it is a spark, not a surface (design.md §1.1). */}
+        {/* Needs you — one instrument panel of equal channels on a hairline
+            grid; a job at zero is dropped, not drawn empty. The violet lives in
+            the counts only: it is a spark, not a surface (design.md §1.1). */}
         {queueLoading ? (
           <div className="bg-muted h-24 animate-pulse rounded-lg motion-reduce:animate-none" />
         ) : queue.length === 0 ? (
@@ -297,7 +298,7 @@ export function DashboardScreen() {
             </p>
           </div>
         ) : (
-          <div className="border-border bg-grid-small divide-border flex flex-col divide-y overflow-hidden rounded-lg border sm:flex-row sm:divide-x sm:divide-y-0">
+          <div className="flex flex-wrap">
             {queue.map((i) => (
               <QueueSegment
                 key={i.key}
@@ -385,11 +386,7 @@ export function DashboardScreen() {
             onRetry={() => void insights.refetch()}
           />
         ) : (
-          <Insights
-            data={insights.data}
-            isOwner={isOwner}
-            revenue={revenue.data ?? []}
-          />
+          <Insights data={insights.data} revenue={revenue.data ?? []} />
         )}
       </Section>
 
@@ -437,26 +434,29 @@ export function DashboardScreen() {
 }
 
 /**
- * One reading on the queue panel: a mono count over a mono label. Same shell as
- * the O9 referral metrics band — a bordered strip on the hairline grid with each
- * cell floated just above it — so the two instrument panels in the app read as
- * one thing. The ring is inset because the strip clips its corners.
+ * One job on the queue: a mono count over a mono label. The channel is a fixed
+ * 10.5rem so all six jobs fit the 1088px content column; a label longer than
+ * that truncates rather than wrapping the tile taller than its neighbours. One
+ * job and six jobs draw the identical tile; what changes is how many the strip
+ * draws. Every cell owns all four hairlines and overlaps its neighbour by a
+ * pixel, so shared edges collapse to one line and a half-filled row still
+ * closes itself when the strip wraps.
  */
 function QueueSegment({ href, count, label, sub }: Omit<QueueItem, "key">) {
   return (
     <Link
       href={href}
-      className="bg-background/90 hover:bg-muted focus-visible:ring-ring/50 flex-1 p-4 transition-colors focus-visible:ring-[3px] focus-visible:outline-none focus-visible:ring-inset"
+      className="group border-border hover:bg-muted focus-visible:ring-ring/50 -mr-px -mb-px w-1/2 shrink-0 border px-3 py-3 transition-colors focus-visible:ring-[3px] focus-visible:outline-none focus-visible:ring-inset sm:w-[10.5rem] sm:py-3.5"
     >
-      <p className="text-brand-strong font-mono text-2xl leading-none tabular-nums">
+      <p className="text-brand-strong font-mono text-3xl leading-none tabular-nums sm:text-4xl">
         {count}
       </p>
-      <p className="text-muted-foreground mt-2 font-mono text-[11px] tracking-wider uppercase">
+      <p className="text-muted-foreground group-hover:text-foreground mt-2 truncate font-mono text-[10px] tracking-wider uppercase transition-colors sm:mt-2.5">
         {label}
       </p>
       {sub && (
-        <p className="text-muted-foreground/70 mt-1 font-mono text-[11px] tabular-nums">
-          {sub} outstanding
+        <p className="text-muted-foreground/70 mt-1 font-mono text-[10px] tabular-nums">
+          {sub}
         </p>
       )}
     </Link>
@@ -573,11 +573,9 @@ type DriftMember = RouterOutputs["stats"]["drifting"][number];
  */
 function Insights({
   data,
-  isOwner,
   revenue,
 }: {
   data: GymInsights;
-  isOwner: boolean;
   revenue: RouterOutputs["stats"]["revenue"];
 }) {
   return (
@@ -599,11 +597,11 @@ function Insights({
           delta={data.visitsThisWeek - data.visitsLastWeek}
           deltaLabel="last week"
         />
-        {isOwner && (
+        {data.newMembers && (
           <Stat
-            value={data.newMembersThisMonth}
+            value={data.newMembers.thisMonth}
             label="New members this month"
-            delta={data.newMembersThisMonth - data.newMembersLastMonth}
+            delta={data.newMembers.thisMonth - data.newMembers.lastMonth}
             deltaLabel="last month"
           />
         )}

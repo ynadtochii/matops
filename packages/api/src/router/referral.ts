@@ -25,7 +25,7 @@ import {
 import type { MemberRecord, MemberScope } from "../members";
 import { academyTimeZone } from "../academy-tz";
 import { requireMember } from "../members";
-import { ownerProcedure, staffProcedure } from "../trpc";
+import { ownerProcedure } from "../trpc";
 
 function referralMember(member: MemberRecord) {
   return {
@@ -90,7 +90,7 @@ export const referralRouter = {
    * student. The screen groups and totals the students itself, so this returns
    * the rows and nothing pre-aggregated (ADR 60 deleted the unread half).
    */
-  dashboard: staffProcedure.query(async ({ ctx }) => {
+  dashboard: ownerProcedure.query(async ({ ctx }) => {
     const [members, referrals, confirmedClaims, timeZone] = await Promise.all([
       listMembersOf(ctx.academyId, ctx.db),
       ctx.db.select().from(memberReferral),
@@ -167,7 +167,6 @@ export const referralRouter = {
     });
 
     return {
-      isOwner: ctx.membership.role === "owner",
       referrers: members
         .map((member) => ({
           memberId: member.memberId,
@@ -180,8 +179,8 @@ export const referralRouter = {
     };
   }),
 
-  /** Permanent one-time initial assignment, available to owners/instructors. */
-  assign: staffProcedure
+  /** Permanent one-time initial assignment. */
+  assign: ownerProcedure
     .input(AssignReferralSchema)
     .mutation(async ({ ctx, input }) => {
       await requireReferralPair(

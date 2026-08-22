@@ -85,6 +85,7 @@ export interface UserAcademy {
   slug: string;
   timeZone: string | null;
   address: string | null;
+  mapUrl: string | null;
   role: string;
   status: string;
   invitedRole: string | null;
@@ -109,6 +110,7 @@ export async function listMembershipsForUser(
       slug: organization.slug,
       timeZone: organization.timeZone,
       address: organization.address,
+      mapUrl: organization.mapUrl,
       role: member.role,
       status: member.status,
       invitedRole: member.invitedRole,

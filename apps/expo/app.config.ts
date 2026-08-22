@@ -47,6 +47,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     "expo-secure-store",
     "expo-web-browser",
     [
+      "expo-camera",
+      {
+        cameraPermission: "Scan your gym's QR poster to check in to a class.",
+        barcodeScannerEnabled: true,
+      },
+    ],
+    [
       // Dark-first: launch on the canonical pure-black surface.
       "expo-splash-screen",
       {

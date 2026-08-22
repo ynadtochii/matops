@@ -22,7 +22,7 @@ Three nullable columns on `organization`, next to `public_code`, which set the p
 
 ### Time zone
 
-Stored on the academy and picked from a `<select>` built from `Intl.supportedValuesOf("timeZone")`, so an unresolvable zone cannot be typed. `academyTimeZone()` reads the setting first, then falls back to the old most-used-template query, then to UTC — an academy that predates this setting is never re-timed to UTC by the upgrade.
+Stored on the academy and picked from a `<select>` built from `Intl.supportedValuesOf("timeZone")`, so an unresolvable zone cannot be typed. That list is **canonical ids only** — Node returns `Europe/Kiev`, not `Europe/Kyiv`, even though both resolve — so `timeZoneOptions(current)` folds the stored value in when it is missing. Without that the picker would render with nothing selected and silently rewrite the zone on the next save. `academyTimeZone()` reads the setting first, then falls back to the old most-used-template query, then to UTC — an academy that predates this setting is never re-timed to UTC by the upgrade.
 
 **Changing the setting does not re-time existing templates.** Re-timing would run the ADR [60](60-backend-review-fixes.md) cancel-and-re-materialize path, which means one dropdown change could cancel classes students have already booked. Instead a new template inherits the academy zone, an existing one keeps its own, Settings names any template zone that disagrees, and the template form offers a "Move to `<zone>`" button so the owner moves it on purpose.
 
@@ -58,6 +58,10 @@ The cost of soft delete is that every path resolving an academy has to filter it
 
 Settings is three sections instead of one: identity, location, danger zone. Spec §O6 grows accordingly, §O3 records that a template inherits the academy zone, and S2/S7 record the address.
 
-`academyTimeZone(tx)` becomes `academyTimeZone(ctx)` — it needs the academy id to pin the `organization` row, which carries no RLS policy. Migration `0020` revoked `UPDATE` on `organization` from `matops_app`, so the settings and delete writes run on the base connection; the reads inside a tenant resolver take `ctx.db`, per ADR 66.
+`academyTimeZone(tx)` becomes `academyTimeZone(ctx)` — it needs the academy id to pin the `organization` row, which carries no RLS policy.
+
+**A new procedure tier came out of this: `ownerIdentityProcedure`.** Migration `0020` revoked `UPDATE` on `organization` from `matops_app`, so the two settings writes must run on the base connection — and running a base-connection query from *inside* `withTenant` checks out a second pool connection and holds both, the exact cost ADR 66 named. On PGlite, which has one connection, it is not a cost but a hang: all six router tests timed out at 30s. The tier is `protectedProcedure` plus the same membership + owner checks (extracted from `enforceTenant` into a shared `resolveActiveMembership`) and **no tenant transaction**, which is correct on its own terms: these writes touch one table that has no RLS policy, so the transaction bought nothing. `academy.settings`, which reads the RLS-scoped `class_template`, stays an `ownerProcedure`.
+
+Three base-connection readers still closed over the module singleton and so dialled the real pool from inside the test harness: `getAcademyCode`, `findAcademyByCode`, and `getAcademyPublic` now take `exec`, closing the gap ADR 60 opened and ADR 66 narrowed. And `softDeleteAcademy` reports its result with `.returning()` rather than `rowCount`, which the PGlite driver does not populate for an `UPDATE`.
 
 Nothing about restore is in the product. Undoing a delete is `UPDATE "organization" SET deleted_at = NULL WHERE public_code = '…'`, run by whoever has database access. A restore UI, an export before delete, and a hard purge after a retention window are all deferred until a real gym asks.

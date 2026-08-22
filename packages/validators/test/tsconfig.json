@@ -1,5 +1,8 @@
 {
   "extends": "@matops/tsconfig/base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "dom"]
+  },
   "include": ["."],
   "exclude": ["node_modules"]
 }

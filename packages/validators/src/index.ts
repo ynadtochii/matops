@@ -97,6 +97,38 @@ export const HttpUrlSchema = z
     "Link must start with http:// or https://",
   );
 
+/**
+ * Hosts we let an owner point students at from the academy address. The link is
+ * rendered as a tappable `href` for every member, so an open URL field would let
+ * one careless owner send the whole gym to a phishing page. Bare `google.com`
+ * and `goo.gl` are absent on purpose: `/url?q=` redirects anywhere, a `goo.gl`
+ * shortlink resolves to anything, and `sites.google.com` hosts user pages.
+ */
+const MAP_HOSTS = [
+  "maps.google.com",
+  "maps.app.goo.gl",
+  "maps.apple.com",
+  "openstreetmap.org",
+  "osm.org",
+  "waze.com",
+];
+
+/** A share link from a map app (spec O6) — https, and from a map host. */
+export const MapUrlSchema = HttpUrlSchema.refine((v) => {
+  // Parse rather than pattern-match the host: a browser reads the backslash in
+  // https://evil.example.com\.google.com/ as a path separator, so any regex
+  // that lets `\` into the host group reads the wrong host.
+  let url;
+  try {
+    url = new URL(v);
+  } catch {
+    return false;
+  }
+  const host = url.hostname.replace(/^www\./, "").replace(/\.$/, "");
+  if (MAP_HOSTS.some((h) => host === h || host.endsWith(`.${h}`))) return true;
+  return host === "google.com" && url.pathname.startsWith("/maps");
+}, "Paste a link from Google Maps, Apple Maps, OpenStreetMap, or Waze");
+
 /** An opaque Better Auth id (user, member, organization, invite). Bounded only. */
 export const IdSchema = z.string().trim().min(1).max(64);
 
@@ -114,6 +146,7 @@ export const UpdateAcademySettingsSchema = z.object({
     .refine((v) => /^[A-Za-z0-9+_\-/]+$/.test(v), "Pick a zone from the list")
     .optional(),
   address: blockText(0, 200).optional(),
+  mapUrl: z.union([MapUrlSchema, z.literal("")]).optional(),
 });
 export type UpdateAcademySettingsInput = z.infer<
   typeof UpdateAcademySettingsSchema

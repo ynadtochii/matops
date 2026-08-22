@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { resolveCheckInClass } from "../src/checkin";
+import { parseCheckInLink, resolveCheckInClass } from "../src/checkin";
 
 const cls = (id: string, iso: string, over = {}) => ({
   id,
@@ -48,5 +48,36 @@ describe("resolveCheckInClass", () => {
       now,
     );
     expect(r.map((c) => c.id)).toEqual(["a", "b"]);
+  });
+});
+
+describe("parseCheckInLink", () => {
+  it("reads the academy id out of the poster URL", () => {
+    expect(
+      parseCheckInLink("https://matops.example.com/checkin/org_abc123"),
+    ).toBe("org_abc123");
+  });
+
+  it("reads it out of the custom-scheme deep link", () => {
+    expect(parseCheckInLink("matops://checkin/org_abc123")).toBe("org_abc123");
+  });
+
+  it("tolerates a trailing slash, a query string and surrounding space", () => {
+    expect(
+      parseCheckInLink("  http://localhost:3004/checkin/org_abc123/  "),
+    ).toBe("org_abc123");
+    expect(
+      parseCheckInLink("https://x.dev/checkin/org_abc123?src=poster"),
+    ).toBe("org_abc123");
+  });
+
+  it("rejects another matops link", () => {
+    expect(parseCheckInLink("https://x.dev/join/tok_abc123")).toBeNull();
+    expect(parseCheckInLink("matops://join/tok_abc123")).toBeNull();
+  });
+
+  it("rejects a random code and an empty id", () => {
+    expect(parseCheckInLink("WIFI:S:gym;T:WPA;P:pass;;")).toBeNull();
+    expect(parseCheckInLink("https://x.dev/checkin/")).toBeNull();
   });
 });

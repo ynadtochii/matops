@@ -36,7 +36,9 @@ describe("time zone validation", () => {
     const withAlias = timeZoneOptions("Europe/Kyiv");
     expect(withAlias).toContain("Europe/Kyiv");
     expect(withAlias).toContain("Europe/Kiev");
-    expect([...withAlias].sort((a, b) => a.localeCompare(b))).toEqual(withAlias);
+    expect([...withAlias].sort((a, b) => a.localeCompare(b))).toEqual(
+      withAlias,
+    );
   });
 
   it("ignores an unusable current value", () => {
@@ -95,6 +97,24 @@ describe("academyMapUrl", () => {
     expect(academyMapUrl(null)).toBeNull();
     expect(academyMapUrl("")).toBeNull();
     expect(academyMapUrl("   ")).toBeNull();
+  });
+
+  it("prefers the pinned share link over searching the address", () => {
+    expect(
+      academyMapUrl("Sportyvna St 12, Kyiv", "https://maps.app.goo.gl/abc123"),
+    ).toBe("https://maps.app.goo.gl/abc123");
+  });
+
+  it("falls back to the address search when the link is blank", () => {
+    expect(academyMapUrl("Sportyvna St 12, Kyiv", "  ")).toContain(
+      "google.com/maps/search",
+    );
+  });
+
+  it("still pins the map when the address is empty", () => {
+    expect(academyMapUrl(null, "https://maps.app.goo.gl/abc123")).toBe(
+      "https://maps.app.goo.gl/abc123",
+    );
   });
 });
 

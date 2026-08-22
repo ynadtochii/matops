@@ -8,6 +8,7 @@ import {
   JoinAcademySchema,
   NameSchema,
   PhoneSchema,
+  UpdateAcademySettingsSchema,
   UpdateClassSchema,
   UpdatePaymentRequisitesSchema,
 } from "../src";
@@ -85,6 +86,52 @@ describe("EmailSchema", () => {
   it("rejects a malformed address", () => {
     expect(EmailSchema.safeParse("sam@").success).toBe(false);
     expect(EmailSchema.safeParse("not an email").success).toBe(false);
+  });
+});
+
+describe("UpdateAcademySettingsSchema.mapUrl", () => {
+  const parse = (mapUrl: string) =>
+    UpdateAcademySettingsSchema.safeParse({ mapUrl }).success;
+
+  it("accepts a share link from a map app", () => {
+    expect(parse("https://maps.app.goo.gl/abc123")).toBe(true);
+    expect(parse("https://www.google.com/maps/place/Gym/@50.4,30.5,17z")).toBe(
+      true,
+    );
+    expect(parse("https://maps.apple.com/?ll=50.45,30.52")).toBe(true);
+    expect(parse("https://www.openstreetmap.org/#map=19/50.45/30.52")).toBe(
+      true,
+    );
+  });
+
+  it("clears the pin when the field is emptied", () => {
+    expect(parse("")).toBe(true);
+  });
+
+  it("rejects a link that is not a map", () => {
+    expect(parse("https://evil.example.com/pay")).toBe(false);
+    expect(parse("javascript:alert(1)")).toBe(false);
+    expect(parse("not a url")).toBe(false);
+  });
+
+  it("rejects a map host smuggled into the userinfo", () => {
+    expect(parse("https://maps.google.com@evil.example.com/")).toBe(false);
+    expect(parse("https://google.com.evil.example.com/")).toBe(false);
+  });
+
+  it("rejects a map host behind a backslash, which a browser reads as a path", () => {
+    expect(parse("https://evil.example.com\\.google.com/")).toBe(false);
+    expect(parse("https://evil.example.com\\.maps.apple.com/")).toBe(false);
+  });
+
+  it("rejects google hosts that are not the map", () => {
+    expect(parse("https://www.google.com/url?q=https://evil.example.com")).toBe(
+      false,
+    );
+    expect(parse("https://sites.google.com/view/free-gym-membership")).toBe(
+      false,
+    );
+    expect(parse("https://goo.gl/aaaaa")).toBe(false);
   });
 });
 

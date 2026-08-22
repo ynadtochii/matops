@@ -87,7 +87,7 @@ function PersonLabel({ student }: { student: Student }) {
 }
 
 /**
- * Staff referral screen (O9, ADR 52 + 56). Reads referrer-first: who brings
+ * Owner referral screen (O9, ADR 52 + 56). Reads referrer-first: who brings
  * people in, and who is still uncredited. One dialog owns every write.
  */
 export function ReferralsScreen() {
@@ -242,16 +242,10 @@ export function ReferralsScreen() {
                   <ReferrerCard
                     key={entry.memberId}
                     entry={entry}
-                    canEdit={data.isOwner}
                     onEdit={(studentId) => setEditing({ studentId })}
                   />
                 ))}
               </ul>
-            )}
-            {!data.isOwner && board.length > 0 && (
-              <p className="text-muted-foreground text-xs">
-                Once a referral is recorded, only an owner can change it.
-              </p>
             )}
           </section>
 
@@ -272,44 +266,28 @@ export function ReferralsScreen() {
                       "flex w-full items-center gap-3 px-4 py-3 text-left text-sm",
                     );
                     const hint = cleared
-                      ? data.isOwner
-                        ? "credit removed · record again"
-                        : "credit removed · owner only"
+                      ? "credit removed · record again"
                       : "who brought them?";
                     return (
                       <li key={student.memberId}>
-                        {cleared && !data.isOwner ? (
-                          <div
-                            className={cn(
-                              cardClass({ variant: "outline" }),
-                              rowClass,
-                            )}
-                          >
-                            <PersonLabel student={student} />
-                            <span className="text-muted-foreground ml-auto shrink-0 text-xs">
-                              {hint}
-                            </span>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setEditing({ studentId: student.memberId })
-                            }
-                            className={cn(
-                              cardClass({
-                                variant: "outline",
-                                interactive: true,
-                              }),
-                              rowClass,
-                            )}
-                          >
-                            <PersonLabel student={student} />
-                            <span className="text-muted-foreground ml-auto shrink-0 text-xs">
-                              {hint}
-                            </span>
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEditing({ studentId: student.memberId })
+                          }
+                          className={cn(
+                            cardClass({
+                              variant: "outline",
+                              interactive: true,
+                            }),
+                            rowClass,
+                          )}
+                        >
+                          <PersonLabel student={student} />
+                          <span className="text-muted-foreground ml-auto shrink-0 text-xs">
+                            {hint}
+                          </span>
+                        </button>
                       </li>
                     );
                   })}
@@ -363,11 +341,9 @@ function Summary({
 
 function ReferrerCard({
   entry,
-  canEdit,
   onEdit,
 }: {
   entry: BoardEntry;
-  canEdit: boolean;
   onEdit: (studentId: string) => void;
 }) {
   return (
@@ -394,20 +370,14 @@ function ReferrerCard({
         <ul className="flex flex-wrap gap-1.5">
           {entry.students.map((student) => (
             <li key={student.memberId}>
-              {canEdit ? (
-                <button
-                  type="button"
-                  onClick={() => onEdit(student.memberId)}
-                  title={`Change who brought ${student.name} in`}
-                  className="border-border hover:border-brand/40 hover:bg-muted flex max-w-52 items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm transition-colors"
-                >
-                  <PersonLabel student={student} />
-                </button>
-              ) : (
-                <span className="border-border flex max-w-52 items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm">
-                  <PersonLabel student={student} />
-                </span>
-              )}
+              <button
+                type="button"
+                onClick={() => onEdit(student.memberId)}
+                title={`Change who brought ${student.name} in`}
+                className="border-border hover:border-brand/40 hover:bg-muted flex max-w-52 items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm transition-colors"
+              >
+                <PersonLabel student={student} />
+              </button>
             </li>
           ))}
         </ul>
@@ -531,7 +501,7 @@ function ReferralDialog({
                     ))}
                   </optgroup>
                 )}
-                {data.isOwner && recorded.length > 0 && (
+                {recorded.length > 0 && (
                   <optgroup label="Already recorded">
                     {recorded.map((s) => (
                       <option key={s.memberId} value={s.memberId}>
@@ -571,11 +541,11 @@ function ReferralDialog({
 
           <p className="text-muted-foreground text-sm">
             {isNew
-              ? "Instructors can record this once. After that, only an owner can change it."
+              ? "Recorded once. After that, only an owner can change it."
               : "Reporting moves to the new person straight away. The old credit stays in the history."}
           </p>
 
-          {!isNew && data.isOwner && studentId && (
+          {!isNew && studentId && (
             <div className="space-y-2">
               <Button
                 size="sm"
