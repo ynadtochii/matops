@@ -452,7 +452,7 @@ Promote to a slice only on purpose (an ADR or a new roadmap row).
 - **Capacity hygiene:** hard caps, booking priority, waitlists, no-show tracking, cancel cut-offs. (tickets 22, 13)
 - **Home widget:** ~~parked~~ **promoted to v1.3 R.2** (S10) — still a native fast-follow, off the launch critical path. (ticket 27, ADR 40 plan)
 - **Live UI:** SSE + Postgres LISTEN/NOTIFY via a separate always-on worker. (tickets 04, 15, 17)
-- **Card billing:** payment **processor / auto-subscription / Stripe**, invoicing, multi-currency tax. _(Manual-transfer dues are **promoted to v1.3** — ADR 40; only the card/recurring layer stays parked.)_
+- **Card billing:** payment **processor / auto-subscription / Stripe**, invoicing, multi-currency tax. _(Manual-transfer dues are **promoted to v1.3** — ADR 40; only the card/recurring layer stays parked.)_ Researched and written up as a parked, ready-to-build wave (6 slices, P.4-P.9): [card-billing-plan.md](card-billing-plan.md). Promoting it needs ADR 72 + new rows here, and the gates listed in that file.
 - **Deferred domains:** ~~belts/rank~~ (**promoted to v1.4** — ADR 41; only owner-defined **custom rank ladders** + **bulk** promotion stay parked), curriculum, announcements/DMs, cross-academy franchise views, i18n, super-admin. (map "out of scope")
 
 Each is additive by design (new schema file + router + pure logic; the tenant seam is untouched) — architecture.md §8.
