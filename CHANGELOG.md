@@ -2,6 +2,11 @@
 
 One line per shipped slice (see `docs/delivery.md` §4). Newest first.
 
+## Search the member roster
+
+- **Finding one person meant scrolling.** The Members tab printed the whole roster in one list, so a gym with a hundred students had no way to reach a name except the browser's own find. A search box now sits above the list and filters by **name, email or phone** while you type. It stacks with the **Overdue** chip, and the count line reads "12 of 104 people" whenever either one is narrowing the list.
+- **No API change.** The web already loads the full member list for the tab, so the filter runs in the browser: no request per keystroke, no new procedure, no index. An empty result says nobody matches and suggests trying part of a name. Spec O4 updated.
+
 ## A pinned map link for the academy
 
 - **The address link was a guess.** ADR 68 rendered the gym's address as a Google Maps **search**, and a search lands on the wrong building for ordinary gyms: a unit in a mall, a basement, an industrial park, a building with no street number. The owner types the address once and never taps it. The person who taps it is a new student, on their first visit.

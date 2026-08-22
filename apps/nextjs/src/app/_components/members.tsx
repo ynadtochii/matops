@@ -10,6 +10,7 @@ import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
 import { CopyButton } from "@matops/ui/copy-button";
+import { Input } from "@matops/ui/input";
 import { Spinner } from "@matops/ui/spinner";
 import { toast } from "@matops/ui/toast";
 
@@ -59,6 +60,8 @@ export function Members() {
 
   // "Overdue" filter chip on the Members list (spec O7, ADR 40).
   const [overdueOnly, setOverdueOnly] = useState(overdueParam);
+  const [query, setQuery] = useState("");
+  const needle = query.trim().toLowerCase();
 
   const invalidate = () =>
     queryClient.invalidateQueries(trpc.membership.members.pathFilter());
@@ -121,9 +124,12 @@ export function Members() {
   const overdueCount = active.filter(
     (m) => m.dues?.status === "overdue",
   ).length;
-  const shownActive = overdueOnly
-    ? active.filter((m) => m.dues?.status === "overdue")
-    : active;
+  const shownActive = active.filter(
+    (m) =>
+      (!overdueOnly || m.dues?.status === "overdue") &&
+      (needle === "" ||
+        `${m.name} ${m.email} ${m.phone ?? ""}`.toLowerCase().includes(needle)),
+  );
   // Pending state is scoped to the member being acted on, so approving one
   // person doesn't grey out every other row's buttons.
   const rowBusy = (id: string) =>
@@ -206,9 +212,18 @@ export function Members() {
         ) : tab === "members" ? (
           <div className="flex flex-col gap-3">
             {!listState && active.length > 0 && (
+              <Input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={`Search ${active.length} members by name, email or phone`}
+                aria-label="Search members"
+              />
+            )}
+            {!listState && active.length > 0 && (
               <div className="flex items-center justify-between gap-3">
                 <Eyebrow>
-                  {overdueOnly
+                  {overdueOnly || needle
                     ? `${shownActive.length} of ${active.length} people`
                     : `${active.length} ${active.length === 1 ? "person" : "people"}`}
                 </Eyebrow>
@@ -236,9 +251,15 @@ export function Members() {
                   people in.
                 </EmptyState>
               ) : shownActive.length === 0 ? (
-                <EmptyState title="No overdue members.">
-                  Everyone&apos;s dues are up to date.
-                </EmptyState>
+                needle ? (
+                  <EmptyState title="No one matches that search.">
+                    Try part of a name, email or phone number.
+                  </EmptyState>
+                ) : (
+                  <EmptyState title="No overdue members.">
+                    Everyone&apos;s dues are up to date.
+                  </EmptyState>
+                )
               ) : (
                 shownActive.map((m) => (
                   <div key={m.memberId} className="flex flex-col">
