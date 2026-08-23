@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sh .claude/skills/debug/scripts/sql.sh:*)",
+      "Bash(.claude/skills/debug/scripts/sql.sh:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run view:*)",
+      "Bash(vercel logs:*)",
+      "Bash(pnpm -F @matops/db check)",
+      "Bash(pnpm -F @matops/db seed status:*)"
+    ]
+  }
+}
