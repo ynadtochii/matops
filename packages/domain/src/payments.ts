@@ -140,7 +140,7 @@ export function canClaim(m: ClaimableMember): boolean {
  * words are not: the phone app and the web must say the same thing (ADR 40).
  */
 export const PAYMENT_STATUS_LABEL: Record<PaymentStatus, string> = {
-  paid: "Paid",
+  paid: "Up to date",
   due_soon: "Due soon",
   overdue: "Overdue",
 };

@@ -199,7 +199,7 @@ function ClaimsToConfirm() {
 const DUES_GROUPS = [
   { key: "overdue", label: "Overdue" },
   { key: "due_soon", label: "Due soon" },
-  { key: "paid", label: "Paid" },
+  { key: "paid", label: "Up to date" },
   { key: "none", label: "No plan set" },
 ] as const;
 

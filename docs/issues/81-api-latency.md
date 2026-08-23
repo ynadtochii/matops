@@ -66,6 +66,12 @@ minutes.** What that does and does not cover here:
   and the `nextCookies()` plugin copies that `Set-Cookie` onto the tRPC
   response. Without that the switcher would appear stuck for five minutes. If a
   future Better Auth drops either half, this cache has to go with it.
+  **Correction, ADR [83](83-streamed-responses-drop-set-cookie.md):** the second
+  half was not true. The web client streamed its responses, and a streamed
+  response sends its headers before the resolver runs, so that `Set-Cookie` was
+  dropped and the switcher did appear stuck for five minutes. Fixed by moving the
+  client to `httpBatchLink`. The same hole made `refreshSessionCookie` below a
+  no-op.
 - **Sign-out is unaffected** — it clears the cookie.
 
 What is left is an admin-revoked session outliving its revocation by up to five

@@ -35,7 +35,7 @@ Diagnosis is read-only. Report findings; a fix is a separate step the user appro
 sh .claude/skills/debug/scripts/sql.sh "select id, kind, created_at, read_at from notification order by created_at desc limit 20"
 ```
 
-The script forces `default_transaction_read_only=on`, so any write fails. This connection bypasses RLS: always filter by `academy_id` yourself, and never show one academy's data while discussing another.
+The script wraps your statement in `BEGIN READ ONLY`, so any write fails, and it connects to the **direct** (non `-pooler`) host. Never point a psql session at the `-pooler` host: PgBouncer shares one server connection between many clients, so a session-level `SET` from psql leaks into the app's own queries. A leaked read-only setting takes the whole app down, dev and production alike, because they share one database. This connection bypasses RLS: always filter by `academy_id` yourself, and never show one academy's data while discussing another.
 
 **Vercel logs (prod runtime).** `vercel logs --json` from `apps/nextjs` (add `--follow` to stream). If `apps/nextjs/.vercel/project.json` is missing, do not fail around it: tell the user to run `vercel login` and `vercel link` in `apps/nextjs` once. Prod URL: `https://matops.grapplerscollective.com`.
 

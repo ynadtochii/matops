@@ -108,6 +108,12 @@ const ThemeContext = React.createContext<ThemeContextProps | undefined>(
 export function ThemeProvider({ children }: React.PropsWithChildren) {
   const [themeMode, setThemeMode] = React.useState(getStoredThemeMode);
 
+  // A hydration mismatch makes React re-render this tree, and React never
+  // re-runs the inline detector script — so reapply the class from React too.
+  React.useEffect(() => {
+    updateThemeClass(themeMode);
+  }, [themeMode]);
+
   React.useEffect(() => {
     if (themeMode !== "auto") return;
     return setupPreferredListener();
@@ -118,7 +124,6 @@ export function ThemeProvider({ children }: React.PropsWithChildren) {
   const setTheme = (newTheme: ThemeMode) => {
     setThemeMode(newTheme);
     setStoredThemeMode(newTheme);
-    updateThemeClass(newTheme);
   };
 
   const toggleMode = () => {

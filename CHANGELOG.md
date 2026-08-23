@@ -2,11 +2,16 @@
 
 One line per shipped slice (see `docs/delivery.md` §4). Newest first.
 
+## The post-login gate stops spinning forever
+
+- **Signing in and landing on "Opening your gym…" forever is fixed.** The web client streamed its tRPC responses, and a streamed response sends its headers before the resolver runs, so the fresh session cookie Better Auth writes when you switch academy never reached the browser. With the five-minute session cookie cache from v4.0, the server then kept answering "no active academy" until that cookie expired, and the gate, which asks once and never retries, sat on a spinner the whole time. The client now uses the buffered link (the same one the phone always used), so the cookie rides the response. Same fix for "Start a gym", joining by link, and renaming yourself, which all re-sign that cookie. ADR [83](docs/issues/83-streamed-responses-drop-set-cookie.md).
+
 ## Membership becomes the key to booking — when the owner turns the key
 
 - **The money loop finally has a consequence, and it is opt-in.** Dues existed since v1.3 but nothing happened when a student ignored them. A new **Booking rule** switch on Payments → Bank details (off by default — off means nothing anywhere changes) locks booking for an approved student who has no membership plan or a month unpaid past a **grace window** the owner sets (0–30 days, default 7). The window is one derived clock in `@matops/domain` (`bookingAccess`), consulted by the server guard, the warning strip, and every Book button, so the three can never disagree. ADR [82](docs/issues/82-membership-booking-gate.md), migration `0025`.
 - **Nobody is locked without seeing it coming, and nobody is locked for paying.** The S11 strip counts down ("Payment overdue. Booking locks in 3 days.") and goes error-tone only past the window; tapping **I paid** unblocks booking instantly — the owner's confirmation latency is never the student's problem, and a rejected claim re-locks on its own. Flipping the switch on grants every plan-less member the full window (the clock anchors on the later of joining and enforcement), so turning it on never slams a door. Pending members, staff, cancel, and the gym QR check-in are never gated: booking is the lever, the door stays open.
 - **Choosing a membership is part of arriving, not a form field.** The one-step join is untouched. A gym with one active plan assigns it automatically at approval; with several, the student picks once on the dues screen (web and phone) with one confirm. Either way the first payment lands on the **1st of next month** — the join month costs nothing in-app, and because the due date anchors on the 1st, the existing roll-forward keeps it there. The owner roster shows a "booking locked" tag so the desk knows who to talk to.
+- **The green dues state stops claiming money changed hands.** A student who had just picked a plan saw "€50.00 · Paid" without ever paying a cent, because the status has always derived from the due date, not from a payment. The label is **"Up to date"** now (one shared constant, both clients, plus the O7 grouping header) — true for the fresh member, the postponed member, and the member who actually paid alike.
 
 ## The API stops paying for Frankfurt forty times a page
 

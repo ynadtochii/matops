@@ -17,8 +17,10 @@ export default async function AppLayout({
   const session = await getSession();
   if (!session) redirect("/sign-in");
 
-  prefetch(trpc.academy.current.queryOptions());
-  prefetch(trpc.academy.memberships.queryOptions());
+  await Promise.all([
+    prefetch(trpc.academy.current.queryOptions()),
+    prefetch(trpc.academy.memberships.queryOptions()),
+  ]);
 
   return (
     <HydrateClient>
