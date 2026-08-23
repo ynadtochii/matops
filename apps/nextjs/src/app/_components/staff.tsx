@@ -26,25 +26,12 @@ import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
 import { InviteLinkCard } from "./invite-link-card";
-import { cardClass, SectionHeading } from "./primitives";
+import { cardClass, MoreIcon, SectionHeading } from "./primitives";
 import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 
 type StaffMember = RouterOutputs["membership"]["staff"][number];
 type Action = "promote" | "demote";
-
-const MoreIcon = () => (
-  <svg
-    viewBox="0 0 16 16"
-    fill="currentColor"
-    className="size-4"
-    aria-hidden="true"
-  >
-    <circle cx="3" cy="8" r="1.4" />
-    <circle cx="8" cy="8" r="1.4" />
-    <circle cx="13" cy="8" r="1.4" />
-  </svg>
-);
 
 /** Owners rank above instructors; then alphabetical by name. */
 function byRoleThenName(a: StaffMember, b: StaffMember): number {

@@ -183,6 +183,13 @@
       "when": 1787481046603,
       "tag": "0025_payment_settings_gate",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1787567446603,
+      "tag": "0026_erase_grants",
+      "breakpoints": true
     }
   ]
 }

@@ -2,6 +2,11 @@
 
 One line per shipped slice (see `docs/delivery.md` §4). Newest first.
 
+## Leaving a gym stops meaning one blunt thing
+
+- **"Remove" becomes two actions that mean different things.** **Archive** is the everyday one: the member loses access, their upcoming bookings are cancelled and those seats go back to the class, their dues stop, and nothing else is touched. They move to a new **Archived** tab where one click restores them with their attendance, rank, notes and payment history intact. A student who rejoins with the gym code lands on the same record either way. **Delete permanently** is the other one: it sits behind the row's `⋯` menu, makes you type the member's name, and erases every record the gym holds about that person. It is how an owner answers a delete-my-data request, which the privacy page already promises. Every action on a member row now lives in that one `⋯` menu, so the row itself stays quiet. ADR [84](docs/issues/84-archive-and-erase.md), migration `0026`.
+- **Three bugs behind the old Remove are fixed.** The dues reminder kept pushing "your dues are due" at people who had left the gym, every month, forever. Their upcoming bookings were never cancelled, so classes counted seats nobody would use and other students still saw a departed member on the attendee list. And there was no way back: an owner could not undo a removal or even see who had gone.
+
 ## The post-login gate stops spinning forever
 
 - **Signing in and landing on "Opening your gym…" forever is fixed.** The web client streamed its tRPC responses, and a streamed response sends its headers before the resolver runs, so the fresh session cookie Better Auth writes when you switch academy never reached the browser. With the five-minute session cookie cache from v4.0, the server then kept answering "no active academy" until that cookie expired, and the gate, which asks once and never retries, sat on a spinner the whole time. The client now uses the buffered link (the same one the phone always used), so the cookie rides the response. Same fix for "Start a gym", joining by link, and renaming yourself, which all re-sign that cookie. ADR [83](docs/issues/83-streamed-responses-drop-set-cookie.md).

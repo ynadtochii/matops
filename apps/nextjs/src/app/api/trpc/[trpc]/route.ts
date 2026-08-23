@@ -25,6 +25,12 @@ export const OPTIONS = () => {
   return response;
 };
 
+/** The deepest `cause` in the chain: Drizzle's own message keeps only the SQL,
+ * so the Postgres message ("cannot execute UPDATE in a read-only transaction")
+ * is one level down and is the half that says why. ADR 83. */
+const rootCause = (e: unknown): unknown =>
+  e instanceof Error && e.cause ? rootCause(e.cause) : e;
+
 const handler = async (req: NextRequest) => {
   const response = await fetchRequestHandler({
     endpoint: "/api/trpc",
@@ -37,6 +43,8 @@ const handler = async (req: NextRequest) => {
       }),
     onError({ error, path, type, ctx }) {
       console.error(`>>> tRPC Error on '${path}'`, error);
+      const root = rootCause(error);
+      if (root !== error) console.error(`>>> caused by`, root);
       // tRPC converts every thrown error into a JSON response and never
       // rethrows, so Next's onRequestError never sees these. Report here or
       // the whole API is invisible.

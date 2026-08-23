@@ -161,18 +161,33 @@ export function ConfirmDialog({
   confirmLabel = "Confirm",
   cancelLabel = "Cancel",
   variant = "destructive",
+  confirmPhrase,
+  open: openProp,
+  onOpenChange,
   onConfirm,
 }: {
-  trigger: React.ReactNode;
+  trigger?: React.ReactNode;
   title: string;
   description?: React.ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
   variant?: "destructive" | "primary";
+  confirmPhrase?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   onConfirm: () => void | Promise<void>;
 }) {
-  const [open, setOpen] = useState(false);
+  const [openState, setOpenState] = useState(false);
+  const open = openProp ?? openState;
+  const setOpen = (next: boolean) => {
+    setOpenState(next);
+    onOpenChange?.(next);
+  };
   const [busy, setBusy] = useState(false);
+  const [typed, setTyped] = useState("");
+  const locked =
+    confirmPhrase !== undefined &&
+    typed.trim().toLowerCase() !== confirmPhrase.trim().toLowerCase();
 
   async function handleConfirm(event: React.MouseEvent) {
     // Keep the dialog open while the async action runs, so the spinner shows.
@@ -180,6 +195,7 @@ export function ConfirmDialog({
     setBusy(true);
     try {
       await onConfirm();
+      setTyped("");
       setOpen(false);
     } finally {
       setBusy(false);
@@ -190,20 +206,37 @@ export function ConfirmDialog({
     <AlertDialog
       open={open}
       onOpenChange={(next) => {
-        if (!busy) setOpen(next);
+        if (busy) return;
+        if (!next) setTyped("");
+        setOpen(next);
       }}
     >
-      <AlertDialogTrigger asChild>{trigger}</AlertDialogTrigger>
+      {trigger && <AlertDialogTrigger asChild>{trigger}</AlertDialogTrigger>}
       <AlertDialogContent>
         <AlertDialogTitle>{title}</AlertDialogTitle>
         {description && (
           <AlertDialogDescription>{description}</AlertDialogDescription>
         )}
+        {confirmPhrase !== undefined && (
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span className="text-muted-foreground">
+              Type <strong className="text-foreground">{confirmPhrase}</strong>{" "}
+              to confirm
+            </span>
+            <input
+              autoComplete="off"
+              className="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:outline-none"
+              disabled={busy}
+              onChange={(e) => setTyped(e.target.value)}
+              value={typed}
+            />
+          </label>
+        )}
         <AlertDialogFooter>
           <AlertDialogCancel disabled={busy}>{cancelLabel}</AlertDialogCancel>
           <AlertDialogAction
             variant={variant}
-            disabled={busy}
+            disabled={busy || locked}
             onClick={handleConfirm}
           >
             {busy && <Spinner size="sm" className="text-current" />}

@@ -119,7 +119,13 @@ describe("an instructor runs the desk", () => {
   it("is still refused everything that is the owner's job", async () => {
     const target = { memberId: memberId(ACAD, STUDENT) };
 
-    expect(await rejectionCode(coach().membership.remove(target))).toBe(
+    expect(await rejectionCode(coach().membership.archive(target))).toBe(
+      "FORBIDDEN",
+    );
+    expect(await rejectionCode(coach().membership.purge(target))).toBe(
+      "FORBIDDEN",
+    );
+    expect(await rejectionCode(coach().membership.archived())).toBe(
       "FORBIDDEN",
     );
     expect(await rejectionCode(coach().membership.suspend(target))).toBe(

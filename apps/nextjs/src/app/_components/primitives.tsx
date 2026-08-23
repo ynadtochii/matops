@@ -270,3 +270,16 @@ const DOT_SKIN: Record<DisciplineTone, string> = {
 export function disciplineDot(discipline: string | null): string {
   return DOT_SKIN[disciplineTone(discipline)];
 }
+
+export const MoreIcon = () => (
+  <svg
+    viewBox="0 0 16 16"
+    fill="currentColor"
+    className="size-4"
+    aria-hidden="true"
+  >
+    <circle cx="3" cy="8" r="1.4" />
+    <circle cx="8" cy="8" r="1.4" />
+    <circle cx="13" cy="8" r="1.4" />
+  </svg>
+);

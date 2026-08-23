@@ -15,14 +15,22 @@ import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
 import { CopyButton } from "@matops/ui/copy-button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@matops/ui/dropdown-menu";
 import { Input } from "@matops/ui/input";
 import { Spinner } from "@matops/ui/spinner";
 import { toast } from "@matops/ui/toast";
 
+import { dateFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { useAcademy } from "./academy";
 import { MemberDetail, MemberRow } from "./member-detail";
-import { cardClass, Eyebrow, Tabs } from "./primitives";
+import { cardClass, Eyebrow, MoreIcon, Tabs } from "./primitives";
 import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 import { VenueCheckin } from "./venue-checkin";
@@ -30,10 +38,127 @@ import { VenueCheckin } from "./venue-checkin";
 export type Member = RouterOutputs["membership"]["members"][number];
 export type MemberHistory = RouterOutputs["membership"]["memberHistory"];
 
-type MemberTab = "requests" | "members" | "leads";
+type MemberTab = "requests" | "members" | "leads" | "archived";
 
 const isMemberTab = (v: string | null): v is MemberTab =>
-  v === "requests" || v === "members" || v === "leads";
+  v === "requests" || v === "members" || v === "leads" || v === "archived";
+type MemberDialog = "suspend" | "archive" | "purge";
+
+function MemberActions({
+  name,
+  busy,
+  onSuspend,
+  onRestore,
+  onArchive,
+  onPurge,
+}: {
+  name: string;
+  busy: boolean;
+  onSuspend?: () => Promise<void>;
+  onRestore?: () => void;
+  onArchive?: () => Promise<void>;
+  onPurge: () => Promise<void>;
+}) {
+  const [dialog, setDialog] = useState<MemberDialog | null>(null);
+  const close = (open: boolean) => {
+    if (!open) setDialog(null);
+  };
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={busy}
+            aria-label={`Manage ${name}`}
+          >
+            {busy ? (
+              <Spinner size="sm" className="text-current" />
+            ) : (
+              <MoreIcon />
+            )}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {onSuspend && (
+            <DropdownMenuItem onSelect={() => setDialog("suspend")}>
+              Suspend
+            </DropdownMenuItem>
+          )}
+          {onRestore && (
+            <DropdownMenuItem onSelect={onRestore}>Restore</DropdownMenuItem>
+          )}
+          {onArchive && (
+            <DropdownMenuItem onSelect={() => setDialog("archive")}>
+              Archive
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            className="text-error focus:bg-error/10 focus:text-error flex-col items-start gap-0.5 py-2"
+            onSelect={() => setDialog("purge")}
+          >
+            Delete permanently
+            <span className="text-error/60 font-mono text-[10px] tracking-wide uppercase">
+              Erases every record
+            </span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {onSuspend && (
+        <ConfirmDialog
+          open={dialog === "suspend"}
+          onOpenChange={close}
+          title={`Suspend ${name}?`}
+          description="They keep their place on the member list but can't book classes until you restore them."
+          confirmLabel="Suspend"
+          variant="primary"
+          onConfirm={onSuspend}
+        />
+      )}
+      {onArchive && (
+        <ConfirmDialog
+          open={dialog === "archive"}
+          onOpenChange={close}
+          title={`Archive ${name}?`}
+          description="They lose access and their upcoming bookings are cancelled. Everything else is kept: attendance, rank, notes, payment history. You can restore them any time from the Archived tab and they pick up where they left off."
+          confirmLabel="Archive member"
+          variant="destructive"
+          onConfirm={onArchive}
+        />
+      )}
+      <ConfirmDialog
+        open={dialog === "purge"}
+        onOpenChange={close}
+        title={`Permanently delete ${name}?`}
+        description={
+          <>
+            This erases everything your gym holds about this person: their
+            attendance record, rank and promotion history, coach notes, payment
+            history and bookings. It cannot be undone, and there is no backup to
+            restore from.
+            <br />
+            <br />
+            If they ever come back they start from nothing, with no history. Any
+            students they referred lose that credit. Their sign-in is deleted
+            too unless they belong to another gym on matops.
+            <br />
+            <br />
+            To keep their record and just end their membership, close this and
+            use <strong>Archive</strong> instead.
+          </>
+        }
+        confirmLabel="Delete everything"
+        confirmPhrase={name}
+        variant="destructive"
+        onConfirm={onPurge}
+      />
+    </>
+  );
+}
+
 function roleLabel(m: Member): string {
   if (m.status === "pending")
     return `wants to join as ${m.invitedRole ?? "student"}`;
@@ -48,6 +173,10 @@ export function Members() {
   const owner = isOwner(academy);
   const leads = useQuery({
     ...trpc.dropIn.list.queryOptions(),
+    enabled: owner,
+  });
+  const archivedList = useQuery({
+    ...trpc.membership.archived.queryOptions(),
     enabled: owner,
   });
 
@@ -70,15 +199,18 @@ export function Members() {
   );
   // Drop-in leads are owner-only (`dropIn.list`), so an instructor arriving on
   // `?tab=leads` lands on the queue they can actually clear (ADR 75).
-  const shownTab: MemberTab = tab === "leads" && !owner ? "requests" : tab;
+  const shownTab: MemberTab =
+    (tab === "leads" || tab === "archived") && !owner ? "requests" : tab;
 
   // "Overdue" filter chip on the Members list (spec O7, ADR 40).
   const [overdueOnly, setOverdueOnly] = useState(overdueParam);
   const [query, setQuery] = useState("");
   const needle = query.trim().toLowerCase();
 
-  const invalidate = () =>
-    queryClient.invalidateQueries(trpc.membership.members.pathFilter());
+  const invalidate = async () => {
+    await queryClient.invalidateQueries(trpc.membership.members.pathFilter());
+    await queryClient.invalidateQueries(trpc.membership.archived.pathFilter());
+  };
 
   const onError = (err: { message: string }) =>
     toast.error(err.message || "Action failed");
@@ -101,11 +233,28 @@ export function Members() {
       onError,
     }),
   );
-  const remove = useMutation(
-    trpc.membership.remove.mutationOptions({
-      onSuccess: async () => {
+  const archive = useMutation(
+    trpc.membership.archive.mutationOptions({
+      onSuccess: async (res) => {
         await invalidate();
-        toast.success("Member removed");
+        toast.success(
+          res.seatsFreed > 0
+            ? `Archived. ${res.seatsFreed} upcoming ${res.seatsFreed === 1 ? "booking" : "bookings"} cancelled.`
+            : "Member archived",
+        );
+      },
+      onError,
+    }),
+  );
+  const purge = useMutation(
+    trpc.membership.purge.mutationOptions({
+      onSuccess: async (res) => {
+        await invalidate();
+        toast.success(
+          res.accountDeleted
+            ? "Deleted. Every record and their sign-in are gone."
+            : "Deleted. Their records here are gone; the sign-in stays because they belong to another gym.",
+        );
       },
       onError,
     }),
@@ -135,6 +284,7 @@ export function Members() {
     (m) => m.status === "pending" && !isPendingCoach(m),
   );
   const active = members.filter((m) => m.status !== "pending");
+  const archived = archivedList.data ?? [];
   const overdueCount = active.filter(
     (m) => m.dues?.status === "overdue",
   ).length;
@@ -149,7 +299,8 @@ export function Members() {
   const rowBusy = (id: string) =>
     (approve.isPending && approve.variables.memberId === id) ||
     (reject.isPending && reject.variables.memberId === id) ||
-    (remove.isPending && remove.variables.memberId === id) ||
+    (archive.isPending && archive.variables.memberId === id) ||
+    (purge.isPending && purge.variables.memberId === id) ||
     (suspend.isPending && suspend.variables.memberId === id) ||
     (restore.isPending && restore.variables.memberId === id);
 
@@ -184,7 +335,12 @@ export function Members() {
         tabs={[
           { id: "requests", label: "Requests", count: pending.length },
           { id: "members", label: "Members" },
-          ...(owner ? [{ id: "leads" as const, label: "Drop-in leads" }] : []),
+          ...(owner
+            ? [
+                { id: "leads" as const, label: "Drop-in leads" },
+                { id: "archived" as const, label: "Archived" },
+              ]
+            : []),
         ]}
       />
       <div>
@@ -308,63 +464,30 @@ export function Members() {
                       open={openId === m.memberId}
                       onToggle={() => toggle(m.memberId)}
                     >
-                      {owner && m.status === "active" && (
-                        <ConfirmDialog
-                          title={`Suspend ${m.name}?`}
-                          description="They keep their place on the member list but can't book classes until you restore them."
-                          confirmLabel="Suspend"
-                          variant="primary"
-                          onConfirm={async () => {
-                            await suspend.mutateAsync({ memberId: m.memberId });
-                          }}
-                          trigger={
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={rowBusy(m.memberId)}
-                            >
-                              Suspend
-                            </Button>
-                          }
-                        />
-                      )}
-                      {owner && m.status === "suspended" && (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          disabled={rowBusy(m.memberId)}
-                          onClick={() =>
-                            restore.mutate({ memberId: m.memberId })
-                          }
-                        >
-                          {restore.isPending &&
-                            restore.variables.memberId === m.memberId && (
-                              <Spinner size="sm" className="text-current" />
-                            )}
-                          {restore.isPending &&
-                          restore.variables.memberId === m.memberId
-                            ? "Restoring…"
-                            : "Restore"}
-                        </Button>
-                      )}
                       {owner && (
-                        <ConfirmDialog
-                          title={`Remove ${m.name}?`}
-                          description="They lose access to the academy and drop off the member list. Their attendance history stays. You can invite them again later."
-                          confirmLabel="Remove member"
-                          variant="destructive"
-                          onConfirm={async () => {
-                            await remove.mutateAsync({ memberId: m.memberId });
-                          }}
-                          trigger={
-                            <Button
-                              size="sm"
-                              variant="destructive-outline"
-                              disabled={rowBusy(m.memberId)}
-                            >
-                              Remove
-                            </Button>
+                        <MemberActions
+                          name={m.name}
+                          busy={rowBusy(m.memberId)}
+                          onSuspend={
+                            m.status === "active"
+                              ? async () => {
+                                  await suspend.mutateAsync({
+                                    memberId: m.memberId,
+                                  });
+                                }
+                              : undefined
                           }
+                          onRestore={
+                            m.status === "suspended"
+                              ? () => restore.mutate({ memberId: m.memberId })
+                              : undefined
+                          }
+                          onArchive={async () => {
+                            await archive.mutateAsync({ memberId: m.memberId });
+                          }}
+                          onPurge={async () => {
+                            await purge.mutateAsync({ memberId: m.memberId });
+                          }}
                         />
                       )}
                     </MemberRow>
@@ -372,6 +495,47 @@ export function Members() {
                   </div>
                 ))
               ))}
+          </div>
+        ) : shownTab === "archived" ? (
+          <div className="flex flex-col gap-3">
+            {archivedList.isPending ? (
+              <SkeletonRows rows={3} action gap="gap-3" />
+            ) : archivedList.isError ? (
+              <ErrorState
+                label="archived members"
+                onRetry={() => void archivedList.refetch()}
+              />
+            ) : archived.length === 0 ? (
+              <EmptyState title="Nobody has left.">
+                Members you archive land here. Their history is kept, and you
+                can restore them in one click.
+              </EmptyState>
+            ) : (
+              archived.map((m) => (
+                <div
+                  key={m.memberId}
+                  className={cn(
+                    cardClass(),
+                    "flex flex-wrap items-center justify-between gap-3",
+                  )}
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{m.name}</p>
+                    <Eyebrow>
+                      {m.role} · joined {dateFmt.format(new Date(m.joinedAt))}
+                    </Eyebrow>
+                  </div>
+                  <MemberActions
+                    name={m.name}
+                    busy={rowBusy(m.memberId)}
+                    onRestore={() => restore.mutate({ memberId: m.memberId })}
+                    onPurge={async () => {
+                      await purge.mutateAsync({ memberId: m.memberId });
+                    }}
+                  />
+                </div>
+              ))
+            )}
           </div>
         ) : (
           <div className="flex flex-col gap-6">

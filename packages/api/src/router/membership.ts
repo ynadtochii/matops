@@ -1,13 +1,20 @@
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
+import type { TenantTx } from "@matops/db";
 import type { Membership } from "@matops/domain";
 import {
   and,
   createPendingMembership,
+  deleteMemberRow,
+  deleteUserRow,
   desc,
   eq,
+  eraseMemberData,
   findAcademyByCode,
+  gt,
+  hasOtherMemberships,
+  inArray,
   isNull,
   listMembersOf,
   resolveInviteToken,
@@ -33,6 +40,9 @@ import {
   classifyDrift,
   CODE_JOIN_ROLE,
   firstDueAt,
+  isActiveMember,
+  isArchived,
+  isOnRoster,
   isOwner,
   isSuspended,
   paymentStatus,
@@ -137,6 +147,62 @@ async function setStatusOrRejectLastOwner(
         "Promote a co-owner first — an academy can't be left without an owner.",
     });
   }
+}
+
+/**
+ * Give back every seat a departing member still holds on a FUTURE scheduled
+ * class, and leave their past rows alone — a past participation row carries the
+ * attendance record on the same row as the booking (docs/issues/79).
+ *
+ * `class_participation` has a unique index on (class_id, student_id), so one
+ * person can hold at most one seat per class and a flat -1 per affected class is
+ * exact. Only `confirmed` seats are given back: a provisional booking never held
+ * one (booking.ts). Runs on the RLS-scoped `ctx.db`, so it cannot reach another
+ * academy's classes.
+ */
+async function releaseUpcomingSeats(
+  ctx: { db: TenantTx; academyId: string },
+  userId: string,
+): Promise<number> {
+  const now = new Date();
+  const cancelled = await ctx.db
+    .update(classParticipation)
+    .set({ bookingStatus: "cancelled", cancelledAt: now })
+    .where(
+      and(
+        eq(classParticipation.studentId, userId),
+        eq(classParticipation.bookingStatus, "booked"),
+        inArray(
+          classParticipation.classId,
+          ctx.db
+            .select({ id: classInstance.id })
+            .from(classInstance)
+            .where(
+              and(
+                gt(classInstance.startsAt, now),
+                eq(classInstance.status, "scheduled"),
+              ),
+            ),
+        ),
+      ),
+    )
+    .returning({
+      classId: classParticipation.classId,
+      tier: classParticipation.bookingTier,
+    });
+
+  const held = cancelled
+    .filter((c) => c.tier === "confirmed")
+    .map((c) => c.classId);
+  if (held.length > 0) {
+    await ctx.db
+      .update(classInstance)
+      .set({
+        bookingCount: sql`GREATEST(${classInstance.bookingCount} - 1, 0)`,
+      })
+      .where(inArray(classInstance.id, held));
+  }
+  return held.length;
 }
 
 /**
@@ -292,48 +358,66 @@ export const membershipRouter = {
           ).map((c) => c.memberId)
         : [],
     );
-    return rows
-      .filter((r) => r.status !== "removed")
-      .map((r) => {
-        const d = seesDues ? duesByMember.get(r.memberId) : undefined;
-        const access =
-          gate && r.role === "student" && r.status === "active"
-            ? bookingAccess(
-                {
-                  enforcedAt: gate.enforcedAt,
-                  graceDays: gate.graceDays,
-                  memberSince: r.createdAt,
-                  nextDueAt: duesByMember.get(r.memberId)?.nextDueAt ?? null,
-                  hasOpenClaim: openClaimMembers.has(r.memberId),
-                },
-                now,
-              )
-            : null;
-        return {
-          access,
-          memberId: r.memberId,
-          name: r.name,
-          email: r.email,
-          phone: r.phone,
-          role: r.role,
-          status: r.status,
-          invitedRole: r.invitedRole,
-          joinedAt: r.createdAt,
-          visitCount: visitByUser.get(r.userId) ?? 0,
-          // null = the owner has not set up dues for this member yet (P.2).
-          dues: d
-            ? {
-                status: paymentStatus(d.nextDueAt, now),
-                planId: d.planId,
-                nextDueAt: d.nextDueAt,
-                priceMinor: d.priceMinor,
-                currency: d.currency,
-                planName: d.planName,
-                lastConfirmedAt: lastConfirmedByMember.get(r.memberId) ?? null,
-              }
-            : null,
-        };
-      });
+    return rows.filter(isOnRoster).map((r) => {
+      const d = seesDues ? duesByMember.get(r.memberId) : undefined;
+      const access =
+        gate && r.role === "student" && r.status === "active"
+          ? bookingAccess(
+              {
+                enforcedAt: gate.enforcedAt,
+                graceDays: gate.graceDays,
+                memberSince: r.createdAt,
+                nextDueAt: duesByMember.get(r.memberId)?.nextDueAt ?? null,
+                hasOpenClaim: openClaimMembers.has(r.memberId),
+              },
+              now,
+            )
+          : null;
+      return {
+        access,
+        memberId: r.memberId,
+        name: r.name,
+        email: r.email,
+        phone: r.phone,
+        role: r.role,
+        status: r.status,
+        invitedRole: r.invitedRole,
+        joinedAt: r.createdAt,
+        visitCount: visitByUser.get(r.userId) ?? 0,
+        // null = the owner has not set up dues for this member yet (P.2).
+        dues: d
+          ? {
+              status: paymentStatus(d.nextDueAt, now),
+              planId: d.planId,
+              nextDueAt: d.nextDueAt,
+              priceMinor: d.priceMinor,
+              currency: d.currency,
+              planName: d.planName,
+              lastConfirmedAt: lastConfirmedByMember.get(r.memberId) ?? null,
+            }
+          : null,
+      };
+    });
+  }),
+
+  /**
+   * The people who left (spec O4 "Archived" tab, docs/issues/84). Owner-only:
+   * it is the same standing as suspend and remove, and a coach running the desk
+   * has no business with the leavers list. Deliberately thin — a name, how to
+   * reach them and when they joined — because the tab exists to restore someone
+   * or to erase them, not to browse. Declined applicants (`removed`) are NOT
+   * here: they were never members.
+   */
+  archived: ownerProcedure.query(async ({ ctx }) => {
+    const rows = await listMembersOf(ctx.academyId, ctx.db);
+    return rows.filter(isArchived).map((r) => ({
+      memberId: r.memberId,
+      name: r.name,
+      email: r.email,
+      phone: r.phone,
+      role: r.role,
+      joinedAt: r.createdAt,
+    }));
   }),
 
   /**
@@ -432,18 +516,78 @@ export const membershipRouter = {
       return { ok: true as const };
     }),
 
-  /** Remove an active member → revoke access, keep history (§4). Never ownerless. */
-  remove: ownerProcedure
+  /**
+   * Archive a member — they left the gym (spec O4, docs/issues/84). Access is
+   * revoked, their upcoming bookings are cancelled and the dues clock stops, but
+   * every row they own is kept and `restore` brings them back whole. Never
+   * ownerless. Reversible; `purge` is the irreversible one.
+   */
+  archive: ownerProcedure
     .input(MemberActionSchema)
     .mutation(async ({ ctx, input }) => {
-      await requireMember(ctx, input.memberId);
+      const m = await requireMember(ctx, input.memberId);
+      // Only someone who WAS a member can leave. Archiving a pending applicant
+      // and restoring them would activate them without approval, and with the
+      // placeholder Better Auth role, because the real role is granted at
+      // approval and never here.
+      if (!isActiveMember(m) && !isSuspended(m)) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Only an active or suspended member can be archived.",
+        });
+      }
+      // Status first: it is the access gate, so a race cannot book in the gap
+      // between cancelling their seats and revoking the account.
       await setStatusOrRejectLastOwner(
         ctx.academyId,
         input.memberId,
-        "removed",
+        "archived",
         ctx.baseDb,
       );
-      return { ok: true as const };
+      const freed = await releaseUpcomingSeats(ctx, m.userId);
+      return { ok: true as const, seatsFreed: freed };
+    }),
+
+  /**
+   * Erase a member for good (spec O4, docs/issues/84). Irreversible, and the
+   * action an owner uses to answer a data-deletion request.
+   *
+   * Archiving FIRST is not decoration: it reuses the locked never-ownerless
+   * guard, and it is the recoverable state a half-finished erase falls back to,
+   * because the RLS transaction and the base connection cannot commit as one.
+   */
+  purge: ownerProcedure
+    .input(MemberActionSchema)
+    .mutation(async ({ ctx, input }) => {
+      const m = await requireMember(ctx, input.memberId);
+      if (m.userId === ctx.session.user.id) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "You can't erase your own membership.",
+        });
+      }
+      await setStatusOrRejectLastOwner(
+        ctx.academyId,
+        input.memberId,
+        "archived",
+        ctx.baseDb,
+      );
+      const report = await eraseMemberData(ctx.db, {
+        academyId: ctx.academyId,
+        memberId: input.memberId,
+        userId: m.userId,
+        actorId: ctx.session.user.id,
+      });
+      await deleteMemberRow(ctx.baseDb, ctx.academyId, input.memberId);
+      const elsewhere = await hasOtherMemberships(
+        ctx.baseDb,
+        m.userId,
+        ctx.academyId,
+      );
+      if (!elsewhere) {
+        await deleteUserRow(ctx.baseDb, m.userId);
+      }
+      return { ok: true as const, accountDeleted: !elsewhere, report };
     }),
 
   /** Suspend a member → access revoked but reversible. Never ownerless. */
@@ -460,15 +604,21 @@ export const membershipRouter = {
       return { ok: true as const };
     }),
 
-  /** Restore a suspended member → active again (reverses `suspend`, §4). */
+  /**
+   * Restore a suspended OR archived member → active again (§4, docs/issues/84).
+   * One path for both, because both are the same promise: the row was never
+   * thrown away, so rank, notes, dues and attendance all come back with them.
+   * Seats cancelled by the archive do NOT come back — those classes may since
+   * have filled or passed.
+   */
   restore: ownerProcedure
     .input(MemberActionSchema)
     .mutation(async ({ ctx, input }) => {
       const m = await requireMember(ctx, input.memberId);
-      if (!isSuspended(m)) {
+      if (!isSuspended(m) && !isArchived(m)) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
-          message: "This member is not suspended.",
+          message: "This member is not suspended or archived.",
         });
       }
       await setMemberStatus(input.memberId, "active", ctx.baseDb);

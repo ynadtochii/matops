@@ -4,6 +4,8 @@ import type { Membership } from "../src/access";
 import {
   canEnroll,
   isActiveMember,
+  isArchived,
+  isOnRoster,
   isOwner,
   isStaff,
   isSuspended,
@@ -19,7 +21,28 @@ describe("access predicates", () => {
       // Suspended / removed keep a row for history but have no access.
       expect(canEnroll(m(role, "suspended"))).toBe(false);
       expect(canEnroll(m(role, "removed"))).toBe(false);
+      expect(canEnroll(m(role, "archived"))).toBe(false);
     }
+  });
+
+  it("isArchived: only the members who left", () => {
+    expect(isArchived(m("student", "archived"))).toBe(true);
+    for (const status of ["pending", "active", "suspended", "removed"]) {
+      expect(isArchived(m("student", status))).toBe(false);
+    }
+  });
+
+  it("isOnRoster: archived and declined drop off, suspended stays", () => {
+    for (const status of ["pending", "active", "suspended"]) {
+      expect(isOnRoster(m("student", status))).toBe(true);
+    }
+    expect(isOnRoster(m("student", "archived"))).toBe(false);
+    expect(isOnRoster(m("student", "removed"))).toBe(false);
+  });
+
+  it("an archived member is not suspended (restore covers both, the copy differs)", () => {
+    expect(isSuspended(m("student", "archived"))).toBe(false);
+    expect(isArchived(m("student", "suspended"))).toBe(false);
   });
 
   it("pending members are never active/staff/owner (view-only)", () => {

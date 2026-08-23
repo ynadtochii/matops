@@ -12,6 +12,7 @@ import {
   canInitiallyAssignReferral,
   groupMoneyByCurrency,
   isEligibleReferrer,
+  isOnRoster,
   isReferralStudent,
   isStudentMembership,
   isValidReferralPair,
@@ -147,7 +148,7 @@ export const referralRouter = {
         memberId: member.memberId,
         name: member.name,
         status: member.status,
-        removed: member.status === "removed",
+        removed: !isOnRoster(member),
         assignmentState: referral
           ? referral.referrerMemberId
             ? ("assigned" as const)

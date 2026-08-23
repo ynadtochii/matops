@@ -24,3 +24,5 @@ export * from "./notification";
 export * from "./academy-settings";
 // Dues-reminder claim (base-connection cron helper, R.1) — see ./dues-reminder.ts.
 export * from "./dues-reminder";
+// Permanent erasure of one member (spec O4) — see ./erase.ts.
+export * from "./erase";

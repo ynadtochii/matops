@@ -12,9 +12,11 @@ export interface Membership {
 
 /**
  * May this membership use the "enrolled" (view-only) tier at all? True only for
- * `pending` and `active` rows. A `suspended` or `removed` member keeps a row
- * (history is preserved) but has NO access — so the enrolled tier must reject
- * them, not just check that a row exists. See docs/issues/23 and spec §4.
+ * `pending` and `active` rows. A `suspended`, `archived` or `removed` member
+ * keeps a row (history is preserved) but has NO access — so the enrolled tier
+ * must reject them, not just check that a row exists. A whitelist on purpose: a
+ * new status is denied until someone deliberately admits it. See docs/issues/23,
+ * docs/issues/84 and spec §4.
  */
 export function canEnroll(m: Membership): boolean {
   return m.status === "pending" || m.status === "active";
@@ -36,6 +38,26 @@ export function isOwner(m: Membership): boolean {
 }
 
 /** Suspended — access revoked by an owner; kept for history, not active. */
-export function isSuspended(m: Membership): boolean {
+export function isSuspended(m: Pick<Membership, "status">): boolean {
   return m.status === "suspended";
+}
+
+/**
+ * Archived — the member left the gym (docs/issues/84). Access is revoked and
+ * their upcoming bookings were cancelled, but every row they own is kept and an
+ * owner can restore them. Distinct from `removed`, which an owner never sees: it
+ * marks an applicant who was declined and was never a member at all.
+ */
+export function isArchived(m: Pick<Membership, "status">): boolean {
+  return m.status === "archived";
+}
+
+/**
+ * Does this membership still belong on the gym's roster? False once they are
+ * archived or declined. The one predicate behind the member list, the growth
+ * counts and the referrals screen's default filter, so the three cannot disagree
+ * about who counts as a current member.
+ */
+export function isOnRoster(m: Pick<Membership, "status">): boolean {
+  return !isArchived(m) && m.status !== "removed";
 }

@@ -14,11 +14,12 @@
  * both fill and clear, so it stays correct with fakes added or removed.
  */
 import { randomUUID } from "node:crypto";
-import { and, eq, isNull, like, sql } from "drizzle-orm";
+import { and, eq, isNull, like } from "drizzle-orm";
 
 import { paymentPeriod } from "@matops/domain";
 
 import type { SeedExec } from "./registry";
+import { recomputeBookingCounts } from "../erase";
 import {
   classInstance,
   classParticipation,
@@ -147,25 +148,6 @@ function buildFakeStudents(academyId: string, count = 20): FakeStudent[] {
       invitedRole,
     };
   });
-}
-
-/** SET class.booking_count = its confirmed-booked participation count, for one academy. */
-async function recomputeBookingCounts(
-  exec: SeedExec,
-  academyId: string,
-): Promise<void> {
-  await exec
-    .update(classInstance)
-    .set({ bookingCount: 0 })
-    .where(eq(classInstance.academyId, academyId));
-  await exec.execute(sql`
-    UPDATE "class" c SET booking_count = sub.c FROM (
-      SELECT class_id, count(*)::int AS c FROM "class_participation"
-      WHERE academy_id = ${academyId}
-        AND booking_status = 'booked' AND booking_tier = 'confirmed'
-      GROUP BY class_id
-    ) sub WHERE c.id = sub.class_id AND c.academy_id = ${academyId}
-  `);
 }
 
 /** How many fake (seed_) members this academy currently holds. */

@@ -26,6 +26,7 @@ import {
   coachWorkloadFor,
   groupMoneyByCurrency,
   gymInsights,
+  isOnRoster,
   isOwner,
   monthBucket,
   trainingStats,
@@ -210,7 +211,7 @@ export const statsRouter = {
     const members = owner ? await listMembersOf(ctx.academyId, ctx.db) : [];
     const thisMonth = monthBucket(now, timeZone);
     const joined = members
-      .filter((m) => m.status !== "removed")
+      .filter(isOnRoster)
       .map((m) => monthBucket(m.createdAt, timeZone));
     const newMembers = owner
       ? {

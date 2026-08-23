@@ -2,6 +2,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { DUE_SOON_DAYS } from "@matops/domain";
 
+import type { DbExec } from "./client";
 import { member, organization } from "./auth-schema";
 import { db } from "./client";
 import { memberDues, membershipPlan } from "./payments-schema";
@@ -39,6 +40,8 @@ export interface ClaimDuesRemindersOptions {
   now?: Date;
   /** Max dues rows claimed per run (bounds work under the serverless limit). */
   limit?: number;
+  /** Base-connection handle; injected by tests so the claim runs on PGlite. */
+  exec?: DbExec;
 }
 
 /**
@@ -52,6 +55,7 @@ export async function claimDueDuesReminders(
 ): Promise<DueDuesReminder[]> {
   const now = opts.now ?? new Date();
   const limit = opts.limit ?? 500;
+  const exec = opts.exec ?? db;
   // The end of the due-soon window: due dates on or before this are eligible.
   const windowEnd = new Date(
     now.getTime() + DUE_SOON_DAYS * 24 * 60 * 60 * 1000,
@@ -59,16 +63,22 @@ export async function claimDueDuesReminders(
 
   // Atomic claim: flip the period for the eligible rows and return their ids.
   // A bounded subselect caps the batch (UPDATE has no LIMIT of its own).
-  const claimed = await db.execute<{ id: string }>(sql`
+  //
+  // The `member` join is what stops the gym billing people who are gone: only an
+  // ACTIVE membership is eligible. It sits in the CLAIM, not in the resolve below
+  // — claiming a non-active row would stamp its period and then drop it, so a
+  // student restored later that month would silently never be reminded.
+  const claimed = await exec.execute<{ id: string }>(sql`
     UPDATE "member_dues" AS md
     SET "dues_reminder_period" = to_char(md."next_due_at" AT TIME ZONE 'UTC', 'YYYY-MM'),
         "updated_at" = now()
     WHERE md."id" IN (
-      SELECT "id" FROM "member_dues"
-      WHERE ("dues_reminder_period" IS DISTINCT FROM
-             to_char("next_due_at" AT TIME ZONE 'UTC', 'YYYY-MM'))
-        AND "next_due_at" <= ${windowEnd}
-      ORDER BY "next_due_at" ASC
+      SELECT md2."id" FROM "member_dues" md2
+      JOIN "member" m ON m."id" = md2."member_id" AND m."status" = 'active'
+      WHERE (md2."dues_reminder_period" IS DISTINCT FROM
+             to_char(md2."next_due_at" AT TIME ZONE 'UTC', 'YYYY-MM'))
+        AND md2."next_due_at" <= ${windowEnd}
+      ORDER BY md2."next_due_at" ASC
       LIMIT ${limit}
     )
     RETURNING md."id"
@@ -78,7 +88,7 @@ export async function claimDueDuesReminders(
   if (ids.length === 0) return [];
 
   // Resolve the recipient user + gym name + plan amount for each claimed row.
-  const rows = await db
+  const rows = await exec
     .select({
       userId: member.userId,
       academyId: memberDues.academyId,
