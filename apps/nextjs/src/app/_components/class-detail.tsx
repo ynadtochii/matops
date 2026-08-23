@@ -19,7 +19,7 @@ import { useBooking } from "./use-booking";
 
 export function ClassDetail({ classId }: { classId: string }) {
   const trpc = useTRPC();
-  const { book, cancel, busy } = useBooking();
+  const { book, cancel, busy, lockedMessage } = useBooking();
 
   const cls = useQuery({
     ...trpc.class.get.queryOptions({ id: classId }),
@@ -117,14 +117,20 @@ export function ClassDetail({ classId }: { classId: string }) {
                 variant="primary"
                 onConfirm={() => book.mutate({ classId })}
                 trigger={
-                  <Button variant="secondary" disabled={busy}>
+                  <Button
+                    variant="secondary"
+                    disabled={busy || !!lockedMessage}
+                  >
                     {busy && <Spinner size="sm" className="text-current" />}
                     Book
                   </Button>
                 }
               />
             ) : (
-              <Button disabled={busy} onClick={() => book.mutate({ classId })}>
+              <Button
+                disabled={busy || !!lockedMessage}
+                onClick={() => book.mutate({ classId })}
+              >
                 {busy && <Spinner size="sm" className="text-current" />}
                 Book
               </Button>

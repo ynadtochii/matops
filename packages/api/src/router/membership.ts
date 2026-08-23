@@ -8,6 +8,7 @@ import {
   desc,
   eq,
   findAcademyByCode,
+  isNull,
   listMembersOf,
   resolveInviteToken,
   setMemberRoleIfNotLastOwner,
@@ -26,10 +27,12 @@ import {
 } from "@matops/db/schema";
 import {
   approveMembership,
+  bookingAccess,
   canApprove,
   canDecideSeat,
   classifyDrift,
   CODE_JOIN_ROLE,
+  firstDueAt,
   isOwner,
   isSuspended,
   paymentStatus,
@@ -46,7 +49,13 @@ import type { createTRPCContext } from "../trpc";
 import { academyTimeZone } from "../academy-tz";
 import { requireMember, staffOf } from "../members";
 import { notifyMembershipApproved } from "../notify";
-import { ownerProcedure, protectedProcedure, staffProcedure } from "../trpc";
+import { loadGateSettings } from "../payments-gate";
+import {
+  ownerProcedure,
+  protectedProcedure,
+  refreshSessionCookie,
+  staffProcedure,
+} from "../trpc";
 
 type BaseContext = Awaited<ReturnType<typeof createTRPCContext>>;
 /** Context inside a `protectedProcedure` — the session is guaranteed present. */
@@ -73,21 +82,29 @@ async function joinPending(
   },
 ) {
   const userId = ctx.session.user.id;
-  await updateUserProfile(userId, {
-    name: `${input.firstName} ${input.lastName}`.trim(),
-    phone: input.phone,
-  });
-  const result = await createPendingMembership({
+  await updateUserProfile(
     userId,
-    academyId: input.academyId,
-    invitedRole: input.invitedRole,
-  });
+    {
+      name: `${input.firstName} ${input.lastName}`.trim(),
+      phone: input.phone,
+    },
+    ctx.baseDb,
+  );
+  const result = await createPendingMembership(
+    {
+      userId,
+      academyId: input.academyId,
+      invitedRole: input.invitedRole,
+    },
+    ctx.baseDb,
+  );
   if (!ctx.session.session.activeOrganizationId) {
     await ctx.authApi.setActiveOrganization({
       body: { organizationId: input.academyId },
       headers: ctx.headers,
     });
   }
+  await refreshSessionCookie(ctx);
   return {
     academyId: input.academyId,
     status: result.status,
@@ -105,11 +122,13 @@ async function setStatusOrRejectLastOwner(
   academyId: string,
   memberId: string,
   status: string,
+  exec: BaseContext["baseDb"],
 ) {
   const { ok } = await setMemberStatusIfNotLastOwner(
     academyId,
     memberId,
     status,
+    exec,
   );
   if (!ok) {
     throw new TRPCError({
@@ -129,8 +148,14 @@ async function setRoleOrRejectLastOwner(
   academyId: string,
   memberId: string,
   role: string,
+  exec: BaseContext["baseDb"],
 ) {
-  const { ok } = await setMemberRoleIfNotLastOwner(academyId, memberId, role);
+  const { ok } = await setMemberRoleIfNotLastOwner(
+    academyId,
+    memberId,
+    role,
+    exec,
+  );
   if (!ok) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
@@ -256,11 +281,36 @@ export const membershipRouter = {
     // Money is the owner's business, not the coach's: an instructor runs the
     // desk (approve, rank) and gets the same roster without the dues figures.
     const seesDues = isOwner(ctx.membership);
+    const gate = seesDues ? await loadGateSettings(ctx.db) : null;
+    const openClaimMembers = new Set(
+      gate?.enforcedAt
+        ? (
+            await ctx.db
+              .select({ memberId: paymentClaim.memberId })
+              .from(paymentClaim)
+              .where(eq(paymentClaim.status, "pending"))
+          ).map((c) => c.memberId)
+        : [],
+    );
     return rows
       .filter((r) => r.status !== "removed")
       .map((r) => {
         const d = seesDues ? duesByMember.get(r.memberId) : undefined;
+        const access =
+          gate && r.role === "student" && r.status === "active"
+            ? bookingAccess(
+                {
+                  enforcedAt: gate.enforcedAt,
+                  graceDays: gate.graceDays,
+                  memberSince: r.createdAt,
+                  nextDueAt: duesByMember.get(r.memberId)?.nextDueAt ?? null,
+                  hasOpenClaim: openClaimMembers.has(r.memberId),
+                },
+                now,
+              )
+            : null;
         return {
+          access,
           memberId: r.memberId,
           name: r.name,
           email: r.email,
@@ -339,7 +389,29 @@ export const membershipRouter = {
           message: "This member is not pending approval.",
         });
       }
-      await setMemberRoleStatus(input.memberId, approveMembership(m));
+      const granted = approveMembership(m);
+      await setMemberRoleStatus(input.memberId, granted, ctx.baseDb);
+      if (granted.role === "student") {
+        const plans = await ctx.db
+          .select({ id: membershipPlan.id })
+          .from(membershipPlan)
+          .where(isNull(membershipPlan.deletedAt))
+          .limit(2);
+        const onlyPlan = plans.length === 1 ? plans[0] : undefined;
+        if (onlyPlan) {
+          await ctx.db
+            .insert(memberDues)
+            .values({
+              academyId: ctx.academyId,
+              memberId: input.memberId,
+              planId: onlyPlan.id,
+              nextDueAt: firstDueAt(new Date()),
+            })
+            .onConflictDoNothing({
+              target: [memberDues.academyId, memberDues.memberId],
+            });
+        }
+      }
       // Welcome push to the newly approved member (§4/S3, docs/issues/17).
       ctx.afterCommit(() =>
         notifyMembershipApproved({
@@ -356,7 +428,7 @@ export const membershipRouter = {
     .mutation(async ({ ctx, input }) => {
       const m = await requireMember(ctx, input.memberId);
       requireSeatDecider(ctx, m);
-      await setMemberStatus(input.memberId, "removed");
+      await setMemberStatus(input.memberId, "removed", ctx.baseDb);
       return { ok: true as const };
     }),
 
@@ -369,6 +441,7 @@ export const membershipRouter = {
         ctx.academyId,
         input.memberId,
         "removed",
+        ctx.baseDb,
       );
       return { ok: true as const };
     }),
@@ -382,6 +455,7 @@ export const membershipRouter = {
         ctx.academyId,
         input.memberId,
         "suspended",
+        ctx.baseDb,
       );
       return { ok: true as const };
     }),
@@ -397,7 +471,7 @@ export const membershipRouter = {
           message: "This member is not suspended.",
         });
       }
-      await setMemberStatus(input.memberId, "active");
+      await setMemberStatus(input.memberId, "active", ctx.baseDb);
       return { ok: true as const };
     }),
 
@@ -406,10 +480,11 @@ export const membershipRouter = {
     .input(MemberActionSchema)
     .mutation(async ({ ctx, input }) => {
       await requireMember(ctx, input.memberId);
-      await setMemberRoleStatus(input.memberId, {
-        role: "owner",
-        status: "active",
-      });
+      await setMemberRoleStatus(
+        input.memberId,
+        { role: "owner", status: "active" },
+        ctx.baseDb,
+      );
       return { ok: true as const };
     }),
 
@@ -423,7 +498,12 @@ export const membershipRouter = {
     .input(MemberActionSchema.extend({ role: InviteRoleSchema }))
     .mutation(async ({ ctx, input }) => {
       await requireMember(ctx, input.memberId);
-      await setRoleOrRejectLastOwner(ctx.academyId, input.memberId, input.role);
+      await setRoleOrRejectLastOwner(
+        ctx.academyId,
+        input.memberId,
+        input.role,
+        ctx.baseDb,
+      );
       return { ok: true as const };
     }),
 

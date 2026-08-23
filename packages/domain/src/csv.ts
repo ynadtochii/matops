@@ -37,17 +37,22 @@ const HEADERS = [
 /**
  * Excel and Sheets run a cell starting with `=`, `+`, `-` or `@` as a formula, so
  * a member could put live code in an owner's spreadsheet by naming themselves
- * `=HYPERLINK(...)`. Those values get an apostrophe in front. A `+`/`-` value
- * made only of digits, spaces and brackets is exempt, because that is a phone number
- * and Excel reads it as a plain number.
+ * `=HYPERLINK(...)`. Those values get an apostrophe in front AND quotes around
+ * them: the apostrophe alone is stripped by some importers, and the quotes force
+ * the cell to be read as text. A `+`/`-` value made only of digits, spaces and
+ * brackets is exempt, because that is a phone number and Excel reads it as a
+ * plain number.
  */
 const RISKY = /^[=@\t\r]|^[+-](?![\d\s()+-]*$)/;
 
 /** One RFC 4180 field. */
 function field(value: string | number | null): string {
   const s = value === null ? "" : String(value);
-  const safe = RISKY.test(s) ? `'${s}` : s;
-  return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
+  const risky = RISKY.test(s);
+  const safe = risky ? `'${s}` : s;
+  return risky || /[",\n\r]/.test(safe)
+    ? `"${safe.replace(/"/g, '""')}"`
+    : safe;
 }
 
 const day = (d: string | Date | null): string =>

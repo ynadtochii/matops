@@ -82,7 +82,16 @@ export function MyDues() {
     );
   }
 
-  const { dues: d, requisites, openClaim, canPay } = dues.data;
+  const { dues: d, requisites, openClaim, canPay, canChoosePlan } = dues.data;
+
+  if (!d && canChoosePlan) {
+    return (
+      <>
+        {header}
+        <ChoosePlan />
+      </>
+    );
+  }
 
   if (!d && !requisites.bankDetails) {
     return (
@@ -172,7 +181,8 @@ export function MyDues() {
           <div>
             {openClaim ? (
               <p className="text-muted-foreground text-sm">
-                Payment submitted — waiting for your gym to confirm.
+                Payment submitted — waiting for your gym to confirm. You can
+                book while it&apos;s pending.
               </p>
             ) : (
               <ConfirmDialog
@@ -201,5 +211,79 @@ export function MyDues() {
         )}
       </div>
     </>
+  );
+}
+
+function ChoosePlan() {
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  const plans = useQuery(trpc.payments.planOptions.queryOptions());
+
+  const choose = useMutation(
+    trpc.payments.choosePlan.mutationOptions({
+      onSuccess: async () => {
+        await queryClient.invalidateQueries(trpc.payments.pathFilter());
+        toast.success("Membership chosen");
+      },
+      onError: (err) => toast.error(err.message || "Could not choose that"),
+    }),
+  );
+
+  if (plans.isPending) return <SkeletonDuesBody />;
+  if (plans.isError) {
+    return (
+      <ErrorState
+        label="the membership plans"
+        onRetry={() => void plans.refetch()}
+      />
+    );
+  }
+  if (plans.data.length === 0) {
+    return (
+      <EmptyState title="Your gym hasn't set up membership dues yet.">
+        Nothing to pay here for now.
+      </EmptyState>
+    );
+  }
+
+  return (
+    <Section label="Choose your membership">
+      <div className="flex flex-col gap-3">
+        <p className="text-muted-foreground text-sm">
+          Pick the plan you agreed with your gym. Your first payment is due on
+          the 1st of next month. Your gym can change your plan later.
+        </p>
+        {plans.data.map((p) => (
+          <div
+            key={p.id}
+            className={`${cardClass()} flex flex-wrap items-center justify-between gap-3`}
+          >
+            <div className="min-w-0">
+              <p className="font-medium">{p.name}</p>
+              <p className="text-muted-foreground text-sm">
+                {formatMoney(p.priceMinor, p.currency)} per month
+              </p>
+            </div>
+            <ConfirmDialog
+              title={`Choose ${p.name}?`}
+              description="Your first payment is due on the 1st of next month. Ask your gym if you need a different plan later."
+              confirmLabel="Choose this plan"
+              variant="primary"
+              onConfirm={async () => {
+                await choose.mutateAsync({ planId: p.id });
+              }}
+              trigger={
+                <Button size="sm" disabled={choose.isPending}>
+                  {choose.isPending && choose.variables.planId === p.id && (
+                    <Spinner size="sm" className="text-current" />
+                  )}
+                  Choose
+                </Button>
+              }
+            />
+          </div>
+        ))}
+      </div>
+    </Section>
   );
 }

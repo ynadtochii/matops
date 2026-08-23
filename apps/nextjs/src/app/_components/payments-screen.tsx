@@ -22,7 +22,7 @@ import { useTRPC } from "~/trpc/react";
 import { useAcademy } from "./academy";
 import { MyDues } from "./my-dues";
 import { PageHeader } from "./page-header";
-import { PaymentRequisites } from "./payment-requisites";
+import { BookingGate, PaymentRequisites } from "./payment-requisites";
 import { cardClass, Section, Tabs } from "./primitives";
 import { SkeletonRows, SkeletonSection } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
@@ -69,7 +69,10 @@ function OwnerPayments() {
         ) : tab === "plans" ? (
           <Plans />
         ) : (
-          <PaymentRequisites />
+          <>
+            <PaymentRequisites />
+            <BookingGate />
+          </>
         )}
       </div>
     </>

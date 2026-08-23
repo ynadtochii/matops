@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  bookingAccess,
+  bookingAccessMessage,
   canClaim,
   claimDedupeKey,
   DUE_SOON_DAYS,
+  firstDueAt,
   paymentPeriod,
   paymentReference,
   paymentStatus,
@@ -126,5 +129,227 @@ describe("canClaim", () => {
 
   it("blocks a claim when the member has no plan/dues set", () => {
     expect(canClaim({ hasPlan: false, hasOpenClaim: false })).toBe(false);
+  });
+});
+
+describe("firstDueAt", () => {
+  it("is the 1st of the next month at UTC midnight", () => {
+    expect(firstDueAt(new Date("2026-07-15T18:30:00Z"))).toEqual(
+      new Date("2026-08-01T00:00:00Z"),
+    );
+  });
+
+  it("rolls the year over from December", () => {
+    expect(firstDueAt(new Date("2026-12-31T23:59:00Z"))).toEqual(
+      new Date("2027-01-01T00:00:00Z"),
+    );
+  });
+
+  it("joining on the 1st still starts the following month", () => {
+    expect(firstDueAt(new Date("2026-07-01T00:00:00Z"))).toEqual(
+      new Date("2026-08-01T00:00:00Z"),
+    );
+  });
+
+  it("keeps later rolls anchored on the 1st", () => {
+    const first = firstDueAt(new Date("2026-07-15T12:00:00Z"));
+    expect(rollNextDue(first, "monthly")).toEqual(
+      new Date("2026-09-01T00:00:00Z"),
+    );
+  });
+});
+
+describe("bookingAccess", () => {
+  const today = new Date("2026-07-15T12:00:00Z");
+  const base = {
+    enforcedAt: new Date("2026-01-01T00:00:00Z"),
+    graceDays: 7,
+    memberSince: new Date("2026-01-10T00:00:00Z"),
+    hasOpenClaim: false,
+  };
+
+  it("is ok whenever enforcement is off", () => {
+    for (const enforcedAt of [null, undefined]) {
+      expect(
+        bookingAccess(
+          { ...base, enforcedAt, nextDueAt: new Date("2020-01-01T00:00:00Z") },
+          today,
+        ),
+      ).toEqual({ state: "ok", reason: null, daysUntilLock: null });
+    }
+  });
+
+  it("an open claim unblocks immediately, even deep past the grace window", () => {
+    expect(
+      bookingAccess(
+        {
+          ...base,
+          hasOpenClaim: true,
+          nextDueAt: new Date("2026-01-01T00:00:00Z"),
+        },
+        today,
+      ).state,
+    ).toBe("ok");
+  });
+
+  it("is ok up to and including the due day", () => {
+    expect(
+      bookingAccess(
+        { ...base, nextDueAt: new Date("2026-08-01T00:00:00Z") },
+        today,
+      ).state,
+    ).toBe("ok");
+    expect(
+      bookingAccess(
+        { ...base, nextDueAt: new Date("2026-07-15T00:00:00Z") },
+        today,
+      ).state,
+    ).toBe("ok");
+  });
+
+  it("enters grace the day after the due day, counting down to the lock", () => {
+    const access = bookingAccess(
+      { ...base, nextDueAt: new Date("2026-07-14T00:00:00Z") },
+      today,
+    );
+    expect(access).toEqual({
+      state: "grace",
+      reason: "unpaid",
+      daysUntilLock: 7,
+    });
+  });
+
+  it("still books on the last grace day, locks the day after", () => {
+    const lastDay = bookingAccess(
+      { ...base, nextDueAt: new Date("2026-07-08T00:00:00Z") },
+      today,
+    );
+    expect(lastDay).toEqual({
+      state: "grace",
+      reason: "unpaid",
+      daysUntilLock: 1,
+    });
+    const locked = bookingAccess(
+      { ...base, nextDueAt: new Date("2026-07-07T00:00:00Z") },
+      today,
+    );
+    expect(locked).toEqual({
+      state: "locked",
+      reason: "unpaid",
+      daysUntilLock: null,
+    });
+  });
+
+  it("grace 0 allows the due day only", () => {
+    expect(
+      bookingAccess(
+        {
+          ...base,
+          graceDays: 0,
+          nextDueAt: new Date("2026-07-15T00:00:00Z"),
+        },
+        today,
+      ).state,
+    ).toBe("ok");
+    expect(
+      bookingAccess(
+        {
+          ...base,
+          graceDays: 0,
+          nextDueAt: new Date("2026-07-14T00:00:00Z"),
+        },
+        today,
+      ).state,
+    ).toBe("locked");
+  });
+
+  it("no plan: a fresh member books through the grace window from joining", () => {
+    const access = bookingAccess(
+      {
+        ...base,
+        memberSince: new Date("2026-07-15T09:00:00Z"),
+        nextDueAt: null,
+      },
+      today,
+    );
+    expect(access).toEqual({
+      state: "no_plan",
+      reason: "no_plan",
+      daysUntilLock: 8,
+    });
+  });
+
+  it("no plan: locks once the window from joining runs out", () => {
+    expect(
+      bookingAccess(
+        {
+          ...base,
+          memberSince: new Date("2026-07-07T00:00:00Z"),
+          nextDueAt: null,
+        },
+        today,
+      ),
+    ).toEqual({ state: "locked", reason: "no_plan", daysUntilLock: null });
+  });
+
+  it("no plan: turning enforcement on grants the full window to an old member", () => {
+    const access = bookingAccess(
+      {
+        ...base,
+        enforcedAt: new Date("2026-07-14T00:00:00Z"),
+        memberSince: new Date("2025-01-01T00:00:00Z"),
+        nextDueAt: null,
+      },
+      today,
+    );
+    expect(access).toEqual({
+      state: "no_plan",
+      reason: "no_plan",
+      daysUntilLock: 7,
+    });
+  });
+});
+
+describe("bookingAccessMessage", () => {
+  it("says nothing while access is ok", () => {
+    expect(
+      bookingAccessMessage({ state: "ok", reason: null, daysUntilLock: null }),
+    ).toBeNull();
+  });
+
+  it("counts down in days and says tomorrow on the last day", () => {
+    expect(
+      bookingAccessMessage({
+        state: "grace",
+        reason: "unpaid",
+        daysUntilLock: 3,
+      }),
+    ).toBe(
+      "Payment overdue. Booking locks in 3 days. Pay and claim to keep booking.",
+    );
+    expect(
+      bookingAccessMessage({
+        state: "no_plan",
+        reason: "no_plan",
+        daysUntilLock: 1,
+      }),
+    ).toBe("Choose your membership. Booking locks tomorrow.");
+  });
+
+  it("names the fix for each locked reason", () => {
+    expect(
+      bookingAccessMessage({
+        state: "locked",
+        reason: "unpaid",
+        daysUntilLock: null,
+      }),
+    ).toBe("Booking is locked. Pay and claim your payment to book again.");
+    expect(
+      bookingAccessMessage({
+        state: "locked",
+        reason: "no_plan",
+        daysUntilLock: null,
+      }),
+    ).toBe("Booking is locked. Choose your membership to book again.");
   });
 });

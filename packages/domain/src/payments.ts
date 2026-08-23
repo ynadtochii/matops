@@ -144,3 +144,73 @@ export const PAYMENT_STATUS_LABEL: Record<PaymentStatus, string> = {
   due_soon: "Due soon",
   overdue: "Overdue",
 };
+
+export const DEFAULT_GRACE_DAYS = 7;
+
+export function firstDueAt(approvedAt: Date): Date {
+  return new Date(
+    Date.UTC(approvedAt.getUTCFullYear(), approvedAt.getUTCMonth() + 1, 1),
+  );
+}
+
+export type BookingAccessState = "ok" | "no_plan" | "grace" | "locked";
+
+export interface BookingAccessInput {
+  enforcedAt: Date | null | undefined;
+  graceDays: number;
+  memberSince: Date;
+  nextDueAt: Date | null;
+  hasOpenClaim: boolean;
+}
+
+export interface BookingAccess {
+  state: BookingAccessState;
+  reason: "no_plan" | "unpaid" | null;
+  daysUntilLock: number | null;
+}
+
+export function bookingAccess(
+  input: BookingAccessInput,
+  today: Date,
+): BookingAccess {
+  if (!input.enforcedAt)
+    return { state: "ok", reason: null, daysUntilLock: null };
+  if (input.hasOpenClaim)
+    return { state: "ok", reason: null, daysUntilLock: null };
+
+  const { nextDueAt } = input;
+  const hasPlan = nextDueAt !== null;
+  const anchor =
+    nextDueAt ??
+    new Date(Math.max(input.memberSince.getTime(), input.enforcedAt.getTime()));
+  const daysPastAnchor = utcDayNumber(today) - utcDayNumber(anchor);
+  const daysUntilLock = input.graceDays + 1 - daysPastAnchor;
+
+  if (daysUntilLock <= 0)
+    return {
+      state: "locked",
+      reason: hasPlan ? "unpaid" : "no_plan",
+      daysUntilLock: null,
+    };
+  if (!hasPlan) return { state: "no_plan", reason: "no_plan", daysUntilLock };
+  if (daysPastAnchor <= 0)
+    return { state: "ok", reason: null, daysUntilLock: null };
+  return { state: "grace", reason: "unpaid", daysUntilLock };
+}
+
+export function bookingAccessMessage(access: BookingAccess): string | null {
+  const days =
+    access.daysUntilLock === 1 ? "tomorrow" : `in ${access.daysUntilLock} days`;
+  switch (access.state) {
+    case "ok":
+      return null;
+    case "no_plan":
+      return `Choose your membership. Booking locks ${days}.`;
+    case "grace":
+      return `Payment overdue. Booking locks ${days}. Pay and claim to keep booking.`;
+    case "locked":
+      return access.reason === "no_plan"
+        ? "Booking is locked. Choose your membership to book again."
+        : "Booking is locked. Pay and claim your payment to book again.";
+  }
+}

@@ -3,15 +3,17 @@ import { and, eq, isNull } from "drizzle-orm";
 
 import { canRemoveOrDemote } from "@matops/domain";
 
+import type { DbExec } from "./client";
 import type { DbReader } from "./tenant";
 import { member, organization, user } from "./auth-schema";
-import { db } from "./client";
 
 export interface Membership {
   /** Better Auth role on the member row: "owner" | "instructor" | "student". */
   role: string;
   /** "pending" until an owner approves, then "active" (docs/issues/20, 23). */
   status: string;
+  memberId: string;
+  joinedAt: Date;
 }
 
 /**
@@ -20,8 +22,8 @@ export interface Membership {
  * our domain tables, see docs/issues/12), scoped explicitly by user + academy.
  * Returns null if the user is not a member of that academy.
  *
- * `exec` is REQUIRED on every base-connection reader in this module, and no
- * default falls back to the module singleton: a missed call site has to be a
+ * `exec` is REQUIRED on every base-connection read AND write in this module, and
+ * no default falls back to the module singleton: a missed call site has to be a
  * compile error, not a silent connection swap (docs/issues/60).
  */
 export async function getMembership(
@@ -30,7 +32,12 @@ export async function getMembership(
   exec: DbReader,
 ): Promise<Membership | null> {
   const rows = await exec
-    .select({ role: member.role, status: member.status })
+    .select({
+      memberId: member.id,
+      role: member.role,
+      status: member.status,
+      joinedAt: member.createdAt,
+    })
     .from(member)
     .innerJoin(organization, eq(member.organizationId, organization.id))
     .where(
@@ -44,7 +51,12 @@ export async function getMembership(
 
   const row = rows[0];
   if (!row) return null;
-  return { role: row.role, status: row.status ?? "pending" };
+  return {
+    memberId: row.memberId,
+    role: row.role,
+    status: row.status ?? "pending",
+    joinedAt: row.joinedAt,
+  };
 }
 
 /**
@@ -71,8 +83,11 @@ export async function getMemberIdForUser(
  * an active owner at once — docs/issues/20) and by owner approval. Writes the
  * Better Auth `member` table on the base connection (no RLS there).
  */
-export async function setMemberActive(memberId: string): Promise<void> {
-  await db
+export async function setMemberActive(
+  memberId: string,
+  exec: DbExec,
+): Promise<void> {
+  await exec
     .update(member)
     .set({ status: "active" })
     .where(eq(member.id, memberId));
@@ -127,8 +142,9 @@ export async function listMembershipsForUser(
 export async function updateUserProfile(
   userId: string,
   profile: { name: string; phone: string },
+  exec: DbExec,
 ): Promise<void> {
-  await db
+  await exec
     .update(user)
     .set({ name: profile.name, phone: profile.phone })
     .where(eq(user.id, userId));
@@ -208,8 +224,9 @@ export async function getMemberById(
 export async function setMemberRoleStatus(
   memberId: string,
   next: { role: string; status: string },
+  exec: DbExec,
 ): Promise<void> {
-  await db
+  await exec
     .update(member)
     .set({ role: next.role, status: next.status })
     .where(eq(member.id, memberId));
@@ -219,8 +236,9 @@ export async function setMemberRoleStatus(
 export async function setMemberStatus(
   memberId: string,
   status: string,
+  exec: DbExec,
 ): Promise<void> {
-  await db.update(member).set({ status }).where(eq(member.id, memberId));
+  await exec.update(member).set({ status }).where(eq(member.id, memberId));
 }
 
 /**
@@ -241,8 +259,9 @@ export async function setMemberStatusIfNotLastOwner(
   academyId: string,
   memberId: string,
   status: string,
+  exec: DbExec,
 ): Promise<{ ok: boolean }> {
-  return db.transaction(async (tx) => {
+  return exec.transaction(async (tx) => {
     const rows = await tx
       .select({ id: member.id, role: member.role, status: member.status })
       .from(member)
@@ -268,8 +287,9 @@ export async function setMemberStatusIfNotLastOwner(
 export async function setMemberRole(
   memberId: string,
   role: string,
+  exec: DbExec,
 ): Promise<void> {
-  await db.update(member).set({ role }).where(eq(member.id, memberId));
+  await exec.update(member).set({ role }).where(eq(member.id, memberId));
 }
 
 /**
@@ -284,8 +304,9 @@ export async function setMemberRoleIfNotLastOwner(
   academyId: string,
   memberId: string,
   role: string,
+  exec: DbExec,
 ): Promise<{ ok: boolean }> {
-  return db.transaction(async (tx) => {
+  return exec.transaction(async (tx) => {
     const rows = await tx
       .select({ id: member.id, role: member.role, status: member.status })
       .from(member)
@@ -317,12 +338,15 @@ export async function setMemberRoleIfNotLastOwner(
  * as-is; a previously removed one is re-opened to pending. Returns the resulting
  * status so the API can tell "joined" from "already a member".
  */
-export async function createPendingMembership(input: {
-  userId: string;
-  academyId: string;
-  invitedRole: string;
-}): Promise<{ status: string; alreadyMember: boolean }> {
-  const existing = await db
+export async function createPendingMembership(
+  input: {
+    userId: string;
+    academyId: string;
+    invitedRole: string;
+  },
+  exec: DbExec,
+): Promise<{ status: string; alreadyMember: boolean }> {
+  const existing = await exec
     .select({ id: member.id, status: member.status })
     .from(member)
     .where(
@@ -339,7 +363,7 @@ export async function createPendingMembership(input: {
     // Still waiting: the newest link wins, so an instructor link opened after a
     // student one is approved as an instructor, not as a stale student.
     if (status === "pending") {
-      await db
+      await exec
         .update(member)
         .set({ invitedRole: input.invitedRole })
         .where(eq(member.id, row.id));
@@ -351,7 +375,7 @@ export async function createPendingMembership(input: {
       return { status, alreadyMember: true };
     }
     // Removed/rejected/suspended → re-open as pending with the fresh intent.
-    await db
+    await exec
       .update(member)
       .set({
         status: "pending",
@@ -362,7 +386,7 @@ export async function createPendingMembership(input: {
     return { status: "pending", alreadyMember: false };
   }
 
-  await db.insert(member).values({
+  await exec.insert(member).values({
     id: randomUUID(),
     organizationId: input.academyId,
     userId: input.userId,

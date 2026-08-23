@@ -34,6 +34,7 @@ import {
   ownerIdentityProcedure,
   ownerProcedure,
   protectedProcedure,
+  refreshSessionCookie,
 } from "../trpc";
 
 export const academyRouter = {
@@ -188,6 +189,7 @@ export const academyRouter = {
           message: "Could not create the academy",
         });
       }
+      await refreshSessionCookie(ctx);
       return { academyId: org.id };
     }),
 

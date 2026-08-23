@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { getSession } from "~/auth/server";
+import { HydrateClient, prefetch, trpc } from "~/trpc/server";
 import { AppShell } from "../_components/app-shell";
 
 /**
@@ -16,9 +17,14 @@ export default async function AppLayout({
   const session = await getSession();
   if (!session) redirect("/sign-in");
 
+  prefetch(trpc.academy.current.queryOptions());
+  prefetch(trpc.academy.memberships.queryOptions());
+
   return (
-    <AppShell user={{ name: session.user.name, email: session.user.email }}>
-      {children}
-    </AppShell>
+    <HydrateClient>
+      <AppShell user={{ name: session.user.name, email: session.user.email }}>
+        {children}
+      </AppShell>
+    </HydrateClient>
   );
 }

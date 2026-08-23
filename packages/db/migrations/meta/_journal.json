@@ -176,6 +176,13 @@
       "when": 1787437333960,
       "tag": "0024_notification_sent_by",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1787481046603,
+      "tag": "0025_payment_settings_gate",
+      "breakpoints": true
     }
   ]
 }

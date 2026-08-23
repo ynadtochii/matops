@@ -25,7 +25,7 @@ type ClassRow = RouterOutputs["class"]["mine"][number];
 
 export function StudentScreen() {
   const trpc = useTRPC();
-  const { book, cancel, busyFor } = useBooking();
+  const { book, cancel, busyFor, lockedMessage } = useBooking();
   const suspended = useAcademy().status === "suspended";
 
   const { from, to, todayKey } = useMemo(() => {
@@ -90,6 +90,7 @@ export function StudentScreen() {
                     c={c}
                     now={now}
                     busy={busyFor(c.id)}
+                    locked={!!lockedMessage}
                     onBook={() => book.mutate({ classId: c.id })}
                     onCancel={() => cancel.mutate({ classId: c.id })}
                   />
@@ -110,12 +111,14 @@ function ClassRowCard({
   c,
   now,
   busy,
+  locked,
   onBook,
   onCancel,
 }: {
   c: ClassRow;
   now: Date;
   busy: boolean;
+  locked: boolean;
   onBook: () => void;
   onCancel: () => void;
 }) {
@@ -195,14 +198,14 @@ function ClassRowCard({
           variant="primary"
           onConfirm={onBook}
           trigger={
-            <Button variant="secondary" size="sm" disabled={busy}>
+            <Button variant="secondary" size="sm" disabled={busy || locked}>
               {busy && <Spinner size="sm" className="text-current" />}
               Book
             </Button>
           }
         />
       ) : (
-        <Button size="sm" disabled={busy} onClick={onBook}>
+        <Button size="sm" disabled={busy || locked} onClick={onBook}>
           {busy && <Spinner size="sm" className="text-current" />}
           Book
         </Button>

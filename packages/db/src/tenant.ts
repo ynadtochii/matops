@@ -36,10 +36,13 @@ export type DbReader = DbExec | TenantTx;
  * Run `fn` inside a transaction scoped to one academy.
  *
  * It drops to the restricted role and sets `app.academy_id` — BOTH
- * transaction-local (`SET LOCAL ROLE` / `set_config(..., true)`), so they reset at
- * COMMIT and never leak to a reused pooled connection (safe under Neon
- * transaction-mode pooling). Postgres RLS then filters every statement `fn` runs
- * on `tx`, so app queries stay plain Drizzle and cannot leak across academies.
+ * transaction-local (`set_config(..., true)`), so they reset at COMMIT and never
+ * leak to a reused pooled connection (safe under Neon transaction-mode pooling).
+ * Postgres RLS then filters every statement `fn` runs on `tx`, so app queries
+ * stay plain Drizzle and cannot leak across academies.
+ *
+ * `SET LOCAL ROLE x` is defined as `SET LOCAL role = x`, so the role goes
+ * through set_config too and both settings fit in one round trip (ADR 81).
  *
  * academyId is the Better Auth organization id (text). See
  * docs/architecture.md §5 and docs/issues/12-tenant-isolation-mechanism.md.
@@ -51,9 +54,9 @@ export async function withTenant<T>(
 ): Promise<T> {
   if (!academyId) throw new Error("withTenant: academyId is required");
   return exec.transaction(async (tx) => {
-    // Identifier → must be raw (constant, shape-checked above). Value → bound param.
-    await tx.execute(sql`SET LOCAL ROLE ${sql.raw(APP_ROLE)}`);
-    await tx.execute(sql`SELECT set_config(${TENANT_GUC}, ${academyId}, true)`);
+    await tx.execute(
+      sql`SELECT set_config(${TENANT_GUC}, ${academyId}, true), set_config('role', ${APP_ROLE}, true)`,
+    );
     return fn(tx);
   });
 }

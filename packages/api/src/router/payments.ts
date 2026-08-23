@@ -17,22 +17,26 @@ import {
 } from "@matops/db/schema";
 import {
   canClaim,
+  firstDueAt,
   paymentPeriod,
   paymentReference,
   paymentStatus,
   rollNextDue,
 } from "@matops/domain";
 import {
+  ChoosePlanSchema,
   ClaimIdSchema,
   CreateMembershipPlanSchema,
   CreatePaymentClaimSchema,
   PlanIdSchema,
   SetMemberDuesSchema,
+  UpdateBookingGateSchema,
   UpdateMembershipPlanSchema,
   UpdatePaymentRequisitesSchema,
 } from "@matops/validators";
 
 import { requireMember } from "../members";
+import { loadBookingAccess } from "../payments-gate";
 import { memberProcedure, ownerProcedure } from "../trpc";
 
 /** Parse a "YYYY-MM-DD" due date to a UTC-midnight instant. */
@@ -187,12 +191,46 @@ export const paymentsRouter = {
   getRequisites: ownerProcedure.query(async ({ ctx }) => {
     const row = (
       await ctx.db
-        .select({ bankDetails: paymentSettings.bankDetails })
+        .select({
+          bankDetails: paymentSettings.bankDetails,
+          graceDays: paymentSettings.graceDays,
+          enforcedAt: paymentSettings.enforcedAt,
+        })
         .from(paymentSettings)
         .limit(1)
     )[0];
-    return { bankDetails: row?.bankDetails ?? "" };
+    return {
+      bankDetails: row?.bankDetails ?? "",
+      graceDays: row?.graceDays ?? 7,
+      enforced: !!row?.enforcedAt,
+    };
   }),
+
+  updateBookingGate: ownerProcedure
+    .input(UpdateBookingGateSchema)
+    .mutation(async ({ ctx, input }) => {
+      const current = (
+        await ctx.db
+          .select({ enforcedAt: paymentSettings.enforcedAt })
+          .from(paymentSettings)
+          .limit(1)
+      )[0];
+      const enforcedAt = input.enforced
+        ? (current?.enforcedAt ?? new Date())
+        : null;
+      await ctx.db
+        .insert(paymentSettings)
+        .values({
+          academyId: ctx.academyId,
+          graceDays: input.graceDays,
+          enforcedAt,
+        })
+        .onConflictDoUpdate({
+          target: paymentSettings.academyId,
+          set: { graceDays: input.graceDays, enforcedAt },
+        });
+      return { ok: true as const };
+    }),
 
   /** Set the academy's bank details (spec O6). */
   updateRequisites: ownerProcedure
@@ -332,6 +370,59 @@ export const paymentsRouter = {
 
   // ─── Student: my dues + requisites + "I paid" ───────────────────────────────
 
+  planOptions: memberProcedure.query(({ ctx }) =>
+    ctx.db
+      .select({
+        id: membershipPlan.id,
+        name: membershipPlan.name,
+        priceMinor: membershipPlan.priceMinor,
+        currency: membershipPlan.currency,
+        cycle: membershipPlan.cycle,
+      })
+      .from(membershipPlan)
+      .where(isNull(membershipPlan.deletedAt))
+      .orderBy(desc(membershipPlan.createdAt)),
+  ),
+
+  choosePlan: memberProcedure
+    .input(ChoosePlanSchema)
+    .mutation(async ({ ctx, input }) => {
+      const plan = (
+        await ctx.db
+          .select({ id: membershipPlan.id })
+          .from(membershipPlan)
+          .where(
+            and(
+              eq(membershipPlan.id, input.planId),
+              isNull(membershipPlan.deletedAt),
+            ),
+          )
+          .limit(1)
+      )[0];
+      if (!plan) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Plan not found" });
+      }
+      const inserted = await ctx.db
+        .insert(memberDues)
+        .values({
+          academyId: ctx.academyId,
+          memberId: ctx.membership.memberId,
+          planId: input.planId,
+          nextDueAt: firstDueAt(new Date()),
+        })
+        .onConflictDoNothing({
+          target: [memberDues.academyId, memberDues.memberId],
+        })
+        .returning({ id: memberDues.id });
+      if (inserted.length === 0) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "You already have a membership. Ask your gym to change it.",
+        });
+      }
+      return { ok: true as const };
+    }),
+
   /**
    * The caller's dues line + requisites for the S9 pay screen. APPROVED members
    * only: `requisites` carries the gym's bank details, which a pending joiner
@@ -376,8 +467,16 @@ export const paymentsRouter = {
         )[0]
       : undefined;
 
+    const access = await loadBookingAccess(ctx.db, ctx.membership);
     if (!duesRow || !memberId) {
-      return { dues: null, requisites, openClaim: null, canPay: false };
+      return {
+        dues: null,
+        requisites,
+        openClaim: null,
+        canPay: false,
+        access,
+        canChoosePlan: ctx.membership.role === "student",
+      };
     }
 
     const period = paymentPeriod(duesRow.nextDueAt);
@@ -407,6 +506,8 @@ export const paymentsRouter = {
       requisites,
       openClaim: openClaim ?? null,
       canPay: canClaim({ hasPlan: true, hasOpenClaim: !!openClaim }),
+      access,
+      canChoosePlan: false,
     };
   }),
 

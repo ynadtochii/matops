@@ -63,6 +63,11 @@ export function MemberRow({
           </span>
         )}
         {m.dues && <DuesDot dues={m.dues} />}
+        {m.access?.state === "locked" && (
+          <span className="text-error ml-2 text-xs font-medium uppercase">
+            booking locked
+          </span>
+        )}
       </span>
       <span className="text-muted-foreground text-sm">
         {label} · {m.email}

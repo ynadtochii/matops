@@ -2,6 +2,8 @@ import { Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 
+import { bookingAccessMessage } from "@matops/domain";
+
 import { Txt, useTheme } from "~/components/ui";
 import { trpc } from "~/utils/api";
 
@@ -31,7 +33,13 @@ export function OverdueBanner() {
     trpc.payments.myDues.queryOptions(undefined, { enabled: approved }),
   );
 
-  if (dues.data?.dues?.status !== "overdue") return null;
+  const access = dues.data?.access;
+  const gateMessage = access ? bookingAccessMessage(access) : null;
+  const overdue = dues.data?.dues?.status === "overdue";
+  const strip =
+    gateMessage ??
+    (overdue ? "Membership payment overdue — tap to pay." : null);
+  if (!strip) return null;
 
   return (
     <Pressable
@@ -56,7 +64,7 @@ export function OverdueBanner() {
       })}
     >
       <Txt size={14} weight={500} style={{ flex: 1 }}>
-        Membership payment overdue — tap to pay.
+        {strip}
       </Txt>
       <Txt size={16} tone="error">
         ›

@@ -532,6 +532,15 @@ export const CreatePaymentClaimSchema = z.object({
 });
 export type CreatePaymentClaimInput = z.infer<typeof CreatePaymentClaimSchema>;
 
+export const ChoosePlanSchema = z.object({ planId: z.uuid() });
+export type ChoosePlanInput = z.infer<typeof ChoosePlanSchema>;
+
+export const UpdateBookingGateSchema = z.object({
+  enforced: z.boolean(),
+  graceDays: z.number().int().min(0).max(30),
+});
+export type UpdateBookingGateInput = z.infer<typeof UpdateBookingGateSchema>;
+
 /** Owner confirms or rejects one "I paid" claim by id (spec O7). */
 export const ClaimIdSchema = z.object({ claimId: z.uuid() });
 export type ClaimIdInput = z.infer<typeof ClaimIdSchema>;

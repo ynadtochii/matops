@@ -1,10 +1,12 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { bookingAccessMessage, isActiveMember, isStaff } from "@matops/domain";
 import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
+import { useAcademy } from "./academy";
 
 /**
  * Book and cancel, for every screen that offers them (the student schedule,
@@ -16,6 +18,15 @@ import { useTRPC } from "~/trpc/react";
 export function useBooking() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
+  const academy = useAcademy();
+
+  const myDues = useQuery({
+    ...trpc.payments.myDues.queryOptions(),
+    enabled: !isStaff(academy) && isActiveMember(academy),
+  });
+  const access = myDues.data?.access ?? null;
+  const lockedMessage =
+    access?.state === "locked" ? bookingAccessMessage(access) : null;
 
   const invalidate = async () => {
     await queryClient.invalidateQueries(trpc.class.pathFilter());
@@ -48,5 +59,11 @@ export function useBooking() {
     (book.isPending && book.variables.classId === classId) ||
     (cancel.isPending && cancel.variables.classId === classId);
 
-  return { book, cancel, busyFor, busy: book.isPending || cancel.isPending };
+  return {
+    book,
+    cancel,
+    busyFor,
+    busy: book.isPending || cancel.isPending,
+    lockedMessage,
+  };
 }

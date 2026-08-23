@@ -147,6 +147,8 @@ export const paymentClaim = pgTable(
 export const paymentSettings = pgTable("payment_settings", (t) => ({
   academyId: t.text().notNull().primaryKey(), // → organization.id (RLS scope)
   bankDetails: t.text().notNull().default(""),
+  graceDays: t.integer().notNull().default(7),
+  enforcedAt: t.timestamp({ withTimezone: true }),
   createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
   updatedAt: t
     .timestamp({ withTimezone: true })

@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Alert, Pressable } from "react-native";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { capacityDisplay } from "@matops/domain";
+import { bookingAccessMessage, capacityDisplay } from "@matops/domain";
 
 import { useToast } from "~/components/toast";
 import { confirm, Txt, useTheme } from "~/components/ui";
@@ -37,6 +37,13 @@ export function useBookClass(
   const queryClient = useQueryClient();
   const toast = useToast();
   const [error, setError] = useState<string | null>(null);
+
+  const current = useQuery(trpc.academy.current.queryOptions());
+  const approved = current.data?.status === "active";
+  const dues = useQuery(
+    trpc.payments.myDues.queryOptions(undefined, { enabled: approved }),
+  );
+  const access = dues.data?.access;
 
   const book = useMutation(
     trpc.booking.book.mutationOptions({
@@ -74,6 +81,13 @@ export function useBookClass(
   /** Book `c`, asking to confirm first when it is at/over capacity. */
   const onBook = (c: BookableClass) => {
     setError(null);
+    if (access?.state === "locked") {
+      const message =
+        bookingAccessMessage(access) ?? "Booking is locked for you.";
+      setError(message);
+      if (opts?.toastError) toast.show(message);
+      return;
+    }
     const over = capacityDisplay(c.bookingCount, c.capacity).isOver;
     if (over) {
       Alert.alert("This class looks full", "Book anyway?", [

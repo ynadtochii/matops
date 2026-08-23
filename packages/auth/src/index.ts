@@ -70,6 +70,13 @@ export function initAuth<
         trustedProviders: ["google"],
       },
     },
+    // The session + user rows are re-read from Postgres on EVERY authed request
+    // (2 round trips to Neon). The cache signs them into the session cookie
+    // instead, so a request inside the window costs zero queries. Tradeoff: a
+    // revoked or role-changed session stays valid for up to `maxAge` (ADR 81).
+    session: {
+      cookieCache: { enabled: true, maxAge: 5 * 60 },
+    },
     // Phone is captured at seamless registration (docs/issues/26); email is
     // required and verified via the magic link. Membership `status` lives on the
     // organization member row (below), not on the user.
@@ -104,7 +111,7 @@ export function initAuth<
             };
           },
           afterCreateOrganization: async ({ member }) => {
-            await setMemberActive(member.id);
+            await setMemberActive(member.id, db);
           },
         },
         schema: {

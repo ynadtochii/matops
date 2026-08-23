@@ -72,6 +72,34 @@ export const createTRPCContext = async (opts: {
     headers: opts.headers,
   };
 };
+
+/**
+ * Re-read the session from Postgres and re-sign it into the session cookie.
+ *
+ * ADR 81 caches the session + user rows in a signed cookie for five minutes, and
+ * Better Auth answers `getSession` from that cookie without touching the
+ * database. So any write that changes the `user` or `session` row behind Better
+ * Auth's back stays invisible until the cookie expires: `updateUserProfile`
+ * writes the row directly, and `createOrganization` sets
+ * `activeOrganizationId` on the session row but never re-signs the cookie (only
+ * `/organization/set-active` does). `disableCookieCache` forces the database
+ * read, and Better Auth rewrites the cookie with the fresh copy.
+ *
+ * Call it after such a write, from a mutation. It only takes effect inside the
+ * route handler, which is where `nextCookies()` can apply the `Set-Cookie`.
+ */
+export async function refreshSessionCookie(
+  ctx: Pick<
+    Awaited<ReturnType<typeof createTRPCContext>>,
+    "authApi" | "headers"
+  >,
+) {
+  await ctx.authApi.getSession({
+    headers: ctx.headers,
+    query: { disableCookieCache: true },
+  });
+}
+
 /**
  * 2. INITIALIZATION
  *
@@ -105,20 +133,9 @@ const t = initTRPC.context<typeof createTRPCContext>().create({
  */
 export const createTRPCRouter = t.router;
 
-/**
- * Middleware for timing procedure execution and adding an articifial delay in development.
- *
- * You can remove this if you don't like it, but it can help catch unwanted waterfalls by simulating
- * network latency that would occur in production but not in local development.
- */
+/** Logs how long each procedure took, to the server console. */
 const timingMiddleware = t.middleware(async ({ next, path }) => {
   const start = Date.now();
-
-  if (t._config.isDev) {
-    // artificial delay in dev 100-500ms
-    const waitMs = Math.floor(Math.random() * 400) + 100;
-    await new Promise((resolve) => setTimeout(resolve, waitMs));
-  }
 
   const result = await next();
 

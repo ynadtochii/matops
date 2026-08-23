@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
 import {
+  bookingAccessMessage,
   isActiveMember,
   isOwner as isOwnerOf,
   isPendingCoach,
@@ -33,6 +34,8 @@ interface NavItem {
 }
 
 const iconClass = "size-[18px] shrink-0";
+
+const ACADEMY_STALE_TIME = 5 * 60 * 1000;
 
 function contentWidth(pathname: string): string {
   return pathname.startsWith("/schedule") ? "max-w-[1600px]" : "max-w-6xl";
@@ -196,8 +199,14 @@ export function AppShell({
 }) {
   const trpc = useTRPC();
   const pathname = usePathname();
-  const current = useQuery(trpc.academy.current.queryOptions());
-  const mine = useQuery(trpc.academy.memberships.queryOptions());
+  const current = useQuery({
+    ...trpc.academy.current.queryOptions(),
+    staleTime: ACADEMY_STALE_TIME,
+  });
+  const mine = useQuery({
+    ...trpc.academy.memberships.queryOptions(),
+    staleTime: ACADEMY_STALE_TIME,
+  });
 
   // Boot: no chrome to mirror yet, and the answer may be the shell or the gate,
   // so a skeleton would draw a layout that half the time never arrives (ADR 80).
@@ -285,7 +294,13 @@ function ShellChrome({
     ...trpc.payments.myDues.queryOptions(),
     enabled: !isStaff && isActiveMember({ status }),
   });
+  const access = myDues.data?.access;
+  const gateMessage = access ? bookingAccessMessage(access) : null;
   const overdue = myDues.data?.dues?.status === "overdue";
+  const duesStrip =
+    gateMessage ??
+    (overdue ? "Membership payment overdue — tap to pay." : null);
+  const duesStripLocked = access?.state === "locked";
 
   const items: NavItem[] = [
     {
@@ -468,12 +483,16 @@ function ShellChrome({
           </div>
         )}
 
-        {overdue && (
+        {duesStrip && (
           <Link
             href="/payments"
-            className="border-warning/25 bg-warning/10 hover:bg-warning/15 block border-b px-6 py-2.5 text-sm transition-colors"
+            className={`block border-b px-6 py-2.5 text-sm transition-colors ${
+              duesStripLocked
+                ? "border-error/25 bg-error/10 hover:bg-error/15"
+                : "border-warning/25 bg-warning/10 hover:bg-warning/15"
+            }`}
           >
-            Membership payment overdue — tap to pay.
+            {duesStrip}
           </Link>
         )}
 

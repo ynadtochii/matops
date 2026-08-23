@@ -3,9 +3,10 @@ import { TRPCError } from "@trpc/server";
 
 import { and, desc, eq, isNull, ne, sql } from "@matops/db";
 import { classInstance, classParticipation } from "@matops/db/schema";
-import { bookingTier, canBook } from "@matops/domain";
+import { bookingAccessMessage, bookingTier, canBook } from "@matops/domain";
 import { BookClassSchema, CancelBookingSchema } from "@matops/validators";
 
+import { loadBookingAccess } from "../payments-gate";
 import { enrolledProcedure } from "../trpc";
 
 /**
@@ -100,6 +101,17 @@ export const bookingRouter = {
       // 2. Tier from the caller's membership: active → confirmed, pending →
       //    provisional (never counted).
       const tier = bookingTier(ctx.membership);
+
+      if (tier === "confirmed") {
+        const access = await loadBookingAccess(ctx.db, ctx.membership);
+        if (access.state === "locked") {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message:
+              bookingAccessMessage(access) ?? "Booking is locked for you.",
+          });
+        }
+      }
 
       // 3. Transition the participation to booked, only if not already booked
       //    (idempotent). A returned row ⇒ a real transition (new insert OR

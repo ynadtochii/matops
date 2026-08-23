@@ -180,7 +180,9 @@ function MembershipDues() {
     return <ErrorState label="your dues" onRetry={() => void dues.refetch()} />;
   }
 
-  const { dues: d, requisites, openClaim, canPay } = dues.data;
+  const { dues: d, requisites, openClaim, canPay, canChoosePlan } = dues.data;
+
+  if (!d && canChoosePlan) return <ChoosePlanCard />;
 
   if (!d && !requisites.bankDetails) {
     return (
@@ -258,6 +260,89 @@ function MembershipDues() {
             }
           />
         )
+      ) : null}
+    </Card>
+  );
+}
+
+function ChoosePlanCard() {
+  const queryClient = useQueryClient();
+  const [error, setError] = useState<string | null>(null);
+  const plans = useQuery(trpc.payments.planOptions.queryOptions());
+  const choose = useMutation(
+    trpc.payments.choosePlan.mutationOptions({
+      onSuccess: async () => {
+        await queryClient.invalidateQueries(trpc.payments.pathFilter());
+      },
+      onError: (err) => setError(err.message || "Could not choose that"),
+    }),
+  );
+
+  if (plans.isPending) return <DuesSkeleton />;
+  if (plans.isError) {
+    return (
+      <ErrorState
+        label="the membership plans"
+        onRetry={() => void plans.refetch()}
+      />
+    );
+  }
+  if (plans.data.length === 0) {
+    return (
+      <Txt size={14} tone="muted">
+        Your gym hasn’t set up membership dues yet.
+      </Txt>
+    );
+  }
+
+  return (
+    <Card variant="outline" style={{ gap: 16 }}>
+      <Txt size={14} tone="muted">
+        Pick the plan you agreed with your gym. Your first payment is due on the
+        1st of next month.
+      </Txt>
+      {plans.data.map((p) => (
+        <View
+          key={p.id}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+          }}
+        >
+          <View style={{ flex: 1, gap: 2 }}>
+            <Txt size={15} weight={600}>
+              {p.name}
+            </Txt>
+            <Txt size={13} tone="muted">
+              {money(p.priceMinor, p.currency)} per month
+            </Txt>
+          </View>
+          <Button
+            label={choose.isPending ? "Choosing…" : "Choose"}
+            loading={choose.isPending && choose.variables.planId === p.id}
+            disabled={choose.isPending}
+            onPress={() =>
+              confirm({
+                title: `Choose ${p.name}?`,
+                message:
+                  "Your first payment is due on the 1st of next month. Ask your gym if you need a different plan later.",
+                confirmLabel: "Choose this plan",
+                destructive: false,
+                onConfirm: () => {
+                  setError(null);
+                  choose.mutate({ planId: p.id });
+                },
+              })
+            }
+          />
+        </View>
+      ))}
+      {error ? (
+        <Txt size={14} tone="error">
+          {error}
+        </Txt>
       ) : null}
     </Card>
   );

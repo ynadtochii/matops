@@ -23,6 +23,9 @@ if (!connectionString) {
 export const pool = new Pool({
   connectionString,
   // Neon requires TLS; the connection string carries `sslmode=require`.
+  max: 20,
+  keepAlive: true,
+  idleTimeoutMillis: 60_000,
 });
 
 pool.on("error", (err) => {
