@@ -35,9 +35,9 @@ jobs:
             -H "Authorization: Bearer $CRON_SECRET" \
             "$APP_URL/api/cron/remind")
           echo "$out"
-          # The sweep stamps its claims before sending, so a dropped email is lost
-          # until the next billing period. Fail loudly rather than log it.
+          # The sweep stamps its claims before sending, so a member it failed to
+          # reach waits until the next billing period. Fail loudly rather than log it.
           case "$out" in
             *'"ok":true'*) ;;
-            *) echo "reminder sweep reported undelivered email"; exit 1 ;;
+            *) echo "reminder sweep did not report success"; exit 1 ;;
           esac
