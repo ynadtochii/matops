@@ -190,7 +190,7 @@ One row per slice. This is the single answer to _"what's left, on which surface?
 | G.1 | `bookingAccess` / `bookingAccessMessage` / `firstDueAt` pure clock + tests | — | — | — | — | done | — |
 | G.2 | Migration `0025`: `grace_days` + `enforced_at` on `payment_settings`; `Membership` gains `memberId` / `joinedAt` | done | done | — | — | — | — |
 | G.3 | `booking.book` guard; `planOptions` / `choosePlan` / `updateBookingGate`; approval auto-assigns a single plan; router tests | — | done | — | — | — | — |
-| G.4 | O7 **Booking rule** card (switch + grace days); roster `access` + "booking locked" tag | — | done | done | — | — | — |
+| G.4 | O6 **Booking rule** card (switch + grace days); roster `access` + "booking locked" tag | — | done | done | — | — | — |
 | G.5 | Web student: strip states, plan chooser on `/payments`, book CTAs disable while locked | — | — | done | — | — | — |
 | G.6 | Phone: strip states, S9 plan pick, a locked book tap explains itself | — | — | — | done | — | — |
 | **v3.9** | **Loading states** _(§3 states line; ADR 80 — both clients, no migration, no procedure)_ | | | | | | |
@@ -558,7 +558,7 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 - **G.1 The clock.** **DONE.** `bookingAccess` in `@matops/domain/payments`: `ok` / `no_plan` / `grace` / `locked` + `daysUntilLock`, day-granular like `paymentStatus`. No plan anchors on the later of joining and `enforced_at`, so flipping the switch grants the window instead of locking instantly. An open claim short-circuits to `ok`. `bookingAccessMessage` is the one wording both clients render; `firstDueAt` is the 1st of next month, so `rollNextDue` keeps every later due date on the 1st with no new roll logic. Spec: §4.
 - **G.2 The columns.** **DONE.** `payment_settings.grace_days` (default 7) + `enforced_at` (null = off), migration `0025`, RLS already on the table. `getMembership` now returns `memberId` + `joinedAt`, so the gate reads the caller's dues without a second member lookup.
 - **G.3 The seam.** **DONE.** `payments-gate.ts` (`loadGateSettings` / `loadBookingAccess`, students only); `booking.book` refuses a locked confirmed-tier booking with the strip's own message; `payments.planOptions` + `choosePlan` (one-shot, owner changes it after) + `updateBookingGate` (owner); `membership.approve` auto-assigns a sole active plan. Spec: S9, O7, §4.
-- **G.4 The owner sees it.** **DONE.** The **Booking rule** card on O7 → Bank details (switch + grace days, save on change); `membership.members` returns per-student `access` and the O4 row shows a "booking locked" tag beside the dues dot.
+- **G.4 The owner sees it.** **DONE.** The **Booking rule** card on O6 Settings (switch + grace days, save on change); `membership.members` returns per-student `access` and the O4 row shows a "booking locked" tag beside the dues dot.
 - **G.5 The web student.** **DONE.** The shell strip carries the gate message (error tone once locked, warning during the countdown, the plain overdue copy when the gate is off); `/payments` offers **Choose your membership** when no plan is set; `useBooking` exposes `lockedMessage` and the Book buttons on the week, class detail disable while locked.
 - **G.6 The phone.** **DONE.** `OverdueBanner` renders the same three messages; the S9 dues card becomes the plan picker while no plan is set; `useBookClass` short-circuits a locked tap with the same message (inline on detail, toast on the row pill). Cancel and check-in untouched.
 

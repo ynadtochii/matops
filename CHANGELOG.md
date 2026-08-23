@@ -2,6 +2,10 @@
 
 One line per shipped slice (see `docs/delivery.md` §4). Newest first.
 
+## The booking rule moves to Settings
+
+- **The "Members need an active membership to book" switch and its grace period now sit on Settings, next to the academy name, time zone and address.** It is a rule about the whole gym, not a payment detail, and it was buried behind the Payments → Bank details tab. Nothing about the rule itself changed.
+
 ## Leaving a gym stops meaning one blunt thing
 
 - **"Remove" becomes two actions that mean different things.** **Archive** is the everyday one: the member loses access, their upcoming bookings are cancelled and those seats go back to the class, their dues stop, and nothing else is touched. They move to a new **Archived** tab where one click restores them with their attendance, rank, notes and payment history intact. A student who rejoins with the gym code lands on the same record either way. **Delete permanently** is the other one: it sits behind the row's `⋯` menu, makes you type the member's name, and erases every record the gym holds about that person. It is how an owner answers a delete-my-data request, which the privacy page already promises. Every action on a member row now lives in that one `⋯` menu, so the row itself stays quiet. ADR [84](docs/issues/84-archive-and-erase.md), migration `0026`.
