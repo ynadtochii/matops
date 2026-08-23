@@ -5,6 +5,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 
 import { parseCheckInLink } from "@matops/domain";
 
+import { AppHeader } from "~/components/app-header";
 import {
   Button,
   Heading,
@@ -62,7 +63,7 @@ export default function Scan() {
   const blocked = permission && !permission.granted && !permission.canAskAgain;
 
   return (
-    <Screen>
+    <Screen header={<AppHeader />}>
       <UIStack gap={24}>
         <Heading>Check in</Heading>
         <Muted>

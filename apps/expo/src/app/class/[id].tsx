@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { capacityDisplay } from "@matops/domain";
 
 import { useBookClass, useCancelBooking } from "~/components/book-control";
+import { ClassDetailSkeleton } from "~/components/skeletons";
 import {
   Banner,
   Button,
@@ -12,7 +13,6 @@ import {
   Eyebrow,
   Field,
   Heading,
-  Loading,
   Mono,
   Muted,
   Screen,
@@ -86,10 +86,10 @@ export default function ClassDetail() {
 
   if (q.isPending) {
     return (
-      <>
+      <Screen>
         <Stack.Screen options={{ title: "Class" }} />
-        <Loading />
-      </>
+        <ClassDetailSkeleton />
+      </Screen>
     );
   }
 

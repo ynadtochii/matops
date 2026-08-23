@@ -22,6 +22,8 @@ import {
   isSuspended,
 } from "@matops/domain";
 
+import { clientIp, take } from "./rate-limit";
+
 /**
  * 1. CONTEXT
  *
@@ -134,6 +136,23 @@ const timingMiddleware = t.middleware(async ({ next, path }) => {
  * can still access user session data if they are logged in
  */
 export const publicProcedure = t.procedure.use(timingMiddleware);
+
+/**
+ * Cap an unauthenticated procedure per caller IP. The join QR is on a public
+ * wall, so anything behind it can be flooded from one laptop: the drop-in form
+ * fills the lead table, and magic-link send burns the shared Resend quota.
+ */
+export function rateLimited(max: number, windowMs: number) {
+  return t.middleware(({ ctx, path, next }) => {
+    if (!take(`${path}:${clientIp(ctx.headers)}`, max, windowMs)) {
+      throw new TRPCError({
+        code: "TOO_MANY_REQUESTS",
+        message: "Too many requests. Wait a minute and try again.",
+      });
+    }
+    return next();
+  });
+}
 
 /**
  * Protected (authenticated) procedure

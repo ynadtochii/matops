@@ -25,7 +25,7 @@ export default function Index() {
   const target = () => {
     if (sessionPending) return <Loading />;
     if (!session) return <Redirect href="/sign-in" />;
-    if (current.isPending) return <Loading />;
+    if (current.isPending) return <Loading label="Opening your academy" />;
     // A failed load is NOT "no gym" — retry instead of dumping a member who
     // already belongs somewhere into the join screen.
     if (current.isError) {

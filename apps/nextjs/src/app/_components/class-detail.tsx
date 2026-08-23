@@ -13,7 +13,8 @@ import { dayLongFmt, timeFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { PageHeader } from "./page-header";
 import { cardClass, Eyebrow, Section } from "./primitives";
-import { EmptyState, ErrorState, SkeletonRows } from "./states";
+import { ClassDetailSkeleton, SkeletonCard } from "./skeletons";
+import { EmptyState, ErrorState } from "./states";
 import { useBooking } from "./use-booking";
 
 export function ClassDetail({ classId }: { classId: string }) {
@@ -25,7 +26,7 @@ export function ClassDetail({ classId }: { classId: string }) {
     retry: false,
   });
 
-  if (cls.isPending) return <SkeletonRows rows={4} />;
+  if (cls.isPending) return <ClassDetailSkeleton />;
   if (cls.isError) {
     return (
       <>
@@ -170,7 +171,7 @@ function Attendees({ classId }: { classId: string }) {
   const trpc = useTRPC();
   const view = useQuery(trpc.class.attendees.queryOptions({ id: classId }));
 
-  if (view.isPending) return <SkeletonRows rows={1} />;
+  if (view.isPending) return <SkeletonCard lines={2} />;
   if (view.isError) {
     return <ErrorState label="who's in" onRetry={() => void view.refetch()} />;
   }

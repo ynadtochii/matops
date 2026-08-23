@@ -6,14 +6,16 @@ import { isOwner, isStaff } from "@matops/domain";
  * the sidebar (what to show) and the shell (what to render), so the nav and the
  * guard cannot disagree. Anything absent is open to every member: the home
  * page, `/payments`, `/profile`, `/training` and `/class/<id>` all branch by
- * role inside the screen instead (ADR 73).
+ * role inside the screen instead (ADR 73). `/members` is staff so the head
+ * coach can approve and rank; the owner-only blocks inside it branch on
+ * `isOwner` in the screen (ADR 75).
  *
  * This is convenience, not security. The tRPC tier is the real guard
  * (`packages/api/src/trpc.ts`); this only decides what a person is offered.
  */
 const ROUTE_ACCESS: { prefix: string; allowed: (m: Membership) => boolean }[] =
   [
-    { prefix: "/members", allowed: isOwner },
+    { prefix: "/members", allowed: isStaff },
     { prefix: "/referrals", allowed: isOwner },
     { prefix: "/settings", allowed: isOwner },
     { prefix: "/schedule", allowed: isStaff },

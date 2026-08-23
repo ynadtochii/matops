@@ -19,7 +19,8 @@ import { AddVisitorSchema } from "@matops/validators";
 import { useTRPC } from "~/trpc/react";
 import { CoachSelect } from "./coach-select";
 import { cardClass } from "./primitives";
-import { EmptyState, ErrorState, SkeletonRows } from "./states";
+import { SkeletonRoster } from "./skeletons";
+import { EmptyState, ErrorState } from "./states";
 
 type ClassRow = RouterOutputs["class"]["week"][number];
 
@@ -202,7 +203,7 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
     }),
   );
 
-  if (classList.isPending) return <SkeletonRows rows={4} />;
+  if (classList.isPending) return <SkeletonRoster />;
   if (classList.isError) {
     return (
       <ErrorState

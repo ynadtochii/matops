@@ -91,7 +91,9 @@ export const bookingRouter = {
           message:
             bookable.reason === "cancelled"
               ? "This class was cancelled"
-              : "This class has already started",
+              : bookable.reason === "too-far-ahead"
+                ? "You can book up to a week ahead"
+                : "This class has already started",
         });
       }
 

@@ -15,7 +15,8 @@ import { useTRPC } from "~/trpc/react";
 import { useAcademy } from "./academy";
 import { PageHeader } from "./page-header";
 import { cardClass, DUES_TONE, Eyebrow, Section } from "./primitives";
-import { EmptyState, ErrorState, SkeletonRows, SuspendedState } from "./states";
+import { SkeletonDuesBody } from "./skeletons";
+import { EmptyState, ErrorState, SuspendedState } from "./states";
 
 export function MyDues() {
   const trpc = useTRPC();
@@ -68,7 +69,7 @@ export function MyDues() {
     return (
       <>
         {header}
-        <SkeletonRows rows={3} />
+        <SkeletonDuesBody />
       </>
     );
   }

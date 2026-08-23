@@ -131,3 +131,46 @@ export function computeOccurrences(
   }
   return result.sort((a, b) => a.getTime() - b.getTime());
 }
+
+/** An existing concrete class, reduced to what the rebuild rule compares. */
+export interface ExistingClass {
+  id: string;
+  /** Null for a one-off the owner entered by hand, which no template recreates. */
+  templateId: string | null;
+  startsAt: Date;
+}
+
+/** An instant an active template still produces. */
+export interface WantedOccurrence {
+  templateId: string;
+  startsAt: Date;
+}
+
+/**
+ * The classes a schedule rebuild removes (ADR 79): every existing row whose
+ * (template, instant) pair no active template still produces. This is what
+ * clears out a paused or deleted template's leftovers, and what drops the old
+ * instants after a template's days or time changed.
+ *
+ * ONE-OFFS SURVIVE. A class with no `templateId` was entered by hand for a
+ * seminar; nothing would recreate it, so nothing removes it either.
+ *
+ * The caller decides which rows to pass in, and passes only FUTURE ones: a past
+ * class carries its attendance on the same `class_participation` row as its
+ * booking, so deleting one erases history.
+ */
+export function staleClassIds(
+  existing: ExistingClass[],
+  wanted: WantedOccurrence[],
+): string[] {
+  const keep = new Set(
+    wanted.map((w) => `${w.templateId}@${w.startsAt.getTime()}`),
+  );
+  return existing
+    .filter(
+      (c) =>
+        c.templateId !== null &&
+        !keep.has(`${c.templateId}@${c.startsAt.getTime()}`),
+    )
+    .map((c) => c.id);
+}

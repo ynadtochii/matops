@@ -8,6 +8,7 @@ import {
   DAY_LABELS,
   disciplineLabel,
   formatRank,
+  isOwner,
   PAYMENT_STATUS_LABEL,
   RANK_SYSTEMS,
   rankDisciplines,
@@ -25,8 +26,10 @@ import type { Member, MemberHistory } from "./members";
 import { dateFmt } from "~/lib/format";
 import { formatMoney } from "~/lib/money";
 import { useTRPC } from "~/trpc/react";
+import { useAcademy } from "./academy";
 import { cardClass, DriftBadge, DUES_TONE, Stat, Tabs } from "./primitives";
-import { EmptyState, ErrorState, SkeletonRows } from "./states";
+import { SkeletonLines, SkeletonRows } from "./skeletons";
+import { EmptyState, ErrorState } from "./states";
 
 /**
  * One member's row and the detail panel behind it (spec O4): Overview, Rank,
@@ -135,7 +138,7 @@ export function MemberDetail({ m }: { m: Member }) {
         ) : tab === "notes" ? (
           <NotesTab memberId={m.memberId} />
         ) : detail.isPending ? (
-          <SkeletonRows rows={3} />
+          <SkeletonLines n={5} />
         ) : detail.isError ? (
           <ErrorState
             label="member detail"
@@ -219,7 +222,7 @@ function RankTab({ memberId }: { memberId: string }) {
           Current rank
         </span>
         {ranks.isPending ? (
-          <SkeletonRows rows={1} />
+          <SkeletonLines n={2} />
         ) : ranks.isError ? (
           <ErrorState label="rank" onRetry={() => void ranks.refetch()} />
         ) : ranks.data.ranks.length === 0 ? (
@@ -530,8 +533,11 @@ function Overview({ m, data }: { m: Member; data: MemberHistory }) {
  * The member's academy role, switchable between student and instructor (spec
  * O6). An owner's role is not editable here: promoting and stepping down live
  * on the Coaches screen, Staff section, behind the never-ownerless guard.
+ * Owner-only: `membership.setRole` is, and an instructor who could mint
+ * instructors could also demote every owner but one (ADR 75).
  */
 function RoleControl({ m }: { m: Member }) {
+  const academy = useAcademy();
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const setRole = useMutation(
@@ -546,7 +552,7 @@ function RoleControl({ m }: { m: Member }) {
     }),
   );
 
-  if (m.role === "owner" || m.status !== "active") {
+  if (!isOwner(academy) || m.role === "owner" || m.status !== "active") {
     return <Detail term="Role" value={m.role} />;
   }
 

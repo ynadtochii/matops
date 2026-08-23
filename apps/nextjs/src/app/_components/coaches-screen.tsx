@@ -22,8 +22,9 @@ import { useTRPC } from "~/trpc/react";
 import { useAcademy } from "./academy";
 import { PageHeader } from "./page-header";
 import { cardClass, Eyebrow, SectionHeading, Stat, Tabs } from "./primitives";
+import { SkeletonBreakdown, SkeletonCoachCards } from "./skeletons";
 import { Staff } from "./staff";
-import { EmptyState, ErrorState, SkeletonRows } from "./states";
+import { EmptyState, ErrorState } from "./states";
 
 type CoachRow = RouterOutputs["stats"]["coaches"]["coaches"][number];
 type CoachDetailData = RouterOutputs["stats"]["coach"];
@@ -165,7 +166,7 @@ function CoachDetail({
   const detail = useQuery(
     trpc.stats.coach.queryOptions({ window, instructorId }),
   );
-  if (detail.isPending) return <SkeletonRows rows={3} />;
+  if (detail.isPending) return <SkeletonBreakdown />;
   if (detail.isError) {
     return (
       <ErrorState
@@ -403,7 +404,7 @@ export function CoachesScreen() {
 
         {isOwner ? (
           roster.isPending ? (
-            <SkeletonRows rows={3} />
+            <SkeletonCoachCards n={3} />
           ) : roster.isError ? (
             <ErrorState
               label="your coaches"
@@ -429,7 +430,7 @@ export function CoachesScreen() {
             ))
           )
         ) : mine.isPending ? (
-          <SkeletonRows rows={3} />
+          <SkeletonCoachCards n={1} toggle={false} />
         ) : mine.isError ? (
           <ErrorState
             label="your classes"

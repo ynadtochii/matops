@@ -7,21 +7,22 @@ import * as Sentry from "@sentry/nextjs";
 Sentry.init({
   dsn: "https://dd68ca937e599d15df70204357fbf812@o4511954931089408.ingest.de.sentry.io/4511954936594512",
 
-  // Add optional integrations for additional features
   integrations: [Sentry.replayIntegration()],
 
-  // Define how likely traces are sampled. Adjust this value in production, or use tracesSampler for greater control.
-  tracesSampleRate: 1,
-  // Enable logs to be sent to Sentry
-  enableLogs: true,
+  tracesSampleRate: 0,
+  enableLogs: false,
 
-  // Define how likely Replay events are sampled.
-  // This sets the sample rate to be 10%. You may want this to be 100% while
-  // in development and sample at a lower rate in production
-  replaysSessionSampleRate: 0.1,
-
-  // Define how likely Replay events are sampled when an error occurs.
+  replaysSessionSampleRate: 0,
   replaysOnErrorSampleRate: 1.0,
+
+  ignoreErrors: [
+    "ResizeObserver loop",
+    "AbortError",
+    "Failed to fetch",
+    "NetworkError when attempting to fetch resource",
+    "chrome-extension://",
+    "moz-extension://",
+  ],
 
   dataCollection: {
     // To disable sending user data and HTTP bodies, uncomment the lines below. For more info visit:

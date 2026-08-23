@@ -24,6 +24,7 @@ import { memberDues, membershipPlan } from "./payments-schema";
 
 export interface DueDuesReminder {
   userId: string;
+  academyId: string;
   academyName: string;
   planName: string;
   priceMinor: number;
@@ -80,6 +81,7 @@ export async function claimDueDuesReminders(
   const rows = await db
     .select({
       userId: member.userId,
+      academyId: memberDues.academyId,
       academyName: organization.name,
       planName: membershipPlan.name,
       priceMinor: membershipPlan.priceMinor,

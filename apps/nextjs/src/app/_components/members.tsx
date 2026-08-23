@@ -5,7 +5,12 @@ import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
-import { isPendingCoach } from "@matops/domain";
+import {
+  isOwner,
+  isPendingCoach,
+  membersCsv,
+  membersCsvFilename,
+} from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
@@ -18,7 +23,8 @@ import { useTRPC } from "~/trpc/react";
 import { useAcademy } from "./academy";
 import { MemberDetail, MemberRow } from "./member-detail";
 import { cardClass, Eyebrow, Tabs } from "./primitives";
-import { EmptyState, ErrorState, SkeletonRows } from "./states";
+import { SkeletonRows } from "./skeletons";
+import { EmptyState, ErrorState } from "./states";
 import { VenueCheckin } from "./venue-checkin";
 
 export type Member = RouterOutputs["membership"]["members"][number];
@@ -38,8 +44,12 @@ export function Members() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const memberList = useQuery(trpc.membership.members.queryOptions());
-  const leads = useQuery(trpc.dropIn.list.queryOptions());
   const academy = useAcademy();
+  const owner = isOwner(academy);
+  const leads = useQuery({
+    ...trpc.dropIn.list.queryOptions(),
+    enabled: owner,
+  });
 
   // A member id from `?member=` (the dashboard "who's drifting" widget links
   // here) opens that member's detail on first render.
@@ -58,6 +68,9 @@ export function Members() {
         ? "members"
         : "requests",
   );
+  // Drop-in leads are owner-only (`dropIn.list`), so an instructor arriving on
+  // `?tab=leads` lands on the queue they can actually clear (ADR 75).
+  const shownTab: MemberTab = tab === "leads" && !owner ? "requests" : tab;
 
   // "Overdue" filter chip on the Members list (spec O7, ADR 40).
   const [overdueOnly, setOverdueOnly] = useState(overdueParam);
@@ -140,8 +153,21 @@ export function Members() {
     (suspend.isPending && suspend.variables.memberId === id) ||
     (restore.isPending && restore.variables.memberId === id);
 
+  const exportCsv = () => {
+    const url = URL.createObjectURL(
+      new Blob([membersCsv(shownActive)], { type: "text/csv;charset=utf-8" }),
+    );
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = membersCsvFilename(academy.name, new Date());
+    link.click();
+    // The download is queued, not synchronous: revoking in this tick can cancel
+    // it before the browser fetches the blob (Firefox does).
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
   const listState = memberList.isPending ? (
-    <SkeletonRows rows={4} />
+    <SkeletonRows rows={4} action gap="gap-3" />
   ) : memberList.isError ? (
     <ErrorState
       label="the member list"
@@ -153,16 +179,16 @@ export function Members() {
     <div className="flex flex-col gap-6">
       <Tabs
         label="Members view"
-        value={tab}
+        value={shownTab}
         onChange={setTab}
         tabs={[
           { id: "requests", label: "Requests", count: pending.length },
           { id: "members", label: "Members" },
-          { id: "leads", label: "Drop-in leads" },
+          ...(owner ? [{ id: "leads" as const, label: "Drop-in leads" }] : []),
         ]}
       />
       <div>
-        {tab === "requests" ? (
+        {shownTab === "requests" ? (
           <div className="flex flex-col gap-3">
             {listState ??
               (pending.length === 0 ? (
@@ -210,7 +236,7 @@ export function Members() {
                 })
               ))}
           </div>
-        ) : tab === "members" ? (
+        ) : shownTab === "members" ? (
           <div className="flex flex-col gap-3">
             {!listState && active.length > 0 && (
               <Input
@@ -228,21 +254,33 @@ export function Members() {
                     ? `${shownActive.length} of ${active.length} people`
                     : `${active.length} ${active.length === 1 ? "person" : "people"}`}
                 </Eyebrow>
-                {active.some((m) => m.dues) && (
-                  <button
-                    type="button"
-                    onClick={() => setOverdueOnly((v) => !v)}
-                    aria-pressed={overdueOnly}
-                    className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                      overdueOnly
-                        ? "border-error/40 bg-error/10 text-error"
-                        : "border-border text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Overdue{overdueCount > 0 ? ` (${overdueCount})` : ""}
-                    {overdueOnly ? " \u00d7" : ""}
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  {active.some((m) => m.dues) && (
+                    <button
+                      type="button"
+                      onClick={() => setOverdueOnly((v) => !v)}
+                      aria-pressed={overdueOnly}
+                      className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                        overdueOnly
+                          ? "border-error/40 bg-error/10 text-error"
+                          : "border-border text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      Overdue{overdueCount > 0 ? ` (${overdueCount})` : ""}
+                      {overdueOnly ? " \u00d7" : ""}
+                    </button>
+                  )}
+                  {owner && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={shownActive.length === 0}
+                      onClick={exportCsv}
+                    >
+                      Export CSV
+                    </Button>
+                  )}
+                </div>
               </div>
             )}
             {listState ??
@@ -270,7 +308,7 @@ export function Members() {
                       open={openId === m.memberId}
                       onToggle={() => toggle(m.memberId)}
                     >
-                      {m.status === "active" && (
+                      {owner && m.status === "active" && (
                         <ConfirmDialog
                           title={`Suspend ${m.name}?`}
                           description="They keep their place on the member list but can't book classes until you restore them."
@@ -290,7 +328,7 @@ export function Members() {
                           }
                         />
                       )}
-                      {m.status === "suspended" && (
+                      {owner && m.status === "suspended" && (
                         <Button
                           size="sm"
                           variant="secondary"
@@ -309,24 +347,26 @@ export function Members() {
                             : "Restore"}
                         </Button>
                       )}
-                      <ConfirmDialog
-                        title={`Remove ${m.name}?`}
-                        description="They lose access to the academy and drop off the member list. Their attendance history stays. You can invite them again later."
-                        confirmLabel="Remove member"
-                        variant="destructive"
-                        onConfirm={async () => {
-                          await remove.mutateAsync({ memberId: m.memberId });
-                        }}
-                        trigger={
-                          <Button
-                            size="sm"
-                            variant="destructive-outline"
-                            disabled={rowBusy(m.memberId)}
-                          >
-                            Remove
-                          </Button>
-                        }
-                      />
+                      {owner && (
+                        <ConfirmDialog
+                          title={`Remove ${m.name}?`}
+                          description="They lose access to the academy and drop off the member list. Their attendance history stays. You can invite them again later."
+                          confirmLabel="Remove member"
+                          variant="destructive"
+                          onConfirm={async () => {
+                            await remove.mutateAsync({ memberId: m.memberId });
+                          }}
+                          trigger={
+                            <Button
+                              size="sm"
+                              variant="destructive-outline"
+                              disabled={rowBusy(m.memberId)}
+                            >
+                              Remove
+                            </Button>
+                          }
+                        />
+                      )}
                     </MemberRow>
                     {openId === m.memberId && <MemberDetail m={m} />}
                   </div>

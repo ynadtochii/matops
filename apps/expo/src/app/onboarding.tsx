@@ -6,7 +6,6 @@ import {
   Button,
   confirm,
   Heading,
-  InlineLoading,
   Logo,
   Muted,
   Screen,
@@ -161,7 +160,6 @@ export default function Onboarding() {
                 autoCapitalize="none"
                 maxLength={6}
               />
-              {query !== null && found.isFetching && <InlineLoading />}
               {query !== null &&
                 !found.isFetching &&
                 !academy &&

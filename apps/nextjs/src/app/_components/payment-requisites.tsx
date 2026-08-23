@@ -10,7 +10,8 @@ import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
 import { SectionHeading } from "./primitives";
-import { EmptyState, ErrorState, SkeletonRows } from "./states";
+import { SkeletonPanel } from "./skeletons";
+import { EmptyState, ErrorState } from "./states";
 
 /**
  * Payment requisites (spec O6/S9, ADR 40) — the owner's bank details, free text.
@@ -53,7 +54,7 @@ export function PaymentRequisites() {
         </p>
       </div>
       {req.isPending ? (
-        <SkeletonRows rows={2} />
+        <SkeletonPanel lines={3} />
       ) : req.isError ? (
         <ErrorState
           label="your payment details"

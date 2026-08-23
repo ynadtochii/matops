@@ -250,6 +250,15 @@ is the reference pair (`packages/ui/src/button.tsx` + `button.native.tsx` +
   underline/outline.
 - **Badges** — `default`, `secondary`, `destructive`, `outline`. Small, sharp.
 - **Alerts** — title + one-line description (e.g. "Auth secret updated").
+- **Loading** — a placeholder looks like what follows it. Where a shape is
+  already known, draw **that shape** in `--muted` (`skeletons.tsx` on web builds
+  each piece out of the real component, and leaves hairlines and rails as real
+  lines, since only the content is unknown). Where nothing is known yet - the
+  cold open, the academy gate - draw the **mat loader** (§6). Never both, and
+  never a spinner in front of a shape we could have drawn. A wait under 180ms
+  draws nothing. Reduced motion holds everything still. A spinner is left with
+  one job: an **action** already in flight (a button mid-submit), which is
+  feedback for something the person just did, not a stand-in for content.
 
 ---
 
@@ -274,6 +283,15 @@ mats are laid in — in `--brand-foreground` at 85%. Seam path:
 
 Built once, shared: **`@matops/ui/logo`** — `Mark` (tile) + `Logo` (mark +
 wordmark); web = inline SVG, mobile = positioned Views (no `react-native-svg`).
+**The mark in motion is the loader.** The one place the mark animates: the six
+seams draw on with `stroke-dashoffset`, 90ms apart, the two long centre seams
+then the four planks - a mat being laid before class. Nothing is added to the
+identity; it is the same tile, violet, and 85% seams. Built for both clients:
+`apps/nextjs/src/app/_components/mat-loader.tsx` (keyframes in `styles.css`) and
+`apps/expo/src/components/mat-loader.tsx` (positioned Views + the native driver,
+no SVG dep, per ADR [44](issues/44-mobile-dark-first-design-system.md)).
+ADR [80](issues/80-loading-states.md).
+
 Web favicon: `apps/nextjs/src/app/icon.svg`. Use the mark at **24px minimum**;
 prefer the full `Logo` when the brand must read at a distance. Wordmark: `matops`,
 lowercase Geist ~640 weight, `-0.02em` tracking, "ops" in `--brand-strong`. Full
@@ -298,3 +316,4 @@ reference: `docs/design-system/matops-design-system.html`. Rationale in ADR 37.
 | Retire `apps/expo/src/components/ui.tsx` local kit                                               | **partial** — token-derived + aligned (ADR 44); full merge onto `@matops/ui` RN primitives pending |
 | matops `● status` states (booking/attendance)                                                    | **Phase 3**, onto callout accents                                                                  |
 | matops basketweave mark + wordmark                                                               | **done** — `@matops/ui/logo`, `app/icon.svg`                                                       |
+| Loading language: shape-matched skeletons + the mat loader                                       | **done** — both clients: `_components/` on web, `components/` on mobile, ADR 80                    |

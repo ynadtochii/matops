@@ -19,7 +19,8 @@ import { useTRPC } from "~/trpc/react";
 import { useAcademy } from "./academy";
 import { PageHeader } from "./page-header";
 import { cardClass, Section, Stat } from "./primitives";
-import { EmptyState, ErrorState, SkeletonRows, SuspendedState } from "./states";
+import { SkeletonMyClassesBody, SkeletonStats } from "./skeletons";
+import { EmptyState, ErrorState, SuspendedState } from "./states";
 import { useBooking } from "./use-booking";
 
 type MyClass = RouterOutputs["booking"]["mine"][number];
@@ -60,7 +61,7 @@ export function MyClassesScreen() {
     <>
       {header}
       {mine.isPending ? (
-        <SkeletonRows rows={5} />
+        <SkeletonMyClassesBody />
       ) : mine.isError ? (
         <ErrorState label="your classes" onRetry={() => void mine.refetch()} />
       ) : (
@@ -208,7 +209,13 @@ function TrainingStats() {
   const trpc = useTRPC();
   const stats = useQuery(trpc.stats.me.queryOptions());
 
-  if (stats.isPending) return <SkeletonRows rows={1} />;
+  if (stats.isPending) {
+    return (
+      <div className={cardClass()}>
+        <SkeletonStats n={3} />
+      </div>
+    );
+  }
   if (stats.isError) {
     return (
       <ErrorState

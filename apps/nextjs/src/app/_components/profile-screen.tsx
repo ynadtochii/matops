@@ -21,10 +21,12 @@ import { UpdateProfileSchema } from "@matops/validators";
 import { dateYearFmt, monthYearFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { useAcademy } from "./academy";
+import { FeedbackLink } from "./feedback-link";
 import { PageHeader } from "./page-header";
 import { cardClass, Eyebrow, Section } from "./primitives";
 import { SignOutButton } from "./sign-out";
-import { EmptyState, ErrorState, SkeletonRows, SuspendedState } from "./states";
+import { SkeletonCard } from "./skeletons";
+import { EmptyState, ErrorState, SuspendedState } from "./states";
 
 function splitName(name: string): { firstName: string; lastName: string } {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -235,8 +237,9 @@ export function ProfileScreen({
           </div>
         </Section>
 
-        <div>
+        <div className="flex flex-wrap items-center gap-4">
           <SignOutButton />
+          <FeedbackLink className="text-muted-foreground hover:text-foreground text-sm underline underline-offset-2" />
         </div>
       </div>
     </>
@@ -247,7 +250,7 @@ function MyRank() {
   const trpc = useTRPC();
   const ranks = useQuery(trpc.rank.mine.queryOptions());
 
-  if (ranks.isPending) return <SkeletonRows rows={1} />;
+  if (ranks.isPending) return <SkeletonCard lines={3} />;
   if (ranks.isError) {
     return (
       <ErrorState label="your rank" onRetry={() => void ranks.refetch()} />

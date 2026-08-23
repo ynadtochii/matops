@@ -48,6 +48,20 @@ export function isPendingCoach(m: {
   return m.status === "pending" && m.invitedRole === "instructor";
 }
 
+/**
+ * Whether `actor` may approve or decline this pending seat (ADR 75). An
+ * instructor runs the student desk, but the coach queue stays the owner's:
+ * approving grants `invitedRole`, so a staff caller clearing a pending
+ * INSTRUCTOR would mint instructors — the same escalation `setRole` is
+ * owner-gated against — and could also decline a coach the owner invited.
+ */
+export function canDecideSeat(
+  actor: Membership,
+  m: { status: string; invitedRole?: string | null },
+): boolean {
+  return !isPendingCoach(m) || isOwner(actor);
+}
+
 // --- Never ownerless (spec §4) -----------------------------------------------
 
 /** How many members are currently ACTIVE owners. */

@@ -51,7 +51,7 @@ export default function JoinScreen() {
     return (
       <>
         <Stack.Screen options={{ title: "Join" }} />
-        <Loading />
+        <Loading label="Opening your invite" />
       </>
     );
   }

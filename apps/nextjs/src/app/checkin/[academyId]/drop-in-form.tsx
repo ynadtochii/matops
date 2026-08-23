@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { Button } from "@matops/ui/button";
@@ -142,15 +143,23 @@ export function DropInForm({ academyId }: { academyId: string }) {
         />
       </div>
 
-      <label className="flex items-start gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={consent}
-          onChange={(e) => setConsent(e.target.checked)}
-          className="mt-1"
-        />
-        <span>OK for the gym to contact me about training.</span>
-      </label>
+      <div className="flex flex-col gap-1">
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={consent}
+            onChange={(e) => setConsent(e.target.checked)}
+            className="mt-1"
+          />
+          <span>OK for the gym to contact me about training.</span>
+        </label>
+        {/* Outside the label: a link inside it would toggle the checkbox. */}
+        <p className="text-muted-foreground pl-6 text-xs">
+          <Link href="/privacy" className="underline underline-offset-2">
+            What the gym stores about you
+          </Link>
+        </p>
+      </div>
 
       {error && (
         <p role="alert" className="text-error text-sm">

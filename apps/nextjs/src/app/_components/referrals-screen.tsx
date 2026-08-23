@@ -24,7 +24,8 @@ import { formatMoney } from "~/lib/money";
 import { useTRPC } from "~/trpc/react";
 import { PageHeader } from "./page-header";
 import { cardClass, Eyebrow, SectionHeading } from "./primitives";
-import { EmptyState, ErrorState, SkeletonRows } from "./states";
+import { SkeletonLines, SkeletonReferralsBody } from "./skeletons";
+import { EmptyState, ErrorState } from "./states";
 
 type Dashboard = RouterOutputs["referral"]["dashboard"];
 type Student = Dashboard["students"][number];
@@ -174,7 +175,7 @@ export function ReferralsScreen() {
           onRetry={() => void dashboard.refetch()}
         />
       ) : !data ? (
-        <SkeletonRows rows={6} />
+        <SkeletonReferralsBody />
       ) : (
         <div className="flex flex-col gap-8">
           <Summary
@@ -585,7 +586,7 @@ function ReferralHistory({ studentMemberId }: { studentMemberId: string }) {
   const history = useQuery(
     trpc.referral.history.queryOptions({ studentMemberId }),
   );
-  if (history.isPending) return <SkeletonRows rows={2} />;
+  if (history.isPending) return <SkeletonLines n={3} />;
   if (history.isError)
     return (
       <ErrorState

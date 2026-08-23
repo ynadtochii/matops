@@ -5,10 +5,12 @@ import { useQuery } from "@tanstack/react-query";
 import { nextClass, splitMyClasses } from "@matops/domain";
 
 import type { RouterOutputs } from "~/utils/api";
+import { AppHeader } from "~/components/app-header";
 import { useCancelBooking } from "~/components/book-control";
 import { MyTrainingCard } from "~/components/my-training-card";
 import { OverdueBanner } from "~/components/overdue-banner";
 import { useRefreshControl } from "~/components/refresh";
+import { MyClassesSkeleton } from "~/components/skeletons";
 import { SuspendedNotice } from "~/components/suspended-notice";
 import {
   Button,
@@ -17,9 +19,8 @@ import {
   ErrorState,
   Eyebrow,
   Heading,
-  InlineLoading,
-  Mark,
   Mono,
+  Muted,
   Screen,
   StatusPill,
   Txt,
@@ -131,23 +132,16 @@ export default function Training() {
   if (suspended) return <SuspendedNotice name={current.data?.name} />;
 
   return (
-    <Screen>
+    <Screen header={<AppHeader />}>
       <OverdueBanner />
 
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: 16,
-        }}
-      >
+      <View style={{ marginBottom: 16 }}>
         <Heading>My classes</Heading>
-        <Mark size={26} />
+        <Muted>What you booked, and what you have trained.</Muted>
       </View>
 
       {mine.isPending ? (
-        <InlineLoading />
+        <MyClassesSkeleton />
       ) : (
         <ScrollView
           style={{ flex: 1 }}

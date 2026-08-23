@@ -1,12 +1,14 @@
 import type { ClaimRemindersOptions } from "@matops/db";
-import type { EmailMessage, PushMessage } from "@matops/domain";
+import type { NotificationKind, PushMessage } from "@matops/domain";
 import {
   claimDueDuesReminders,
   claimDueReminderClasses,
   getAcademyPublic,
   getPushTargets,
+  insertNotifications,
 } from "@matops/db";
 import {
+  buildAnnouncementMessage,
   buildApprovalMessage,
   buildCancelledMessage,
   buildClassChangeMessage,
@@ -14,12 +16,12 @@ import {
   buildReminderMessage,
   formatWhen,
 } from "@matops/domain";
-import { sendEmail, sendPush } from "@matops/notifications";
+import { sendPush } from "@matops/notifications";
 
 /**
  * API-side notification helpers (Phase 4, docs/issues/17, 34). Routers gather
  * the affected student ids under the tenant seam, then call one of these. Each
- * resolves the academy name + the recipients' tokens/emails on the BASE
+ * resolves the academy name + the recipients' push tokens on the BASE
  * connection (push tokens are user-global, outside RLS — docs/issues/34), builds
  * the message text with the pure domain builders, and sends.
  *
@@ -32,25 +34,69 @@ import { sendEmail, sendPush } from "@matops/notifications";
  */
 
 interface Delivery {
+  academyId: string;
+  kind: NotificationKind;
   push: PushMessage;
-  email?: EmailMessage;
   data?: Record<string, unknown>;
+  /** In-app path the inbox row opens on tap; the feed row is flat without it. */
+  link?: string;
+  /** Display name of the staff member who posted it. Announcements only. */
+  sentBy?: string;
 }
 
-/** Resolve targets + fan a built message out over push (+ email). Never throws. */
-async function deliver(studentIds: string[], msg: Delivery): Promise<void> {
-  if (studentIds.length === 0) return;
+/** One recipient plus the message only they get. The unit `deliver` works in. */
+type PersonalDelivery = Delivery & { userId: string };
+
+/** The same message addressed to each of `userIds`. */
+function each(userIds: string[], msg: Delivery): PersonalDelivery[] {
+  return userIds.map((userId) => ({ ...msg, userId }));
+}
+
+/**
+ * Resolve targets, write the inbox rows, and fan the built messages out over
+ * push. Never throws.
+ *
+ * Per-recipient throughout, because the two shapes are the same job: a cancelled
+ * class is one message to thirty people, a dues sweep is thirty messages to
+ * thirty people, and both come down to one addressed list.
+ *
+ * The inbox write is the first thing that happens and is deliberately NOT
+ * conditional on the send: the notification center is the durable copy, so a
+ * dead Expo token must not cost the member the message.
+ */
+async function deliver(items: PersonalDelivery[]): Promise<void> {
+  if (items.length === 0) return;
   try {
-    const targets = await getPushTargets(studentIds);
-    const tokens = targets.flatMap((t) => t.tokens);
-    await sendPush(tokens, { ...msg.push, data: msg.data });
-    const email = msg.email;
-    if (email) {
-      const emails = targets.map((t) => t.email).filter((e) => e.length > 0);
-      // ONE send per recipient. Putting the whole class in a single `to:` shows
-      // every booked student every other student's address (spec S4 privacy).
-      await Promise.all(emails.map((to) => sendEmail({ to, ...email })));
-    }
+    await insertNotifications(
+      items.map((m) => ({
+        academyId: m.academyId,
+        userId: m.userId,
+        kind: m.kind,
+        title: m.push.title,
+        body: m.push.body,
+        link: m.link,
+        sentBy: m.sentBy,
+      })),
+    );
+  } catch (err) {
+    console.error("[notify] inbox write failed", err);
+  }
+  try {
+    const byUser = new Map(
+      (await getPushTargets(items.map((m) => m.userId))).map((t) => [
+        t.userId,
+        t,
+      ]),
+    );
+    await sendPush(
+      items.flatMap((m) =>
+        (byUser.get(m.userId)?.tokens ?? []).map((to) => ({
+          to,
+          ...m.push,
+          data: m.data,
+        })),
+      ),
+    );
   } catch (err) {
     console.error("[notify] delivery failed", err);
   }
@@ -77,36 +123,44 @@ export interface ClassEventInput {
   studentIds: string[];
 }
 
-/** Class cancelled → push + email every booked student (highest stakes, §4). */
+/** Class cancelled → push every booked student (highest stakes, §4). */
 export async function notifyClassCancelled(
   input: ClassEventInput,
 ): Promise<void> {
-  const msg = buildCancelledMessage({
+  const push = buildCancelledMessage({
     academyName: await academyName(input.academyId),
     className: input.className,
     whenLabel: formatWhen(input.startsAt, input.timeZone),
   });
-  await deliver(input.studentIds, {
-    push: msg.push,
-    email: msg.email,
-    data: { type: "class", classId: input.classId },
-  });
+  await deliver(
+    each(input.studentIds, {
+      academyId: input.academyId,
+      kind: "class_cancelled",
+      push,
+      data: { type: "class", classId: input.classId },
+      link: `/class/${input.classId}`,
+    }),
+  );
 }
 
-/** Class time/instructor changed → push + email booked students (§4). */
+/** Class time/instructor changed → push booked students (§4). */
 export async function notifyClassChanged(
   input: ClassEventInput,
 ): Promise<void> {
-  const msg = buildClassChangeMessage({
+  const push = buildClassChangeMessage({
     academyName: await academyName(input.academyId),
     className: input.className,
     whenLabel: formatWhen(input.startsAt, input.timeZone),
   });
-  await deliver(input.studentIds, {
-    push: msg.push,
-    email: msg.email,
-    data: { type: "class", classId: input.classId },
-  });
+  await deliver(
+    each(input.studentIds, {
+      academyId: input.academyId,
+      kind: "class_changed",
+      push,
+      data: { type: "class", classId: input.classId },
+      link: `/class/${input.classId}`,
+    }),
+  );
 }
 
 /** Membership approved → welcome push to the newly approved member (push only). */
@@ -117,7 +171,40 @@ export async function notifyMembershipApproved(input: {
   const push = buildApprovalMessage({
     academyName: await academyName(input.academyId),
   });
-  await deliver([input.userId], { push, data: { type: "approved" } });
+  await deliver(
+    each([input.userId], {
+      academyId: input.academyId,
+      kind: "membership_approved",
+      push,
+      data: { type: "approved" },
+      link: "/",
+    }),
+  );
+}
+
+/**
+ * Owner-written gym news (v3.7, spec O12; docs/issues/77). Lands in the inbox
+ * and pushes.
+ */
+export async function notifyAnnouncement(input: {
+  academyId: string;
+  userIds: string[];
+  title: string;
+  body: string;
+  sentBy: string;
+}): Promise<void> {
+  await deliver(
+    each(input.userIds, {
+      academyId: input.academyId,
+      kind: "announcement",
+      push: buildAnnouncementMessage({
+        title: input.title,
+        body: input.body,
+      }),
+      data: { type: "announcement" },
+      sentBy: input.sentBy,
+    }),
+  );
 }
 
 /**
@@ -141,13 +228,18 @@ export async function runReminderSweep(
   // at a time, so the run finishes inside the serverless limit.
   await Promise.all(
     claimed.map((c) =>
-      deliver(c.studentIds, {
-        push: buildReminderMessage({
-          className: c.title,
-          whenLabel: formatWhen(c.startsAt, c.timeZone ?? undefined),
+      deliver(
+        each(c.studentIds, {
+          academyId: c.academyId,
+          kind: "class_reminder",
+          push: buildReminderMessage({
+            className: c.title,
+            whenLabel: formatWhen(c.startsAt, c.timeZone ?? undefined),
+          }),
+          data: { type: "class", classId: c.classId },
+          link: `/class/${c.classId}`,
         }),
-        data: { type: "class", classId: c.classId },
-      }),
+      ),
     ),
   );
   const sent = claimed.length;
@@ -172,7 +264,7 @@ function formatDueLabel(nextDueAt: Date): string {
 /**
  * Dues-reminder sweep (v1.3, R.1 — docs/issues/40). Claims each member who is due
  * soon or overdue and not yet reminded this period (one per period, base
- * connection), then pushes + emails them via the existing transport. Rides the
+ * connection), then pushes them via the existing transport. Rides the
  * DAILY cron; the frequent cadence stays a Phase-5 concern. Never throws (each
  * `deliver` swallows its own errors).
  */
@@ -184,21 +276,23 @@ async function sweepDuesReminders(
     limit: opts.limit,
   });
   // Same as the class sweep: the period stamp is already written, so every
-  // claimed member has to be attempted in this run. Serial sends would need
-  // three round trips per member and time out long before 500 of them.
-  await Promise.all(
+  // claimed member has to be attempted in this run.
+  await deliver(
     claimed.map((d) => {
-      const msg = buildDuesReminderMessage({
+      const push = buildDuesReminderMessage({
         academyName: d.academyName,
         amountLabel: `${d.currency} ${(d.priceMinor / 100).toFixed(2)}`,
         dueLabel: formatDueLabel(d.nextDueAt),
         overdue: d.overdue,
       });
-      return deliver([d.userId], {
-        push: msg.push,
-        email: msg.email,
+      return {
+        academyId: d.academyId,
+        userId: d.userId,
+        kind: "dues_reminder" as const,
+        push,
         data: { type: "dues" },
-      });
+        link: "/payments",
+      };
     }),
   );
   return { processed: claimed.length, sent: claimed.length };

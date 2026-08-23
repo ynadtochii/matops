@@ -15,7 +15,7 @@ import {
   InviteTokenSchema,
 } from "@matops/validators";
 
-import { ownerProcedure, publicProcedure } from "../trpc";
+import { ownerProcedure, publicProcedure, rateLimited } from "../trpc";
 
 export const inviteRouter = {
   /** Live per-role links for the active academy (spec O4). Owner-only. */
@@ -57,14 +57,17 @@ export const inviteRouter = {
    * `academy_invite` has no RLS. Fails loudly on an unknown/expired token so the
    * UI can show "This invite isn't valid — ask your gym for a new link" (spec S2).
    */
-  resolve: publicProcedure.input(InviteTokenSchema).query(async ({ input }) => {
-    const resolved = await resolveInviteToken(input.token);
-    if (!resolved) {
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "This invite isn't valid — ask your gym for a new link.",
-      });
-    }
-    return resolved;
-  }),
+  resolve: publicProcedure
+    .use(rateLimited(30, 60_000))
+    .input(InviteTokenSchema)
+    .query(async ({ input }) => {
+      const resolved = await resolveInviteToken(input.token);
+      if (!resolved) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "This invite isn't valid — ask your gym for a new link.",
+        });
+      }
+      return resolved;
+    }),
 } satisfies TRPCRouterRecord;

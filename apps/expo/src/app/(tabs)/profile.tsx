@@ -12,8 +12,11 @@ import {
 } from "@matops/domain";
 import { UpdateProfileSchema } from "@matops/validators";
 
+import { AppHeader } from "~/components/app-header";
+import { SettingsIcon } from "~/components/icons";
 import { OverdueBanner } from "~/components/overdue-banner";
 import { useRefreshControl } from "~/components/refresh";
+import { DuesSkeleton, RankSkeleton } from "~/components/skeletons";
 import {
   Banner,
   Button,
@@ -24,7 +27,6 @@ import {
   Eyebrow,
   Field,
   Heading,
-  InlineLoading,
   Loading,
   Mono,
   Screen,
@@ -173,7 +175,7 @@ function MembershipDues() {
     }),
   );
 
-  if (dues.isPending) return <InlineLoading />;
+  if (dues.isPending) return <DuesSkeleton />;
   if (dues.isError) {
     return <ErrorState label="your dues" onRetry={() => void dues.refetch()} />;
   }
@@ -269,7 +271,7 @@ function MyRanks() {
   const t = useTheme();
   const ranks = useQuery(trpc.rank.mine.queryOptions());
 
-  if (ranks.isPending) return <InlineLoading />;
+  if (ranks.isPending) return <RankSkeleton />;
   if (ranks.isError) {
     return (
       <ErrorState label="your ranks" onRetry={() => void ranks.refetch()} />
@@ -348,6 +350,7 @@ function MyRanks() {
 /** Gear glyph for the header — opens Settings (S12). Emoji renders from the
  * system font, independent of Geist, so no icon-font dependency is added. */
 function SettingsButton({ onPress }: { onPress: () => void }) {
+  const t = useTheme();
   return (
     <Pressable
       accessibilityRole="button"
@@ -355,7 +358,7 @@ function SettingsButton({ onPress }: { onPress: () => void }) {
       hitSlop={10}
       onPress={onPress}
     >
-      <Txt size={22}>⚙️</Txt>
+      <SettingsIcon color={t.mutedForeground} size={20} />
     </Pressable>
   );
 }
@@ -450,20 +453,17 @@ export default function Profile() {
   const approved = current.data?.status === "active";
 
   return (
-    <Screen>
+    <Screen
+      header={
+        <AppHeader
+          right={<SettingsButton onPress={() => router.push("/settings")} />}
+        />
+      }
+    >
       <OverdueBanner />
 
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-          marginBottom: 16,
-        }}
-      >
+      <View style={{ marginBottom: 16 }}>
         <Heading>{user.name || user.email}</Heading>
-        <SettingsButton onPress={() => router.push("/settings")} />
       </View>
 
       <ScrollView

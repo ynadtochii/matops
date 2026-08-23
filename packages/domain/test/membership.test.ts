@@ -5,6 +5,7 @@ import {
   activeOwnerCount,
   approveMembership,
   canApprove,
+  canDecideSeat,
   canRemoveOrDemote,
   isPendingCoach,
   isStudentLensMembership,
@@ -153,5 +154,28 @@ describe("pending coach requests", () => {
     expect(
       isPendingCoach({ status: "active", invitedRole: "instructor" }),
     ).toBe(false);
+  });
+});
+
+describe("who may decide a pending seat", () => {
+  const owner = { role: "owner", status: "active" };
+  const coach = { role: "instructor", status: "active" };
+  const coachSeat = { status: "pending", invitedRole: "instructor" };
+  const studentSeat = { status: "pending", invitedRole: "student" };
+
+  it("lets an instructor clear the student queue", () => {
+    expect(canDecideSeat(coach, studentSeat)).toBe(true);
+    expect(canDecideSeat(owner, studentSeat)).toBe(true);
+  });
+
+  it("keeps the coach queue owner-only, so staff cannot mint instructors", () => {
+    expect(canDecideSeat(coach, coachSeat)).toBe(false);
+    expect(canDecideSeat(owner, coachSeat)).toBe(true);
+  });
+
+  it("does not gate a seat that carries no invited role", () => {
+    expect(canDecideSeat(coach, { status: "pending", invitedRole: null })).toBe(
+      true,
+    );
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { computeOccurrences } from "../src/materialize";
+import { computeOccurrences, staleClassIds } from "../src/materialize";
 
 const iso = (dates: Date[]) => dates.map((d) => d.toISOString());
 
@@ -89,5 +89,65 @@ describe("computeOccurrences", () => {
         new Date("2024-01-01T00:00:00Z"),
       ),
     ).toEqual([]);
+  });
+});
+
+describe("staleClassIds", () => {
+  const at = (iso: string) => new Date(iso);
+  const MON = "2026-09-07T17:00:00Z";
+  const WED = "2026-09-09T17:00:00Z";
+
+  it("keeps a class an active template still produces", () => {
+    expect(
+      staleClassIds(
+        [{ id: "c1", templateId: "t1", startsAt: at(MON) }],
+        [{ templateId: "t1", startsAt: at(MON) }],
+      ),
+    ).toEqual([]);
+  });
+
+  it("drops every class of a template that is no longer active", () => {
+    expect(
+      staleClassIds(
+        [
+          { id: "c1", templateId: "paused", startsAt: at(MON) },
+          { id: "c2", templateId: "paused", startsAt: at(WED) },
+        ],
+        [],
+      ),
+    ).toEqual(["c1", "c2"]);
+  });
+
+  it("drops the old instant when a template's time moved", () => {
+    expect(
+      staleClassIds(
+        [
+          { id: "old", templateId: "t1", startsAt: at(MON) },
+          { id: "new", templateId: "t1", startsAt: at(WED) },
+        ],
+        [{ templateId: "t1", startsAt: at(WED) }],
+      ),
+    ).toEqual(["old"]);
+  });
+
+  it("never touches a one-off the owner entered by hand", () => {
+    expect(
+      staleClassIds(
+        [{ id: "seminar", templateId: null, startsAt: at(MON) }],
+        [],
+      ),
+    ).toEqual([]);
+  });
+
+  it("does not confuse the same instant under two templates", () => {
+    expect(
+      staleClassIds(
+        [
+          { id: "a", templateId: "t1", startsAt: at(MON) },
+          { id: "b", templateId: "t2", startsAt: at(MON) },
+        ],
+        [{ templateId: "t1", startsAt: at(MON) }],
+      ),
+    ).toEqual(["b"]);
   });
 });

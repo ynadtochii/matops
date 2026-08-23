@@ -21,6 +21,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import type { FontWeight } from "./fonts";
 import type { Theme } from "./theme";
 import { mono, sans } from "./fonts";
+import { MatLoader } from "./mat-loader";
 import { useTheme } from "./theme";
 
 export { useTheme } from "./theme";
@@ -211,11 +212,14 @@ export function Stat({ value, label }: { value: string; label: string }) {
 /** Full-screen padded surface. Wrap every screen in this. */
 export function Screen({
   children,
+  header,
   center = false,
   avoidKeyboard = false,
   style,
 }: {
   children: ReactNode;
+  /** A full-bleed bar above the padded content (the tab screens' `AppHeader`). */
+  header?: ReactNode;
   /** Centre content vertically (auth/onboarding screens). */
   center?: boolean;
   /** Lift content above the keyboard — for screens whose submit sits low. */
@@ -224,15 +228,18 @@ export function Screen({
 }) {
   const t = useTheme();
   const inner = (
-    <View
-      style={[
-        { flex: 1, padding: 16 },
-        center && { justifyContent: "center" },
-        style,
-      ]}
-    >
-      {children}
-    </View>
+    <>
+      {header}
+      <View
+        style={[
+          { flex: 1, padding: 16 },
+          center && { justifyContent: "center" },
+          style,
+        ]}
+      >
+        {children}
+      </View>
+    </>
   );
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: t.background }}>
@@ -277,8 +284,14 @@ export function Stack({
   );
 }
 
-/** Full-screen centred spinner — the loading state for a whole route/gate. */
-export function Loading() {
+/**
+ * The full-screen gate — the **mat loader**, for a wait with nothing on screen
+ * yet to be faithful to: the auth gate, the magic link, an invite opening
+ * (ADR 80). `label` says what is happening, so use it wherever the wait is for
+ * something nameable. Once a screen is drawn, the matching shape from
+ * `skeletons.tsx` says more than any spinner can.
+ */
+export function Loading({ label }: { label?: string }) {
   const t = useTheme();
   return (
     <SafeAreaView
@@ -289,29 +302,8 @@ export function Loading() {
         justifyContent: "center",
       }}
     >
-      <ActivityIndicator color={t.brand} />
+      <MatLoader label={label} />
     </SafeAreaView>
-  );
-}
-
-/**
- * Inline spinner — the loading state for a section or a screen body that already
- * sits inside a `Screen`. Unlike `Loading` it paints no new full-screen surface,
- * so it centres in the space it's given instead of covering the header.
- */
-export function InlineLoading() {
-  const t = useTheme();
-  return (
-    <View
-      style={{
-        flex: 1,
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 24,
-      }}
-    >
-      <ActivityIndicator color={t.brand} />
-    </View>
   );
 }
 

@@ -36,8 +36,18 @@ export interface BookableClass {
   deletedAt: Date | null;
 }
 
+/**
+ * How far ahead a student may book (spec S5, ADR 79). Both clients only ever
+ * show a rolling seven-day week, so this is what closes the gap a deep link to
+ * `/class/<id>` left open. Classes exist six months out for the owner's planning;
+ * booking one of them is noise, because the gym's plans change first.
+ */
+export const BOOKING_WINDOW_DAYS = 7;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 /** Why a class cannot be booked (drives a precise, friendly error). */
-export type NotBookableReason = "deleted" | "cancelled" | "past";
+export type NotBookableReason =
+  "deleted" | "cancelled" | "past" | "too-far-ahead";
 
 export interface BookableResult {
   ok: boolean;
@@ -48,14 +58,19 @@ export interface BookableResult {
  * Can this class be booked right now? This is the FRIENDLY-ERROR guard, not the
  * race guard — capacity safety comes from the atomic UPDATE in the resolver
  * (ticket 13). A class is bookable when it is not soft-deleted, not cancelled,
- * and has not already started. Capacity is deliberately NOT checked here —
- * booking is never blocked by a full room (soft cap, §4).
+ * has not already started, and starts inside the booking window. Capacity is
+ * deliberately NOT checked here — booking is never blocked by a full room
+ * (soft cap, §4).
  */
 export function canBook(c: BookableClass, now: Date): BookableResult {
   if (c.deletedAt) return { ok: false, reason: "deleted" };
   if (c.status === "cancelled") return { ok: false, reason: "cancelled" };
   if (c.startsAt.getTime() <= now.getTime())
     return { ok: false, reason: "past" };
+  // Measured from `now`, not from midnight, so the guard is never stricter than
+  // the seven-day list both clients render off the start of today.
+  if (c.startsAt.getTime() > now.getTime() + BOOKING_WINDOW_DAYS * DAY_MS)
+    return { ok: false, reason: "too-far-ahead" };
   return { ok: true };
 }
 

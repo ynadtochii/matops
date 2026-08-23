@@ -21,7 +21,8 @@ import { useTRPC } from "~/trpc/react";
 import { useAcademy } from "./academy";
 import { cardClass } from "./primitives";
 import { QrPoster } from "./qr-poster";
-import { ErrorState, SkeletonRows } from "./states";
+import { SkeletonInviteCard } from "./skeletons";
+import { ErrorState } from "./states";
 
 type InviteRole = "student" | "instructor";
 
@@ -72,7 +73,7 @@ export function InviteLinkCard({
     }),
   );
 
-  if (invites.isPending) return <SkeletonRows rows={1} />;
+  if (invites.isPending) return <SkeletonInviteCard />;
   if (invites.isError)
     return (
       <ErrorState

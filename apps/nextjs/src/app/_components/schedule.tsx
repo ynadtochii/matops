@@ -35,7 +35,8 @@ import { useAcademy } from "./academy";
 import { ClassRoster } from "./class-roster";
 import { InstructorOptions } from "./coach-select";
 import { Section } from "./primitives";
-import { EmptyState, ErrorState, SkeletonRows } from "./states";
+import { SkeletonScheduleWeek } from "./skeletons";
+import { EmptyState, ErrorState } from "./states";
 import { WeekGrid } from "./week-grid";
 
 type ClassRow = RouterOutputs["class"]["week"][number];
@@ -454,7 +455,7 @@ export function Schedule() {
       </Dialog>
 
       {week.isPending ? (
-        <SkeletonRows rows={3} />
+        <SkeletonScheduleWeek />
       ) : week.isError ? (
         <ErrorState
           label="this week's schedule"

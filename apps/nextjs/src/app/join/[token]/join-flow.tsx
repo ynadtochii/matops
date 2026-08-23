@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
@@ -202,6 +203,11 @@ function ProfileForm({
         {pending && <Spinner size="sm" className="text-current" />}
         {pending ? "Joining\u2026" : `Join ${academyName}`}
       </Button>
+      <p className="text-muted-foreground text-xs">
+        <Link href="/privacy" className="underline underline-offset-2">
+          What {academyName} stores about you
+        </Link>
+      </p>
     </form>
   );
 }

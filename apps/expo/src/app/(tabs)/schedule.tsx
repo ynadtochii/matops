@@ -8,9 +8,11 @@ import { capacityDisplay, disciplineTone } from "@matops/domain";
 
 import type { Theme } from "~/components/theme";
 import type { RouterOutputs } from "~/utils/api";
+import { AppHeader } from "~/components/app-header";
 import { BookButton, CancelButton } from "~/components/book-control";
 import { OverdueBanner } from "~/components/overdue-banner";
 import { useRefreshControl } from "~/components/refresh";
+import { ScheduleSkeleton } from "~/components/skeletons";
 import { SuspendedNotice } from "~/components/suspended-notice";
 import {
   Banner,
@@ -19,8 +21,7 @@ import {
   ErrorState,
   Eyebrow,
   Heading,
-  InlineLoading,
-  Mark,
+  Muted,
   Screen,
   StatusPill,
   Txt,
@@ -262,19 +263,12 @@ export default function Schedule() {
   if (suspended) return <SuspendedNotice name={current.data?.name} />;
 
   return (
-    <Screen>
+    <Screen header={<AppHeader />}>
       <OverdueBanner />
 
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: 16,
-        }}
-      >
-        <Heading>{current.data?.name ?? "Schedule"}</Heading>
-        <Mark size={26} />
+      <View style={{ marginBottom: 16 }}>
+        <Heading>Schedule</Heading>
+        <Muted>Your classes for the next seven days.</Muted>
       </View>
 
       {isPending && (
@@ -287,7 +281,7 @@ export default function Schedule() {
       )}
 
       {week.isPending ? (
-        <InlineLoading />
+        <ScheduleSkeleton />
       ) : (
         <ScrollView
           style={{ flex: 1 }}

@@ -50,17 +50,23 @@ both loops.
 Nothing below is polish. Each item is either "a stranger sees something broken"
 or "you cannot see that it broke".
 
+**Status, 22 August 2026:** items 2-5 and 7-12 are **built and static-gates
+green** (ADR [76](issues/76-pilot-blockers.md)). What is left is yours, not the
+codebase's: **Vercel Pro** (item 1), **rotate `AUTH_SECRET`** (item 6), and
+filling the three `[PLACEHOLDER]` markers on `/privacy` before a stranger reads
+it.
+
 | # | Item | Why it blocks | Size |
 |---|---|---|---|
 | 1 | **Vercel Pro, $20/mo** | Hobby forbids commercial use, and the rule keys on *anyone's* financial gain, so a revenue-generating gym is commercial even unpriced ([infra-costs.md](infra-costs.md)). Charging nothing does not cure it | 10 min |
-| 2 | **Sentry** | **The single most important item on this page.** You are not in the room. Without it a coach hits a bug on Tuesday, shrugs, goes back to WhatsApp, and you never learn it happened. **Free tier covers this pilot** (see below) | 1-2 h |
-| 3 | **`error.tsx` + `global-error.tsx`** | Right now a client exception shows a stranger's student a blank "Application error" page. Cheapest fix here and the most visible failure | 1 h |
-| 4 | **Rate limiting** on `dropIn.submit`, `invite.resolve`, magic-link send | The join QR goes on a public wall. Anyone can flood the lead table and burn the Resend quota, which kills sign-in for every gym at once. Better Auth ships this as one config block (roadmap 5.2) | 2 h |
-| 5 | **Materialization self-heal on schedule read** | Classes materialize only on template write, 42 days forward (`template.ts:70`). A pilot running past week 6 silently shows an **empty calendar**. ADR 46 already names this as its Option B; the sweep exists and is tested | 2-3 h |
+| 2 | ~~**Sentry**~~ **DONE** (ADR 72 + 76) | **The single most important item on this page.** You are not in the room. Without it a coach hits a bug on Tuesday, shrugs, goes back to WhatsApp, and you never learn it happened. **Free tier covers this pilot** (see below) | 1-2 h |
+| 3 | ~~**`error.tsx` + `global-error.tsx`**~~ **DONE** (ADR 72) | Right now a client exception shows a stranger's student a blank "Application error" page. Cheapest fix here and the most visible failure | 1 h |
+| 4 | ~~**Rate limiting** on `dropIn.submit`, `invite.resolve`, magic-link send~~ **DONE** (ADR 76) | The join QR goes on a public wall. Anyone can flood the lead table and burn the Resend quota, which kills sign-in for every gym at once. Better Auth ships this as one config block (roadmap 5.2) | 2 h |
+| 5 | ~~**Materialization self-heal on schedule read**~~ **DONE** (ADR 76, then ADR 78: the daily cron sweeps the horizon, the read does not) | Classes materialize only on template write, 42 days forward (`template.ts:70`). A pilot running past week 6 silently shows an **empty calendar**. ADR 46 already names this as its Option B; the sweep exists and is tested | 2-3 h |
 | 6 | **Rotate `AUTH_SECRET`** | The old auth error hook logged it (ADR 60). Rotating kills every live session, so it happens **before** the pilot, never during | 15 min |
-| 7 | **Prove Resend works in production** | `sendEmail` no-ops silently when the env vars are missing, so a missing key in Vercel looks exactly like "the magic link never arrives", with no error anywhere. Send yourself one from the live site | 15 min |
-| 8 | **Privacy page + a real consent line** on the drop-in form | It collects a stranger's name, phone and email behind one line of copy with no link to anything. Friends' gyms in the EU means GDPR, and matops is the processor | 2-3 h |
-| 9 | **Confirm the live deploy is current** | `beta-readiness.md` found production at `df77c89` with `/coaches` returning 404. v2.5 through v3.1 have been committed since. Run `next build`, redeploy, click every screen | 30 min |
+| 7 | ~~**Prove Resend works in production**~~ **DONE** | `sendEmail` no-ops silently when the env vars are missing, so a missing key in Vercel looks exactly like "the magic link never arrives", with no error anywhere. Send yourself one from the live site | 15 min |
+| 8 | ~~**Privacy page + a real consent line** on the drop-in form~~ **DONE** (ADR 76; three placeholders still to fill in) | It collects a stranger's name, phone and email behind one line of copy with no link to anything. Friends' gyms in the EU means GDPR, and matops is the processor | 2-3 h |
+| 9 | ~~**Confirm the live deploy is current**~~ **DONE** | `beta-readiness.md` found production at `df77c89` with `/coaches` returning 404. v2.5 through v3.1 have been committed since. Run `next build`, redeploy, click every screen | 30 min |
 
 **Roughly two days of work.** Items 1, 6, 7 and 9 are minutes and should happen first.
 
@@ -90,9 +96,9 @@ nothing, which is worse than not running it.
 
 | # | Item | Why |
 |---|---|---|
-| 10 | **Feedback link in the sidebar** (a `mailto:` is fine) | Turns a frustrated coach into a bug report. One sidebar item |
-| 11 | **First-run checklist on the empty dashboard** | After **Start a gym** the owner lands on nothing. "1. Add your weekly classes · 2. Share your join link · 3. Print the QR." You are not there to say it out loud. Biggest product gap for a remote pilot |
-| 12 | **Let instructors approve members and set rank** | In most gyms the **head coach** does the admin, not the owner. Today both are owner-only (`beta-readiness.md` §3.4). At a friend's gym this bites in week one. Decide: fix it, or make sure the owner is the person you onboard |
+| 10 | ~~**Feedback link in the sidebar**~~ **DONE** (ADR 76; footer + Profile) | Turns a frustrated coach into a bug report. One sidebar item |
+| 11 | ~~**First-run checklist on the empty dashboard**~~ **DONE** (ADR 76) | After **Start a gym** the owner lands on nothing. "1. Add your weekly classes · 2. Share your join link · 3. Print the QR." You are not there to say it out loud. Biggest product gap for a remote pilot |
+| 12 | ~~**Let instructors approve members and set rank**~~ **DONE** (ADR 76; approve, decline, roster, rank, notes. No dues figures, no invites, no leads, no suspend/remove, no role picker) | In most gyms the **head coach** does the admin, not the owner. Today both are owner-only (`beta-readiness.md` §3.4). At a friend's gym this bites in week one. Decide: fix it, or make sure the owner is the person you onboard |
 
 Item 12 is a judgement call, not an automatic yes. Ask each gym who actually
 handles new students before deciding.

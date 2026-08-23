@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  BOOKING_WINDOW_DAYS,
   bookingTier,
   canBook,
   capacityDisplay,
@@ -58,6 +59,60 @@ describe("canBook", () => {
     expect(
       canBook({ status: "scheduled", startsAt: now, deletedAt: null }, now),
     ).toEqual({ ok: false, reason: "past" });
+  });
+
+  const inDays = (n: number) =>
+    new Date(now.getTime() + n * 24 * 60 * 60 * 1000);
+
+  it("allows anything inside the seven-day window the clients render", () => {
+    expect(
+      canBook(
+        {
+          status: "scheduled",
+          startsAt: inDays(BOOKING_WINDOW_DAYS - 1),
+          deletedAt: null,
+        },
+        now,
+      ),
+    ).toEqual({ ok: true });
+    expect(
+      canBook(
+        {
+          status: "scheduled",
+          startsAt: inDays(BOOKING_WINDOW_DAYS),
+          deletedAt: null,
+        },
+        now,
+      ),
+    ).toEqual({ ok: true });
+  });
+
+  it("rejects a class further ahead than the window", () => {
+    expect(
+      canBook(
+        {
+          status: "scheduled",
+          startsAt: inDays(BOOKING_WINDOW_DAYS + 1),
+          deletedAt: null,
+        },
+        now,
+      ),
+    ).toEqual({ ok: false, reason: "too-far-ahead" });
+    expect(
+      canBook(
+        { status: "scheduled", startsAt: inDays(90), deletedAt: null },
+        now,
+      ),
+    ).toEqual({ ok: false, reason: "too-far-ahead" });
+  });
+
+  it("still reports the more specific reason first", () => {
+    expect(
+      canBook(
+        { status: "cancelled", startsAt: inDays(90), deletedAt: null },
+        now,
+      ),
+    ).toEqual({ ok: false, reason: "cancelled" });
   });
 });
 

@@ -24,7 +24,8 @@ import { MyDues } from "./my-dues";
 import { PageHeader } from "./page-header";
 import { PaymentRequisites } from "./payment-requisites";
 import { cardClass, Section, Tabs } from "./primitives";
-import { EmptyState, ErrorState, SkeletonRows } from "./states";
+import { SkeletonRows, SkeletonSection } from "./skeletons";
+import { EmptyState, ErrorState } from "./states";
 
 type Plan = RouterOutputs["payments"]["plans"][number];
 type Member = RouterOutputs["membership"]["members"][number];
@@ -110,7 +111,7 @@ function ClaimsToConfirm() {
   return (
     <section className="flex flex-col gap-3">
       {claims.isPending ? (
-        <SkeletonRows rows={2} />
+        <SkeletonRows rows={2} action gap="gap-3" />
       ) : claims.isError ? (
         <ErrorState label="claims" onRetry={() => void claims.refetch()} />
       ) : claims.data.length === 0 ? (
@@ -210,7 +211,13 @@ function MemberDues() {
   return (
     <section className="flex flex-col gap-8">
       {memberList.isPending || plans.isPending ? (
-        <SkeletonRows rows={3} />
+        <div className="flex flex-col gap-8">
+          {[0, 1].map((i) => (
+            <SkeletonSection key={i} meta>
+              <SkeletonRows rows={2} action gap="gap-3" />
+            </SkeletonSection>
+          ))}
+        </div>
       ) : memberList.isError ? (
         <ErrorState label="members" onRetry={() => void memberList.refetch()} />
       ) : (plans.data?.length ?? 0) === 0 ? (
@@ -642,7 +649,7 @@ function Plans() {
   return (
     <section className="flex flex-col gap-3">
       {plans.isPending ? (
-        <SkeletonRows rows={2} />
+        <SkeletonRows rows={2} action gap="gap-3" />
       ) : plans.isError ? (
         <ErrorState label="plans" onRetry={() => void plans.refetch()} />
       ) : plans.data.length === 0 ? (

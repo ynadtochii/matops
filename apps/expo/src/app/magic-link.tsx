@@ -98,7 +98,7 @@ export default function MagicLink() {
   return (
     <>
       <Stack.Screen options={{ title: "Signing in…" }} />
-      <Loading />
+      <Loading label="Signing you in" />
     </>
   );
 }

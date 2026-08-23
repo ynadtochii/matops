@@ -3,12 +3,12 @@ import { View } from "react-native";
 import { Redirect, Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { CheckinSkeleton } from "~/components/skeletons";
 import {
   Banner,
   Button,
   Card,
   Heading,
-  InlineLoading,
   Loading,
   Mono,
   Muted,
@@ -119,7 +119,7 @@ export default function WalkInCheckin() {
             — they can also mark you present.
           </Muted>
         ) : !scoped || today.isPending ? (
-          <InlineLoading />
+          <CheckinSkeleton />
         ) : today.isError ? (
           <Muted>
             Couldn&apos;t reach this gym. Check your connection and scan again.

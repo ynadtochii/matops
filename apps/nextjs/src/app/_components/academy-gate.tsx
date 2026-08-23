@@ -11,7 +11,8 @@ import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
 import { JoinByCode } from "./join-by-code";
-import { ErrorState, SkeletonRows } from "./states";
+import { PageLoader } from "./mat-loader";
+import { ErrorState } from "./states";
 
 interface Membership {
   academyId: string;
@@ -35,11 +36,7 @@ export function AcademyGate() {
   const memberships = useQuery(trpc.academy.memberships.queryOptions());
 
   if (memberships.isPending) {
-    return (
-      <div className="mx-auto w-full max-w-md p-8">
-        <SkeletonRows rows={4} />
-      </div>
-    );
+    return <PageLoader label="Finding your academy" />;
   }
 
   if (memberships.isError) {

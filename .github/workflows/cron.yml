@@ -1,0 +1,43 @@
+name: cron
+
+# Daily dues reminders at 09:00 in Lisbon, host-agnostic (ADR 75). GitHub cron is
+# UTC-only and Portugal moves between UTC+0 (winter) and UTC+1 (summer), so both
+# hours are scheduled and the guard below keeps whichever one is 09:00 local today.
+# A skipped tick exits 0, so a red run always means the sweep itself failed.
+# If GitHub delays a tick past the hour, the guard drops it and the sweep runs
+# tomorrow. The claim is per billing period, so no reminder is lost.
+#
+# The class horizon is NOT swept here (ADR 79): the owner rebuilds it by hand from
+# Schedule → Templates, six months at a time.
+on:
+  schedule:
+    - cron: "0 8 * * *"
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dues reminders
+        env:
+          EVENT: ${{ github.event_name }}
+          APP_URL: https://matops.grapplerscollective.com
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          hour=$(TZ=Europe/Lisbon date +%H)
+          if [ "$EVENT" = "schedule" ] && [ "$hour" != "09" ]; then
+            echo "Lisbon hour is $hour, not this tick"
+            exit 0
+          fi
+
+          out=$(curl -fsS --max-time 90 --retry 2 --retry-delay 30 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_URL/api/cron/remind")
+          echo "$out"
+          # The sweep stamps its claims before sending, so a dropped email is lost
+          # until the next billing period. Fail loudly rather than log it.
+          case "$out" in
+            *'"ok":true'*) ;;
+            *) echo "reminder sweep reported undelivered email"; exit 1 ;;
+          esac

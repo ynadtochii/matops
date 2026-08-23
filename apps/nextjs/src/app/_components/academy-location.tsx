@@ -14,7 +14,8 @@ import { MapUrlSchema } from "@matops/validators";
 
 import { useTRPC } from "~/trpc/react";
 import { SectionHeading } from "./primitives";
-import { ErrorState, SkeletonRows } from "./states";
+import { SkeletonControlPanel } from "./skeletons";
+import { ErrorState } from "./states";
 
 export function AcademyLocation({
   address,
@@ -61,7 +62,7 @@ export function AcademyLocation({
           </p>
         </div>
         {settings.isPending ? (
-          <SkeletonRows rows={1} />
+          <SkeletonControlPanel />
         ) : settings.isError ? (
           <ErrorState
             label="your time zone"

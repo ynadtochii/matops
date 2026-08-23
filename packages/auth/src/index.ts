@@ -183,6 +183,19 @@ export function initAuth<
     // append the session cookie back to the app. (Expo Go's `exp://` is auto-added
     // in development by the expo() plugin; the custom scheme is not, so list it.)
     trustedOrigins: ["matops://"],
+    // Magic-link send is public and spends the shared Resend quota, so one
+    // flooder would break sign-in for every academy at once. Storage is the
+    // default in-memory one: per instance on Vercel Fluid compute, and reset by
+    // a cold start, so it brakes a flood without being a global ceiling. Better
+    // Auth only enables this in production, so it is invisible in `dev:next`.
+    rateLimit: {
+      window: 60,
+      max: 60,
+      customRules: {
+        "/sign-in/magic-link": { window: 300, max: 5 },
+        "/magic-link/verify": { window: 60, max: 20 },
+      },
+    },
     onAPIError: {
       onError(error) {
         // The MESSAGE only. The Better Auth context carries the app secret as a

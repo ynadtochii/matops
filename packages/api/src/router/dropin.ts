@@ -15,7 +15,7 @@ import {
 } from "@matops/domain";
 import { AcademyPublicSchema, DropInSchema } from "@matops/validators";
 
-import { ownerProcedure, publicProcedure } from "../trpc";
+import { ownerProcedure, publicProcedure, rateLimited } from "../trpc";
 
 const LOOKBACK_MS = 3 * 60 * 60 * 1000;
 const LOOKAHEAD_MS = 6 * 60 * 60 * 1000;
@@ -31,6 +31,7 @@ const LOOKAHEAD_MS = 6 * 60 * 60 * 1000;
 export const dropInRouter = {
   /** Academy name for the public drop-in page header; 404 if the id is unknown. */
   academyInfo: publicProcedure
+    .use(rateLimited(30, 60_000))
     .input(AcademyPublicSchema)
     .query(async ({ input }) => {
       const academy = await getAcademyPublic(input.academyId);
@@ -46,44 +47,47 @@ export const dropInRouter = {
    * attaches it when exactly one is on; otherwise it's a general visit lead
    * (spec §4). Deduped by phone — a repeat visitor bumps their visit count.
    */
-  submit: publicProcedure.input(DropInSchema).mutation(async ({ input }) => {
-    const academy = await getAcademyPublic(input.academyId);
-    if (!academy) {
-      throw new TRPCError({ code: "NOT_FOUND", message: "Gym not found" });
-    }
-    const gate = canSubmitDropIn(input);
-    if (!gate.ok) {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message:
-          gate.reason === "no-consent"
-            ? "Please tick the consent box to continue"
-            : "Please enter your name and phone number",
+  submit: publicProcedure
+    .use(rateLimited(5, 10 * 60_000))
+    .input(DropInSchema)
+    .mutation(async ({ input }) => {
+      const academy = await getAcademyPublic(input.academyId);
+      if (!academy) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Gym not found" });
+      }
+      const gate = canSubmitDropIn(input);
+      if (!gate.ok) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            gate.reason === "no-consent"
+              ? "Please tick the consent box to continue"
+              : "Please enter your name and phone number",
+        });
+      }
+
+      // Attach the current class if exactly one is on right now (else general lead).
+      const now = Date.now();
+      const classes = await listAcademyClassesInWindow(
+        input.academyId,
+        now - LOOKBACK_MS,
+        now + LOOKAHEAD_MS,
+      );
+      const candidates = resolveCheckInClass(classes, new Date(now));
+      const classId =
+        candidates.length === 1 ? (candidates[0]?.id ?? null) : null;
+
+      const { visitCount } = await createDropIn({
+        academyId: input.academyId,
+        firstName: input.firstName,
+        lastName: input.lastName,
+        phone: normalizePhone(input.phone),
+        email: input.email ?? null,
+        classId,
+        consent: input.consent,
       });
-    }
-
-    // Attach the current class if exactly one is on right now (else general lead).
-    const now = Date.now();
-    const classes = await listAcademyClassesInWindow(
-      input.academyId,
-      now - LOOKBACK_MS,
-      now + LOOKAHEAD_MS,
-    );
-    const candidates = resolveCheckInClass(classes, new Date(now));
-    const classId =
-      candidates.length === 1 ? (candidates[0]?.id ?? null) : null;
-
-    const { visitCount } = await createDropIn({
-      academyId: input.academyId,
-      firstName: input.firstName,
-      lastName: input.lastName,
-      phone: normalizePhone(input.phone),
-      email: input.email ?? null,
-      classId,
-      consent: input.consent,
-    });
-    return { ok: true as const, firstVisit: visitCount === 1 };
-  }),
+      return { ok: true as const, firstVisit: visitCount === 1 };
+    }),
 
   /** Drop-in leads for the active academy (spec O4). Owner-only, RLS-scoped. */
   list: ownerProcedure.query(({ ctx }) => {

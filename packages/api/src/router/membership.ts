@@ -1,6 +1,7 @@
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
+import type { Membership } from "@matops/domain";
 import {
   and,
   createPendingMembership,
@@ -26,8 +27,10 @@ import {
 import {
   approveMembership,
   canApprove,
+  canDecideSeat,
   classifyDrift,
   CODE_JOIN_ROLE,
+  isOwner,
   isSuspended,
   paymentStatus,
   trainingStats,
@@ -137,6 +140,16 @@ async function setRoleOrRejectLastOwner(
   }
 }
 
+/** Enforce the pure `canDecideSeat` rule: the coach queue stays the owner's. */
+function requireSeatDecider(
+  ctx: { membership: Membership },
+  m: { status: string; invitedRole: string | null },
+): void {
+  if (!canDecideSeat(ctx.membership, m)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Owner only" });
+  }
+}
+
 export const membershipRouter = {
   /**
    * Self-join via an invite link (spec S1–S3, docs/issues/14, 20, 26). The caller
@@ -192,12 +205,13 @@ export const membershipRouter = {
     }),
 
   /**
-   * The member list for the active academy (spec O4). Owner-only. Removed rows are
+   * The member list for the active academy (spec O4). Staff, so the head coach
+   * can run the desk (ADR 75); dues are owner-only. Removed rows are
    * hidden; history is kept. `visitCount` (slice 3.3) = how many classes the
    * member attended (present), powering the "attended 3×" nudge on pending rows
    * (§4). Counted on the RLS-scoped `ctx.db`, grouped by student.
    */
-  members: ownerProcedure.query(async ({ ctx }) => {
+  members: staffProcedure.query(async ({ ctx }) => {
     const rows = await listMembersOf(ctx.academyId, ctx.db);
     const visits = await ctx.db
       .select({
@@ -239,10 +253,13 @@ export const membershipRouter = {
     );
 
     const now = new Date();
+    // Money is the owner's business, not the coach's: an instructor runs the
+    // desk (approve, rank) and gets the same roster without the dues figures.
+    const seesDues = isOwner(ctx.membership);
     return rows
       .filter((r) => r.status !== "removed")
       .map((r) => {
-        const d = duesByMember.get(r.memberId);
+        const d = seesDues ? duesByMember.get(r.memberId) : undefined;
         return {
           memberId: r.memberId,
           name: r.name,
@@ -271,12 +288,12 @@ export const membershipRouter = {
 
   /**
    * One member's attendance history + derived stats (spec O4 "member detail",
-   * slice C.2 — ADR 39). Owner-only. Resolves the member to its user, lists
+   * slice C.2 — ADR 39). Staff. Resolves the member to its user, lists
    * their `present` sessions (newest first), and reuses the pure `trainingStats`
    * + `classifyDrift` for the Overview tab. Contact/role come from the member list
    * row the web already holds — this returns only the history + numbers.
    */
-  memberHistory: ownerProcedure
+  memberHistory: staffProcedure
     .input(MemberActionSchema)
     .query(async ({ ctx, input }) => {
       const m = await requireMember(ctx, input.memberId);
@@ -310,11 +327,12 @@ export const membershipRouter = {
       };
     }),
 
-  /** Approve a pending member → grant the invited role + activate (docs/issues/20). */
-  approve: ownerProcedure
+  /** Approve a pending member → grant the invited role + activate (docs/issues/20). Staff (ADR 75). */
+  approve: staffProcedure
     .input(MemberActionSchema)
     .mutation(async ({ ctx, input }) => {
       const m = await requireMember(ctx, input.memberId);
+      requireSeatDecider(ctx, m);
       if (!canApprove(m)) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
@@ -333,10 +351,11 @@ export const membershipRouter = {
     }),
 
   /** Reject a pending member → revoke access, keep the record (§4). */
-  reject: ownerProcedure
+  reject: staffProcedure
     .input(MemberActionSchema)
     .mutation(async ({ ctx, input }) => {
-      await requireMember(ctx, input.memberId);
+      const m = await requireMember(ctx, input.memberId);
+      requireSeatDecider(ctx, m);
       await setMemberStatus(input.memberId, "removed");
       return { ok: true as const };
     }),

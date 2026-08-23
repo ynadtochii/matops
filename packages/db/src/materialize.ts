@@ -1,12 +1,28 @@
-import { and, asc, eq, isNull, lt } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  gt,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  sql,
+} from "drizzle-orm";
 
 import {
   computeOccurrences,
   MATERIALIZATION_HORIZON_DAYS,
+  staleClassIds,
 } from "@matops/domain";
 
 import { db } from "./client";
-import { classInstance, classTemplate } from "./scheduling";
+import {
+  classInstance,
+  classParticipation,
+  classTemplate,
+  dropIn,
+} from "./scheduling";
 
 /**
  * Class materialization (docs/issues/16). Turns recurring templates into concrete
@@ -125,6 +141,8 @@ export interface SweepOptions {
   softBudgetMs?: number;
   now?: Date;
   horizonDays?: number;
+  /** The drizzle handle to sweep on. Defaults to the base `db`; tests inject. */
+  exec?: Executor;
 }
 
 export interface SweepResult {
@@ -145,6 +163,7 @@ export async function runMaterializationSweep({
   softBudgetMs = 55_000,
   now = new Date(),
   horizonDays = MATERIALIZATION_HORIZON_DAYS,
+  exec = db,
 }: SweepOptions = {}): Promise<SweepResult> {
   const startedAt = Date.now();
   // Target horizon end for THIS run. A template is "stale" when its cursor does
@@ -153,7 +172,7 @@ export async function runMaterializationSweep({
 
   // Stale = cursor behind the horizon end. Oldest cursor first so the most-behind
   // templates catch up first under the row limit.
-  const stale = await db
+  const stale = await exec
     .select()
     .from(classTemplate)
     .where(
@@ -167,7 +186,7 @@ export async function runMaterializationSweep({
     .limit(limit + 1);
 
   // Templates with a NULL cursor are excluded by `lt(NULL)`; fetch those too.
-  const fresh = await db
+  const fresh = await exec
     .select()
     .from(classTemplate)
     .where(
@@ -189,9 +208,135 @@ export async function runMaterializationSweep({
     if (Date.now() - startedAt > softBudgetMs) {
       return { processed, created, hasMore: true };
     }
-    created += await materializeTemplate(db, template, { now, horizonDays });
+    created += await materializeTemplate(exec, template, {
+      now,
+      horizonDays,
+    });
     processed += 1;
   }
 
   return { processed, created, hasMore };
+}
+
+export interface RebuildResult {
+  /** Future classes removed because no active template still produces them. */
+  deleted: number;
+  /** Bookings that went with them. Zero when nobody had booked. */
+  bookingsRemoved: number;
+  /** Classes generated to refill the horizon. */
+  created: number;
+}
+
+/** The active, non-deleted templates of the academy the caller is scoped to. */
+async function activeTemplates(exec: Executor): Promise<Template[]> {
+  return exec
+    .select()
+    .from(classTemplate)
+    .where(
+      and(eq(classTemplate.status, "active"), isNull(classTemplate.deletedAt)),
+    );
+}
+
+/**
+ * The future classes a rebuild would remove, and how many bookings go with them.
+ * Reads only, so the owner's confirm dialog can name the damage before they
+ * commit to it (ADR 79).
+ */
+export async function planRebuild(
+  exec: Executor,
+  { now = new Date(), horizonDays = MATERIALIZATION_HORIZON_DAYS } = {},
+): Promise<{ ids: string[]; bookings: number }> {
+  const to = new Date(now.getTime() + horizonDays * DAY_MS);
+  const templates = await activeTemplates(exec);
+
+  const wanted = templates.flatMap((t) =>
+    computeOccurrences(
+      {
+        daysOfWeek: t.daysOfWeek,
+        startsAtMinutes: t.startsAtMinutes,
+        timeZone: t.timeZone,
+      },
+      now,
+      to,
+    ).map((startsAt) => ({ templateId: t.id, startsAt })),
+  );
+
+  // FUTURE only, and only rows a template generated. A past class carries its
+  // attendance on the same participation row as its booking, so removing one
+  // erases history; a one-off has no template to recreate it.
+  const existing = await exec
+    .select({
+      id: classInstance.id,
+      templateId: classInstance.templateId,
+      startsAt: classInstance.startsAt,
+    })
+    .from(classInstance)
+    .where(
+      and(
+        gt(classInstance.startsAt, now),
+        isNotNull(classInstance.templateId),
+        isNull(classInstance.deletedAt),
+      ),
+    );
+
+  const ids = staleClassIds(existing, wanted);
+  if (ids.length === 0) return { ids, bookings: 0 };
+
+  const [booked] = await exec
+    .select({ n: sql<number>`count(*)::int` })
+    .from(classParticipation)
+    .where(inArray(classParticipation.classId, ids));
+
+  return { ids, bookings: booked?.n ?? 0 };
+}
+
+/**
+ * Rebuild the academy's forward schedule (ADR 79). Removes every future class no
+ * active template still produces, then regenerates all of them from today to the
+ * horizon. The owner triggers this by hand; nothing schedules it.
+ *
+ * Runs on the CALLER's executor, which is the per-request tenant transaction, so
+ * RLS scopes every statement to the active academy and there is no `academy_id`
+ * filter to forget. It is also why the whole thing is atomic: a failure part-way
+ * rolls the deletes back with it.
+ *
+ * A class the owner deliberately CANCELLED at a still-wanted instant stays
+ * cancelled: the regeneration uses `onConflictDoNothing`, not `reviveCancelled`.
+ */
+export async function rebuildSchedule(
+  exec: Executor,
+  { now = new Date(), horizonDays = MATERIALIZATION_HORIZON_DAYS } = {},
+): Promise<RebuildResult> {
+  const { ids, bookings } = await planRebuild(exec, { now, horizonDays });
+
+  if (ids.length > 0) {
+    // ponytail: one statement per table, no chunking. Six months of a normal
+    // gym is low thousands of ids; chunk at ~10k if a franchise ever appears.
+    await exec
+      .delete(classParticipation)
+      .where(inArray(classParticipation.classId, ids));
+    // A walk-in lead attached to a class it can outlive: keep the lead, drop
+    // the link. The column is already nullable ("null = general lead").
+    await exec
+      .update(dropIn)
+      .set({ classId: null })
+      .where(inArray(dropIn.classId, ids));
+    await exec.delete(classInstance).where(inArray(classInstance.id, ids));
+  }
+
+  const templates = await activeTemplates(exec);
+  let created = 0;
+  for (const template of templates) {
+    created += await materializeTemplate(
+      exec,
+      // Cursor blanked in the passed row, not in the DB: `materializeTemplate`
+      // reads it off the object and writes the new one back. Without this a
+      // template already at the horizon creates nothing and the hole the delete
+      // just made stays open.
+      { ...template, generatedUntil: null },
+      { now, horizonDays },
+    );
+  }
+
+  return { deleted: ids.length, bookingsRemoved: bookings, created };
 }

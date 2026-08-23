@@ -8,6 +8,7 @@ import {
   DAY_LABELS,
   describeRecurrence,
   formatStartMinutes,
+  isOwner,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
@@ -22,9 +23,10 @@ import { toast } from "@matops/ui/toast";
 import { useTRPC } from "~/trpc/react";
 import { useAcademy } from "./academy";
 import { InstructorOptions } from "./coach-select";
-import { cardClass } from "./primitives";
+import { cardClass, SectionHeading } from "./primitives";
 import { SchedulePoster } from "./schedule-poster";
-import { EmptyState, ErrorState, SkeletonRows } from "./states";
+import { SkeletonRows } from "./skeletons";
+import { EmptyState, ErrorState } from "./states";
 
 type Template = RouterOutputs["template"]["list"][number];
 
@@ -93,6 +95,7 @@ export function Templates() {
   const [form, setForm] = useState<FormState | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const academyTz = me.timeZone ?? browserTz();
+  const owner = isOwner(me);
 
   const invalidate = () =>
     queryClient.invalidateQueries(trpc.template.list.pathFilter());
@@ -205,7 +208,7 @@ export function Templates() {
       </div>
 
       {list.isPending ? (
-        <SkeletonRows rows={3} />
+        <SkeletonRows rows={3} action />
       ) : list.isError ? (
         <ErrorState
           label="your templates"
@@ -480,6 +483,87 @@ export function Templates() {
           )}
         </DialogContent>
       </Dialog>
+
+      {owner && <RebuildSchedule />}
     </section>
+  );
+}
+
+/**
+ * Rebuild the forward schedule (spec O3, ADR 79). Owner-only. v1 runs no
+ * scheduler, so this is the one thing that clears out the classes a paused or
+ * deleted template left behind, and the one thing that refills six months after
+ * the templates change. The preview names the damage before the owner commits:
+ * bookings on those classes go with them.
+ */
+function RebuildSchedule() {
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  const preview = useQuery(trpc.template.rebuildPreview.queryOptions());
+
+  const rebuild = useMutation(
+    trpc.template.rebuild.mutationOptions({
+      onSuccess: async (res) => {
+        await queryClient.invalidateQueries(trpc.class.pathFilter());
+        await queryClient.invalidateQueries(trpc.template.pathFilter());
+        await queryClient.invalidateQueries(trpc.booking.pathFilter());
+        toast.success(
+          `Rebuilt: ${res.deleted} removed, ${res.created} generated`,
+        );
+      },
+      onError: (e) =>
+        toast.error(e.message || "Could not rebuild the schedule"),
+    }),
+  );
+
+  const toDelete = preview.data?.toDelete ?? 0;
+  const bookings = preview.data?.bookingsAffected ?? 0;
+
+  const damage =
+    toDelete === 0
+      ? "Nothing is stale right now."
+      : `Removes ${toDelete} upcoming ${toDelete === 1 ? "class" : "classes"}` +
+        (bookings > 0
+          ? ` and ${bookings} ${bookings === 1 ? "booking" : "bookings"}.`
+          : ".");
+
+  return (
+    <div className="mt-4 flex flex-col gap-3 border-t pt-6">
+      <div>
+        <SectionHeading>Rebuild schedule</SectionHeading>
+        <p className="text-muted-foreground text-sm">
+          Regenerates every class from your active templates, six months ahead.
+          Use it after pausing or deleting a template: its classes stay on the
+          calendar until you do.
+        </p>
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
+        <div>
+          <p className="text-sm font-medium">{damage}</p>
+          <p className="text-muted-foreground text-sm">
+            Past classes and their attendance are never touched. One-off classes
+            you added by hand stay.
+          </p>
+        </div>
+        <ConfirmDialog
+          title="Rebuild the schedule?"
+          description={`${damage} Students lose those bookings without being told. Your templates, past classes, attendance history and one-off classes are unaffected.`}
+          confirmLabel="Rebuild schedule"
+          variant="destructive"
+          onConfirm={async () => {
+            await rebuild.mutateAsync();
+          }}
+          trigger={
+            <Button
+              size="sm"
+              variant="destructive-outline"
+              disabled={rebuild.isPending || preview.isPending}
+            >
+              {rebuild.isPending ? "Rebuilding…" : "Rebuild schedule"}
+            </Button>
+          }
+        />
+      </div>
+    </div>
   );
 }

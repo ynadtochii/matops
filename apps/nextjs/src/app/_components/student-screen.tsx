@@ -17,7 +17,8 @@ import { useAcademy } from "./academy";
 import { InstallAppCard } from "./install-app-card";
 import { PageHeader } from "./page-header";
 import { cardClass, disciplineDot, Section } from "./primitives";
-import { EmptyState, ErrorState, SkeletonRows, SuspendedState } from "./states";
+import { SkeletonClassDays } from "./skeletons";
+import { EmptyState, ErrorState, SuspendedState } from "./states";
 import { useBooking } from "./use-booking";
 
 type ClassRow = RouterOutputs["class"]["mine"][number];
@@ -63,7 +64,7 @@ export function StudentScreen() {
         subtitle="Your classes for the next seven days."
       />
       {week.isPending ? (
-        <SkeletonRows rows={5} />
+        <SkeletonClassDays />
       ) : week.isError ? (
         <ErrorState label="your schedule" onRetry={() => void week.refetch()} />
       ) : byDay.length === 0 ? (

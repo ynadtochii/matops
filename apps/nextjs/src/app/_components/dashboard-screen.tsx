@@ -26,7 +26,7 @@ import {
   DialogTitle,
 } from "@matops/ui/dialog";
 
-import { dayLongFmt, timeFmt } from "~/lib/format";
+import { clockParts, dayLongFmt, timeFmt } from "~/lib/format";
 import { formatMoney } from "~/lib/money";
 import { useTRPC } from "~/trpc/react";
 import { useAcademy } from "./academy";
@@ -40,7 +40,14 @@ import {
   Section,
   Stat,
 } from "./primitives";
-import { EmptyState, ErrorState, SkeletonRows } from "./states";
+import {
+  Bar,
+  SkeletonDayRail,
+  SkeletonInsights,
+  SkeletonQueue,
+  SkeletonRows,
+} from "./skeletons";
+import { EmptyState, ErrorState } from "./states";
 import { StudentScreen } from "./student-screen";
 
 type ClassRow = RouterOutputs["class"]["week"][number];
@@ -128,7 +135,7 @@ export function DashboardScreen() {
   });
   const memberList = useQuery({
     ...trpc.membership.members.queryOptions(),
-    enabled: isOwner,
+    enabled: isStaff,
   });
   const leads = useQuery({
     ...trpc.dropIn.list.queryOptions(),
@@ -200,6 +207,12 @@ export function DashboardScreen() {
       count: unmarked.length,
       label: "Classes to mark",
     },
+    {
+      key: "approvals",
+      href: "/members?tab=requests",
+      count: pendingCount,
+      label: "Pending approvals",
+    },
     ...(!isOwner
       ? []
       : [
@@ -208,12 +221,6 @@ export function DashboardScreen() {
             href: "/payments",
             count: claims.data?.length ?? 0,
             label: "Payments to confirm",
-          },
-          {
-            key: "approvals",
-            href: "/members?tab=requests",
-            count: pendingCount,
-            label: "Pending approvals",
           },
           {
             key: "coach-requests",
@@ -241,8 +248,12 @@ export function DashboardScreen() {
   // "counting", a bare 0 reads as "nothing to do".
   const queueLoading =
     week.isPending ||
-    (isOwner && (memberList.isPending || leads.isPending || claims.isPending));
-  const numbersLoading = week.isPending || (isOwner && memberList.isPending);
+    memberList.isPending ||
+    (isOwner && (leads.isPending || claims.isPending));
+  const numbersLoading = week.isPending || memberList.isPending;
+  // A brand-new academy has nothing to do, and "All clear." reads as finished.
+  // The owner is on their own here: nobody is standing next to them saying it.
+  const firstRun = isOwner && activeCount === 0 && weekCount === 0;
 
   const detail = (week.data ?? []).find((r) => r.id === detailId);
 
@@ -275,14 +286,31 @@ export function DashboardScreen() {
             grid; a job at zero is dropped, not drawn empty. The violet lives in
             the counts only: it is a spark, not a surface (design.md §1.1). */}
         {queueLoading ? (
-          <div className="bg-muted h-24 animate-pulse rounded-lg motion-reduce:animate-none" />
+          <SkeletonQueue />
+        ) : firstRun ? (
+          <EmptyState title="Your academy is empty. Three steps to open it.">
+            <Link href="/schedule" className="text-brand-strong font-medium">
+              1. Add your weekly classes
+            </Link>
+            {" · "}
+            <Link href="/members" className="text-brand-strong font-medium">
+              2. Share your join link
+            </Link>
+            {" · "}
+            <Link
+              href="/members?tab=leads"
+              className="text-brand-strong font-medium"
+            >
+              3. Print the QR poster
+            </Link>
+          </EmptyState>
         ) : queue.length === 0 ? (
           <div className="border-border bg-grid-small rounded-lg border border-dashed p-6">
             <p className="text-sm font-medium">All clear.</p>
             <p className="text-muted-foreground mt-1 text-sm">
               {isOwner
                 ? "Every class is marked, everyone is approved, every payment is settled."
-                : "Every class is marked."}
+                : "Every class is marked and everyone is approved."}
             </p>
           </div>
         ) : (
@@ -302,7 +330,7 @@ export function DashboardScreen() {
         {/* Context, not readings — a caption under the panel, so the counts
             that need an action stay the only numbers competing for the eye. */}
         {numbersLoading ? (
-          <div className="bg-muted mt-3 h-3 w-56 animate-pulse rounded-sm motion-reduce:animate-none" />
+          <Bar className="mt-3 h-3 w-56" />
         ) : (
           <p className="text-muted-foreground mt-3 font-mono text-[11px] tracking-wider uppercase tabular-nums">
             {isOwner && `${activeCount} active members · `}
@@ -321,7 +349,7 @@ export function DashboardScreen() {
         }
       >
         {week.isPending ? (
-          <SkeletonRows rows={2} />
+          <SkeletonDayRail rows={3} />
         ) : week.isError ? (
           <ErrorState
             label="today's classes"
@@ -367,7 +395,7 @@ export function DashboardScreen() {
       {/* Insights — gym activity over the last 30 days */}
       <Section label="Insights">
         {insights.isPending ? (
-          <SkeletonRows rows={2} />
+          <SkeletonInsights />
         ) : insights.isError ? (
           <ErrorState
             label="gym insights"
@@ -389,7 +417,7 @@ export function DashboardScreen() {
           }
         >
           {drifting.isPending ? (
-            <SkeletonRows rows={2} />
+            <SkeletonRows rows={3} action variant="outline" />
           ) : drifting.isError ? (
             <ErrorState
               label="the drifting list"
@@ -484,11 +512,12 @@ function DayRow({
 }) {
   const full = capacityDisplay(c.bookingCount, c.capacity).isOver;
   const ended = endsAt(c) <= now.getTime();
+  const { clock, period } = clockParts(new Date(c.startsAt));
   return (
     <button
       type="button"
       onClick={onOpen}
-      className="hover:bg-muted focus-visible:border-ring focus-visible:ring-ring/50 flex w-full items-center gap-3 py-2.5 text-left text-sm focus-visible:ring-[3px] focus-visible:outline-none"
+      className="hover:bg-muted focus-visible:border-ring focus-visible:ring-ring/50 -mx-2.5 flex w-[calc(100%+1.25rem)] items-center gap-3 rounded-sm px-2.5 py-2.5 text-left text-sm focus-visible:ring-[3px] focus-visible:outline-none"
     >
       <span
         aria-hidden
@@ -497,8 +526,9 @@ function DayRow({
           disciplineDot(c.discipline),
         )}
       />
-      <span className="text-muted-foreground w-11 shrink-0 font-mono tabular-nums">
-        {timeFmt.format(new Date(c.startsAt))}
+      <span className="text-muted-foreground shrink-0 font-mono whitespace-nowrap tabular-nums">
+        {clock}
+        {period && <span className="ml-1 text-[10px]">{period}</span>}
       </span>
       <span
         className={cn(
@@ -618,7 +648,7 @@ const BAR_SKIN: Record<DisciplineTone, string> = {
 function BusiestRow({ row, top }: { row: BusiestClass; top: number }) {
   const share = top > 0 ? Math.max(row.count / top, 0.04) : 0;
   return (
-    <div className="relative flex items-center justify-between gap-3 py-1.5 text-sm">
+    <div className="relative flex items-center justify-between gap-3 px-2.5 py-1.5 text-sm">
       <span
         aria-hidden
         className={cn(

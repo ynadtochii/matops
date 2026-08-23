@@ -46,3 +46,45 @@
     letter-spacing: var(--tracking-normal);
   }
 }
+
+/* The mat loader (ADR 80) — the basketweave mark laying itself, plank by plank.
+   Each seam carries its own `--len` so it lands exactly drawn, and `--i` walks
+   the weave order. `backwards` on the wrapper holds it invisible through the
+   delay, so a load that resolves in under 180ms never flashes a loader. */
+@keyframes mat-seam {
+  0% {
+    stroke-dashoffset: var(--len);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  46%,
+  82% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes mat-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@layer components {
+  .mat-loader {
+    animation: mat-in 220ms ease-out 180ms backwards;
+  }
+  .mat-seam {
+    animation: mat-seam 1900ms ease-in-out infinite;
+    animation-delay: calc(var(--i) * 90ms);
+  }
+}

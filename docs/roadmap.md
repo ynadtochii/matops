@@ -6,11 +6,11 @@
 > Flip cells as you go: **`—`** not needed · **`todo`** · **`wip`** · **`done`**. Every flip to `done` must pass the [Definition of Done](delivery.md#4-definition-of-done-the-anti-drift-gate).
 > Surfaces: **DB · API · Web · Mob · Sh(ared) · Inf(ra)**. Spec IDs trace up to [spec.md](spec.md); tickets to [map.md](map.md).
 
-**Status:** **Phases 0-4 complete, plus every product wave through v3.2, and the v3.3 web refactor.** Static gates green: `lint` 15/15 · `typecheck` 17/17 · `pnpm test` **456 green** (domain 275 · db 82 · api 72 · validators 24 · notifications 3). **`next build` was last run for v3.3** — v2.5 to v3.1 are lint + typecheck only, and the per-wave verify lines below say so. Tests live in three homes now — `packages/db/test` (PGlite RLS), `packages/domain/test` (pure rules) and, since ADR [60](issues/60-backend-review-fixes.md), `packages/api/test` (real routers + real middleware + real SQL over PGlite).
+**Status:** **Phases 0-4 complete, plus every product wave through v3.2, and the v3.3 web refactor.** Static gates green: `lint` 15/15 · `typecheck` 17/17 · `pnpm test` **456 green** (domain 275 · db 82 · api 72 · validators 24 · notifications 3). **`next build` was last run for v3.9** — v2.5 to v3.1 are lint + typecheck only, and the per-wave verify lines below say so. Tests live in three homes now — `packages/db/test` (PGlite RLS), `packages/domain/test` (pure rules) and, since ADR [60](issues/60-backend-review-fixes.md), `packages/api/test` (real routers + real middleware + real SQL over PGlite).
 
-What is built: the identity join loop (Phase 1), the scheduling core (Phase 2), booking & attendance (Phase 3), notifications (Phase 4 — engine only, **no scheduler**, ADR [46](issues/46-no-scheduler-v1.md)), the Expo student app, and the waves below — v1.1 UX, v1.2 stats, v1.3 payments, v1.4 rank & notes, v1.5 PWA, v1.7 mobile design, v1.8 mobile IA, v1.9 referrals, v2.0/v2.1 mobile waves, v2.2 student web funnel, v2.3/v2.4 review fixes, v2.5 coach workload, v2.6 the Settings split, v2.7 invite roles + the coach queue, v2.8 the web Profile, v2.9 academy time zone / address / delete, v2.10 referrals owner-only, v3.0 in-app QR scan, v3.1 the pinned map link, v3.2 the student web at parity, v3.3 the web shell seams (refactor, ADR [74](issues/74-web-shell-seams.md)).
+What is built: the identity join loop (Phase 1), the scheduling core (Phase 2), booking & attendance (Phase 3), notifications (Phase 4 — engine, plus a **daily dues sweep** since ADR [75](issues/75-daily-cron-on-github-actions.md)), the Expo student app, and the waves below — v1.1 UX, v1.2 stats, v1.3 payments, v1.4 rank & notes, v1.5 PWA, v1.7 mobile design, v1.8 mobile IA, v1.9 referrals, v2.0/v2.1 mobile waves, v2.2 student web funnel, v2.3/v2.4 review fixes, v2.5 coach workload, v2.6 the Settings split, v2.7 invite roles + the coach queue, v2.8 the web Profile, v2.9 academy time zone / address / delete, v2.10 referrals owner-only, v3.0 in-app QR scan, v3.1 the pinned map link, v3.2 the student web at parity, v3.3 the web shell seams (refactor, ADR [74](issues/74-web-shell-seams.md)), v3.4 the member CSV export, v3.5 the daily cron on GitHub Actions (ADR [75](issues/75-daily-cron-on-github-actions.md)), v3.6 the pilot blockers (ADR [76](issues/76-pilot-blockers.md)), v3.7 the notification center (ADR [77](issues/77-notification-center.md)), v3.9 the loading states (ADR [80](issues/80-loading-states.md)).
 
-**Not built yet:** **Phase 5** launch hardening (universal/App links — the app still uses a custom scheme; booking-count reconciliation; rate limiting, ADR [58](issues/58-input-validation-and-sanitization.md)), **any scheduler** (both cron routes stay dormant and manually callable), and **v1.3 R.2** the native home-screen widget (scaffolded, guide in [home-widget-implementation.md](home-widget-implementation.md)).
+**Not built yet:** **Phase 5** launch hardening (universal/App links — the app still uses a custom scheme; booking-count reconciliation; a **shared-store** rate limiter — v3.6 shipped an in-process one, ADR [76](issues/76-pilot-blockers.md), which leaks across a Fluid-compute scale-out), **any scheduler beyond the daily dues tick** (v3.5 put `/api/cron/remind` on a **daily** GitHub Actions run at 09:00 Lisbon; `/api/cron/materialize` stays dormant and the **class** reminder sweep stays switched off, both on purpose — ADR 75), and **v1.3 R.2** the native home-screen widget (scaffolded, guide in [home-widget-implementation.md](home-widget-implementation.md)).
 
 **Open operational items:** **`AUTH_SECRET` needs rotating** on the next deploy (the old auth error hook logged it — ADR 60); the mobile **Google browser→app session hand-off** still does not land ([mobile-google-login-handoff.md](mobile-google-login-handoff.md)); and every mobile wave since v1.8 is **static-gates-green only** — no simulator in this environment, so the checks in [mobile-device-test.md](mobile-device-test.md) are outstanding.
 
@@ -45,41 +45,41 @@ Solo-builder note: 0.5 (auth) and 0.6 (CI) can run beside 0.2–0.4. Everything 
 
 One row per slice. This is the single answer to _"what's left, on which surface?"_
 
-| #     | Slice                                                       | DB   | API  | Web  | Mob  | Sh   | Inf   |
-| ----- | ----------------------------------------------------------- | ---- | ---- | ---- | ---- | ---- | ----- |
-| **0** | **Foundations**                                             |      |      |      |      |      |       |
-| 0.1   | Monorepo scaffold (create-t3-turbo)                         | —    | done | done | done | done | done  |
-| 0.2   | DB package: Drizzle + Neon + migrate + seed                 | done | —    | —    | —    | —    | done  |
-| 0.3   | Tenant seam: RLS role + per-req tx + `scopedDb` + leak test | done | done | —    | —    | —    | done  |
-| 0.4   | tRPC base + procedure tiers                                 | —    | done | —    | —    | done | —     |
-| 0.5   | Better Auth (core + org + magic-link)                       | done | done | done | done | done | —     |
-| 0.6   | CI/CD + env + preview builds                                | —    | —    | —    | —    | —    | done  |
-| **1** | **Identity & tenancy**                                      |      |      |      |      |      |       |
-| 1.1   | Owner onboarding (create academy, magic link)               | done | done | done | —    | done | —     |
-| 1.2   | Invite links (per-role, create/rotate)                      | done | done | done | —    | done | —     |
-| 1.3   | Student self-join → pending (min fields, email req.)        | done | done | —    | done | done | —     |
-| 1.4   | Uniform approval gate + `enrolledProcedure`                 | —    | done | done | done | done | —     |
-| 1.5   | Members (approve/remove/suspend, promote co-owner)          | done | done | done | —    | —    | —     |
-| 1.6   | Multi-academy switcher                                      | —    | done | done | done | —    | —     |
-| 1.7   | Numeric academy code join (mobile v1)                       | done | done | done | done | done | —     |
-| 1.8   | Social login — Google (web; mobile deferred)                | —    | done | done | —    | done | wip   |
-| **2** | **Scheduling core**                                         |      |      |      |      |      |       |
-| 2.1   | Class templates CRUD (recurring)                            | done | done | done | —    | done | —     |
-| 2.2   | Materialization (lazy on save; **cron removed** — ADR 46)   | done | done | —    | —    | —    | —     |
-| 2.3   | Class instances (one-off + edit/cancel rules)               | done | done | done | —    | done | —     |
-| 2.4   | Schedule read (owner web + student mobile)                  | —    | done | done | done | done | —     |
-| **3** | **Booking & attendance**                                    |      |      |      |      |      |       |
-| 3.1   | Book / cancel (atomic write, soft capacity)                 | done | done | —    | done | done | —     |
-| 3.2   | Provisional booking for pending (display tag)               | —    | done | done | done | done | —     |
-| 3.3   | Attendance marking (staff)                                  | done | done | done | —    | done | —     |
-| 3.4   | QR self check-in (book + attend)                            | done | done | —    | done | done | —     |
-| 3.5   | Public drop-in / lead form (consent, dedupe)                | done | done | done | —    | done | done  |
-| **4** | **Notifications & polish**                                  |      |      |      |      |      |       |
-| 4.1   | `notifications` package (Expo Push + Resend)                | done | done | —    | done | done | done  |
-| 4.2   | Events (cancel, reminder, approval, class change)           | done | done | —    | done | done | done¹ |
-| 4.3   | Empty/error/soft-capacity states, design pass               | —    | —    | done | done | done | —     |
+| #     | Slice                                                                  | DB   | API  | Web  | Mob  | Sh   | Inf   |
+| ----- | ---------------------------------------------------------------------- | ---- | ---- | ---- | ---- | ---- | ----- |
+| **0** | **Foundations**                                                        |      |      |      |      |      |       |
+| 0.1   | Monorepo scaffold (create-t3-turbo)                                    | —    | done | done | done | done | done  |
+| 0.2   | DB package: Drizzle + Neon + migrate + seed                            | done | —    | —    | —    | —    | done  |
+| 0.3   | Tenant seam: RLS role + per-req tx + `scopedDb` + leak test            | done | done | —    | —    | —    | done  |
+| 0.4   | tRPC base + procedure tiers                                            | —    | done | —    | —    | done | —     |
+| 0.5   | Better Auth (core + org + magic-link)                                  | done | done | done | done | done | —     |
+| 0.6   | CI/CD + env + preview builds                                           | —    | —    | —    | —    | —    | done  |
+| **1** | **Identity & tenancy**                                                 |      |      |      |      |      |       |
+| 1.1   | Owner onboarding (create academy, magic link)                          | done | done | done | —    | done | —     |
+| 1.2   | Invite links (per-role, create/rotate)                                 | done | done | done | —    | done | —     |
+| 1.3   | Student self-join → pending (min fields, email req.)                   | done | done | —    | done | done | —     |
+| 1.4   | Uniform approval gate + `enrolledProcedure`                            | —    | done | done | done | done | —     |
+| 1.5   | Members (approve/remove/suspend, promote co-owner)                     | done | done | done | —    | —    | —     |
+| 1.6   | Multi-academy switcher                                                 | —    | done | done | done | —    | —     |
+| 1.7   | Numeric academy code join (mobile v1)                                  | done | done | done | done | done | —     |
+| 1.8   | Social login — Google (web; mobile deferred)                           | —    | done | done | —    | done | wip   |
+| **2** | **Scheduling core**                                                    |      |      |      |      |      |       |
+| 2.1   | Class templates CRUD (recurring)                                       | done | done | done | —    | done | —     |
+| 2.2   | Materialization (lazy on save + heal on read; **no cron** — ADR 46/75) | done | done | —    | —    | —    | —     |
+| 2.3   | Class instances (one-off + edit/cancel rules)                          | done | done | done | —    | done | —     |
+| 2.4   | Schedule read (owner web + student mobile)                             | —    | done | done | done | done | —     |
+| **3** | **Booking & attendance**                                               |      |      |      |      |      |       |
+| 3.1   | Book / cancel (atomic write, soft capacity)                            | done | done | —    | done | done | —     |
+| 3.2   | Provisional booking for pending (display tag)                          | —    | done | done | done | done | —     |
+| 3.3   | Attendance marking (staff)                                             | done | done | done | —    | done | —     |
+| 3.4   | QR self check-in (book + attend)                                       | done | done | —    | done | done | —     |
+| 3.5   | Public drop-in / lead form (consent, dedupe)                           | done | done | done | —    | done | done  |
+| **4** | **Notifications & polish**                                             |      |      |      |      |      |       |
+| 4.1   | `notifications` package (Expo Push + Resend)                           | done | done | —    | done | done | done  |
+| 4.2   | Events (cancel, reminder, approval, class change)                      | done | done | —    | done | done | done¹ |
+| 4.3   | Empty/error/soft-capacity states, design pass                          | —    | —    | done | done | done | —     |
 
-¹ Reminder sweep + `/api/cron/remind` route ship in 4.2; **v1 wires no `vercel.json` cron at all** (ADR 46) — the route is a dormant, manually-callable seam and reminders do not fire automatically in v1.
+¹ Reminder sweep + `/api/cron/remind` route ship in 4.2. **No `vercel.json` cron** (ADR 46), but since v3.5 a **daily GitHub Actions** tick drives the route (ADR 75): **dues** reminders fire, the **class** sweep is switched off (`leadMinutes: 0`) because the phone schedules those locally (ADR 54).
 | **5** | **Launch hardening** | | | | | | |
 | 5.1 | `booking_count` reconciliation cron | — | todo | — | — | — | todo |
 | 5.2 | Observability + errors + rate-limit public routes | — | wip² | wip² | wip² | — | wip² |
@@ -100,7 +100,7 @@ One row per slice. This is the single answer to _"what's left, on which surface?
 | P.1 | Dues + payment-claim schema & domain (ADR 40) | done | — | — | — | done | — |
 | P.2 | Owner: paid / overdue status on member list (O7) | — | done | done | — | — | — |
 | P.3 | Student pay: requisites + "I paid" + confirm (S9, O7) | — | done | done | done | done | — |
-| R.1 | Payment reminders (engine built; **not scheduled in v1** — ADR 46) | done | done | — | — | done | — |
+| R.1 | Payment reminders (**scheduled daily** since v3.5 — ADR 75) | done | done | — | — | done | done |
 | R.2 | Home-screen widget (S10, native) | — | — | — | todo | — | — |
 | **v1.4** | **Rank & Notes** _(un-parks belts/rank; ADR 41)_ | | | | | | |
 | G.1 | Rank + notes schema & `rank.ts` engine (ADR 41) | done | — | — | — | done | — |
@@ -178,6 +178,36 @@ One row per slice. This is the single answer to _"what's left, on which surface?
 | Q.3 | `routes.ts` access table: the sidebar and the shell read the same rule; `NoAccessState` | — | — | done | — | done | — |
 | Q.4 | `~/lib/format.ts`: 24 scattered `Intl.DateTimeFormat` become 12 named ones | — | — | done | — | — | — |
 | Q.5 | `dayKey` / `groupByDay` / `PAYMENT_STATUS_LABEL` move to `@matops/domain` + tests | — | — | done | done | done | — |
+| **v3.7** | **The notification center** _(S13 / O12 / §4; ADR 77 — migrations `0023`, `0024`)_ | | | | | | |
+| T.1 | Migration `0023`: `notification`, RLS policy, `insertNotifications` | done | — | — | — | done | — |
+| T.2 | `deliver()` writes the inbox row first; `notification` router (`list` / `unreadCount` / `markAllRead`) | done | done | — | — | — | — |
+| T.3 | `/notifications` screen: feed by day, unread dots, mark-read on open, nav badge | — | — | done | — | — | — |
+| T.4 | `announce` + `audienceCounts` (owner); compose box with the audience picker | — | done | done | — | done | — |
+| T.5 | _(dropped in v3.8: no gym message is emailed, so there is no email preference)_ | — | — | — | — | — | — |
+| T.6 | The feed on the phone: a header bell with a red dot, `notifications` pushed over the tabs | — | — | done | — | — | — |
+| T.7 | One `AppHeader` on the phone, matching the web mobile bar; the web's bell + settings glyphs replace the emoji | — | — | done | — | — | — |
+| **v3.9** | **Loading states** _(§3 states line; ADR 80 — both clients, no migration, no procedure)_ | | | | | | |
+| L.1 | `mat-loader.tsx`: the basketweave mark weaving itself, with a 180ms anti-flash delay | — | — | done | — | — | — |
+| L.2 | `skeletons.tsx`: one vocabulary cut from the real shapes, replacing `SkeletonRows` at 32 call sites | — | — | done | — | — | — |
+| L.3 | Twelve route `loading.tsx` files, each rendering the same skeleton its screen renders | — | — | done | — | — | — |
+| L.4 | The boot and the academy gate draw the loader, not a skeleton of a layout that may not arrive | — | — | done | — | — | — |
+| L.5 | The phone's `Loading` gate becomes the mat loader, drawn with positioned Views + the native driver | — | — | — | done | — | — |
+| L.6 | `components/skeletons.tsx`: the same shapes for the week, my classes, the feed, class detail, dues, rank, check-in | — | — | — | done | — | — |
+| L.7 | `InlineLoading` retired — its last caller duplicated the button's own spinner | — | — | — | done | — | — |
+| **v3.4** | **Member CSV export** _(O4; browser-side, no migration, no router change)_ | | | | | | |
+| U.1 | `membersCsv` / `membersCsvFilename` in `@matops/domain` (+ tests, formula-injection guard) | — | — | — | — | done | — |
+| U.2 | Members tab **Export CSV** over the filtered roster | — | — | done | — | — | — |
+| **v3.6** | **Pilot blockers** _(O1 / O4 / §4; ADR 76 — no migration, no new dependency)_ | | | | | | |
+| B.1 | Sentry sampling capped for the free plan: no traces, no logs, replay on error only | — | — | — | — | — | done |
+| B.2 | The class horizon: `healHorizon` (ADR 76) → daily sweep (ADR 78) → the owner's **Rebuild schedule** button, 6 months (ADR 79) | — | done | — | — | — | — |
+| B.3 | `rate-limit.ts` + `rateLimited()` on the three public procedures; Better Auth `rateLimit` block | — | done | — | — | — | done |
+| B.4 | Public `/privacy` page (placeholders visible) + links from the drop-in and join forms | — | — | done | — | — | — |
+| B.5 | `FeedbackLink` (sidebar footer + Profile) and the first-run checklist on an empty dashboard | — | — | done | — | — | — |
+| B.6 | Approve / decline / roster / history move to `staffProcedure`; `dues: null` for a non-owner | — | done | done | — | — | — |
+| B.7 | `/members` becomes a staff route; four owner-only blocks grow their own `isOwner` gate | — | — | done | — | — | — |
+| **v3.5** | **A daily cron, off the host** _(ADR 75; no migration, no domain change)_ | | | | | | |
+| C.1 | `.github/workflows/cron.yml` — daily 09:00 Lisbon, dues sweep, `CRON_SECRET` bearer | — | — | — | — | — | done |
+| C.2 | `/api/cron/remind` sends **dues only** (`leadMinutes: 0` empties the class claim) | — | done | — | — | — | — |
 | **v3.1** | **A pinned map link for the academy** _(O6 / S7; ADR 71)_ | | | | | | |
 | P.1 | Migration `0022` (`map_url` on `organization`) + `MapUrlSchema` host allowlist | done | — | — | — | done | done |
 | P.2 | `academyMapUrl(address, mapUrl)` prefers the pin; `academy.current` returns `mapUrl` | — | done | — | — | done | — |
@@ -230,7 +260,7 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 **Exit test:** owner defines a recurring week; concrete classes appear; both clients read the schedule.
 
 - **2.1 Class templates** — recurring weekly definition (days, local start minutes, duration, tz, capacity, discipline). Staff CRUD. Refs: ticket 08.
-- **2.2 Materialization** — lazy on template write (fills the **6-week horizon** on each save); idempotent via `generated_until` + `UNIQUE(template_id, starts_at)`. The **daily Vercel Cron** that extended the horizon cross-academy was **removed for v1 (ADR 46)** — the route (`runMaterializationSweep`, LIMIT + time budget, service role outside the seam) stays as a dormant, re-schedulable seam. Refs: ticket 16, ADR 46.
+- **2.2 Materialization** — lazy on template write (fills the **6-week horizon** on each save); idempotent via `generated_until` + `UNIQUE(template_id, starts_at)`. Horizon is **180 days** (ADR 79). Nothing fills it automatically: a template save fills six months, and the owner's **Rebuild schedule** button (`rebuildSchedule` + the pure `staleClassIds`) throws the forward schedule away and regenerates it from the active templates. The cross-academy sweep (`runMaterializationSweep`, LIMIT + time budget, service role outside the seam, injectable `exec`) stays a tested, callable, **unscheduled** seam. The schedule read does not materialize. Refs: ticket 16, ADR 46, 75, 78, 79.
 - **2.3 Class instances** — one-off create (templateId null) + edit/cancel. Edit rules: **notify booked students** on time/instructor change; capacity cut below bookings allowed (soft); **template edits hit future non-cancelled instances only**; delete = soft-delete, keep bookings. `status = scheduled|cancelled` (no "completed"). Refs: spec §4; tickets 19, 08.
 - **2.4 Schedule read** — owner web (full) + student mobile (**own academy only**, can't see other academies). Refs: spec S-schedule. **As built (web-first):** owner web read = `class.week` (staff, shipped in 2.3); student read = `class.mine` on `enrolledProcedure` (pending may browse, RLS-scoped to own academy). Student-lens API ready (`isStudentLensMembership` + `academy.listMineStudent`). **Mob** (the Expo student schedule screen) stays `todo` — it lands in the deferred mobile pass, which is now unblocked.
 
@@ -249,7 +279,7 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 **Exit test:** every v1 event fires on the right channel; empty/error states are flawless.
 
 - **4.1 notifications package** — **DONE.** Thin `packages/notifications` = pure transport (`sendPush` batched Expo Push + `sendEmail` Resend, serverless HTTPS, never throws, no DB dep). Message text = pure builders in `@matops/domain/notify.ts` (+13 tests); resolution lives in the API layer (ADR **34**). Push tokens stored **outside the tenant seam** — `push_token` (migration `0014`, keyed by `user.id`, no `academy_id`/RLS); `pushToken.register`/`unregister` on `protectedProcedure`; mobile registers on sign-in via `expo-notifications` (`utils/push.ts` + `push-sync.tsx`). Refs: tickets 17, 34.
-- **4.2 Events** — **DONE (bar the reminder schedule).** The three `TODO(phase 4)` hooks are wired: class cancelled (**push + email**), class time/instructor change (**push + email**), membership approved (**push**) — via `packages/api/src/notify.ts`, awaited but error-swallowed so a send never fails the mutation. Class-reminder **sweep** (`claimDueReminderClasses`, atomic `reminder_sent_at` claim in `0014`) + `runReminderSweep` + the protected `/api/cron/remind` route ship now; the **frequent cron schedule** is a Phase 5 task (ADR 34). Mobile: tap-to-navigate handler. Refs: tickets 17, 34; spec §4.
+- **4.2 Events** — **DONE (bar the reminder schedule).** The three `TODO(phase 4)` hooks are wired: class cancelled (**push**), class time/instructor change (**push**), membership approved (**push**) — via `packages/api/src/notify.ts`, awaited but error-swallowed so a send never fails the mutation. Class-reminder **sweep** (`claimDueReminderClasses`, atomic `reminder_sent_at` claim in `0014`) + `runReminderSweep` + the protected `/api/cron/remind` route ship now. The route is scheduled daily since v3.5 (ADR 75) but for **dues only** — the class half is switched off, since the phone schedules those on the device (ADR 54) and a daily tick would reach only the classes inside the 2h window. Mobile: tap-to-navigate handler. Refs: tickets 17, 34; spec §4.
 - **4.3 States + design pass** — **DONE.** A shared **state system** on both clients — `SkeletonRows` / `EmptyState` / `ErrorState` (web `_components/states.tsx`; mobile `components/ui.tsx`): loading skeletons, empties written as **invitations** (title + what-to-do), and errors with a **retry** that never masquerade as "no data". Applied across every data screen (web home/schedule/members/attendance/templates; mobile schedule/class/check-in) — fixed two real bugs where a fetch error fell through to onboarding (web) / "no classes" (mobile). Soft-capacity red + ≤3-tap booking verified (already built in S5). Thin S7 **Push notifications** toggle on mobile profile (registers/unregisters this device's token — no server pref). NativeWind/Tailwind tokens already shared (ADR 11). Refs: tickets 09, 11.
 
 ### Phase 5 — Launch hardening
@@ -258,7 +288,7 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 
 - **5.1 Reconciliation** — periodic recompute of `booking_count` from participations (safety net for the denormalized count). Refs: ticket 13.
 - **5.2 Observability & abuse** — error tracking, structured logs, rate-limit the **public** drop-in endpoint (QR-in-gym is the main anti-spam; add a soft limit). Refs: ticket 25.
-- **5.x Reminder scheduling — deferred, host-agnostic (ADR 46).** v1 ships with **no scheduler** — the two Vercel Cron jobs were removed for the pilot (proprietary + Hobby is non-commercial/1-per-day; the schedule fills lazily on save). Both routes stay as dormant `CRON_SECRET`-guarded seams. Post-v1, wherever we host (self-host / Railway / Vercel Pro), re-attach `/api/cron/remind` to that host's scheduler — daily is enough for dues, ~15 min for class reminders. `/api/cron/materialize` only needs re-scheduling if a pilot outruns the 6-week lazy horizon (else use ADR 46 Option B, self-heal on read). Refs: ADR 46, 34, ticket 17.
+- **5.x Reminder scheduling — DONE for dues, off-host (ADR 75).** ADR 46 removed the two Vercel Cron jobs (proprietary + Hobby is non-commercial/1-per-day). v3.5 puts both routes on a **daily GitHub Actions** tick with the same `CRON_SECRET` bearer token, which locks us to no host. **Daily is a Neon limit, not a preference:** Neon Free sleeps after 5 min idle on ~100 compute-hours/month, so each ping buys ≥5 min of compute and a 15-min cadence would keep the DB awake until it hard-suspends. **Class** reminders stay off (ADR 54 schedules them on the device; the benefit is fewer no-shows, which v1 does not track). Anything sub-hourly needs a paid Neon plan first. Refs: ADR 75, 46, 34, ticket 17.
 - **5.3 Release** — Vercel prod, Neon prod branch + migration run, EAS build + store submit, env promotion.
 
 ### v1.2 — Personal & Insight
@@ -282,7 +312,7 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 - **P.1 Dues + payment-claim schema & domain** — **DONE (foundation).** Migration `0015` adds four tenant-scoped tables (RLS `drop_in` pattern, **verified live on Neon** + a PGlite leak test): `membership_plan`, `member_dues` (a dedicated RLS dues row instead of a column on the RLS-less `member` table — ADR 40 implementation note), `payment_claim` (partial unique index = one open claim per member per `"YYYY-MM"` period), `payment_settings` (owner bank details). Pure `packages/domain/src/payments.ts` — `paymentStatus`/`rollNextDue` (UTC month math)/`paymentPeriod`/`claimDedupeKey`/`canClaim` + 13 tests. Validators added (`CreateMembershipPlanSchema`, `SetMemberDuesSchema`, `CreatePaymentClaimSchema`, `ClaimIdSchema`, …). Un-parked payments — ADR 40 written; spec §5/S9/O7 updated. Spec: O7, S9.
 - **P.2 Owner: paid / overdue status** — **DONE.** `membership.members` (owner) now returns a per-member `dues` object — the RLS-scoped `member_dues`⋈`membership_plan` join + a last-confirmed-`payment_claim` aggregate, both on `ctx.db`, merged by `member.id`; status computed at read time via `paymentStatus` (never stored). Web O4: a payment-status **dot** (green/amber/red) per member, an **Overdue** filter chip, and plan / next-due / last-payment rows in the member-detail Overview. Verified live on Neon (rolled-back tx). Deps: P.1. Spec: O7.
 - **P.3 Student pay: requisites + "I paid" + confirm** — **DONE.** New **`payments` router** (all RLS-scoped `ctx.db`): owner `plans`/`createPlan`/`deletePlan`, `setMemberDues` (upsert plan + next-due), `getRequisites`/`updateRequisites` (bank details), `claims`/`confirm`/`reject` (confirm rolls `next_due_at` one cycle in the one RLS tx); student `myDues` (dues + requisites + derived reference code + `canPay`) + `claim` (one open claim per period via `canClaim` + the DB partial unique index; optional `proofUrl`). Reference code = pure `paymentReference` (derived, not stored). Web: new owner **Payments** screen (O7 — claims to confirm · member dues · plans) + nav item + waiting-claims badge; **bank-details** field on Settings (O6). Mobile S9: **Membership dues** card on Profile (status + amount + next-due, requisites with **copy** buttons via `expo-clipboard`, **"I paid"**). `expo-clipboard` is loaded **lazily + guarded** so a dev client built before it was added degrades to selectable text instead of dropping the whole Profile tab; a dev-client rebuild enables one-tap copy. Verified live on Neon (rolled-back tx: claim under RLS, double-submit blocked, confirm rolls the due date); **mobile device check pending**. Deps: P.1, P.2. Spec: S9, O7.
-- **R.1 Payment reminders** — **DONE.** Pure `buildDuesReminderMessage` (push + email, due-soon vs. overdue) + tests; `dues_reminder_period` column on `member_dues` (migration `0016`) = **one reminder per billing period** (auto-resets when a confirm rolls `next_due_at`); base-connection `claimDueDuesReminders` (atomic `UPDATE … RETURNING`, concurrency-safe) wired into `runReminderSweep`. **v1 wires no `vercel.json` cron (ADR 46)** — the sweep is built + tested but fires only via a manual `curl` in v1; automatic scheduling returns with the first host scheduler post-v1. Verified live on Neon (rolled-back tx: claims due-soon+overdue not paid, idempotent, re-eligible on a new period). Deps: P.1. Spec: O7; ADR 34/40.
+- **R.1 Payment reminders** — **DONE.** Pure `buildDuesReminderMessage` (push + email, due-soon vs. overdue) + tests; `dues_reminder_period` column on `member_dues` (migration `0016`) = **one reminder per billing period** (auto-resets when a confirm rolls `next_due_at`); base-connection `claimDueDuesReminders` (atomic `UPDATE … RETURNING`, concurrency-safe) wired into `runReminderSweep`. Scheduled **daily** since v3.5 (ADR 75) from `.github/workflows/cron.yml`, not from the host, so dues reminders now fire on their own — the first message in the product that reaches a student with no person acting. Verified live on Neon (rolled-back tx: claims due-soon+overdue not paid, idempotent, re-eligible on a new period). Deps: P.1. Spec: O7; ADR 34/40.
 - **R.2 Home-screen widget** — native widget (iOS WidgetKit / Android) mirroring the F.1 card; deep-link "Book" into the app; a read-only snapshot in a shared store (App Group / SharedPreferences) — no auth/API in the widget. **Fast-follow, last, off the critical path.** **Scaffolded, native build deferred:** the shared selection `nextBookableClass` is built + tested in `@matops/domain` (reused by F.1); ticket 27 promoted; full native handoff written. The remaining WidgetKit/AppWidget/App-Group work is device-only (no simulator/Xcode in env). Guide: [`docs/home-widget-implementation.md`](home-widget-implementation.md). Deps: F.1. Spec: S10.
 
 ### v1.4 — Rank & Notes
@@ -487,6 +517,46 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 
 **Series verify:** typecheck 17/17 · lint 15/15 · `next build` green · `pnpm test` **456 green** (domain 275 · db 82 · api 72 · validators 24 · notifications 3), including the six new `dayKey` / `groupByDay` cases in `packages/domain/test/format.test.ts`.
 
+### v3.9 — Loading states (ADR 80)
+
+**Exit test:** clicking Members draws the Members screen's own shape before its data arrives, and that shape does not move when the data lands; a cold open weaves the mark rather than drawing grey bars; a wait under 180ms shows nothing at all; reduced motion leaves everything still. **Web only: no migration, no procedure, no screen redesigned.**
+
+- **L.1 The loader.** **DONE.** `_components/mat-loader.tsx` splits the `@matops/ui/logo` seam path into its six planks and draws each on with `stroke-dashoffset`, staggered 90ms in weave order: the two long centre seams, then the four short ones. Same tile, same violet, same 85% seam opacity, so nothing new enters the identity. The keyframes sit in `app/styles.css` beside the blueprint motifs, since NativeWind never has to parse them. `animation-fill-mode: backwards` on a 180ms delay means a boot that resolves faster shows nothing, because a loader that flashes for one frame is worse than no loader. The label is a prop and says what is happening (`Opening your academy`), not `Loading…`. Reduced motion stops the weave and leaves the mark whole. Spec: §3 states.
+- **L.2 One skeleton vocabulary, cut from the real shapes.** **DONE.** `_components/skeletons.tsx` builds each piece out of the component it replaces: `SkeletonRow` uses `cardClass()`, `SkeletonSection` draws `Section`'s real hairlines around a placeholder label, `SkeletonQueue` is the O1 tile geometry, `SkeletonWeekGrid` is the O2 column template and its 64px hour rows, `SkeletonCoachCards` is the five-number grid. Structural lines are drawn for real and do not pulse: they are not the unknown part. All 32 `SkeletonRows` call sites moved to a shape that matches what follows, and the two hand-rolled pulses in `dashboard-screen.tsx` became `SkeletonQueue` and `Bar`. `states.tsx` is the empty / failed / no-access half now. Spec: §3 states.
+- **L.3 A route change draws the screen, not a hole.** **DONE.** No route under `(app)/` had a `loading.tsx`, so a click held the old screen and swapped the page whole. Twelve routes have one, and each renders the same component the screen's own `isPending` branch renders, so the placeholder appears once and is replaced once. `/` and `/payments` stay deliberately vague: the first is the dashboard or the student week, the second is claims or dues, and `loading.tsx` runs before the shell mounts and knows no role, so both draw only what the two versions share rather than tabs a student never gets. Spec: §3 states.
+- **L.4 The boot is not a skeleton.** **DONE.** `AppShell` resolves the academy before it renders anything and the answer is either the shell or the academy gate, which share no chrome, so the old five-bar skeleton was a guess that was wrong for every new member. Both draw the loader. Spec: §3 states.
+
+- **L.5 The phone gate.** **DONE.** `components/mat-loader.tsx` is the same mark and the same 1900ms weave, drawn the way the phone already draws the mark: positioned Views, no SVG dependency (ADR 44). Each seam scales from the end it starts at (`transformOrigin` + `scaleX` / `scaleY`) on the native driver, 90ms apart, behind the same 180ms anti-flash delay. `Loading` in `ui.tsx` now renders it, so all six gates that already called it took it with no call-site change; the three with something nameable to say pass a `label` (`Opening your academy`, `Signing you in`, `Opening your invite`). Spec: §3 states.
+- **L.6 The phone skeletons.** **DONE.** `components/skeletons.tsx` mirrors the web file, cut from the real native shapes: the class row keeps the discipline rail, the 48px time column and the row button; the day rule keeps its real hairlines; the stats card is a 22px numeral over its eyebrow. Eight screens moved off the spinner — the week, my classes, the notification feed, class detail, dues, rank, the training card and the walk-in check-in list. One `Animated` pulse for the app, ref-counted so nothing loops while nothing is on screen, and one shared `reduce motion` subscription rather than one per bar. Spec: S4, S5, S6, S7, S9, S13.
+- **L.7 One spinner job left.** **DONE.** After the pass `InlineLoading`'s only caller was the onboarding gym search, where the **Find gym** button already spins for that same fetch. The duplicate went and the export with it. A spinner still belongs on an action in flight — `Button` owns that. Spec: unchanged.
+
+**Series verify:** typecheck 17/17 · lint 15/15 · `next build` green, all twelve routes in the list, the keyframes and both classes present in the emitted CSS with the reduced-motion utility winning the cascade. No test change: the whole wave is presentation. **Neither client has been seen running** — no browser extension and no simulator in the build env, so the weave timing, the native `transformOrigin` scaling, and each skeleton's fit to the screen behind it want an eyeball pass (`docs/mobile-device-test.md`).
+
+### v3.5 — A daily cron, off the host (ADR 75)
+
+**Exit test:** a member who is three days from their due date gets one push + email at 09:00 Lisbon without anyone at the gym doing anything, and gets exactly one that period. No class reminder is sent by the server. **No migration, no domain change, no screen.**
+
+- **C.1 One scheduled job.** **DONE.** `.github/workflows/cron.yml` curls `/api/cron/remind` once a day at **09:00 in Lisbon**, the pilot's zone, with the existing `CRON_SECRET` bearer token. GitHub cron is UTC-only and Portugal moves between UTC+0 and UTC+1, so both hours are scheduled and one guard line keeps whichever tick is 09:00 local; a skipped tick exits 0, so a red run always means the sweep failed. `/api/cron/materialize` is **not** scheduled (ADR 79): the class horizon is the owner's **Rebuild schedule** button, six months at a time. The schedule read no longer materializes. `CRON_SECRET` is the only repo secret; the production URL sits in the workflow, since a domain is public. `curl -fsS` fails the workflow on a bad sweep, which is free monitoring. The scheduler is **not the host**, so Vercel Cron stays removed (ADR 46) and nothing is host-locked. **Daily is a Neon constraint:** Neon Free sleeps after 5 min idle on ~100 compute-hours/month, so each ping buys ≥5 min of compute and a 15-min cadence would keep the database awake (~730 h/month) until it hard-suspends.
+- **C.2 Dues only.** **DONE.** The route passes `runReminderSweep({ leadMinutes: 0 })`, which empties the class claim window (`startsAt > now AND startsAt <= now`), so **no class is claimed and none is stamped** — switching it on later loses nothing. The dues half runs for real: one message per member per billing period, due-soon (3 days) or overdue, never a second time in the same period. Class reminders stay on the device (ADR 54): their benefit is fewer no-shows, which v1 does not track, and a daily tick would reach only the classes inside the 2h lead window. Spec: §4, O7 R.1.
+
+**Series verify:** typecheck 17/17 · lint 15/15. No test change — the sweeps' own tests are unchanged and pass `leadMinutes` explicitly.
+
+### v3.7 — The notification center (ADR 77)
+
+**Exit test:** a student whose class is cancelled finds the notice on `/notifications` with push turned off; an owner posts "No class Friday" to students, the button says how many that is, and every one of them has it within a poll; the owner sees their own copy. **Migration `0023`; no scheduler change.** T.6 brings the phone in: same feed, reached from a header bell instead of a tab.
+
+- **T.1 The table.** **DONE.** `notification` (one row per recipient per event: `kind`, `title`, `body`, `link`, `sent_by`, `read_at`), academy-scoped with the standard isolation policy (`DELETE` comes from `0001`'s default privileges; no procedure deletes a row). `insertNotifications` runs on the base connection, because its callers do. `announcementRecipients` + `NOTIFICATION_KIND_LABEL` + `buildAnnouncementMessage` in `@matops/domain`. Spec: S13, O12.
+- **T.2 Every event lands in the inbox.** **DONE.** `deliver()` writes the row in its own `try` **before** it pushes, so a dead token cannot cost the member the message; all five existing kinds gained an entry with no new call sites. `DueDuesReminder` grew an `academyId` so the daily dues sweep can address the row. Router: `list` (50, no cursor), `unreadCount`, `markAllRead`, each narrowed to the caller's own user id on top of the academy policy. Spec: §4.
+- **T.3 The center on web.** **DONE.** `(app)/notifications` groups the feed by local day with the shared `groupByDay`, dots the unread rows, marks the feed read once per visit (dots kept for that render), and opens `link` on tap. Nav item with the unread badge, using the badge pattern the Members and Payments items already had. Open to every active member — no `routes.ts` entry. Spec: S13.
+- **T.4 Announcements.** **DONE.** `announce` on `staffProcedure` behind `AnnounceSchema` (sanitized, title ≤ 80, body ≤ 1000), fanned out through the pure audience rule to active members only. Owners and instructors can both post; the sender's display name is copied onto every row it writes (`sent_by`, migration `0024`) and shown on the feed. The compose box sits above the feed and its button names the reach (`Post to 34`) from `audienceCounts`, the same function that picks the recipients. The sender's own copy is included. Spec: O12.
+- **T.5 One delivery choice.** **DROPPED (v3.8).** matops has no mail layouts, so no gym message is emailed at all: the feed plus push is the whole delivery, and a preference with nothing to switch went with it. `notification_pref`, the `/profile` switch, and the "Also send as email" tick are gone. Email carries the sign-in magic link only. Spec: S13, O12, §4.
+
+- **T.6 The feed on the phone.** **DONE.** `apps/expo/src/app/notifications.tsx` is the web screen minus the compose box: the same `groupByDay` day rules, unread dots and mark-read-once effect. It is a pushed screen, not a fifth tab, reached from a **bell in the Schedule and My classes headers** that carries a red dot while anything is unread (`components/notification-bell.tsx`). The bell hides until the membership is active, because the feed is `memberProcedure`. Only a `/class/<id>` row is tappable: `/payments` has no mobile route. The web's mobile top bar gets the same bell and drops Notifications from its bottom tabs; the desktop sidebar keeps the item. Spec: S13.
+
+- **T.7 The phone header.** **DONE.** `components/app-header.tsx` gives every tab screen the same bar the web mobile shell has: mark, academy name, then the bell (and the settings control on Profile). `Screen` gained a `header` slot so the bar sits outside the screen padding, full-bleed on `--card` with a hairline; the screen title moved below it into the content, matching the web's `PageHeader`. The bell and settings emoji are gone: `components/icons.tsx` redraws the web shell's own glyphs with positioned Views at the same stroke weight, the way the tab icons are drawn. Spec: S7, S13.
+
+**Series verify:** typecheck 17/17 · lint 15/15 · `next build` green (`/notifications` in the route list). Tests written, not run in-session (per the working rule): the `notification-rls` leak suite in `packages/db/test`, the router suite in `packages/api/test/notification.test.ts` (feed scoping, unread counts, mark-read isolation, owner-only announce, audience counts, sanitization, the preference round trip) and the audience + message cases in `packages/domain/test/notify.test.ts`. **Migration `0023` is applied to Neon** (checked 2026-08-22: 24 migration rows, RLS on both tables, both policies live).
+
 ## Parked — next iteration (do NOT build in v1)
 
 Promote to a slice only on purpose (an ADR or a new roadmap row).
@@ -495,6 +565,6 @@ Promote to a slice only on purpose (an ADR or a new roadmap row).
 - **Home widget:** ~~parked~~ **promoted to v1.3 R.2** (S10) — still a native fast-follow, off the launch critical path. (ticket 27, ADR 40 plan)
 - **Live UI:** SSE + Postgres LISTEN/NOTIFY via a separate always-on worker. (tickets 04, 15, 17)
 - **Card billing:** payment **processor / auto-subscription / Stripe**, invoicing, multi-currency tax. _(Manual-transfer dues are **promoted to v1.3** — ADR 40; only the card/recurring layer stays parked.)_ Researched and written up as a parked, ready-to-build wave (6 slices, P.4-P.9): [card-billing-plan.md](card-billing-plan.md). Promoting it needs ADR 72 + new rows here, and the gates listed in that file.
-- **Deferred domains:** ~~belts/rank~~ (**promoted to v1.4** — ADR 41; only owner-defined **custom rank ladders** + **bulk** promotion stay parked), curriculum, announcements/DMs, cross-academy franchise views, i18n, super-admin. (map "out of scope")
+- **Deferred domains:** ~~belts/rank~~ (**promoted to v1.4** — ADR 41; only owner-defined **custom rank ladders** + **bulk** promotion stay parked), ~~announcements~~ (**promoted to v3.7** — ADR 77; **DMs, replies and per-kind preferences** stay parked), curriculum, cross-academy franchise views, i18n, super-admin. (map "out of scope")
 
 Each is additive by design (new schema file + router + pure logic; the tenant seam is untouched) — architecture.md §8.

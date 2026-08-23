@@ -10,16 +10,16 @@ import { sendEmail } from "../src/resend";
  */
 
 describe("sendPush", () => {
-  it("no-ops on an empty token list", async () => {
-    const r = await sendPush([], { title: "t", body: "b" });
+  it("no-ops on an empty message list", async () => {
+    const r = await sendPush([]);
     expect(r).toEqual({ sent: 0, ok: true });
   });
 
   it("filters out non-Expo tokens (no send)", async () => {
-    const r = await sendPush(["not-an-expo-token", ""], {
-      title: "t",
-      body: "b",
-    });
+    const r = await sendPush([
+      { to: "not-an-expo-token", title: "t", body: "b" },
+      { to: "", title: "t", body: "b" },
+    ]);
     expect(r).toEqual({ sent: 0, ok: true });
   });
 });

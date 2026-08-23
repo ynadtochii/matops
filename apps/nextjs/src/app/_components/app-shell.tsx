@@ -18,9 +18,11 @@ import { useTRPC } from "~/trpc/react";
 import { AcademyProvider, useAcademy } from "./academy";
 import { AcademyGate } from "./academy-gate";
 import { AcademySwitcher } from "./academy-switcher";
+import { FeedbackLink } from "./feedback-link";
+import { PageLoader } from "./mat-loader";
 import { canVisit } from "./routes";
 import { SignOutButton } from "./sign-out";
-import { ErrorState, NoAccessState, SkeletonRows } from "./states";
+import { ErrorState, NoAccessState } from "./states";
 
 interface NavItem {
   href: string;
@@ -87,6 +89,18 @@ const TrainingIcon = () => (
     <path d="M5.5 8.5l2 2 3.5-4" />
   </svg>
 );
+const NotificationsIcon = () => (
+  <svg
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={1.5}
+    className={iconClass}
+  >
+    <path d="M4 6.5a4 4 0 018 0c0 3 1 4 1 4H3s1-1 1-4z" />
+    <path d="M6.5 13a1.5 1.5 0 003 0" />
+  </svg>
+);
 const ProfileIcon = () => (
   <svg
     viewBox="0 0 16 16"
@@ -119,9 +133,9 @@ const SettingsIcon = () => (
     strokeWidth={1.5}
     className={iconClass}
   >
-    <path d="M3 5h10M3 11h10" />
-    <circle cx="6" cy="5" r="1.7" fill="var(--sidebar)" />
-    <circle cx="10" cy="11" r="1.7" fill="var(--sidebar)" />
+    <path d="M3 5h1.3M7.7 5h5.3M3 11h5.3M11.7 11h1.3" />
+    <circle cx="6" cy="5" r="1.7" />
+    <circle cx="10" cy="11" r="1.7" />
   </svg>
 );
 const PaymentsIcon = () => (
@@ -166,7 +180,7 @@ const CoachesIcon = () => (
 /**
  * The owner/instructor web shell (IA ticket 02). A sidebar on desktop + a
  * bottom-tab bar on mobile, driven by one role-aware nav config. Fetches the
- * active academy: while it loads → a skeleton; if the user has no academy →
+ * active academy: while it loads → the mat loader; if the user has no academy →
  * onboarding (no chrome); otherwise the shell wraps the routed screen and puts
  * the resolved academy in context, so no screen under it re-fetches or re-tests
  * it. `routes.ts` says who may open which path: the sidebar hides what a person
@@ -185,12 +199,10 @@ export function AppShell({
   const current = useQuery(trpc.academy.current.queryOptions());
   const mine = useQuery(trpc.academy.memberships.queryOptions());
 
+  // Boot: no chrome to mirror yet, and the answer may be the shell or the gate,
+  // so a skeleton would draw a layout that half the time never arrives (ADR 80).
   if (current.isPending || mine.isPending) {
-    return (
-      <div className="mx-auto w-full max-w-md p-8">
-        <SkeletonRows rows={5} />
-      </div>
-    );
+    return <PageLoader label="Opening your academy" />;
   }
 
   if (current.isError || mine.isError) {
@@ -244,11 +256,12 @@ function ShellChrome({
   const isOwner = isOwnerOf(academy);
   const isStaff = isStaffOf(academy);
   const isPending = status === "pending";
-  // Owner badges: student requests sit on Members, coach requests on Coaches —
+  // Staff badges: student requests sit on Members, coach requests on Coaches —
   // same split as the two screens (ADR 64). Dedupes with their own queries.
+  // An instructor sees the student queue (ADR 75), never the coach one.
   const memberList = useQuery({
     ...trpc.membership.members.queryOptions(),
-    enabled: isOwner,
+    enabled: isStaff,
   });
   const waiting = memberList.data?.filter((m) => m.status === "pending") ?? [];
   const pendingCoachCount = waiting.filter(isPendingCoach).length;
@@ -260,6 +273,13 @@ function ShellChrome({
     enabled: isOwner,
   });
   const claimsCount = claims.data?.length ?? 0;
+
+  // Inbox badge: unread notifications for this member in this academy (ADR 77).
+  const unread = useQuery({
+    ...trpc.notification.unreadCount.queryOptions(),
+    enabled: !isPending,
+  });
+  const unreadCount = unread.data ?? 0;
 
   const myDues = useQuery({
     ...trpc.payments.myDues.queryOptions(),
@@ -320,6 +340,13 @@ function ShellChrome({
       show: canVisit("/settings", academy),
     },
     {
+      href: "/notifications",
+      label: "Notifications",
+      icon: <NotificationsIcon />,
+      show: !isPending,
+      badge: unreadCount,
+    },
+    {
       href: "/profile",
       label: "Profile",
       icon: <ProfileIcon />,
@@ -330,13 +357,16 @@ function ShellChrome({
   const isCurrent = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
+  // Phones reach the feed from the header bell, so it never spends a tab slot.
+  const tabItems = items.filter((i) => i.href !== "/notifications");
+
   return (
     <div className="flex h-dvh overflow-hidden">
       {/* Desktop sidebar — pinned full height, never scrolls */}
       <aside className="bg-sidebar border-sidebar-border hidden h-full w-60 shrink-0 flex-col overflow-hidden border-r p-3 md:flex">
-        <div className="flex items-center gap-2 px-2 pt-1 pb-4">
+        <Link href="/" className="flex items-center gap-2 px-2 pt-1 pb-4">
           <Logo size={22} />
-        </div>
+        </Link>
 
         <div className="mb-3 px-1">
           {academies.length >= 2 ? (
@@ -374,6 +404,7 @@ function ShellChrome({
               </p>
             </div>
           </Link>
+          <FeedbackLink />
           <div className="flex items-center gap-2">
             <ThemeToggle />
             <SignOutButton />
@@ -386,7 +417,9 @@ function ShellChrome({
         {/* Mobile top bar — top padding clears the status-bar notch when installed
             as a PWA (viewport-fit=cover; ADR 42). env() is 0 elsewhere. */}
         <header className="bg-sidebar border-sidebar-border flex items-center gap-2 border-b px-4 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-3 md:hidden">
-          <Logo size={22} withWordmark={false} />
+          <Link href="/" aria-label="Home">
+            <Logo size={22} withWordmark={false} />
+          </Link>
           <div className="min-w-0 flex-1">
             {academies.length >= 2 ? (
               <AcademySwitcher academies={academies} activeId={activeId} />
@@ -397,6 +430,27 @@ function ShellChrome({
             )}
           </div>
           <ThemeToggle />
+          {!isPending && (
+            <Link
+              href="/notifications"
+              aria-label={
+                unreadCount > 0
+                  ? `Notifications, ${unreadCount} unread`
+                  : "Notifications"
+              }
+              aria-current={isCurrent("/notifications") ? "page" : undefined}
+              className={`relative flex size-8 shrink-0 items-center justify-center rounded-md transition-colors ${
+                isCurrent("/notifications")
+                  ? "text-brand-strong"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <NotificationsIcon />
+              {unreadCount > 0 && (
+                <span className="bg-error absolute top-1 right-1 size-2 rounded-full" />
+              )}
+            </Link>
+          )}
           <Link
             href="/profile"
             aria-label="Profile"
@@ -434,12 +488,12 @@ function ShellChrome({
 
       {/* Mobile bottom tabs — bottom padding clears the home indicator when
           installed as a PWA (viewport-fit=cover; ADR 42). env() is 0 elsewhere. */}
-      {items.length > 1 && (
+      {tabItems.length > 1 && (
         <nav
           aria-label="Primary"
           className="bg-sidebar border-sidebar-border fixed inset-x-0 bottom-0 z-20 flex border-t pb-[env(safe-area-inset-bottom)] md:hidden"
         >
-          {items.map((i) => {
+          {tabItems.map((i) => {
             const active = isCurrent(i.href);
             return (
               <Link

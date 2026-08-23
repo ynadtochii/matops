@@ -10,6 +10,11 @@ export interface PushPayload {
   data?: Record<string, unknown>;
 }
 
+/** One payload addressed to one Expo push token. */
+export interface BatchPush extends PushPayload {
+  to: string;
+}
+
 export interface SendPushResult {
   /** Messages actually POSTed (0 when no tokens or unconfigured). */
   sent: number;
@@ -24,17 +29,16 @@ function chunk<T>(items: T[], size: number): T[][] {
 }
 
 /**
- * Send one push payload to many Expo push tokens (docs/issues/17, 34). Pure
- * serverless transport — a batched HTTPS POST to the Expo Push API, which fans
- * out to APNs/FCM. Never throws: transport failures are logged and swallowed so
- * a notification can never break the mutation that triggered it. Recipient
- * resolution (userIds → tokens) happens upstream in the API layer.
+ * Send already-addressed push messages through the Expo Push API (docs/issues/
+ * 17, 34), which fans out to APNs/FCM. Each message carries its own token and
+ * its own text, so one class reminder to thirty people and thirty different
+ * dues reminders cost the same batched calls. Never throws: transport failures
+ * are logged and swallowed so a notification can never break the mutation that
+ * triggered it. Recipient resolution (userIds → tokens) happens upstream in the
+ * API layer.
  */
-export async function sendPush(
-  tokens: string[],
-  payload: PushPayload,
-): Promise<SendPushResult> {
-  const valid = tokens.filter((t) => t.startsWith("ExponentPushToken"));
+export async function sendPush(messages: BatchPush[]): Promise<SendPushResult> {
+  const valid = messages.filter((m) => m.to.startsWith("ExponentPushToken"));
   if (valid.length === 0) return { sent: 0, ok: true };
 
   const { EXPO_ACCESS_TOKEN } = notificationsEnv();
@@ -47,18 +51,19 @@ export async function sendPush(
   let ok = true;
   let sent = 0;
   for (const batch of chunk(valid, CHUNK_SIZE)) {
-    const messages = batch.map((to) => ({
-      to,
-      title: payload.title,
-      body: payload.body,
-      data: payload.data,
-      sound: "default",
-    }));
     try {
       const res = await fetch(EXPO_PUSH_URL, {
         method: "POST",
         headers,
-        body: JSON.stringify(messages),
+        body: JSON.stringify(
+          batch.map((m) => ({
+            to: m.to,
+            title: m.title,
+            body: m.body,
+            data: m.data,
+            sound: "default",
+          })),
+        ),
       });
       if (!res.ok) {
         ok = false;

@@ -27,7 +27,8 @@ import { toast } from "@matops/ui/toast";
 import { useTRPC } from "~/trpc/react";
 import { InviteLinkCard } from "./invite-link-card";
 import { cardClass, SectionHeading } from "./primitives";
-import { EmptyState, ErrorState, SkeletonRows } from "./states";
+import { SkeletonRows } from "./skeletons";
+import { EmptyState, ErrorState } from "./states";
 
 type StaffMember = RouterOutputs["membership"]["staff"][number];
 type Action = "promote" | "demote";
@@ -240,7 +241,7 @@ export function Staff() {
       />
 
       {staff.isPending ? (
-        <SkeletonRows rows={2} />
+        <SkeletonRows rows={2} action />
       ) : staff.isError ? (
         <ErrorState label="your staff" onRetry={() => void staff.refetch()} />
       ) : members.length === 0 ? (

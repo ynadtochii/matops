@@ -91,7 +91,7 @@ describe("tenant seam", () => {
       Array,
     );
     await expect(h.as(PENDING_A, A).membership.members()).rejects.toThrow(
-      /pending approval|Owner only/,
+      /pending approval/,
     );
   });
 
@@ -102,7 +102,7 @@ describe("tenant seam", () => {
   });
 
   it("blocks an instructor from owner procedures", async () => {
-    await expect(h.as(INSTRUCTOR_A, A).membership.members()).rejects.toThrow(
+    await expect(h.as(INSTRUCTOR_A, A).membership.staff()).rejects.toThrow(
       /Owner only/,
     );
     await expect(

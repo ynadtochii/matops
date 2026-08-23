@@ -9,6 +9,8 @@ import {
   gt,
   isNull,
   materializeTemplate,
+  planRebuild,
+  rebuildSchedule,
 } from "@matops/db";
 import { classInstance, classTemplate, user } from "@matops/db/schema";
 import { normalizeDaysOfWeek, templateTimingChanged } from "@matops/domain";
@@ -20,7 +22,7 @@ import {
 } from "@matops/validators";
 
 import { requireInstructor } from "../members";
-import { staffProcedure } from "../trpc";
+import { ownerProcedure, staffProcedure } from "../trpc";
 
 /**
  * Recurring class templates (spec O3, docs/issues/08, 16). Staff-only CRUD.
@@ -225,4 +227,21 @@ export const templateRouter = {
       // TODO(phase 4): notify booked students of each cancelled class.
       return { ok: true as const };
     }),
+
+  /**
+   * What a rebuild would remove, so the confirm dialog can name the damage
+   * before the owner commits to it. Reads only.
+   */
+  rebuildPreview: ownerProcedure.query(async ({ ctx }) => {
+    const { ids, bookings } = await planRebuild(ctx.db);
+    return { toDelete: ids.length, bookingsAffected: bookings };
+  }),
+
+  /**
+   * Rebuild the forward schedule from the active templates (spec O3, ADR 79).
+   * Owner-only: an instructor runs the desk, not a destructive regeneration of
+   * everyone's calendar. Past classes and their attendance are never touched,
+   * and a one-off the owner entered by hand survives.
+   */
+  rebuild: ownerProcedure.mutation(({ ctx }) => rebuildSchedule(ctx.db)),
 } satisfies TRPCRouterRecord;

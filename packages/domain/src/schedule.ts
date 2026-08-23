@@ -8,10 +8,11 @@
 export const MINUTES_PER_DAY = 24 * 60;
 
 /**
- * How far ahead concrete classes are materialized (docs/issues/16). Lazy writes
- * fill this window on template save; the daily cron extends it forward.
+ * How far ahead concrete classes are materialized (docs/issues/16, 79). A
+ * template save fills this window immediately; the owner's Rebuild schedule
+ * button refills it from scratch. No scheduler extends it (ADR 46, 79).
  */
-export const MATERIALIZATION_HORIZON_DAYS = 42; // ~6 weeks
+export const MATERIALIZATION_HORIZON_DAYS = 180; // ~6 months
 
 /** 0=Sun … 6=Sat — the order the DB stores and the UI renders. */
 export const DAY_LABELS = [

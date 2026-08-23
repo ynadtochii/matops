@@ -1,8 +1,9 @@
-import { ActivityIndicator, View } from "react-native";
+import { View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 
 import { DAY_LABELS, lastClassLabel } from "@matops/domain";
 
+import { SkeletonStatsCard } from "~/components/skeletons";
 import {
   Card,
   EmptyState,
@@ -10,7 +11,6 @@ import {
   Eyebrow,
   Stat,
   Txt,
-  useTheme,
 } from "~/components/ui";
 import { trpc } from "~/utils/api";
 
@@ -20,7 +20,6 @@ import { trpc } from "~/utils/api";
  * last-class line. Owns its own card-sized loading / empty / error states.
  */
 export function MyTrainingCard() {
-  const t = useTheme();
   const stats = useQuery(trpc.stats.me.queryOptions());
 
   const title = <Eyebrow>My training</Eyebrow>;
@@ -29,9 +28,7 @@ export function MyTrainingCard() {
     return (
       <View style={{ gap: 12 }}>
         {title}
-        <Card variant="filled" style={{ alignItems: "center", padding: 24 }}>
-          <ActivityIndicator color={t.brand} />
-        </Card>
+        <SkeletonStatsCard />
       </View>
     );
   }
