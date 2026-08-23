@@ -25,6 +25,10 @@ export const pool = new Pool({
   // Neon requires TLS; the connection string carries `sslmode=require`.
 });
 
+pool.on("error", (err) => {
+  console.error("[db] idle client error", err.message);
+});
+
 export const db = drizzle({
   client: pool,
   schema,
