@@ -696,7 +696,7 @@ export function TextField({
  */
 export function Mark({ size = 24 }: { size?: number }) {
   const t = useTheme();
-  const th = Math.max(1, size * 0.055);
+  const th = Math.max(1, size * 0.05);
   const half = size / 2;
   const seam = (s: ViewStyle) => (
     <View

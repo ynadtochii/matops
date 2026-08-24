@@ -2,6 +2,10 @@
 
 One line per shipped slice (see `docs/delivery.md` §4). Newest first.
 
+## One mark, everywhere
+
+- **The saved home-screen icon now looks like the mark in the header.** The PWA and app icons were drawn by hand months ago and had drifted: pale seams on the light-theme violet, each seam stopping short of the tile edge. They are now generated from the mark itself by `scripts/gen-icons.sh` — dark seams running edge to edge on the dark-theme violet — and so are the favicon, the Apple touch icon, the Expo app icon and the iOS splash. The seams in the on-screen `Mark` and in the loader run edge to edge too, so the header and the home screen show the same thing.
+
 ## The booking rule moves to Settings
 
 - **The "Members need an active membership to book" switch and its grace period now sit on Settings, next to the academy name, time zone and address.** It is a rule about the whole gym, not a payment detail, and it was buried behind the Payments → Bank details tab. Nothing about the rule itself changed.

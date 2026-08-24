@@ -151,7 +151,7 @@ export function MatLoader({
     };
   }, [enter, weave, reduced]);
 
-  const th = Math.max(1, size * 0.055);
+  const th = Math.max(1, size * 0.05);
 
   return (
     <Animated.View

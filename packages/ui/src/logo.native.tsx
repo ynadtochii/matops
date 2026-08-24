@@ -21,7 +21,7 @@ export function Mark({
   size?: number;
   className?: string;
 }) {
-  const t = Math.max(1, size * 0.055); // seam thickness
+  const t = Math.max(1, size * 0.05); // seam thickness
   const half = size / 2;
   const seam = (style: object) => (
     <View

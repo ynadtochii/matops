@@ -16,12 +16,12 @@ import { cn } from "@matops/ui";
  * "busy" meaning on its own.
  */
 const SEAMS: { d: string; len: number }[] = [
-  { d: "M16 1.6V30.4", len: 28.8 },
-  { d: "M1.6 16H30.4", len: 28.8 },
-  { d: "M8.5 1.6V16", len: 14.4 },
-  { d: "M16 8.5H30.4", len: 14.4 },
-  { d: "M1.6 23.5H16", len: 14.4 },
-  { d: "M23.5 16V30.4", len: 14.4 },
+  { d: "M16 0V32", len: 32 },
+  { d: "M0 16H32", len: 32 },
+  { d: "M8.5 0V16", len: 16 },
+  { d: "M16 8.5H32", len: 16 },
+  { d: "M0 23.5H16", len: 16 },
+  { d: "M23.5 16V32", len: 16 },
 ];
 
 export function MatLoader({
@@ -49,14 +49,14 @@ export function MatLoader({
         fill="none"
         aria-hidden
       >
-        <rect x="1" y="1" width="30" height="30" rx="6.5" fill="var(--brand)" />
+        <rect width="32" height="32" rx="7" fill="var(--brand)" />
         {SEAMS.map((seam, i) => (
           <path
             key={seam.d}
             d={seam.d}
             stroke="var(--brand-foreground)"
             strokeOpacity={0.85}
-            strokeWidth={1.5}
+            strokeWidth={1.6}
             className="mat-seam motion-reduce:animate-none"
             style={
               {

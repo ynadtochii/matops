@@ -276,10 +276,11 @@ is the reference pair (`packages/ui/src/button.tsx` + `button.native.tsx` +
 
 ## 6. Logo
 
-**Mark = the basketweave mat bond.** A rounded tile (`rx` 6.5 on a 32 viewBox)
+**Mark = the basketweave mat bond.** A rounded tile (`rx` 7 on a 32 viewBox)
 filled `--brand`, seams of a **basketweave** bond — the woven plank pairs real
-mats are laid in — in `--brand-foreground` at 85%. Seam path:
-`M16 1.6V30.4 M1.6 16H30.4 M8.5 1.6V16 M16 8.5H30.4 M1.6 23.5H16 M23.5 16V30.4`.
+mats are laid in — in `--brand-foreground` at 85%, each seam running edge to
+edge. Seam path:
+`M16 0V32 M0 16H32 M8.5 0V16 M16 8.5H32 M0 23.5H16 M23.5 16V32`.
 
 Built once, shared: **`@matops/ui/logo`** — `Mark` (tile) + `Logo` (mark +
 wordmark); web = inline SVG, mobile = positioned Views (no `react-native-svg`).
@@ -291,6 +292,14 @@ identity; it is the same tile, violet, and 85% seams. Built for both clients:
 `apps/expo/src/components/mat-loader.tsx` (positioned Views + the native driver,
 no SVG dep, per ADR [44](issues/44-mobile-dark-first-design-system.md)).
 ADR [80](issues/80-loading-states.md).
+
+**Every raster icon comes from one script.** `scripts/gen-icons.sh` renders the
+mark to the favicon, the PWA icons, the Apple touch icon and the Expo app icon,
+so a home-screen icon can never drift from the mark in the header. It paints the
+dark-theme brand tokens (`#8b72ff` tile, `#12091f` seams), because a saved icon
+sits on the user's wallpaper and cannot follow the app theme. Icons the OS masks
+(Apple touch, maskable, Expo) bleed to a square edge; the rest keep the `rx` 7
+tile. Re-run the script after any change to the mark.
 
 Web favicon: `apps/nextjs/src/app/icon.svg`. Use the mark at **24px minimum**;
 prefer the full `Logo` when the brand must read at a distance. Wordmark: `matops`,
