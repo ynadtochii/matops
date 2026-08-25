@@ -14,6 +14,7 @@
 
 import type { Membership } from "./access";
 import { isActiveMember } from "./access";
+import { DAY_MS } from "./local-date";
 
 /** Booking tier — mirrors the `booking_tier` DB enum. */
 export type BookingTier = "confirmed" | "provisional";
@@ -43,7 +44,6 @@ export interface BookableClass {
  * booking one of them is noise, because the gym's plans change first.
  */
 export const BOOKING_WINDOW_DAYS = 7;
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Why a class cannot be booked (drives a precise, friendly error). */
 export type NotBookableReason =
@@ -72,6 +72,24 @@ export function canBook(c: BookableClass, now: Date): BookableResult {
   if (c.startsAt.getTime() > now.getTime() + BOOKING_WINDOW_DAYS * DAY_MS)
     return { ok: false, reason: "too-far-ahead" };
   return { ok: true };
+}
+
+/**
+ * Why the Book button is off, in the student's words. `deleted` is excluded on
+ * purpose: a deleted class is a 404, not a message, and the type forces every
+ * caller to handle that case before asking for copy.
+ */
+export function notBookableMessage(
+  reason: Exclude<NotBookableReason, "deleted">,
+): string {
+  switch (reason) {
+    case "cancelled":
+      return "This class was cancelled";
+    case "past":
+      return "This class has already started";
+    case "too-far-ahead":
+      return `You can book up to ${BOOKING_WINDOW_DAYS} days ahead`;
+  }
 }
 
 export interface CapacityDisplay {

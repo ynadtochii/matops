@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
+import { DEFAULT_GRACE_DAYS } from "@matops/domain";
+
 import type { Harness } from "./helpers";
 import { harness, memberId, seedAcademies } from "./helpers";
 
@@ -121,5 +123,17 @@ describe("payments confirm loop", () => {
     const mine = await h.as(STUDENT, ACAD).payments.myDues();
     expect(mine.dues).toBeNull();
     expect(mine.canPay).toBe(false);
+  });
+
+  it("a gym with no settings row reads the shared defaults", async () => {
+    await h.pg.exec(`DELETE FROM "payment_settings";`);
+    expect(await h.as(OWNER, ACAD).payments.getRequisites()).toEqual({
+      bankDetails: "",
+      graceDays: DEFAULT_GRACE_DAYS,
+      enforced: false,
+    });
+    expect(
+      (await h.as(STUDENT, ACAD).payments.myDues()).requisites.bankDetails,
+    ).toBe("");
   });
 });

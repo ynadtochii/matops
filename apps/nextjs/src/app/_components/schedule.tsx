@@ -6,7 +6,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
 import type { DisciplineTone } from "@matops/domain";
-import { capacityDisplay, disciplineTone, groupByDay } from "@matops/domain";
+import {
+  calendarWeekStart,
+  capacityDisplay,
+  disciplineTone,
+  GRID_WEEK_STARTS_ON,
+  groupByDay,
+} from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
@@ -102,14 +108,8 @@ const browserTz = () => {
   }
 };
 
-/** Monday 00:00 local for the week `offset` weeks from now. */
-function weekStart(offset: number): Date {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  const day = (d.getDay() + 6) % 7; // 0=Mon … 6=Sun
-  d.setDate(d.getDate() - day + offset * 7);
-  return d;
-}
+const weekStart = (offset: number) =>
+  calendarWeekStart(new Date(), offset, GRID_WEEK_STARTS_ON);
 
 interface OneOffForm {
   title: string;
@@ -219,7 +219,8 @@ export function Schedule() {
   };
 
   const start = weekStart(offset);
-  const end = new Date(start.getTime() + 6 * 86400000);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
   const rangeLabel = `${monthDayFmt.format(start)} – ${
     start.getMonth() === end.getMonth()
       ? dayNumFmt.format(end)

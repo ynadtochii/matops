@@ -1,5 +1,6 @@
 import { fromZonedTime } from "date-fns-tz";
 
+import { DAY_MS } from "./local-date";
 import { MINUTES_PER_DAY } from "./schedule";
 
 /**
@@ -21,8 +22,6 @@ export interface RecurrenceSpec {
   /** IANA zone, e.g. "Europe/Kyiv". */
   timeZone: string;
 }
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** The calendar date (Y/M/D) seen in `timeZone` at a given UTC instant. */
 function localDateParts(

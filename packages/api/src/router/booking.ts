@@ -1,11 +1,18 @@
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
-import { and, desc, eq, isNull, ne, sql } from "@matops/db";
+import { and, desc, eq, isNull, ne } from "@matops/db";
 import { classInstance, classParticipation } from "@matops/db/schema";
-import { bookingAccessMessage, bookingTier, canBook } from "@matops/domain";
+import {
+  bookingAccessMessage,
+  bookingTier,
+  canBook,
+  notBookableMessage,
+} from "@matops/domain";
 import { BookClassSchema, CancelBookingSchema } from "@matops/validators";
 
+import { claimSeat, releaseSeats, requireClassFacts } from "../classes";
+import { CLASS_NOT_FOUND } from "../messages";
 import { loadBookingAccess } from "../payments-gate";
 import { enrolledProcedure } from "../trpc";
 
@@ -22,6 +29,11 @@ import { enrolledProcedure } from "../trpc";
  * resolver runs inside the RLS per-request transaction (`ctx.db`), so the two
  * statements commit or roll back together. See docs/issues/13.
  */
+// ponytail: newest 300 by start time. A student who trains daily loses past rows
+// past ~10 months; `stats.me` is the lifetime figure, not this list. Paginate if
+// the Past list ever needs to go further back.
+const MINE_LIMIT = 300;
+
 export const bookingRouter = {
   /**
    * The caller's own participations, each joined to its class (slice B.2, spec
@@ -55,7 +67,8 @@ export const bookingRouter = {
           isNull(classInstance.deletedAt),
         ),
       )
-      .orderBy(desc(classInstance.startsAt));
+      .orderBy(desc(classInstance.startsAt))
+      .limit(MINE_LIMIT);
   }),
 
   /**
@@ -68,33 +81,15 @@ export const bookingRouter = {
     .mutation(async ({ ctx, input }) => {
       // 1. Pre-read for a precise, friendly error (NOT the race guard — that is
       //    the atomic upsert + increment below). RLS scopes this to the academy.
-      const [cls] = await ctx.db
-        .select({
-          status: classInstance.status,
-          startsAt: classInstance.startsAt,
-          deletedAt: classInstance.deletedAt,
-        })
-        .from(classInstance)
-        .where(eq(classInstance.id, input.classId));
-      if (!cls) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Class not found" });
-      }
+      const cls = await requireClassFacts(ctx.db, input.classId);
       const bookable = canBook(cls, new Date());
-      if (!bookable.ok) {
-        if (bookable.reason === "deleted") {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Class not found",
-          });
-        }
+      if (bookable.reason === "deleted") {
+        throw new TRPCError({ code: "NOT_FOUND", message: CLASS_NOT_FOUND });
+      }
+      if (bookable.reason) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
-          message:
-            bookable.reason === "cancelled"
-              ? "This class was cancelled"
-              : bookable.reason === "too-far-ahead"
-                ? "You can book up to a week ahead"
-                : "This class has already started",
+          message: notBookableMessage(bookable.reason),
         });
       }
 
@@ -141,10 +136,7 @@ export const bookingRouter = {
       //    confirmed booking. No capacity guard: the count may exceed capacity
       //    (soft cap). Provisional bookings never touch the count (docs/issues/22).
       if (transition && tier === "confirmed") {
-        await ctx.db
-          .update(classInstance)
-          .set({ bookingCount: sql`${classInstance.bookingCount} + 1` })
-          .where(eq(classInstance.id, input.classId));
+        await claimSeat(ctx.db, input.classId);
       }
 
       return { ok: true as const, tier };
@@ -171,12 +163,7 @@ export const bookingRouter = {
         .returning({ tier: classParticipation.bookingTier });
 
       if (cancelled?.tier === "confirmed") {
-        await ctx.db
-          .update(classInstance)
-          .set({
-            bookingCount: sql`GREATEST(${classInstance.bookingCount} - 1, 0)`,
-          })
-          .where(eq(classInstance.id, input.classId));
+        await releaseSeats(ctx.db, [input.classId]);
       }
 
       return { ok: true as const };

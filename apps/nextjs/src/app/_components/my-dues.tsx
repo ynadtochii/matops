@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { PAYMENT_STATUS_LABEL } from "@matops/domain";
+import { formatMoney, PAYMENT_STATUS_LABEL } from "@matops/domain";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
 import { CopyButton } from "@matops/ui/copy-button";
@@ -10,7 +10,6 @@ import { Spinner } from "@matops/ui/spinner";
 import { toast } from "@matops/ui/toast";
 
 import { dateFmt } from "~/lib/format";
-import { formatMoney } from "~/lib/money";
 import { useTRPC } from "~/trpc/react";
 import { useAcademy } from "./academy";
 import { PageHeader } from "./page-header";

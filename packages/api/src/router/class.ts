@@ -1,7 +1,7 @@
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
-import { z } from "zod/v4";
 
+import type { DbExec } from "@matops/db";
 import type { Membership } from "@matops/domain";
 import {
   and,
@@ -31,24 +31,16 @@ import {
   CreateClassSchema,
   SetClassInstructorSchema,
   UpdateClassSchema,
+  WeekWindowSchema,
 } from "@matops/validators";
 
 import type { TimeZoneCtx } from "../academy-tz";
 import { academyTimeZone } from "../academy-tz";
+import { liveClass } from "../classes";
 import { requireInstructor } from "../members";
+import { CLASS_NOT_FOUND } from "../messages";
 import { notifyClassCancelled, notifyClassChanged } from "../notify";
 import { enrolledProcedure, staffProcedure } from "../trpc";
-
-/**
- * Week window input shared by the staff and student schedule reads. The span is
- * capped so a hand-rolled request cannot ask for a decade of classes in one go.
- */
-const WeekInput = z
-  .object({ from: z.iso.datetime(), to: z.iso.datetime() })
-  .refine((v) => {
-    const span = Date.parse(v.to) - Date.parse(v.from);
-    return span > 0 && span <= 400 * 24 * 60 * 60 * 1000;
-  }, "Pick a window between 0 and 400 days");
 
 /**
  * Concrete classes (spec O2, §4 edit rules). Staff-only. One-off create,
@@ -80,7 +72,7 @@ function assertCanReassignCoach(
 interface NotifyScope {
   db: TimeZoneCtx["db"];
   academyId: string;
-  afterCommit: (task: () => Promise<void>) => void;
+  afterCommit: (task: (exec: DbExec) => Promise<void>) => void;
 }
 
 /**
@@ -89,9 +81,12 @@ interface NotifyScope {
  * the two can never drift apart. Callers decide WHETHER to notify via
  * `classChange`; this only sends.
  */
-async function notifyBookedOfChange(
+type ClassNotifier = typeof notifyClassChanged;
+
+async function notifyBooked(
   ctx: NotifyScope,
   row: { id: string; title: string; startsAt: Date },
+  send: ClassNotifier,
 ): Promise<void> {
   const booked = await ctx.db
     .select({ studentId: classParticipation.studentId })
@@ -106,15 +101,18 @@ async function notifyBookedOfChange(
   // told the wrong hour. The reminder sweep already resolves one.
   const timeZone = await academyTimeZone(ctx);
   const studentIds = booked.map((b) => b.studentId);
-  ctx.afterCommit(() =>
-    notifyClassChanged({
-      academyId: ctx.academyId,
-      className: row.title,
-      startsAt: row.startsAt,
-      timeZone,
-      classId: row.id,
-      studentIds,
-    }),
+  ctx.afterCommit((exec) =>
+    send(
+      {
+        academyId: ctx.academyId,
+        className: row.title,
+        startsAt: row.startsAt,
+        timeZone,
+        classId: row.id,
+        studentIds,
+      },
+      exec,
+    ),
   );
 }
 
@@ -128,7 +126,7 @@ export const classRouter = {
    * The subqueries are RLS-scoped like the outer query, so they only count this
    * academy's rows.
    */
-  week: staffProcedure.input(WeekInput).query(({ ctx, input }) => {
+  week: staffProcedure.input(WeekWindowSchema).query(({ ctx, input }) => {
     return ctx.db
       .select({
         ...getTableColumns(classInstance),
@@ -165,7 +163,7 @@ export const classRouter = {
    * (title/time/duration/capacity/booking_count) are all a student may see —
    * attendee names are a Phase-3 booking concern, not returned here.
    */
-  mine: enrolledProcedure.input(WeekInput).query(({ ctx, input }) => {
+  mine: enrolledProcedure.input(WeekWindowSchema).query(({ ctx, input }) => {
     return ctx.db
       .select({
         id: classInstance.id,
@@ -235,11 +233,9 @@ export const classRouter = {
           eq(classParticipation.studentId, ctx.session.user.id),
         ),
       )
-      .where(
-        and(eq(classInstance.id, input.id), isNull(classInstance.deletedAt)),
-      );
+      .where(liveClass(input.id));
     if (!row) {
-      throw new TRPCError({ code: "NOT_FOUND", message: "Class not found" });
+      throw new TRPCError({ code: "NOT_FOUND", message: CLASS_NOT_FOUND });
     }
     return row;
   }),
@@ -308,11 +304,9 @@ export const classRouter = {
       const [before] = await ctx.db
         .select()
         .from(classInstance)
-        .where(
-          and(eq(classInstance.id, input.id), isNull(classInstance.deletedAt)),
-        );
+        .where(liveClass(input.id));
       if (!before) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Class not found" });
+        throw new TRPCError({ code: "NOT_FOUND", message: CLASS_NOT_FOUND });
       }
 
       const now = new Date();
@@ -340,12 +334,10 @@ export const classRouter = {
           capacity: input.capacity,
           startsAt,
         })
-        .where(
-          and(eq(classInstance.id, input.id), isNull(classInstance.deletedAt)),
-        )
+        .where(liveClass(input.id))
         .returning();
       if (!row) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Class not found" });
+        throw new TRPCError({ code: "NOT_FOUND", message: CLASS_NOT_FOUND });
       }
 
       const change = classChange(
@@ -353,7 +345,7 @@ export const classRouter = {
         { startsAt: row.startsAt, instructorId: row.instructorId },
         now,
       );
-      if (change.shouldNotify) await notifyBookedOfChange(ctx, row);
+      if (change.shouldNotify) await notifyBooked(ctx, row, notifyClassChanged);
       return row;
     }),
 
@@ -371,11 +363,9 @@ export const classRouter = {
       const [before] = await ctx.db
         .select()
         .from(classInstance)
-        .where(
-          and(eq(classInstance.id, input.id), isNull(classInstance.deletedAt)),
-        );
+        .where(liveClass(input.id));
       if (!before) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Class not found" });
+        throw new TRPCError({ code: "NOT_FOUND", message: CLASS_NOT_FOUND });
       }
       const now = new Date();
       assertCanReassignCoach(ctx.membership, before.startsAt, now);
@@ -385,12 +375,10 @@ export const classRouter = {
       const [row] = await ctx.db
         .update(classInstance)
         .set({ instructorId: input.instructorId })
-        .where(
-          and(eq(classInstance.id, input.id), isNull(classInstance.deletedAt)),
-        )
+        .where(liveClass(input.id))
         .returning();
       if (!row) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Class not found" });
+        throw new TRPCError({ code: "NOT_FOUND", message: CLASS_NOT_FOUND });
       }
 
       const change = classChange(
@@ -398,7 +386,7 @@ export const classRouter = {
         { startsAt: row.startsAt, instructorId: row.instructorId },
         now,
       );
-      if (change.shouldNotify) await notifyBookedOfChange(ctx, row);
+      if (change.shouldNotify) await notifyBooked(ctx, row, notifyClassChanged);
       return row;
     }),
 
@@ -427,28 +415,7 @@ export const classRouter = {
           message: "Class not found or already cancelled",
         });
       }
-      // Push + email every booked student (class cancelled — §4, docs/issues/17).
-      const booked = await ctx.db
-        .select({ studentId: classParticipation.studentId })
-        .from(classParticipation)
-        .where(
-          and(
-            eq(classParticipation.classId, row.id),
-            eq(classParticipation.bookingStatus, "booked"),
-          ),
-        );
-      const timeZone = await academyTimeZone(ctx);
-      const studentIds = booked.map((b) => b.studentId);
-      ctx.afterCommit(() =>
-        notifyClassCancelled({
-          academyId: ctx.academyId,
-          className: row.title,
-          startsAt: row.startsAt,
-          timeZone,
-          classId: row.id,
-          studentIds,
-        }),
-      );
+      await notifyBooked(ctx, row, notifyClassCancelled);
       return { ok: true as const };
     }),
 } satisfies TRPCRouterRecord;

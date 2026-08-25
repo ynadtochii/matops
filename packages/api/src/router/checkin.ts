@@ -1,20 +1,18 @@
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
-import { and, asc, eq, gte, isNull, lt, sql } from "@matops/db";
+import { and, asc, eq, gte, isNull, lt } from "@matops/db";
 import { classInstance, classParticipation } from "@matops/db/schema";
 import {
   bookingTier,
-  canMarkAttendance,
+  canCheckIn,
+  checkInFetchWindow,
   resolveCheckInClass,
 } from "@matops/domain";
 import { CheckInSchema } from "@matops/validators";
 
+import { claimSeat, requireClassFacts } from "../classes";
 import { enrolledProcedure } from "../trpc";
-
-/** Window of classes the app fetches to resolve "check in now" (before + after). */
-const LOOKBACK_MS = 3 * 60 * 60 * 1000; // 3h back (a class that just ran)
-const LOOKAHEAD_MS = 6 * 60 * 60 * 1000; // 6h ahead (today's later classes)
 
 /**
  * QR self check-in (slice 3.4, spec S8; docs/issues/24). `enrolledProcedure`, so
@@ -32,6 +30,7 @@ export const checkinRouter = {
    */
   today: enrolledProcedure.query(async ({ ctx }) => {
     const now = new Date();
+    const window = checkInFetchWindow(now);
     const rows = await ctx.db
       .select({
         id: classInstance.id,
@@ -44,8 +43,8 @@ export const checkinRouter = {
       .where(
         and(
           isNull(classInstance.deletedAt),
-          gte(classInstance.startsAt, new Date(now.getTime() - LOOKBACK_MS)),
-          lt(classInstance.startsAt, new Date(now.getTime() + LOOKAHEAD_MS)),
+          gte(classInstance.startsAt, window.from),
+          lt(classInstance.startsAt, window.to),
         ),
       )
       .orderBy(asc(classInstance.startsAt));
@@ -64,25 +63,14 @@ export const checkinRouter = {
   checkIn: enrolledProcedure
     .input(CheckInSchema)
     .mutation(async ({ ctx, input }) => {
-      const [cls] = await ctx.db
-        .select({
-          status: classInstance.status,
-          startsAt: classInstance.startsAt,
-          deletedAt: classInstance.deletedAt,
-        })
-        .from(classInstance)
-        .where(eq(classInstance.id, input.classId));
-      if (!cls) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Class not found" });
-      }
+      const cls = await requireClassFacts(ctx.db, input.classId);
       if (cls.status === "cancelled" || cls.deletedAt) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
           message: "That class isn't running",
         });
       }
-      // Reuse the attendance window as the check-in window guard: today / recent.
-      if (!canMarkAttendance(cls, new Date())) {
+      if (!canCheckIn(cls, new Date())) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
           message: "No class to check into right now",
@@ -136,10 +124,7 @@ export const checkinRouter = {
         });
 
       if (willBook && tier === "confirmed") {
-        await ctx.db
-          .update(classInstance)
-          .set({ bookingCount: sql`${classInstance.bookingCount} + 1` })
-          .where(eq(classInstance.id, input.classId));
+        await claimSeat(ctx.db, input.classId);
       }
 
       return { ok: true as const, tier, booked: willBook };

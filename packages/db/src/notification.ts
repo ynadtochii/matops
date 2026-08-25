@@ -1,6 +1,6 @@
 import type { NotificationKind } from "@matops/domain";
 
-import { db } from "./client";
+import type { DbExec } from "./client";
 import { notification } from "./notification-schema";
 
 /**
@@ -30,9 +30,10 @@ export interface NewNotification {
 /** Write one inbox row per recipient. One statement; no-op on an empty list. */
 export async function insertNotifications(
   rows: NewNotification[],
+  exec: DbExec,
 ): Promise<number> {
   if (rows.length === 0) return 0;
-  const written = await db
+  const written = await exec
     .insert(notification)
     .values(rows)
     .returning({ id: notification.id });

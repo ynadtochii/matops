@@ -1,4 +1,6 @@
 import type { BookingTier } from "./booking";
+import { classEndsAt } from "./dashboard";
+import { DAY_MS } from "./local-date";
 
 /**
  * Pure attendance rules (spec O5, §4; docs/issues/08, 24). No I/O — the
@@ -10,7 +12,6 @@ import type { BookingTier } from "./booking";
 
 /** How far back an owner may still fill in attendance (spec O5). */
 export const ATTENDANCE_BACKFILL_DAYS = 14;
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Attendance axis — mirrors the `attendance_status` DB enum. */
 export type AttendanceStatus = "unmarked" | "present" | "absent";
@@ -77,7 +78,7 @@ export function needsAttendance(c: AttendanceCandidate, now: Date): boolean {
   if (c.status === "cancelled") return false;
   if (c.markedCount > 0) return false;
   if (c.bookingCount + c.pendingCount === 0) return false;
-  const endedAt = c.startsAt.getTime() + c.durationMinutes * 60 * 1000;
+  const endedAt = classEndsAt(c);
   if (endedAt > now.getTime()) return false;
   return now.getTime() - endedAt <= UNMARKED_LOOKBACK_DAYS * DAY_MS;
 }

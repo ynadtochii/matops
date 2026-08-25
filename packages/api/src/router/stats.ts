@@ -2,22 +2,14 @@ import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
 import type { ClassMark, CoachClass, CoachWindowKey } from "@matops/domain";
-import {
-  and,
-  eq,
-  gte,
-  inArray,
-  isNull,
-  listMembersOf,
-  lt,
-  sql,
-} from "@matops/db";
+import { and, eq, gte, inArray, isNull, lt, sql } from "@matops/db";
 import {
   classInstance,
   classParticipation,
   paymentClaim,
 } from "@matops/db/schema";
 import {
+  canReadCoachFigures,
   classifyDrift,
   COACH_WINDOWS,
   coachBreakdown,
@@ -26,9 +18,12 @@ import {
   coachWorkloadFor,
   groupMoneyByCurrency,
   gymInsights,
+  isActiveMember,
   isOnRoster,
   isOwner,
+  isStaff,
   monthBucket,
+  newMemberCounts,
   trainingStats,
 } from "@matops/domain";
 import { CoachDetailSchema, CoachStatsSchema } from "@matops/validators";
@@ -36,7 +31,7 @@ import { CoachDetailSchema, CoachStatsSchema } from "@matops/validators";
 import type { TimeZoneCtx } from "../academy-tz";
 import type { MemberScope } from "../members";
 import { academyTimeZone } from "../academy-tz";
-import { staffAmong } from "../members";
+import { rosterOf, staffAmong, nameByUser as userNames } from "../members";
 import { enrolledProcedure, ownerProcedure, staffProcedure } from "../trpc";
 
 /**
@@ -126,7 +121,7 @@ async function loadCoachContext(
   const timeZone = await academyTimeZone(ctx);
   const range = coachWindowRange(COACH_WINDOWS[windowKey], now, timeZone);
   const { classes, marks } = await readCoachRows(ctx.db, range);
-  const members = await listMembersOf(ctx.academyId, ctx.db);
+  const members = await rosterOf(ctx);
   return {
     now,
     timeZone,
@@ -134,7 +129,7 @@ async function loadCoachContext(
     classes,
     marks,
     instructorIds: staffAmong(members).map((m) => m.userId),
-    nameByUser: new Map(members.map((m) => [m.userId, m.name])),
+    nameByUser: userNames(members),
   };
 }
 
@@ -204,20 +199,15 @@ export const statsRouter = {
         ),
       );
     const timeZone = await academyTimeZone(ctx);
-    // Growth, this month against last. Both sides count only retained members,
-    // so a joiner who has since been removed is missing from either — the two
-    // numbers are biased the same way and stay comparable.
     const owner = isOwner(ctx.membership);
-    const members = owner ? await listMembersOf(ctx.academyId, ctx.db) : [];
-    const thisMonth = monthBucket(now, timeZone);
-    const joined = members
-      .filter(isOnRoster)
-      .map((m) => monthBucket(m.createdAt, timeZone));
+    const members = owner ? await rosterOf(ctx) : [];
     const newMembers = owner
-      ? {
-          thisMonth: joined.filter((b) => b === thisMonth).length,
-          lastMonth: joined.filter((b) => b === thisMonth - 1).length,
-        }
+      ? newMemberCounts(
+          members
+            .filter(isOnRoster)
+            .map((m) => monthBucket(m.createdAt, timeZone)),
+          monthBucket(now, timeZone),
+        )
       : null;
     return {
       ...gymInsights(
@@ -272,7 +262,9 @@ export const statsRouter = {
     .input(CoachDetailSchema)
     .query(async ({ ctx, input }) => {
       const instructorId = input.instructorId ?? ctx.session.user.id;
-      if (instructorId !== ctx.session.user.id && !isOwner(ctx.membership)) {
+      if (
+        !canReadCoachFigures(ctx.membership, instructorId, ctx.session.user.id)
+      ) {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "Only an owner can read another coach's figures",
@@ -370,14 +362,10 @@ export const statsRouter = {
       lastByStudent.map((r) => [r.studentId, new Date(r.last)]),
     );
 
-    const members = await listMembersOf(ctx.academyId, ctx.db);
+    const members = await rosterOf(ctx);
     const drifting = members
       .filter(
-        (m) =>
-          m.status === "active" &&
-          m.role !== "owner" &&
-          m.role !== "instructor" &&
-          lastByUser.has(m.userId),
+        (m) => isActiveMember(m) && !isStaff(m) && lastByUser.has(m.userId),
       )
       .map((m) => {
         const lastAttendance = lastByUser.get(m.userId) ?? null;

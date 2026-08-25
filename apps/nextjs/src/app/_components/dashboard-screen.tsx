@@ -9,13 +9,22 @@ import type { RouterOutputs } from "@matops/api";
 import type { DisciplineTone } from "@matops/domain";
 import {
   capacityDisplay,
+  classEndsAt,
+  dayPlan,
+  daysSince,
+  dayWindow,
   disciplineTone,
+  formatMoney,
   groupMoneyByCurrency,
+  isFirstRun,
   isOwner as isOwnerOf,
-  isPendingCoach,
   isStaff as isStaffOf,
   needsAttendance,
+  newLeadCount,
+  rosterSummary,
+  startOfDay,
   UNMARKED_LOOKBACK_DAYS,
+  upcomingClassCount,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { Button } from "@matops/ui/button";
@@ -27,7 +36,6 @@ import {
 } from "@matops/ui/dialog";
 
 import { clockParts, dayLongFmt, timeFmt } from "~/lib/format";
-import { formatMoney } from "~/lib/money";
 import { useTRPC } from "~/trpc/react";
 import { useAcademy } from "./academy";
 import { ClassRoster } from "./class-roster";
@@ -50,17 +58,8 @@ import {
 import { EmptyState, ErrorState } from "./states";
 import { StudentScreen } from "./student-screen";
 
-type ClassRow = RouterOutputs["class"]["week"][number];
-
-const endsAt = (c: ClassRow) =>
-  new Date(c.startsAt).getTime() + c.durationMinutes * 60 * 1000;
-const sameDay = (value: Date | string, d: Date) => {
-  const x = new Date(value);
-  return (
-    x.getFullYear() === d.getFullYear() &&
-    x.getMonth() === d.getMonth() &&
-    x.getDate() === d.getDate()
-  );
+type ClassRow = Omit<RouterOutputs["class"]["week"][number], "startsAt"> & {
+  startsAt: Date;
 };
 
 /** One row of the "needs you" queue. Rendered only while `count` is above zero. */
@@ -105,24 +104,19 @@ export function DashboardScreen() {
   const isStaff = isStaffOf(c);
 
   const { weekFrom, weekTo, today, tomorrow, leadsSince } = useMemo(() => {
-    const t = new Date();
-    t.setHours(0, 0, 0, 0);
-    const end = new Date(t);
-    end.setDate(end.getDate() + 7);
+    const at = new Date();
     // Reaches back over the unmarked look-back so one read covers both halves of
     // the page: the week ahead and the finished classes still missing a register.
-    const start = new Date(t);
-    start.setDate(start.getDate() - UNMARKED_LOOKBACK_DAYS - 1);
-    const since = new Date(t);
-    since.setDate(since.getDate() - 6);
-    const next = new Date(t);
-    next.setDate(next.getDate() + 1);
+    const week = dayWindow(at, {
+      backDays: UNMARKED_LOOKBACK_DAYS + 1,
+      aheadDays: 7,
+    });
     return {
-      weekFrom: start.toISOString(),
-      weekTo: end.toISOString(),
-      today: t,
-      tomorrow: next,
-      leadsSince: since,
+      weekFrom: week.from.toISOString(),
+      weekTo: week.to.toISOString(),
+      today: startOfDay(at),
+      tomorrow: dayWindow(at, { aheadDays: 1 }).to,
+      leadsSince: dayWindow(at, { backDays: 6, aheadDays: 0 }).from,
     };
   }, []);
   // The query window is a query key, so it stays frozen. The clock is not, and
@@ -160,45 +154,29 @@ export function DashboardScreen() {
 
   if (!isStaff) return <StudentScreen />;
 
-  const onDay = (d: Date) =>
-    (week.data ?? [])
-      .filter((r) => sameDay(r.startsAt, d) && r.status !== "cancelled")
-      .sort(
-        (a, b) =>
-          new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
-      );
-  const todays = onDay(today);
-  const tomorrows = onDay(tomorrow);
-  // Once today's last class has ended the day block is a log, not a plan. Roll
-  // it forward — anything still needing a mark is already in the queue above.
-  const showTomorrow =
-    todays.every((r) => endsAt(r) <= now.getTime()) && tomorrows.length > 0;
-  const dayList = showTomorrow ? tomorrows : todays;
-  // The list is sorted, so the count of already-started classes IS the index the
-  // now-line belongs at. Tomorrow has no "now".
-  const nowIndex = showTomorrow
-    ? null
-    : dayList.filter((r) => new Date(r.startsAt).getTime() <= now.getTime())
-        .length;
+  const weekRows = (week.data ?? []).map((r) => ({
+    ...r,
+    startsAt: new Date(r.startsAt),
+  }));
+  const {
+    list: dayList,
+    showTomorrow,
+    nowIndex,
+  } = dayPlan(weekRows, today, tomorrow, now);
   const members = memberList.data ?? [];
-  const pendingCoaches = members.filter(isPendingCoach).length;
-  const pendingCount =
-    members.filter((m) => m.status === "pending").length - pendingCoaches;
-  const activeCount = members.filter((m) => m.status === "active").length;
-  const overdue = members.filter((m) => m.dues?.status === "overdue");
-  const weekCount = (week.data ?? []).filter(
-    (r) => r.status !== "cancelled" && new Date(r.startsAt) >= today,
-  ).length;
-  const unmarked = (week.data ?? []).filter((r) =>
-    needsAttendance({ ...r, startsAt: new Date(r.startsAt) }, now),
-  );
+  const {
+    pendingStudents: pendingCount,
+    pendingCoaches,
+    active: activeCount,
+    overdue,
+  } = rosterSummary(members);
+  const weekCount = upcomingClassCount(weekRows, today);
+  const unmarked = weekRows.filter((r) => needsAttendance(r, now));
   const unmarkedIds = new Set(unmarked.map((r) => r.id));
-  // Only the last week's leads count as "new": `drop_in` has no handled flag, so
-  // an all-time count could never reach zero and the queue would read as
-  // permanently dirty.
-  const newLeads = (leads.data ?? []).filter(
-    (l) => new Date(l.lastVisitAt) >= leadsSince,
-  ).length;
+  const newLeads = newLeadCount(
+    (leads.data ?? []).map((l) => ({ lastVisitAt: new Date(l.lastVisitAt) })),
+    leadsSince,
+  );
 
   const queue: QueueItem[] = [
     {
@@ -251,9 +229,7 @@ export function DashboardScreen() {
     memberList.isPending ||
     (isOwner && (leads.isPending || claims.isPending));
   const numbersLoading = week.isPending || memberList.isPending;
-  // A brand-new academy has nothing to do, and "All clear." reads as finished.
-  // The owner is on their own here: nobody is standing next to them saying it.
-  const firstRun = isOwner && activeCount === 0 && weekCount === 0;
+  const firstRun = isOwner && isFirstRun(activeCount, weekCount);
 
   const detail = (week.data ?? []).find((r) => r.id === detailId);
 
@@ -511,8 +487,8 @@ function DayRow({
   onOpen: () => void;
 }) {
   const full = capacityDisplay(c.bookingCount, c.capacity).isOver;
-  const ended = endsAt(c) <= now.getTime();
-  const { clock, period } = clockParts(new Date(c.startsAt));
+  const ended = classEndsAt(c) <= now.getTime();
+  const { clock, period } = clockParts(c.startsAt);
   return (
     <button
       type="button"
@@ -667,12 +643,10 @@ function BusiestRow({ row, top }: { row: BusiestClass; top: number }) {
 
 /** One "who's drifting" row — links to the member's detail (C.2). */
 function DriftRow({ m, today }: { m: DriftMember; today: Date }) {
-  const days = m.lastAttendance
-    ? Math.floor(
-        (today.getTime() - new Date(m.lastAttendance).getTime()) /
-          (24 * 60 * 60 * 1000),
-      )
-    : null;
+  const days = daysSince(
+    m.lastAttendance ? new Date(m.lastAttendance) : null,
+    today,
+  );
   return (
     <Link
       href={`/members?member=${m.memberId}`}

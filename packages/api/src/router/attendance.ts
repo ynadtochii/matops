@@ -2,20 +2,8 @@ import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
 import type { TenantTx } from "@matops/db";
-import {
-  and,
-  createDropIn,
-  eq,
-  getMembership,
-  inArray,
-  listMembersOf,
-} from "@matops/db";
-import {
-  classInstance,
-  classParticipation,
-  dropIn,
-  user,
-} from "@matops/db/schema";
+import { and, createDropIn, eq, inArray } from "@matops/db";
+import { classParticipation, dropIn, user } from "@matops/db/schema";
 import {
   attendanceCounts,
   bulkMarkTargets,
@@ -29,7 +17,9 @@ import {
   MarkAttendanceSchema,
 } from "@matops/validators";
 
-import { staffProcedure } from "../trpc";
+import { requireClassFacts } from "../classes";
+import { requireMembership, rosterOf } from "../members";
+import { staffIdentityProcedure, staffProcedure } from "../trpc";
 
 /**
  * Attendance (slice 3.3, spec O5, §4; docs/issues/08, 24). Staff-only (owner or
@@ -42,7 +32,7 @@ export const attendanceRouter = {
   /** Active members of the academy (id = user.id, name) for the walk-in picker. */
   members: staffProcedure.query(async ({ ctx }) => {
     // Members live in the auth `member` table (no RLS); list + filter to active.
-    const members = await listMembersOf(ctx.academyId, ctx.db);
+    const members = await rosterOf(ctx);
     return members
       .filter((m) => m.status === "active")
       .map((m) => ({ id: m.userId, name: m.name }));
@@ -156,17 +146,12 @@ export const attendanceRouter = {
       await assertMarkable(ctx.db, input.classId);
       // Defense-in-depth: the RLS WITH CHECK only scopes academy_id, not that the
       // student is a member — so verify membership before recording a walk-in.
-      const membership = await getMembership(
+      await requireMembership(
         input.studentId,
         ctx.academyId,
         ctx.db,
+        "That person is not a member of this academy",
       );
-      if (!membership) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "That person is not a member of this academy",
-        });
-      }
       const now = new Date();
       await ctx.db
         .insert(classParticipation)
@@ -200,36 +185,29 @@ export const attendanceRouter = {
    * this writes `consent: false`; the `OR` in `createDropIn` means it never
    * clears a consent the visitor gave earlier.
    */
-  addVisitor: staffProcedure
+  addVisitor: staffIdentityProcedure
     .input(AddVisitorSchema)
     .mutation(async ({ ctx, input }) => {
-      await assertMarkable(ctx.db, input.classId);
-      const { visitCount } = await createDropIn({
-        academyId: ctx.academyId,
-        firstName: input.firstName,
-        lastName: input.lastName,
-        phone: normalizePhone(input.phone),
-        email: null,
-        classId: input.classId,
-        consent: false,
-      });
+      await ctx.withTenant((db) => assertMarkable(db, input.classId));
+      const { visitCount } = await createDropIn(
+        {
+          academyId: ctx.academyId,
+          firstName: input.firstName,
+          lastName: input.lastName,
+          phone: normalizePhone(input.phone),
+          email: null,
+          classId: input.classId,
+          consent: false,
+        },
+        ctx.baseDb,
+      );
       return { firstVisit: visitCount === 1, visitCount };
     }),
 } satisfies TRPCRouterRecord;
 
 /** Load the class and assert it is inside the attendance backfill window (O5). */
 async function assertMarkable(db: TenantTx, classId: string) {
-  const [cls] = await db
-    .select({
-      status: classInstance.status,
-      startsAt: classInstance.startsAt,
-      deletedAt: classInstance.deletedAt,
-    })
-    .from(classInstance)
-    .where(eq(classInstance.id, classId));
-  if (!cls) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "Class not found" });
-  }
+  const cls = await requireClassFacts(db, classId);
   if (!canMarkAttendance(cls, new Date())) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",

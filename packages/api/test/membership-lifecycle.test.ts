@@ -173,6 +173,20 @@ describe("member archive and permanent erase (docs/issues/84)", () => {
       ).toBe("PRECONDITION_FAILED");
     });
 
+    it("refuses to step the last owner down to instructor", async () => {
+      await h
+        .as(OWNER, ACAD)
+        .membership.archive({ memberId: memberId(ACAD, COOWNER) });
+      expect(
+        await rejectionCode(
+          h.as(OWNER, ACAD).membership.setRole({
+            memberId: memberId(ACAD, OWNER),
+            role: "instructor",
+          }),
+        ),
+      ).toBe("PRECONDITION_FAILED");
+    });
+
     it("refuses a pending applicant, who is declined instead", async () => {
       await h.pg.exec(
         `UPDATE "member" SET status = 'pending', role = 'member' WHERE id = '${LEAVER_MEMBER}';`,
@@ -203,7 +217,7 @@ describe("member archive and permanent erase (docs/issues/84)", () => {
     it("brings an archived member back active with their history", async () => {
       await h.as(OWNER, ACAD).rank.set({
         memberId: LEAVER_MEMBER,
-        discipline: "BJJ",
+        discipline: "bjj",
         belt: "Blue",
         stripes: 1,
       });
@@ -262,7 +276,7 @@ describe("member archive and permanent erase (docs/issues/84)", () => {
       });
       await h.as(OWNER, ACAD).rank.set({
         memberId: LEAVER_MEMBER,
-        discipline: "BJJ",
+        discipline: "bjj",
         belt: "Blue",
         stripes: 0,
       });

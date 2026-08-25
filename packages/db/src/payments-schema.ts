@@ -91,6 +91,7 @@ export const memberDues = pgTable(
   (table) => [
     // One dues record per member per academy.
     uniqueIndex("md_uniq_academy_member").on(table.academyId, table.memberId),
+    index("md_by_next_due").on(table.nextDueAt),
   ],
 );
 

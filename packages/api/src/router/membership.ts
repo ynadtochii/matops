@@ -16,7 +16,6 @@ import {
   hasOtherMemberships,
   inArray,
   isNull,
-  listMembersOf,
   resolveInviteToken,
   setMemberRoleIfNotLastOwner,
   setMemberRoleStatus,
@@ -34,6 +33,7 @@ import {
 } from "@matops/db/schema";
 import {
   approveMembership,
+  autoAssignedPlan,
   bookingAccess,
   canApprove,
   canDecideSeat,
@@ -57,13 +57,17 @@ import {
 
 import type { createTRPCContext } from "../trpc";
 import { academyTimeZone } from "../academy-tz";
-import { requireMember, staffOf } from "../members";
+import { releaseSeats } from "../classes";
+import { requireMember, rosterOf, staffOf } from "../members";
+import { LAST_OWNER } from "../messages";
 import { notifyMembershipApproved } from "../notify";
-import { loadGateSettings } from "../payments-gate";
+import { readAllDuesWithPlan, readPaymentSettings } from "../payments-read";
 import {
+  ownerIdentityProcedure,
   ownerProcedure,
   protectedProcedure,
   refreshSessionCookie,
+  staffIdentityProcedure,
   staffProcedure,
 } from "../trpc";
 
@@ -123,28 +127,19 @@ async function joinPending(
 }
 
 /**
- * Set a member's status, but reject the change if it would leave the academy
- * ownerless (§4). The check + write are atomic (one locked transaction) in
- * `setMemberStatusIfNotLastOwner`, so two concurrent owner mutations cannot both
- * pass and strand the gym without an owner.
+ * Run one of the last-owner-safe writes and turn its refusal into an error. The
+ * check + write are atomic (one locked transaction) inside the `@matops/db`
+ * function, so two concurrent owner mutations cannot both pass and strand the
+ * gym without an owner.
  */
-async function setStatusOrRejectLastOwner(
-  academyId: string,
-  memberId: string,
-  status: string,
-  exec: BaseContext["baseDb"],
-) {
-  const { ok } = await setMemberStatusIfNotLastOwner(
-    academyId,
-    memberId,
-    status,
-    exec,
-  );
+async function rejectIfLastOwner(
+  write: Promise<{ ok: boolean }>,
+): Promise<void> {
+  const { ok } = await write;
   if (!ok) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
-      message:
-        "Promote a co-owner first — an academy can't be left without an owner.",
+      message: LAST_OWNER,
     });
   }
 }
@@ -194,41 +189,15 @@ async function releaseUpcomingSeats(
   const held = cancelled
     .filter((c) => c.tier === "confirmed")
     .map((c) => c.classId);
-  if (held.length > 0) {
-    await ctx.db
-      .update(classInstance)
-      .set({
-        bookingCount: sql`GREATEST(${classInstance.bookingCount} - 1, 0)`,
-      })
-      .where(inArray(classInstance.id, held));
-  }
+  await releaseSeats(ctx.db, held);
   return held.length;
 }
 
-/**
- * Set a member's role, but reject the change if it would leave the academy
- * ownerless (§4) — used to step an owner DOWN to instructor. Atomic (one locked
- * transaction) in `setMemberRoleIfNotLastOwner`, the sibling of the status path.
- */
-async function setRoleOrRejectLastOwner(
-  academyId: string,
-  memberId: string,
-  role: string,
-  exec: BaseContext["baseDb"],
-) {
-  const { ok } = await setMemberRoleIfNotLastOwner(
-    academyId,
-    memberId,
-    role,
-    exec,
-  );
-  if (!ok) {
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message:
-        "Promote a co-owner first — an academy can't be left without an owner.",
-    });
-  }
+function identityScope(ctx: {
+  academyId: string;
+  baseDb: BaseContext["baseDb"];
+}) {
+  return { academyId: ctx.academyId, db: ctx.baseDb };
 }
 
 /** Enforce the pure `canDecideSeat` rule: the coach queue stays the owner's. */
@@ -253,7 +222,7 @@ export const membershipRouter = {
   join: protectedProcedure
     .input(JoinAcademySchema)
     .mutation(async ({ ctx, input }) => {
-      const invite = await resolveInviteToken(input.token);
+      const invite = await resolveInviteToken(input.token, ctx.baseDb);
       if (!invite) {
         throw new TRPCError({
           code: "NOT_FOUND",
@@ -303,7 +272,7 @@ export const membershipRouter = {
    * (§4). Counted on the RLS-scoped `ctx.db`, grouped by student.
    */
   members: staffProcedure.query(async ({ ctx }) => {
-    const rows = await listMembersOf(ctx.academyId, ctx.db);
+    const rows = await rosterOf(ctx);
     const visits = await ctx.db
       .select({
         studentId: classParticipation.studentId,
@@ -318,17 +287,7 @@ export const membershipRouter = {
     // reads run on the RLS-scoped `ctx.db` (the payment tables carry academy_id
     // policies), so no explicit academy pin is needed here. `member_dues.memberId`
     // is the `member.id`, aligning with the member row's `memberId`.
-    const duesRows = await ctx.db
-      .select({
-        memberId: memberDues.memberId,
-        planId: memberDues.planId,
-        nextDueAt: memberDues.nextDueAt,
-        priceMinor: membershipPlan.priceMinor,
-        currency: membershipPlan.currency,
-        planName: membershipPlan.name,
-      })
-      .from(memberDues)
-      .innerJoin(membershipPlan, eq(memberDues.planId, membershipPlan.id));
+    const duesRows = await readAllDuesWithPlan(ctx.db);
     const duesByMember = new Map(duesRows.map((d) => [d.memberId, d]));
 
     const confirmed = await ctx.db
@@ -347,7 +306,7 @@ export const membershipRouter = {
     // Money is the owner's business, not the coach's: an instructor runs the
     // desk (approve, rank) and gets the same roster without the dues figures.
     const seesDues = isOwner(ctx.membership);
-    const gate = seesDues ? await loadGateSettings(ctx.db) : null;
+    const gate = seesDues ? await readPaymentSettings(ctx.db) : null;
     const openClaimMembers = new Set(
       gate?.enforcedAt
         ? (
@@ -409,7 +368,7 @@ export const membershipRouter = {
    * here: they were never members.
    */
   archived: ownerProcedure.query(async ({ ctx }) => {
-    const rows = await listMembersOf(ctx.academyId, ctx.db);
+    const rows = await rosterOf(ctx);
     return rows.filter(isArchived).map((r) => ({
       memberId: r.memberId,
       name: r.name,
@@ -462,10 +421,10 @@ export const membershipRouter = {
     }),
 
   /** Approve a pending member → grant the invited role + activate (docs/issues/20). Staff (ADR 75). */
-  approve: staffProcedure
+  approve: staffIdentityProcedure
     .input(MemberActionSchema)
     .mutation(async ({ ctx, input }) => {
-      const m = await requireMember(ctx, input.memberId);
+      const m = await requireMember(identityScope(ctx), input.memberId);
       requireSeatDecider(ctx, m);
       if (!canApprove(m)) {
         throw new TRPCError({
@@ -476,41 +435,42 @@ export const membershipRouter = {
       const granted = approveMembership(m);
       await setMemberRoleStatus(input.memberId, granted, ctx.baseDb);
       if (granted.role === "student") {
-        const plans = await ctx.db
-          .select({ id: membershipPlan.id })
-          .from(membershipPlan)
-          .where(isNull(membershipPlan.deletedAt))
-          .limit(2);
-        const onlyPlan = plans.length === 1 ? plans[0] : undefined;
-        if (onlyPlan) {
-          await ctx.db
-            .insert(memberDues)
-            .values({
-              academyId: ctx.academyId,
-              memberId: input.memberId,
-              planId: onlyPlan.id,
-              nextDueAt: firstDueAt(new Date()),
-            })
-            .onConflictDoNothing({
-              target: [memberDues.academyId, memberDues.memberId],
-            });
-        }
+        await ctx.withTenant(async (db) => {
+          const onlyPlan = autoAssignedPlan(
+            await db
+              .select({ id: membershipPlan.id })
+              .from(membershipPlan)
+              .where(isNull(membershipPlan.deletedAt))
+              .limit(2),
+          );
+          if (onlyPlan) {
+            await db
+              .insert(memberDues)
+              .values({
+                academyId: ctx.academyId,
+                memberId: input.memberId,
+                planId: onlyPlan.id,
+                nextDueAt: firstDueAt(new Date()),
+              })
+              .onConflictDoNothing({
+                target: [memberDues.academyId, memberDues.memberId],
+              });
+          }
+        });
       }
       // Welcome push to the newly approved member (§4/S3, docs/issues/17).
-      ctx.afterCommit(() =>
-        notifyMembershipApproved({
-          academyId: ctx.academyId,
-          userId: m.userId,
-        }),
+      await notifyMembershipApproved(
+        { academyId: ctx.academyId, userId: m.userId },
+        ctx.baseDb,
       );
       return { ok: true as const };
     }),
 
   /** Reject a pending member → revoke access, keep the record (§4). */
-  reject: staffProcedure
+  reject: staffIdentityProcedure
     .input(MemberActionSchema)
     .mutation(async ({ ctx, input }) => {
-      const m = await requireMember(ctx, input.memberId);
+      const m = await requireMember(identityScope(ctx), input.memberId);
       requireSeatDecider(ctx, m);
       await setMemberStatus(input.memberId, "removed", ctx.baseDb);
       return { ok: true as const };
@@ -522,10 +482,10 @@ export const membershipRouter = {
    * every row they own is kept and `restore` brings them back whole. Never
    * ownerless. Reversible; `purge` is the irreversible one.
    */
-  archive: ownerProcedure
+  archive: ownerIdentityProcedure
     .input(MemberActionSchema)
     .mutation(async ({ ctx, input }) => {
-      const m = await requireMember(ctx, input.memberId);
+      const m = await requireMember(identityScope(ctx), input.memberId);
       // Only someone who WAS a member can leave. Archiving a pending applicant
       // and restoring them would activate them without approval, and with the
       // placeholder Better Auth role, because the real role is granted at
@@ -538,13 +498,17 @@ export const membershipRouter = {
       }
       // Status first: it is the access gate, so a race cannot book in the gap
       // between cancelling their seats and revoking the account.
-      await setStatusOrRejectLastOwner(
-        ctx.academyId,
-        input.memberId,
-        "archived",
-        ctx.baseDb,
+      await rejectIfLastOwner(
+        setMemberStatusIfNotLastOwner(
+          ctx.academyId,
+          input.memberId,
+          "archived",
+          ctx.baseDb,
+        ),
       );
-      const freed = await releaseUpcomingSeats(ctx, m.userId);
+      const freed = await ctx.withTenant((db) =>
+        releaseUpcomingSeats({ db, academyId: ctx.academyId }, m.userId),
+      );
       return { ok: true as const, seatsFreed: freed };
     }),
 
@@ -556,28 +520,32 @@ export const membershipRouter = {
    * guard, and it is the recoverable state a half-finished erase falls back to,
    * because the RLS transaction and the base connection cannot commit as one.
    */
-  purge: ownerProcedure
+  purge: ownerIdentityProcedure
     .input(MemberActionSchema)
     .mutation(async ({ ctx, input }) => {
-      const m = await requireMember(ctx, input.memberId);
+      const m = await requireMember(identityScope(ctx), input.memberId);
       if (m.userId === ctx.session.user.id) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
           message: "You can't erase your own membership.",
         });
       }
-      await setStatusOrRejectLastOwner(
-        ctx.academyId,
-        input.memberId,
-        "archived",
-        ctx.baseDb,
+      await rejectIfLastOwner(
+        setMemberStatusIfNotLastOwner(
+          ctx.academyId,
+          input.memberId,
+          "archived",
+          ctx.baseDb,
+        ),
       );
-      const report = await eraseMemberData(ctx.db, {
-        academyId: ctx.academyId,
-        memberId: input.memberId,
-        userId: m.userId,
-        actorId: ctx.session.user.id,
-      });
+      const report = await ctx.withTenant((db) =>
+        eraseMemberData(db, {
+          academyId: ctx.academyId,
+          memberId: input.memberId,
+          userId: m.userId,
+          actorId: ctx.session.user.id,
+        }),
+      );
       await deleteMemberRow(ctx.baseDb, ctx.academyId, input.memberId);
       const elsewhere = await hasOtherMemberships(
         ctx.baseDb,
@@ -591,15 +559,17 @@ export const membershipRouter = {
     }),
 
   /** Suspend a member → access revoked but reversible. Never ownerless. */
-  suspend: ownerProcedure
+  suspend: ownerIdentityProcedure
     .input(MemberActionSchema)
     .mutation(async ({ ctx, input }) => {
-      await requireMember(ctx, input.memberId);
-      await setStatusOrRejectLastOwner(
-        ctx.academyId,
-        input.memberId,
-        "suspended",
-        ctx.baseDb,
+      await requireMember(identityScope(ctx), input.memberId);
+      await rejectIfLastOwner(
+        setMemberStatusIfNotLastOwner(
+          ctx.academyId,
+          input.memberId,
+          "suspended",
+          ctx.baseDb,
+        ),
       );
       return { ok: true as const };
     }),
@@ -611,10 +581,10 @@ export const membershipRouter = {
    * Seats cancelled by the archive do NOT come back — those classes may since
    * have filled or passed.
    */
-  restore: ownerProcedure
+  restore: ownerIdentityProcedure
     .input(MemberActionSchema)
     .mutation(async ({ ctx, input }) => {
-      const m = await requireMember(ctx, input.memberId);
+      const m = await requireMember(identityScope(ctx), input.memberId);
       if (!isSuspended(m) && !isArchived(m)) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
@@ -626,10 +596,10 @@ export const membershipRouter = {
     }),
 
   /** Promote a member to co-owner (so a gym is never left ownerless — §4). */
-  promote: ownerProcedure
+  promote: ownerIdentityProcedure
     .input(MemberActionSchema)
     .mutation(async ({ ctx, input }) => {
-      await requireMember(ctx, input.memberId);
+      await requireMember(identityScope(ctx), input.memberId);
       await setMemberRoleStatus(
         input.memberId,
         { role: "owner", status: "active" },
@@ -644,15 +614,17 @@ export const membershipRouter = {
    * never-ownerless check: the last active owner can't be stepped down (promote
    * a co-owner first, §4).
    */
-  setRole: ownerProcedure
+  setRole: ownerIdentityProcedure
     .input(MemberActionSchema.extend({ role: InviteRoleSchema }))
     .mutation(async ({ ctx, input }) => {
-      await requireMember(ctx, input.memberId);
-      await setRoleOrRejectLastOwner(
-        ctx.academyId,
-        input.memberId,
-        input.role,
-        ctx.baseDb,
+      await requireMember(identityScope(ctx), input.memberId);
+      await rejectIfLastOwner(
+        setMemberRoleIfNotLastOwner(
+          ctx.academyId,
+          input.memberId,
+          input.role,
+          ctx.baseDb,
+        ),
       );
       return { ok: true as const };
     }),

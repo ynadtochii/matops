@@ -79,14 +79,14 @@ describe("an instructor runs the desk", () => {
     await coach().rank.set({
       memberId: memberId(ACAD, STUDENT),
       discipline: "bjj",
-      belt: "blue",
+      belt: "Blue",
       stripes: 1,
     });
 
     const ranks = await coach().rank.forMember({
       memberId: memberId(ACAD, STUDENT),
     });
-    expect(ranks.ranks[0]?.belt).toBe("blue");
+    expect(ranks.ranks[0]?.belt).toBe("Blue");
   });
 
   it("opens a member's history", async () => {
@@ -104,7 +104,9 @@ describe("an instructor runs the desk", () => {
     await owner().payments.setMemberDues({
       memberId: memberId(ACAD, STUDENT),
       planId: plan.id,
-      nextDueAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      nextDueAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .slice(0, 10),
     });
 
     const forOwner = await owner().membership.members();

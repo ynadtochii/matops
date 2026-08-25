@@ -3,7 +3,6 @@ import { and, eq, isNull } from "drizzle-orm";
 import type { DbExec } from "./client";
 import type { DbReader } from "./tenant";
 import { organization } from "./auth-schema";
-import { db } from "./client";
 
 export interface AcademySettings {
   academyId: string;
@@ -16,7 +15,7 @@ export interface AcademySettings {
 
 export async function getAcademySettings(
   academyId: string,
-  exec: DbReader = db,
+  exec: DbReader,
 ): Promise<AcademySettings | null> {
   const rows = await exec
     .select({
@@ -36,7 +35,7 @@ export async function getAcademySettings(
 export async function updateAcademySettings(
   academyId: string,
   patch: { timeZone?: string; address?: string; mapUrl?: string },
-  exec: DbExec = db,
+  exec: DbExec,
 ): Promise<void> {
   const next: {
     timeZone?: string;
@@ -55,7 +54,7 @@ export async function updateAcademySettings(
 
 export async function softDeleteAcademy(
   academyId: string,
-  exec: DbExec = db,
+  exec: DbExec,
 ): Promise<boolean> {
   const rows = await exec
     .update(organization)

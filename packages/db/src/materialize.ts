@@ -12,11 +12,13 @@ import {
 
 import {
   computeOccurrences,
+  DAY_MS,
   MATERIALIZATION_HORIZON_DAYS,
   staleClassIds,
 } from "@matops/domain";
 
-import { db } from "./client";
+import type { DbExec } from "./client";
+import type { TenantTx } from "./tenant";
 import {
   classInstance,
   classParticipation,
@@ -40,10 +42,8 @@ import {
  * re-runs safe; `generated_until` is the resume cursor.
  */
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 /** A drizzle handle — the base `db` OR a per-request tenant transaction. */
-type Executor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+type Executor = DbExec | TenantTx;
 
 type Template = typeof classTemplate.$inferSelect;
 
@@ -142,7 +142,7 @@ export interface SweepOptions {
   now?: Date;
   horizonDays?: number;
   /** The drizzle handle to sweep on. Defaults to the base `db`; tests inject. */
-  exec?: Executor;
+  exec: Executor;
 }
 
 export interface SweepResult {
@@ -163,8 +163,8 @@ export async function runMaterializationSweep({
   softBudgetMs = 55_000,
   now = new Date(),
   horizonDays = MATERIALIZATION_HORIZON_DAYS,
-  exec = db,
-}: SweepOptions = {}): Promise<SweepResult> {
+  exec,
+}: SweepOptions): Promise<SweepResult> {
   const startedAt = Date.now();
   // Target horizon end for THIS run. A template is "stale" when its cursor does
   // not yet reach here — so every active template is nudged ~+1 day each day.

@@ -49,7 +49,7 @@ export default function WalkInCheckin() {
 
   // Scope RLS to the scanned gym before resolving its live class — a student who
   // trains at several gyms may be checking in away from their active one. A
-  // non-member is refused here (FORBIDDEN) and shown the safety-net message.
+  // non-member is refused here (NOT_FOUND) and shown the safety-net message.
   const setActive = useMutation(
     trpc.academy.setActive.mutationOptions({
       onSuccess: async () => {

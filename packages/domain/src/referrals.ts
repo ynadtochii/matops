@@ -72,3 +72,17 @@ export function groupMoneyByCurrency(
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([currency, amountMinor]) => ({ currency, amountMinor }));
 }
+
+/**
+ * Where a student sits in the referral flow. `cleared` is not `never_assigned`:
+ * a row with a null referrer means an owner deliberately removed the credit, and
+ * only an owner may set it again (ADR 52).
+ */
+export type ReferralAssignmentState = "assigned" | "cleared" | "never_assigned";
+
+export function referralAssignmentState(
+  referral: { referrerMemberId: string | null } | undefined,
+): ReferralAssignmentState {
+  if (!referral) return "never_assigned";
+  return referral.referrerMemberId ? "assigned" : "cleared";
+}

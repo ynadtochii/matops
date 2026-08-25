@@ -2,8 +2,8 @@ import { and, asc, eq, gt, isNull, lte } from "drizzle-orm";
 
 import { REMINDER_LEAD_MINUTES } from "@matops/domain";
 
+import type { DbExec } from "./client";
 import { organization } from "./auth-schema";
-import { db } from "./client";
 import { classInstance, classParticipation, classTemplate } from "./scheduling";
 
 /**
@@ -47,15 +47,16 @@ export interface ClaimRemindersOptions {
  * leftovers are picked up on the next tick.
  */
 export async function claimDueReminderClasses(
-  opts: ClaimRemindersOptions = {},
+  opts: ClaimRemindersOptions & { exec: DbExec },
 ): Promise<DueReminderClass[]> {
+  const exec = opts.exec;
   const now = opts.now ?? new Date();
   const lead = opts.leadMinutes ?? REMINDER_LEAD_MINUTES;
   const limit = opts.limit ?? 200;
   const windowEnd = new Date(now.getTime() + lead * MIN_MS);
 
   // Candidates: due, unreminded, and actually booked (join forces ≥1 booking).
-  const candidates = await db
+  const candidates = await exec
     .selectDistinct({
       classId: classInstance.id,
       academyId: classInstance.academyId,
@@ -89,7 +90,7 @@ export async function claimDueReminderClasses(
   const claimed: DueReminderClass[] = [];
   for (const c of candidates) {
     // Atomic claim: only the flip that wins NULL→now proceeds to send.
-    const [won] = await db
+    const [won] = await exec
       .update(classInstance)
       .set({ reminderSentAt: now })
       .where(
@@ -101,7 +102,7 @@ export async function claimDueReminderClasses(
       .returning({ id: classInstance.id });
     if (!won) continue;
 
-    const booked = await db
+    const booked = await exec
       .select({ studentId: classParticipation.studentId })
       .from(classParticipation)
       .where(

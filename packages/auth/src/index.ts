@@ -106,7 +106,7 @@ export function initAuth<
             return {
               data: {
                 ...organization,
-                publicCode: await generateAcademyCode(),
+                publicCode: await generateAcademyCode(db),
               },
             };
           },

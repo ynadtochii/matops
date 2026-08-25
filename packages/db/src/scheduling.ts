@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { index, pgEnum, pgTable, uniqueIndex } from "drizzle-orm/pg-core";
 
 /**
@@ -98,6 +99,9 @@ export const classTemplate = pgTable(
     index("ct_by_academy").on(table.academyId),
     // stale-first cursor scan for the materialization cron (slice 2.2).
     index("ct_by_academy_status").on(table.academyId, table.status),
+    index("ct_sweep_stale")
+      .on(table.status, table.generatedUntil)
+      .where(sql`deleted_at IS NULL`),
   ],
 );
 
@@ -145,6 +149,9 @@ export const classInstance = pgTable(
     // Idempotent materialization: a template yields at most one class per instant.
     // Postgres treats NULL template_id as distinct, so multiple one-offs are fine.
     uniqueIndex("cl_uniq_template_start").on(table.templateId, table.startsAt),
+    index("cl_reminder_due")
+      .on(table.startsAt)
+      .where(sql`reminder_sent_at IS NULL AND deleted_at IS NULL`),
   ],
 );
 

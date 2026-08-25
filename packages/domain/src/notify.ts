@@ -102,47 +102,6 @@ export function buildDuesReminderMessage(input: {
 
 /** Default reminder lead time (how long before start the reminder fires). */
 export const REMINDER_LEAD_MINUTES = 120;
-const MIN_MS = 60 * 1000;
-
-/**
- * Whether a class start falls in the reminder window for this sweep: from
- * `leadMinutes` before start, back to one sweep interval earlier, so a class is
- * caught exactly once as the horizon crosses it. Combined with a persisted
- * `reminder_sent_at` guard, the send is idempotent even if sweeps overlap.
- */
-export function isInReminderWindow(
-  startsAt: Date,
-  now: Date,
-  opts: { leadMinutes?: number; sweepMinutes: number },
-): boolean {
-  const lead = opts.leadMinutes ?? REMINDER_LEAD_MINUTES;
-  const dueAt = startsAt.getTime() - lead * MIN_MS;
-  const t = now.getTime();
-  // Fire once `now` reaches the due point, but not for classes already started.
-  return (
-    t >= dueAt &&
-    t - dueAt < opts.sweepMinutes * MIN_MS &&
-    t < startsAt.getTime()
-  );
-}
-
-/** A booking row, reduced to what recipient selection needs. */
-export interface Participation {
-  studentId: string;
-  bookingStatus: string; // "booked" | "cancelled" | "none"
-}
-
-/**
- * The student ids that should be notified about a class: those with a live
- * booking (`booked`), never cancelled bookings or walk-ins (`none`). Deduped.
- */
-export function reminderRecipients(participations: Participation[]): string[] {
-  const ids = new Set<string>();
-  for (const p of participations) {
-    if (p.bookingStatus === "booked") ids.add(p.studentId);
-  }
-  return [...ids];
-}
 
 /** What produced an inbox entry. Persisted as text on `notification.kind`. */
 export type NotificationKind =
@@ -152,15 +111,6 @@ export type NotificationKind =
   | "dues_reminder"
   | "membership_approved"
   | "announcement";
-
-export const NOTIFICATION_KINDS: NotificationKind[] = [
-  "class_cancelled",
-  "class_changed",
-  "class_reminder",
-  "dues_reminder",
-  "membership_approved",
-  "announcement",
-];
 
 /** Short label for the inbox row, so both clients spell the kinds the same. */
 const NOTIFICATION_KIND_LABEL: Record<NotificationKind, string> = {

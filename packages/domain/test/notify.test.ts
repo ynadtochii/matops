@@ -10,9 +10,6 @@ import {
   buildDuesReminderMessage,
   buildReminderMessage,
   formatWhen,
-  isInReminderWindow,
-  REMINDER_LEAD_MINUTES,
-  reminderRecipients,
 } from "../src/notify";
 
 describe("formatWhen", () => {
@@ -61,59 +58,6 @@ describe("message builders", () => {
     });
     expect(m.body).toContain("Fundamentals");
     expect(m.body).toContain("in 2 hours");
-  });
-});
-
-describe("isInReminderWindow", () => {
-  const sweepMinutes = 30;
-  // Class starts at 20:00; default lead 120 min → due at 18:00.
-  const startsAt = new Date("2026-08-15T20:00:00Z");
-  const due = new Date("2026-08-15T18:00:00Z");
-
-  it("fires once now reaches the due point", () => {
-    expect(isInReminderWindow(startsAt, due, { sweepMinutes })).toBe(true);
-  });
-
-  it("does not fire before the due point", () => {
-    const before = new Date("2026-08-15T17:45:00Z");
-    expect(isInReminderWindow(startsAt, before, { sweepMinutes })).toBe(false);
-  });
-
-  it("does not fire again after one sweep interval passed the due point", () => {
-    const late = new Date("2026-08-15T18:31:00Z");
-    expect(isInReminderWindow(startsAt, late, { sweepMinutes })).toBe(false);
-  });
-
-  it("does not fire for an already-started class", () => {
-    // Short lead so the due point is after start; still must not fire post-start.
-    const soon = new Date("2026-08-15T20:05:00Z");
-    expect(
-      isInReminderWindow(startsAt, soon, { leadMinutes: 5, sweepMinutes: 60 }),
-    ).toBe(false);
-  });
-
-  it("respects a custom lead time", () => {
-    const at60 = new Date("2026-08-15T19:00:00Z");
-    expect(
-      isInReminderWindow(startsAt, at60, { leadMinutes: 60, sweepMinutes }),
-    ).toBe(true);
-    expect(REMINDER_LEAD_MINUTES).toBe(120);
-  });
-});
-
-describe("reminderRecipients", () => {
-  it("keeps only live bookings, deduped", () => {
-    const r = reminderRecipients([
-      { studentId: "a", bookingStatus: "booked" },
-      { studentId: "b", bookingStatus: "cancelled" },
-      { studentId: "c", bookingStatus: "none" },
-      { studentId: "a", bookingStatus: "booked" },
-    ]);
-    expect(r.sort()).toEqual(["a"]);
-  });
-
-  it("empty for no bookings", () => {
-    expect(reminderRecipients([])).toEqual([]);
   });
 });
 
@@ -189,7 +133,6 @@ describe("announcementRecipients", () => {
 
 describe("buildAnnouncementMessage", () => {
   const msg = buildAnnouncementMessage({
-    academyName: "Kyiv BJJ",
     title: "No class Friday",
     body: "The mats are being replaced.",
   });

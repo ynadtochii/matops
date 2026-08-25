@@ -6,25 +6,6 @@ import { appRouter, createTRPCContext } from "@matops/api";
 
 import { auth } from "~/auth/server";
 
-/**
- * Configure basic CORS headers
- * You should extend this to match your needs
- */
-const setCorsHeaders = (res: Response) => {
-  res.headers.set("Access-Control-Allow-Origin", "*");
-  res.headers.set("Access-Control-Request-Method", "*");
-  res.headers.set("Access-Control-Allow-Methods", "OPTIONS, GET, POST");
-  res.headers.set("Access-Control-Allow-Headers", "*");
-};
-
-export const OPTIONS = () => {
-  const response = new Response(null, {
-    status: 204,
-  });
-  setCorsHeaders(response);
-  return response;
-};
-
 /** The deepest `cause` in the chain: Drizzle's own message keeps only the SQL,
  * so the Postgres message ("cannot execute UPDATE in a read-only transaction")
  * is one level down and is the half that says why. ADR 83. */
@@ -61,7 +42,6 @@ const handler = async (req: NextRequest) => {
     },
   });
 
-  setCorsHeaders(response);
   return response;
 };
 
