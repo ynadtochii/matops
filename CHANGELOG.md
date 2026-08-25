@@ -2,6 +2,39 @@
 
 One line per shipped slice (see `docs/delivery.md` §4). Newest first.
 
+## The QR poster pages start drawing before the server wakes up
+
+- **The two pages a new student lands on from a printed QR code now come straight from the cache, not from a server that has to start up first.** Scanning a gym's poster or opening a join link should show something immediately, on gym wifi, on a cold phone. Those pages hold no gym data, so there was nothing worth waiting for.
+- **One thing got slightly worse, on purpose.** If you are already signed in and you type the sign-in address by hand, you now see the sign-in page for a moment before it sends you on. Everyone arriving signed out, which is nearly everyone who opens that page, gets it faster.
+- **The screens behind your login were measured and are unchanged.** They wait on the database, and nothing about this changes that.
+
+## The printable posters stop riding along on every visit
+
+- **The QR poster and the schedule poster now download when you open them, not when you open the page.** Both are things you use occasionally and print once. The Coaches, Members and Schedule screens are each a few kilobytes lighter, and the buttons that open them still appear instantly.
+- **Tried a new React feature that promised faster screens, measured it, and left it out.** It would have added more weight to every single page than the change above removed from three, in exchange for something this app is not slow at. Written down so nobody spends the day on it again.
+
+## The page arrives while the gym data is still loading
+
+- **The web app now draws the page around your data before the data is there.** Until now the server waited for every number on a screen before it sent anything, so the browser sat on a blank page for about seven tenths of a second and then got everything at once. It now sends the page straight away, with the same placeholder shapes you already saw, and each panel fills in as its own answer comes back. The dashboard's heading reaches you in about a tenth of a second instead of seven tenths, and the page is not one byte bigger.
+- **Nothing about what you see has changed**, only when. The placeholders are the same ones, and the page still asks your browser for nothing after it loads.
+
+## Screens arrive with their data already in them
+
+- **Every screen in the web app now loads its data on the server and sends it with the page, instead of the browser asking for it after the page has drawn.** The dashboard used to make eight requests after it appeared; now it makes none. The page costs about 12 kB more to download and saves roughly two thirds of a second of waiting.
+- **Fixed a trap that would have made this slower, not faster.** Three screens worked out which week to ask for using the clock on whatever machine they ran on. The server and your browser would have picked slightly different weeks, and the page would have fetched everything twice. Date ranges are now worked out one agreed way, while what you actually see is still your own local days.
+
+## One place decides how stale a screen may be
+
+- **How long cached data stays fresh is now one table, and both the web app and the phone app read it.** Each client had the same 30 second rule copied into it separately, and two screens overrode it by hand. 30 seconds is right for a class roster someone else can change while you watch it, and pointless for the plan list or your gym's name, which only change when a staff member edits them. Reference data now holds for five minutes, stats for two, the two little counters in the sidebar for one, and everything else keeps 30 seconds.
+
+## Session replay stops riding along on every page
+
+- **The error-recording tool was being downloaded on every screen, including the privacy page, even though it only ever records when something breaks.** It now loads a moment after the page does, which takes 123 kB off every single route and keeps the recording.
+
+## The frontend has numbers now
+
+- **Measured what the web app actually costs before changing it: bundle size for all 18 routes, and what a dashboard open looks like in production.** Two settings that were assumed rather than checked are now confirmed: the server functions really do run in Frankfurt next to the database, and Vercel's Fluid Compute is on. The useful surprise: the dashboard paints about 50 ms after the last query lands, so it is waiting on data, not on code.
+
 ## One mark, everywhere
 
 - **The saved home-screen icon now looks like the mark in the header.** The PWA and app icons were drawn by hand months ago and had drifted: pale seams on the light-theme violet, each seam stopping short of the tile edge. They are now generated from the mark itself by `scripts/gen-icons.sh` — dark seams running edge to edge on the dark-theme violet — and so are the favicon, the Apple touch icon, the Expo app icon and the iOS splash. The seams in the on-screen `Mark` and in the loader run edge to edge too, so the header and the home screen show the same thing.

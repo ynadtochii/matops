@@ -19,6 +19,8 @@ const config = {
 
   /** We already do linting and typechecking as separate tasks in CI */
   typescript: { ignoreBuildErrors: true },
+
+  cacheComponents: true,
 };
 
 export default withSentryConfig(config, {

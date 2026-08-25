@@ -7,7 +7,7 @@ import * as Sentry from "@sentry/nextjs";
 Sentry.init({
   dsn: "https://dd68ca937e599d15df70204357fbf812@o4511954931089408.ingest.de.sentry.io/4511954936594512",
 
-  integrations: [Sentry.replayIntegration()],
+  integrations: [],
 
   tracesSampleRate: 0,
   enableLogs: false,
@@ -30,6 +30,10 @@ Sentry.init({
     // userInfo: false,
     // httpBodies: [],
   },
+});
+
+void import("@sentry/nextjs").then((lazy) => {
+  Sentry.addIntegration(lazy.replayIntegration());
 });
 
 export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;

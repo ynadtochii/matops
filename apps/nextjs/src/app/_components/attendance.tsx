@@ -3,14 +3,17 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
+import {
+  ATTENDANCE_BACKFILL_DAYS,
+  attendanceWindow,
+  DAY_MS,
+} from "@matops/domain";
 import { Select } from "@matops/ui/select";
 
 import { dateTimeFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { ClassRoster } from "./class-roster";
 import { EmptyState, ErrorState } from "./states";
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * O5 Attendance (spec O5, slice 3.3). Staff pick a class from the backfill
@@ -20,22 +23,20 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export function Attendance() {
   const trpc = useTRPC();
   const [classId, setClassId] = useState<string>("");
+  const [openedAt] = useState(() => Date.now());
 
-  // The backfill window: 14 days back through the end of today.
-  const { from, to } = useMemo(() => {
-    const now = new Date();
-    const start = new Date(now.getTime() - 14 * DAY_MS);
-    const end = new Date(now.getTime() + DAY_MS);
-    return { from: start.toISOString(), to: end.toISOString() };
-  }, []);
-
-  const classes = useQuery(trpc.class.week.queryOptions({ from, to }));
-
-  // Most-recent classes first for the picker (week read is ascending).
-  const options = useMemo(
-    () => [...(classes.data ?? [])].reverse(),
-    [classes.data],
+  const classes = useQuery(
+    trpc.class.week.queryOptions(attendanceWindow(new Date(openedAt))),
   );
+
+  // The window is snapped to a UTC day so the server and the browser build the
+  // same cache key. Trimming here is what keeps the picker to the real 14 days.
+  const options = useMemo(() => {
+    const cutoff = openedAt - ATTENDANCE_BACKFILL_DAYS * DAY_MS;
+    return [...(classes.data ?? [])]
+      .filter((c) => new Date(c.startsAt).getTime() >= cutoff)
+      .reverse();
+  }, [classes.data, openedAt]);
   const selected = options.find((c) => c.id === classId);
 
   return (

@@ -9,13 +9,13 @@ import type { RouterOutputs } from "@matops/api";
 import type { DisciplineTone } from "@matops/domain";
 import {
   capacityDisplay,
+  dashboardWeekWindow,
   disciplineTone,
   groupMoneyByCurrency,
   isOwner as isOwnerOf,
   isPendingCoach,
   isStaff as isStaffOf,
   needsAttendance,
-  UNMARKED_LOOKBACK_DAYS,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { Button } from "@matops/ui/button";
@@ -104,33 +104,21 @@ export function DashboardScreen() {
   const isOwner = isOwnerOf(c);
   const isStaff = isStaffOf(c);
 
-  const { weekFrom, weekTo, today, tomorrow, leadsSince } = useMemo(() => {
+  const { today, tomorrow, leadsSince } = useMemo(() => {
     const t = new Date();
     t.setHours(0, 0, 0, 0);
-    const end = new Date(t);
-    end.setDate(end.getDate() + 7);
-    // Reaches back over the unmarked look-back so one read covers both halves of
-    // the page: the week ahead and the finished classes still missing a register.
-    const start = new Date(t);
-    start.setDate(start.getDate() - UNMARKED_LOOKBACK_DAYS - 1);
     const since = new Date(t);
     since.setDate(since.getDate() - 6);
     const next = new Date(t);
     next.setDate(next.getDate() + 1);
-    return {
-      weekFrom: start.toISOString(),
-      weekTo: end.toISOString(),
-      today: t,
-      tomorrow: next,
-      leadsSince: since,
-    };
+    return { today: t, tomorrow: next, leadsSince: since };
   }, []);
   // The query window is a query key, so it stays frozen. The clock is not, and
   // freezing it left a long-open tab calling an ended class "now".
   const now = new Date();
 
   const week = useQuery({
-    ...trpc.class.week.queryOptions({ from: weekFrom, to: weekTo }),
+    ...trpc.class.week.queryOptions(dashboardWeekWindow(now)),
     enabled: isStaff,
   });
   const memberList = useQuery({

@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { cn } from "@matops/ui";
@@ -20,9 +21,10 @@ import { shareLink, useCanShare } from "~/lib/share";
 import { useTRPC } from "~/trpc/react";
 import { useAcademy } from "./academy";
 import { cardClass } from "./primitives";
-import { QrPoster } from "./qr-poster";
 import { SkeletonInviteCard } from "./skeletons";
 import { ErrorState } from "./states";
+
+const QrPoster = dynamic(() => import("./qr-poster").then((m) => m.QrPoster));
 
 type InviteRole = "student" | "instructor";
 

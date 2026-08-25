@@ -24,8 +24,6 @@ import { env } from "~/env";
  *
  * Protected by CRON_SECRET when set, exactly like the materialize route.
  */
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {

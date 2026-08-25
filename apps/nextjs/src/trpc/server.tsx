@@ -24,7 +24,7 @@ const createContext = cache(async () => {
   });
 });
 
-const getQueryClient = cache(createQueryClient);
+export const getQueryClient = cache(createQueryClient);
 
 export const trpc = createTRPCOptionsProxy<AppRouter>({
   router: appRouter,
@@ -43,11 +43,19 @@ export function HydrateClient(props: { children: React.ReactNode }) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function prefetch<T extends ReturnType<TRPCQueryOptions<any>>>(
   queryOptions: T,
-) {
+): void {
   const queryClient = getQueryClient();
   if (queryOptions.queryKey[1]?.type === "infinite") {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
-    return queryClient.prefetchInfiniteQuery(queryOptions as any);
+    void queryClient.prefetchInfiniteQuery(queryOptions as any);
+    return;
   }
-  return queryClient.prefetchQuery(queryOptions);
+  void queryClient.prefetchQuery(queryOptions);
+}
+
+export async function currentAcademy() {
+  const queryClient = getQueryClient();
+  const options = trpc.academy.current.queryOptions();
+  await queryClient.prefetchQuery(options);
+  return queryClient.getQueryData(options.queryKey) ?? null;
 }

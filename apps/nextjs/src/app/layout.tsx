@@ -56,6 +56,7 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   subsets: ["latin"],
   variable: "--font-geist-mono",
+  preload: false,
 });
 
 export default function RootLayout(props: { children: React.ReactNode }) {
