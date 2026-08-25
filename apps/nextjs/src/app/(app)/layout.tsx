@@ -2,7 +2,12 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 
 import { getSession } from "~/auth/server";
-import { currentAcademy, HydrateClient, prefetch, trpc } from "~/trpc/server";
+import {
+  currentAcademy,
+  getQueryClient,
+  HydrateClient,
+  trpc,
+} from "~/trpc/server";
 import { AppShell } from "../_components/app-shell";
 import { PageLoader } from "../_components/mat-loader";
 
@@ -23,8 +28,11 @@ async function AuthedShell({ children }: { children: React.ReactNode }) {
   const session = await getSession();
   if (!session) redirect("/sign-in");
 
-  await currentAcademy();
-  prefetch(trpc.academy.memberships.queryOptions());
+  const queryClient = getQueryClient();
+  await Promise.all([
+    currentAcademy(),
+    queryClient.prefetchQuery(trpc.academy.memberships.queryOptions()),
+  ]);
 
   return (
     <HydrateClient>

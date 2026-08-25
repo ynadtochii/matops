@@ -198,7 +198,7 @@ export const academyRouter = {
    * Academy code) + the org id. Updates via Better Auth so its org permission
    * check applies; the code is never touched.
    */
-  rename: ownerProcedure
+  rename: ownerIdentityProcedure
     .input(CreateAcademySchema)
     .mutation(async ({ ctx, input }) => {
       await ctx.authApi.updateOrganization({
