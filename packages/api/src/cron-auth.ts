@@ -5,8 +5,7 @@ export interface CronRequest {
 }
 
 export type CronVerdict =
-  | { ok: true }
-  | { ok: false; status: 401 | 500; message: string };
+  { ok: true } | { ok: false; status: 401 | 500; message: string };
 
 export function cronVerdict(req: CronRequest): CronVerdict {
   if (req.secret) {

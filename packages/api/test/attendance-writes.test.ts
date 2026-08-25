@@ -91,7 +91,11 @@ describe("attendance.mark", () => {
 
     await h
       .as(COACH, A)
-      .attendance.mark({ classId: YESTERDAY, studentId: ANA, status: "present" });
+      .attendance.mark({
+        classId: YESTERDAY,
+        studentId: ANA,
+        status: "present",
+      });
 
     const res = await h.pg.query<{
       attendance_status: string;

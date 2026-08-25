@@ -87,7 +87,10 @@ describe("referral.correct", () => {
       await rejectionCode(
         h
           .as(OWNER, A)
-          .referral.correct({ studentMemberId: m(ANA), referrerMemberId: m(BO) }),
+          .referral.correct({
+            studentMemberId: m(ANA),
+            referrerMemberId: m(BO),
+          }),
       ),
     ).toBe("PRECONDITION_FAILED");
   });
@@ -102,7 +105,10 @@ describe("referral.correct", () => {
       await rejectionCode(
         h
           .as(OWNER, A)
-          .referral.correct({ studentMemberId: m(ANA), referrerMemberId: m(BO) }),
+          .referral.correct({
+            studentMemberId: m(ANA),
+            referrerMemberId: m(BO),
+          }),
       ),
     ).toBe("PRECONDITION_FAILED");
   });
@@ -129,7 +135,10 @@ describe("referral.correct", () => {
       await rejectionCode(
         h
           .as(COACH, A)
-          .referral.correct({ studentMemberId: m(ANA), referrerMemberId: m(CY) }),
+          .referral.correct({
+            studentMemberId: m(ANA),
+            referrerMemberId: m(CY),
+          }),
       ),
     ).toBe("FORBIDDEN");
   });

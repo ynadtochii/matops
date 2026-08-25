@@ -1,6 +1,6 @@
-import type { PGlite } from "@electric-sql/pglite";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import type { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { freshDb } from "./helpers";
@@ -19,9 +19,7 @@ const NOT_MEMBER_DATA: Record<string, string> = {
     "The seed:health probe row. Not member data and not reachable by a member.",
 };
 
-const ERASE_SOURCE = fileURLToPath(
-  new URL("../src/erase.ts", import.meta.url),
-);
+const ERASE_SOURCE = fileURLToPath(new URL("../src/erase.ts", import.meta.url));
 
 describe("eraseMemberData names every table that holds member data", () => {
   let pg: PGlite;

@@ -94,7 +94,9 @@ describe("start a gym", () => {
 describe("joining a gym", () => {
   it("lands a student pending, with no academy role until approval", async () => {
     const h = await base();
-    const { academyId } = await h.as(OWNER, null).academy.create({ name: "Alma" });
+    const { academyId } = await h
+      .as(OWNER, null)
+      .academy.create({ name: "Alma" });
     const invite = await h
       .as(OWNER, academyId)
       .invite.create({ role: "student" });
@@ -115,7 +117,9 @@ describe("joining a gym", () => {
 
   it("carries the invited role so approval grants the right one", async () => {
     const h = await base();
-    const { academyId } = await h.as(OWNER, null).academy.create({ name: "Alma" });
+    const { academyId } = await h
+      .as(OWNER, null)
+      .academy.create({ name: "Alma" });
     const invite = await h
       .as(OWNER, academyId)
       .invite.create({ role: "instructor" });
@@ -129,7 +133,9 @@ describe("joining a gym", () => {
 
   it("saves the name and phone the joiner typed", async () => {
     const h = await base();
-    const { academyId } = await h.as(OWNER, null).academy.create({ name: "Alma" });
+    const { academyId } = await h
+      .as(OWNER, null)
+      .academy.create({ name: "Alma" });
     const invite = await h
       .as(OWNER, academyId)
       .invite.create({ role: "student" });
@@ -149,12 +155,16 @@ describe("joining a gym", () => {
 
   it("is idempotent, so a second tap on the link changes nothing", async () => {
     const h = await base();
-    const { academyId } = await h.as(OWNER, null).academy.create({ name: "Alma" });
+    const { academyId } = await h
+      .as(OWNER, null)
+      .academy.create({ name: "Alma" });
     const invite = await h
       .as(OWNER, academyId)
       .invite.create({ role: "student" });
 
-    await h.as(STUDENT, null).membership.join({ token: invite.token, ...PERSON });
+    await h
+      .as(STUDENT, null)
+      .membership.join({ token: invite.token, ...PERSON });
     const again = await h
       .as(STUDENT, null)
       .membership.join({ token: invite.token, ...PERSON });
@@ -181,9 +191,15 @@ describe("joining a gym", () => {
 
   it("refuses a rotated token, and accepts the one that replaced it", async () => {
     const h = await base();
-    const { academyId } = await h.as(OWNER, null).academy.create({ name: "Alma" });
-    const first = await h.as(OWNER, academyId).invite.create({ role: "student" });
-    const second = await h.as(OWNER, academyId).invite.rotate({ role: "student" });
+    const { academyId } = await h
+      .as(OWNER, null)
+      .academy.create({ name: "Alma" });
+    const first = await h
+      .as(OWNER, academyId)
+      .invite.create({ role: "student" });
+    const second = await h
+      .as(OWNER, academyId)
+      .invite.rotate({ role: "student" });
 
     expect(second.token).not.toBe(first.token);
     expect(
@@ -200,7 +216,9 @@ describe("joining a gym", () => {
 describe("joining by the six-digit code", () => {
   it("lands a student pending as a student", async () => {
     const h = await base();
-    const { academyId } = await h.as(OWNER, null).academy.create({ name: "Alma" });
+    const { academyId } = await h
+      .as(OWNER, null)
+      .academy.create({ name: "Alma" });
     const code = await codeOf(h, academyId);
 
     const joined = await h.as(STUDENT, null).membership.joinByCode({
@@ -220,7 +238,9 @@ describe("joining by the six-digit code", () => {
     await h.as(OWNER, null).academy.create({ name: "Alma" });
     expect(
       await rejectionCode(
-        h.as(STUDENT, null).membership.joinByCode({ code: "000000", ...PERSON }),
+        h
+          .as(STUDENT, null)
+          .membership.joinByCode({ code: "000000", ...PERSON }),
       ),
     ).toBe("NOT_FOUND");
   });
@@ -229,7 +249,9 @@ describe("joining by the six-digit code", () => {
 describe("switching the active academy", () => {
   it("switches to a gym the caller belongs to", async () => {
     const h = await base();
-    const { academyId } = await h.as(OWNER, null).academy.create({ name: "Alma" });
+    const { academyId } = await h
+      .as(OWNER, null)
+      .academy.create({ name: "Alma" });
     const code = await codeOf(h, academyId);
     await h.as(STUDENT, null).membership.joinByCode({ code, ...PERSON });
 
@@ -241,10 +263,14 @@ describe("switching the active academy", () => {
 
   it("refuses a gym the caller does not belong to", async () => {
     const h = await base();
-    const { academyId } = await h.as(OWNER, null).academy.create({ name: "Alma" });
+    const { academyId } = await h
+      .as(OWNER, null)
+      .academy.create({ name: "Alma" });
 
     expect(
-      await rejectionCode(h.as(STRANGER, null).academy.setActive({ academyId })),
+      await rejectionCode(
+        h.as(STRANGER, null).academy.setActive({ academyId }),
+      ),
     ).toBe("NOT_FOUND");
     expect(h.activeOrgOf(STRANGER)).toBeUndefined();
   });

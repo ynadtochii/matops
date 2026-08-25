@@ -1,6 +1,7 @@
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
+import type { MemberRow } from "@matops/db";
 import type { ClassMark, CoachClass, CoachWindowKey } from "@matops/domain";
 import { and, eq, gte, inArray, isNull, lt, sql } from "@matops/db";
 import {
@@ -29,7 +30,6 @@ import {
 import { CoachDetailSchema, CoachStatsSchema } from "@matops/validators";
 
 import type { TimeZoneCtx } from "../academy-tz";
-import type { MemberRow } from "@matops/db";
 import type { MemberScope } from "../members";
 import { academyTimeZone } from "../academy-tz";
 import { rosterOf, staffAmong, nameByUser as userNames } from "../members";

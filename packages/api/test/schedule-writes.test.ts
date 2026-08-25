@@ -144,9 +144,9 @@ describe("template.delete", () => {
     expect(await rejectionCode(h.as(ANA, A).template.delete({ id: TPL }))).toBe(
       "FORBIDDEN",
     );
-    await expect(
-      h.as(COACH, A).template.delete({ id: TPL }),
-    ).resolves.toEqual({ ok: true });
+    await expect(h.as(COACH, A).template.delete({ id: TPL })).resolves.toEqual({
+      ok: true,
+    });
   });
 });
 
@@ -223,9 +223,7 @@ describe("class.cancel", () => {
     const inbox = await h.pg.query<{ user_id: string; kind: string }>(
       `SELECT user_id, kind FROM notification WHERE kind = 'class_cancelled'`,
     );
-    expect(inbox.rows).toEqual([
-      { user_id: ANA, kind: "class_cancelled" },
-    ]);
+    expect(inbox.rows).toEqual([{ user_id: ANA, kind: "class_cancelled" }]);
   });
 
   it("refuses a class that is already cancelled, so nobody is told twice", async () => {

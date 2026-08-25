@@ -7,8 +7,8 @@ import { bookingAccessMessage, capacityDisplay } from "@matops/domain";
 import { useToast } from "~/components/toast";
 import { confirm, Txt, useTheme } from "~/components/ui";
 import { trpc } from "~/utils/api";
-import { useInvalidate } from "~/utils/invalidate";
 import { dayFmt, timeFmt } from "~/utils/format";
+import { useInvalidate } from "~/utils/invalidate";
 import { cancelClassReminder, scheduleClassReminder } from "~/utils/reminders";
 
 /**

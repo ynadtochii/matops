@@ -1,5 +1,6 @@
 import type { ClaimRemindersOptions, DbExec } from "@matops/db";
 import type { NotificationKind, PushMessage } from "@matops/domain";
+import type { BatchPush } from "@matops/notifications";
 import {
   claimDueDuesReminders,
   claimDueReminderClasses,
@@ -17,7 +18,6 @@ import {
   formatMoney,
   formatWhen,
 } from "@matops/domain";
-import type { BatchPush } from "@matops/notifications";
 import { sendPush } from "@matops/notifications";
 
 /**

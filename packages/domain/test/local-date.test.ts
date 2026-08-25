@@ -21,8 +21,10 @@ describe("localDate", () => {
     const day = new Date("2026-06-15T00:30:00Z");
     const numbers = [0, 6, 12, 18, 23].map(
       (h) =>
-        localDate(new Date(`2026-06-15T${String(h).padStart(2, "0")}:30:00Z`), UTC)
-          .dayNumber,
+        localDate(
+          new Date(`2026-06-15T${String(h).padStart(2, "0")}:30:00Z`),
+          UTC,
+        ).dayNumber,
     );
     expect(new Set(numbers).size).toBe(1);
     expect(numbers[0]).toBe(localDate(day, UTC).dayNumber);

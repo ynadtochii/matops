@@ -357,7 +357,10 @@ export function DashboardScreen() {
         {dash.isPending ? (
           <SkeletonInsights />
         ) : dash.isError ? (
-          <ErrorState label="gym insights" onRetry={() => void dash.refetch()} />
+          <ErrorState
+            label="gym insights"
+            onRetry={() => void dash.refetch()}
+          />
         ) : (
           <Insights
             data={dash.data.insights}

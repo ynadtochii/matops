@@ -1,9 +1,5 @@
 export type Aggregate =
-  | "booking"
-  | "attendance"
-  | "payment"
-  | "membership"
-  | "schedule";
+  "booking" | "attendance" | "payment" | "membership" | "schedule";
 
 const AFFECTS: Record<Aggregate, readonly string[]> = {
   booking: ["class", "booking", "stats"],

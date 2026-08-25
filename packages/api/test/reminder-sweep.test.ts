@@ -295,7 +295,12 @@ describe("class reminder sweep", () => {
     await seedClasses(h.pg, [
       { id: C_ONE, academyId: A, instructorId: "u_coach", startsInMinutes: 30 },
       { id: C_TWO, academyId: A, instructorId: "u_coach", startsInMinutes: 45 },
-      { id: C_THREE, academyId: A, instructorId: "u_coach", startsInMinutes: 60 },
+      {
+        id: C_THREE,
+        academyId: A,
+        instructorId: "u_coach",
+        startsInMinutes: 60,
+      },
     ]);
     await book(h.pg, C_ONE, A, ["u_ana"]);
     await book(h.pg, C_TWO, A, ["u_ana"]);
