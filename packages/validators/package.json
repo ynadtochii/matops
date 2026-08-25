@@ -20,6 +20,7 @@
     "typecheck": "tsc --noEmit --emitDeclarationOnly false"
   },
   "dependencies": {
+    "@matops/domain": "workspace:*",
     "zod": "catalog:"
   },
   "devDependencies": {

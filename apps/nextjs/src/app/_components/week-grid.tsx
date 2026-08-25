@@ -8,6 +8,7 @@ import type { DisciplineTone } from "@matops/domain";
 import {
   busyHours,
   capacityDisplay,
+  DAY_MS,
   disciplineTone,
   hourSlots,
 } from "@matops/domain";
@@ -19,7 +20,6 @@ type ClassRow = RouterOutputs["class"]["week"][number];
 
 const HOUR_H = 64;
 const GAP_H = 26;
-const DAY_MS = 86400000;
 
 /** The grid block paint for each tone. The Legend below reads the same map. */
 const TONE_SKIN: Record<DisciplineTone, string> = {

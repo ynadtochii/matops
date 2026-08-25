@@ -10,15 +10,13 @@ import {
 import { dropIn } from "@matops/db/schema";
 import {
   canSubmitDropIn,
+  checkInFetchWindow,
   normalizePhone,
   resolveCheckInClass,
 } from "@matops/domain";
 import { AcademyPublicSchema, DropInSchema } from "@matops/validators";
 
 import { ownerProcedure, publicProcedure, rateLimited } from "../trpc";
-
-const LOOKBACK_MS = 3 * 60 * 60 * 1000;
-const LOOKAHEAD_MS = 6 * 60 * 60 * 1000;
 
 /**
  * Public drop-in / lead capture (slice 3.5, spec O4/§4; docs/issues/25). The
@@ -33,8 +31,8 @@ export const dropInRouter = {
   academyInfo: publicProcedure
     .use(rateLimited(30, 60_000))
     .input(AcademyPublicSchema)
-    .query(async ({ input }) => {
-      const academy = await getAcademyPublic(input.academyId);
+    .query(async ({ ctx, input }) => {
+      const academy = await getAcademyPublic(input.academyId, ctx.baseDb);
       if (!academy) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Gym not found" });
       }
@@ -50,8 +48,8 @@ export const dropInRouter = {
   submit: publicProcedure
     .use(rateLimited(5, 10 * 60_000))
     .input(DropInSchema)
-    .mutation(async ({ input }) => {
-      const academy = await getAcademyPublic(input.academyId);
+    .mutation(async ({ ctx, input }) => {
+      const academy = await getAcademyPublic(input.academyId, ctx.baseDb);
       if (!academy) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Gym not found" });
       }
@@ -68,24 +66,29 @@ export const dropInRouter = {
 
       // Attach the current class if exactly one is on right now (else general lead).
       const now = Date.now();
+      const window = checkInFetchWindow(new Date(now));
       const classes = await listAcademyClassesInWindow(
         input.academyId,
-        now - LOOKBACK_MS,
-        now + LOOKAHEAD_MS,
+        window.from.getTime(),
+        window.to.getTime(),
+        ctx.baseDb,
       );
       const candidates = resolveCheckInClass(classes, new Date(now));
       const classId =
         candidates.length === 1 ? (candidates[0]?.id ?? null) : null;
 
-      const { visitCount } = await createDropIn({
-        academyId: input.academyId,
-        firstName: input.firstName,
-        lastName: input.lastName,
-        phone: normalizePhone(input.phone),
-        email: input.email ?? null,
-        classId,
-        consent: input.consent,
-      });
+      const { visitCount } = await createDropIn(
+        {
+          academyId: input.academyId,
+          firstName: input.firstName,
+          lastName: input.lastName,
+          phone: normalizePhone(input.phone),
+          email: input.email ?? null,
+          classId,
+          consent: input.consent,
+        },
+        ctx.baseDb,
+      );
       return { ok: true as const, firstVisit: visitCount === 1 };
     }),
 

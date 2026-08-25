@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
-import { isOwner } from "@matops/domain";
+import { formatMoney, isOwner } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
@@ -17,7 +17,6 @@ import { toast } from "@matops/ui/toast";
 import { CreateMembershipPlanSchema } from "@matops/validators";
 
 import { dateYearFmt } from "~/lib/format";
-import { formatMoney } from "~/lib/money";
 import { useTRPC } from "~/trpc/react";
 import { useAcademy } from "./academy";
 import { MyDues } from "./my-dues";

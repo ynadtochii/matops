@@ -1,3 +1,5 @@
+import { DAY_MS } from "./local-date";
+
 /**
  * @matops/domain/payments — manual bank-transfer dues (v1.3, ADR 40).
  * PURE — no I/O, no DB, no clock reading. The single engine behind the owner
@@ -13,8 +15,6 @@
  * dot from `next_due_at` vs. today. Same idea as `class.status` deriving "past"
  * from `starts_at` (docs/issues/19, 40).
  */
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Derived money status shown on the member list and the student dues line (ADR 40). */
 export type PaymentStatus = "paid" | "due_soon" | "overdue";
@@ -212,5 +212,48 @@ export function bookingAccessMessage(access: BookingAccess): string | null {
       return access.reason === "no_plan"
         ? "Booking is locked. Choose your membership to book again."
         : "Booking is locked. Pay and claim your payment to book again.";
+  }
+}
+
+/**
+ * Is this plan a legal choice for this member? An archived plan stays selectable
+ * for the member already on it, so editing only their due date does not force a
+ * plan change on them.
+ */
+export function canAssignPlan(
+  plan: { id: string; deletedAt: Date | null } | undefined,
+  currentPlanId: string | null | undefined,
+): boolean {
+  if (!plan) return false;
+  return !plan.deletedAt || plan.id === currentPlanId;
+}
+
+/**
+ * The plan a newly approved student is put on automatically: only when the gym
+ * has exactly one live plan, so the choice is not a guess.
+ */
+export function autoAssignedPlan<T>(livePlans: T[]): T | undefined {
+  return livePlans.length === 1 ? livePlans[0] : undefined;
+}
+
+/** An owner may confirm or reject a claim only while it is still pending. */
+export function canDecideClaim(claim: { status: string }): boolean {
+  return claim.status === "pending";
+}
+
+/**
+ * Money stored as an integer in the currency's MINOR unit (ADR 40). v1.3 assumes
+ * a 2-decimal currency; multi-currency exactness is parked. The fallback covers
+ * a runtime whose Intl has no currency data, which is the case on some Hermes
+ * builds.
+ */
+export function formatMoney(minor: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+    }).format(minor / 100);
+  } catch {
+    return `${currency} ${(minor / 100).toFixed(2)}`;
   }
 }

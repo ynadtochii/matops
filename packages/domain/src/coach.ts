@@ -410,3 +410,15 @@ export function canReassignCoach(
   if (classStartsAt.getTime() > now.getTime()) return true;
   return isOwner(membership);
 }
+
+/**
+ * Whose coaching figures may this caller open? Your own always; anyone else's
+ * only as an owner, the same split `canReassignCoach` draws.
+ */
+export function canReadCoachFigures(
+  membership: Membership,
+  instructorId: string,
+  callerId: string,
+): boolean {
+  return instructorId === callerId || isOwner(membership);
+}

@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 
 import type { DbReader, MemberRow } from "@matops/db";
-import { getMemberById, listMembersOf } from "@matops/db";
+import { getMemberById, getMembership, listMembersOf } from "@matops/db";
 import { isStaff } from "@matops/domain";
 
 /**
@@ -52,7 +52,7 @@ export async function requireMember(
  * O10 roster, and `requireInstructor`.
  */
 export async function staffOf(ctx: MemberScope): Promise<MemberRow[]> {
-  return staffAmong(await listMembersOf(ctx.academyId, ctx.db));
+  return staffAmong(await rosterOf(ctx));
 }
 
 /**
@@ -80,4 +80,45 @@ export async function requireInstructor(
   if (!staff.some((r) => r.userId === userId)) {
     throw new TRPCError({ code: "NOT_FOUND", message: "Instructor not found" });
   }
+}
+
+/**
+ * The academy's full roster. Thirteen call sites passed `ctx.academyId, ctx.db`
+ * by hand; this is the same read behind the same context shape the other guards
+ * in this file take.
+ */
+export async function rosterOf(ctx: MemberScope): Promise<MemberRow[]> {
+  return listMembersOf(ctx.academyId, ctx.db);
+}
+
+/** Display name by `user.id`, for rows that store a user id. */
+export function nameByUser(rows: MemberRow[]): Map<string, string> {
+  return new Map(rows.map((r) => [r.userId, r.name]));
+}
+
+/** Display name by `member.id`, for rows that store a member id. */
+export function nameByMember(rows: MemberRow[]): Map<string, string> {
+  return new Map(rows.map((r) => [r.memberId, r.name]));
+}
+
+/**
+ * Assert a user belongs to an academy, and hand back the membership row.
+ *
+ * The miss is NOT_FOUND, never FORBIDDEN, for the same reason `requireMember`
+ * uses it: both academy id and user id arrive from the caller, and FORBIDDEN
+ * would confirm the id exists somewhere. The one exception is the tenant
+ * middleware in `trpc.ts`, which answers about the caller's OWN active academy
+ * and has no foreign id to protect.
+ */
+export async function requireMembership(
+  userId: string,
+  academyId: string,
+  exec: DbReader,
+  message: string,
+): Promise<NonNullable<Awaited<ReturnType<typeof getMembership>>>> {
+  const membership = await getMembership(userId, academyId, exec);
+  if (!membership) {
+    throw new TRPCError({ code: "NOT_FOUND", message });
+  }
+  return membership;
 }

@@ -1,6 +1,8 @@
 import type { NextRequest } from "next/server";
 
+import { cronVerdict } from "@matops/api/cron-auth";
 import { runMaterializationSweep } from "@matops/db";
+import { db } from "@matops/db/client";
 
 import { env } from "~/env";
 
@@ -28,16 +30,15 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
-  const authorized = req.headers.get("authorization");
-  if (env.CRON_SECRET) {
-    if (authorized !== `Bearer ${env.CRON_SECRET}`) {
-      return new Response("Unauthorized", { status: 401 });
-    }
-  } else if (env.NODE_ENV === "production") {
-    // Refuse to run unprotected in production.
-    return new Response("CRON_SECRET is not configured", { status: 500 });
+  const verdict = cronVerdict({
+    authorization: req.headers.get("authorization"),
+    secret: env.CRON_SECRET,
+    isProduction: env.NODE_ENV === "production",
+  });
+  if (!verdict.ok) {
+    return new Response(verdict.message, { status: verdict.status });
   }
 
-  const result = await runMaterializationSweep();
+  const result = await runMaterializationSweep({ exec: db });
   return Response.json({ ok: true, ...result });
 }

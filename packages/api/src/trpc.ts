@@ -11,7 +11,9 @@ import superjson from "superjson";
 import { z, ZodError } from "zod/v4";
 
 import type { Auth } from "@matops/auth";
+import type { TenantTx } from "@matops/db";
 import type { DbExec } from "@matops/db/client";
+import type { Membership } from "@matops/domain";
 import { getMembership, withTenant } from "@matops/db";
 import { db } from "@matops/db/client";
 import {
@@ -106,10 +108,23 @@ export async function refreshSessionCookie(
  * This is where the trpc api is initialized, connecting the context and
  * transformer
  */
+export const GENERIC_ERROR = "Something went wrong. Try again.";
+
+// An uncaught throw reaches the client with the driver's own words, which for a
+// Postgres error name the table, the column and the constraint. tRPC drops
+// `stack` outside dev but never touches `message`.
+export function publicErrorMessage(code: string, message: string): string {
+  return code === "INTERNAL_SERVER_ERROR" &&
+    process.env.NODE_ENV === "production"
+    ? GENERIC_ERROR
+    : message;
+}
+
 const t = initTRPC.context<typeof createTRPCContext>().create({
   transformer: superjson,
   errorFormatter: ({ shape, error }) => ({
     ...shape,
+    message: publicErrorMessage(error.code, shape.message),
     data: {
       ...shape.data,
       zodError:
@@ -256,24 +271,31 @@ const enforceTenant = t.middleware(async ({ ctx, next }) => {
   // connection open for their whole duration. Resolvers hand them here and they
   // fire after COMMIT, so a notification can also never resurrect a rolled-back
   // mutation. See docs/issues/60.
-  const afterCommit: (() => Promise<void>)[] = [];
+  const baseDb = ctx.baseDb;
+  const afterCommit: ((exec: DbExec) => Promise<void>)[] = [];
+  // Rethrow, do not return: tRPC reports a failed resolver as `{ ok: false }`,
+  // and returning that would COMMIT what the resolver wrote before it threw.
   const result = await withTenant(
     academyId,
-    (tx) =>
-      next({
+    async (tx) => {
+      const attempt = await next({
         ctx: {
           db: tx,
           academyId,
           membership,
-          afterCommit: (task: () => Promise<void>) => {
+          baseDb: undefined,
+          afterCommit: (task: (exec: DbExec) => Promise<void>) => {
             afterCommit.push(task);
           },
           session: { ...ctx.session, user },
         },
-      }),
-    ctx.baseDb,
+      });
+      if (!attempt.ok) throw attempt.error;
+      return attempt;
+    },
+    baseDb,
   );
-  if (result.ok) for (const task of afterCommit) await task();
+  for (const task of afterCommit) await task(baseDb);
   return result;
 });
 
@@ -314,19 +336,33 @@ export const ownerProcedure = memberProcedure.use(({ ctx, next }) => {
 });
 
 /**
- * Owner procedure with NO tenant transaction — for the writes that touch the
- * `organization` row itself (ADR 68). That table carries no RLS policy and
- * migration `0020` revoked `matops_app`'s write access to it, so the write must
- * run on the base connection; doing that from inside `withTenant` checks out a
- * SECOND pool connection and holds both (ADR 66), which deadlocks outright on a
- * single-connection PGlite. Same authorization as `ownerProcedure`, no `ctx.db`.
+ * Identity procedures: same authorization as the tenant tiers, but NO ambient
+ * transaction. They exist for the writes that touch `organization` or `member`
+ * (ADR 68, 84). Those tables carry no RLS policy and migration `0020` revoked
+ * `matops_app`'s write access, so the write must run on the base connection —
+ * and doing that from inside `withTenant` checks out a SECOND pool connection
+ * and holds both (ADR 66), which deadlocks outright on a single-connection
+ * PGlite. `ctx.withTenant(fn)` lets a resolver that also touches tenant tables
+ * open the scoped transaction around just that part, so the ORDER of the two
+ * writes stays with the resolver, the only thing that knows which order is
+ * recoverable.
  */
-export const ownerIdentityProcedure = protectedProcedure.use(
-  async ({ ctx, next }) => {
+function identityProcedure(allow: (m: Membership) => boolean, denial: string) {
+  return protectedProcedure.use(async ({ ctx, next }) => {
     const { academyId, membership } = await resolveActiveMembership(ctx);
-    if (!isActiveMember(membership) || !isOwner(membership)) {
-      throw new TRPCError({ code: "FORBIDDEN", message: "Owner only" });
+    if (!isActiveMember(membership) || !allow(membership)) {
+      throw new TRPCError({ code: "FORBIDDEN", message: denial });
     }
-    return next({ ctx: { academyId, membership } });
-  },
-);
+    return next({
+      ctx: {
+        academyId,
+        membership,
+        withTenant: <T>(fn: (tx: TenantTx) => Promise<T>): Promise<T> =>
+          withTenant(academyId, fn, ctx.baseDb),
+      },
+    });
+  });
+}
+
+export const staffIdentityProcedure = identityProcedure(isStaff, "Staff only");
+export const ownerIdentityProcedure = identityProcedure(isOwner, "Owner only");

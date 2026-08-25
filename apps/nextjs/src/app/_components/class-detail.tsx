@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 
-import { capacityDisplay } from "@matops/domain";
+import { canBook, capacityDisplay, notBookableMessage } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
@@ -51,6 +51,14 @@ export function ClassDetail({ classId }: { classId: string }) {
   const booked = c.myBooking === "booked";
   const provisional = booked && c.myBookingTier === "provisional";
   const past = start.getTime() <= new Date().getTime();
+  const bookable = canBook(
+    { status: c.status, startsAt: start, deletedAt: null },
+    new Date(),
+  );
+  const refusal =
+    bookable.reason && bookable.reason !== "deleted"
+      ? notBookableMessage(bookable.reason)
+      : null;
   const cap = capacityDisplay(c.bookingCount, c.capacity);
 
   return (
@@ -60,9 +68,9 @@ export function ClassDetail({ classId }: { classId: string }) {
         subtitle={`${dayLongFmt.format(start)} · ${timeFmt.format(start)}`}
       />
       <div className="flex flex-col gap-8">
-        {cancelled && (
+        {cancelled && refusal && (
           <div className="border-error/30 bg-error/5 rounded-lg border p-4 text-sm">
-            This class was cancelled. Booking is closed.
+            {refusal}. Booking is closed.
           </div>
         )}
 
@@ -87,10 +95,8 @@ export function ClassDetail({ classId }: { classId: string }) {
           <Attendees classId={classId} />
         </Section>
 
-        {!cancelled && past && (
-          <p className="text-muted-foreground text-sm">
-            This class has already started.
-          </p>
+        {!cancelled && refusal && (
+          <p className="text-muted-foreground text-sm">{refusal}.</p>
         )}
 
         {!cancelled && !past && (
@@ -119,7 +125,7 @@ export function ClassDetail({ classId }: { classId: string }) {
                 trigger={
                   <Button
                     variant="secondary"
-                    disabled={busy || !!lockedMessage}
+                    disabled={busy || !!lockedMessage || !bookable.ok}
                   >
                     {busy && <Spinner size="sm" className="text-current" />}
                     Book
@@ -128,7 +134,7 @@ export function ClassDetail({ classId }: { classId: string }) {
               />
             ) : (
               <Button
-                disabled={busy || !!lockedMessage}
+                disabled={busy || !!lockedMessage || !bookable.ok}
                 onClick={() => book.mutate({ classId })}
               >
                 {busy && <Spinner size="sm" className="text-current" />}

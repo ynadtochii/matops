@@ -7,6 +7,10 @@
       "types": "./src/index.ts",
       "default": "./src/index.ts"
     },
+    "./cron-auth": {
+      "types": "./src/cron-auth.ts",
+      "default": "./src/cron-auth.ts"
+    },
     "./notify": {
       "types": "./src/notify.ts",
       "default": "./src/notify.ts"

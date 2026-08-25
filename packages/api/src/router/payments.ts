@@ -1,14 +1,7 @@
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
-import {
-  and,
-  desc,
-  eq,
-  getMemberIdForUser,
-  isNull,
-  listMembersOf,
-} from "@matops/db";
+import { and, desc, eq, getMemberIdForUser, isNull } from "@matops/db";
 import {
   memberDues,
   membershipPlan,
@@ -16,7 +9,9 @@ import {
   paymentSettings,
 } from "@matops/db/schema";
 import {
+  canAssignPlan,
   canClaim,
+  canDecideClaim,
   firstDueAt,
   paymentPeriod,
   paymentReference,
@@ -35,8 +30,15 @@ import {
   UpdatePaymentRequisitesSchema,
 } from "@matops/validators";
 
-import { requireMember } from "../members";
+import { nameByMember, requireMember, rosterOf } from "../members";
+import { CLAIM_HANDLED, PLAN_NOT_FOUND } from "../messages";
 import { loadBookingAccess } from "../payments-gate";
+import {
+  readDuesWithPlan,
+  readOpenClaim,
+  readPaymentSettings,
+} from "../payments-read";
+import { isUniqueViolation } from "../pg-error";
 import { memberProcedure, ownerProcedure } from "../trpc";
 
 /** Parse a "YYYY-MM-DD" due date to a UTC-midnight instant. */
@@ -52,6 +54,11 @@ function parseDueDate(date: string): Date {
  * RLS-scoped `ctx.db` — the payment tables carry `academy_id` policies. Member
  * identity (`member.id`) is resolved on the base connection where needed.
  */
+// ponytail: newest 500 pending claims. Only reachable by an owner who never
+// confirms or rejects; a queue that deep is a product problem, not a read
+// problem. Paginate the day the queue is meant to be that long.
+const CLAIMS_LIMIT = 500;
+
 export const paymentsRouter = {
   // ─── Owner: plans ──────────────────────────────────────────────────────────
 
@@ -113,7 +120,7 @@ export const paymentsRouter = {
         )
         .returning({ id: membershipPlan.id });
       if (rows.length === 0) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Plan not found" });
+        throw new TRPCError({ code: "NOT_FOUND", message: PLAN_NOT_FOUND });
       }
       return { ok: true as const };
     }),
@@ -164,10 +171,8 @@ export const paymentsRouter = {
           .where(eq(memberDues.memberId, input.memberId))
           .limit(1)
       )[0];
-      // An archived plan stays selectable for the member already on it, so
-      // editing only their due date does not force a plan change.
-      if (!plan || (plan.deletedAt && plan.id !== current?.planId)) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Plan not found" });
+      if (!canAssignPlan(plan, current?.planId)) {
+        throw new TRPCError({ code: "NOT_FOUND", message: PLAN_NOT_FOUND });
       }
       const nextDueAt = parseDueDate(input.nextDueAt);
       await ctx.db
@@ -189,34 +194,20 @@ export const paymentsRouter = {
 
   /** The academy's bank details for the requisites card (spec S9/O6). Owner-only. */
   getRequisites: ownerProcedure.query(async ({ ctx }) => {
-    const row = (
-      await ctx.db
-        .select({
-          bankDetails: paymentSettings.bankDetails,
-          graceDays: paymentSettings.graceDays,
-          enforcedAt: paymentSettings.enforcedAt,
-        })
-        .from(paymentSettings)
-        .limit(1)
-    )[0];
+    const row = await readPaymentSettings(ctx.db);
     return {
-      bankDetails: row?.bankDetails ?? "",
-      graceDays: row?.graceDays ?? 7,
-      enforced: !!row?.enforcedAt,
+      bankDetails: row.bankDetails,
+      graceDays: row.graceDays,
+      enforced: !!row.enforcedAt,
     };
   }),
 
   updateBookingGate: ownerProcedure
     .input(UpdateBookingGateSchema)
     .mutation(async ({ ctx, input }) => {
-      const current = (
-        await ctx.db
-          .select({ enforcedAt: paymentSettings.enforcedAt })
-          .from(paymentSettings)
-          .limit(1)
-      )[0];
+      const current = await readPaymentSettings(ctx.db);
       const enforcedAt = input.enforced
-        ? (current?.enforcedAt ?? new Date())
+        ? (current.enforcedAt ?? new Date())
         : null;
       await ctx.db
         .insert(paymentSettings)
@@ -262,15 +253,11 @@ export const paymentsRouter = {
       })
       .from(paymentClaim)
       .where(eq(paymentClaim.status, "pending"))
-      .orderBy(desc(paymentClaim.claimedAt));
-    const nameByMember = new Map(
-      (await listMembersOf(ctx.academyId, ctx.db)).map((r) => [
-        r.memberId,
-        r.name,
-      ]),
-    );
+      .orderBy(desc(paymentClaim.claimedAt))
+      .limit(CLAIMS_LIMIT);
+    const byMember = nameByMember(await rosterOf(ctx));
     return rows.map((r) => {
-      const memberName = nameByMember.get(r.memberId) ?? "Member";
+      const memberName = byMember.get(r.memberId) ?? "Member";
       return {
         ...r,
         memberName,
@@ -303,23 +290,13 @@ export const paymentsRouter = {
       if (!claim) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Claim not found" });
       }
-      if (claim.status !== "pending") {
+      if (!canDecideClaim(claim)) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
-          message: "This payment has already been handled.",
+          message: CLAIM_HANDLED,
         });
       }
-      const dues = (
-        await ctx.db
-          .select({
-            nextDueAt: memberDues.nextDueAt,
-            cycle: membershipPlan.cycle,
-          })
-          .from(memberDues)
-          .innerJoin(membershipPlan, eq(memberDues.planId, membershipPlan.id))
-          .where(eq(memberDues.memberId, claim.memberId))
-          .limit(1)
-      )[0];
+      const dues = await readDuesWithPlan(ctx.db, claim.memberId);
       if (dues) {
         await ctx.db
           .update(memberDues)
@@ -351,10 +328,10 @@ export const paymentsRouter = {
       if (!claim) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Claim not found" });
       }
-      if (claim.status !== "pending") {
+      if (!canDecideClaim(claim)) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
-          message: "This payment has already been handled.",
+          message: CLAIM_HANDLED,
         });
       }
       await ctx.db
@@ -400,7 +377,7 @@ export const paymentsRouter = {
           .limit(1)
       )[0];
       if (!plan) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Plan not found" });
+        throw new TRPCError({ code: "NOT_FOUND", message: PLAN_NOT_FOUND });
       }
       const inserted = await ctx.db
         .insert(memberDues)
@@ -440,31 +417,14 @@ export const paymentsRouter = {
     const reference = memberId
       ? paymentReference(ctx.session.user.name, memberId)
       : "";
-    const settings = (
-      await ctx.db
-        .select({ bankDetails: paymentSettings.bankDetails })
-        .from(paymentSettings)
-        .limit(1)
-    )[0];
+    const settings = await readPaymentSettings(ctx.db);
     const requisites = {
-      bankDetails: settings?.bankDetails ?? "",
+      bankDetails: settings.bankDetails,
       reference,
     };
 
     const duesRow = memberId
-      ? (
-          await ctx.db
-            .select({
-              nextDueAt: memberDues.nextDueAt,
-              priceMinor: membershipPlan.priceMinor,
-              currency: membershipPlan.currency,
-              planName: membershipPlan.name,
-            })
-            .from(memberDues)
-            .innerJoin(membershipPlan, eq(memberDues.planId, membershipPlan.id))
-            .where(eq(memberDues.memberId, memberId))
-            .limit(1)
-        )[0]
+      ? await readDuesWithPlan(ctx.db, memberId)
       : undefined;
 
     const access = await loadBookingAccess(ctx.db, ctx.membership);
@@ -480,19 +440,7 @@ export const paymentsRouter = {
     }
 
     const period = paymentPeriod(duesRow.nextDueAt);
-    const openClaim = (
-      await ctx.db
-        .select({ id: paymentClaim.id, claimedAt: paymentClaim.claimedAt })
-        .from(paymentClaim)
-        .where(
-          and(
-            eq(paymentClaim.memberId, memberId),
-            eq(paymentClaim.status, "pending"),
-            eq(paymentClaim.period, period),
-          ),
-        )
-        .limit(1)
-    )[0];
+    const openClaim = await readOpenClaim(ctx.db, memberId, period);
 
     return {
       dues: {
@@ -530,19 +478,7 @@ export const paymentsRouter = {
           message: "You are not a member of this academy",
         });
       }
-      const duesRow = (
-        await ctx.db
-          .select({
-            planId: memberDues.planId,
-            nextDueAt: memberDues.nextDueAt,
-            priceMinor: membershipPlan.priceMinor,
-            currency: membershipPlan.currency,
-          })
-          .from(memberDues)
-          .innerJoin(membershipPlan, eq(memberDues.planId, membershipPlan.id))
-          .where(eq(memberDues.memberId, memberId))
-          .limit(1)
-      )[0];
+      const duesRow = await readDuesWithPlan(ctx.db, memberId);
       if (!duesRow) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
@@ -550,19 +486,7 @@ export const paymentsRouter = {
         });
       }
       const period = paymentPeriod(duesRow.nextDueAt);
-      const open = (
-        await ctx.db
-          .select({ id: paymentClaim.id })
-          .from(paymentClaim)
-          .where(
-            and(
-              eq(paymentClaim.memberId, memberId),
-              eq(paymentClaim.status, "pending"),
-              eq(paymentClaim.period, period),
-            ),
-          )
-          .limit(1)
-      )[0];
+      const open = await readOpenClaim(ctx.db, memberId, period);
       if (!canClaim({ hasPlan: true, hasOpenClaim: !!open })) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
@@ -580,8 +504,9 @@ export const paymentsRouter = {
           period,
           proofUrl: input.proofUrl ?? null,
         });
-      } catch {
+      } catch (error) {
         // The partial unique index caught a concurrent double-submit.
+        if (!isUniqueViolation(error)) throw error;
         throw new TRPCError({
           code: "CONFLICT",
           message:

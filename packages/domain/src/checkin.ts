@@ -9,6 +9,13 @@
 export const CHECK_IN_EARLY_MINUTES = 60;
 const MIN_MS = 60 * 1000;
 
+/**
+ * The longest class the schedule validators accept. The fetch window below is
+ * derived from it, so a long seminar cannot fall outside the rows a check-in
+ * looks at while its own window is still open.
+ */
+export const MAX_CLASS_MINUTES = 600;
+
 export interface CheckInClass {
   id: string;
   startsAt: Date;
@@ -50,4 +57,27 @@ const CHECK_IN_LINK = /\/checkin\/([A-Za-z0-9_-]{1,64})\/?(?:[?#].*)?$/;
  */
 export function parseCheckInLink(value: string): string | null {
   return CHECK_IN_LINK.exec(value.trim())?.[1] ?? null;
+}
+
+export interface CheckInWindow {
+  from: Date;
+  to: Date;
+}
+
+/**
+ * The rows a check-in has to consider, as a bound for the query that feeds
+ * `resolveCheckInClass`. It is the rule widened to whole classes: back far
+ * enough that the longest class still running is included, forward only as far
+ * as a class whose doors are already open.
+ */
+export function checkInFetchWindow(now: Date): CheckInWindow {
+  return {
+    from: new Date(now.getTime() - MAX_CLASS_MINUTES * MIN_MS),
+    to: new Date(now.getTime() + CHECK_IN_EARLY_MINUTES * MIN_MS),
+  };
+}
+
+/** Is this one class checkable into right now? The same rule, for one row. */
+export function canCheckIn(c: CheckInClass, now: Date): boolean {
+  return resolveCheckInClass([c], now).length === 1;
 }

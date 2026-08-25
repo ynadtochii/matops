@@ -4,7 +4,6 @@ import { DUE_SOON_DAYS } from "@matops/domain";
 
 import type { DbExec } from "./client";
 import { member, organization } from "./auth-schema";
-import { db } from "./client";
 import { memberDues, membershipPlan } from "./payments-schema";
 
 /**
@@ -41,7 +40,7 @@ export interface ClaimDuesRemindersOptions {
   /** Max dues rows claimed per run (bounds work under the serverless limit). */
   limit?: number;
   /** Base-connection handle; injected by tests so the claim runs on PGlite. */
-  exec?: DbExec;
+  exec: DbExec;
 }
 
 /**
@@ -51,11 +50,11 @@ export interface ClaimDuesRemindersOptions {
  * overdue = past it. Bounded by `limit`; leftovers ride the next daily run.
  */
 export async function claimDueDuesReminders(
-  opts: ClaimDuesRemindersOptions = {},
+  opts: ClaimDuesRemindersOptions,
 ): Promise<DueDuesReminder[]> {
   const now = opts.now ?? new Date();
   const limit = opts.limit ?? 500;
-  const exec = opts.exec ?? db;
+  const exec = opts.exec;
   // The end of the due-soon window: due dates on or before this are eligible.
   const windowEnd = new Date(
     now.getTime() + DUE_SOON_DAYS * 24 * 60 * 60 * 1000,

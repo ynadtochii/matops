@@ -8,6 +8,7 @@ import {
   isReferralStudent,
   isStudentMembership,
   isValidReferralPair,
+  referralAssignmentState,
 } from "../src/referrals";
 
 const membership = (
@@ -90,5 +91,21 @@ describe("academyMonthKey", () => {
     const instant = new Date("2026-08-01T00:30:00Z");
     expect(academyMonthKey(instant, "Europe/Lisbon")).toBe("2026-08");
     expect(academyMonthKey(instant, "America/Los_Angeles")).toBe("2026-07");
+  });
+});
+
+describe("referralAssignmentState", () => {
+  it("is never_assigned when no row exists", () => {
+    expect(referralAssignmentState(undefined)).toBe("never_assigned");
+  });
+
+  it("is assigned when a referrer is set", () => {
+    expect(referralAssignmentState({ referrerMemberId: "mem_1" })).toBe(
+      "assigned",
+    );
+  });
+
+  it("is cleared, not never_assigned, once an owner removes the credit", () => {
+    expect(referralAssignmentState({ referrerMemberId: null })).toBe("cleared");
   });
 });

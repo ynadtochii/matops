@@ -1,8 +1,8 @@
 import { randomBytes } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
 
+import type { DbExec } from "./client";
 import { organization } from "./auth-schema";
-import { db } from "./client";
 import { academyInvite } from "./invite-schema";
 
 /**
@@ -32,8 +32,11 @@ function newToken(): string {
 }
 
 /** Live (non-revoked) invite links for one academy — one per role at most. */
-export async function listInvites(academyId: string): Promise<InviteRow[]> {
-  return db
+export async function listInvites(
+  academyId: string,
+  exec: DbExec,
+): Promise<InviteRow[]> {
+  return exec
     .select(inviteCols)
     .from(academyInvite)
     .where(
@@ -50,12 +53,15 @@ export async function listInvites(academyId: string): Promise<InviteRow[]> {
  * (also enforced by a partial unique index). Serves the Create button too — when
  * no live link exists yet, the revoke is a no-op.
  */
-export async function rotateInvite(input: {
-  academyId: string;
-  role: string;
-  createdBy: string;
-}): Promise<InviteRow> {
-  return db.transaction(async (tx) => {
+export async function rotateInvite(
+  input: {
+    academyId: string;
+    role: string;
+    createdBy: string;
+  },
+  exec: DbExec,
+): Promise<InviteRow> {
+  return exec.transaction(async (tx) => {
     await tx
       .update(academyInvite)
       .set({ revokedAt: new Date() })
@@ -84,12 +90,15 @@ export async function rotateInvite(input: {
 }
 
 /** Return the live link for (academy, role), creating one if none exists yet. */
-export async function getOrCreateInvite(input: {
-  academyId: string;
-  role: string;
-  createdBy: string;
-}): Promise<InviteRow> {
-  const live = await db
+export async function getOrCreateInvite(
+  input: {
+    academyId: string;
+    role: string;
+    createdBy: string;
+  },
+  exec: DbExec,
+): Promise<InviteRow> {
+  const live = await exec
     .select(inviteCols)
     .from(academyInvite)
     .where(
@@ -101,15 +110,16 @@ export async function getOrCreateInvite(input: {
     )
     .limit(1);
 
-  return live[0] ?? rotateInvite(input);
+  return live[0] ?? rotateInvite(input, exec);
 }
 
 /** Revoke one link by id, scoped to the academy (defense — no RLS here). */
 export async function revokeInvite(
   academyId: string,
   inviteId: string,
+  exec: DbExec,
 ): Promise<void> {
-  await db
+  await exec
     .update(academyInvite)
     .set({ revokedAt: new Date() })
     .where(
@@ -126,13 +136,16 @@ export async function revokeInvite(
  * null if the token is unknown or revoked. Used by a public procedure with no
  * session; joins the organization for its display name.
  */
-export async function resolveInviteToken(token: string): Promise<{
+export async function resolveInviteToken(
+  token: string,
+  exec: DbExec,
+): Promise<{
   academyId: string;
   academyName: string;
   academyAddress: string | null;
   role: string;
 } | null> {
-  const rows = await db
+  const rows = await exec
     .select({
       academyId: academyInvite.academyId,
       role: academyInvite.role,

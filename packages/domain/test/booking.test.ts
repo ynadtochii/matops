@@ -6,6 +6,7 @@ import {
   canBook,
   capacityDisplay,
   fillLabel,
+  notBookableMessage,
   spotsLeftLabel,
 } from "../src/booking";
 
@@ -113,6 +114,42 @@ describe("canBook", () => {
         now,
       ),
     ).toEqual({ ok: false, reason: "cancelled" });
+  });
+});
+
+describe("notBookableMessage", () => {
+  it("names the reason the class cannot be booked", () => {
+    expect(notBookableMessage("cancelled")).toBe("This class was cancelled");
+    expect(notBookableMessage("past")).toBe("This class has already started");
+  });
+
+  it("says the same number of days the window allows", () => {
+    expect(notBookableMessage("too-far-ahead")).toContain(
+      String(BOOKING_WINDOW_DAYS),
+    );
+  });
+
+  it("answers for every reason a class that exists can be refused", () => {
+    const now = new Date("2026-08-01T12:00:00Z");
+    const refused = [
+      { status: "cancelled", startsAt: new Date("2026-08-01T18:00:00Z") },
+      { status: "scheduled", startsAt: new Date("2026-08-01T06:00:00Z") },
+      {
+        status: "scheduled",
+        startsAt: new Date(
+          now.getTime() + (BOOKING_WINDOW_DAYS + 1) * 24 * 60 * 60 * 1000,
+        ),
+      },
+    ];
+    for (const c of refused) {
+      const result = canBook({ ...c, deletedAt: null }, now);
+      expect(result.ok).toBe(false);
+      expect(
+        notBookableMessage(
+          result.reason as Exclude<typeof result.reason, "deleted" | undefined>,
+        ),
+      ).toBeTruthy();
+    }
   });
 });
 

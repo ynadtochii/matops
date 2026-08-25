@@ -19,6 +19,10 @@ import { staffProcedure } from "../trpc";
  * staff member of the academy shares the same notes.
  */
 
+// ponytail: newest 200 notes for one member. The screen is a scroll of coaching
+// memory, not an archive; paginate if a coach ever hits it.
+const NOTES_LIMIT = 200;
+
 export const noteRouter = {
   /** One member's staff notes, newest first, with the author's name (spec O4). */
   forMember: staffProcedure
@@ -35,7 +39,8 @@ export const noteRouter = {
         .from(memberNote)
         .leftJoin(user, eq(user.id, memberNote.authorId))
         .where(eq(memberNote.memberId, input.memberId))
-        .orderBy(desc(memberNote.createdAt));
+        .orderBy(desc(memberNote.createdAt))
+        .limit(NOTES_LIMIT);
     }),
 
   /** Add a staff note about a member (spec O4). */

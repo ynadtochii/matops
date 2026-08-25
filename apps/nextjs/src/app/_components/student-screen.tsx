@@ -5,7 +5,12 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
-import { capacityDisplay, groupByDay, spotsLeftLabel } from "@matops/domain";
+import {
+  capacityDisplay,
+  dayWindow,
+  groupByDay,
+  spotsLeftLabel,
+} from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
@@ -29,10 +34,9 @@ export function StudentScreen() {
   const suspended = useAcademy().status === "suspended";
 
   const { from, to, todayKey } = useMemo(() => {
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(start);
-    end.setDate(end.getDate() + 7);
+    const { from: start, to: end } = dayWindow(new Date(), {
+      aheadDays: 7,
+    });
     return {
       from: start.toISOString(),
       to: end.toISOString(),

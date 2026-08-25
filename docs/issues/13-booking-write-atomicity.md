@@ -76,3 +76,29 @@ Booking is now **two-tier** ([22](22-provisional-booking-capacity.md)): the atom
 
 ## ⚠ Pressure-test refinement (session 12)
 **No hard capacity cap in v1.** Booking is never blocked. The atomic `UPDATE` **drops the `booking_count < capacity` guard** — it just increments the count (still atomic, `UNIQUE(classId,studentId)` still prevents double-book). At/over capacity the UI shows red "may be busy" + confirm; the owner manages the room. Hard cap / priority / waitlist / no-show → next iteration.
+
+## ⚠ Amended 2026-08-25: the rollback was not happening
+
+"Atomic rollback: a failed capacity claim rolls back the participation change
+because both run in the one RLS transaction" was true of the SQL and false of
+the code above it.
+
+tRPC does not let a thrown resolver error escape the middleware. `next()` catches
+it and returns `{ ok: false, error }`. `enforceTenant` returned that object, so
+the `withTenant` callback resolved normally and Postgres got a COMMIT. Every
+write the resolver had already made was kept, including the half of a two-step
+mutation that was supposed to be undone.
+
+`enforceTenant` now rethrows `attempt.error` instead of returning the failed
+result. The transaction sees an exception and rolls back. tRPC's own
+`callRecursive` catches the rethrow one frame out and rebuilds the same
+`{ ok: false, error }` shape, and `getTRPCErrorFromUnknown` returns an existing
+`TRPCError` unchanged, so the error the client sees is byte for byte the same.
+
+Covered by `packages/api/test/tenant-rollback.test.ts`, which writes a row
+through `ctx.db`, throws, and asserts the row is gone. Both of its cases fail if
+the rethrow is changed back to a return.
+
+This does not extend to a mutation that writes an identity table and a tenant
+table. Those two writes commit separately and always did. See
+[92](92-identity-writes-leave-the-tenant-transaction.md).

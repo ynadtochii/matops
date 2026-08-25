@@ -37,6 +37,44 @@ export function templateTimingChanged(
   );
 }
 
+export interface TemplateContent {
+  title: string;
+  discipline: string | null;
+  instructorId: string;
+  durationMinutes: number;
+  capacity: number;
+}
+
+/**
+ * What an owner's template edit costs. `regenerate` cancels the future
+ * instances and re-materializes, reviving the ones the new timing still covers;
+ * `update-in-place` rewrites their content and keeps every row; `none` means the
+ * save changed nothing, which is worth knowing because both other paths write to
+ * every future class the template owns.
+ */
+export type TemplateEditStrategy = "regenerate" | "update-in-place" | "none";
+
+export function templateContentChanged(
+  before: TemplateContent,
+  after: TemplateContent,
+): boolean {
+  return (
+    before.title !== after.title ||
+    before.discipline !== after.discipline ||
+    before.instructorId !== after.instructorId ||
+    before.durationMinutes !== after.durationMinutes ||
+    before.capacity !== after.capacity
+  );
+}
+
+export function templateEditStrategy(
+  before: TemplateRecurrence & TemplateContent,
+  after: TemplateRecurrence & TemplateContent,
+): TemplateEditStrategy {
+  if (templateTimingChanged(before, after)) return "regenerate";
+  return templateContentChanged(before, after) ? "update-in-place" : "none";
+}
+
 export interface ClassNotifiable {
   /** UTC start instant. */
   startsAt: Date;

@@ -14,6 +14,7 @@ export interface Harness {
   exec: DbExec;
   close: () => Promise<void>;
   as: (userId: string, academyId: string | null) => ReturnType<typeof caller>;
+  ctxFor: (userId: string, academyId: string | null) => Ctx;
 }
 
 function caller(ctx: Ctx) {
@@ -37,20 +38,22 @@ export async function harness(): Promise<Harness> {
   const pg = await freshDb();
   const exec = execOn(pg);
 
+  const ctxFor = (userId: string, academyId: string | null): Ctx => ({
+    authApi: notWired as Ctx["authApi"],
+    headers: new Headers(),
+    session: {
+      user: { id: userId, name: `User ${userId}` },
+      session: { activeOrganizationId: academyId },
+    } as unknown as Ctx["session"],
+    baseDb: exec,
+  });
+
   return {
     pg,
     exec,
     close: () => pg.close(),
-    as: (userId, academyId) =>
-      caller({
-        authApi: notWired as Ctx["authApi"],
-        headers: new Headers(),
-        session: {
-          user: { id: userId, name: `User ${userId}` },
-          session: { activeOrganizationId: academyId },
-        } as unknown as Ctx["session"],
-        baseDb: exec,
-      }),
+    as: (userId, academyId) => caller(ctxFor(userId, academyId)),
+    ctxFor,
   };
 }
 

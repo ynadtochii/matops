@@ -2,7 +2,7 @@ import { ScrollView, View } from "react-native";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 
-import { capacityDisplay } from "@matops/domain";
+import { canBook, capacityDisplay, notBookableMessage } from "@matops/domain";
 
 import { useBookClass, useCancelBooking } from "~/components/book-control";
 import { ClassDetailSkeleton } from "~/components/skeletons";
@@ -112,34 +112,41 @@ export default function ClassDetail() {
   const booked = c.myBooking === "booked";
   const provisional = booked && c.myBookingTier === "provisional";
   const past = start.getTime() <= new Date().getTime();
-
-  const action = cancelled ? (
-    <Muted>This class was cancelled — booking is closed.</Muted>
-  ) : past ? (
-    <Muted>This class has already started.</Muted>
-  ) : booked ? (
-    <UIStack gap={8}>
-      {provisional && (
-        <Txt size={14} tone="brand">
-          Booked · pending approval
-        </Txt>
-      )}
-      <Button
-        label={cancelling ? "Cancelling…" : "Cancel booking"}
-        variant="destructive"
-        loading={cancelling}
-        disabled={busy}
-        onPress={() => onCancel(c.id)}
-      />
-    </UIStack>
-  ) : (
-    <Button
-      label={booking ? "Booking…" : "Book"}
-      loading={booking}
-      disabled={busy}
-      onPress={() => onBook(c)}
-    />
+  const bookable = canBook(
+    { status: c.status, startsAt: start, deletedAt: null },
+    new Date(),
   );
+  const refusal =
+    bookable.reason && bookable.reason !== "deleted"
+      ? notBookableMessage(bookable.reason)
+      : null;
+
+  const action =
+    booked && !cancelled && !past ? (
+      <UIStack gap={8}>
+        {provisional && (
+          <Txt size={14} tone="brand">
+            Booked · pending approval
+          </Txt>
+        )}
+        <Button
+          label={cancelling ? "Cancelling…" : "Cancel booking"}
+          variant="destructive"
+          loading={cancelling}
+          disabled={busy}
+          onPress={() => onCancel(c.id)}
+        />
+      </UIStack>
+    ) : refusal ? (
+      <Muted>{refusal}.</Muted>
+    ) : (
+      <Button
+        label={booking ? "Booking…" : "Book"}
+        loading={booking}
+        disabled={busy}
+        onPress={() => onBook(c)}
+      />
+    );
 
   return (
     <Screen>
