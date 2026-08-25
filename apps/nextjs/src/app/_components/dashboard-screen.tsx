@@ -10,6 +10,7 @@ import type { DisciplineTone } from "@matops/domain";
 import {
   capacityDisplay,
   classEndsAt,
+  dashboardWeekWindow,
   dayPlan,
   daysSince,
   dayWindow,
@@ -23,7 +24,6 @@ import {
   newLeadCount,
   rosterSummary,
   startOfDay,
-  UNMARKED_LOOKBACK_DAYS,
   upcomingClassCount,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
@@ -103,17 +103,9 @@ export function DashboardScreen() {
   const isOwner = isOwnerOf(c);
   const isStaff = isStaffOf(c);
 
-  const { weekFrom, weekTo, today, tomorrow, leadsSince } = useMemo(() => {
+  const { today, tomorrow, leadsSince } = useMemo(() => {
     const at = new Date();
-    // Reaches back over the unmarked look-back so one read covers both halves of
-    // the page: the week ahead and the finished classes still missing a register.
-    const week = dayWindow(at, {
-      backDays: UNMARKED_LOOKBACK_DAYS + 1,
-      aheadDays: 7,
-    });
     return {
-      weekFrom: week.from.toISOString(),
-      weekTo: week.to.toISOString(),
       today: startOfDay(at),
       tomorrow: dayWindow(at, { aheadDays: 1 }).to,
       leadsSince: dayWindow(at, { backDays: 6, aheadDays: 0 }).from,
@@ -124,7 +116,7 @@ export function DashboardScreen() {
   const now = new Date();
 
   const week = useQuery({
-    ...trpc.class.week.queryOptions({ from: weekFrom, to: weekTo }),
+    ...trpc.class.week.queryOptions(dashboardWeekWindow(now)),
     enabled: isStaff,
   });
   const memberList = useQuery({

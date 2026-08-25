@@ -14,7 +14,7 @@ import { toast } from "@matops/ui/toast";
 
 import type { PosterClass } from "./poster-draw";
 import { useAcademy } from "./academy";
-import { drawPoster, POSTER_H, POSTER_W, posterBlob } from "./poster-draw";
+import { POSTER_H, POSTER_W } from "./poster-size";
 
 const updatedFmt = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
@@ -38,7 +38,10 @@ export function SchedulePoster({ classes }: { classes: PosterClass[] }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const render = useCallback(async () => {
-    await document.fonts.ready;
+    const [{ drawPoster }] = await Promise.all([
+      import("./poster-draw"),
+      document.fonts.ready,
+    ]);
     const canvas = canvasRef.current;
     if (!canvas) return;
     drawPoster(canvas, {
@@ -59,6 +62,7 @@ export function SchedulePoster({ classes }: { classes: PosterClass[] }) {
     if (!canvas) return;
     setSaving(true);
     try {
+      const { posterBlob } = await import("./poster-draw");
       const blob = await posterBlob(canvas);
       if (!blob) throw new Error("The poster could not be encoded");
       const url = URL.createObjectURL(blob);

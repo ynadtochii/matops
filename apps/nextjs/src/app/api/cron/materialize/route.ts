@@ -25,8 +25,6 @@ import { env } from "~/env";
  * Protected by CRON_SECRET when set: a caller sends `Authorization: Bearer <secret>`.
  * CRON_SECRET is optional now; if unset, the route still refuses to run in production.
  */
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {

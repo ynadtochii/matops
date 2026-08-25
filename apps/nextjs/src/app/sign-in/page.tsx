@@ -1,9 +1,11 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Logo, Mark } from "@matops/ui/logo";
 
 import { getSession } from "~/auth/server";
+import { PageLoader } from "../_components/mat-loader";
 import { Eyebrow } from "../_components/primitives";
 import { SignIn } from "../_components/sign-in";
 
@@ -15,7 +17,15 @@ const ANCHORS = ["Schedule", "Members", "Attendance", "Dues"];
  * the "run the mat" thesis, with the passwordless form on the other side. Splits
  * to a stacked, compact header on small screens. No marketing site (out of scope).
  */
-export default async function SignInPage() {
+export default function SignInPage() {
+  return (
+    <Suspense fallback={<PageLoader label="Checking your session" />}>
+      <SignInGate />
+    </Suspense>
+  );
+}
+
+async function SignInGate() {
   const session = await getSession();
   if (session) redirect("/");
 
