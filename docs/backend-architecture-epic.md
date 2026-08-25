@@ -449,26 +449,26 @@ Plan items 13 and 16.
 Plan items 14 and 15. Coordinate with the `frontend-performance-plan` branch
 before starting: it may already have moved some of this.
 
-- [ ] **6.1 `stats.dashboard`.** Fold `stats.gym`, `stats.drifting` and
+- [x] **6.1 `stats.dashboard`.** Fold `stats.gym`, `stats.drifting` and
       `stats.revenue` into one procedure. Three database trips become one, and
       the non-streaming batch stops waiting on the slowest of three.
-- [ ] **6.2 `membership.memberDetail`.** Fold `membership.memberHistory`,
+- [!] **6.2 `membership.memberDetail`.** Fold `membership.memberHistory`,
       `rank.forMember` and `note.forMember`. Ten opened member rows go from 30
       procedures to 10.
-- [ ] **6.3 Fold the coach breakdown into `stats.coaches`.** It already returns
+- [!] **6.3 Fold the coach breakdown into `stats.coaches`.** It already returns
       the roster, and today each expanded card fires its own `stats.coach`.
-- [ ] **6.4 Kill the mobile waterfalls.** Give Expo the same 5-minute
+- [x] **6.4 Kill the mobile waterfalls.** Give Expo the same 5-minute
       `staleTime` on `academy.current` that the web has at `app-shell.tsx:38`,
       which turns a per-30-seconds waterfall into a per-5-minutes one. Then hoist
       the two query calls that sit inside an `else` branch so they stop waiting:
       `stats.me` behind `booking.mine`, and `class.attendees` behind `class.get`
       on both clients.
-- [ ] **6.5 One invalidation rule per aggregate.** Follow
+- [x] **6.5 One invalidation rule per aggregate.** Follow
       `use-booking.ts`, whose header already says "One place decides what a
       booking invalidates". Shared by both clients. Fix the concrete bug: no
       attendance or booking mutation invalidates `stats`, so dashboard insights
       and student stats stay stale.
-- [ ] **GATE 6.** Gates green. Then stop for compaction.
+- [x] **GATE 6.** Gates green. Then stop for compaction.
 
 ### Phase 7 — cover the untested procedures
 
@@ -1971,4 +1971,239 @@ clients, and the `frontend-performance-plan` branch is doing its own work in the
 same files. Either that branch lands on `main` first, or Phase 6 is skipped and
 the loop goes straight to Phase 7, which touches only `packages/api/test`. Say
 which.
+
+### Phase 6
+
+Run on the `release/pilot-prep` branch, not on the backend worktree. Phase 6 is
+about round trips and cache rules, which is exactly what the frontend arc
+changed, so writing it anywhere else would mean merging it twice.
+
+**6.1 `stats.dashboard`** - done 2026-08-25. `stats.gym`, `stats.drifting` and
+`stats.revenue` are gone, replaced by one `dashboard` procedure. Their bodies
+lifted to `readGymInsights`, `readDrifting` and `readRevenue` in the same file.
+
+Staff tier, not owner. `gym` was staff-visible and the other two were owner-only,
+so the folded procedure takes the loosest tier and returns `drifting` and
+`revenue` as `null` for an instructor, whose reads are then skipped. That is the
+shape `gym` already used for `newMembers`, so it is not a new idea.
+
+**The item's stated benefit did not survive the merge, and I measured it rather
+than assuming.** It claimed "the non-streaming batch stops waiting on the slowest
+of three". The batch is not non-streaming any more (ADR 89) and wave 0 had
+already measured that procedures inside one batch run concurrently. Warm
+dashboard render, five runs each: **0.79-0.96s before, 0.87-0.89s after.** No
+wall-clock change, and I am not going to claim one.
+
+What did change is real but different from what was written down:
+
+- **Three tenant transactions become one.** Each was a pooled connection out of
+  twenty, so a dashboard load used to cost three. This is the actual win, and it
+  is about connection pressure under concurrent users, not latency.
+- **Two `academyTimeZone` calls become one.** It is not cached, and it costs
+  **two** queries when the academy row has no `time_zone` set, because it falls
+  through to the most-common template zone.
+- **Two `rosterOf` calls become one.** `gym` read the roster for `newMembers`,
+  `drifting` read it again.
+
+Roughly seven queries across three transactions become five in one.
+
+The one thing given up: the three panels used to hydrate independently, so
+insights could paint before drifting. Now they arrive together. They are the
+lower half of the dashboard and the primary content (`class.week`,
+`membership.members`) is untouched and still separate, so I took the trade. Said
+out loud here because it is the only place the frontend arc and this phase pull
+in opposite directions.
+
+Files: `packages/api/src/router/stats.ts`, `apps/nextjs/src/app/(app)/page.tsx`,
+`apps/nextjs/src/app/_components/dashboard-screen.tsx`,
+`packages/api/test/tenant-seam.test.ts`, `packages/domain/test/freshness.test.ts`.
+The seam test now asserts all three owner-only figures are null for an
+instructor, where it used to check only `newMembers`. 13 and 8 tests pass.
+`@matops/api` and `@matops/nextjs` typecheck and lint green.
+
+**6.2 `membership.memberDetail`** - REJECTED 2026-08-25. The item's premise is
+false, and doing it would make the page slower.
+
+It claims "ten opened member rows go from 30 procedures to 10". Opening a member
+row fires **one** procedure today, not three. `member-detail.tsx:141-143` renders
+`RankTab` and `NotesTab` only when their tab is selected:
+
+```
+{tab === "rank" ? <RankTab .../> : tab === "notes" ? <NotesTab .../> : ...}
+```
+
+So `rank.forMember` and `note.forMember` fire when a staff member clicks Rank or
+Notes, and never otherwise. The members page prefetches neither
+(`(app)/members/page.tsx` prefetches `membership.members`, plus `dropIn.list` and
+`membership.archived` for an owner).
+
+Folding them into a `memberDetail` procedure would turn ten cheap opens into ten
+opens that each also read the rank ledger and the staff notes, for tabs most
+people never click. Ten procedures doing three times the work is not an
+improvement on ten procedures.
+
+The rank and note reads are already lazy, which is the thing the item wanted.
+Nothing to do.
+
+**6.3 Fold the coach breakdown into `stats.coaches`** - REJECTED 2026-08-25.
+It trades a query nobody usually makes for a payload everybody pays.
+
+The item is right that `stats.coach` re-runs `loadCoachContext`, the same loader
+`stats.coaches` just ran. That part is real waste.
+
+But the fold is not free the way the item assumes. `coachBreakdown` returns
+`recent`, which is **every class that coach led in the window**, unbounded within
+it. For a month window and a coach teaching five classes a week that is about
+twenty class summaries. Ten coaches is two hundred, on a roster response that
+carries a few aggregate rows today. Call it a tenfold payload increase on every
+Coaches page load.
+
+Against that: expanding a card is user-initiated, lazy, and **only one card can
+be open at a time** (`coaches-screen.tsx:361`, `openId` is a single value, and
+`:241` renders the body only when `open`). The page load is far more frequent
+than the expand.
+
+So the fold would make the common path worse to improve the rare one. ADR 88 in
+the frontend arc had already priced payload honestly for the dashboard; the same
+arithmetic says no here.
+
+Considered and dropped: folding only the small parts (`byWeekday` is seven
+numbers, `byWeek` a handful, `byClass` is grouped) and leaving `recent` lazy.
+That splits one panel's data across two procedures and two loading states to save
+one on-demand query. Not worth the seam.
+
+**6.4 Kill the mobile waterfalls** - done 2026-08-25. Half of it was already
+done by the merge, and the item is only about mobile now.
+
+**Already true after the merge.** The `academy.current` staleTime is handled:
+ADR 87's freshness table gives the `academy` namespace five minutes and BOTH
+clients read it through `staleTime: (query) => staleTimeForQueryKey(...)`
+(`apps/expo/src/utils/api.tsx:15`, `apps/nextjs/src/trpc/query-client.ts:13`).
+The item asked to copy a hardcoded 5-minute override from `app-shell.tsx:38`;
+that override no longer exists, and the value now comes from one shared table.
+
+**Also already true on the web.** ADR 88's server prefetch fixed both hoists
+there: `(app)/training/page.tsx` prefetches `booking.mine` and `stats.me` side by
+side, and `(app)/class/[id]/page.tsx` prefetches `class.attendees`.
+
+**Still real on mobile**, which has no server prefetch, and both were confirmed
+by reading the render tree rather than assuming:
+
+- `(tabs)/training.tsx:143` renders `MyTrainingCard` inside the
+  `mine.isPending ? skeleton : (...)` branch, and that card owns the `stats.me`
+  query. So the stats read could not start until bookings had landed.
+- `class/[id].tsx:187` renders `WhoIsIn` below the `q.isPending` gate, and that
+  component owns the `class.attendees` query. Same shape.
+
+Fixed by starting each second query in the parent, above the gate. TanStack keys
+both to the same entry, so the child subscribes to the in-flight query instead of
+making a second one. The child keeps its own loading and error states, which is
+what it was built for, and neither component's interface changed.
+
+Each new call carries a two-line comment, which is the exception the comment rule
+allows. A `useQuery` whose return value is discarded reads as dead code, and the
+next person to tidy it would put the waterfall straight back.
+
+Considered and dropped: hoisting `MyTrainingCard` out of the pending branch so it
+renders beside the skeleton. That works too, but it moves the card above the
+next-class card while bookings load and makes the layout jump.
+
+Files: `apps/expo/src/app/(tabs)/training.tsx`,
+`apps/expo/src/app/class/[id].tsx`. `@matops/expo` typecheck and lint green.
+**Not verified on a device** — no simulator here, and this is behaviour a static
+gate cannot see. Goes on `docs/mobile-device-test.md` with the rest.
+
+**6.5 One invalidation rule per aggregate** - done 2026-08-25, and the bug it
+named is real. `packages/domain/src/invalidation.ts`, 6 tests, written before the
+callers switched.
+
+`invalidatedBy(aggregate)` returns the tRPC namespaces a mutation dirties.
+**Every aggregate includes `stats`**, and a test asserts that, because that is
+the bug: no booking and no attendance mark refreshed the gym's figures, so
+dashboard insights, who is drifting and a student's own training stats all sat
+stale after the thing that changed them.
+
+**The merge had quietly made this worse.** ADR 87 gives the `stats` namespace a
+two-minute `staleTime`, up from the old 30-second default. So the stale window
+went from half a minute to two minutes. Neither change is wrong alone.
+
+Wired at three call sites: `use-booking.ts` and `class-roster.tsx` on the web,
+`book-control.tsx` on mobile (which had the same two lines twice). Each client
+gets a five-line `useInvalidate()` that turns a namespace into a query filter, so
+the table itself stays pure and shared.
+
+**The key shape was verified, not assumed**, because the whole fix depends on it.
+`getQueryKeyInternal` in `@trpc/tanstack-react-query` builds `[["class"]]` for a
+path filter with no input, which is exactly what the helper builds. It also
+prepends `[prefix]` when one is configured, and neither client configures one.
+
+**One deliberate optimisation preserved.** `class-roster.tsx` defers the `class`
+invalidation to an effect cleanup, so tapping through a register does not re-run
+the booking-count subqueries on every tap. `stats` joins that deferred cleanup
+rather than the per-tap path, for the same reason.
+
+Scope: the named bug and the aggregates around it. The other ~30 `invalidateQueries`
+call sites still name their own paths and were left alone. Rewriting all of them
+is a large mechanical change with no bug behind it, and the table is now there for
+whoever touches one next.
+
+Files: `packages/domain/src/{invalidation.ts,index.ts}`,
+`packages/domain/test/invalidation.test.ts`,
+`apps/nextjs/src/trpc/invalidate.ts`, `apps/expo/src/utils/invalidate.ts`,
+`use-booking.ts`, `class-roster.tsx`, `book-control.tsx`. Both clients typecheck
+and lint green.
+
+## GATE 6 — passed
+
+2026-08-25, on `release/pilot-prep`.
+
+- `pnpm typecheck` 17/17.
+- `pnpm lint` 15/15.
+- `pnpm test` **733 passed, 0 failed** (domain 406, api 185, db 110,
+  validators 29, notifications 3). Up 6 from 727.
+- `next build` passes, 23 routes still prerender with Cache Components on.
+- Dev server against live Neon: all 11 screens 200, no server error, dashboard
+  renders real data.
+
+Docs: ADR [98](issues/98-fewer-round-trips-and-one-invalidation-rule.md),
+`docs/map.md` row, `docs/architecture.md` §0 retitled to "phases 1-6" with three
+bullets, `docs/roadmap.md` slice 5.4, `CHANGELOG.md`. No `docs/spec.md` change:
+nothing user-visible moved, the cache fix makes existing behaviour true sooner.
+
+### The phase in one line
+
+**Three of five items were wrong or already done.** 6.1 and 6.5 shipped, 6.4
+shipped at half its size, 6.2 and 6.3 are `- [!]` with the evidence.
+
+That is not a complaint about the plan. The plan was written from a read at one
+commit, before the frontend arc existed, and it said to re-check against that
+branch first. Doing so is what turned up that ADR 87 already shared the
+freshness table across both clients and ADR 88 had already parallelised the web's
+two waterfalls.
+
+**The one real defect was in the cache rules, not the round trips.** No booking
+and no attendance mark invalidated `stats`. And the merge had widened the window
+it was wrong for, from 30 seconds to two minutes, because ADR 87 gave `stats` a
+two-minute `staleTime`. Two correct changes making a third thing worse is exactly
+what an integration branch is for.
+
+**6.1 is the item I would flag to a reviewer.** It shipped, and I measured that
+it does not make the dashboard faster. It reduces three tenant transactions to
+one, which matters for connection pressure under concurrent users and not for
+the number a stopwatch shows. The cost is that the three lower panels now arrive
+together instead of independently. If a reviewer disagrees with that trade, it
+reverts cleanly.
+
+### Carried forward
+
+- Migration `0027` still **not applied to Neon**.
+- **`CRON_SECRET` is unset.** Unprotected in dev, 500 in production, so the daily
+  dues reminder would silently never run.
+- The two mobile fixes are **not verified on a device**, along with everything
+  else on `docs/mobile-device-test.md`.
+- Still the human's call from Phase 4: Monday-first grid versus the
+  Sunday-aligned `weekBucket` behind "weeks trained".
+
+**Next.** Phase 7, coverage. 46 of 104 procedures have no test, and 7.0 fixes the
+gate that let a broken test pass.
 

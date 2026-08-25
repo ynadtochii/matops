@@ -1,10 +1,11 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { bookingAccessMessage, isActiveMember, isStaff } from "@matops/domain";
 import { toast } from "@matops/ui/toast";
 
+import { useInvalidate } from "~/trpc/invalidate";
 import { useTRPC } from "~/trpc/react";
 import { useAcademy } from "./academy";
 
@@ -17,7 +18,7 @@ import { useAcademy } from "./academy";
  */
 export function useBooking() {
   const trpc = useTRPC();
-  const queryClient = useQueryClient();
+  const invalidateFor = useInvalidate();
   const academy = useAcademy();
 
   const myDues = useQuery({
@@ -28,10 +29,7 @@ export function useBooking() {
   const lockedMessage =
     access?.state === "locked" ? bookingAccessMessage(access) : null;
 
-  const invalidate = async () => {
-    await queryClient.invalidateQueries(trpc.class.pathFilter());
-    await queryClient.invalidateQueries(trpc.booking.pathFilter());
-  };
+  const invalidate = () => invalidateFor("booking");
   const onError = (err: { message: string }) =>
     toast.error(err.message || "Could not update your booking");
 

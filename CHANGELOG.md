@@ -2,6 +2,12 @@
 
 One line per shipped slice (see `docs/delivery.md` §4). Newest first.
 
+## The dashboard tells the truth after you change something
+
+- **Booking a class, or marking a register, now updates the gym's numbers straight away.** They used to keep showing the old figures for up to two minutes: the insights, the "who's drifting" list, and a student's own training stats. ADR [98](docs/issues/98-fewer-round-trips-and-one-invalidation-rule.md).
+- **The dashboard asks the database once instead of three times.** No faster to look at, and it stops one screen from holding three database connections while it loads.
+- **On the phone, your training stats and "who's in this class" start loading right away** instead of waiting for the list above them to finish.
+
 ## The reminders get a safety net
 
 - **The class and dues reminders are tested for the first time.** They are the one part of the system that runs on its own, with nobody watching. A broken screen gets reported the same day. A broken reminder is silent: the gym just stops hearing from us. ADR [97](docs/issues/97-the-notification-path-gets-a-test.md).

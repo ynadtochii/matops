@@ -16,6 +16,7 @@ import { Separator } from "@matops/ui/separator";
 import { toast } from "@matops/ui/toast";
 import { AddVisitorSchema } from "@matops/validators";
 
+import { useInvalidate } from "~/trpc/invalidate";
 import { useTRPC } from "~/trpc/react";
 import { CoachSelect } from "./coach-select";
 import { cardClass } from "./primitives";
@@ -68,6 +69,7 @@ function segmentClass(kind: Mark, selected: boolean) {
 export function ClassRoster({ cls }: { cls: ClassRow }) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
+  const invalidateFor = useInvalidate();
   const classId = cls.id;
   const [walkInIds, setWalkInIds] = useState<Set<string>>(new Set());
   const [walkInQuery, setWalkInQuery] = useState("");
@@ -98,9 +100,9 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
   useEffect(() => {
     if (!touched) return;
     return () => {
-      void queryClient.invalidateQueries(trpc.class.pathFilter());
+      void invalidateFor("attendance");
     };
-  }, [touched, queryClient, trpc]);
+  }, [touched, invalidateFor]);
 
   const invalidate = async () => {
     setTouched(true);

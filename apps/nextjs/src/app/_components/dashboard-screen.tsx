@@ -131,17 +131,9 @@ export function DashboardScreen() {
     ...trpc.payments.claims.queryOptions(),
     enabled: isOwner,
   });
-  const insights = useQuery({
-    ...trpc.stats.gym.queryOptions(),
+  const dash = useQuery({
+    ...trpc.stats.dashboard.queryOptions(),
     enabled: isStaff,
-  });
-  const drifting = useQuery({
-    ...trpc.stats.drifting.queryOptions(),
-    enabled: isOwner,
-  });
-  const revenue = useQuery({
-    ...trpc.stats.revenue.queryOptions(),
-    enabled: isOwner,
   });
 
   if (!isStaff) return <StudentScreen />;
@@ -362,15 +354,15 @@ export function DashboardScreen() {
 
       {/* Insights — gym activity over the last 30 days */}
       <Section label="Insights">
-        {insights.isPending ? (
+        {dash.isPending ? (
           <SkeletonInsights />
-        ) : insights.isError ? (
-          <ErrorState
-            label="gym insights"
-            onRetry={() => void insights.refetch()}
-          />
+        ) : dash.isError ? (
+          <ErrorState label="gym insights" onRetry={() => void dash.refetch()} />
         ) : (
-          <Insights data={insights.data} revenue={revenue.data ?? []} />
+          <Insights
+            data={dash.data.insights}
+            revenue={dash.data.revenue ?? []}
+          />
         )}
       </Section>
 
@@ -379,26 +371,26 @@ export function DashboardScreen() {
         <Section
           label="Who's drifting"
           meta={
-            drifting.isPending || drifting.isError || drifting.data.length === 0
+            dash.isPending || dash.isError || !dash.data.drifting?.length
               ? undefined
-              : `${drifting.data.length} members`
+              : `${dash.data.drifting.length} members`
           }
         >
-          {drifting.isPending ? (
+          {dash.isPending ? (
             <SkeletonRows rows={3} action variant="outline" />
-          ) : drifting.isError ? (
+          ) : dash.isError ? (
             <ErrorState
               label="the drifting list"
-              onRetry={() => void drifting.refetch()}
+              onRetry={() => void dash.refetch()}
             />
-          ) : drifting.data.length === 0 ? (
+          ) : !dash.data.drifting?.length ? (
             <EmptyState title="Everyone's showing up.">
               Members who used to train here but have gone quiet appear here so
               you can reach out.
             </EmptyState>
           ) : (
             <div className="flex flex-col gap-2">
-              {drifting.data.slice(0, 6).map((m) => (
+              {dash.data.drifting.slice(0, 6).map((m) => (
                 <DriftRow key={m.memberId} m={m} today={today} />
               ))}
             </div>
@@ -532,9 +524,10 @@ function DayRow({
   );
 }
 
-type GymInsights = RouterOutputs["stats"]["gym"];
+type Dashboard = RouterOutputs["stats"]["dashboard"];
+type GymInsights = Dashboard["insights"];
 type BusiestClass = GymInsights["busiest"][number];
-type DriftMember = RouterOutputs["stats"]["drifting"][number];
+type DriftMember = NonNullable<Dashboard["drifting"]>[number];
 
 /**
  * The health block: a handful of numbers, each carrying the baseline that gives
@@ -551,7 +544,7 @@ function Insights({
   revenue,
 }: {
   data: GymInsights;
-  revenue: RouterOutputs["stats"]["revenue"];
+  revenue: NonNullable<Dashboard["revenue"]>;
 }) {
   return (
     <div className="flex flex-col gap-4">

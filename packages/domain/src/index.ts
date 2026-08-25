@@ -27,6 +27,7 @@ export * from "./dropin";
 export * from "./format";
 export * from "./freshness";
 export * from "./grid";
+export * from "./invalidation";
 export * from "./local-date";
 export * from "./materialize";
 export * from "./membership";

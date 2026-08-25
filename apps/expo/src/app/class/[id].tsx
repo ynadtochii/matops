@@ -79,6 +79,9 @@ export default function ClassDetail() {
   const t = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const q = useQuery(trpc.class.get.queryOptions({ id }, { retry: false }));
+  // Same key as WhoIsIn, which renders below the `q.isPending` gate and so
+  // would not start fetching until the class itself lands.
+  useQuery(trpc.class.attendees.queryOptions({ id }));
 
   const { onBook, isPending: booking, error: bookError } = useBookClass();
   const { onCancel, isPending: cancelling } = useCancelBooking();
