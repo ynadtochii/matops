@@ -474,33 +474,33 @@ before starting: it may already have moved some of this.
 
 Plan item 17. 46 of 104 procedures have no test.
 
-- [ ] **7.0 Put every `test/` directory in the typecheck gate.** `pnpm typecheck`
+- [x] **7.0 Put every `test/` directory in the typecheck gate.** `pnpm typecheck`
       runs each package's own script, which points at `src`. The `test/tsconfig.json`
       files are never run by any gate, and vitest strips types without checking
       them, so a test can call a function with arguments its signature refuses and
       still pass. Found live in `packages/domain/test/notify.test.ts` during item
       3.4. Fix in the package `typecheck` scripts, not by merging the tsconfigs:
       the split exists to keep `build` off the test files.
-- [ ] **7.1 Unblock `authApi` in the api test harness.** It is a Proxy that
+- [x] **7.1 Unblock `authApi` in the api test harness.** It is a Proxy that
       throws on any access (`packages/api/test/helpers.ts:23-34`), which is why
       the whole onboarding funnel is untestable. Fixing this is the prerequisite
       for 7.2.
-- [ ] **7.2 Test the onboarding funnel.** `academy.create`, `membership.join`,
+- [x] **7.2 Test the onboarding funnel.** `academy.create`, `membership.join`,
       `joinByCode`, `academy.setActive`. This is the path every pilot gym walks
       first.
-- [ ] **7.3 Test the public surface.** `dropIn.submit` (stranger-writable insert
+- [x] **7.3 Test the public surface.** `dropIn.submit` (stranger-writable insert
       behind the wall poster) and the `rateLimited` middleware driven through a
       real procedure, so the `path:ip` keying at `trpc.ts:164` is verified.
-- [ ] **7.4 Test the destructive schedule writes.** `template.rebuild`,
+- [x] **7.4 Test the destructive schedule writes.** `template.rebuild`,
       `template.delete`, `class.cancel`.
-- [ ] **7.5 Test the attendance mutations.** `attendance.mark`, `markAll`,
+- [x] **7.5 Test the attendance mutations.** `attendance.mark`, `markAll`,
       `addVisitor`. The instructor's daily job.
-- [ ] **7.6 Close the rest.** `referral.correct`, `stats.revenue`,
+- [x] **7.6 Close the rest.** `referral.correct`, `stats.revenue`,
       `stats.drifting`, `packages/domain/src/local-date.ts`,
       `packages/db/src/invite.ts`, the two `FOR UPDATE` never-ownerless
       transactions (`membership.ts:258,303`), and `eraseMemberData` per-table
       completeness, which `erase.ts:47-48` warns about and nothing checks.
-- [ ] **GATE 7.** Gates green. Final summary in `## Log`. Then stop.
+- [x] **GATE 7.** Gates green. Final summary in `## Log`. Then stop.
 
 ---
 
@@ -2206,4 +2206,250 @@ reverts cleanly.
 
 **Next.** Phase 7, coverage. 46 of 104 procedures have no test, and 7.0 fixes the
 gate that let a broken test pass.
+
+### Phase 7
+
+**7.0 Put every `test/` directory in the typecheck gate** - done 2026-08-25.
+One flag per package, five packages:
+
+```
+"typecheck": "tsc --noEmit --emitDeclarationOnly false && tsc -p test/tsconfig.json --noEmit"
+```
+
+Done in the package scripts, not by merging the tsconfigs, because the split
+exists to keep `build` off the test files. `packages/*/tsconfig.json` includes
+`src` and extends `compiled-package.json`; `test/tsconfig.json` includes `.` and
+extends `base.json`. Both stay as they are.
+
+**Verified by breaking it on purpose.** A gate that passes proves nothing, and
+this whole item exists because a passing gate was covering nothing. Appended
+`const _proof: number = "not a number"` to a domain test:
+
+```
+test/invalidation.test.ts(49,7): error TS2322: Type 'string' is not assignable to type 'number'.
+Exit status 2
+```
+
+Reverted, green again. Before this change that line would have typechecked
+clean and vitest would have stripped it without a word.
+
+**Nothing else was broken.** 17/17 on the first run with the test directories
+included. The one live defect this gap had hidden was already found and fixed
+during item 3.4 (`packages/domain/test/notify.test.ts` calling
+`buildAnnouncementMessage` with an `academyName` its signature refuses), and that
+file has since been deleted with the decoy rules it covered in item 4.1.
+
+Files: `packages/{api,db,domain,validators,notifications}/package.json`.
+
+**7.1 Unblock `authApi` in the api test harness** - done 2026-08-25. The Proxy
+that threw on every access is replaced by `fakeAuthApi` in
+`packages/api/test/helpers.ts`.
+
+The routers make exactly **four** Better Auth calls, so the stand-in implements
+four: `createOrganization`, `updateOrganization`, `setActiveOrganization`,
+`getSession`. Anything else still throws, so a router reaching for an untested
+Better Auth call fails loudly rather than silently doing nothing.
+
+**The stand-in reproduces the plugin's hooks, or the tests would test the
+stand-in.** `beforeCreateOrganization` assigns `publicCode`, which is NOT NULL
+since migration `0010` and cannot be set afterwards, and
+`afterCreateOrganization` flips the creator's membership to active. Both reuse
+the real helpers from `@matops/db` (`generateAcademyCode`, `setMemberActive`)
+rather than reimplementing them, so the code generator and the activation stay
+one implementation.
+
+`setActiveOrganization` records into a map the harness exposes as
+`activeOrgOf(userId)`. The session in a test ctx is a plain object, so this is
+how a test can assert the switch was actually requested.
+
+**7.2 Test the onboarding funnel** - done 2026-08-25.
+`packages/api/test/onboarding.test.ts`, 14 tests, all passing. This is the path
+every pilot gym walks first and it had no test at all.
+
+What they pin down:
+
+- **Start a gym** makes the creator a working `owner`/`active` in one step, mints
+  a six-digit code, and makes the new gym active. Two gyms get two codes.
+  A signed-out caller gets `UNAUTHORIZED`.
+- **The invite-link join** lands `pending` with the academy role **withheld**:
+  `invited_role` carries it and `role` does not, which is the ADR 20/23 rule that
+  a missed status check must not become a role grant. The instructor link carries
+  `instructor` the same way.
+- The joiner's typed name and phone reach the `user` row.
+- **A second tap on the link is idempotent** and leaves exactly one member row.
+- An unminted token is `NOT_FOUND`. **A rotated token stops working and the one
+  that replaced it works**, which is the whole point of rotation and was
+  unverified.
+- **Join by code** lands pending as a student; an unknown code is `NOT_FOUND`.
+- **Switching academies** works for a gym you belong to, and a gym you do not
+  belong to gives `NOT_FOUND` with nothing recorded. A missing academy id gives
+  the same answer as a foreign one, which is the deliberate choice from item 2.3.
+
+Files: `packages/api/test/helpers.ts`, `packages/api/test/onboarding.test.ts`.
+`@matops/api` typecheck green, now including its `test/` directory.
+
+**7.3 Test the public surface** - done 2026-08-25.
+`packages/api/test/public-surface.test.ts`, 13 tests. `dropIn.submit` is the one
+insert a stranger can make with no account, reached from a poster on a wall, so
+it is the procedure a pilot gym is most exposed on.
+
+The harness gained an optional `headers` argument, because the rate limiter keys
+on `path:ip` and every test ctx had an empty `Headers`. Without it the middleware
+could only ever be tested at unit level, which item 7.3 specifically said was not
+enough.
+
+What the tests pin down:
+
+- A walk-in with no account is recorded, and a returning one updates the same row
+  rather than creating a second.
+- The class **on right now** is attached, and nothing is attached when no class
+  is on.
+- An unknown academy is `NOT_FOUND` **with nothing written**.
+- A lead is owner-only and does not leak to an instructor or another gym.
+- **The rate limit through a real procedure:** five submits pass from one address
+  and the sixth is `TOO_MANY_REQUESTS`; a second address is unaffected, so one
+  flooder cannot lock a gym out; and a different path from the same address still
+  works, which is the `path:ip` keying the item named.
+- `invite.resolve` resolves a live token and refuses an unminted one.
+
+**My test was wrong about the visit counter and the code was right.** I asserted
+that a second form fill counts a second visit. It does not, deliberately: the
+`onConflictDoUpdate` only increments when the class differs, with a comment
+saying "a visit is a NEW class, not a new form submit". So the tests now pin the
+real rule, which had no coverage at all: a double submit during one class stays
+at one visit, and a submit during a later class makes it two. That rule protects
+a gym's lead numbers from a visitor tapping submit twice.
+
+**7.4 Test the destructive schedule writes** - done 2026-08-25.
+`packages/api/test/schedule-writes.test.ts`, 12 tests. These are the three
+procedures that can wipe a gym's calendar.
+
+- **`template.delete`** cancels the FUTURE classes it generated, keeps past ones
+  scheduled, and leaves a one-off alone. The booking rows survive a cancel, which
+  is what keeps attendance history intact. A second delete is `NOT_FOUND`. A
+  student is refused; an instructor is allowed, because they run the desk.
+- **`template.rebuild` is owner-only**, refused for both instructor and student.
+  `rebuildPreview` names the damage before the owner commits, and its
+  `bookingsAffected` count matches the bookings actually at risk. A rebuild never
+  touches a past class or a hand-entered one-off, and it does fill the horizon.
+- **`class.cancel`** cancels and the booked student gets the inbox row. Cancelling
+  an already-cancelled class is `NOT_FOUND` **and sends nothing**, so nobody is
+  told twice. A student cannot cancel a class.
+
+**7.5 Test the attendance mutations** - done 2026-08-25.
+`packages/api/test/attendance-writes.test.ts`, 14 tests. The instructor's daily
+job, previously untested end to end.
+
+- **`mark`** sets the status, stamps `marked_by`, and sets `attended_at` only for
+  present, clearing it when a mark is changed to absent. Marking someone who never
+  booked is `NOT_FOUND` with the "add them as a walk-in" message.
+- **The 14-day backfill window is enforced on both sides**: a class 30 days old
+  and a class next week are both `PRECONDITION_FAILED`. This is the same rule ADR
+  96 found the QR check-in wrongly reusing, so it is worth having pinned here.
+- **`markAll`** marks only unmarked live bookings: an already-absent student keeps
+  their mark and a cancelled booking is never marked present. An empty class
+  returns `{marked: 0}` rather than erroring.
+- **`addWalkIn`** records `booking_status: none` with `present`, and
+  **`booking_count` stays 0** — a walk-in must never consume a seat.
+- **`addVisitor`** writes the lead against the class with `consent: false`, which
+  is the deliberate rule that a gym cannot tick a contact-consent box for someone
+  who is not at the keyboard.
+- Students are refused throughout, including marking themselves present.
+
+**7.6 Close the rest** - done 2026-08-25.
+
+- **`eraseMemberData` per-table completeness** is now structural, which is what
+  `erase.ts`'s own comment asked for: `packages/db/test/erase-coverage.test.ts`
+  asks Postgres for every table with an `academy_id` column and requires each one
+  to be either deleted by the erase or carry a written exemption. Stale
+  exemptions fail too, so the list cannot rot. **No defect found** - every table
+  holding member data is named. What it buys is that the next tenant-scoped table
+  cannot be added without someone deciding whether a member erase should remove
+  its rows, which is how an owner answers a data-deletion request.
+- **`stats.dashboard` content** (8 tests): the 30-day insights window, the
+  attendance rate, this month's confirmed money against last month, an
+  unconfirmed claim staying out of it, who counts as drifting, and that staff
+  never do.
+- **`referral.correct`** (6 tests): moving credit writes an audit row, clearing it
+  works, correcting nothing and correcting to the same person are both refused,
+  a coach cannot be the target, owner-only.
+- **`local-date.ts`** (9 tests): day boundaries drawn in the academy zone rather
+  than UTC, Sunday-aligned week buckets, month buckets, and **the DST jump** -
+  every academy-zone statistic rests on this and none of it was covered.
+- **`packages/db/src/invite.ts`** is now covered in passing: `getOrCreateInvite`,
+  `rotateInvite` and `resolveInviteToken` are all exercised by the onboarding and
+  public-surface tests, including that rotation actually kills the old token.
+- **Not done, deliberately: the concurrent race in the two `FOR UPDATE`
+  never-ownerless transactions.** PGlite is a single connection, so two callers
+  cannot actually race there and a test would prove nothing. The single-caller
+  guard is already covered in `membership-lifecycle.test.ts`. Reproducing the race
+  needs a real Postgres with two connections, which is a different kind of test
+  than this suite runs.
+
+## GATE 7 — passed
+
+2026-08-25, on `release/pilot-prep`. The last gate.
+
+- `pnpm typecheck` 17/17, **now including every `test/` directory**.
+- `pnpm lint` 15/15.
+- `pnpm test` **812 passed, 0 failed** (domain 415, api 252, db 113,
+  validators 29, notifications 3). Up 79 from 733.
+- `next build` passes, 23 routes prerender.
+
+Docs: ADR [99](issues/99-cover-the-procedures-a-pilot-gym-walks-first.md), plus
+`docs/map.md`, `docs/architecture.md`, `docs/roadmap.md` and `CHANGELOG.md`.
+No `docs/spec.md` change: no production behaviour moved this phase.
+
+### The whole epic, in one place
+
+Eight phases, ADRs 92-99. `pnpm test` went **589 → 812**, and the suite went from
+27 failing in 5m49s to green in about 20 seconds.
+
+**Ten defects were found by reading, not from a bug report.** In rough order of
+what they would have cost a real gym:
+
+1. The QR check-in mutation accepted a class from two weeks ago, so a student
+   could mark themselves present at a class they never attended. Attendance feeds
+   the gym's stats and its drifting list.
+2. The tenant transaction never rolled back on a thrown error, so a resolver that
+   failed halfway committed what it had already written.
+3. Booking and attendance never refreshed the gym's figures, and the frontend
+   merge had widened that stale window to two minutes.
+4. A template saved without edits rewrote every future class to the 180-day
+   horizon.
+5. Both clients reimplemented half of `canBook` and neither knew about the
+   booking window, so a deep link showed a Book button the server then refused.
+6. A long class still running was invisible to the QR scanner.
+7. `HttpUrlSchema` skipped invisible-character stripping, on the one field
+   rendered as a tappable link for every member.
+8. Raw Postgres text reached clients on an internal error.
+9. The owner's grace-period screen and the rule enforcing it had separate
+   defaults.
+10. Two reminder rules had seven passing tests and were never called.
+
+**Five plan items were rejected on evidence** rather than implemented: folding
+rank and notes into a member-detail read (would make ten cheap opens fetch two
+tabs nobody clicked), folding the coach breakdown into the roster (~200 class
+summaries in a response to save one on-demand query), the "five hand-rolled week
+windows" (two concepts, and one of the five was already right), the list of ~45
+dead exports (it undercounts re-exports; `fillLabel` looked unused and is live),
+and one item that a previous phase had already fixed.
+
+**One item shipped that I measured as not helping the number it claimed.**
+`stats.dashboard` does not make the dashboard faster; it reduces three tenant
+transactions to one. Said plainly in ADR 98 rather than dressed up.
+
+### Still open, and none of it is code
+
+- Migration `0027` is **not applied to Neon**.
+- **`CRON_SECRET` is unset**, so the daily dues reminder would 500 in production
+  and silently never run.
+- Local development and production **share one database**.
+- No backup or restore story.
+- The class horizon does not refill itself.
+- Mobile has never run on a device; `expo-camera` needs a dev-client rebuild.
+- The human's call from Phase 4: Monday-first grid versus the Sunday-aligned
+  `weekBucket` behind "weeks trained".
+
+The epic is finished. Every item is `- [x]` or `- [!]` with its reason.
 

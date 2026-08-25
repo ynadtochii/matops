@@ -2,6 +2,13 @@
 
 One line per shipped slice (see `docs/delivery.md` §4). Newest first.
 
+## The parts a new gym touches first now have tests
+
+- **Opening a gym, inviting people, and joining by link or code are covered end to end.** It is the first thing any new academy does and it was the least tested part of the system.
+- **A rotated invite link is now proven to stop working.** That is the whole point of rotating one, and nothing checked it.
+- **Deleting a class template, rebuilding the schedule, and cancelling a class are covered.** These are the three actions that can clear a gym's calendar.
+- **Erasing a member's data is checked against the database itself**, so a new kind of record cannot be added without someone deciding whether a deletion request should remove it.
+
 ## The dashboard tells the truth after you change something
 
 - **Booking a class, or marking a register, now updates the gym's numbers straight away.** They used to keep showing the old figures for up to two minutes: the insights, the "who's drifting" list, and a student's own training stats. ADR [98](docs/issues/98-fewer-round-trips-and-one-invalidation-rule.md).
