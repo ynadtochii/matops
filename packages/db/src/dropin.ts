@@ -1,8 +1,8 @@
 import { and, eq, gte, isNull, lt, sql } from "drizzle-orm";
 
+import type { DbExec } from "./client";
 import type { DbReader } from "./tenant";
 import { organization } from "./auth-schema";
-import { db } from "./client";
 import { classInstance, dropIn } from "./scheduling";
 
 /**
@@ -16,7 +16,7 @@ import { classInstance, dropIn } from "./scheduling";
 /** Public academy info for the drop-in page header; null if the id is unknown. */
 export async function getAcademyPublic(
   academyId: string,
-  exec: DbReader = db,
+  exec: DbReader,
 ): Promise<{ academyId: string; name: string } | null> {
   const rows = await exec
     .select({ academyId: organization.id, name: organization.name })
@@ -35,10 +35,11 @@ export async function listAcademyClassesInWindow(
   academyId: string,
   fromMs: number,
   toMs: number,
+  exec: DbExec,
 ): Promise<
   { id: string; startsAt: Date; durationMinutes: number; status: string }[]
 > {
-  return db
+  return exec
     .select({
       id: classInstance.id,
       startsAt: classInstance.startsAt,
@@ -73,9 +74,10 @@ export interface CreateDropInInput {
  */
 export async function createDropIn(
   input: CreateDropInInput,
+  exec: DbExec,
 ): Promise<{ visitCount: number }> {
   const now = new Date();
-  const [row] = await db
+  const [row] = await exec
     .insert(dropIn)
     .values({
       academyId: input.academyId,

@@ -4,7 +4,7 @@ import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 
 import type { DisciplineTone } from "@matops/domain";
-import { capacityDisplay, disciplineTone } from "@matops/domain";
+import { capacityDisplay, dayWindow, disciplineTone } from "@matops/domain";
 
 import type { Theme } from "~/components/theme";
 import type { RouterOutputs } from "~/utils/api";
@@ -38,13 +38,6 @@ import {
 } from "~/utils/format";
 
 type ClassRow = RouterOutputs["class"]["mine"][number];
-
-/** Local midnight today — the start of the rolling week window. */
-function startOfToday(): Date {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
 
 /** The discipline rail colour. Same tones the web schedule paints (ADR 53). */
 const toneColorOf = (t: Theme): Record<DisciplineTone, string> => ({
@@ -242,9 +235,9 @@ export default function Schedule() {
 
   const now = new Date();
   const todayKey = dayKey(now);
-  const windowStart = startOfToday();
-  const windowEnd = new Date(windowStart);
-  windowEnd.setDate(windowEnd.getDate() + 7);
+  const { from: windowStart, to: windowEnd } = dayWindow(now, {
+    aheadDays: 7,
+  });
   const from = windowStart.toISOString();
   const to = windowEnd.toISOString();
 

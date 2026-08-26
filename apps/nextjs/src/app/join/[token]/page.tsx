@@ -1,9 +1,11 @@
+import { Suspense } from "react";
 import { z } from "zod/v4";
 
 import { Logo } from "@matops/ui/logo";
 import { NameSchema, PhoneSchema } from "@matops/validators";
 
 import type { JoinProfile } from "./join-flow";
+import { MatLoader } from "~/app/_components/mat-loader";
 import { getSession } from "~/auth/server";
 import { JoinFlow } from "./join-flow";
 
@@ -36,7 +38,24 @@ function carriedProfile(query: Query): JoinProfile | undefined {
   }
 }
 
-export default async function JoinPage({
+export default function JoinPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ token: string }>;
+  searchParams: Promise<Query>;
+}) {
+  return (
+    <main className="container flex min-h-screen flex-col items-center justify-center gap-6 py-16">
+      <Logo size={26} />
+      <Suspense fallback={<MatLoader label="Opening your invite" />}>
+        <Join params={params} searchParams={searchParams} />
+      </Suspense>
+    </main>
+  );
+}
+
+async function Join({
   params,
   searchParams,
 }: {
@@ -47,10 +66,5 @@ export default async function JoinPage({
   const session = await getSession();
   const profile = session ? carriedProfile(await searchParams) : undefined;
 
-  return (
-    <main className="container flex min-h-screen flex-col items-center justify-center gap-6 py-16">
-      <Logo size={26} />
-      <JoinFlow token={token} signedIn={!!session} profile={profile} />
-    </main>
-  );
+  return <JoinFlow token={token} signedIn={!!session} profile={profile} />;
 }

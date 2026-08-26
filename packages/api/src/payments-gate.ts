@@ -1,8 +1,10 @@
 import type { DbReader, Membership } from "@matops/db";
 import type { BookingAccess } from "@matops/domain";
 import { and, eq } from "@matops/db";
-import { memberDues, paymentClaim, paymentSettings } from "@matops/db/schema";
-import { bookingAccess, DEFAULT_GRACE_DAYS } from "@matops/domain";
+import { memberDues, paymentClaim } from "@matops/db/schema";
+import { bookingAccess } from "@matops/domain";
+
+import { readPaymentSettings } from "./payments-read";
 
 const OPEN_ACCESS: BookingAccess = {
   state: "ok",
@@ -10,28 +12,12 @@ const OPEN_ACCESS: BookingAccess = {
   daysUntilLock: null,
 };
 
-export async function loadGateSettings(db: DbReader) {
-  const row = (
-    await db
-      .select({
-        graceDays: paymentSettings.graceDays,
-        enforcedAt: paymentSettings.enforcedAt,
-      })
-      .from(paymentSettings)
-      .limit(1)
-  )[0];
-  return {
-    graceDays: row?.graceDays ?? DEFAULT_GRACE_DAYS,
-    enforcedAt: row?.enforcedAt ?? null,
-  };
-}
-
 export async function loadBookingAccess(
   db: DbReader,
   membership: Membership,
 ): Promise<BookingAccess> {
   if (membership.role !== "student") return OPEN_ACCESS;
-  const settings = await loadGateSettings(db);
+  const settings = await readPaymentSettings(db);
   if (!settings.enforcedAt) return OPEN_ACCESS;
 
   const dues = (

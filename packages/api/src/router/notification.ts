@@ -1,12 +1,13 @@
 import type { TRPCRouterRecord } from "@trpc/server";
 
 import type { AnnouncementAudience } from "@matops/domain";
-import { and, desc, eq, isNull, listMembersOf, sql } from "@matops/db";
+import { and, desc, eq, isNull, sql } from "@matops/db";
 import { notification } from "@matops/db/schema";
 import { announcementRecipients } from "@matops/domain";
 import { AnnounceSchema } from "@matops/validators";
 
 import type { MemberScope } from "../members";
+import { rosterOf } from "../members";
 import { notifyAnnouncement } from "../notify";
 import { memberProcedure, staffProcedure } from "../trpc";
 
@@ -15,7 +16,7 @@ async function announcementTargets(
   ctx: MemberScope,
   audience: AnnouncementAudience,
 ): Promise<string[]> {
-  const roster = await listMembersOf(ctx.academyId, ctx.db);
+  const roster = await rosterOf(ctx);
   return announcementRecipients(roster, audience);
 }
 
@@ -85,7 +86,7 @@ export const notificationRouter = {
    * form labels its button with this, so nobody posts blind.
    */
   audienceCounts: staffProcedure.query(async ({ ctx }) => {
-    const roster = await listMembersOf(ctx.academyId, ctx.db);
+    const roster = await rosterOf(ctx);
     return {
       all: announcementRecipients(roster, "all").length,
       students: announcementRecipients(roster, "students").length,
@@ -99,14 +100,17 @@ export const notificationRouter = {
     .mutation(async ({ ctx, input }) => {
       const recipients = await announcementTargets(ctx, input.audience);
       if (recipients.length === 0) return { ok: true as const, sent: 0 };
-      ctx.afterCommit(() =>
-        notifyAnnouncement({
-          academyId: ctx.academyId,
-          userIds: recipients,
-          title: input.title,
-          body: input.body,
-          sentBy: ctx.session.user.name,
-        }),
+      ctx.afterCommit((exec) =>
+        notifyAnnouncement(
+          {
+            academyId: ctx.academyId,
+            userIds: recipients,
+            title: input.title,
+            body: input.body,
+            sentBy: ctx.session.user.name,
+          },
+          exec,
+        ),
       );
       return { ok: true as const, sent: recipients.length };
     }),

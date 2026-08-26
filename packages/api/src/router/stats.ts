@@ -1,23 +1,16 @@
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
+import type { MemberRow } from "@matops/db";
 import type { ClassMark, CoachClass, CoachWindowKey } from "@matops/domain";
-import {
-  and,
-  eq,
-  gte,
-  inArray,
-  isNull,
-  listMembersOf,
-  lt,
-  sql,
-} from "@matops/db";
+import { and, eq, gte, inArray, isNull, lt, sql } from "@matops/db";
 import {
   classInstance,
   classParticipation,
   paymentClaim,
 } from "@matops/db/schema";
 import {
+  canReadCoachFigures,
   classifyDrift,
   COACH_WINDOWS,
   coachBreakdown,
@@ -26,9 +19,12 @@ import {
   coachWorkloadFor,
   groupMoneyByCurrency,
   gymInsights,
+  isActiveMember,
   isOnRoster,
   isOwner,
+  isStaff,
   monthBucket,
+  newMemberCounts,
   trainingStats,
 } from "@matops/domain";
 import { CoachDetailSchema, CoachStatsSchema } from "@matops/validators";
@@ -36,7 +32,7 @@ import { CoachDetailSchema, CoachStatsSchema } from "@matops/validators";
 import type { TimeZoneCtx } from "../academy-tz";
 import type { MemberScope } from "../members";
 import { academyTimeZone } from "../academy-tz";
-import { staffAmong } from "../members";
+import { rosterOf, staffAmong, nameByUser as userNames } from "../members";
 import { enrolledProcedure, ownerProcedure, staffProcedure } from "../trpc";
 
 /**
@@ -126,7 +122,7 @@ async function loadCoachContext(
   const timeZone = await academyTimeZone(ctx);
   const range = coachWindowRange(COACH_WINDOWS[windowKey], now, timeZone);
   const { classes, marks } = await readCoachRows(ctx.db, range);
-  const members = await listMembersOf(ctx.academyId, ctx.db);
+  const members = await rosterOf(ctx);
   return {
     now,
     timeZone,
@@ -134,7 +130,7 @@ async function loadCoachContext(
     classes,
     marks,
     instructorIds: staffAmong(members).map((m) => m.userId),
-    nameByUser: new Map(members.map((m) => [m.userId, m.name])),
+    nameByUser: userNames(members),
   };
 }
 
@@ -145,6 +141,131 @@ async function loadCoachContext(
  * `@matops/domain` stats engine; this router only fetches rows and picks the
  * academy time zone.
  */
+type DashboardScope = MemberScope & { db: TenantDb };
+
+async function readGymInsights(
+  ctx: DashboardScope,
+  now: Date,
+  timeZone: string,
+  members: MemberRow[] | null,
+) {
+  const windowStart = new Date(
+    now.getTime() - GYM_WINDOW_DAYS * 24 * 60 * 60 * 1000,
+  );
+  const marked = await ctx.db
+    .select({
+      startsAt: classInstance.startsAt,
+      title: classInstance.title,
+      discipline: classInstance.discipline,
+      status: classParticipation.attendanceStatus,
+    })
+    .from(classParticipation)
+    .innerJoin(classInstance, eq(classParticipation.classId, classInstance.id))
+    .where(
+      and(
+        inArray(classParticipation.attendanceStatus, ["present", "absent"]),
+        gte(classInstance.startsAt, windowStart),
+      ),
+    );
+  const newMembers = members
+    ? newMemberCounts(
+        members
+          .filter(isOnRoster)
+          .map((m) => monthBucket(m.createdAt, timeZone)),
+        monthBucket(now, timeZone),
+      )
+    : null;
+  return {
+    ...gymInsights(
+      // The `where` already excludes `unmarked`; narrow rather than assert so
+      // the compiler proves it instead of taking our word for it.
+      marked.flatMap((r) =>
+        r.status === "unmarked" ? [] : [{ ...r, status: r.status }],
+      ),
+      now,
+      timeZone,
+    ),
+    newMembers,
+  };
+}
+
+async function readRevenue(ctx: DashboardScope, now: Date, timeZone: string) {
+  const windowStart = new Date(
+    now.getTime() - REVENUE_WINDOW_DAYS * 24 * 60 * 60 * 1000,
+  );
+  const rows = await ctx.db
+    .select({
+      amountMinor: paymentClaim.amountMinor,
+      currency: paymentClaim.currency,
+      confirmedAt: paymentClaim.confirmedAt,
+    })
+    .from(paymentClaim)
+    .where(
+      and(
+        eq(paymentClaim.status, "confirmed"),
+        gte(paymentClaim.confirmedAt, windowStart),
+      ),
+    );
+  const thisBucket = monthBucket(now, timeZone);
+  const inMonth = (bucket: number) =>
+    groupMoneyByCurrency(
+      rows.filter(
+        (r) =>
+          r.confirmedAt !== null &&
+          monthBucket(r.confirmedAt, timeZone) === bucket,
+      ),
+    );
+  const current = inMonth(thisBucket);
+  const previous = new Map(
+    inMonth(thisBucket - 1).map((m) => [m.currency, m.amountMinor]),
+  );
+  const currencies = new Set([
+    ...current.map((m) => m.currency),
+    ...previous.keys(),
+  ]);
+  return [...currencies].sort().map((currency) => ({
+    currency,
+    amountMinor: current.find((m) => m.currency === currency)?.amountMinor ?? 0,
+    previousMinor: previous.get(currency) ?? 0,
+  }));
+}
+
+async function readDrifting(
+  ctx: DashboardScope,
+  now: Date,
+  members: MemberRow[],
+) {
+  const lastByStudent = await ctx.db
+    .select({
+      studentId: classParticipation.studentId,
+      last: sql<string>`max(${classInstance.startsAt})`,
+    })
+    .from(classParticipation)
+    .innerJoin(classInstance, eq(classParticipation.classId, classInstance.id))
+    .where(eq(classParticipation.attendanceStatus, "present"))
+    .groupBy(classParticipation.studentId);
+  const lastByUser = new Map(
+    lastByStudent.map((r) => [r.studentId, new Date(r.last)]),
+  );
+
+  return members
+    .filter((m) => isActiveMember(m) && !isStaff(m) && lastByUser.has(m.userId))
+    .map((m) => {
+      const lastAttendance = lastByUser.get(m.userId) ?? null;
+      return {
+        memberId: m.memberId,
+        name: m.name,
+        lastAttendance,
+        drift: classifyDrift(lastAttendance, now),
+      };
+    })
+    .filter((m) => m.drift !== "active")
+    .sort(
+      (a, b) =>
+        (a.lastAttendance?.getTime() ?? 0) - (b.lastAttendance?.getTime() ?? 0),
+    );
+}
+
 export const statsRouter = {
   /**
    * The caller's own training summary (spec S7, mobile "My Training" card).
@@ -173,63 +294,27 @@ export const statsRouter = {
   }),
 
   /**
-   * Gym-activity insights for the owner dashboard (spec O1, C.1). Marked
-   * attendance (present + absent) over a 30-day window → the pure `gymInsights`
-   * (visits this week/month, busiest classes, attendance rate — null unless
-   * absent marks exist, by-weekday). Staff-visible; every value is an aggregate
-   * count, no names. `newMembers` is the one owner-only figure (spec O1, D.4),
-   * so it comes back null for an instructor and the member read is skipped.
+   * Everything the O1 dashboard's lower half needs, in one read (ADR 98).
+   * Gym-activity insights (spec O1, C.1), who is drifting (C.1/C.2) and the
+   * month's confirmed revenue used to be three owner/staff procedures. They
+   * each opened their own tenant transaction, each re-read the academy time
+   * zone, and two of them each read the roster.
+   *
+   * Staff-tier, because insights are staff-visible and every value in them is
+   * an aggregate with no names. The three owner-only figures come back `null`
+   * for an instructor and their reads are skipped, which is the shape `gym`
+   * already used for `newMembers` (spec O1, D.4).
    */
-  gym: staffProcedure.query(async ({ ctx }) => {
+  dashboard: staffProcedure.query(async ({ ctx }) => {
     const now = new Date();
-    const windowStart = new Date(
-      now.getTime() - GYM_WINDOW_DAYS * 24 * 60 * 60 * 1000,
-    );
-    const marked = await ctx.db
-      .select({
-        startsAt: classInstance.startsAt,
-        title: classInstance.title,
-        discipline: classInstance.discipline,
-        status: classParticipation.attendanceStatus,
-      })
-      .from(classParticipation)
-      .innerJoin(
-        classInstance,
-        eq(classParticipation.classId, classInstance.id),
-      )
-      .where(
-        and(
-          inArray(classParticipation.attendanceStatus, ["present", "absent"]),
-          gte(classInstance.startsAt, windowStart),
-        ),
-      );
     const timeZone = await academyTimeZone(ctx);
-    // Growth, this month against last. Both sides count only retained members,
-    // so a joiner who has since been removed is missing from either — the two
-    // numbers are biased the same way and stay comparable.
     const owner = isOwner(ctx.membership);
-    const members = owner ? await listMembersOf(ctx.academyId, ctx.db) : [];
-    const thisMonth = monthBucket(now, timeZone);
-    const joined = members
-      .filter(isOnRoster)
-      .map((m) => monthBucket(m.createdAt, timeZone));
-    const newMembers = owner
-      ? {
-          thisMonth: joined.filter((b) => b === thisMonth).length,
-          lastMonth: joined.filter((b) => b === thisMonth - 1).length,
-        }
-      : null;
+    const members = owner ? await rosterOf(ctx) : null;
+
     return {
-      ...gymInsights(
-        // The `where` already excludes `unmarked`; narrow rather than assert so
-        // the compiler proves it instead of taking our word for it.
-        marked.flatMap((r) =>
-          r.status === "unmarked" ? [] : [{ ...r, status: r.status }],
-        ),
-        now,
-        timeZone,
-      ),
-      newMembers,
+      insights: await readGymInsights(ctx, now, timeZone, members),
+      drifting: members ? await readDrifting(ctx, now, members) : null,
+      revenue: owner ? await readRevenue(ctx, now, timeZone) : null,
     };
   }),
 
@@ -272,7 +357,9 @@ export const statsRouter = {
     .input(CoachDetailSchema)
     .query(async ({ ctx, input }) => {
       const instructorId = input.instructorId ?? ctx.session.user.id;
-      if (instructorId !== ctx.session.user.id && !isOwner(ctx.membership)) {
+      if (
+        !canReadCoachFigures(ctx.membership, instructorId, ctx.session.user.id)
+      ) {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "Only an owner can read another coach's figures",
@@ -289,111 +376,4 @@ export const statsRouter = {
         breakdown: coachBreakdown({ ...base, instructorId, timeZone }),
       };
     }),
-
-  /**
-   * Owner-confirmed payment money for this academy month against last (spec O1,
-   * D.5). Owner-only: the O1 insights row is staff-visible, and instructors
-   * never see money (ADR 38 / 52 role split). "Confirmed" is the only honest
-   * basis — dues are manual bank transfers (ADR 40), so money exists once the
-   * owner has matched a transfer to a claim, never before.
-   *
-   * Currencies are never added together (the O9 rule): the result is one entry
-   * per currency, each carrying its own previous-month figure, and a currency
-   * billed in either month appears in both so a drop to zero is visible.
-   */
-  revenue: ownerProcedure.query(async ({ ctx }) => {
-    const now = new Date();
-    const windowStart = new Date(
-      now.getTime() - REVENUE_WINDOW_DAYS * 24 * 60 * 60 * 1000,
-    );
-    const rows = await ctx.db
-      .select({
-        amountMinor: paymentClaim.amountMinor,
-        currency: paymentClaim.currency,
-        confirmedAt: paymentClaim.confirmedAt,
-      })
-      .from(paymentClaim)
-      .where(
-        and(
-          eq(paymentClaim.status, "confirmed"),
-          gte(paymentClaim.confirmedAt, windowStart),
-        ),
-      );
-    const timeZone = await academyTimeZone(ctx);
-    const thisBucket = monthBucket(now, timeZone);
-    const inMonth = (bucket: number) =>
-      groupMoneyByCurrency(
-        rows.filter(
-          (r) =>
-            r.confirmedAt !== null &&
-            monthBucket(r.confirmedAt, timeZone) === bucket,
-        ),
-      );
-    const current = inMonth(thisBucket);
-    const previous = new Map(
-      inMonth(thisBucket - 1).map((m) => [m.currency, m.amountMinor]),
-    );
-    const currencies = new Set([
-      ...current.map((m) => m.currency),
-      ...previous.keys(),
-    ]);
-    return [...currencies].sort().map((currency) => ({
-      currency,
-      amountMinor:
-        current.find((m) => m.currency === currency)?.amountMinor ?? 0,
-      previousMinor: previous.get(currency) ?? 0,
-    }));
-  }),
-
-  /**
-   * Members who used to train here but have gone quiet (spec O1 "who's
-   * drifting", C.1). For every non-staff member with ≥1 attended session, band
-   * their recency with the pure `classifyDrift`; return those past `active`,
-   * stalest first, each linking to their detail (C.2). Never-attended members
-   * are excluded — they never started, so they aren't "drifting". Owner-only.
-   */
-  drifting: ownerProcedure.query(async ({ ctx }) => {
-    const now = new Date();
-    const lastByStudent = await ctx.db
-      .select({
-        studentId: classParticipation.studentId,
-        last: sql<string>`max(${classInstance.startsAt})`,
-      })
-      .from(classParticipation)
-      .innerJoin(
-        classInstance,
-        eq(classParticipation.classId, classInstance.id),
-      )
-      .where(eq(classParticipation.attendanceStatus, "present"))
-      .groupBy(classParticipation.studentId);
-    const lastByUser = new Map(
-      lastByStudent.map((r) => [r.studentId, new Date(r.last)]),
-    );
-
-    const members = await listMembersOf(ctx.academyId, ctx.db);
-    const drifting = members
-      .filter(
-        (m) =>
-          m.status === "active" &&
-          m.role !== "owner" &&
-          m.role !== "instructor" &&
-          lastByUser.has(m.userId),
-      )
-      .map((m) => {
-        const lastAttendance = lastByUser.get(m.userId) ?? null;
-        return {
-          memberId: m.memberId,
-          name: m.name,
-          lastAttendance,
-          drift: classifyDrift(lastAttendance, now),
-        };
-      })
-      .filter((m) => m.drift !== "active")
-      .sort(
-        (a, b) =>
-          (a.lastAttendance?.getTime() ?? 0) -
-          (b.lastAttendance?.getTime() ?? 0),
-      );
-    return drifting;
-  }),
 } satisfies TRPCRouterRecord;

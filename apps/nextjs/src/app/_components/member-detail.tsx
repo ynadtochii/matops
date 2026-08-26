@@ -7,6 +7,7 @@ import {
   compareRank,
   DAY_LABELS,
   disciplineLabel,
+  formatMoney,
   formatRank,
   isOwner,
   PAYMENT_STATUS_LABEL,
@@ -24,7 +25,6 @@ import { toast } from "@matops/ui/toast";
 
 import type { Member, MemberHistory } from "./members";
 import { dateFmt } from "~/lib/format";
-import { formatMoney } from "~/lib/money";
 import { useTRPC } from "~/trpc/react";
 import { useAcademy } from "./academy";
 import { cardClass, DriftBadge, DUES_TONE, Stat, Tabs } from "./primitives";

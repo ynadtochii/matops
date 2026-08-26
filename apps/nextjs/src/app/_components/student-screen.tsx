@@ -5,7 +5,12 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
-import { capacityDisplay, groupByDay, spotsLeftLabel } from "@matops/domain";
+import {
+  capacityDisplay,
+  groupByDay,
+  spotsLeftLabel,
+  studentWeekWindow,
+} from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
@@ -28,25 +33,34 @@ export function StudentScreen() {
   const { book, cancel, busyFor, lockedMessage } = useBooking();
   const suspended = useAcademy().status === "suspended";
 
-  const { from, to, todayKey } = useMemo(() => {
+  const { todayKey, windowStart, windowEnd } = useMemo(() => {
     const start = new Date();
     start.setHours(0, 0, 0, 0);
     const end = new Date(start);
     end.setDate(end.getDate() + 7);
-    return {
-      from: start.toISOString(),
-      to: end.toISOString(),
-      todayKey: dayKey(start),
-    };
+    return { todayKey: dayKey(start), windowStart: start, windowEnd: end };
   }, []);
 
   const week = useQuery(
-    trpc.class.mine.queryOptions({ from, to }, { enabled: !suspended }),
+    trpc.class.mine.queryOptions(studentWeekWindow(new Date()), {
+      enabled: !suspended,
+    }),
   );
 
   const now = new Date();
 
-  const byDay = useMemo(() => groupByDay(week.data ?? []), [week.data]);
+  // The window is snapped to a UTC day so the server and the browser build the
+  // same cache key. Filtering here is what keeps the list to seven local days.
+  const byDay = useMemo(
+    () =>
+      groupByDay(
+        (week.data ?? []).filter((r) => {
+          const t = new Date(r.startsAt).getTime();
+          return t >= windowStart.getTime() && t < windowEnd.getTime();
+        }),
+      ),
+    [week.data, windowStart, windowEnd],
+  );
 
   if (suspended) {
     return (

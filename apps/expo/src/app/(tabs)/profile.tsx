@@ -7,6 +7,7 @@ import type { PaymentStatus } from "@matops/domain";
 import {
   academyMapUrl,
   disciplineLabel,
+  formatMoney,
   formatRank,
   PAYMENT_STATUS_LABEL,
 } from "@matops/domain";
@@ -149,11 +150,6 @@ function ProfileDetails({
   );
 }
 
-/** Money stored in minor units → "USD 50.00" (Hermes Intl is partial on native). */
-function money(minor: number, currency: string): string {
-  return `${currency} ${(minor / 100).toFixed(2)}`;
-}
-
 const STATUS_TONE: Record<PaymentStatus, "success" | "warning" | "error"> = {
   paid: "success",
   due_soon: "warning",
@@ -198,7 +194,7 @@ function MembershipDues() {
         <View style={{ gap: 4 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Mono size={18} weight={600}>
-              {money(d.amountMinor, d.currency)}
+              {formatMoney(d.amountMinor, d.currency)}
             </Mono>
             <StatusPill
               tone={STATUS_TONE[d.status]}
@@ -316,7 +312,7 @@ function ChoosePlanCard() {
               {p.name}
             </Txt>
             <Txt size={13} tone="muted">
-              {money(p.priceMinor, p.currency)} per month
+              {formatMoney(p.priceMinor, p.currency)} per month
             </Txt>
           </View>
           <Button

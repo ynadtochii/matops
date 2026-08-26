@@ -2,6 +2,8 @@ import { sql } from "drizzle-orm";
 
 import type { db, DbExec } from "./client";
 
+export type { DbExec } from "./client";
+
 /** Restricted, non-BYPASSRLS role the request transaction runs as. */
 export const APP_ROLE = "matops_app";
 /** Transaction-local GUC that the RLS policies read. */

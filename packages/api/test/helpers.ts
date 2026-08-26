@@ -2,6 +2,8 @@ import type { PGlite } from "@electric-sql/pglite";
 import { TRPCError } from "@trpc/server";
 
 import type { DbExec } from "@matops/db/client";
+import { eq, generateAcademyCode, setMemberActive } from "@matops/db";
+import { member, organization } from "@matops/db/schema";
 import { execOn, freshDb } from "@matops/db/testing";
 
 import type { createTRPCContext } from "../src/trpc";
@@ -13,44 +15,119 @@ export interface Harness {
   pg: PGlite;
   exec: DbExec;
   close: () => Promise<void>;
-  as: (userId: string, academyId: string | null) => ReturnType<typeof caller>;
+  as: (
+    userId: string,
+    academyId: string | null,
+    headers?: Headers,
+  ) => ReturnType<typeof caller>;
+  ctxFor: (userId: string, academyId: string | null, headers?: Headers) => Ctx;
+  /** What `setActiveOrganization` was last told, per user. */
+  activeOrgOf: (userId: string) => string | undefined;
 }
 
 function caller(ctx: Ctx) {
   return appRouter.createCaller(ctx);
 }
 
-const notWired = new Proxy(
-  {},
-  {
-    get(_t, key) {
+/**
+ * The four Better Auth calls the routers make, over PGlite. This stands in for
+ * the organization plugin, so it must reproduce what the plugin's hooks do or
+ * the tests would be testing the stand-in: `beforeCreateOrganization` assigns
+ * `publicCode` (NOT NULL since migration 0010) and `afterCreateOrganization`
+ * flips the creator's membership to active. Both reuse the real helpers.
+ *
+ * Anything not implemented here still throws, so a router reaching for an
+ * untested Better Auth call fails loudly instead of silently doing nothing.
+ */
+function fakeAuthApi(
+  userId: string,
+  exec: DbExec,
+  activeOrg: Map<string, string>,
+) {
+  const impl: Record<string, (arg: never) => Promise<unknown>> = {
+    createOrganization: async (arg: {
+      body: { name: string; slug: string };
+    }) => {
+      const id = `org_${arg.body.slug}`;
+      await exec.insert(organization).values({
+        id,
+        name: arg.body.name,
+        slug: arg.body.slug,
+        publicCode: await generateAcademyCode(exec),
+        createdAt: new Date(),
+      });
+      const memberId = `mem_${id}_${userId}`;
+      await exec.insert(member).values({
+        id: memberId,
+        organizationId: id,
+        userId,
+        role: "owner",
+        status: "pending",
+        createdAt: new Date(),
+      });
+      await setMemberActive(memberId, exec);
+      activeOrg.set(userId, id);
+      return { id, name: arg.body.name, slug: arg.body.slug };
+    },
+    updateOrganization: async (arg: {
+      body: { organizationId: string; data: { name?: string } };
+    }) => {
+      if (arg.body.data.name !== undefined) {
+        await exec
+          .update(organization)
+          .set({ name: arg.body.data.name })
+          .where(eq(organization.id, arg.body.organizationId));
+      }
+      return { id: arg.body.organizationId };
+    },
+    setActiveOrganization: (arg: { body: { organizationId: string } }) => {
+      activeOrg.set(userId, arg.body.organizationId);
+      return Promise.resolve({ id: arg.body.organizationId });
+    },
+    getSession: () => Promise.resolve(null),
+  };
+
+  return new Proxy(impl, {
+    get(target, key) {
+      const fn = target[String(key)];
+      if (fn) return fn;
       return () => {
         throw new Error(
-          `ctx.authApi.${String(key)}() is not available in router tests`,
+          `ctx.authApi.${String(key)}() is not wired in router tests`,
         );
       };
     },
-  },
-);
+  });
+}
 
 export async function harness(): Promise<Harness> {
   const pg = await freshDb();
   const exec = execOn(pg);
 
+  const activeOrg = new Map<string, string>();
+
+  const ctxFor = (
+    userId: string,
+    academyId: string | null,
+    headers = new Headers(),
+  ): Ctx => ({
+    authApi: fakeAuthApi(userId, exec, activeOrg) as unknown as Ctx["authApi"],
+    headers,
+    session: {
+      user: { id: userId, name: `User ${userId}` },
+      session: { activeOrganizationId: academyId },
+    } as unknown as Ctx["session"],
+    baseDb: exec,
+  });
+
   return {
     pg,
     exec,
     close: () => pg.close(),
-    as: (userId, academyId) =>
-      caller({
-        authApi: notWired as Ctx["authApi"],
-        headers: new Headers(),
-        session: {
-          user: { id: userId, name: `User ${userId}` },
-          session: { activeOrganizationId: academyId },
-        } as unknown as Ctx["session"],
-        baseDb: exec,
-      }),
+    as: (userId, academyId, headers) =>
+      caller(ctxFor(userId, academyId, headers)),
+    ctxFor,
+    activeOrgOf: (userId) => activeOrg.get(userId),
   };
 }
 

@@ -35,8 +35,6 @@ interface NavItem {
 
 const iconClass = "size-[18px] shrink-0";
 
-const ACADEMY_STALE_TIME = 5 * 60 * 1000;
-
 function contentWidth(pathname: string): string {
   return pathname.startsWith("/schedule") ? "max-w-[1600px]" : "max-w-6xl";
 }
@@ -199,14 +197,8 @@ export function AppShell({
 }) {
   const trpc = useTRPC();
   const pathname = usePathname();
-  const current = useQuery({
-    ...trpc.academy.current.queryOptions(),
-    staleTime: ACADEMY_STALE_TIME,
-  });
-  const mine = useQuery({
-    ...trpc.academy.memberships.queryOptions(),
-    staleTime: ACADEMY_STALE_TIME,
-  });
+  const current = useQuery(trpc.academy.current.queryOptions());
+  const mine = useQuery(trpc.academy.memberships.queryOptions());
 
   // Boot: no chrome to mirror yet, and the answer may be the shell or the gate,
   // so a skeleton would draw a layout that half the time never arrives (ADR 80).

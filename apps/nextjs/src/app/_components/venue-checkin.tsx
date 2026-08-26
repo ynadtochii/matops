@@ -1,13 +1,19 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import dynamic from "next/dynamic";
 
 import { Button } from "@matops/ui/button";
 import { CopyButton } from "@matops/ui/copy-button";
 
 import { shareLink, useCanShare } from "~/lib/share";
 import { SectionHeading } from "./primitives";
-import { QrPoster } from "./qr-poster";
+
+const QrPoster = dynamic(() => import("./qr-poster").then((m) => m.QrPoster), {
+  loading: () => (
+    <div className="border-border mx-auto h-[336px] w-full max-w-xs animate-pulse rounded-lg border bg-white" />
+  ),
+});
 
 /**
  * Venue check-in QR (spec O6, ticket 08). Renders the public `/checkin/[id]`

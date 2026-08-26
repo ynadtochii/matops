@@ -2,7 +2,7 @@ import { ScrollView, View } from "react-native";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 
-import { capacityDisplay } from "@matops/domain";
+import { canBook, capacityDisplay, notBookableMessage } from "@matops/domain";
 
 import { useBookClass, useCancelBooking } from "~/components/book-control";
 import { ClassDetailSkeleton } from "~/components/skeletons";
@@ -79,6 +79,9 @@ export default function ClassDetail() {
   const t = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const q = useQuery(trpc.class.get.queryOptions({ id }, { retry: false }));
+  // Same key as WhoIsIn, which renders below the `q.isPending` gate and so
+  // would not start fetching until the class itself lands.
+  useQuery(trpc.class.attendees.queryOptions({ id }));
 
   const { onBook, isPending: booking, error: bookError } = useBookClass();
   const { onCancel, isPending: cancelling } = useCancelBooking();
@@ -112,34 +115,41 @@ export default function ClassDetail() {
   const booked = c.myBooking === "booked";
   const provisional = booked && c.myBookingTier === "provisional";
   const past = start.getTime() <= new Date().getTime();
-
-  const action = cancelled ? (
-    <Muted>This class was cancelled — booking is closed.</Muted>
-  ) : past ? (
-    <Muted>This class has already started.</Muted>
-  ) : booked ? (
-    <UIStack gap={8}>
-      {provisional && (
-        <Txt size={14} tone="brand">
-          Booked · pending approval
-        </Txt>
-      )}
-      <Button
-        label={cancelling ? "Cancelling…" : "Cancel booking"}
-        variant="destructive"
-        loading={cancelling}
-        disabled={busy}
-        onPress={() => onCancel(c.id)}
-      />
-    </UIStack>
-  ) : (
-    <Button
-      label={booking ? "Booking…" : "Book"}
-      loading={booking}
-      disabled={busy}
-      onPress={() => onBook(c)}
-    />
+  const bookable = canBook(
+    { status: c.status, startsAt: start, deletedAt: null },
+    new Date(),
   );
+  const refusal =
+    bookable.reason && bookable.reason !== "deleted"
+      ? notBookableMessage(bookable.reason)
+      : null;
+
+  const action =
+    booked && !cancelled && !past ? (
+      <UIStack gap={8}>
+        {provisional && (
+          <Txt size={14} tone="brand">
+            Booked · pending approval
+          </Txt>
+        )}
+        <Button
+          label={cancelling ? "Cancelling…" : "Cancel booking"}
+          variant="destructive"
+          loading={cancelling}
+          disabled={busy}
+          onPress={() => onCancel(c.id)}
+        />
+      </UIStack>
+    ) : refusal ? (
+      <Muted>{refusal}.</Muted>
+    ) : (
+      <Button
+        label={booking ? "Booking…" : "Book"}
+        loading={booking}
+        disabled={busy}
+        onPress={() => onBook(c)}
+      />
+    );
 
   return (
     <Screen>

@@ -1,9 +1,9 @@
 import { randomInt } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
 
+import type { DbExec } from "./client";
 import type { DbReader } from "./tenant";
 import { organization } from "./auth-schema";
-import { db } from "./client";
 
 /**
  * Academy-code helpers (docs/issues/32). The code is the plain 6-digit number an
@@ -23,10 +23,10 @@ const CODE_MAX = 999999;
  * codes; the unique index is the final backstop if two creates race. Uses crypto
  * `randomInt` for an even, non-guessable distribution.
  */
-export async function generateAcademyCode(): Promise<string> {
+export async function generateAcademyCode(exec: DbExec): Promise<string> {
   for (let attempt = 0; attempt < 50; attempt++) {
     const code = String(randomInt(CODE_MIN, CODE_MAX + 1));
-    const clash = await db
+    const clash = await exec
       .select({ id: organization.id })
       .from(organization)
       .where(eq(organization.publicCode, code))
@@ -42,7 +42,7 @@ export async function generateAcademyCode(): Promise<string> {
  */
 export async function findAcademyByCode(
   code: string,
-  exec: DbReader = db,
+  exec: DbReader,
 ): Promise<{ academyId: string; name: string; address: string | null } | null> {
   const rows = await exec
     .select({
@@ -61,7 +61,7 @@ export async function findAcademyByCode(
 /** The shared code for one academy (owner display on the web), or null. */
 export async function getAcademyCode(
   academyId: string,
-  exec: DbReader = db,
+  exec: DbReader,
 ): Promise<string | null> {
   const rows = await exec
     .select({ code: organization.publicCode })

@@ -4,6 +4,7 @@ import { createTRPCOptionsProxy } from "@trpc/tanstack-react-query";
 import superjson from "superjson";
 
 import type { AppRouter } from "@matops/api";
+import { staleTimeForQueryKey } from "@matops/domain";
 
 import { authClient } from "./auth";
 import { getBaseUrl } from "./base-url";
@@ -11,7 +12,7 @@ import { getBaseUrl } from "./base-url";
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 30_000,
+      staleTime: (query) => staleTimeForQueryKey(query.queryKey),
     },
   },
 });

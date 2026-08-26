@@ -8,6 +8,8 @@ Scaffolded from [`create-t3-turbo`](https://github.com/t3-oss/create-t3-turbo).
 
 Turborepo · pnpm · tRPC v11 · Better Auth (Organization + magic-link) · Drizzle + Postgres (Neon) · Next.js (Vercel) · Expo (EAS) · Tailwind / NativeWind · TanStack Query.
 
+##
+
 ## Layout
 
 ```
@@ -35,11 +37,11 @@ pnpm dev                # everything   (pnpm dev:next for web only)
 
 ## Common commands
 
-| Command | Does |
-|---|---|
-| `pnpm typecheck` / `pnpm lint` | check types / lint |
+| Command                           | Does                              |
+| --------------------------------- | --------------------------------- |
+| `pnpm typecheck` / `pnpm lint`    | check types / lint                |
 | `pnpm db:push` / `pnpm db:studio` | push schema / open Drizzle studio |
-| `pnpm auth:generate` | regenerate the Better Auth schema |
+| `pnpm auth:generate`              | regenerate the Better Auth schema |
 
 ## Where to start reading
 

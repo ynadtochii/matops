@@ -5,6 +5,7 @@ import {
   CreatePaymentClaimSchema,
   DropInSchema,
   EmailSchema,
+  HttpUrlSchema,
   JoinAcademySchema,
   NameSchema,
   PhoneSchema,
@@ -86,6 +87,38 @@ describe("EmailSchema", () => {
   it("rejects a malformed address", () => {
     expect(EmailSchema.safeParse("sam@").success).toBe(false);
     expect(EmailSchema.safeParse("not an email").success).toBe(false);
+  });
+});
+
+describe("HttpUrlSchema", () => {
+  it("strips invisible characters before parsing the link", () => {
+    const url = ok(HttpUrlSchema.safeParse(`https://example.com/a${ZWSP}b`));
+    expect(url).toBe("https://example.com/ab");
+    expect(url).not.toContain(ZWSP);
+  });
+
+  it("refuses a link whose direction is overridden", () => {
+    const url = ok(
+      HttpUrlSchema.safeParse(`https://example.com/${RTL_OVERRIDE}gnp.exe`),
+    );
+    expect(url).not.toContain(RTL_OVERRIDE);
+  });
+
+  it("still refuses a non-http scheme", () => {
+    expect(HttpUrlSchema.safeParse("javascript:alert(1)").success).toBe(false);
+    expect(HttpUrlSchema.safeParse("data:text/html,<b>x").success).toBe(false);
+  });
+
+  it("cannot be smuggled past the scheme check with an invisible", () => {
+    expect(HttpUrlSchema.safeParse(`java${ZWSP}script:alert(1)`).success).toBe(
+      false,
+    );
+  });
+
+  it("accepts an ordinary link unchanged", () => {
+    expect(ok(HttpUrlSchema.safeParse("https://example.com/maps"))).toBe(
+      "https://example.com/maps",
+    );
   });
 });
 

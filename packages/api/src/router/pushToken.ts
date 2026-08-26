@@ -20,18 +20,22 @@ export const pushTokenRouter = {
   register: protectedProcedure
     .input(RegisterPushTokenSchema)
     .mutation(async ({ ctx, input }) => {
-      await upsertPushToken(ctx.session.user.id, {
-        token: input.token,
-        platform: input.platform,
-        deviceId: input.deviceId,
-      });
+      await upsertPushToken(
+        ctx.session.user.id,
+        {
+          token: input.token,
+          platform: input.platform,
+          deviceId: input.deviceId,
+        },
+        ctx.baseDb,
+      );
       return { ok: true as const };
     }),
 
   unregister: protectedProcedure
     .input(UnregisterPushTokenSchema)
     .mutation(async ({ ctx, input }) => {
-      await deletePushToken(ctx.session.user.id, input.token);
+      await deletePushToken(ctx.session.user.id, input.token, ctx.baseDb);
       return { ok: true as const };
     }),
 } satisfies TRPCRouterRecord;

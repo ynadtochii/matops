@@ -2,6 +2,90 @@
 
 One line per shipped slice (see `docs/delivery.md` §4). Newest first.
 
+## The parts a new gym touches first now have tests
+
+- **Opening a gym, inviting people, and joining by link or code are covered end to end.** It is the first thing any new academy does and it was the least tested part of the system.
+- **A rotated invite link is now proven to stop working.** That is the whole point of rotating one, and nothing checked it.
+- **Deleting a class template, rebuilding the schedule, and cancelling a class are covered.** These are the three actions that can clear a gym's calendar.
+- **Erasing a member's data is checked against the database itself**, so a new kind of record cannot be added without someone deciding whether a deletion request should remove it.
+
+## The dashboard tells the truth after you change something
+
+- **Booking a class, or marking a register, now updates the gym's numbers straight away.** They used to keep showing the old figures for up to two minutes: the insights, the "who's drifting" list, and a student's own training stats. ADR [98](docs/issues/98-fewer-round-trips-and-one-invalidation-rule.md).
+- **The dashboard asks the database once instead of three times.** No faster to look at, and it stops one screen from holding three database connections while it loads.
+- **On the phone, your training stats and "who's in this class" start loading right away** instead of waiting for the list above them to finish.
+
+## The reminders get a safety net
+
+- **The class and dues reminders are tested for the first time.** They are the one part of the system that runs on its own, with nobody watching. A broken screen gets reported the same day. A broken reminder is silent: the gym just stops hearing from us. ADR [97](docs/issues/97-the-notification-path-gets-a-test.md).
+- **A gym that has closed, a cancelled class, and a member who has left are all now proven to be left alone.** Each was already handled in the code and none of it was checked.
+- **If the push service is down, the message still reaches the inbox.** That was already true by design, and now a test says so.
+- **Both scheduled endpoints share one door check.** They had a copy each, so the two could drift apart while both looked right.
+
+## One definition per rule
+
+- **Checking in to a class you did not attend is no longer possible.** The scan mutation was allowing any class from the last two weeks, while the app itself only ever offered the one happening now. Attendance feeds the gym's stats and its "who's drifting" list, so the numbers were open to being wrong. ADR [96](docs/issues/96-one-definition-per-rule.md).
+- **A long class that is still running now shows up when you scan.** The lookup only reached three hours back, so a seminar that started this morning was invisible to the scanner while its own check-in window was still open.
+- **A map link can no longer hide invisible characters.** It is the one field the gym shows every member as a tappable link, and it was the one field skipping the cleaning step every other text field gets.
+- **Two reminder rules with passing tests were never actually used.** They are gone, and the code that really sends reminders is now on the list to be tested.
+
+## The rules leave the routers
+
+- **A class further out than a week no longer shows a Book button that fails.** Both apps checked "is it cancelled" and "has it started" themselves and neither knew about the one-week booking limit, so opening a direct link to a class three weeks out offered a button the server then refused. Both ask the same rule now. ADR [95](docs/issues/95-what-belongs-in-domain.md).
+- **Saving a template you did not change stops rewriting every future class.** There were only two paths, regenerate or update-in-place, so a no-op save took the second one and wrote to every class out to six months.
+- **The dashboard's eight rules can now be tested without rendering the page**, including the one that decides whether the day block shows today or rolls forward to tomorrow. It has seven branches and had no test.
+- **Money is formatted one way.** There were three: one on the web, one in the app, and a third inside the dues reminder students actually receive.
+
+## One copy of each query
+
+- **The grace period an owner sets and the rule that enforces it read one number now.** The Payments screen and the booking gate each carried their own default. They agree today, so nothing was broken yet; the next edit to the shared constant would have moved one and not the other, with nothing failing. ADR [94](docs/issues/94-one-copy-of-each-query.md).
+- **Cancelling a class is finally tested.** Nothing checked that the booked students actually hear about it. They do, and now a test says so.
+- **Switching to an academy you do not belong to answers the same as switching to one that does not exist.** Before, the two answers differed, which told a caller that an academy id was real.
+- **Thirteen copies of the roster read, four of the payment settings, five of "this class, not deleted" and two byte-identical booking counters became one each.** No new layer and no behaviour change: the same queries, written once. 617 tests pass.
+
+## The safety pass before the pilot
+
+- **A mutation that fails halfway no longer leaves the first half behind.** The tenant transaction was committing even when the resolver threw, because tRPC reports a failed resolver by returning it rather than raising it. Every two-step mutation was exposed. ADR [13](docs/issues/13-booking-write-atomicity.md) had promised this rollback since session 10.
+- **A database error stops talking to the user.** An unhandled server error reached the client carrying Postgres's own words, which name the table, the column and the constraint. In production it now says one plain sentence. Separately, "I paid" was reporting a dropped connection or a permission error as "a payment for this period is already awaiting confirmation", and now only says that when it is true.
+- **Faster reminders, dues sweeps and academy switching**, and four screens that would have slowed down for a long-running gym now stop at a fixed number of rows. Migration `0027` adds four indexes, three of them for the nightly sweeps that read across every academy. It is written and still needs applying.
+- **Adding a tenant table without row level security is now a failing test**, not something you find out later. ADR [93](docs/issues/93-safety-pass-before-the-pilot.md).
+
+## Identity writes stop fighting the tenant transaction
+
+- **Approving, archiving, restoring or erasing a member, handing out an invite link, and signing in a walk-in each hold one database connection instead of two.** All thirteen ran inside the tenant transaction and then wrote an identity table on the base connection, which the pool quietly absorbed by handing out a second connection and the test database could not absorb at all: 27 tests failed on timeouts and the three suites took eleven minutes. They now run on identity procedures that open no transaction and ask for one only around the part that needs it, keeping each mutation's own ordering. Reaching for the base connection inside a tenant procedure is now a compile error. `pnpm test` is 589 passing in 19 seconds.
+## The QR poster pages start drawing before the server wakes up
+
+- **The two pages a new student lands on from a printed QR code now come straight from the cache, not from a server that has to start up first.** Scanning a gym's poster or opening a join link should show something immediately, on gym wifi, on a cold phone. Those pages hold no gym data, so there was nothing worth waiting for.
+- **One thing got slightly worse, on purpose.** If you are already signed in and you type the sign-in address by hand, you now see the sign-in page for a moment before it sends you on. Everyone arriving signed out, which is nearly everyone who opens that page, gets it faster.
+- **The screens behind your login were measured and are unchanged.** They wait on the database, and nothing about this changes that.
+
+## The printable posters stop riding along on every visit
+
+- **The QR poster and the schedule poster now download when you open them, not when you open the page.** Both are things you use occasionally and print once. The Coaches, Members and Schedule screens are each a few kilobytes lighter, and the buttons that open them still appear instantly.
+- **Tried a new React feature that promised faster screens, measured it, and left it out.** It would have added more weight to every single page than the change above removed from three, in exchange for something this app is not slow at. Written down so nobody spends the day on it again.
+
+## The page arrives while the gym data is still loading
+
+- **The web app now draws the page around your data before the data is there.** Until now the server waited for every number on a screen before it sent anything, so the browser sat on a blank page for about seven tenths of a second and then got everything at once. It now sends the page straight away, with the same placeholder shapes you already saw, and each panel fills in as its own answer comes back. The dashboard's heading reaches you in about a tenth of a second instead of seven tenths, and the page is not one byte bigger.
+- **Nothing about what you see has changed**, only when. The placeholders are the same ones, and the page still asks your browser for nothing after it loads.
+
+## Screens arrive with their data already in them
+
+- **Every screen in the web app now loads its data on the server and sends it with the page, instead of the browser asking for it after the page has drawn.** The dashboard used to make eight requests after it appeared; now it makes none. The page costs about 12 kB more to download and saves roughly two thirds of a second of waiting.
+- **Fixed a trap that would have made this slower, not faster.** Three screens worked out which week to ask for using the clock on whatever machine they ran on. The server and your browser would have picked slightly different weeks, and the page would have fetched everything twice. Date ranges are now worked out one agreed way, while what you actually see is still your own local days.
+
+## One place decides how stale a screen may be
+
+- **How long cached data stays fresh is now one table, and both the web app and the phone app read it.** Each client had the same 30 second rule copied into it separately, and two screens overrode it by hand. 30 seconds is right for a class roster someone else can change while you watch it, and pointless for the plan list or your gym's name, which only change when a staff member edits them. Reference data now holds for five minutes, stats for two, the two little counters in the sidebar for one, and everything else keeps 30 seconds.
+
+## Session replay stops riding along on every page
+
+- **The error-recording tool was being downloaded on every screen, including the privacy page, even though it only ever records when something breaks.** It now loads a moment after the page does, which takes 123 kB off every single route and keeps the recording.
+
+## The frontend has numbers now
+
+- **Measured what the web app actually costs before changing it: bundle size for all 18 routes, and what a dashboard open looks like in production.** Two settings that were assumed rather than checked are now confirmed: the server functions really do run in Frankfurt next to the database, and Vercel's Fluid Compute is on. The useful surprise: the dashboard paints about 50 ms after the last query lands, so it is waiting on data, not on code.
+
 ## One mark, everywhere
 
 - **The saved home-screen icon now looks like the mark in the header.** The PWA and app icons were drawn by hand months ago and had drifted: pale seams on the light-theme violet, each seam stopping short of the tile edge. They are now generated from the mark itself by `scripts/gen-icons.sh` — dark seams running edge to edge on the dark-theme violet — and so are the favicon, the Apple touch icon, the Expo app icon and the iOS splash. The seams in the on-screen `Mark` and in the loader run edge to edge too, so the header and the home screen show the same thing.

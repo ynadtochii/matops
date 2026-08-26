@@ -1,7 +1,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 
+import type { DbExec } from "./client";
 import { user } from "./auth-schema";
-import { db } from "./client";
 import { pushToken } from "./push-token-schema";
 
 /**
@@ -24,8 +24,9 @@ export interface UpsertPushTokenInput {
 export async function upsertPushToken(
   userId: string,
   input: UpsertPushTokenInput,
+  exec: DbExec,
 ): Promise<void> {
-  await db
+  await exec
     .insert(pushToken)
     .values({
       userId,
@@ -53,8 +54,9 @@ export async function upsertPushToken(
 export async function deletePushToken(
   userId: string,
   token: string,
+  exec: DbExec,
 ): Promise<void> {
-  await db
+  await exec
     .delete(pushToken)
     .where(and(eq(pushToken.userId, userId), eq(pushToken.token, token)));
 }
@@ -72,9 +74,12 @@ export interface PushTarget {
  * cross-academy). Users with no token still come back (email can still reach
  * them). Used by the API notify helper and the reminder cron.
  */
-export async function getPushTargets(userIds: string[]): Promise<PushTarget[]> {
+export async function getPushTargets(
+  userIds: string[],
+  exec: DbExec,
+): Promise<PushTarget[]> {
   if (userIds.length === 0) return [];
-  const rows = await db
+  const rows = await exec
     .select({
       userId: user.id,
       email: user.email,

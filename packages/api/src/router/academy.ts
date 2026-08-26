@@ -7,13 +7,13 @@ import {
   findAcademyByCode,
   getAcademyCode,
   getAcademySettings,
-  getMembership,
   listMembershipsForUser,
   softDeleteAcademy,
   updateAcademySettings,
 } from "@matops/db";
 import { classTemplate } from "@matops/db/schema";
 import {
+  canEnroll,
   driftingTemplateZones,
   isStudentLensMembership,
   isValidTimeZone,
@@ -30,6 +30,7 @@ import {
 } from "@matops/validators";
 
 import { academyTimeZone } from "../academy-tz";
+import { requireMembership } from "../members";
 import {
   ownerIdentityProcedure,
   ownerProcedure,
@@ -67,14 +68,12 @@ export const academyRouter = {
    */
   memberships: protectedProcedure.query(async ({ ctx }) => {
     const all = await listMembershipsForUser(ctx.session.user.id, ctx.baseDb);
-    return all
-      .filter((a) => a.status === "pending" || a.status === "active")
-      .map((a) => ({
-        academyId: a.academyId,
-        name: a.name,
-        role: a.role,
-        status: a.status,
-      }));
+    return all.filter(canEnroll).map((a) => ({
+      academyId: a.academyId,
+      name: a.name,
+      role: a.role,
+      status: a.status,
+    }));
   }),
 
   /** The active academy (name, the caller's role/status, and the shareable code
@@ -199,7 +198,7 @@ export const academyRouter = {
    * Academy code) + the org id. Updates via Better Auth so its org permission
    * check applies; the code is never touched.
    */
-  rename: ownerProcedure
+  rename: ownerIdentityProcedure
     .input(CreateAcademySchema)
     .mutation(async ({ ctx, input }) => {
       await ctx.authApi.updateOrganization({
@@ -216,18 +215,12 @@ export const academyRouter = {
   setActive: protectedProcedure
     .input(z.object({ academyId: IdSchema }))
     .mutation(async ({ ctx, input }) => {
-      // Only switch to an academy the caller actually belongs to.
-      const membership = await getMembership(
+      await requireMembership(
         ctx.session.user.id,
         input.academyId,
         ctx.baseDb,
+        "You are not a member of that academy",
       );
-      if (!membership) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "You are not a member of that academy",
-        });
-      }
       await ctx.authApi.setActiveOrganization({
         body: { organizationId: input.academyId },
         headers: ctx.headers,

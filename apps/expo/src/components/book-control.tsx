@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Alert, Pressable } from "react-native";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { bookingAccessMessage, capacityDisplay } from "@matops/domain";
 
@@ -8,6 +8,7 @@ import { useToast } from "~/components/toast";
 import { confirm, Txt, useTheme } from "~/components/ui";
 import { trpc } from "~/utils/api";
 import { dayFmt, timeFmt } from "~/utils/format";
+import { useInvalidate } from "~/utils/invalidate";
 import { cancelClassReminder, scheduleClassReminder } from "~/utils/reminders";
 
 /**
@@ -34,7 +35,7 @@ export function useBookClass(
   onBooked?: () => void,
   opts?: { toastError?: boolean },
 ) {
-  const queryClient = useQueryClient();
+  const invalidateFor = useInvalidate();
   const toast = useToast();
   const [error, setError] = useState<string | null>(null);
 
@@ -49,8 +50,7 @@ export function useBookClass(
     trpc.booking.book.mutationOptions({
       onSuccess: async () => {
         setError(null);
-        await queryClient.invalidateQueries(trpc.class.pathFilter());
-        await queryClient.invalidateQueries(trpc.booking.pathFilter());
+        await invalidateFor("booking");
         onBooked?.();
       },
       onError: (err) => {
@@ -107,7 +107,7 @@ export function useBookClass(
  * list that shows the class.
  */
 export function useCancelBooking() {
-  const queryClient = useQueryClient();
+  const invalidateFor = useInvalidate();
   const toast = useToast();
 
   const cancel = useMutation(
@@ -115,8 +115,7 @@ export function useCancelBooking() {
       onSuccess: async (_data, variables) => {
         toast.show("Booking cancelled");
         void cancelClassReminder(variables.classId);
-        await queryClient.invalidateQueries(trpc.class.pathFilter());
-        await queryClient.invalidateQueries(trpc.booking.pathFilter());
+        await invalidateFor("booking");
       },
       onError: (err) => toast.show(err.message || "Could not cancel"),
     }),

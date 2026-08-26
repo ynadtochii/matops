@@ -115,6 +115,9 @@ export default function Training() {
   const mine = useQuery(
     trpc.booking.mine.queryOptions(undefined, { enabled: !suspended }),
   );
+  // Same key as MyTrainingCard, which renders inside the `mine.isPending`
+  // branch and so would not start fetching until bookings land.
+  useQuery(trpc.stats.me.queryOptions(undefined, { enabled: !suspended }));
 
   const { onCancel, pendingClassId } = useCancelBooking();
 

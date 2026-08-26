@@ -329,3 +329,24 @@ export function nextClass<T extends { startsAt: Date }>(
 // Re-export so clients can label `favoriteWeekday` / `byWeekday` without a
 // second import path.
 export { DAY_LABELS };
+
+export interface NewMemberCounts {
+  thisMonth: number;
+  lastMonth: number;
+}
+
+/**
+ * Growth, this month against last, from the month bucket each member joined in.
+ * Both sides count only retained members, so a joiner who has since been removed
+ * is missing from either: the two numbers are biased the same way and stay
+ * comparable.
+ */
+export function newMemberCounts(
+  joinedBuckets: number[],
+  thisMonth: number,
+): NewMemberCounts {
+  return {
+    thisMonth: joinedBuckets.filter((b) => b === thisMonth).length,
+    lastMonth: joinedBuckets.filter((b) => b === thisMonth - 1).length,
+  };
+}

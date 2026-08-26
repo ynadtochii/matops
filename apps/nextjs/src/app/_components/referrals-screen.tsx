@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
-import { groupMoneyByCurrency } from "@matops/domain";
+import { formatMoney, groupMoneyByCurrency } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { Button } from "@matops/ui/button";
 import {
@@ -20,7 +20,6 @@ import { Select } from "@matops/ui/select";
 import { toast } from "@matops/ui/toast";
 
 import { dateTimeMediumFmt } from "~/lib/format";
-import { formatMoney } from "~/lib/money";
 import { useTRPC } from "~/trpc/react";
 import { PageHeader } from "./page-header";
 import { cardClass, Eyebrow, SectionHeading } from "./primitives";

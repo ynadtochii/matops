@@ -15,39 +15,47 @@ import {
   InviteTokenSchema,
 } from "@matops/validators";
 
-import { ownerProcedure, publicProcedure, rateLimited } from "../trpc";
+import { ownerIdentityProcedure, publicProcedure, rateLimited } from "../trpc";
 
 export const inviteRouter = {
   /** Live per-role links for the active academy (spec O4). Owner-only. */
-  list: ownerProcedure.query(({ ctx }) => listInvites(ctx.academyId)),
+  list: ownerIdentityProcedure.query(({ ctx }) =>
+    listInvites(ctx.academyId, ctx.baseDb),
+  ),
 
   /** Ensure a live link exists for a role (create-on-demand). Owner-only. */
-  create: ownerProcedure
+  create: ownerIdentityProcedure
     .input(z.object({ role: InviteRoleSchema }))
     .mutation(({ ctx, input }) =>
-      getOrCreateInvite({
-        academyId: ctx.academyId,
-        role: input.role,
-        createdBy: ctx.session.user.id,
-      }),
+      getOrCreateInvite(
+        {
+          academyId: ctx.academyId,
+          role: input.role,
+          createdBy: ctx.session.user.id,
+        },
+        ctx.baseDb,
+      ),
     ),
 
   /** Rotate a role's link: the old token stops working, a new one is minted. */
-  rotate: ownerProcedure
+  rotate: ownerIdentityProcedure
     .input(z.object({ role: InviteRoleSchema }))
     .mutation(({ ctx, input }) =>
-      rotateInvite({
-        academyId: ctx.academyId,
-        role: input.role,
-        createdBy: ctx.session.user.id,
-      }),
+      rotateInvite(
+        {
+          academyId: ctx.academyId,
+          role: input.role,
+          createdBy: ctx.session.user.id,
+        },
+        ctx.baseDb,
+      ),
     ),
 
   /** Revoke a specific link (kills it without minting a replacement). */
-  revoke: ownerProcedure
+  revoke: ownerIdentityProcedure
     .input(z.object({ inviteId: IdSchema }))
     .mutation(async ({ ctx, input }) => {
-      await revokeInvite(ctx.academyId, input.inviteId);
+      await revokeInvite(ctx.academyId, input.inviteId, ctx.baseDb);
       return { ok: true as const };
     }),
 
@@ -60,8 +68,8 @@ export const inviteRouter = {
   resolve: publicProcedure
     .use(rateLimited(30, 60_000))
     .input(InviteTokenSchema)
-    .query(async ({ input }) => {
-      const resolved = await resolveInviteToken(input.token);
+    .query(async ({ ctx, input }) => {
+      const resolved = await resolveInviteToken(input.token, ctx.baseDb);
       if (!resolved) {
         throw new TRPCError({
           code: "NOT_FOUND",

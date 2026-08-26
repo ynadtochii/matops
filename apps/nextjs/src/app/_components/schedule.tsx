@@ -6,7 +6,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
 import type { DisciplineTone } from "@matops/domain";
-import { capacityDisplay, disciplineTone, groupByDay } from "@matops/domain";
+import {
+  calendarWeekStart,
+  capacityDisplay,
+  disciplineTone,
+  GRID_WEEK_STARTS_ON,
+  groupByDay,
+  scheduleWeekWindow,
+} from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
@@ -102,14 +109,8 @@ const browserTz = () => {
   }
 };
 
-/** Monday 00:00 local for the week `offset` weeks from now. */
-function weekStart(offset: number): Date {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  const day = (d.getDay() + 6) % 7; // 0=Mon … 6=Sun
-  d.setDate(d.getDate() - day + offset * 7);
-  return d;
-}
+const weekStart = (offset: number) =>
+  calendarWeekStart(new Date(), offset, GRID_WEEK_STARTS_ON);
 
 interface OneOffForm {
   title: string;
@@ -150,14 +151,11 @@ export function Schedule() {
   const [form, setForm] = useState<OneOffForm | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
 
-  const { from, to } = useMemo(() => {
-    const start = weekStart(offset);
-    const end = new Date(start);
-    end.setDate(end.getDate() + 7);
-    return { from: start.toISOString(), to: end.toISOString() };
-  }, [offset]);
-
-  const week = useQuery(trpc.class.week.queryOptions({ from, to }));
+  const weekWindow = useMemo(
+    () => scheduleWeekWindow(new Date(), offset),
+    [offset],
+  );
+  const week = useQuery(trpc.class.week.queryOptions(weekWindow));
   const me = useAcademy();
   const invalidate = () =>
     queryClient.invalidateQueries(trpc.class.week.pathFilter());
@@ -179,7 +177,7 @@ export function Schedule() {
   const cancel = useMutation(
     trpc.class.cancel.mutationOptions({
       onMutate: async (vars) => {
-        const key = trpc.class.week.queryKey({ from, to });
+        const key = trpc.class.week.queryKey(weekWindow);
         await queryClient.cancelQueries({ queryKey: key });
         const prev = queryClient.getQueryData(key);
         queryClient.setQueryData(key, (old) =>
@@ -198,7 +196,18 @@ export function Schedule() {
     }),
   );
 
-  const byDay = useMemo(() => groupByDay(week.data ?? []), [week.data]);
+  // The window is snapped to a UTC Monday so the server and the browser build
+  // the same cache key. Filtering here is what keeps the grid to its own week.
+  const rows = useMemo(() => {
+    const start = weekStart(offset).getTime();
+    const end = start + 7 * 86400000;
+    return (week.data ?? []).filter((r) => {
+      const t = new Date(r.startsAt).getTime();
+      return t >= start && t < end;
+    });
+  }, [week.data, offset]);
+
+  const byDay = useMemo(() => groupByDay(rows), [rows]);
 
   const submitOneOff = () => {
     if (!form) return;
@@ -219,7 +228,8 @@ export function Schedule() {
   };
 
   const start = weekStart(offset);
-  const end = new Date(start.getTime() + 6 * 86400000);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
   const rangeLabel = `${monthDayFmt.format(start)} – ${
     start.getMonth() === end.getMonth()
       ? dayNumFmt.format(end)
@@ -468,7 +478,7 @@ export function Schedule() {
       ) : (
         <>
           <WeekGrid
-            rows={week.data}
+            rows={rows}
             weekStart={weekStart(offset)}
             onSelect={(c) => setDetailId(c.id)}
             action={(c) =>

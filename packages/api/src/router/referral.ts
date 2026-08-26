@@ -1,7 +1,7 @@
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
-import { desc, eq, listMembersOf } from "@matops/db";
+import { desc, eq } from "@matops/db";
 import {
   memberReferral,
   memberReferralAudit,
@@ -16,6 +16,7 @@ import {
   isReferralStudent,
   isStudentMembership,
   isValidReferralPair,
+  referralAssignmentState,
 } from "@matops/domain";
 import {
   AssignReferralSchema,
@@ -25,7 +26,8 @@ import {
 
 import type { MemberRecord, MemberScope } from "../members";
 import { academyTimeZone } from "../academy-tz";
-import { requireMember } from "../members";
+import { nameByMember, nameByUser, requireMember, rosterOf } from "../members";
+import { isUniqueViolation } from "../pg-error";
 import { ownerProcedure } from "../trpc";
 
 function referralMember(member: MemberRecord) {
@@ -43,10 +45,8 @@ async function requireReferralPair(
   referrerMemberId: string,
   options: { allowRemovedStudent: boolean },
 ) {
-  const [student, referrer] = await Promise.all([
-    requireMember(ctx, studentMemberId),
-    requireMember(ctx, referrerMemberId),
-  ]);
+  const student = await requireMember(ctx, studentMemberId);
+  const referrer = await requireMember(ctx, referrerMemberId);
   const studentFacts = referralMember(student);
   const validStudent = options.allowRemovedStudent
     ? isStudentMembership(studentFacts)
@@ -73,15 +73,9 @@ async function requireReferralPair(
   }
 }
 
-function isUniqueViolation(error: unknown): boolean {
-  let value: unknown = error;
-  for (let depth = 0; depth < 4; depth += 1) {
-    if (typeof value !== "object" || value === null) return false;
-    if ("code" in value && value.code === "23505") return true;
-    value = "cause" in value ? value.cause : undefined;
-  }
-  return false;
-}
+// ponytail: newest 200 reassignments for one student. Nothing in the product
+// writes that many; paginate if a real academy ever proves otherwise.
+const HISTORY_LIMIT = 200;
 
 /** Staff-only referral attribution and confirmed-payment reporting (O9). */
 export const referralRouter = {
@@ -92,20 +86,18 @@ export const referralRouter = {
    * the rows and nothing pre-aggregated (ADR 60 deleted the unread half).
    */
   dashboard: ownerProcedure.query(async ({ ctx }) => {
-    const [members, referrals, confirmedClaims, timeZone] = await Promise.all([
-      listMembersOf(ctx.academyId, ctx.db),
-      ctx.db.select().from(memberReferral),
-      ctx.db
-        .select({
-          memberId: paymentClaim.memberId,
-          amountMinor: paymentClaim.amountMinor,
-          currency: paymentClaim.currency,
-          confirmedAt: paymentClaim.confirmedAt,
-        })
-        .from(paymentClaim)
-        .where(eq(paymentClaim.status, "confirmed")),
-      academyTimeZone(ctx),
-    ]);
+    const members = await rosterOf(ctx);
+    const referrals = await ctx.db.select().from(memberReferral);
+    const confirmedClaims = await ctx.db
+      .select({
+        memberId: paymentClaim.memberId,
+        amountMinor: paymentClaim.amountMinor,
+        currency: paymentClaim.currency,
+        confirmedAt: paymentClaim.confirmedAt,
+      })
+      .from(paymentClaim)
+      .where(eq(paymentClaim.status, "confirmed"));
+    const timeZone = await academyTimeZone(ctx);
 
     const currentMonth = academyMonthKey(new Date(), timeZone);
     const memberById = new Map(
@@ -149,11 +141,7 @@ export const referralRouter = {
         name: member.name,
         status: member.status,
         removed: !isOnRoster(member),
-        assignmentState: referral
-          ? referral.referrerMemberId
-            ? ("assigned" as const)
-            : ("cleared" as const)
-          : ("never_assigned" as const),
+        assignmentState: referralAssignmentState(referral),
         referrer: referrer
           ? { memberId: referrer.memberId, name: referrer.name }
           : null,
@@ -300,30 +288,25 @@ export const referralRouter = {
           message: "Student not found",
         });
       }
-      const [history, members] = await Promise.all([
-        ctx.db
-          .select()
-          .from(memberReferralAudit)
-          .where(eq(memberReferralAudit.studentMemberId, input.studentMemberId))
-          .orderBy(desc(memberReferralAudit.occurredAt)),
-        listMembersOf(ctx.academyId, ctx.db),
-      ]);
-      const nameByMember = new Map(
-        members.map((member) => [member.memberId, member.name]),
-      );
-      const nameByUser = new Map(
-        members.map((member) => [member.userId, member.name]),
-      );
+      const history = await ctx.db
+        .select()
+        .from(memberReferralAudit)
+        .where(eq(memberReferralAudit.studentMemberId, input.studentMemberId))
+        .orderBy(desc(memberReferralAudit.occurredAt))
+        .limit(HISTORY_LIMIT);
+      const members = await rosterOf(ctx);
+      const byMember = nameByMember(members);
+      const byUser = nameByUser(members);
       return history.map((event) => ({
         id: event.id,
         action: event.action,
         oldReferrerName: event.oldReferrerMemberId
-          ? (nameByMember.get(event.oldReferrerMemberId) ?? "Former member")
+          ? (byMember.get(event.oldReferrerMemberId) ?? "Former member")
           : null,
         newReferrerName: event.newReferrerMemberId
-          ? (nameByMember.get(event.newReferrerMemberId) ?? "Former member")
+          ? (byMember.get(event.newReferrerMemberId) ?? "Former member")
           : null,
-        actorName: nameByUser.get(event.actorId) ?? "Former staff member",
+        actorName: byUser.get(event.actorId) ?? "Former staff member",
         occurredAt: event.occurredAt,
       }));
     }),

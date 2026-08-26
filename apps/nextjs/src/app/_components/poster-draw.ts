@@ -1,6 +1,8 @@
 import type { DisciplineTone } from "@matops/domain";
 import { busyHours, disciplineTone, hourSlots } from "@matops/domain";
 
+import { POSTER_H, POSTER_W } from "./poster-size";
+
 export interface PosterClass {
   title: string;
   discipline: string | null;
@@ -17,8 +19,7 @@ export interface PosterData {
   classes: PosterClass[];
 }
 
-export const POSTER_W = 1600;
-export const POSTER_H = 1200;
+export { POSTER_H, POSTER_W };
 export const POSTER_SCALE = 2;
 
 const PAD = 64;

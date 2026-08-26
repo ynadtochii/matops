@@ -13,7 +13,7 @@ import {
   rebuildSchedule,
 } from "@matops/db";
 import { classInstance, classTemplate, user } from "@matops/db/schema";
-import { normalizeDaysOfWeek, templateTimingChanged } from "@matops/domain";
+import { normalizeDaysOfWeek, templateEditStrategy } from "@matops/domain";
 import {
   CreateClassTemplateSchema,
   TemplateIdSchema,
@@ -22,6 +22,7 @@ import {
 } from "@matops/validators";
 
 import { requireInstructor } from "../members";
+import { TEMPLATE_NOT_FOUND } from "../messages";
 import { ownerProcedure, staffProcedure } from "../trpc";
 
 /**
@@ -96,7 +97,7 @@ export const templateRouter = {
       if (!prev) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Template not found",
+          message: TEMPLATE_NOT_FOUND,
         });
       }
 
@@ -124,7 +125,7 @@ export const templateRouter = {
       if (!row) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Template not found",
+          message: TEMPLATE_NOT_FOUND,
         });
       }
 
@@ -136,14 +137,12 @@ export const templateRouter = {
         gt(classInstance.startsAt, now),
       );
 
-      if (templateTimingChanged(prev, row)) {
-        // Regenerate. CANCEL the future scheduled instances rather than deleting
-        // them: `class_participation` and `drop_in` both reference `class.id`
-        // with ON DELETE no action, so a hard delete fails the moment one
-        // student has booked, and the owner could never move that template
-        // again. Re-materializing then REVIVES every instance the new timing
-        // still covers (bookings intact); the rest stay cancelled and show up
-        // as cancelled on the student's schedule.
+      const strategy = templateEditStrategy(prev, row);
+      if (strategy === "regenerate") {
+        // CANCEL the future scheduled instances rather than deleting them:
+        // `class_participation` and `drop_in` both reference `class.id` with ON
+        // DELETE no action, so a hard delete fails the moment one student has
+        // booked, and the owner could never move that template again.
         await ctx.db
           .update(classInstance)
           .set({ status: "cancelled" })
@@ -153,8 +152,7 @@ export const templateRouter = {
           { ...row, generatedUntil: null },
           { now, reviveCancelled: true },
         );
-      } else {
-        // Content-only: update the future scheduled instances in place.
+      } else if (strategy === "update-in-place") {
         await ctx.db
           .update(classInstance)
           .set({
@@ -183,7 +181,7 @@ export const templateRouter = {
       if (!row) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Template not found",
+          message: TEMPLATE_NOT_FOUND,
         });
       }
       // Resuming fills the horizon at once so classes reappear immediately (O2).
@@ -210,7 +208,7 @@ export const templateRouter = {
       if (!row) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Template not found",
+          message: TEMPLATE_NOT_FOUND,
         });
       }
       await ctx.db
