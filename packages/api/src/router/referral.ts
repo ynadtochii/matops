@@ -45,10 +45,8 @@ async function requireReferralPair(
   referrerMemberId: string,
   options: { allowRemovedStudent: boolean },
 ) {
-  const [student, referrer] = await Promise.all([
-    requireMember(ctx, studentMemberId),
-    requireMember(ctx, referrerMemberId),
-  ]);
+  const student = await requireMember(ctx, studentMemberId);
+  const referrer = await requireMember(ctx, referrerMemberId);
   const studentFacts = referralMember(student);
   const validStudent = options.allowRemovedStudent
     ? isStudentMembership(studentFacts)
@@ -88,20 +86,18 @@ export const referralRouter = {
    * the rows and nothing pre-aggregated (ADR 60 deleted the unread half).
    */
   dashboard: ownerProcedure.query(async ({ ctx }) => {
-    const [members, referrals, confirmedClaims, timeZone] = await Promise.all([
-      rosterOf(ctx),
-      ctx.db.select().from(memberReferral),
-      ctx.db
-        .select({
-          memberId: paymentClaim.memberId,
-          amountMinor: paymentClaim.amountMinor,
-          currency: paymentClaim.currency,
-          confirmedAt: paymentClaim.confirmedAt,
-        })
-        .from(paymentClaim)
-        .where(eq(paymentClaim.status, "confirmed")),
-      academyTimeZone(ctx),
-    ]);
+    const members = await rosterOf(ctx);
+    const referrals = await ctx.db.select().from(memberReferral);
+    const confirmedClaims = await ctx.db
+      .select({
+        memberId: paymentClaim.memberId,
+        amountMinor: paymentClaim.amountMinor,
+        currency: paymentClaim.currency,
+        confirmedAt: paymentClaim.confirmedAt,
+      })
+      .from(paymentClaim)
+      .where(eq(paymentClaim.status, "confirmed"));
+    const timeZone = await academyTimeZone(ctx);
 
     const currentMonth = academyMonthKey(new Date(), timeZone);
     const memberById = new Map(
@@ -292,15 +288,13 @@ export const referralRouter = {
           message: "Student not found",
         });
       }
-      const [history, members] = await Promise.all([
-        ctx.db
-          .select()
-          .from(memberReferralAudit)
-          .where(eq(memberReferralAudit.studentMemberId, input.studentMemberId))
-          .orderBy(desc(memberReferralAudit.occurredAt))
-          .limit(HISTORY_LIMIT),
-        rosterOf(ctx),
-      ]);
+      const history = await ctx.db
+        .select()
+        .from(memberReferralAudit)
+        .where(eq(memberReferralAudit.studentMemberId, input.studentMemberId))
+        .orderBy(desc(memberReferralAudit.occurredAt))
+        .limit(HISTORY_LIMIT);
+      const members = await rosterOf(ctx);
       const byMember = nameByMember(members);
       const byUser = nameByUser(members);
       return history.map((event) => ({
