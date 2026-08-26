@@ -2,6 +2,12 @@
 
 One line per shipped slice (see `docs/delivery.md` §4). Newest first.
 
+## Switching between tabs stops reloading the page
+
+- **Going back to a screen you opened in the last 30 seconds now brings it straight back**, with no skeleton and no wait. Clicking between the sidebar tabs used to redraw everything every time, even a tab you left seconds ago. ADR [100](docs/issues/100-the-client-router-keeps-a-page-for-30-seconds.md).
+- **Each of those clicks was also asking the database again** for figures the browser already had, up to five queries for the dashboard. It stops.
+- Opening a screen for the first time is unchanged.
+
 ## The parts a new gym touches first now have tests
 
 - **Opening a gym, inviting people, and joining by link or code are covered end to end.** It is the first thing any new academy does and it was the least tested part of the system.

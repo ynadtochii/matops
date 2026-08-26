@@ -21,6 +21,10 @@ const config = {
   typescript: { ignoreBuildErrors: true },
 
   cacheComponents: true,
+
+  experimental: {
+    staleTimes: { dynamic: 30 },
+  },
 };
 
 export default withSentryConfig(config, {

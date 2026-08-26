@@ -525,6 +525,18 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 
 **Series verify:** typecheck 17/17 · lint 15/15 · `next build` green · `pnpm test` **456 green** (domain 275 · db 82 · api 72 · validators 24 · notifications 3), including the six new `dayKey` / `groupByDay` cases in `packages/domain/test/format.test.ts`.
 
+### v4.8 — Going back to a tab keeps it (ADR 100)
+
+**Exit test:** clicking a sidebar tab you opened seconds ago paints instantly, with no skeleton and no request. **One config line, no migration, no procedure.** Reported from the production deployment, not found by a gate.
+
+- **Y.1 `experimental.staleTimes: { dynamic: 30 }`.** **DONE.** Next 16 defaults `staleTimes.dynamic` to `0`, which is the value the client BFCache checks on a forward navigation, so a dynamic page was never reused and every tab click re-rendered on the server and re-ran that page's `prefetch()` queries: three database reads for `/members`, five for the dashboard. Spec: **§3 loading states amended.**
+- **Y.2 It does not weaken freshness, it stops overriding it.** **NOTED.** The components remount and re-check React Query's own per-path `staleTime` in `packages/domain/src/freshness.ts`, whose default is the same 30 seconds. The router had been applying a stricter rule of its own on top, which is the drift ADR 87 exists to prevent. Mutations are unaffected: `invalidatedBy()` (ADR 98) still dirties the right queries and an invalidated query refetches on remount.
+- **Y.3 The arc never measured a navigation.** **NOTED, and it is the lesson.** ADR 91 timed cold first-byte on twelve authed routes; ADR 89 timed a page shell reaching the browser. Neither timed a click-then-click-back, which is most of what an owner does.
+- **Y.4 The chrome is still inside the layout's dynamic hole.** **NOTED, not addressed.** Checked live on four routes: the prerendered shell is the mat loader and a skeleton, with no sidebar in it, because `AuthedShell` awaits the session. That is ADR 91's shape and a cold visitor still pays it.
+- **Y.5 `experimental.cachedNavigations` declined for now.** **REJECTED, with the reason.** It caches the dynamic holes themselves and is the larger win, and it is available since it requires `cacheComponents`. Not taken days before a pilot, for a problem one config value already fixes. Reach for it if 30 seconds proves too short; per-page `unstable_dynamicStaleTime` is the knob if one route needs to be tighter.
+
+**Series verify:** `next build` green, all routes still `◐` Partial Prerender, no config warning. Next's own validation was read first: `staleTimes` and `cacheComponents` do not conflict. **Not verified:** the improvement was not clicked. Browser automation failed again (`Tab not found`), as in ADR 91. After the deploy, click Schedule → Members → Schedule and confirm the third click paints with no skeleton and issues no RSC request.
+
 ### v4.7 — Cache Components and the static shell (ADR 91)
 
 **Exit test:** the two printed-QR landings serve a prerendered shell from the CDN instead of booting a function. **No migration, no procedure, one user-visible regression, named below.** This closes the v4.x frontend arc.

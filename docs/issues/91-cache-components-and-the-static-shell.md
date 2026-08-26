@@ -154,3 +154,15 @@ measurement on the next deploy before treating this wave as paid for.
 **Nothing was clicked.** Browser automation failed for the third session running
 (`Tab not found`), so the streamed `/sign-in` redirect, the `/start` form swap and
 the QR landing forms were checked by their rendered HTML and not in a browser.
+
+---
+
+**⚠ refined by [100](100-the-client-router-keeps-a-page-for-30-seconds.md)** (2026-08-26). This
+note measured cold first-byte and never measured a navigation. Under the flag,
+returning to an authed route was re-rendering the whole page on the server every
+time, because Next 16 reuses no dynamic navigation at its default of
+`staleTimes.dynamic: 0`. The static shell described above is why it was so
+visible: for an authed route that shell is the mat loader and a skeleton, with
+the sidebar and everything else inside the layout's dynamic hole. ADR 100 sets
+`experimental.staleTimes: { dynamic: 30 }`. Reverting this note's flag now also
+means deciding what to do with that line.
