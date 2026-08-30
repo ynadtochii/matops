@@ -45,6 +45,13 @@
   body {
     letter-spacing: var(--tracking-normal);
   }
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  label[for],
+  summary,
+  select {
+    cursor: pointer;
+  }
 }
 
 /* The mat loader (ADR 80) — the basketweave mark laying itself, plank by plank.

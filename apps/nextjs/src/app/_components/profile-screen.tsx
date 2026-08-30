@@ -11,6 +11,7 @@ import {
   formatRank,
   isStaff,
 } from "@matops/domain";
+import { cn } from "@matops/ui";
 import { Button } from "@matops/ui/button";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
@@ -23,7 +24,7 @@ import { useTRPC } from "~/trpc/react";
 import { useAcademy } from "./academy";
 import { FeedbackLink } from "./feedback-link";
 import { PageHeader } from "./page-header";
-import { cardClass, Eyebrow, Section } from "./primitives";
+import { cardClass, ENTER, Eyebrow, Section } from "./primitives";
 import { SignOutButton } from "./sign-out";
 import { SkeletonCard } from "./skeletons";
 import { EmptyState, ErrorState, SuspendedState } from "./states";
@@ -70,7 +71,7 @@ function ProfileDetails({
 
   if (editing) {
     return (
-      <div className="border-border flex flex-col gap-4 rounded-lg border p-4">
+      <div className={cn(cardClass(), "flex flex-col gap-4")}>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="firstName">First name</Label>
@@ -107,10 +108,11 @@ function ProfileDetails({
         <div className="flex flex-wrap gap-2">
           <Button
             size="sm"
+            busy={update.isPending}
             disabled={!parsed.success || update.isPending}
             onClick={() => parsed.success && update.mutate(parsed.data)}
           >
-            {update.isPending ? "Saving…" : "Save"}
+            Save
           </Button>
           <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
             Cancel
@@ -121,30 +123,28 @@ function ProfileDetails({
   }
 
   return (
-    <section className="border-border flex flex-col divide-y rounded-lg border">
+    <section
+      className={cn(cardClass(), "divide-border flex flex-col divide-y p-0")}
+    >
       <div className="flex flex-wrap items-center justify-between gap-3 p-4">
-        <div>
-          <p className="text-muted-foreground text-sm">Name</p>
-          <p className="text-base font-medium">{name || "—"}</p>
+        <div className="min-w-0">
+          <Eyebrow>Name</Eyebrow>
+          <p className="mt-1 text-base font-medium">{name || "—"}</p>
         </div>
         <Button size="sm" variant="outline" onClick={startEdit}>
           Edit
         </Button>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-3 p-4">
-        <div>
-          <p className="text-muted-foreground text-sm">Phone</p>
-          <p className="text-base">{phone || "—"}</p>
-        </div>
+      <div className="p-4">
+        <Eyebrow>Phone</Eyebrow>
+        <p className="mt-1 text-base">{phone || "—"}</p>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-3 p-4">
-        <div>
-          <p className="text-muted-foreground text-sm">Email</p>
-          <p className="text-base">{email}</p>
-        </div>
-        <span className="text-muted-foreground text-sm">
-          Your sign-in — not editable
-        </span>
+      <div className="p-4">
+        <Eyebrow>Email</Eyebrow>
+        <p className="mt-1 text-base break-all">{email}</p>
+        <p className="text-muted-foreground mt-1 text-sm">
+          This is your sign-in, so it cannot be changed here.
+        </p>
       </div>
     </section>
   );
@@ -169,14 +169,19 @@ export function ProfileScreen({
         subtitle="Your details and how matops looks."
       />
       <div className="flex flex-col gap-8">
-        <Section label="Your details">
+        <Section label="Your details" className={ENTER}>
           <ProfileDetails name={name} email={email} phone={phone} />
         </Section>
 
-        <Section label="In this academy">
+        <Section label="In this academy" className={cn(ENTER, "delay-100")}>
           <div className="flex flex-col gap-3">
-            <div className="border-border flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
-              <div>
+            <div
+              className={cn(
+                cardClass(),
+                "flex flex-wrap items-start justify-between gap-3",
+              )}
+            >
+              <div className="min-w-0">
                 <p className="text-base font-medium">{academy.name}</p>
                 <p className="text-muted-foreground text-sm capitalize">
                   {academy.status === "pending"
@@ -202,7 +207,7 @@ export function ProfileScreen({
                   </p>
                 )}
               </div>
-              <p className="text-muted-foreground text-sm">
+              <p className="text-muted-foreground shrink-0 text-sm">
                 Member since {monthYearFmt.format(new Date(academy.joinedAt))}
               </p>
             </div>
@@ -220,13 +225,18 @@ export function ProfileScreen({
         </Section>
 
         {!isStaff(academy) && (
-          <Section label="My rank">
+          <Section label="My rank" className={cn(ENTER, "delay-200")}>
             {academy.status === "suspended" ? <SuspendedState /> : <MyRank />}
           </Section>
         )}
 
-        <Section label="Appearance">
-          <div className="border-border flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
+        <Section label="Appearance" className={cn(ENTER, "delay-200")}>
+          <div
+            className={cn(
+              cardClass(),
+              "flex flex-wrap items-center justify-between gap-3",
+            )}
+          >
             <div>
               <p className="text-base font-medium">Theme</p>
               <p className="text-muted-foreground text-sm">

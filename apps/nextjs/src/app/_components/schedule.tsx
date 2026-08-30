@@ -37,11 +37,13 @@ import {
   monthDayFmt,
   timeFmt,
 } from "~/lib/format";
+import { optimistic, rollback } from "~/lib/optimistic";
 import { useTRPC } from "~/trpc/react";
 import { useAcademy } from "./academy";
 import { ClassRoster } from "./class-roster";
 import { InstructorOptions } from "./coach-select";
 import { Section } from "./primitives";
+import { SchedulePoster } from "./schedule-poster";
 import { SkeletonScheduleWeek } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 import { WeekGrid } from "./week-grid";
@@ -172,23 +174,16 @@ export function Schedule() {
       onError,
     }),
   );
-  // Optimistic cancel: flip the class to cancelled in the visible week straight
-  // away (it re-renders read-only), reconcile on settle, roll back on error.
   const cancel = useMutation(
     trpc.class.cancel.mutationOptions({
-      onMutate: async (vars) => {
-        const key = trpc.class.week.queryKey(weekWindow);
-        await queryClient.cancelQueries({ queryKey: key });
-        const prev = queryClient.getQueryData(key);
-        queryClient.setQueryData(key, (old) =>
-          old?.map((c) =>
+      onMutate: (vars) =>
+        optimistic(queryClient, trpc.class.week.queryKey(weekWindow), (old) =>
+          old.map((c) =>
             c.id === vars.id ? { ...c, status: "cancelled" as const } : c,
           ),
-        );
-        return { key, prev };
-      },
+        ),
       onError: (err, _vars, ctx) => {
-        if (ctx) queryClient.setQueryData(ctx.key, ctx.prev);
+        rollback(queryClient, ctx);
         onError(err);
       },
       onSuccess: () => toast.success("Class cancelled"),
@@ -310,14 +305,16 @@ export function Schedule() {
             <ChevronRight />
           </Button>
         </div>
-        <Button
-          size="sm"
-          variant="outline"
-          className="shrink-0"
-          onClick={() => setForm(emptyOneOff(me.userId))}
-        >
-          Add class
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          <SchedulePoster />
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setForm(emptyOneOff(me.userId))}
+          >
+            Add class
+          </Button>
+        </div>
       </div>
 
       <Dialog

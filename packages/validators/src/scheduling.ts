@@ -27,6 +27,7 @@ const TimeZoneSchema = z
 export const CreateClassTemplateSchema = z.object({
   title: lineText(1, 80),
   discipline: DisciplineSchema.nullish(),
+  curriculumTrackId: IdSchema.nullish(),
   instructorId: IdSchema.optional(),
   daysOfWeek: z
     .array(z.number().int().min(0).max(6))

@@ -35,8 +35,14 @@ interface NavItem {
 
 const iconClass = "size-[18px] shrink-0";
 
-function contentWidth(pathname: string): string {
-  return pathname.startsWith("/schedule") ? "max-w-[1600px]" : "max-w-6xl";
+const NARROW_ROUTES = ["/class", "/profile"];
+
+function contentWidth(pathname: string, isStaff: boolean): string {
+  if (pathname.startsWith("/schedule")) return "max-w-[1600px]";
+  if (!isStaff || NARROW_ROUTES.some((r) => pathname.startsWith(r))) {
+    return "max-w-3xl";
+  }
+  return "max-w-6xl";
 }
 
 /** Two-letter avatar fallback: initials of the first two name words, else the
@@ -367,6 +373,8 @@ function ShellChrome({
   // Phones reach the feed from the header bell, so it never spends a tab slot.
   const tabItems = items.filter((i) => i.href !== "/notifications");
 
+  const columnClass = `mx-auto w-full ${contentWidth(pathname, isStaff)} px-6 md:px-8`;
+
   return (
     <div className="flex h-dvh overflow-hidden">
       {/* Desktop sidebar — pinned full height, never scrolls */}
@@ -470,27 +478,31 @@ function ShellChrome({
         </header>
 
         {isPending && (
-          <div className="border-brand/25 bg-brand-wash text-brand-strong border-b px-6 py-2.5 text-sm">
-            Pending approval — your academy owner will confirm you soon.
+          <div className="border-brand/25 bg-brand-wash text-brand-strong border-b">
+            <p className={`${columnClass} py-2.5 text-sm`}>
+              Pending approval — your academy owner will confirm you soon.
+            </p>
           </div>
         )}
 
         {duesStrip && (
           <Link
             href="/payments"
-            className={`block border-b px-6 py-2.5 text-sm transition-colors ${
+            className={`block border-b transition-colors ${
               duesStripLocked
                 ? "border-error/25 bg-error/10 hover:bg-error/15"
                 : "border-warning/25 bg-warning/10 hover:bg-warning/15"
             }`}
           >
-            {duesStrip}
+            <span className={`${columnClass} block py-2.5 text-sm`}>
+              {duesStrip}
+            </span>
           </Link>
         )}
 
         <main className="min-h-0 flex-1 overflow-y-auto">
           <div
-            className={`mx-auto w-full ${contentWidth(pathname)} p-6 pb-24 md:p-8 md:pb-8`}
+            className={`${columnClass} pt-6 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pt-8 md:pb-8`}
           >
             {canVisit(pathname, academy) ? children : <NoAccessState />}
           </div>

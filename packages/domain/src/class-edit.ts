@@ -54,6 +54,11 @@ export interface TemplateContent {
  */
 export type TemplateEditStrategy = "regenerate" | "update-in-place" | "none";
 
+/**
+ * `curriculumTrackId` is deliberately absent: the track is read through the
+ * template on every request and never copied onto a class row, so re-pointing a
+ * template must not cancel or rewrite a single class.
+ */
 export function templateContentChanged(
   before: TemplateContent,
   after: TemplateContent,

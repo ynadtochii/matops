@@ -5,8 +5,7 @@ import { AlertDialog as AlertDialogPrimitive } from "radix-ui";
 
 import { cn } from "@matops/ui";
 
-import { buttonClass } from "./button";
-import { Spinner } from "./spinner";
+import { Button, buttonClass } from "./button";
 
 /**
  * Confirmation modal for actions that can't be undone — remove a member, cancel
@@ -137,13 +136,17 @@ export function AlertDialogAction({
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Action> & {
   variant?: "destructive" | "primary";
+  busy?: boolean;
 }) {
   return (
-    <AlertDialogPrimitive.Action
-      data-slot="alert-dialog-action"
-      className={cn(buttonClass({ variant }), className)}
-      {...props}
-    />
+    <AlertDialogPrimitive.Action asChild>
+      <Button
+        data-slot="alert-dialog-action"
+        variant={variant}
+        className={className}
+        {...props}
+      />
+    </AlertDialogPrimitive.Action>
   );
 }
 
@@ -236,10 +239,10 @@ export function ConfirmDialog({
           <AlertDialogCancel disabled={busy}>{cancelLabel}</AlertDialogCancel>
           <AlertDialogAction
             variant={variant}
+            busy={busy}
             disabled={busy || locked}
             onClick={handleConfirm}
           >
-            {busy && <Spinner size="sm" className="text-current" />}
             {confirmLabel}
           </AlertDialogAction>
         </AlertDialogFooter>

@@ -178,6 +178,7 @@ export async function seedAcademies(
   const seen = new Set<string>();
   const users: string[] = [];
   const orgs: string[] = [];
+  const orgIds = academies.map((a) => a.id);
   const members: string[] = [];
 
   for (const academy of academies) {
@@ -204,6 +205,8 @@ export async function seedAcademies(
       VALUES ${orgs.join(",")};
     INSERT INTO "member" (id, organization_id, user_id, role, status, invited_role, created_at)
       VALUES ${members.join(",")};
+    INSERT INTO "curriculum_track" (academy_id, name, is_default)
+      VALUES ${orgIds.map((id) => `(${lit(id)}, 'All classes', true)`).join(",")};
   `);
 }
 

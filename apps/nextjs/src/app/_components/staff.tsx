@@ -21,7 +21,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@matops/ui/dropdown-menu";
-import { Spinner } from "@matops/ui/spinner";
 import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
@@ -154,10 +153,10 @@ function StaffRow({
                 </AlertDialogCancel>
                 <AlertDialogAction
                   variant={copy.variant}
+                  busy={confirming}
                   disabled={confirming}
                   onClick={confirm}
                 >
-                  {confirming && <Spinner size="sm" className="text-current" />}
                   {copy.confirmLabel}
                 </AlertDialogAction>
               </AlertDialogFooter>

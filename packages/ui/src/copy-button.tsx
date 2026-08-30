@@ -8,6 +8,13 @@ import { cn } from "@matops/ui";
 import { Button } from "./button";
 import { toast } from "./toast";
 
+const STACK = "col-start-1 row-start-1";
+const EASE =
+  "duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none";
+const SWAP = `${STACK} transition-[opacity,scale,filter] ${EASE}`;
+const HIDDEN = "scale-25 opacity-0 blur-[4px]";
+const FADE = `${STACK} transition-opacity ${EASE}`;
+
 /**
  * Copy-to-clipboard control — the one true way to copy a value (invite link,
  * academy code, payment reference, a member's phone). Handles the parts every
@@ -61,12 +68,29 @@ export function CopyButton({
       aria-label={iconOnly ? label : undefined}
       className={cn(className)}
     >
-      {copied ? (
-        <CheckIcon className="text-success" aria-hidden />
-      ) : (
-        <CopyIcon aria-hidden />
+      <span className="grid size-4 place-items-center">
+        <CopyIcon className={cn(SWAP, copied && HIDDEN)} aria-hidden />
+        <CheckIcon
+          className={cn(SWAP, "text-success", !copied && HIDDEN)}
+          aria-hidden
+        />
+      </span>
+      {!iconOnly && (
+        <span className="grid">
+          <span
+            aria-hidden={copied}
+            className={cn(FADE, copied && "opacity-0")}
+          >
+            {label}
+          </span>
+          <span
+            aria-hidden={!copied}
+            className={cn(FADE, !copied && "opacity-0")}
+          >
+            {copiedLabel}
+          </span>
+        </span>
       )}
-      {!iconOnly && <span>{copied ? copiedLabel : label}</span>}
     </Button>
   );
 }

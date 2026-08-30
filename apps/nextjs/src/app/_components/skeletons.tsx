@@ -2,7 +2,13 @@ import type { ReactNode } from "react";
 
 import { cn } from "@matops/ui";
 
-import { cardClass } from "./primitives";
+import {
+  cardClass,
+  Panel,
+  panelCell,
+  ROSTER_LIST,
+  ROSTER_ROW,
+} from "./primitives";
 
 /**
  * The loading vocabulary (ADR 80). Three tiers, one per kind of wait:
@@ -323,6 +329,17 @@ export function SkeletonBreakdown() {
           </div>
         ))}
       </div>
+      <div>
+        <Bar className="h-2.5 w-24" />
+        <div className="mt-2 flex flex-col gap-1.5">
+          {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+            <div key={i} className="flex items-baseline justify-between gap-3">
+              <Bar className={cn("h-3.5", pick(TITLE_W, i))} />
+              <Bar className="h-3 w-20 shrink-0" />
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -330,17 +347,14 @@ export function SkeletonBreakdown() {
 /** The O1 "needs you" strip — equal channels on a hairline grid. */
 export function SkeletonQueue({ tiles = 4 }: { tiles?: number }) {
   return (
-    <div aria-hidden className="flex flex-wrap">
+    <Panel aria-hidden>
       {Array.from({ length: tiles }).map((_, i) => (
-        <div
-          key={i}
-          className="border-border -mr-px -mb-px w-1/2 shrink-0 border px-3 py-3 sm:w-[10.5rem] sm:py-3.5"
-        >
+        <div key={i} className={cn(panelCell, "px-3 py-3 sm:py-3.5")}>
           <Bar className="h-7 w-10 sm:h-9" />
           <Bar className="mt-2 h-2.5 w-20 sm:mt-2.5" />
         </div>
       ))}
-    </div>
+    </Panel>
   );
 }
 
@@ -365,7 +379,10 @@ export function SkeletonDayRail({ rows = 3 }: { rows?: number }) {
 export function SkeletonInsights() {
   return (
     <div aria-hidden className="flex flex-col gap-4">
-      <SkeletonStats n={4} />
+      <SkeletonStats
+        n={4}
+        className="grid grid-cols-2 gap-x-6 gap-y-4 lg:grid-cols-1"
+      />
       <div className="flex flex-col gap-1">
         <Bar className="h-2.5 w-36" />
         {["w-3/4", "w-1/2", "w-1/3"].map((w) => (
@@ -521,29 +538,25 @@ export function SkeletonCoachCards({
 /** The O5 roster — the coach picker, the counts line, then who is on the mat. */
 export function SkeletonRoster({ rows = 5 }: { rows?: number }) {
   return (
-    <div aria-hidden className="flex flex-col gap-3">
-      <Bar className="h-9 w-full max-w-xs rounded-md" />
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Bar className="h-3.5 w-56" />
-        <Bar className="h-8 w-32 rounded-md" />
-      </div>
+    <div aria-hidden className="flex flex-col gap-4">
+      <Bar className="h-8 w-64 rounded-md" />
       <div className="flex flex-col gap-2">
-        {Array.from({ length: rows }).map((_, i) => (
-          <div
-            key={i}
-            className={cn(
-              cardClass(),
-              "flex items-center justify-between gap-3 p-3",
-            )}
-          >
-            <Bar className={cn("h-4", pick(TITLE_W, i))} />
-            <div className="flex shrink-0 gap-2">
-              <Bar className="size-8 rounded-md" />
-              <Bar className="size-8 rounded-md" />
-            </div>
-          </div>
-        ))}
+        <div className="flex items-center justify-between gap-4">
+          <Bar className="h-3 w-48" />
+          <Bar className="h-8 w-32 shrink-0 rounded-md" />
+        </div>
+        <Bar className="h-0.5 w-full rounded-full" />
       </div>
+      <ul className={cn(ROSTER_LIST, "overflow-hidden")}>
+        {Array.from({ length: rows }).map((_, i) => (
+          <li key={i} className={ROSTER_ROW}>
+            <Bar className="size-2.5 shrink-0 rounded-full" />
+            <Bar className={cn("h-4", pick(TITLE_W, i))} />
+            <Bar className="ml-auto h-9 w-32 shrink-0 rounded-md" />
+          </li>
+        ))}
+      </ul>
+      <Bar className="h-12 w-full rounded-lg" />
     </div>
   );
 }
@@ -637,11 +650,13 @@ export function SkeletonMyClassesBody() {
 /** Referrals below its title: the summary sentence, the search, the board. */
 export function SkeletonReferralsBody() {
   return (
-    <div aria-hidden className="flex flex-col gap-8">
-      <SkeletonLines n={3} className="max-w-2xl" />
-      <div className="flex flex-wrap items-center gap-3">
-        <Bar className="h-9 min-w-56 flex-1 rounded-md" />
-        <Bar className="h-4 w-48 shrink-0" />
+    <div aria-hidden className="flex flex-col gap-10">
+      <div className="flex flex-col gap-6">
+        <SkeletonLines n={3} className="max-w-2xl" />
+        <div className="flex flex-wrap items-center gap-3">
+          <Bar className="h-9 min-w-56 flex-1 rounded-md" />
+          <Bar className="h-4 w-48 shrink-0" />
+        </div>
       </div>
       <section className="space-y-3">
         <Bar className="h-5 w-24" />
@@ -696,7 +711,6 @@ export function HomeSkeleton() {
   return (
     <Frame>
       <SkeletonHeader />
-      <SkeletonClassDays />
     </Frame>
   );
 }
@@ -751,13 +765,7 @@ export function CoachesSkeleton() {
           <SkeletonTabs tabs={3} />
           <Bar className="h-2.5 w-32" />
         </div>
-        <SkeletonCoachCards n={2} />
-        <section className="flex flex-col gap-4 pt-4">
-          <Bar className="h-5 w-24" />
-          <Bar className="h-3.5 w-full max-w-xl" />
-          <SkeletonInviteCard />
-          <SkeletonRows rows={2} action />
-        </section>
+        <SkeletonCoachCards n={1} toggle={false} />
       </div>
     </Frame>
   );

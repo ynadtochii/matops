@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import { Button } from "@matops/ui/button";
 import {
@@ -12,7 +13,7 @@ import {
 import { Spinner } from "@matops/ui/spinner";
 import { toast } from "@matops/ui/toast";
 
-import type { PosterClass } from "./poster-draw";
+import { useTRPC } from "~/trpc/react";
 import { useAcademy } from "./academy";
 import { POSTER_H, POSTER_W } from "./poster-size";
 
@@ -28,7 +29,8 @@ const fileSlug = (name: string) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "") || "schedule";
 
-export function SchedulePoster({ classes }: { classes: PosterClass[] }) {
+export function SchedulePoster() {
+  const trpc = useTRPC();
   const academy = useAcademy();
   const name = academy.name;
   const code = academy.code ?? "";
@@ -36,6 +38,25 @@ export function SchedulePoster({ classes }: { classes: PosterClass[] }) {
   const [drawing, setDrawing] = useState(true);
   const [saving, setSaving] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // The poster is the recurring week, so it is drawn from the templates rather
+  // than from the concrete classes on screen. The schedule route prefetches
+  // this list, so reading it here costs no request.
+  const list = useQuery(trpc.template.list.queryOptions());
+  const classes = useMemo(
+    () =>
+      (list.data ?? [])
+        .filter((t) => t.status === "active")
+        .map((t) => ({
+          title: t.title,
+          discipline: t.discipline,
+          daysOfWeek: t.daysOfWeek,
+          startsAtMinutes: t.startsAtMinutes,
+          durationMinutes: t.durationMinutes,
+          instructorName: t.instructorName,
+        })),
+    [list.data],
+  );
 
   const render = useCallback(async () => {
     const [{ drawPoster }] = await Promise.all([

@@ -20,11 +20,11 @@ import { Select } from "@matops/ui/select";
 import { Spinner } from "@matops/ui/spinner";
 import { toast } from "@matops/ui/toast";
 
+import { optimistic, rollback } from "~/lib/optimistic";
 import { useTRPC } from "~/trpc/react";
 import { useAcademy } from "./academy";
 import { InstructorOptions } from "./coach-select";
 import { cardClass, SectionHeading } from "./primitives";
-import { SchedulePoster } from "./schedule-poster";
 import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 
@@ -51,6 +51,7 @@ interface FormState {
   title: string;
   instructorId: string;
   discipline: Discipline | "";
+  curriculumTrackId: string;
   daysOfWeek: number[];
   time: string; // "HH:MM"
   durationMinutes: number;
@@ -62,6 +63,7 @@ const emptyForm = (instructorId: string, timeZone: string): FormState => ({
   title: "",
   instructorId,
   discipline: "",
+  curriculumTrackId: "",
   daysOfWeek: [],
   time: "18:00",
   durationMinutes: 60,
@@ -73,6 +75,7 @@ const formFromTemplate = (t: Template): FormState => ({
   title: t.title,
   instructorId: t.instructorId,
   discipline: t.discipline ?? "",
+  curriculumTrackId: t.curriculumTrackId ?? "",
   daysOfWeek: t.daysOfWeek,
   time: formatStartMinutes(t.startsAtMinutes),
   durationMinutes: t.durationMinutes,
@@ -90,6 +93,7 @@ export function Templates() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const list = useQuery(trpc.template.list.queryOptions());
+  const board = useQuery(trpc.curriculum.board.queryOptions({}));
   const me = useAcademy();
 
   const [form, setForm] = useState<FormState | null>(null);
@@ -127,23 +131,16 @@ export function Templates() {
       onError,
     }),
   );
-  // Optimistic pause/resume: flip the template's status in the list cache
-  // straight away, reconcile on settle, roll back on error.
   const setStatus = useMutation(
     trpc.template.setStatus.mutationOptions({
-      onMutate: async (vars) => {
-        const key = trpc.template.list.queryKey();
-        await queryClient.cancelQueries({ queryKey: key });
-        const prev = queryClient.getQueryData(key);
-        queryClient.setQueryData(key, (old) =>
-          old?.map((t) =>
+      onMutate: (vars) =>
+        optimistic(queryClient, trpc.template.list.queryKey(), (old) =>
+          old.map((t) =>
             t.id === vars.id ? { ...t, status: vars.status } : t,
           ),
-        );
-        return { key, prev };
-      },
+        ),
       onError: (err, _vars, ctx) => {
-        if (ctx) queryClient.setQueryData(ctx.key, ctx.prev);
+        rollback(queryClient, ctx);
         onError(err);
       },
       onSettled: () => invalidate(),
@@ -155,18 +152,9 @@ export function Templates() {
 
   const busy = create.isPending || update.isPending;
   const templates = list.data ?? [];
-  const posterClasses = templates
-    .filter((t) => t.status === "active")
-    .map((t) => ({
-      title: t.title,
-      discipline: t.discipline,
-      daysOfWeek: t.daysOfWeek,
-      startsAtMinutes: t.startsAtMinutes,
-      durationMinutes: t.durationMinutes,
-      instructorName: t.instructorName,
-    }));
-
   const editingTemplate = list.data?.find((t) => t.id === editingId);
+  const tracks = board.data?.tracks ?? [];
+  const defaultTrack = tracks.find((t) => t.isDefault);
 
   const submit = () => {
     if (!form) return;
@@ -178,6 +166,8 @@ export function Templates() {
       title: form.title.trim(),
       instructorId: form.instructorId || undefined,
       discipline: form.discipline === "" ? null : form.discipline,
+      curriculumTrackId:
+        form.curriculumTrackId === "" ? null : form.curriculumTrackId,
       daysOfWeek: form.daysOfWeek,
       startsAtMinutes: timeToMinutes(form.time),
       durationMinutes: form.durationMinutes,
@@ -192,19 +182,16 @@ export function Templates() {
     <section className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-lg font-semibold">Recurring classes</h2>
-        <div className="flex items-center gap-2">
-          <SchedulePoster classes={posterClasses} />
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              setEditingId(null);
-              setForm(emptyForm(me.userId, academyTz));
-            }}
-          >
-            New template
-          </Button>
-        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => {
+            setEditingId(null);
+            setForm(emptyForm(me.userId, academyTz));
+          }}
+        >
+          New template
+        </Button>
       </div>
 
       {list.isPending ? (
@@ -436,6 +423,31 @@ export function Templates() {
                     ))}
                   </Select>
                 </div>
+                {tracks.length > 1 && (
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="tpl-track">Curriculum</Label>
+                    <Select
+                      id="tpl-track"
+                      value={form.curriculumTrackId}
+                      onChange={(e) =>
+                        setForm({ ...form, curriculumTrackId: e.target.value })
+                      }
+                    >
+                      <option value="">
+                        {defaultTrack
+                          ? `${defaultTrack.name} (default)`
+                          : "Default"}
+                      </option>
+                      {tracks
+                        .filter((t) => !t.isDefault)
+                        .map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name}
+                          </option>
+                        ))}
+                    </Select>
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-col gap-1.5">

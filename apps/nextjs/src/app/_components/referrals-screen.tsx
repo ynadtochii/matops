@@ -9,6 +9,11 @@ import { formatMoney, groupMoneyByCurrency } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { Button } from "@matops/ui/button";
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@matops/ui/collapsible";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -16,13 +21,20 @@ import {
 } from "@matops/ui/dialog";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
+import { FOCUS_RING, PRESS } from "@matops/ui/motion";
 import { Select } from "@matops/ui/select";
 import { toast } from "@matops/ui/toast";
 
 import { dateTimeMediumFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { PageHeader } from "./page-header";
-import { cardClass, Eyebrow, SectionHeading } from "./primitives";
+import {
+  cardClass,
+  ChevronDownIcon,
+  ENTER,
+  Eyebrow,
+  SectionHeading,
+} from "./primitives";
 import { SkeletonLines, SkeletonReferralsBody } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 
@@ -176,39 +188,40 @@ export function ReferralsScreen() {
       ) : !data ? (
         <SkeletonReferralsBody />
       ) : (
-        <div className="flex flex-col gap-8">
-          <Summary
-            board={board}
-            credited={visible.length - uncredited.length}
-          />
-
+        <div className="flex flex-col gap-10">
           {(board.length > 0 || uncredited.length > 0) && (
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="min-w-0 flex-1 basis-56">
-                <Label htmlFor="referral-search" className="sr-only">
-                  Find a person
-                </Label>
-                <Input
-                  id="referral-search"
-                  type="search"
-                  value={search}
-                  placeholder="Find a person…"
-                  onChange={(event) => setSearch(event.target.value)}
-                />
+            <div className={cn(ENTER, "flex flex-col gap-6")}>
+              <Summary
+                board={board}
+                credited={visible.length - uncredited.length}
+              />
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="min-w-0 flex-1 basis-56">
+                  <Label htmlFor="referral-search" className="sr-only">
+                    Find a person
+                  </Label>
+                  <Input
+                    id="referral-search"
+                    type="search"
+                    value={search}
+                    placeholder="Find a person…"
+                    onChange={(event) => setSearch(event.target.value)}
+                  />
+                </div>
+                <label className="text-muted-foreground flex min-h-11 shrink-0 items-center gap-2 text-sm sm:min-h-0">
+                  <input
+                    type="checkbox"
+                    checked={showRemoved}
+                    onChange={(event) => setShowRemoved(event.target.checked)}
+                    className="accent-brand size-4"
+                  />
+                  Show removed students
+                </label>
               </div>
-              <label className="text-muted-foreground flex shrink-0 items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={showRemoved}
-                  onChange={(event) => setShowRemoved(event.target.checked)}
-                  className="accent-brand size-4"
-                />
-                Show removed students
-              </label>
             </div>
           )}
 
-          <section className="space-y-3">
+          <section className={cn(ENTER, "space-y-3 delay-100")}>
             <SectionHeading>Credited</SectionHeading>
             {shownBoard.length === 0 ? (
               <EmptyState
@@ -246,7 +259,7 @@ export function ReferralsScreen() {
           </section>
 
           {uncredited.length > 0 && (
-            <section className="space-y-3">
+            <section className={cn(ENTER, "space-y-3 delay-200")}>
               <SectionHeading count={uncredited.length}>
                 Nobody credited yet
               </SectionHeading>
@@ -260,6 +273,7 @@ export function ReferralsScreen() {
                     const cleared = student.assignmentState === "cleared";
                     const rowClass = cn(
                       "flex w-full items-center gap-3 px-4 py-3 text-left text-sm",
+                      FOCUS_RING,
                     );
                     const hint = cleared
                       ? "credit removed · record again"
@@ -369,8 +383,12 @@ function ReferrerCard({
               <button
                 type="button"
                 onClick={() => onEdit(student.memberId)}
-                title={`Change who brought ${student.name} in`}
-                className="border-border hover:border-brand/40 hover:bg-muted flex max-w-52 items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm transition-colors"
+                aria-label={`Change who brought ${student.name} in`}
+                className={cn(
+                  "border-border hover:border-brand/40 hover:bg-muted flex min-h-11 max-w-52 items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm transition-[background-color,border-color,scale] duration-150 sm:min-h-0",
+                  FOCUS_RING,
+                  PRESS,
+                )}
               >
                 <PersonLabel student={student} />
               </button>
@@ -542,18 +560,30 @@ function ReferralDialog({
           </p>
 
           {!isNew && studentId && (
-            <div className="space-y-2">
-              <Button
-                size="sm"
-                variant="ghost"
-                className="text-muted-foreground -ml-2 text-xs"
-                aria-expanded={showHistory}
-                onClick={() => setShowHistory((current) => !current)}
-              >
-                {showHistory ? "Hide history" : "View history"}
-              </Button>
-              {showHistory && <ReferralHistory studentMemberId={studentId} />}
-            </div>
+            <Collapsible
+              open={showHistory}
+              onOpenChange={setShowHistory}
+              className="space-y-2"
+            >
+              <CollapsibleTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-muted-foreground -ml-2 text-xs"
+                >
+                  History
+                  <ChevronDownIcon
+                    className={cn(
+                      "transition-[rotate] duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none",
+                      showHistory && "rotate-180",
+                    )}
+                  />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <ReferralHistory studentMemberId={studentId} />
+              </CollapsibleContent>
+            </Collapsible>
           )}
         </div>
 
@@ -563,16 +593,15 @@ function ReferralDialog({
           </Button>
           <Button
             variant={clearing ? "destructive" : "primary"}
+            busy={pending}
             disabled={!studentId || !referrerId || pending}
             onClick={save}
           >
-            {pending
-              ? "Saving…"
-              : clearing
-                ? "Remove credit"
-                : isNew
-                  ? "Record referral"
-                  : "Save change"}
+            {clearing
+              ? "Remove credit"
+              : isNew
+                ? "Record referral"
+                : "Save change"}
           </Button>
         </div>
       </DialogContent>

@@ -89,6 +89,9 @@ export const organization = pgTable("organization", {
   timeZone: text("time_zone"),
   address: text("address"),
   mapUrl: text("map_url"),
+  curriculumForStudents: boolean("curriculum_for_students")
+    .notNull()
+    .default(false),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
 

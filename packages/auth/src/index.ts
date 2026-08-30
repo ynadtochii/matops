@@ -4,7 +4,11 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { magicLink, oAuthProxy, organization } from "better-auth/plugins";
 
-import { generateAcademyCode, setMemberActive } from "@matops/db";
+import {
+  createDefaultTrack,
+  generateAcademyCode,
+  setMemberActive,
+} from "@matops/db";
 import { db } from "@matops/db/client";
 import { sendEmail } from "@matops/notifications";
 
@@ -110,8 +114,9 @@ export function initAuth<
               },
             };
           },
-          afterCreateOrganization: async ({ member }) => {
+          afterCreateOrganization: async ({ member, organization }) => {
             await setMemberActive(member.id, db);
+            await createDefaultTrack(organization.id, db);
           },
         },
         schema: {

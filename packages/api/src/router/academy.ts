@@ -94,6 +94,7 @@ export const academyRouter = {
       timeZone: academy.timeZone,
       address: academy.address,
       mapUrl: academy.mapUrl,
+      curriculumForStudents: academy.curriculumForStudents,
       code: await getAcademyCode(academyId, ctx.baseDb),
     };
   }),

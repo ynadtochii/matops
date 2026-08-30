@@ -4,6 +4,8 @@ import { cn } from "@matops/ui";
 
 import type { ButtonVariant, ButtonVariants } from "./button-variants";
 import { buttonContainerVariants, buttonTextVariants } from "./button-variants";
+import { FOCUS_RING, PRESS } from "./motion";
+import { Spinner } from "./spinner";
 
 export { buttonContainerVariants, buttonTextVariants } from "./button-variants";
 export type { ButtonVariant, ButtonVariants } from "./button-variants";
@@ -16,9 +18,10 @@ export type { ButtonVariant, ButtonVariants } from "./button-variants";
  * mobile twin. See ADR docs/issues/32.
  */
 const webAdornments =
-  "inline-flex shrink-0 whitespace-nowrap outline-none transition-all " +
-  "focus-visible:border-ring focus-visible:ring-ring/50 " +
-  "focus-visible:ring-[3px] disabled:pointer-events-none " +
+  "inline-flex shrink-0 whitespace-nowrap outline-none " +
+  "transition-[background-color,border-color,color,box-shadow,scale] duration-150 " +
+  `${PRESS} ${FOCUS_RING} focus-visible:border-ring ` +
+  "disabled:pointer-events-none " +
   "disabled:bg-muted disabled:text-muted-foreground disabled:border-transparent " +
   "aria-invalid:border-error aria-invalid:ring-error/20 " +
   "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4";
@@ -65,18 +68,36 @@ export function Button({
   variant,
   size,
   asChild = false,
+  busy = false,
+  children,
   ...props
 }: React.ComponentProps<"button"> &
   ButtonVariants & {
     asChild?: boolean;
+    busy?: boolean;
   }) {
   const Comp = asChild ? SlotPrimitive.Slot : "button";
+  const spin = busy && !asChild;
 
   return (
     <Comp
       data-slot="button"
-      className={cn(buttonClass({ variant, size }), className)}
+      className={cn(
+        buttonClass({ variant, size }),
+        spin && "relative",
+        className,
+      )}
       {...props}
-    />
+    >
+      {spin ? (
+        <>
+          {/* The label keeps its box so the button can't resize mid-action. */}
+          <span className="invisible contents">{children}</span>
+          <Spinner size="sm" className="absolute text-current" />
+        </>
+      ) : (
+        children
+      )}
+    </Comp>
   );
 }

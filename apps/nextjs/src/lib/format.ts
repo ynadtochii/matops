@@ -67,6 +67,10 @@ export const dateYearFmt = new Intl.DateTimeFormat(undefined, {
   year: "numeric",
 });
 
+export const monthShortFmt = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+});
+
 /** "Jul 2026" */
 export const monthYearFmt = new Intl.DateTimeFormat(undefined, {
   month: "short",

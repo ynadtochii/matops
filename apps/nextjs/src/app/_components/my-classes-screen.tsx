@@ -12,16 +12,16 @@ import {
 } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { Button } from "@matops/ui/button";
-import { Spinner } from "@matops/ui/spinner";
 
 import { dayMediumFmt, timeFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { useAcademy } from "./academy";
 import { PageHeader } from "./page-header";
-import { cardClass, Section, Stat } from "./primitives";
+import { cardClass, ENTER, Section, Stat } from "./primitives";
 import { SkeletonMyClassesBody, SkeletonStats } from "./skeletons";
 import { EmptyState, ErrorState, SuspendedState } from "./states";
 import { useBooking } from "./use-booking";
+import { useMinuteClock } from "./use-clock";
 
 type MyClass = RouterOutputs["booking"]["mine"][number];
 
@@ -35,7 +35,7 @@ export function MyClassesScreen() {
     enabled: !suspended,
   });
 
-  const now = new Date();
+  const now = useMinuteClock();
   const { upcoming, past } = splitMyClasses(mine.data ?? [], now);
   const next = nextClass(upcoming, now);
 
@@ -67,7 +67,7 @@ export function MyClassesScreen() {
       ) : (
         <div className="flex flex-col gap-8">
           {next && (
-            <Section label="Next class">
+            <Section label="Next class" className={ENTER}>
               <Link
                 href={`/class/${next.classId}`}
                 className={cn(
@@ -91,12 +91,16 @@ export function MyClassesScreen() {
             </Section>
           )}
 
-          <Section label="My training">
+          <Section
+            label="My training"
+            className={cn(ENTER, next && "delay-100")}
+          >
             <TrainingStats />
           </Section>
 
           <Section
             label="Upcoming"
+            className={cn(ENTER, "delay-200")}
             meta={rest.length > 0 ? `${rest.length}` : undefined}
           >
             {rest.length === 0 ? (
@@ -115,12 +119,10 @@ export function MyClassesScreen() {
                         <Button
                           variant="outline"
                           size="sm"
+                          busy={busyFor(c.classId)}
                           disabled={busyFor(c.classId)}
                           onClick={() => cancel.mutate({ classId: c.classId })}
                         >
-                          {busyFor(c.classId) && (
-                            <Spinner size="sm" className="text-current" />
-                          )}
                           Cancel
                         </Button>
                       )
@@ -133,6 +135,7 @@ export function MyClassesScreen() {
 
           <Section
             label="Past"
+            className={cn(ENTER, "delay-200")}
             meta={past.length > 0 ? `${past.length}` : undefined}
           >
             {past.length === 0 ? (
@@ -243,23 +246,25 @@ function TrainingStats() {
 
   return (
     <div className={cardClass()}>
-      <div className="flex flex-wrap gap-8">
+      <div className="grid grid-cols-3 gap-4">
         <Stat value={s.total} label="Sessions" />
         <Stat value={s.thisMonth} label="This month" />
         <Stat value={s.streakWeeks} label="Week streak" />
       </div>
-      <div className="mt-4 flex flex-col gap-1 text-sm">
-        {favorite && (
-          <p>
-            Favorite: <span className="font-medium">{favorite}</span>
-          </p>
-        )}
-        {s.daysSinceLastClass != null && (
-          <p className="text-muted-foreground">
-            Last class: {lastClassLabel(s.daysSinceLastClass)}
-          </p>
-        )}
-      </div>
+      {(favorite || s.daysSinceLastClass != null) && (
+        <div className="mt-5 flex flex-col gap-1 text-sm">
+          {favorite && (
+            <p>
+              Favorite: <span className="font-medium">{favorite}</span>
+            </p>
+          )}
+          {s.daysSinceLastClass != null && (
+            <p className="text-muted-foreground">
+              Last class: {lastClassLabel(s.daysSinceLastClass)}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

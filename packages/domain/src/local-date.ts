@@ -45,3 +45,13 @@ export function localDate(instant: Date, timeZone: string): LocalDate {
     weekday: ((((dayNumber % 7) + 4) % 7) + 7) % 7,
   };
 }
+
+/** The calendar day in `timeZone` as "YYYY-MM-DD" (en-CA already yields that order). */
+export function academyDay(instant: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(instant);
+}

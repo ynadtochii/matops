@@ -3,17 +3,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { formatMoney, PAYMENT_STATUS_LABEL } from "@matops/domain";
+import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
 import { CopyButton } from "@matops/ui/copy-button";
-import { Spinner } from "@matops/ui/spinner";
 import { toast } from "@matops/ui/toast";
 
 import { dateFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { useAcademy } from "./academy";
 import { PageHeader } from "./page-header";
-import { cardClass, DUES_TONE, Eyebrow, Section } from "./primitives";
+import { cardClass, DUES_TONE, ENTER, Eyebrow, Section } from "./primitives";
 import { SkeletonDuesBody } from "./skeletons";
 import { EmptyState, ErrorState, SuspendedState } from "./states";
 
@@ -108,7 +108,7 @@ export function MyDues() {
       {header}
       <div className="flex flex-col gap-8">
         {d && (
-          <Section label="What you owe">
+          <Section label="What you owe" className={ENTER}>
             <div className={cardClass()}>
               <div className="flex flex-wrap items-center gap-3">
                 <span className="font-mono text-2xl tabular-nums">
@@ -134,7 +134,7 @@ export function MyDues() {
           </Section>
         )}
 
-        <Section label="How to pay">
+        <Section label="How to pay" className={cn(ENTER, d && "delay-100")}>
           {requisites.bankDetails ? (
             <div className="flex flex-col gap-3">
               <div className={cardClass()}>
@@ -168,46 +168,44 @@ export function MyDues() {
                 </div>
               </div>
               <p className="text-muted-foreground text-sm">
-                Pay in your own bank app, then tell your gym below.
+                Pay in your own bank app, then tell your gym here.
               </p>
             </div>
           ) : (
             <EmptyState title="Ask your gym for their bank details to pay." />
           )}
-        </Section>
 
-        {d && (
-          <div>
-            {openClaim ? (
-              <p className="text-muted-foreground text-sm">
-                Payment submitted — waiting for your gym to confirm. You can
-                book while it&apos;s pending.
-              </p>
-            ) : (
-              <ConfirmDialog
-                title="Mark this as paid?"
-                description="This tells your gym you sent the transfer. They'll confirm it once the money arrives."
-                confirmLabel="I paid"
-                variant="primary"
-                onConfirm={async () => {
-                  await claim.mutateAsync({});
-                }}
-                trigger={
-                  <Button
-                    disabled={
-                      !canPay || !requisites.bankDetails || claim.isPending
-                    }
-                  >
-                    {claim.isPending && (
-                      <Spinner size="sm" className="text-current" />
-                    )}
-                    I paid
-                  </Button>
-                }
-              />
-            )}
-          </div>
-        )}
+          {d && (
+            <div className="mt-2">
+              {openClaim ? (
+                <p className="text-muted-foreground text-sm">
+                  Payment submitted — waiting for your gym to confirm. You can
+                  book while it&apos;s pending.
+                </p>
+              ) : (
+                <ConfirmDialog
+                  title="Mark this as paid?"
+                  description="This tells your gym you sent the transfer. They'll confirm it once the money arrives."
+                  confirmLabel="I paid"
+                  variant="primary"
+                  onConfirm={async () => {
+                    await claim.mutateAsync({});
+                  }}
+                  trigger={
+                    <Button
+                      busy={claim.isPending}
+                      disabled={
+                        !canPay || !requisites.bankDetails || claim.isPending
+                      }
+                    >
+                      I paid
+                    </Button>
+                  }
+                />
+              )}
+            </div>
+          )}
+        </Section>
       </div>
     </>
   );
@@ -246,16 +244,19 @@ function ChoosePlan() {
   }
 
   return (
-    <Section label="Choose your membership">
+    <Section label="Choose your membership" className={ENTER}>
+      <p className="text-muted-foreground text-sm">
+        Pick the plan you agreed with your gym. Your first payment is due on the
+        1st of next month. Your gym can change your plan later.
+      </p>
       <div className="flex flex-col gap-3">
-        <p className="text-muted-foreground text-sm">
-          Pick the plan you agreed with your gym. Your first payment is due on
-          the 1st of next month. Your gym can change your plan later.
-        </p>
         {plans.data.map((p) => (
           <div
             key={p.id}
-            className={`${cardClass()} flex flex-wrap items-center justify-between gap-3`}
+            className={cn(
+              cardClass(),
+              "flex flex-wrap items-center justify-between gap-3",
+            )}
           >
             <div className="min-w-0">
               <p className="font-medium">{p.name}</p>
@@ -272,10 +273,11 @@ function ChoosePlan() {
                 await choose.mutateAsync({ planId: p.id });
               }}
               trigger={
-                <Button size="sm" disabled={choose.isPending}>
-                  {choose.isPending && choose.variables.planId === p.id && (
-                    <Spinner size="sm" className="text-current" />
-                  )}
+                <Button
+                  size="sm"
+                  busy={choose.isPending && choose.variables.planId === p.id}
+                  disabled={choose.isPending}
+                >
                   Choose
                 </Button>
               }

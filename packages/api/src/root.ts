@@ -5,6 +5,7 @@ import { authRouter } from "./router/auth";
 import { bookingRouter } from "./router/booking";
 import { checkinRouter } from "./router/checkin";
 import { classRouter } from "./router/class";
+import { curriculumRouter } from "./router/curriculum";
 import { dropInRouter } from "./router/dropin";
 import { inviteRouter } from "./router/invite";
 import { membershipRouter } from "./router/membership";
@@ -27,6 +28,7 @@ export const appRouter = createTRPCRouter({
   membership: membershipRouter,
   template: templateRouter,
   class: classRouter,
+  curriculum: curriculumRouter,
   booking: bookingRouter,
   attendance: attendanceRouter,
   checkin: checkinRouter,

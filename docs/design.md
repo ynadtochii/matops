@@ -202,12 +202,16 @@ one per view.
 
 **The instrument panel.** One shape carries every set of top-of-screen readings:
 a bordered strip on `bg-grid-small`, split into cells by hairlines, each cell
-floated just above the texture with `bg-background/90`. The O9 referral metrics
-and the O1 "needs you" queue are the same object; a third panel should be too.
-It replaces a row of separate cards on purpose — several tinted cards read as
+floated just above the texture with `bg-background/90`. It is built, as `Panel`
+/ `panelCell` / `PanelNotice` in `apps/nextjs/src/app/_components/primitives.tsx`
+(ADR [101](issues/101-the-dashboard-uses-its-width.md)). Use it rather than
+drawing a fourth silhouette. Channels that carry nothing are simply absent and
+the grid shows through, so one job and six jobs draw the identical tile.
+It replaces a row of separate cards on purpose: several tinted cards read as
 several things to decide between, one panel reads as one instrument. When the O1
-queue is empty the strip keeps the texture and the dashed edge, so the cleared
-state occupies the same slot rather than leaving a hole.
+queue is empty the strip keeps its border and texture and one channel carries the
+line of copy, so the cleared state occupies the same slot rather than leaving a
+hole.
 
 ---
 

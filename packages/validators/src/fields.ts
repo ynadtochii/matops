@@ -156,6 +156,7 @@ export const UpdateAcademySettingsSchema = z.object({
     .optional(),
   address: blockText(0, 200).optional(),
   mapUrl: z.union([MapUrlSchema, z.literal("")]).optional(),
+  curriculumForStudents: z.boolean().optional(),
 });
 export type UpdateAcademySettingsInput = z.infer<
   typeof UpdateAcademySettingsSchema

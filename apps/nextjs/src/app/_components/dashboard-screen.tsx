@@ -1,6 +1,5 @@
 "use client";
 
-import type { ReactNode } from "react";
 import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
@@ -27,13 +26,13 @@ import {
   upcomingClassCount,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
-import { Button } from "@matops/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogTitle,
 } from "@matops/ui/dialog";
+import { FOCUS_RING, FOCUS_RING_INSET, PRESS } from "@matops/ui/motion";
 
 import { clockParts, dayLongFmt, timeFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
@@ -44,7 +43,12 @@ import {
   cardClass,
   disciplineDot,
   DriftBadge,
+  ENTER,
   Eyebrow,
+  Panel,
+  panelCell,
+  PanelNotice,
+  RESOLVE,
   Section,
   Stat,
 } from "./primitives";
@@ -57,6 +61,7 @@ import {
 } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 import { StudentScreen } from "./student-screen";
+import { useMinuteClock } from "./use-clock";
 
 type ClassRow = Omit<RouterOutputs["class"]["week"][number], "startsAt"> & {
   startsAt: Date;
@@ -113,7 +118,7 @@ export function DashboardScreen() {
   }, []);
   // The query window is a query key, so it stays frozen. The clock is not, and
   // freezing it left a long-open tab calling an ended class "now".
-  const now = new Date();
+  const now = useMinuteClock();
 
   const week = useQuery({
     ...trpc.class.week.queryOptions(dashboardWeekWindow(now)),
@@ -239,52 +244,54 @@ export function DashboardScreen() {
         </DialogContent>
       </Dialog>
 
-      <div>
-        <PageHeader title="This week" subtitle={dayLongFmt.format(today)} />
+      <div className={ENTER}>
+        <PageHeader title="Dashboard" subtitle={dayLongFmt.format(today)} />
 
         {/* Needs you — one instrument panel of equal channels on a hairline
             grid; a job at zero is dropped, not drawn empty. The violet lives in
             the counts only: it is a spark, not a surface (design.md §1.1). */}
         {queueLoading ? (
           <SkeletonQueue />
-        ) : firstRun ? (
-          <EmptyState title="Your academy is empty. Three steps to open it.">
-            <Link href="/schedule" className="text-brand-strong font-medium">
-              1. Add your weekly classes
-            </Link>
-            {" · "}
-            <Link href="/members" className="text-brand-strong font-medium">
-              2. Share your join link
-            </Link>
-            {" · "}
-            <Link
-              href="/members?tab=leads"
-              className="text-brand-strong font-medium"
-            >
-              3. Print the QR poster
-            </Link>
-          </EmptyState>
-        ) : queue.length === 0 ? (
-          <div className="border-border bg-grid-small rounded-lg border border-dashed p-6">
-            <p className="text-sm font-medium">All clear.</p>
-            <p className="text-muted-foreground mt-1 text-sm">
-              {isOwner
-                ? "Every class is marked, everyone is approved, every payment is settled."
-                : "Every class is marked and everyone is approved."}
-            </p>
-          </div>
         ) : (
-          <div className="flex flex-wrap">
-            {queue.map((i) => (
-              <QueueSegment
-                key={i.key}
-                href={i.href}
-                count={i.count}
-                label={i.label}
-                sub={i.sub}
-              />
-            ))}
-          </div>
+          <Panel className={RESOLVE}>
+            {firstRun ? (
+              <PanelNotice title="Your academy is empty. Three steps to open it.">
+                <Link
+                  href="/schedule"
+                  className="text-brand-strong font-medium"
+                >
+                  1. Add your weekly classes
+                </Link>
+                {" · "}
+                <Link href="/members" className="text-brand-strong font-medium">
+                  2. Share your join link
+                </Link>
+                {" · "}
+                <Link
+                  href="/members?tab=leads"
+                  className="text-brand-strong font-medium"
+                >
+                  3. Print the QR poster
+                </Link>
+              </PanelNotice>
+            ) : queue.length === 0 ? (
+              <PanelNotice title="All clear.">
+                {isOwner
+                  ? "Every class is marked, everyone is approved, every payment is settled."
+                  : "Every class is marked and everyone is approved."}
+              </PanelNotice>
+            ) : (
+              queue.map((i) => (
+                <QueueSegment
+                  key={i.key}
+                  href={i.href}
+                  count={i.count}
+                  label={i.label}
+                  sub={i.sub}
+                />
+              ))
+            )}
+          </Panel>
         )}
 
         {/* Context, not readings — a caption under the panel, so the counts
@@ -299,133 +306,134 @@ export function DashboardScreen() {
         )}
       </div>
 
-      {/* The day's classes — today until its last class ends, then tomorrow */}
-      <Section
-        label={showTomorrow ? "Tomorrow" : "Today"}
-        meta={
-          week.isPending || week.isError
-            ? undefined
-            : `${dayList.length} ${dayList.length === 1 ? "class" : "classes"}`
-        }
-      >
-        {week.isPending ? (
-          <SkeletonDayRail rows={3} />
-        ) : week.isError ? (
-          <ErrorState
-            label="today's classes"
-            onRetry={() => void week.refetch()}
-          />
-        ) : dayList.length === 0 ? (
-          <EmptyState
-            title="No classes today."
-            action={
-              <Link
-                href="/schedule"
-                className="text-brand-strong text-sm font-medium"
-              >
-                Add a class →
-              </Link>
+      <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className={cn("flex flex-col gap-10", ENTER, "delay-100")}>
+          {/* The day's classes — today until its last class ends, then tomorrow */}
+          <Section
+            label={showTomorrow ? "Tomorrow" : "Today"}
+            meta={
+              week.isPending || week.isError
+                ? undefined
+                : `${dayList.length} ${dayList.length === 1 ? "class" : "classes"}`
             }
           >
-            Enjoy the rest day, or add a one-off from the schedule.
-          </EmptyState>
-        ) : (
-          <div className="relative">
-            <span
-              aria-hidden
-              className="bg-border absolute top-4 bottom-4 left-[3.5px] w-px"
-            />
-            {dayList.map((cl, i) => (
-              <Fragment key={cl.id}>
-                {nowIndex === i && <NowLine now={now} />}
-                <DayRow
-                  c={cl}
-                  mine={cl.instructorId === c.userId}
-                  unmarked={unmarkedIds.has(cl.id)}
-                  now={now}
-                  onOpen={() => setDetailId(cl.id)}
+            {week.isPending ? (
+              <SkeletonDayRail rows={3} />
+            ) : week.isError ? (
+              <ErrorState
+                label="today's classes"
+                onRetry={() => void week.refetch()}
+              />
+            ) : dayList.length === 0 ? (
+              <EmptyState
+                title="No classes today."
+                action={
+                  <Link
+                    href="/schedule"
+                    className="text-brand-strong text-sm font-medium"
+                  >
+                    Add a class →
+                  </Link>
+                }
+              >
+                Enjoy the rest day, or add a one-off from the schedule.
+              </EmptyState>
+            ) : (
+              <div className={cn("relative", RESOLVE)}>
+                <span
+                  aria-hidden
+                  className="bg-border absolute top-4 bottom-4 left-[3.5px] w-px"
                 />
-              </Fragment>
-            ))}
-            {nowIndex === dayList.length && <NowLine now={now} />}
-          </div>
-        )}
-      </Section>
+                {dayList.map((cl, i) => (
+                  <Fragment key={cl.id}>
+                    {nowIndex === i && <NowLine now={now} />}
+                    <DayRow
+                      c={cl}
+                      mine={cl.instructorId === c.userId}
+                      unmarked={unmarkedIds.has(cl.id)}
+                      now={now}
+                      onOpen={() => setDetailId(cl.id)}
+                    />
+                  </Fragment>
+                ))}
+                {nowIndex === dayList.length && <NowLine now={now} />}
+              </div>
+            )}
+          </Section>
 
-      {/* Insights — gym activity over the last 30 days */}
-      <Section label="Insights">
-        {dash.isPending ? (
-          <SkeletonInsights />
-        ) : dash.isError ? (
-          <ErrorState
-            label="gym insights"
-            onRetry={() => void dash.refetch()}
-          />
-        ) : (
-          <Insights
-            data={dash.data.insights}
-            revenue={dash.data.revenue ?? []}
-          />
-        )}
-      </Section>
-
-      {/* Who's drifting — members who used to train and have gone quiet */}
-      {isOwner && (
-        <Section
-          label="Who's drifting"
-          meta={
-            dash.isPending || dash.isError || !dash.data.drifting?.length
-              ? undefined
-              : `${dash.data.drifting.length} members`
-          }
-        >
-          {dash.isPending ? (
-            <SkeletonRows rows={3} action variant="outline" />
-          ) : dash.isError ? (
-            <ErrorState
-              label="the drifting list"
-              onRetry={() => void dash.refetch()}
-            />
-          ) : !dash.data.drifting?.length ? (
-            <EmptyState title="Everyone's showing up.">
-              Members who used to train here but have gone quiet appear here so
-              you can reach out.
-            </EmptyState>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {dash.data.drifting.slice(0, 6).map((m) => (
-                <DriftRow key={m.memberId} m={m} today={today} />
-              ))}
-            </div>
+          {/* Who's drifting — members who used to train and have gone quiet */}
+          {isOwner && (
+            <Section
+              label="Who's drifting"
+              meta={
+                dash.isPending || dash.isError || !dash.data.drifting?.length
+                  ? undefined
+                  : `${dash.data.drifting.length} members`
+              }
+            >
+              {dash.isPending ? (
+                <SkeletonRows rows={3} action variant="outline" />
+              ) : dash.isError ? (
+                <ErrorState
+                  label="the drifting list"
+                  onRetry={() => void dash.refetch()}
+                />
+              ) : !dash.data.drifting?.length ? (
+                <EmptyState title="Everyone's showing up.">
+                  Members who used to train here but have gone quiet appear here
+                  so you can reach out.
+                </EmptyState>
+              ) : (
+                <div className={cn("flex flex-col gap-2", RESOLVE)}>
+                  {dash.data.drifting.slice(0, 6).map((m) => (
+                    <DriftRow key={m.memberId} m={m} today={today} />
+                  ))}
+                </div>
+              )}
+            </Section>
           )}
-        </Section>
-      )}
-
-      {/* Quick actions */}
-      <Section label="Quick actions">
-        <div className="flex flex-wrap gap-2">
-          <QuickAction href="/schedule">Add class</QuickAction>
-          <QuickAction href="/attendance">Take attendance</QuickAction>
         </div>
-      </Section>
+
+        <div className={cn("flex flex-col gap-10", ENTER, "delay-200")}>
+          {/* Insights — gym activity over the last 30 days */}
+          <Section label="Insights">
+            {dash.isPending ? (
+              <SkeletonInsights />
+            ) : dash.isError ? (
+              <ErrorState
+                label="gym insights"
+                onRetry={() => void dash.refetch()}
+              />
+            ) : (
+              <Insights
+                data={dash.data.insights}
+                revenue={dash.data.revenue ?? []}
+              />
+            )}
+          </Section>
+        </div>
+      </div>
     </div>
   );
 }
 
 /**
- * One job on the queue: a mono count over a mono label. The channel is a fixed
+ * One job on the queue: a mono count over a mono label. The channel floor is
  * 10.5rem so all six jobs fit the 1088px content column; a label longer than
  * that truncates rather than wrapping the tile taller than its neighbours. One
- * job and six jobs draw the identical tile; what changes is how many the strip
- * draws. Every cell owns all four hairlines and overlaps its neighbour by a
- * pixel, so shared edges collapse to one line and a half-filled row still
- * closes itself when the strip wraps.
+ * job and six jobs draw the identical tile; what changes is how many channels
+ * the strip fills, and the grid shows through the rest.
  */
 function QueueSegment({ href, count, label, sub }: Omit<QueueItem, "key">) {
   return (
     <Link
       href={href}
-      className="group border-border hover:bg-muted focus-visible:ring-ring/50 -mr-px -mb-px w-1/2 shrink-0 border px-3 py-3 transition-colors focus-visible:ring-[3px] focus-visible:outline-none focus-visible:ring-inset sm:w-[10.5rem] sm:py-3.5"
+      className={cn(
+        panelCell,
+        "group hover:bg-muted px-3 py-3 transition-[background-color,scale] duration-150 sm:py-3.5",
+        FOCUS_RING_INSET,
+        PRESS,
+      )}
     >
       <p className="text-brand-strong font-mono text-3xl leading-none tabular-nums sm:text-4xl">
         {count}
@@ -480,7 +488,10 @@ function DayRow({
     <button
       type="button"
       onClick={onOpen}
-      className="hover:bg-muted focus-visible:border-ring focus-visible:ring-ring/50 -mx-2.5 flex w-[calc(100%+1.25rem)] items-center gap-3 rounded-sm px-2.5 py-2.5 text-left text-sm focus-visible:ring-[3px] focus-visible:outline-none"
+      className={cn(
+        "hover:bg-muted focus-visible:border-ring -mx-2.5 flex w-[calc(100%+1.25rem)] items-center gap-3 rounded-sm px-2.5 py-2.5 text-left text-sm",
+        FOCUS_RING,
+      )}
     >
       <span
         aria-hidden
@@ -495,7 +506,7 @@ function DayRow({
       </span>
       <span
         className={cn(
-          "flex-1 font-medium",
+          "min-w-0 flex-1 truncate font-medium",
           ended && !unmarked && "text-muted-foreground",
         )}
       >
@@ -550,8 +561,8 @@ function Insights({
   revenue: NonNullable<Dashboard["revenue"]>;
 }) {
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap gap-x-8 gap-y-3">
+    <div className={cn("flex flex-col gap-4", RESOLVE)}>
+      <div className="grid grid-cols-2 gap-x-6 gap-y-4 lg:grid-cols-1">
         {revenue.map((m) => (
           <Stat
             key={m.currency}
@@ -653,19 +664,5 @@ function DriftRow({ m, today }: { m: DriftMember; today: Date }) {
       </div>
       <DriftBadge drift={m.drift} className="shrink-0" />
     </Link>
-  );
-}
-
-function QuickAction({
-  href,
-  children,
-}: {
-  href: string;
-  children: ReactNode;
-}) {
-  return (
-    <Button asChild variant="outline" size="sm">
-      <Link href={href}>{children}</Link>
-    </Button>
   );
 }

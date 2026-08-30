@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 
 import type { RouterOutputs } from "@matops/api";
 import type { DisciplineTone } from "@matops/domain";
@@ -15,6 +15,7 @@ import {
 import { cn } from "@matops/ui";
 
 import { time24Fmt, weekdayFmt } from "~/lib/format";
+import { useMinuteClock } from "./use-clock";
 
 type ClassRow = RouterOutputs["class"]["week"][number];
 
@@ -161,11 +162,7 @@ export function WeekGrid({
   action?: (c: ClassRow) => ReactNode;
   onSelect?: (c: ClassRow) => void;
 }) {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 60_000);
-    return () => clearInterval(t);
-  }, []);
+  const now = useMinuteClock();
 
   const days = useMemo(() => {
     const all = Array.from({ length: 7 }, (_, i) => {

@@ -2,6 +2,7 @@ export * from "./fields";
 export * from "./scheduling";
 export * from "./booking";
 export * from "./checkin";
+export * from "./curriculum";
 export * from "./push";
 export * from "./payments";
 export * from "./rank";

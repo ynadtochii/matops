@@ -26,3 +26,5 @@ export * from "./academy-settings";
 export * from "./dues-reminder";
 // Permanent erasure of one member (spec O4) — see ./erase.ts.
 export * from "./erase";
+// Default curriculum track for a new academy — see ./curriculum.ts.
+export * from "./curriculum";

@@ -10,13 +10,30 @@ export interface TimeZoneCtx {
   academyId: string;
 }
 
-export async function academyTimeZone(ctx: TimeZoneCtx): Promise<string> {
+/** Everything a request needs off the academy row, in one read. */
+export interface AcademyContext {
+  timeZone: string;
+  curriculumForStudents: boolean;
+}
+
+export async function academyContext(
+  ctx: TimeZoneCtx,
+): Promise<AcademyContext> {
   const [org] = await ctx.db
-    .select({ timeZone: organization.timeZone })
+    .select({
+      timeZone: organization.timeZone,
+      curriculumForStudents: organization.curriculumForStudents,
+    })
     .from(organization)
     .where(eq(organization.id, ctx.academyId))
     .limit(1);
-  if (org?.timeZone) return resolveAcademyTimeZone(org.timeZone);
+  const curriculumForStudents = org?.curriculumForStudents ?? false;
+  if (org?.timeZone) {
+    return {
+      timeZone: resolveAcademyTimeZone(org.timeZone),
+      curriculumForStudents,
+    };
+  }
 
   const [row] = await ctx.db
     .select({ timeZone: classTemplate.timeZone })
@@ -24,5 +41,12 @@ export async function academyTimeZone(ctx: TimeZoneCtx): Promise<string> {
     .groupBy(classTemplate.timeZone)
     .orderBy(desc(sql`count(*)`))
     .limit(1);
-  return resolveAcademyTimeZone(null, row?.timeZone);
+  return {
+    timeZone: resolveAcademyTimeZone(null, row?.timeZone),
+    curriculumForStudents,
+  };
+}
+
+export async function academyTimeZone(ctx: TimeZoneCtx): Promise<string> {
+  return (await academyContext(ctx)).timeZone;
 }

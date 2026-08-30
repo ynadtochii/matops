@@ -104,9 +104,10 @@ export function InviteLinkCard({
               <Button
                 variant="destructive-outline"
                 size="sm"
+                busy={rotate.isPending}
                 disabled={rotate.isPending}
               >
-                {rotate.isPending ? "Rotating…" : "Rotate"}
+                Rotate
               </Button>
             }
           />
@@ -114,10 +115,11 @@ export function InviteLinkCard({
           <Button
             variant="outline"
             size="sm"
+            busy={create.isPending}
             disabled={create.isPending}
             onClick={() => create.mutate({ role })}
           >
-            {create.isPending ? "Creating…" : "Create link"}
+            Create link
           </Button>
         )}
       </div>

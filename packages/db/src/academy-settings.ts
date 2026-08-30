@@ -11,6 +11,7 @@ export interface AcademySettings {
   timeZone: string | null;
   address: string | null;
   mapUrl: string | null;
+  curriculumForStudents: boolean;
 }
 
 export async function getAcademySettings(
@@ -25,6 +26,7 @@ export async function getAcademySettings(
       timeZone: organization.timeZone,
       address: organization.address,
       mapUrl: organization.mapUrl,
+      curriculumForStudents: organization.curriculumForStudents,
     })
     .from(organization)
     .where(and(eq(organization.id, academyId), isNull(organization.deletedAt)))
@@ -34,17 +36,25 @@ export async function getAcademySettings(
 
 export async function updateAcademySettings(
   academyId: string,
-  patch: { timeZone?: string; address?: string; mapUrl?: string },
+  patch: {
+    timeZone?: string;
+    address?: string;
+    mapUrl?: string;
+    curriculumForStudents?: boolean;
+  },
   exec: DbExec,
 ): Promise<void> {
   const next: {
     timeZone?: string;
     address?: string | null;
     mapUrl?: string | null;
+    curriculumForStudents?: boolean;
   } = {};
   if (patch.timeZone !== undefined) next.timeZone = patch.timeZone;
   if (patch.address !== undefined) next.address = patch.address || null;
   if (patch.mapUrl !== undefined) next.mapUrl = patch.mapUrl.trim() || null;
+  if (patch.curriculumForStudents !== undefined)
+    next.curriculumForStudents = patch.curriculumForStudents;
   if (Object.keys(next).length === 0) return;
   await exec
     .update(organization)

@@ -14,19 +14,21 @@ import {
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
-import { Spinner } from "@matops/ui/spinner";
 
 import { dayKey, dayMediumFmt, timeFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { useAcademy } from "./academy";
 import { InstallAppCard } from "./install-app-card";
 import { PageHeader } from "./page-header";
-import { cardClass, disciplineDot, Section } from "./primitives";
+import { cardClass, disciplineDot, ENTER, Section } from "./primitives";
 import { SkeletonClassDays } from "./skeletons";
 import { EmptyState, ErrorState, SuspendedState } from "./states";
 import { useBooking } from "./use-booking";
+import { useMinuteClock } from "./use-clock";
 
 type ClassRow = RouterOutputs["class"]["mine"][number];
+
+const STAGGER = ["", "delay-100", "delay-200"];
 
 export function StudentScreen() {
   const trpc = useTRPC();
@@ -47,7 +49,7 @@ export function StudentScreen() {
     }),
   );
 
-  const now = new Date();
+  const now = useMinuteClock();
 
   // The window is snapped to a UTC day so the server and the browser build the
   // same cache key. Filtering here is what keeps the list to seven local days.
@@ -87,30 +89,31 @@ export function StudentScreen() {
         </EmptyState>
       ) : (
         <div className="flex flex-col gap-8">
-          {byDay.map(([key, rows]) => (
-            <Section
-              key={key}
-              label={
-                key === todayKey
-                  ? "Today"
-                  : dayMediumFmt.format(new Date(`${key}T12:00:00`))
-              }
-              meta={`${rows.length} ${rows.length === 1 ? "class" : "classes"}`}
-            >
-              <div className="flex flex-col gap-2">
-                {rows.map((c) => (
-                  <ClassRowCard
-                    key={c.id}
-                    c={c}
-                    now={now}
-                    busy={busyFor(c.id)}
-                    locked={!!lockedMessage}
-                    onBook={() => book.mutate({ classId: c.id })}
-                    onCancel={() => cancel.mutate({ classId: c.id })}
-                  />
-                ))}
-              </div>
-            </Section>
+          {byDay.map(([key, rows], i) => (
+            <div key={key} className={cn(ENTER, STAGGER[Math.min(i, 2)])}>
+              <Section
+                label={
+                  key === todayKey
+                    ? "Today"
+                    : dayMediumFmt.format(new Date(`${key}T12:00:00`))
+                }
+                meta={`${rows.length} ${rows.length === 1 ? "class" : "classes"}`}
+              >
+                <div className="flex flex-col gap-2">
+                  {rows.map((c) => (
+                    <ClassRowCard
+                      key={c.id}
+                      c={c}
+                      now={now}
+                      busy={busyFor(c.id)}
+                      locked={!!lockedMessage}
+                      onBook={() => book.mutate({ classId: c.id })}
+                      onCancel={() => cancel.mutate({ classId: c.id })}
+                    />
+                  ))}
+                </div>
+              </Section>
+            </div>
           ))}
         </div>
       )}
@@ -200,8 +203,13 @@ function ClassRowCard({
       </Link>
 
       {cancelled || past ? null : booked ? (
-        <Button variant="outline" size="sm" disabled={busy} onClick={onCancel}>
-          {busy && <Spinner size="sm" className="text-current" />}
+        <Button
+          variant="outline"
+          size="sm"
+          busy={busy}
+          disabled={busy}
+          onClick={onCancel}
+        >
           Cancel
         </Button>
       ) : full ? (
@@ -212,15 +220,23 @@ function ClassRowCard({
           variant="primary"
           onConfirm={onBook}
           trigger={
-            <Button variant="secondary" size="sm" disabled={busy || locked}>
-              {busy && <Spinner size="sm" className="text-current" />}
+            <Button
+              variant="secondary"
+              size="sm"
+              busy={busy}
+              disabled={busy || locked}
+            >
               Book
             </Button>
           }
         />
       ) : (
-        <Button size="sm" disabled={busy || locked} onClick={onBook}>
-          {busy && <Spinner size="sm" className="text-current" />}
+        <Button
+          size="sm"
+          busy={busy}
+          disabled={busy || locked}
+          onClick={onBook}
+        >
           Book
         </Button>
       )}

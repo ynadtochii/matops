@@ -2,6 +2,143 @@
 
 One line per shipped slice (see `docs/delivery.md` §4). Newest first.
 
+## The class card, and the poster's home
+
+- **The scheduled-class card, reworked.** Roster rows drop from cards to 44px hairline rows with a status-dot gutter, the counts move to mono and gain a stacked progress rule, and the list owns its own scroll so the tally and **Mark all present** stay put over a long roster. The curriculum theme loses its violet slab for a brand hairline. No API or domain change.
+- **One layout swap when the class card opens, not three.** `curriculum.forClass` now fires in parallel with the roster read instead of starting only once the skeleton lifted, `SkeletonRoster` was rebuilt to the new row geometry, and the coach `<select>` no longer re-widths when the instructor list lands. The roster list and row classes moved to `primitives.tsx` so the shape and its skeleton cannot drift.
+- **Export poster moves to the This week tab**, beside **Add class** — printing the board belongs with looking at the week, not with editing the engine behind it. It still draws the active **templates**, and now reads that list itself (the route already prefetches it) instead of taking it as a prop. Spec: O3.
+
+## Seams in the curriculum wave
+
+- **A refactor, nothing to see.** Nine slices of curriculum work left seven places where the interface had grown as fast as the code behind it. Reshaped in one pass, no behaviour change, no migration. ADR [114](docs/issues/114-seams-in-the-curriculum-wave.md).
+- **Three id schemas instead of one**, so a procedure's signature says whether it wants a library block, a stretch of weeks, or one placed row.
+- **One `academyDay`, one academy read per request, one statement per ripple**, one optimistic-cache helper for all four screens that use one, and one press-and-focus vocabulary in `@matops/ui/motion`.
+- **The curriculum screen split into a board hook, a drag hook, its dialogs and the view.** The 1165-line component is 467 lines of layout, and the card that took 18 props takes 4.
+
+## A note on one run of a block
+
+- **Every run of a block takes its own note.** The block's notes say what it covers, everywhere it appears. **This run** says what these two weeks are doing about it, with this group. Writing one changes no other run and does not touch the block. ADR [113](docs/issues/113-a-note-on-one-run.md).
+- **It shows up on the class**, under the theme, labelled This run.
+- **You can still write it after the weeks have passed.** It is the one thing a finished stretch lets you change apart from the block's name, so it is where "what we actually covered" goes.
+- **Students never see it**, the same as your block notes.
+- Taking a block off the plan takes its run note with it, and Undo puts both back.
+
+## Two blocks on the same weeks
+
+- **A stretch of weeks can teach more than one block.** Standing and Pinning run together over the same fortnight instead of one after the other. Drop a block on top of a stretch already on the plan and the two join up; drop it on the line between two and it starts its own. Up to 10 on one stretch. ADR [112](docs/issues/112-several-blocks-on-one-stretch.md).
+- **They sit side by side as columns**, so the card reads as "these run at the same time", and each one keeps its own notes and its own edit button.
+- **They share the stretch's weeks.** One length, one pair of arrows, one remove button for the stretch. A block that needs its own run of weeks goes on its own stretch.
+- **Taking one block off a stretch moves nothing.** The dates belong to the stretch. The last block leaves by taking the whole stretch off the plan.
+- **A class shows every theme running that week**, above the roster and on the class page, in the app too.
+- **Deleting a track no longer refuses when classes follow it.** Those classes go back to the default track, and the confirm says how many. Rename and delete now sit in a menu on the track's own chip, behind a three-dot button.
+
+## One gym, several curriculums
+
+- **You can run more than one plan.** A **track** is one curriculum with its own run of weeks: Fundamentals, Gi, No-gi, Advanced. Chips above the timeline switch between them. ADR [111](docs/issues/111-many-curriculums-one-library.md).
+- **Your blocks are shared by all of them.** The library is the gym's, not the track's, so closed guard can run in Fundamentals in March and in Advanced in June, and it is one block both times.
+- **Each track moves on its own.** Lengthen a block in Fundamentals and only Fundamentals slides.
+- **A class follows a track through its recurring class**, with one Curriculum picker beside Discipline. The picker shows up once you have a second track. Anything you do not assign follows the default.
+- **Every gym starts with one track called All classes**, so nothing changes until you add a second.
+- The default track can be renamed but not deleted. Deleting any other one takes its timeline and leaves every block in your library.
+
+## The student web reads like one screen
+
+- **Your pages stop stretching.** The student tabs and the class page hold a reading-width column, so a class row no longer throws its Book button to the far side of a wide monitor.
+- **The pending and overdue strips line up with the page.** Their text starts on the same edge as the content below, not at the window edge.
+- **Book on a class page is at the top**, above Details and Who's in, so you do not scroll past the class to book it.
+- **Buttons keep their size while they work.** The spinner sits on top of the label instead of pushing it sideways.
+- **The clock ticks.** Leave a tab open and a class that has started stops offering Book on its own.
+- Every student screen fades its sections in the way the owner screens already did, one card language on Profile, and the day list clears the phone tab bar on an iPhone home screen.
+
+## Your plan shows up on the class
+
+- **The week's theme is on the class now**, above the roster, wherever you open one: from Schedule, from the dashboard, from Attendance, or on the class page itself. Your block notes sit under it. ADR [110](docs/issues/110-the-theme-on-the-class.md).
+- **You decide whether students see it.** One checkbox on Schedule → Curriculum, owner-only, **off** until you turn it on. Instructors always see the theme.
+- **Students never see your block notes**, on or off. They get the theme, nothing else. The notes are the coach's lesson plan.
+- **Students see it in the app too**, on the class screen, not just the web.
+- A class in a week you have not planned shows nothing at all.
+
+## The block you are teaching now is yours to change
+
+- **The block running this week has the same buttons as every other one.** Shorten it, lengthen it, move it up or down the plan, rename it or take it off. Before, it could only be made longer. ADR [109](docs/issues/109-the-running-block-is-editable.md).
+- **Deciding you have done enough of something is now one press.** Shorten the running block and everything after it comes forward, with one line saying what moved and an **Undo**.
+- **Only blocks that have already ended are fixed.** They keep their edit button, so a name can still be corrected, but their dates cannot move and nothing can be dropped in ahead of them.
+- **The "Still on this, 1 more week" button is gone**, because the + button next to it does the same thing.
+
+## The plan runs Monday to Sunday
+
+- **Every week on the curriculum timeline starts on Monday**, and so does every block. The rows now line up with the week numbers beside them, and with the week grid on the This week tab. ADR [108](docs/issues/108-the-week-starts-on-monday.md).
+- **A block you add opens on the Monday of the week you are in**, instead of on whatever day you happened to add it. Blocks already on your plan have been shifted back to the nearest Monday.
+- **The running block has a button that says what it is for**: "Still on this, 1 more week". Its bottom edge only pulls downward now, and the cursor shows it, so the rule that a running block can be extended but not shortened is clear before you try.
+- **Every button on the screen answers the keyboard** with a visible focus ring, and presses in like the rest of the app. The arrows, the stepper and the grips are drawn icons now rather than typed characters, so they match the weight of the text beside them.
+- **A block that has already run looks like a record**, a soft filled row instead of a dashed outline, which everywhere else in the app means something is missing or cancelled.
+- **Today's date sits on the now-line**, and an empty plan says what to do instead of leaving you a page of blank weeks.
+
+## Your blocks go in folders
+
+- **Blocks are filed under categories now**, so a library that has grown to sixty of them is still readable. You see a short list of category names with counts, and open the one you want. ADR [107](docs/issues/107-block-categories.md).
+- **You set the category while writing the block**, from a dropdown of the ones you already use. It ends with "New category…", which is how a category gets created.
+- **Typing a name that already exists in another spelling files it under the existing one**, so "guard" does not start a second group beside "Guard".
+- **A block does not need a category**, and if none of yours has one you still see a plain list with no headers.
+
+## The plan is a blank year you fill in
+
+- **The timeline is always there now**, even with nothing on it: a run of weeks with the week number and month down the side, so you can see where a block would go before you have any. ADR [106](docs/issues/106-the-timeline-is-a-run-of-weeks.md).
+- **Drag a block's bottom edge to make it longer or shorter.** The blocks below move as you pull, and nothing is saved until you let go.
+- **Drag a block's grip to move it up or down the plan**, and the blocks in between shuffle out of the way while you drag.
+- **Dragging works with a finger now.** The old version only answered a mouse.
+- **Blocks on the plan show their notes**, so a row tells you what the block covers instead of just naming it. A one-week block leaves them out, since there is no room.
+- **Every block has an edit button**, on the plan and in your library, and both open the same block. Blocks that already ran can be renamed too, even though their dates are fixed.
+- **The buttons all still work**, and the resize handle takes the arrow keys, so nothing here needs a pointer.
+
+## Blocks are yours to keep, and you drag them onto the plan
+
+- **Curriculum has two halves now: your blocks, and the plan.** A block is a theme your gym teaches, with notes and a usual length. It stays in your library, and you can put it on the plan as often as you like. ADR [105](docs/issues/105-a-block-library-and-a-drop-target-timeline.md).
+- **Drag a block onto the plan**, and a violet line shows where it will land. Drag one already on the plan to move it. Everything after it slides down.
+- **On a phone, or with a keyboard, press Add to plan** and use the arrows. A drag does not work on touch, so the buttons are the whole feature there, not a fallback.
+- **Nothing can be dropped onto a part of the plan that has already started.**
+- **Taking a block off the plan no longer asks first**, because you can put it straight back with Undo. Deleting a block from your library still asks, and it refuses while the block is on the plan.
+- **Renaming a block renames it everywhere it appears**, so a better name fixes the whole plan at once.
+- **The same theme can run for different lengths each time.** The library holds how long it usually runs; the plan holds how long it runs this time.
+
+## Your gym's plan is a timeline you can shove
+
+- **Schedule has a Curriculum tab.** Write the themes your gym works through, one block at a time, and see them as a column where a block's height is how long it lasts. ADR [104](docs/issues/104-curriculum-blocks-as-a-timeline.md).
+- **Ran long on closed guard? Press +1 week.** Every block after it moves with it. You used to have no way to plan this at all, and the alternative was re-dating a dozen rows by hand, which is why gym plans rot.
+- **Ran long? Press + on the block you are on now.** It uses the same stepper as every other block, with the − switched off, because a block that has started can be extended but never shortened.
+- **Blocks that already ran do not move.** They read as a record, with no controls, because the plan should never contradict the register.
+- **Every change says what it did and can be undone in one press.** "Passing now runs 3 weeks. 6 blocks after it moved. The plan now ends Dec 21", with an Undo beside it.
+- **Length is set in weeks, never "a month"**, because a month is four weeks or five and the dates would drift.
+- **Owners and instructors both write it.** Students do not see it yet.
+- **Not yet:** the theme does not appear on tonight's class screen, and there is no place to log what you actually taught. Both are the next slice.
+
+## The referrals screen answers when you press it
+
+- **Changing who brought a student in now responds to the press.** The name chips inside a referrer's card are the only way to reach that dialog, and they used to do nothing until the dialog opened. ADR [103](docs/issues/103-the-referrals-screen-joins-the-motion-vocabulary.md).
+- **Saving a referral no longer changes the button's size** or replaces the words you just read. It keeps its label and shows a spinner over it, like every other button in the app.
+- **The history of a referral slides open** instead of appearing in one frame and stretching the dialog, and its button stops changing width between "View history" and "Hide history".
+- **The page fades in a block at a time** the first time you open it, and stops if your device asks for less motion.
+- **The chips and the "show removed students" tick box are big enough to hit on a phone**, and a screen reader now says what pressing a chip does.
+
+## The coaches screen stops jumping about
+
+- **Switching between this month, last month and 90 days keeps the numbers on screen.** The whole page used to collapse to placeholders and spring back, moving everything under it by about a thousand pixels. The figures now fade slightly and are replaced where they stand. ADR [102](docs/issues/102-the-coaches-screen-stops-jumping.md).
+- **Opening a coach's breakdown slides open instead of jumping.** It used to add 700 pixels in one frame and shove every coach below it down the page.
+- **A coach's class list shows the eight most recent** and says how many more the window holds. On 90 days it used to print every single class.
+- **The Breakdown button stops changing width when you press it**, and a small arrow now shows whether the panel is open.
+- **Any button that is working keeps its size.** Rotating a link, creating one, approving a coach and confirming a dialog all used to grow or shrink as they ran.
+- **The copy button's tick fades in** rather than snapping, and the button no longer changes width between "Copy" and "Copied".
+- **The staff list is properly separated from the coach list**, and the little charts are grey rather than violet, which is reserved for the brand.
+
+## The dashboard uses the whole screen
+
+- **The gym's numbers now sit beside today's classes instead of below them.** On a wide screen Insights moved into a right-hand rail, so an owner sees the week's money, visits and busiest classes without scrolling. On a phone nothing moves. ADR [101](docs/issues/101-the-dashboard-uses-its-width.md).
+- **The "needs you" queue looks like one instrument in every state.** Filled, all clear, and a brand-new gym's three-step checklist now fill the same panel, instead of three boxes of different shapes taking turns in the same slot.
+- **Opening the dashboard no longer flashes the wrong screen first.** The placeholder used to be the student home's layout, which an owner never sees, so the page appeared to change shape as it loaded.
+- **The "now" line keeps up with the clock.** A tab left open all evening used to freeze it, and kept calling a finished class the live one.
+- **Buttons respond when you press them**, everywhere in the app, and the dashboard blocks fade in one after another the first time you open it. Both stop if your device asks for less motion.
+- **The quick-action row is gone.** Both its links are in the sidebar, and "Take attendance" is already the first thing in the queue whenever a register is waiting.
+
 ## Switching between tabs stops reloading the page
 
 - **Going back to a screen you opened in the last 30 seconds now brings it straight back**, with no skeleton and no wait. Clicking between the sidebar tabs used to redraw everything every time, even a tab you left seconds ago. ADR [100](docs/issues/100-the-client-router-keeps-a-page-for-30-seconds.md).
@@ -59,6 +196,7 @@ One line per shipped slice (see `docs/delivery.md` §4). Newest first.
 ## Identity writes stop fighting the tenant transaction
 
 - **Approving, archiving, restoring or erasing a member, handing out an invite link, and signing in a walk-in each hold one database connection instead of two.** All thirteen ran inside the tenant transaction and then wrote an identity table on the base connection, which the pool quietly absorbed by handing out a second connection and the test database could not absorb at all: 27 tests failed on timeouts and the three suites took eleven minutes. They now run on identity procedures that open no transaction and ask for one only around the part that needs it, keeping each mutation's own ordering. Reaching for the base connection inside a tenant procedure is now a compile error. `pnpm test` is 589 passing in 19 seconds.
+
 ## The QR poster pages start drawing before the server wakes up
 
 - **The two pages a new student lands on from a printed QR code now come straight from the cache, not from a server that has to start up first.** Scanning a gym's poster or opening a join link should show something immediately, on gym wifi, on a cold phone. Those pages hold no gym data, so there was nothing worth waiting for.

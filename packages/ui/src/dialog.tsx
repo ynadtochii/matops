@@ -4,6 +4,8 @@ import { Dialog as DialogPrimitive } from "radix-ui";
 
 import { cn } from "@matops/ui";
 
+import { FOCUS_RING } from "./motion";
+
 /**
  * Plain content modal — a panel you open to read or edit something, as opposed
  * to `ConfirmDialog` (alert-dialog.tsx), which asks a yes/no question about an
@@ -35,9 +37,22 @@ export function DialogContent({
         {children}
         <DialogPrimitive.Close
           aria-label="Close"
-          className="text-muted-foreground hover:text-foreground absolute top-3 right-3 flex size-8 items-center justify-center rounded-md text-lg leading-none"
+          className={cn(
+            "text-muted-foreground hover:text-foreground hover:bg-muted absolute top-3 right-3 flex size-8 items-center justify-center rounded-md transition-colors outline-none",
+            FOCUS_RING,
+          )}
         >
-          ×
+          <svg
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            className="size-4"
+            aria-hidden="true"
+          >
+            <path d="m4.5 4.5 7 7M11.5 4.5l-7 7" />
+          </svg>
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>

@@ -16,6 +16,9 @@ import {
   classInstance,
   classParticipation,
   classTemplate,
+  curriculumBlock,
+  curriculumBlockTemplate,
+  curriculumTrack,
   dropIn,
   member,
   memberDues,
@@ -103,6 +106,17 @@ export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
   );
   await del("academy_invite", () =>
     exec.delete(academyInvite).where(inArray(academyInvite.academyId, ids)),
+  );
+  await del("curriculum_block", () =>
+    exec.delete(curriculumBlock).where(inArray(curriculumBlock.academyId, ids)),
+  );
+  await del("curriculum_block_template", () =>
+    exec
+      .delete(curriculumBlockTemplate)
+      .where(inArray(curriculumBlockTemplate.academyId, ids)),
+  );
+  await del("curriculum_track", () =>
+    exec.delete(curriculumTrack).where(inArray(curriculumTrack.academyId, ids)),
   );
 
   // Better Auth membership rows, scoped by the seed org id.

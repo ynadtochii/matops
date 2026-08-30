@@ -14,8 +14,10 @@
       "react-native": "./src/logo.native.tsx",
       "default": "./src/logo.tsx"
     },
+    "./motion": "./src/motion.ts",
     "./alert-dialog": "./src/alert-dialog.tsx",
     "./dialog": "./src/dialog.tsx",
+    "./collapsible": "./src/collapsible.tsx",
     "./copy-button": "./src/copy-button.tsx",
     "./dropdown-menu": "./src/dropdown-menu.tsx",
     "./field": "./src/field.tsx",

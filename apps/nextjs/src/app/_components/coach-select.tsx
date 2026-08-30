@@ -89,16 +89,17 @@ export function CoachSelect({
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex max-w-xs items-center gap-2">
       <label
         htmlFor={`coach-${classId}`}
-        className="text-muted-foreground text-sm"
+        className="text-muted-foreground font-mono text-[10px] tracking-wide uppercase"
       >
         Coach
       </label>
       <Select
         id={`coach-${classId}`}
         value={instructorId}
+        className="h-8 min-w-0 flex-1"
         disabled={setInstructor.isPending}
         onChange={(e) =>
           setInstructor.mutate({ id: classId, instructorId: e.target.value })

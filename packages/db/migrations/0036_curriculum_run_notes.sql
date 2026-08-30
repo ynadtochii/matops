@@ -1,0 +1,1 @@
+ALTER TABLE "curriculum_block" ADD COLUMN "notes" text;

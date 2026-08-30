@@ -1,7 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
 import type { CoachWindowKey } from "@matops/domain";
@@ -14,14 +19,27 @@ import {
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
-import { Spinner } from "@matops/ui/spinner";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@matops/ui/collapsible";
 import { toast } from "@matops/ui/toast";
 
 import { dateTimeFmt, monthDayFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { useAcademy } from "./academy";
 import { PageHeader } from "./page-header";
-import { cardClass, Eyebrow, SectionHeading, Stat, Tabs } from "./primitives";
+import {
+  cardClass,
+  ChevronDownIcon,
+  ENTER,
+  Eyebrow,
+  RESOLVE,
+  SectionHeading,
+  Stat,
+  Tabs,
+} from "./primitives";
 import { SkeletonBreakdown, SkeletonCoachCards } from "./skeletons";
 import { Staff } from "./staff";
 import { EmptyState, ErrorState } from "./states";
@@ -61,7 +79,7 @@ function BarRow({
             </span>
             <span
               aria-hidden
-              className="bg-brand/70 w-full rounded-sm"
+              className="bg-muted-foreground/40 w-full rounded-sm"
               style={{ height: `${Math.max(2, (b.value / peak) * 40)}px` }}
             />
             <span className="text-muted-foreground font-mono text-[10px]">
@@ -77,14 +95,18 @@ function BarRow({
   );
 }
 
+const RECENT_SHOWN = 8;
+
 function BreakdownPanel({ breakdown }: { breakdown: Breakdown }) {
   if (breakdown.recent.length === 0) {
     return (
-      <EmptyState title="No classes led in this window.">
-        Pick a wider window, or set this coach on a class from the schedule.
-      </EmptyState>
+      <p className="text-muted-foreground text-sm">
+        No classes led in this window. Pick a wider window, or set this coach on
+        a class from the schedule.
+      </p>
     );
   }
+  const hidden = breakdown.recent.length - RECENT_SHOWN;
   return (
     <div className="flex flex-col gap-5">
       <div>
@@ -133,7 +155,7 @@ function BreakdownPanel({ breakdown }: { breakdown: Breakdown }) {
       <div>
         <Eyebrow>Classes led</Eyebrow>
         <ul className="mt-2 flex flex-col gap-1">
-          {breakdown.recent.map((c) => (
+          {breakdown.recent.slice(0, RECENT_SHOWN).map((c) => (
             <li
               key={c.classId}
               className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm"
@@ -150,6 +172,11 @@ function BreakdownPanel({ breakdown }: { breakdown: Breakdown }) {
             </li>
           ))}
         </ul>
+        {hidden > 0 && (
+          <p className="text-muted-foreground mt-1.5 font-mono text-[10px] tracking-wide uppercase tabular-nums">
+            + {hidden} more in this window
+          </p>
+        )}
       </div>
     </div>
   );
@@ -163,9 +190,10 @@ function CoachDetail({
   window: CoachWindowKey;
 }) {
   const trpc = useTRPC();
-  const detail = useQuery(
-    trpc.stats.coach.queryOptions({ window, instructorId }),
-  );
+  const detail = useQuery({
+    ...trpc.stats.coach.queryOptions({ window, instructorId }),
+    placeholderData: keepPreviousData,
+  });
   if (detail.isPending) return <SkeletonBreakdown />;
   if (detail.isError) {
     return (
@@ -198,21 +226,38 @@ function CoachCard({
   breakdown?: Breakdown;
 }) {
   const partial = row.markedRate !== null && row.markedRate < 1;
+  const body = breakdown ? (
+    <BreakdownPanel breakdown={breakdown} />
+  ) : (
+    <CoachDetail instructorId={row.instructorId} window={window} />
+  );
   return (
-    <div className={cn(cardClass(), "flex flex-col gap-4")}>
+    <Collapsible
+      open={open}
+      onOpenChange={onToggle}
+      className={cn(cardClass(), "flex flex-col gap-4")}
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="font-medium">
           {row.name}
           {!row.onStaff && (
-            <span className="text-muted-foreground ml-2 text-xs uppercase">
+            <span className="text-muted-foreground ml-2 font-mono text-xs uppercase">
               no longer staff
             </span>
           )}
         </p>
         {onToggle && (
-          <Button size="sm" variant="outline" onClick={onToggle}>
-            {open ? "Hide breakdown" : "Breakdown"}
-          </Button>
+          <CollapsibleTrigger asChild>
+            <Button size="sm" variant="outline">
+              Breakdown
+              <ChevronDownIcon
+                className={cn(
+                  "transition-[rotate] duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none",
+                  open && "rotate-180",
+                )}
+              />
+            </Button>
+          </CollapsibleTrigger>
         )}
       </div>
 
@@ -238,13 +283,8 @@ function CoachCard({
         </p>
       )}
 
-      {open &&
-        (breakdown ? (
-          <BreakdownPanel breakdown={breakdown} />
-        ) : (
-          <CoachDetail instructorId={row.instructorId} window={window} />
-        ))}
-    </div>
+      {onToggle ? <CollapsibleContent>{body}</CollapsibleContent> : body}
+    </Collapsible>
   );
 }
 
@@ -290,7 +330,7 @@ function PendingCoaches() {
 
   return (
     <section className="flex flex-col gap-3">
-      <SectionHeading>Coach requests ({waiting.length})</SectionHeading>
+      <SectionHeading count={waiting.length}>Coach requests</SectionHeading>
       {waiting.map((m) => {
         const busy =
           (approve.isPending && approve.variables.memberId === m.memberId) ||
@@ -313,12 +353,10 @@ function PendingCoaches() {
               <Button
                 size="sm"
                 variant="secondary"
+                busy={busy && approve.isPending}
                 disabled={busy}
                 onClick={() => approve.mutate({ memberId: m.memberId })}
               >
-                {busy && approve.isPending && (
-                  <Spinner size="sm" className="text-current" />
-                )}
                 Approve
               </Button>
               <ConfirmDialog
@@ -365,12 +403,15 @@ export function CoachesScreen() {
   const roster = useQuery({
     ...trpc.stats.coaches.queryOptions({ window }),
     enabled: isOwner,
+    placeholderData: keepPreviousData,
   });
   const mine = useQuery({
     ...trpc.stats.coach.queryOptions({ window }),
     enabled: !isOwner,
+    placeholderData: keepPreviousData,
   });
 
+  const stale = isOwner ? roster.isPlaceholderData : mine.isPlaceholderData;
   const range = isOwner ? roster.data?.range : mine.data?.range;
   const rangeLabel = range
     ? `${monthDayFmt.format(new Date(range.from))} – ${monthDayFmt.format(
@@ -389,63 +430,89 @@ export function CoachesScreen() {
         }
       />
 
-      <div className="flex flex-col gap-4">
-        {isOwner && <PendingCoaches />}
-
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <Tabs
-            label="Window"
-            value={window}
-            onChange={setWindow}
-            tabs={WINDOW_TABS}
-          />
-          {rangeLabel && <Eyebrow>{rangeLabel}</Eyebrow>}
-        </div>
-
-        {isOwner ? (
-          roster.isPending ? (
-            <SkeletonCoachCards n={3} />
-          ) : roster.isError ? (
-            <ErrorState
-              label="your coaches"
-              onRetry={() => void roster.refetch()}
-            />
-          ) : roster.data.coaches.length === 0 ? (
-            <EmptyState title="No coaches yet.">
-              Share the instructor link below, then set the coach on each class.
-            </EmptyState>
-          ) : (
-            roster.data.coaches.map((row) => (
-              <CoachCard
-                key={row.instructorId}
-                row={row}
-                window={window}
-                open={openId === row.instructorId}
-                onToggle={() =>
-                  setOpenId(
-                    openId === row.instructorId ? null : row.instructorId,
-                  )
-                }
-              />
-            ))
-          )
-        ) : mine.isPending ? (
-          <SkeletonCoachCards n={1} toggle={false} />
-        ) : mine.isError ? (
-          <ErrorState
-            label="your classes"
-            onRetry={() => void mine.refetch()}
-          />
-        ) : (
-          <CoachCard
-            row={{ ...mine.data.workload, name: mine.data.name, onStaff: true }}
-            window={window}
-            breakdown={mine.data.breakdown}
-            open
-          />
+      <div className="flex flex-col gap-10">
+        {isOwner && (
+          <div className={ENTER}>
+            <PendingCoaches />
+          </div>
         )}
 
-        {isOwner && <Staff />}
+        <div className={cn(ENTER, isOwner && "delay-100")}>
+          <div
+            className={cn(
+              "flex flex-col gap-4 transition-opacity duration-200 motion-reduce:transition-none",
+              stale && "opacity-60",
+            )}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Tabs
+                label="Window"
+                value={window}
+                onChange={setWindow}
+                tabs={WINDOW_TABS}
+              />
+              {rangeLabel && <Eyebrow>{rangeLabel}</Eyebrow>}
+            </div>
+
+            {isOwner ? (
+              roster.isPending ? (
+                <SkeletonCoachCards n={3} />
+              ) : roster.isError ? (
+                <ErrorState
+                  label="your coaches"
+                  onRetry={() => void roster.refetch()}
+                />
+              ) : roster.data.coaches.length === 0 ? (
+                <EmptyState title="No coaches yet.">
+                  Share the instructor link below, then set the coach on each
+                  class.
+                </EmptyState>
+              ) : (
+                <div className={cn("flex flex-col gap-4", RESOLVE)}>
+                  {roster.data.coaches.map((row) => (
+                    <CoachCard
+                      key={row.instructorId}
+                      row={row}
+                      window={window}
+                      open={openId === row.instructorId}
+                      onToggle={() =>
+                        setOpenId(
+                          openId === row.instructorId ? null : row.instructorId,
+                        )
+                      }
+                    />
+                  ))}
+                </div>
+              )
+            ) : mine.isPending ? (
+              <SkeletonCoachCards n={1} toggle={false} />
+            ) : mine.isError ? (
+              <ErrorState
+                label="your classes"
+                onRetry={() => void mine.refetch()}
+              />
+            ) : (
+              <div className={RESOLVE}>
+                <CoachCard
+                  row={{
+                    ...mine.data.workload,
+                    name: mine.data.name,
+                    onStaff: true,
+                  }}
+                  window={window}
+                  breakdown={mine.data.breakdown}
+                  open
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {isOwner && (
+          <div className={cn(ENTER, "delay-200")}>
+            <Staff />
+          </div>
+        )}
       </div>
     </>
   );

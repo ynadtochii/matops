@@ -80,6 +80,7 @@ export const classTemplate = pgTable(
     instructorId: t.text().notNull(), // → user.id
     title: t.text().notNull(),
     discipline: discipline(), // nullable optional tag
+    curriculumTrackId: t.uuid(), // null = the academy's default track
     daysOfWeek: t.integer().array().notNull(), // 0=Sun … 6=Sat
     startsAtMinutes: t.integer().notNull(), // minutes from LOCAL midnight
     durationMinutes: t.integer().notNull(),

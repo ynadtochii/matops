@@ -7,19 +7,21 @@ import { canBook, capacityDisplay, notBookableMessage } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
-import { Spinner } from "@matops/ui/spinner";
 
 import { dayLongFmt, timeFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
+import { ClassTheme } from "./class-theme";
 import { PageHeader } from "./page-header";
-import { cardClass, Eyebrow, Section } from "./primitives";
+import { cardClass, ENTER, Eyebrow, Section } from "./primitives";
 import { ClassDetailSkeleton, SkeletonCard } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 import { useBooking } from "./use-booking";
+import { useMinuteClock } from "./use-clock";
 
 export function ClassDetail({ classId }: { classId: string }) {
   const trpc = useTRPC();
   const { book, cancel, busy, lockedMessage } = useBooking();
+  const now = useMinuteClock();
 
   const cls = useQuery({
     ...trpc.class.get.queryOptions({ id: classId }),
@@ -50,10 +52,10 @@ export function ClassDetail({ classId }: { classId: string }) {
   const cancelled = c.status === "cancelled";
   const booked = c.myBooking === "booked";
   const provisional = booked && c.myBookingTier === "provisional";
-  const past = start.getTime() <= new Date().getTime();
+  const past = start.getTime() <= now.getTime();
   const bookable = canBook(
     { status: c.status, startsAt: start, deletedAt: null },
-    new Date(),
+    now,
   );
   const refusal =
     bookable.reason && bookable.reason !== "deleted"
@@ -74,41 +76,20 @@ export function ClassDetail({ classId }: { classId: string }) {
           </div>
         )}
 
-        <Section label="Details">
-          <dl className={cn(cardClass(), "grid gap-4 sm:grid-cols-2")}>
-            <Detail
-              term="Time"
-              value={`${timeFmt.format(start)} · ${c.durationMinutes} min`}
-            />
-            <Detail term="Discipline" value={c.discipline ?? "—"} />
-            <Detail term="Instructor" value={c.instructorName ?? "—"} />
-            <Detail
-              term="Spots"
-              value={cap.label}
-              note={cap.isOver ? "may be busy" : undefined}
-              alert={cap.isOver}
-            />
-          </dl>
-        </Section>
-
-        <Section label="Who's in">
-          <Attendees classId={classId} />
-        </Section>
-
         {!cancelled && refusal && (
           <p className="text-muted-foreground text-sm">{refusal}.</p>
         )}
 
         {!cancelled && !past && (
-          <div className="flex flex-wrap items-center gap-3">
+          <div className={cn(ENTER, "flex flex-wrap items-center gap-3")}>
             {booked ? (
               <>
                 <Button
                   variant="outline"
+                  busy={busy}
                   disabled={busy}
                   onClick={() => cancel.mutate({ classId })}
                 >
-                  {busy && <Spinner size="sm" className="text-current" />}
                   Cancel booking
                 </Button>
                 <span className="text-muted-foreground text-sm">
@@ -125,24 +106,47 @@ export function ClassDetail({ classId }: { classId: string }) {
                 trigger={
                   <Button
                     variant="secondary"
+                    busy={busy}
                     disabled={busy || !!lockedMessage || !bookable.ok}
                   >
-                    {busy && <Spinner size="sm" className="text-current" />}
                     Book
                   </Button>
                 }
               />
             ) : (
               <Button
+                busy={busy}
                 disabled={busy || !!lockedMessage || !bookable.ok}
                 onClick={() => book.mutate({ classId })}
               >
-                {busy && <Spinner size="sm" className="text-current" />}
                 Book
               </Button>
             )}
           </div>
         )}
+
+        <ClassTheme classId={classId} />
+
+        <Section label="Details" className={cn(ENTER, "delay-100")}>
+          <dl className={cn(cardClass(), "grid gap-4 sm:grid-cols-2")}>
+            <Detail
+              term="Time"
+              value={`${timeFmt.format(start)} · ${c.durationMinutes} min`}
+            />
+            <Detail term="Discipline" value={c.discipline ?? "—"} />
+            <Detail term="Instructor" value={c.instructorName ?? "—"} />
+            <Detail
+              term="Spots"
+              value={cap.label}
+              note={cap.isOver ? "may be busy" : undefined}
+              alert={cap.isOver}
+            />
+          </dl>
+        </Section>
+
+        <Section label="Who's in" className={cn(ENTER, "delay-200")}>
+          <Attendees classId={classId} />
+        </Section>
       </div>
     </>
   );
@@ -161,7 +165,7 @@ function Detail({
 }) {
   return (
     <div>
-      <Eyebrow>{term}</Eyebrow>
+      <Eyebrow as="dt">{term}</Eyebrow>
       <dd className="mt-0.5 text-sm font-medium capitalize">
         {value}
         {note && (

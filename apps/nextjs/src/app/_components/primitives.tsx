@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 
 import type {
   DisciplineTone,
@@ -34,6 +34,64 @@ export function cardClass({
 }
 
 /**
+ * The roster list shape (class-roster.tsx), shared with its skeleton so the two
+ * cannot drift: a bordered card that scrolls its own rows, and a 44px hairline
+ * row inside it.
+ */
+export const ROSTER_LIST =
+  "border-border bg-card max-h-[26rem] overflow-y-auto rounded-lg border px-3";
+
+export const ROSTER_ROW =
+  "border-border/60 flex min-h-11 items-center gap-3 border-b py-1.5 last:border-b-0";
+
+export const ENTER =
+  "animate-in fade-in-0 slide-in-from-bottom-1 fill-mode-backwards duration-300 motion-reduce:animate-none";
+
+export const RESOLVE =
+  "animate-in fade-in-0 duration-200 motion-reduce:animate-none";
+
+export function Panel({
+  className,
+  children,
+  ...props
+}: ComponentProps<"div">) {
+  return (
+    <div
+      className={cn(
+        "border-border bg-grid-small overflow-hidden rounded-lg border",
+        className,
+      )}
+      {...props}
+    >
+      {/* Pulled a pixel past the strip and clipped, so the last column and row
+          shed their hairline into the strip's edge instead of doubling it. */}
+      <div className="-mr-px -mb-px grid grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(10.5rem,1fr))]">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+export const panelCell = "border-border bg-background/90 border-r border-b";
+
+export function PanelNotice({
+  title,
+  children,
+}: {
+  title: string;
+  children?: ReactNode;
+}) {
+  return (
+    <div className={cn(panelCell, "col-span-full px-4 py-5")}>
+      <p className="text-sm font-medium">{title}</p>
+      {children && (
+        <p className="text-muted-foreground mt-1 text-sm">{children}</p>
+      )}
+    </div>
+  );
+}
+
+/**
  * A section heading (h2) with an optional attention count and a right-aligned
  * action. The count carries the brand spark — matching the nav badges — because
  * it always means "N things here want you", never a data status (ADR 37).
@@ -63,14 +121,16 @@ export function SectionHeading({
 export function Section({
   label,
   meta,
+  className,
   children,
 }: {
   label: string;
   meta?: string;
+  className?: string;
   children: ReactNode;
 }) {
   return (
-    <section className="flex flex-col gap-4">
+    <section className={cn("flex flex-col gap-4", className)}>
       <div className="flex items-center gap-3">
         <span aria-hidden className="bg-border h-px w-5 shrink-0" />
         <h2 className="shrink-0 font-mono text-[11px] font-medium tracking-[0.16em] uppercase">
@@ -148,21 +208,23 @@ export function Stat({
 
 /** The small mono uppercase metadata label used above stats and sub-lists. */
 export function Eyebrow({
+  as: Tag = "p",
   children,
   className,
 }: {
+  as?: "p" | "dt" | "span";
   children: ReactNode;
   className?: string;
 }) {
   return (
-    <p
+    <Tag
       className={cn(
         "text-muted-foreground font-mono text-[10px] tracking-wide uppercase",
         className,
       )}
     >
       {children}
-    </p>
+    </Tag>
   );
 }
 
@@ -271,6 +333,52 @@ export function disciplineDot(discipline: string | null): string {
   return DOT_SKIN[disciplineTone(discipline)];
 }
 
+export const ChevronDownIcon = ({ className }: { className?: string }) => (
+  <svg
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={cn("size-4", className)}
+    aria-hidden="true"
+  >
+    <path d="m4 6 4 4 4-4" />
+  </svg>
+);
+
+export const PencilIcon = ({ className }: { className?: string }) => (
+  <svg
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={cn("size-3.5", className)}
+    aria-hidden="true"
+  >
+    <path d="M10.9 2.6a1.5 1.5 0 0 1 2.1 2.1l-7.3 7.3-2.8.7.7-2.8z" />
+  </svg>
+);
+
+export const NoteIcon = ({ className }: { className?: string }) => (
+  <svg
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={cn("size-3.5", className)}
+    aria-hidden="true"
+  >
+    <path d="M3.5 2.5h9v11h-9z" />
+    <path d="M5.75 5.5h4.5M5.75 8h4.5M5.75 10.5h2.5" />
+  </svg>
+);
+
 export const MoreIcon = () => (
   <svg
     viewBox="0 0 16 16"
@@ -281,5 +389,108 @@ export const MoreIcon = () => (
     <circle cx="3" cy="8" r="1.4" />
     <circle cx="8" cy="8" r="1.4" />
     <circle cx="13" cy="8" r="1.4" />
+  </svg>
+);
+
+export const GripIcon = ({ className }: { className?: string }) => (
+  <svg
+    viewBox="0 0 16 16"
+    fill="currentColor"
+    className={cn("size-4", className)}
+    aria-hidden="true"
+  >
+    <circle cx="6" cy="3.5" r="1.3" />
+    <circle cx="10" cy="3.5" r="1.3" />
+    <circle cx="6" cy="8" r="1.3" />
+    <circle cx="10" cy="8" r="1.3" />
+    <circle cx="6" cy="12.5" r="1.3" />
+    <circle cx="10" cy="12.5" r="1.3" />
+  </svg>
+);
+
+export const PlusIcon = ({ className }: { className?: string }) => (
+  <svg
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    className={cn("size-4", className)}
+    aria-hidden="true"
+  >
+    <path d="M8 3.5v9M3.5 8h9" />
+  </svg>
+);
+
+export const MinusIcon = ({ className }: { className?: string }) => (
+  <svg
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    className={cn("size-4", className)}
+    aria-hidden="true"
+  >
+    <path d="M3.5 8h9" />
+  </svg>
+);
+
+export const ArrowUpIcon = ({ className }: { className?: string }) => (
+  <svg
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={cn("size-4", className)}
+    aria-hidden="true"
+  >
+    <path d="M8 12.5v-9M4 7.5 8 3.5l4 4" />
+  </svg>
+);
+
+export const ArrowDownIcon = ({ className }: { className?: string }) => (
+  <svg
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={cn("size-4", className)}
+    aria-hidden="true"
+  >
+    <path d="M8 3.5v9M4 8.5l4 4 4-4" />
+  </svg>
+);
+
+export const CheckIcon = ({ className }: { className?: string }) => (
+  <svg
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.75"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={cn("size-3.5", className)}
+    aria-hidden="true"
+  >
+    <path d="m3.5 8.5 3 3 6-7" />
+  </svg>
+);
+
+export const XIcon = ({ className }: { className?: string }) => (
+  <svg
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    className={cn("size-3.5", className)}
+    aria-hidden="true"
+  >
+    <path d="m4.5 4.5 7 7M11.5 4.5l-7 7" />
   </svg>
 );

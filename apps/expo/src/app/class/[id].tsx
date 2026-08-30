@@ -82,6 +82,7 @@ export default function ClassDetail() {
   // Same key as WhoIsIn, which renders below the `q.isPending` gate and so
   // would not start fetching until the class itself lands.
   useQuery(trpc.class.attendees.queryOptions({ id }));
+  const theme = useQuery(trpc.curriculum.forClass.queryOptions({ id }));
 
   const { onBook, isPending: booking, error: bookError } = useBookClass();
   const { onCancel, isPending: cancelling } = useCancelBooking();
@@ -181,6 +182,24 @@ export default function ClassDetail() {
               </Txt>
             </Field>
             <Field label="Instructor" value={c.instructorName ?? "—"} />
+            {theme.data?.themes.length ? (
+              <Field label="This week">
+                {theme.data.themes.map((on) => (
+                  <View key={on.theme}>
+                    <Txt size={16}>{on.theme}</Txt>
+                    {on.notes ? <Muted>{on.notes}</Muted> : null}
+                    {on.run ? (
+                      <View>
+                        <Mono size={11} tone="brand">
+                          THIS RUN
+                        </Mono>
+                        <Txt>{on.run}</Txt>
+                      </View>
+                    ) : null}
+                  </View>
+                ))}
+              </Field>
+            ) : null}
             <Field label="Capacity">
               <Mono size={16} tone={over ? "error" : "default"}>
                 {capacityLabel}
