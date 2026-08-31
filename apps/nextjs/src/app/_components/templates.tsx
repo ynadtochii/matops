@@ -57,6 +57,7 @@ interface FormState {
   durationMinutes: number;
   capacity: number;
   timeZone: string;
+  publicBookable: boolean;
 }
 
 const emptyForm = (instructorId: string, timeZone: string): FormState => ({
@@ -69,6 +70,7 @@ const emptyForm = (instructorId: string, timeZone: string): FormState => ({
   durationMinutes: 60,
   capacity: 20,
   timeZone,
+  publicBookable: false,
 });
 
 const formFromTemplate = (t: Template): FormState => ({
@@ -81,6 +83,7 @@ const formFromTemplate = (t: Template): FormState => ({
   durationMinutes: t.durationMinutes,
   capacity: t.capacity,
   timeZone: t.timeZone,
+  publicBookable: t.publicBookable,
 });
 
 /**
@@ -173,6 +176,7 @@ export function Templates() {
       durationMinutes: form.durationMinutes,
       capacity: form.capacity,
       timeZone: form.timeZone,
+      publicBookable: form.publicBookable,
     };
     if (editingId) update.mutate({ id: editingId, ...payload });
     else create.mutate(payload);
@@ -388,6 +392,20 @@ export function Templates() {
                     required
                   />
                 </div>
+                <label
+                  title="Only classes you share appear on your booking link and in the public API. Kids classes and competition training stay off unless you tick this."
+                  className="text-muted-foreground hover:text-foreground flex min-h-11 cursor-pointer items-center gap-2 text-sm sm:col-span-2"
+                >
+                  <input
+                    type="checkbox"
+                    className="accent-brand size-4"
+                    checked={form.publicBookable}
+                    onChange={(e) =>
+                      setForm({ ...form, publicBookable: e.target.checked })
+                    }
+                  />
+                  Share this class publicly
+                </label>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="tpl-instructor">Coach</Label>
                   <Select

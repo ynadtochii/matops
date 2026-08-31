@@ -69,6 +69,7 @@ export const templateRouter = {
           durationMinutes: input.durationMinutes,
           timeZone: input.timeZone,
           capacity: input.capacity,
+          publicBookable: input.publicBookable,
         })
         .returning();
       // Lazy materialization (docs/issues/16): fill the near-term classes in the
@@ -121,6 +122,7 @@ export const templateRouter = {
           durationMinutes: input.durationMinutes,
           timeZone: input.timeZone,
           capacity: input.capacity,
+          publicBookable: input.publicBookable,
         })
         .where(eq(classTemplate.id, prev.id))
         .returning();
@@ -142,9 +144,10 @@ export const templateRouter = {
       const strategy = templateEditStrategy(prev, row);
       if (strategy === "regenerate") {
         // CANCEL the future scheduled instances rather than deleting them:
-        // `class_participation` and `drop_in` both reference `class.id` with ON
-        // DELETE no action, so a hard delete fails the moment one student has
-        // booked, and the owner could never move that template again.
+        // `class_participation` and `drop_in_visit` both reference `class.id`
+        // with ON DELETE no action, so a hard delete fails the moment one
+        // student has booked, and the owner could never move that template
+        // again.
         await ctx.db
           .update(classInstance)
           .set({ status: "cancelled" })
@@ -163,6 +166,7 @@ export const templateRouter = {
             instructorId: row.instructorId,
             durationMinutes: row.durationMinutes,
             capacity: row.capacity,
+            publicBookable: row.publicBookable,
           })
           .where(futureScheduled);
       }

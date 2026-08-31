@@ -1,9 +1,12 @@
-import { and, eq, gte, isNull, lt, sql } from "drizzle-orm";
+import { and, eq, gte, isNull, lt, ne, sql } from "drizzle-orm";
+
+import type { LeadSource } from "@matops/domain";
+import { matchLeadByPhone } from "@matops/domain";
 
 import type { DbExec } from "./client";
 import type { DbReader } from "./tenant";
 import { organization } from "./auth-schema";
-import { classInstance, dropIn } from "./scheduling";
+import { classInstance, dropIn, dropInVisit } from "./scheduling";
 
 /**
  * Drop-in / lead helpers (slice 3.5, docs/issues/25). These run on the BASE
@@ -17,9 +20,19 @@ import { classInstance, dropIn } from "./scheduling";
 export async function getAcademyPublic(
   academyId: string,
   exec: DbReader,
-): Promise<{ academyId: string; name: string } | null> {
+): Promise<{
+  academyId: string;
+  name: string;
+  timeZone: string | null;
+  country: string | null;
+} | null> {
   const rows = await exec
-    .select({ academyId: organization.id, name: organization.name })
+    .select({
+      academyId: organization.id,
+      name: organization.name,
+      timeZone: organization.timeZone,
+      country: organization.country,
+    })
     .from(organization)
     .where(and(eq(organization.id, academyId), isNull(organization.deletedAt)))
     .limit(1);
@@ -37,11 +50,18 @@ export async function listAcademyClassesInWindow(
   toMs: number,
   exec: DbExec,
 ): Promise<
-  { id: string; startsAt: Date; durationMinutes: number; status: string }[]
+  {
+    id: string;
+    title: string;
+    startsAt: Date;
+    durationMinutes: number;
+    status: string;
+  }[]
 > {
   return exec
     .select({
       id: classInstance.id,
+      title: classInstance.title,
       startsAt: classInstance.startsAt,
       durationMinutes: classInstance.durationMinutes,
       status: classInstance.status,
@@ -65,17 +85,24 @@ export interface CreateDropInInput {
   email: string | null;
   classId: string | null;
   consent: boolean;
+  source: LeadSource;
+}
+
+export interface DropInResult {
+  dropInId: string;
+  visitCount: number;
 }
 
 /**
- * Record a drop-in lead + attendance, deduped by `(academy_id, phone)`. A repeat
- * phone bumps `visit_count` and refreshes the contact / class instead of adding a
- * row (spec §4). Returns the lead's visit count (1 = first visit).
+ * Upsert the lead itself, deduped by `(academy_id, phone)`. Contact fields are
+ * merged, never replaced: staff recording a visitor at the desk pass no email
+ * and may pass an empty last name, and that must not erase what the visitor
+ * typed on the form themselves.
  */
-export async function createDropIn(
-  input: CreateDropInInput,
+async function upsertLead(
+  input: Omit<CreateDropInInput, "classId">,
   exec: DbExec,
-): Promise<{ visitCount: number }> {
+): Promise<string> {
   const now = new Date();
   const [row] = await exec
     .insert(dropIn)
@@ -85,28 +112,173 @@ export async function createDropIn(
       lastName: input.lastName,
       phone: input.phone,
       email: input.email,
-      classId: input.classId,
       consent: input.consent,
+      source: input.source,
     })
     .onConflictDoUpdate({
       target: [dropIn.academyId, dropIn.phone],
       set: {
-        firstName: input.firstName,
-        lastName: input.lastName,
-        email: input.email,
-        // Keep the class we already have when this submit resolved none, so a
-        // second form fill outside any class window does not erase the visit
-        // the lead was actually recorded against.
-        classId: sql`coalesce(${input.classId}::uuid, ${dropIn.classId})`,
+        firstName: sql`coalesce(nullif(${input.firstName}::text, ''), ${dropIn.firstName})`,
+        lastName: sql`coalesce(nullif(${input.lastName}::text, ''), ${dropIn.lastName})`,
+        email: sql`coalesce(${input.email}::text, ${dropIn.email})`,
         consent: sql`${dropIn.consent} OR ${input.consent}`,
-        // A visit is a NEW class, not a new form submit: a double submit for the
-        // same class must not count twice.
-        // ponytail: one class per lead row. Real per-visit history needs its own
-        // table; add it when the gym asks to see a visitor's attendance list.
-        visitCount: sql`${dropIn.visitCount} + CASE WHEN ${input.classId}::uuid IS DISTINCT FROM ${dropIn.classId} AND ${input.classId}::uuid IS NOT NULL THEN 1 ELSE 0 END`,
         lastVisitAt: now,
       },
     })
-    .returning({ visitCount: dropIn.visitCount });
-  return { visitCount: row?.visitCount ?? 1 };
+    .returning({ id: dropIn.id });
+  if (!row) throw new Error("drop_in upsert returned no row");
+  return row.id;
+}
+
+/** How many classes this lead actually turned up to (spec O4 activity line). */
+async function countPresentVisits(
+  dropInId: string,
+  exec: DbExec,
+): Promise<number> {
+  const [row] = await exec
+    .select({ n: sql<number>`count(*)::int` })
+    .from(dropInVisit)
+    .where(
+      and(
+        eq(dropInVisit.dropInId, dropInId),
+        eq(dropInVisit.attendanceStatus, "present"),
+      ),
+    );
+  return row?.n ?? 0;
+}
+
+/**
+ * Record a visitor who turned up: the lead plus, when a class is known, one
+ * `drop_in_visit` marked present. Deduped by phone, so the gym QR form and the
+ * staff "Add visitor" box converge on one lead. Returns how many classes the
+ * lead has attended (1 = first visit).
+ */
+export async function createDropIn(
+  input: CreateDropInInput,
+  exec: DbExec,
+): Promise<DropInResult> {
+  const dropInId = await upsertLead(input, exec);
+  if (input.classId) {
+    const now = new Date();
+    await exec
+      .insert(dropInVisit)
+      .values({
+        academyId: input.academyId,
+        dropInId,
+        classId: input.classId,
+        bookingStatus: "none",
+        attendanceStatus: "present",
+        attendedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: [dropInVisit.dropInId, dropInVisit.classId],
+        set: { attendanceStatus: "present", attendedAt: now },
+      });
+  }
+  return { dropInId, visitCount: await countPresentVisits(dropInId, exec) };
+}
+
+export interface BookVisitorInput extends Omit<CreateDropInInput, "classId"> {
+  classId: string;
+  cancelToken: string;
+}
+
+export interface BookVisitorResult extends DropInResult {
+  visitId: string;
+  cancelToken: string;
+}
+
+/**
+ * Book a visitor onto a class from the public API. Idempotent by
+ * `(drop_in_id, class_id)`: the same phone posting twice gets the same booking
+ * and the same cancel token back, so a double tap on a bad connection is
+ * harmless. A cancelled booking is revived and keeps the token the caller was
+ * already given.
+ */
+export async function bookVisitor(
+  input: BookVisitorInput,
+  exec: DbExec,
+): Promise<BookVisitorResult> {
+  const dropInId = await upsertLead(input, exec);
+  const now = new Date();
+  const [row] = await exec
+    .insert(dropInVisit)
+    .values({
+      academyId: input.academyId,
+      dropInId,
+      classId: input.classId,
+      bookingStatus: "booked",
+      attendanceStatus: "unmarked",
+      cancelToken: input.cancelToken,
+      bookedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: [dropInVisit.dropInId, dropInVisit.classId],
+      set: {
+        bookingStatus: "booked",
+        cancelledAt: null,
+        bookedAt: sql`coalesce(${dropInVisit.bookedAt}, ${now})`,
+        cancelToken: sql`coalesce(${dropInVisit.cancelToken}, ${input.cancelToken})`,
+      },
+    })
+    .returning({ id: dropInVisit.id, cancelToken: dropInVisit.cancelToken });
+  if (!row?.cancelToken)
+    throw new Error("drop_in_visit upsert returned no row");
+  return {
+    dropInId,
+    visitId: row.id,
+    cancelToken: row.cancelToken,
+    visitCount: await countPresentVisits(dropInId, exec),
+  };
+}
+
+/**
+ * Cancel a visitor booking by its public token. The LEAD survives: someone who
+ * cancelled still wanted to train and the gym still wants their number. Scoped
+ * to the academy the caller's key names, so one gym's key can never reach
+ * another gym's booking even if it learns the token. Returns false when the
+ * token is unknown, so the endpoint answers the same either way.
+ */
+export async function cancelVisitorBooking(
+  academyId: string,
+  cancelToken: string,
+  exec: DbExec,
+): Promise<boolean> {
+  const rows = await exec
+    .update(dropInVisit)
+    .set({ bookingStatus: "cancelled", cancelledAt: new Date() })
+    .where(
+      and(
+        eq(dropInVisit.academyId, academyId),
+        eq(dropInVisit.cancelToken, cancelToken),
+      ),
+    )
+    .returning({ id: dropInVisit.id });
+  return rows.length > 0;
+}
+
+/**
+ * Stamp the lead this new member came from, matched on the last nine digits of
+ * the phone (`matchLeadByPhone`). Runs at self-join, so it works however they
+ * joined: invite link, academy code, web or mobile. No per-lead token, nothing
+ * to leak or mis-assign. Returns false when there is no lead, or when two leads
+ * are equally good candidates.
+ */
+export async function linkLeadOnJoin(
+  academyId: string,
+  phone: string,
+  userId: string,
+  exec: DbExec,
+): Promise<boolean> {
+  const leads = await exec
+    .select({ id: dropIn.id, phone: dropIn.phone })
+    .from(dropIn)
+    .where(and(eq(dropIn.academyId, academyId), ne(dropIn.stage, "joined")));
+  const hit = matchLeadByPhone(leads, phone);
+  if (!hit) return false;
+  await exec
+    .update(dropIn)
+    .set({ stage: "joined", convertedUserId: userId })
+    .where(eq(dropIn.id, hit.id));
+  return true;
 }

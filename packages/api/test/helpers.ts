@@ -219,6 +219,7 @@ export interface ClassSpec {
   durationMinutes?: number;
   capacity?: number;
   status?: "scheduled" | "cancelled";
+  publicBookable?: boolean;
 }
 
 export async function seedClasses(
@@ -227,10 +228,10 @@ export async function seedClasses(
 ): Promise<void> {
   const values = classes.map(
     (c) =>
-      `(${lit(c.id)}, ${lit(c.academyId)}, ${lit(c.instructorId)}, ${lit(c.title ?? "Gi Fundamentals")}, now() + interval '${c.startsInMinutes} minutes', ${c.durationMinutes ?? 60}, ${c.capacity ?? 20}, ${lit(c.status ?? "scheduled")}, now(), now())`,
+      `(${lit(c.id)}, ${lit(c.academyId)}, ${lit(c.instructorId)}, ${lit(c.title ?? "Gi Fundamentals")}, now() + interval '${c.startsInMinutes} minutes', ${c.durationMinutes ?? 60}, ${c.capacity ?? 20}, ${lit(c.status ?? "scheduled")}, ${c.publicBookable ?? false}, now(), now())`,
   );
   await pg.exec(`
-    INSERT INTO "class" (id, academy_id, instructor_id, title, starts_at, duration_minutes, capacity, status, created_at, updated_at)
+    INSERT INTO "class" (id, academy_id, instructor_id, title, starts_at, duration_minutes, capacity, status, public_bookable, created_at, updated_at)
       VALUES ${values.join(",")};
   `);
 }

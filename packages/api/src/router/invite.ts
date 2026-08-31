@@ -15,11 +15,21 @@ import {
   InviteTokenSchema,
 } from "@matops/validators";
 
-import { ownerIdentityProcedure, publicProcedure, rateLimited } from "../trpc";
+import {
+  ownerIdentityProcedure,
+  publicProcedure,
+  rateLimited,
+  staffIdentityProcedure,
+} from "../trpc";
 
 export const inviteRouter = {
-  /** Live per-role links for the active academy (spec O4). Owner-only. */
-  list: ownerIdentityProcedure.query(({ ctx }) =>
+  /**
+   * Live per-role links for the active academy (spec O4). Staff, not owner: the
+   * instructor answering the gym's messages is the one asked for a link, and
+   * reading a link grants nothing on its own — an owner still approves every
+   * join. Minting and rotating stay owner-only.
+   */
+  list: staffIdentityProcedure.query(({ ctx }) =>
     listInvites(ctx.academyId, ctx.baseDb),
   ),
 

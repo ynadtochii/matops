@@ -38,6 +38,7 @@ export const CreateClassTemplateSchema = z.object({
   durationMinutes: z.number().int().min(5).max(600),
   timeZone: TimeZoneSchema,
   capacity: z.number().int().min(0).max(1000),
+  publicBookable: z.boolean().default(false),
 });
 export type CreateClassTemplateInput = z.infer<
   typeof CreateClassTemplateSchema
@@ -74,6 +75,7 @@ export const CreateClassSchema = z.object({
   durationMinutes: z.number().int().min(5).max(600),
   timeZone: TimeZoneSchema,
   capacity: z.number().int().min(0).max(1000),
+  publicBookable: z.boolean().default(false),
 });
 export type CreateClassInput = z.infer<typeof CreateClassSchema>;
 
@@ -91,6 +93,7 @@ export const UpdateClassSchema = z
     instructorId: IdSchema,
     durationMinutes: z.number().int().min(5).max(600),
     capacity: z.number().int().min(0).max(1000),
+    publicBookable: z.boolean().default(false),
     date: z.iso.date().optional(),
     startsAtMinutes: z.number().int().min(0).max(1439).optional(),
     timeZone: TimeZoneSchema.optional(),

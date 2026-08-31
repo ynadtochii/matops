@@ -87,11 +87,21 @@ export const organization = pgTable("organization", {
   // unique across academies. Not secret — it only names the academy in search.
   publicCode: text("public_code").notNull().unique(),
   timeZone: text("time_zone"),
+  country: text("country"),
   address: text("address"),
   mapUrl: text("map_url"),
   curriculumForStudents: boolean("curriculum_for_students")
     .notNull()
     .default(false),
+  // Public booking API (ADR 115). The master switch is the off button for the
+  // whole surface; the key is publishable (it ships in a browser) and exists for
+  // attribution, revocation and per-academy limits, not secrecy. An empty
+  // origin list means any origin.
+  publicBookingEnabled: boolean("public_booking_enabled")
+    .notNull()
+    .default(false),
+  publicApiKey: text("public_api_key").unique(),
+  publicApiOrigins: text("public_api_origins").array(),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
 

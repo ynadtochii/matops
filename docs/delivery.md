@@ -83,7 +83,7 @@ If steps 4–6 feel like a chore, that is the point: the doc-update is cheap onl
 This is the order an agent or you follows inside one slice. It puts pure logic and the spec first, UI last.
 
 1. **Read** the spec IDs + ADRs the slice names. Restate the behavior in one sentence.
-2. **Schema** — adjust `packages/db`, generate the migration.
+2. **Schema** — adjust `packages/db`, generate the migration. **Structure only**: tables, columns, indexes, constraints, RLS policies, grants. If the slice needs existing rows filled or corrected, that is a separate hand-run script in `packages/db/scripts/`, never part of the migration. A migration runs everywhere and forever; a data fill is usually right once, on one database.
 3. **Domain** — pure functions in `packages/domain` (no I/O) + unit tests. The booking rule, the approval rule, etc.
 4. **API** — the tRPC procedure (right tier) that calls domain + scoped db.
 5. **Clients** — web and/or mobile UI on top of the procedure.

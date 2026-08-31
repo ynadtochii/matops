@@ -81,15 +81,6 @@ export function upcomingClassCount(rows: DashClass[], from: Date): number {
   ).length;
 }
 
-// Last week's leads only: `drop_in` has no handled flag, so an all-time count
-// could never reach zero and the queue would read as permanently dirty.
-export function newLeadCount(
-  leads: { lastVisitAt: Date }[],
-  since: Date,
-): number {
-  return leads.filter((l) => l.lastVisitAt.getTime() >= since.getTime()).length;
-}
-
 export function isFirstRun(
   activeMembers: number,
   upcomingClasses: number,

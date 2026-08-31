@@ -2,8 +2,13 @@ import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
 import type { TenantTx } from "@matops/db";
-import { and, createDropIn, eq, inArray } from "@matops/db";
-import { classParticipation, dropIn, user } from "@matops/db/schema";
+import { and, createDropIn, eq, inArray, ne } from "@matops/db";
+import {
+  classParticipation,
+  dropIn,
+  dropInVisit,
+  user,
+} from "@matops/db/schema";
 import {
   attendanceCounts,
   bulkMarkTargets,
@@ -15,6 +20,7 @@ import {
   AddWalkInSchema,
   ClassIdSchema,
   MarkAttendanceSchema,
+  MarkVisitorSchema,
 } from "@matops/validators";
 
 import { requireClassFacts } from "../classes";
@@ -58,13 +64,22 @@ export const attendanceRouter = {
       .where(eq(classParticipation.classId, input.id));
     const dropIns = await ctx.db
       .select({
-        id: dropIn.id,
+        id: dropInVisit.id,
+        leadId: dropIn.id,
         firstName: dropIn.firstName,
         lastName: dropIn.lastName,
         phone: dropIn.phone,
+        bookingStatus: dropInVisit.bookingStatus,
+        attendanceStatus: dropInVisit.attendanceStatus,
       })
-      .from(dropIn)
-      .where(eq(dropIn.classId, input.id));
+      .from(dropInVisit)
+      .innerJoin(dropIn, eq(dropIn.id, dropInVisit.dropInId))
+      .where(
+        and(
+          eq(dropInVisit.classId, input.id),
+          ne(dropInVisit.bookingStatus, "cancelled"),
+        ),
+      );
     return { rows, dropIns, counts: attendanceCounts(rows) };
   }),
 
@@ -198,10 +213,45 @@ export const attendanceRouter = {
           email: null,
           classId: input.classId,
           consent: false,
+          source: "staff",
         },
         ctx.baseDb,
       );
-      return { firstVisit: visitCount === 1, visitCount };
+      return { firstVisit: visitCount <= 1, visitCount };
+    }),
+
+  /**
+   * Mark a visitor present or absent on the class register (spec O5). Before
+   * ADR 115 a visitor was present by construction, so a booked visitor who
+   * never arrived could not be recorded as a no-show.
+   */
+  markVisitor: staffProcedure
+    .input(MarkVisitorSchema)
+    .mutation(async ({ ctx, input }) => {
+      await assertMarkable(ctx.db, input.classId);
+      const present = input.status === "present";
+      const [row] = await ctx.db
+        .update(dropInVisit)
+        .set({
+          attendanceStatus: input.status,
+          attendedAt: present ? new Date() : null,
+          markedBy: ctx.session.user.id,
+        })
+        .where(
+          and(
+            eq(dropInVisit.id, input.visitId),
+            eq(dropInVisit.classId, input.classId),
+            ne(dropInVisit.bookingStatus, "cancelled"),
+          ),
+        )
+        .returning({ id: dropInVisit.id });
+      if (!row) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "That visitor is not on this class",
+        });
+      }
+      return { ok: true as const };
     }),
 } satisfies TRPCRouterRecord;
 

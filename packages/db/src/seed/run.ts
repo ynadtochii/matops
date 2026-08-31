@@ -22,6 +22,7 @@ import {
   classTemplate,
   curriculumTrack,
   dropIn,
+  dropInVisit,
   member,
   memberDues,
   memberNote,
@@ -130,6 +131,7 @@ export async function seedAll(
   await insert(report, "rank_promotion", exec, rankPromotion, graph.promotions);
   await insert(report, "member_note", exec, memberNote, graph.notes);
   await insert(report, "drop_in", exec, dropIn, graph.dropIns);
+  await insert(report, "drop_in_visit", exec, dropInVisit, graph.dropInVisits);
   await insert(
     report,
     "member_referral",

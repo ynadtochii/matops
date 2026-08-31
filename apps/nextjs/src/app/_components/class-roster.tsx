@@ -21,8 +21,10 @@ import { AddVisitorSchema } from "@matops/validators";
 import { optimistic, rollback } from "~/lib/optimistic";
 import { useInvalidate } from "~/trpc/invalidate";
 import { useTRPC } from "~/trpc/react";
+import { useAcademy } from "./academy";
 import { ClassTheme } from "./class-theme";
 import { CoachSelect } from "./coach-select";
+import { PhoneField } from "./form-fields";
 import {
   cardClass,
   CheckIcon,
@@ -139,6 +141,7 @@ function RowTag({ children }: { children: ReactNode }) {
  */
 export function ClassRoster({ cls }: { cls: ClassRow }) {
   const trpc = useTRPC();
+  const academy = useAcademy();
   const queryClient = useQueryClient();
   const invalidateFor = useInvalidate();
   const classId = cls.id;
@@ -166,7 +169,9 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
   // a skeleton gate, so a query that only begins once the gate lifts lands a
   // second later and shoves the whole dialog down. Same query options, so React
   // Query serves ClassTheme from cache — one request, one layout swap.
-  const theme = useQuery(trpc.curriculum.forClass.queryOptions({ id: classId }));
+  const theme = useQuery(
+    trpc.curriculum.forClass.queryOptions({ id: classId }),
+  );
 
   // The week read carries `markedCount`, which the O1 dashboard turns into its
   // "classes to mark" queue. Refetching it per mark would re-run two correlated
@@ -208,6 +213,13 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
     }),
   );
   const addWalkIn = useMutation(trpc.attendance.addWalkIn.mutationOptions({}));
+
+  const markVisitor = useMutation(
+    trpc.attendance.markVisitor.mutationOptions({
+      onError,
+      onSettled: () => invalidate(),
+    }),
+  );
 
   const addVisitor = useMutation(
     trpc.attendance.addVisitor.mutationOptions({
@@ -335,7 +347,9 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
             ) : (
               <span>{counts.confirmed + counts.provisional} booked</span>
             )}
-            {counts.provisional > 0 && <span>{counts.provisional} pending</span>}
+            {counts.provisional > 0 && (
+              <span>{counts.provisional} pending</span>
+            )}
             {counts.walkIn > 0 && <span>{counts.walkIn} walk-in</span>}
             {dropIns.length > 0 && <span>{dropIns.length} drop-in</span>}
           </p>
@@ -436,16 +450,70 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
         <div className="flex flex-col gap-2">
           <Eyebrow>Drop-ins</Eyebrow>
           <ul className={ROSTER_LIST}>
-            {dropIns.map((d) => (
-              <li key={d.id} className={ROSTER_ROW}>
-                <span className="min-w-0 flex-1 truncate text-sm">
-                  {d.firstName} {d.lastName}
-                </span>
-                <span className="text-muted-foreground shrink-0 font-mono text-xs tabular-nums">
-                  {d.phone}
-                </span>
-              </li>
-            ))}
+            {dropIns.map((d) => {
+              const present = d.attendanceStatus === "present";
+              const absent = d.attendanceStatus === "absent";
+              const name = `${d.firstName} ${d.lastName}`.trim();
+              return (
+                <li key={d.id} className={ROSTER_ROW}>
+                  {canMark && (
+                    <MarkDot
+                      kind={absent ? "absent" : "present"}
+                      filled={present || absent}
+                    />
+                  )}
+                  <span className="min-w-0 flex-1 truncate text-sm">
+                    {name}
+                  </span>
+                  {d.bookingStatus === "booked" && <RowTag>booked</RowTag>}
+                  <span className="text-muted-foreground shrink-0 font-mono text-xs tabular-nums">
+                    {d.phone}
+                  </span>
+                  {canMark && (
+                    <div
+                      role="group"
+                      aria-label={`Attendance for ${name}`}
+                      className="border-border bg-muted flex shrink-0 gap-0.5 rounded-md border p-0.5"
+                    >
+                      <button
+                        type="button"
+                        aria-pressed={present}
+                        aria-label={
+                          present ? `Clear ${name}` : `${name} present`
+                        }
+                        className={segmentClass("present", present)}
+                        onClick={() =>
+                          markVisitor.mutate({
+                            classId,
+                            visitId: d.id,
+                            status: present ? "unmarked" : "present",
+                          })
+                        }
+                      >
+                        <CheckIcon className="sm:hidden" />
+                        <span className="hidden sm:inline">Present</span>
+                      </button>
+                      <button
+                        type="button"
+                        aria-pressed={absent}
+                        aria-label={absent ? `Clear ${name}` : `${name} absent`}
+                        className={segmentClass("absent", absent)}
+                        onClick={() =>
+                          markVisitor.mutate({
+                            classId,
+                            visitId: d.id,
+                            status: absent ? "unmarked" : "absent",
+                          })
+                        }
+                      >
+                        <XIcon className="sm:hidden" />
+                        <span className="hidden sm:inline">Absent</span>
+                      </button>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
@@ -563,15 +631,15 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
                   aria-label="Visitor last name"
                   autoComplete="off"
                 />
-                <Input
-                  type="tel"
+                <PhoneField
+                  timeZone={academy.timeZone}
+                  country={academy.country}
+                  label="Visitor phone"
+                  hideLabel
                   value={visitor.phone}
-                  onChange={(e) =>
-                    setVisitor((v) => ({ ...v, phone: e.target.value }))
+                  onChange={(next) =>
+                    setVisitor((v) => ({ ...v, phone: next }))
                   }
-                  placeholder="Phone"
-                  aria-label="Visitor phone"
-                  autoComplete="off"
                 />
               </div>
               <Button

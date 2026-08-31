@@ -26,5 +26,7 @@ export * from "./academy-settings";
 export * from "./dues-reminder";
 // Permanent erasure of one member (spec O4) — see ./erase.ts.
 export * from "./erase";
+// Public booking API (key resolution, published classes) — see ./public-api.ts.
+export * from "./public-api";
 // Default curriculum track for a new academy — see ./curriculum.ts.
 export * from "./curriculum";

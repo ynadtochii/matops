@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { parseCheckInLink, resolveCheckInClass } from "../src/checkin";
+import {
+  parseCheckInLink,
+  resolveCheckInClass,
+  VISITOR_UPCOMING_LIMIT,
+  visitorClassChoices,
+} from "../src/checkin";
 
 const cls = (id: string, iso: string, over = {}) => ({
   id,
@@ -79,5 +84,52 @@ describe("parseCheckInLink", () => {
   it("rejects a random code and an empty id", () => {
     expect(parseCheckInLink("WIFI:S:gym;T:WPA;P:pass;;")).toBeNull();
     expect(parseCheckInLink("https://x.dev/checkin/")).toBeNull();
+  });
+});
+
+describe("visitorClassChoices", () => {
+  const now = new Date("2026-08-15T18:30:00Z");
+
+  it("offers both classes when two overlap, instead of neither", () => {
+    const r = visitorClassChoices(
+      [cls("a", "2026-08-15T18:00:00Z"), cls("b", "2026-08-15T19:00:00Z")],
+      now,
+    );
+    expect(r.now.map((c) => c.id)).toEqual(["a", "b"]);
+    expect(r.upcoming).toEqual([]);
+  });
+
+  it("never lists a class as both here-now and bookable-later", () => {
+    const r = visitorClassChoices([cls("a", "2026-08-15T19:00:00Z")], now);
+    expect(r.now.map((c) => c.id)).toEqual(["a"]);
+    expect(r.upcoming).toEqual([]);
+  });
+
+  it("offers something to book when no class is on", () => {
+    const r = visitorClassChoices([cls("a", "2026-08-15T21:00:00Z")], now);
+    expect(r.now).toEqual([]);
+    expect(r.upcoming.map((c) => c.id)).toEqual(["a"]);
+  });
+
+  it("leaves out a cancelled class and one that already finished", () => {
+    const r = visitorClassChoices(
+      [
+        cls("done", "2026-08-15T14:00:00Z"),
+        cls("off", "2026-08-15T21:00:00Z", { status: "cancelled" }),
+        cls("ok", "2026-08-15T22:00:00Z"),
+      ],
+      now,
+    );
+    expect(r.now).toEqual([]);
+    expect(r.upcoming.map((c) => c.id)).toEqual(["ok"]);
+  });
+
+  it("sorts what is coming up and caps how much a stranger has to read", () => {
+    const many = Array.from({ length: VISITOR_UPCOMING_LIMIT + 3 }, (_, i) =>
+      cls(`c${i}`, `2026-08-16T${String(6 + i).padStart(2, "0")}:00:00Z`),
+    );
+    const r = visitorClassChoices([...many].reverse(), now);
+    expect(r.upcoming).toHaveLength(VISITOR_UPCOMING_LIMIT);
+    expect(r.upcoming[0]?.id).toBe("c0");
   });
 });

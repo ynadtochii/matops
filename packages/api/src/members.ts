@@ -1,8 +1,17 @@
 import { TRPCError } from "@trpc/server";
 
-import type { DbReader, MemberRow } from "@matops/db";
-import { getMemberById, getMembership, listMembersOf } from "@matops/db";
-import { isStaff } from "@matops/domain";
+import type { DbExec, DbReader, MemberRow, TenantTx } from "@matops/db";
+import {
+  getMemberById,
+  getMembership,
+  isNull,
+  listMembersOf,
+  setMemberRoleStatus,
+} from "@matops/db";
+import { memberDues, membershipPlan } from "@matops/db/schema";
+import { autoAssignedPlan, firstDueAt, isStaff } from "@matops/domain";
+
+import { notifyMembershipApproved } from "./notify";
 
 /**
  * The one academy-membership guard (docs/issues/60). Five routers each kept a
@@ -121,4 +130,57 @@ export async function requireMembership(
     throw new TRPCError({ code: "NOT_FOUND", message });
   }
   return membership;
+}
+
+/** The tenant handles activation needs: the base connection plus an RLS tx. */
+export interface ActivateScope {
+  academyId: string;
+  baseDb: DbExec;
+  withTenant: <T>(fn: (tx: TenantTx) => Promise<T>) => Promise<T>;
+}
+
+/**
+ * Grant the role, activate the seat, put the member on the one plan if the
+ * academy has exactly one, and welcome them. Shared by `approve` and by the
+ * owner promoting a lead (ADR 118), so the two cannot drift: a promoted member
+ * lands on dues exactly like an approved one.
+ */
+export async function activateMember(
+  ctx: ActivateScope,
+  input: {
+    memberId: string;
+    userId: string;
+    granted: { role: string; status: string };
+  },
+): Promise<void> {
+  await setMemberRoleStatus(input.memberId, input.granted, ctx.baseDb);
+  if (input.granted.role === "student") {
+    await ctx.withTenant(async (db) => {
+      const onlyPlan = autoAssignedPlan(
+        await db
+          .select({ id: membershipPlan.id })
+          .from(membershipPlan)
+          .where(isNull(membershipPlan.deletedAt))
+          .limit(2),
+      );
+      if (onlyPlan) {
+        await db
+          .insert(memberDues)
+          .values({
+            academyId: ctx.academyId,
+            memberId: input.memberId,
+            planId: onlyPlan.id,
+            nextDueAt: firstDueAt(new Date()),
+          })
+          .onConflictDoNothing({
+            target: [memberDues.academyId, memberDues.memberId],
+          });
+      }
+    });
+  }
+  // Welcome push to the newly approved member (§4/S3, docs/issues/17).
+  await notifyMembershipApproved(
+    { academyId: ctx.academyId, userId: input.userId },
+    ctx.baseDb,
+  );
 }

@@ -43,6 +43,7 @@ export interface TemplateContent {
   instructorId: string;
   durationMinutes: number;
   capacity: number;
+  publicBookable: boolean;
 }
 
 /**
@@ -55,6 +56,10 @@ export interface TemplateContent {
 export type TemplateEditStrategy = "regenerate" | "update-in-place" | "none";
 
 /**
+ * Every field here is one the in-place update copies onto the class row, so a
+ * field missing from this list is a setting the owner can save on the template
+ * and never see reach a class that already exists.
+ *
  * `curriculumTrackId` is deliberately absent: the track is read through the
  * template on every request and never copied onto a class row, so re-pointing a
  * template must not cancel or rewrite a single class.
@@ -68,7 +73,8 @@ export function templateContentChanged(
     before.discipline !== after.discipline ||
     before.instructorId !== after.instructorId ||
     before.durationMinutes !== after.durationMinutes ||
-    before.capacity !== after.capacity
+    before.capacity !== after.capacity ||
+    before.publicBookable !== after.publicBookable
   );
 }
 

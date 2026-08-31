@@ -86,6 +86,10 @@ export const classTemplate = pgTable(
     durationMinutes: t.integer().notNull(),
     timeZone: t.text().notNull(), // IANA; default copied from the academy
     capacity: t.integer().notNull(),
+    // Copied onto each class at materialization, not joined: a one-off class has
+    // no template and can still be published, and an owner can unpublish a
+    // single date without touching the recurring template (ADR 115).
+    publicBookable: t.boolean().notNull().default(false),
     status: templateStatus().notNull().default("active"), // business status…
     deletedAt: t.timestamp({ withTimezone: true }), // …orthogonal soft-delete
     generatedUntil: t.timestamp({ withTimezone: true }), // materialization cursor (slice 2.2)
@@ -127,6 +131,7 @@ export const classInstance = pgTable(
     durationMinutes: t.integer().notNull(),
     capacity: t.integer().notNull(),
     bookingCount: t.integer().notNull().default(0),
+    publicBookable: t.boolean().notNull().default(false),
     status: classStatus().notNull().default("scheduled"),
     // Phase 4 (docs/issues/17): stamped when the reminder cron has pushed this
     // class's reminder, so a re-run never double-sends (idempotency guard).
@@ -207,16 +212,40 @@ export const classParticipation = pgTable(
 );
 
 /**
- * Drop-in / lead — a first-time, no-app visitor captured via the public gym QR
- * form (slice 3.5, spec O4/§4; docs/issues/25). NOT a `class_participation` row:
- * a drop-in has no `user.id`, so it lives here with its own contact fields and
- * implied `present` attendance. Deduped by `(academy_id, phone)` — one lead per
- * person with a `visit_count`, not a row per visit (spec §4).
+ * Where a lead came from (ADR 115). Without it the gym cannot tell which
+ * channel is working, and the channel is the point of the public API.
+ */
+export const leadSource = pgEnum("lead_source", [
+  "link",
+  "web",
+  "wall_qr",
+  "staff",
+  "api",
+]);
+
+/**
+ * Where the OWNER is with this person (ADR 115). Orthogonal to what the person
+ * did: someone who trained twice and was never followed up is still `new`, and
+ * that row is the one worth showing. `ghosted` deletes nothing.
+ */
+export const leadStage = pgEnum("lead_stage", [
+  "new",
+  "contacted",
+  "invited",
+  "joined",
+  "ghosted",
+]);
+
+/**
+ * Drop-in / lead — a person the gym is working on, captured by the public QR
+ * form, the public booking API, the shared booking link or staff at the desk
+ * (spec O4/§4; docs/issues/25, 115). NOT a `class_participation` row: a lead has
+ * no `user.id`. Deduped by `(academy_id, phone)` — one lead per person; the
+ * classes they booked or attended are rows in `drop_in_visit` (ADR 115).
  *
- * Tenant-scoped for OWNER reads (RLS policy in migration 0013); the PUBLIC submit
- * writes on the trusted base connection (an enumerated tenant-seam exception,
- * docs/issues/12/25) after validating the academy exists. `class_id` is nullable
- * — null = a general visit lead (QR scanned with no class on, spec §4).
+ * Tenant-scoped for OWNER reads (RLS policy in migration 0013); the PUBLIC
+ * writes run on the trusted base connection (an enumerated tenant-seam
+ * exception, docs/issues/12/25) after validating the academy exists.
  */
 export const dropIn = pgTable(
   "drop_in",
@@ -227,9 +256,11 @@ export const dropIn = pgTable(
     lastName: t.text().notNull(),
     phone: t.text().notNull(),
     email: t.text(), // optional
-    classId: t.uuid().references(() => classInstance.id), // null = general lead
     consent: t.boolean().notNull(), // "OK for the gym to contact me" (GDPR)
-    visitCount: t.integer().notNull().default(1),
+    stage: leadStage().notNull().default("new"),
+    source: leadSource().notNull().default("wall_qr"),
+    contactedAt: t.timestamp({ withTimezone: true }),
+    convertedUserId: t.text(), // → user.id once they joined as a member
     firstVisitAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
     lastVisitAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
     createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -240,8 +271,56 @@ export const dropIn = pgTable(
       .$onUpdateFn(() => new Date()),
   }),
   (table) => [
-    // Dedupe: one lead per person per academy; repeat visits bump visit_count.
+    // Dedupe: one lead per person per academy; repeat visits add a visit row.
     uniqueIndex("di_uniq_academy_phone").on(table.academyId, table.phone),
-    index("di_by_academy_class").on(table.academyId, table.classId),
+  ],
+);
+
+/**
+ * One row per lead per class (ADR 115). Replaces the single `drop_in.class_id`
+ * pointer, which a second visit overwrote, so the first class silently lost the
+ * visitor from its register. Carries the same two axes as
+ * `class_participation`: a booking axis (`booked` from the public API or the
+ * shared link, `none` for a walk-in staff recorded, `cancelled`) and an
+ * attendance axis, so a booked visitor who never arrives reads as a no-show
+ * instead of as present.
+ *
+ * Read by exactly three places: the class roster, the leads screen and the
+ * public API. No statistics query may join it (roadmap K.0).
+ */
+export const dropInVisit = pgTable(
+  "drop_in_visit",
+  (t) => ({
+    id: t.uuid().notNull().primaryKey().defaultRandom(),
+    academyId: t.text().notNull(), // → organization.id (RLS scope)
+    dropInId: t
+      .uuid()
+      .notNull()
+      .references(() => dropIn.id),
+    classId: t
+      .uuid()
+      .notNull()
+      .references(() => classInstance.id),
+    bookingStatus: bookingStatus().notNull().default("none"),
+    attendanceStatus: attendanceStatus().notNull().default("unmarked"),
+    // Returned once to the public caller; the only handle that cancels a
+    // visitor booking, so it is never listed by any read endpoint.
+    cancelToken: t.text(),
+    bookedAt: t.timestamp({ withTimezone: true }),
+    cancelledAt: t.timestamp({ withTimezone: true }),
+    attendedAt: t.timestamp({ withTimezone: true }),
+    markedBy: t.text(), // → user.id of the staff who marked
+    createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
+    updatedAt: t
+      .timestamp({ withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdateFn(() => new Date()),
+  }),
+  (table) => [
+    uniqueIndex("dv_uniq_lead_class").on(table.dropInId, table.classId),
+    index("dv_by_academy_class").on(table.academyId, table.classId),
+    index("dv_by_lead").on(table.dropInId),
+    uniqueIndex("dv_uniq_cancel_token").on(table.cancelToken),
   ],
 );

@@ -51,3 +51,11 @@ export const AddVisitorSchema = z.object({
   lastName: lineText(0, 60).default(""),
 });
 export type AddVisitorInput = z.infer<typeof AddVisitorSchema>;
+
+/** Mark a visitor present or absent on the class register (spec O5, ADR 115). */
+export const MarkVisitorSchema = z.object({
+  classId: z.uuid(),
+  visitId: z.uuid(),
+  status: AttendanceStatusSchema,
+});
+export type MarkVisitorInput = z.infer<typeof MarkVisitorSchema>;

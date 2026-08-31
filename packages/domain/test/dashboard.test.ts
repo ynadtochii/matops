@@ -5,7 +5,6 @@ import {
   dayPlan,
   daysSince,
   isFirstRun,
-  newLeadCount,
   rosterSummary,
   upcomingClassCount,
 } from "../src/dashboard";
@@ -153,20 +152,6 @@ describe("upcomingClassCount", () => {
         TODAY,
       ),
     ).toBe(2);
-  });
-});
-
-describe("newLeadCount", () => {
-  it("counts only the leads inside the window", () => {
-    expect(
-      newLeadCount(
-        [
-          { lastVisitAt: at("2026-08-24T10:00:00") },
-          { lastVisitAt: at("2026-08-10T10:00:00") },
-        ],
-        at("2026-08-19T00:00:00"),
-      ),
-    ).toBe(1);
   });
 });
 

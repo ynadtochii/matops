@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { isOwner as isOwnerOf } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
@@ -51,7 +52,9 @@ export function InviteLinkCard({
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const invites = useQuery(trpc.invite.list.queryOptions());
-  const academyName = useAcademy().name;
+  const academy = useAcademy();
+  const academyName = academy.name;
+  const isOwner = isOwnerOf(academy);
 
   // Offer the OS share sheet (ADR 42) only where it exists.
   const shareable = useCanShare();
@@ -91,7 +94,7 @@ export function InviteLinkCard({
     <div className={cn(cardClass(), "flex flex-col gap-2")}>
       <div className="flex items-center justify-between gap-2">
         <span className="font-medium">{label}</span>
-        {invite ? (
+        {!isOwner ? null : invite ? (
           <ConfirmDialog
             title="Rotate this link?"
             description="The current link stops working for everyone you already sent it to. A new link takes its place."

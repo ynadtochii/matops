@@ -14,6 +14,7 @@ const base = {
   instructorId: "usr_1",
   durationMinutes: 60,
   capacity: 20,
+  publicBookable: false,
 };
 
 describe("templateEditStrategy", () => {
@@ -50,6 +51,16 @@ describe("templateEditStrategy", () => {
     );
   });
 
+  it("updates in place when a template is shared or unshared", () => {
+    expect(templateEditStrategy(base, { ...base, publicBookable: true })).toBe(
+      "update-in-place",
+    );
+    const shared = { ...base, publicBookable: true };
+    expect(
+      templateEditStrategy(shared, { ...shared, publicBookable: false }),
+    ).toBe("update-in-place");
+  });
+
   it("does nothing when the save changed nothing", () => {
     expect(templateEditStrategy(base, { ...base })).toBe("none");
   });
@@ -73,6 +84,7 @@ describe("templateContentChanged", () => {
       { instructorId: "usr_2" },
       { durationMinutes: 90 },
       { capacity: 25 },
+      { publicBookable: true },
     ];
     for (const patch of fields) {
       expect(templateContentChanged(base, { ...base, ...patch })).toBe(true);

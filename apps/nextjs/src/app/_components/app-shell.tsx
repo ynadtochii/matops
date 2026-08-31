@@ -22,6 +22,7 @@ import { AcademySwitcher } from "./academy-switcher";
 import { FeedbackLink } from "./feedback-link";
 import { PageLoader } from "./mat-loader";
 import { canVisit } from "./routes";
+import { ShareLinksDialog } from "./share-links-dialog";
 import { SignOutButton } from "./sign-out";
 import { ErrorState, NoAccessState } from "./states";
 
@@ -181,6 +182,19 @@ const CoachesIcon = () => (
     className={iconClass}
   >
     <path d="M2.5 13V9M6.5 13V5.5M10.5 13v-3M14.5 13V3" />
+  </svg>
+);
+
+const ShareIcon = () => (
+  <svg
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={1.5}
+    className={iconClass}
+  >
+    <path d="M13 8.5V13a1 1 0 01-1 1H4a1 1 0 01-1-1V8.5" />
+    <path d="M8 10V2M5 5l3-3 3 3" />
   </svg>
 );
 
@@ -402,6 +416,19 @@ function ShellChrome({
         )}
 
         <div className="border-sidebar-border mt-auto space-y-2 border-t pt-3">
+          {isStaff && (
+            <ShareLinksDialog
+              trigger={
+                <button
+                  type="button"
+                  className="text-sidebar-foreground hover:bg-muted flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm transition-colors"
+                >
+                  <ShareIcon />
+                  Send someone a link
+                </button>
+              }
+            />
+          )}
           <Link
             href="/profile"
             aria-current={isCurrent("/profile") ? "page" : undefined}
@@ -444,6 +471,19 @@ function ShellChrome({
               </span>
             )}
           </div>
+          {isStaff && (
+            <ShareLinksDialog
+              trigger={
+                <button
+                  type="button"
+                  aria-label="Send someone a link"
+                  className="text-muted-foreground hover:text-foreground flex size-8 shrink-0 items-center justify-center rounded-md transition-colors"
+                >
+                  <ShareIcon />
+                </button>
+              }
+            />
+          )}
           <ThemeToggle />
           {!isPending && (
             <Link

@@ -1,4 +1,4 @@
-import type { ComponentProps, ReactNode } from "react";
+import type { ComponentProps, CSSProperties, ReactNode } from "react";
 
 import type {
   DisciplineTone,
@@ -51,10 +51,11 @@ export const RESOLVE =
   "animate-in fade-in-0 duration-200 motion-reduce:animate-none";
 
 export function Panel({
+  cols = 1,
   className,
   children,
   ...props
-}: ComponentProps<"div">) {
+}: ComponentProps<"div"> & { cols?: number }) {
   return (
     <div
       className={cn(
@@ -65,7 +66,10 @@ export function Panel({
     >
       {/* Pulled a pixel past the strip and clipped, so the last column and row
           shed their hairline into the strip's edge instead of doubling it. */}
-      <div className="-mr-px -mb-px grid grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(10.5rem,1fr))]">
+      <div
+        style={{ "--panel-cols": cols } as CSSProperties}
+        className="-mr-px -mb-px grid grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] lg:grid-cols-[repeat(var(--panel-cols),minmax(0,1fr))]"
+      >
         {children}
       </div>
     </div>
@@ -256,7 +260,7 @@ export function Tabs<T extends string>({
             aria-pressed={active}
             onClick={() => onChange(t.id)}
             className={cn(
-              "relative -mb-px flex items-center gap-2 px-3 py-2 text-sm transition-colors",
+              "relative flex items-center gap-2 px-3 py-2 text-sm transition-colors",
               active
                 ? "text-foreground font-medium"
                 : "text-muted-foreground hover:text-foreground",
@@ -267,7 +271,7 @@ export function Tabs<T extends string>({
               <CountBadge>{t.count}</CountBadge>
             )}
             {active && (
-              <span className="bg-brand absolute inset-x-0 -bottom-px h-0.5" />
+              <span className="bg-brand absolute inset-x-0 bottom-0 h-0.5" />
             )}
           </button>
         );

@@ -13,6 +13,8 @@ const NOT_MEMBER_DATA: Record<string, string> = {
   payment_settings: "The gym's bank details, not member data.",
   drop_in:
     "A lead is not a member. It carries no member_id and is erased with the academy, not with a member (spec O4).",
+  drop_in_visit:
+    "A visitor's class, which belongs to a lead and not to a member. Erased with the academy, like the lead itself (ADR 115).",
   academy_invite:
     "A shareable link belongs to the academy and to the role, not to whoever used it.",
   tenant_probe:

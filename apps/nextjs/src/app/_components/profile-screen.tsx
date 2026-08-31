@@ -23,6 +23,7 @@ import { dateYearFmt, monthYearFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { useAcademy } from "./academy";
 import { FeedbackLink } from "./feedback-link";
+import { PhoneField } from "./form-fields";
 import { PageHeader } from "./page-header";
 import { cardClass, ENTER, Eyebrow, Section } from "./primitives";
 import { SignOutButton } from "./sign-out";
@@ -48,6 +49,7 @@ function ProfileDetails({
 }) {
   const trpc = useTRPC();
   const router = useRouter();
+  const academy = useAcademy();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({ ...splitName(name), phone });
 
@@ -94,16 +96,12 @@ function ProfileDetails({
               autoComplete="family-name"
             />
           </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="phone">Phone</Label>
-            <Input
-              id="phone"
-              type="tel"
-              value={draft.phone}
-              onChange={(e) => setDraft({ ...draft, phone: e.target.value })}
-              autoComplete="tel"
-            />
-          </div>
+          <PhoneField
+            timeZone={academy.timeZone}
+            country={academy.country}
+            value={draft.phone}
+            onChange={(phone) => setDraft({ ...draft, phone })}
+          />
         </div>
         <div className="flex flex-wrap gap-2">
           <Button

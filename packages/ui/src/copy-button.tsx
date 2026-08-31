@@ -16,6 +16,26 @@ const HIDDEN = "scale-25 opacity-0 blur-[4px]";
 const FADE = `${STACK} transition-opacity ${EASE}`;
 
 /**
+ * Write to the clipboard and say so, or explain why not. The write can reject
+ * (insecure context, denied permission), which is the part every hand-rolled
+ * copy forgot. Returns whether it landed, so a caller can skip its own success
+ * state. Exported for the places a `CopyButton` cannot go, such as a menu item.
+ */
+export async function copyText(
+  value: string,
+  toastMessage = "Copied to clipboard",
+): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(value);
+    toast.success(toastMessage);
+    return true;
+  } catch {
+    toast.error("Couldn't copy. Copy it manually.");
+    return false;
+  }
+}
+
+/**
  * Copy-to-clipboard control — the one true way to copy a value (invite link,
  * academy code, payment reference, a member's phone). Handles the parts every
  * hand-rolled copy forgot: the write can reject (insecure context, denied
@@ -49,14 +69,9 @@ export function CopyButton({
   const [copied, setCopied] = useState(false);
 
   async function copy() {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      toast.success(toastMessage);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      toast.error("Couldn't copy. Copy it manually.");
-    }
+    if (!(await copyText(value, toastMessage))) return;
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   }
 
   return (

@@ -24,6 +24,7 @@ import type {
   classParticipation,
   classTemplate,
   dropIn,
+  dropInVisit,
   member,
   memberDues,
   memberNote,
@@ -55,6 +56,7 @@ type NewRank = typeof memberRank.$inferInsert;
 type NewPromotion = typeof rankPromotion.$inferInsert;
 type NewNote = typeof memberNote.$inferInsert;
 type NewDropIn = typeof dropIn.$inferInsert;
+type NewDropInVisit = typeof dropInVisit.$inferInsert;
 type NewReferral = typeof memberReferral.$inferInsert;
 type NewReferralAudit = typeof memberReferralAudit.$inferInsert;
 
@@ -77,6 +79,7 @@ export interface SeedGraph {
   promotions: NewPromotion[];
   notes: NewNote[];
   dropIns: NewDropIn[];
+  dropInVisits: NewDropInVisit[];
   referrals: NewReferral[];
   referralAudits: NewReferralAudit[];
   /** Active students who stopped training — run.ts leaves them out of future
@@ -239,6 +242,7 @@ function buildAcademy(args: {
   promotions: NewPromotion[];
   notes: NewNote[];
   dropIns: NewDropIn[];
+  dropInVisits: NewDropInVisit[];
 } {
   const { academy, students, staffInstructorId, newId, now } = args;
   const from = new Date(now.getTime() - PAST_WINDOW_DAYS * DAY_MS);
@@ -686,6 +690,7 @@ function buildAcademy(args: {
   });
 
   // --- Drop-in leads (public QR form) for the owner's O4 leads list. ----------
+  const danaLeadId = newId();
   const dropIns: NewDropIn[] = [
     {
       id: newId(),
@@ -694,9 +699,7 @@ function buildAcademy(args: {
       lastName: "Visitor",
       phone: "+380509998877",
       email: "pat.visitor@example.com",
-      classId: null,
       consent: true,
-      visitCount: 1,
     },
     {
       id: newId(),
@@ -705,21 +708,17 @@ function buildAcademy(args: {
       lastName: "Trial",
       phone: "+380509998866",
       email: null,
-      classId: null,
       consent: true,
-      visitCount: 2,
     },
     {
       // Walked into a specific class — shows on that class's O5 roster.
-      id: newId(),
+      id: danaLeadId,
       academyId: academy.id,
       firstName: "Dana",
       lastName: "Guest",
       phone: "+380509998855",
       email: "dana.guest@example.com",
-      classId: pastSeminarId,
       consent: true,
-      visitCount: 1,
       firstVisitAt: pastSeminarStart,
       lastVisitAt: pastSeminarStart,
     },
@@ -732,11 +731,21 @@ function buildAcademy(args: {
       lastName: "Onceoff",
       phone: "+380509998844",
       email: null,
-      classId: null,
       consent: false,
-      visitCount: 4,
       firstVisitAt: new Date(now.getTime() - 50 * DAY_MS),
       lastVisitAt: new Date(now.getTime() - 5 * DAY_MS),
+    },
+  ];
+
+  const dropInVisits: NewDropInVisit[] = [
+    {
+      id: newId(),
+      academyId: academy.id,
+      dropInId: danaLeadId,
+      classId: pastSeminarId,
+      bookingStatus: "none",
+      attendanceStatus: "present",
+      attendedAt: pastSeminarStart,
     },
   ];
 
@@ -752,6 +761,7 @@ function buildAcademy(args: {
     promotions,
     notes,
     dropIns,
+    dropInVisits,
   };
 }
 
@@ -1122,6 +1132,7 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
     promotions: data.promotions,
     notes: data.notes,
     dropIns: data.dropIns,
+    dropInVisits: data.dropInVisits,
     referrals,
     referralAudits,
     quietStudentIds: students

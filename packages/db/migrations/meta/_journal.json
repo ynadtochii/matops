@@ -260,6 +260,41 @@
       "when": 1788393600000,
       "tag": "0036_curriculum_run_notes",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1788480000000,
+      "tag": "0037_drop_in_visit",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1788566400000,
+      "tag": "0038_lead_stage",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1788652800000,
+      "tag": "0039_public_bookable",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1788739200000,
+      "tag": "0040_public_booking",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1788825600000,
+      "tag": "0041_academy_country",
+      "breakpoints": true
     }
   ]
 }

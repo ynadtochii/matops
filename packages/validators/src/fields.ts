@@ -61,9 +61,15 @@ export const blockText = (min: number, max: number) =>
 export const NameSchema = lineText(1, 60);
 
 /**
- * A phone number. Deliberately loose on format (international numbers vary) but
- * strict on charset, so a name, a URL, or a script tag can never land in the
- * field the gym dials. At least 5 digits after the punctuation is stripped.
+ * A phone number, stored without punctuation so two spellings of one number are
+ * one string (ADR 119). Strict on charset, so a name, a URL, or a script tag
+ * can never land in the field the gym dials.
+ *
+ * A value that carries a country code is held to **E.164** (`+351912345678`),
+ * which is what every web form now sends. One without a plus keeps the older,
+ * looser rule: the Expo app still posts what the person typed, and tightening
+ * this before its fields are rebuilt would lock every mobile member out of
+ * their own profile.
  */
 export const PhoneSchema = cleanedString(120)
   .transform(singleLine)
@@ -71,10 +77,22 @@ export const PhoneSchema = cleanedString(120)
     z
       .string()
       .max(30)
-      .regex(/^[+\d][\d\s().-]*$/, "Use digits and + ( ) - . only")
+      .regex(/^[+\d][\d\s().-]*$/, "Use digits and + ( ) - . only"),
+  )
+  .transform((v) => {
+    const digits = v.replace(/\D/g, "");
+    return v.startsWith("+") ? `+${digits}` : digits;
+  })
+  .pipe(
+    z
+      .string()
       .refine(
         (v) => (v.match(/\d/g) ?? []).length >= 5,
         "Enter a full phone number",
+      )
+      .refine(
+        (v) => !v.startsWith("+") || /^\+[1-9]\d{7,14}$/.test(v),
+        "Check the country code and the number",
       ),
   );
 
@@ -153,6 +171,15 @@ export type CreateAcademyInput = z.infer<typeof CreateAcademySchema>;
 export const UpdateAcademySettingsSchema = z.object({
   timeZone: lineText(1, 64)
     .refine((v) => /^[A-Za-z0-9+_\-/]+$/.test(v), "Pick a zone from the list")
+    .optional(),
+  country: z
+    .union([
+      lineText(2, 2).refine(
+        (v) => /^[A-Z]{2}$/.test(v),
+        "Pick a country from the list",
+      ),
+      z.literal(""),
+    ])
     .optional(),
   address: blockText(0, 200).optional(),
   mapUrl: z.union([MapUrlSchema, z.literal("")]).optional(),

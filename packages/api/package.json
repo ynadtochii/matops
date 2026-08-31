@@ -11,6 +11,10 @@
       "types": "./src/cron-auth.ts",
       "default": "./src/cron-auth.ts"
     },
+    "./public": {
+      "types": "./src/public/index.ts",
+      "default": "./src/public/index.ts"
+    },
     "./notify": {
       "types": "./src/notify.ts",
       "default": "./src/notify.ts"

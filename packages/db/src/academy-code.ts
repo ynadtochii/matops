@@ -43,12 +43,20 @@ export async function generateAcademyCode(exec: DbExec): Promise<string> {
 export async function findAcademyByCode(
   code: string,
   exec: DbReader,
-): Promise<{ academyId: string; name: string; address: string | null } | null> {
+): Promise<{
+  academyId: string;
+  name: string;
+  address: string | null;
+  timeZone: string | null;
+  country: string | null;
+} | null> {
   const rows = await exec
     .select({
       academyId: organization.id,
       name: organization.name,
       address: organization.address,
+      timeZone: organization.timeZone,
+      country: organization.country,
     })
     .from(organization)
     .where(

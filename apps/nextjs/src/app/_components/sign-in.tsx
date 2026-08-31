@@ -1,15 +1,14 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { Button } from "@matops/ui/button";
-import { Input } from "@matops/ui/input";
-import { Label } from "@matops/ui/label";
 import { Spinner } from "@matops/ui/spinner";
 
 import type { MagicLinkState } from "./sign-in-actions";
 import { env } from "~/env";
+import { EmailField } from "./form-fields";
 import { sendMagicLinkAction, signInSocialAction } from "./sign-in-actions";
 
 /**
@@ -84,6 +83,7 @@ export function OrDivider() {
 }
 
 export function SignIn({ callbackURL = "/" }: { callbackURL?: string }) {
+  const [email, setEmail] = useState("");
   const [state, formAction] = useActionState<MagicLinkState, FormData>(
     sendMagicLinkAction.bind(null, callbackURL),
     { status: "idle" },
@@ -95,18 +95,14 @@ export function SignIn({ callbackURL = "/" }: { callbackURL?: string }) {
       <OrDivider />
 
       <form action={formAction} className="flex flex-col gap-2">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="email">Email</Label>
-          <Input
-            id="email"
-            name="email"
-            type="email"
-            required
-            autoComplete="email"
-            placeholder="you@example.com"
-            aria-invalid={state.status === "error"}
-          />
-        </div>
+        <EmailField
+          name="email"
+          value={email}
+          onChange={setEmail}
+          placeholder="you@example.com"
+          required
+          invalid={state.status === "error"}
+        />
         <SubmitButton className="w-full" pendingLabel="Sending…">
           Send magic link
         </SubmitButton>

@@ -12,6 +12,7 @@ import { Spinner } from "@matops/ui/spinner";
 import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
+import { PhoneField } from "./form-fields";
 
 /**
  * Join your gym by code (ADR 49). The landing gate for a signed-in user who
@@ -34,6 +35,8 @@ export function JoinByCode() {
     academyId: string;
     name: string;
     address: string | null;
+    timeZone: string | null;
+    country: string | null;
   } | null>(null);
 
   // findByCode is a query procedure; fetch it on demand (not on every keystroke)
@@ -157,18 +160,13 @@ export function JoinByCode() {
               required
             />
           </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="phone">Phone</Label>
-            <Input
-              id="phone"
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              autoComplete="tel"
-              maxLength={30}
-              required
-            />
-          </div>
+          <PhoneField
+            timeZone={found.timeZone}
+            country={found.country}
+            value={phone}
+            onChange={setPhone}
+            required
+          />
           <Button type="submit" size="lg" disabled={join.isPending}>
             {join.isPending && <Spinner size="sm" className="text-current" />}
             {join.isPending ? "Joining…" : `Join ${found.name}`}

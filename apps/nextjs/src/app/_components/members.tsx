@@ -14,7 +14,6 @@ import {
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
-import { CopyButton } from "@matops/ui/copy-button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,6 +28,7 @@ import { toast } from "@matops/ui/toast";
 import { dateFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { useAcademy } from "./academy";
+import { LeadsPipeline } from "./leads";
 import { MemberDetail, MemberRow } from "./member-detail";
 import { cardClass, Eyebrow, MoreIcon, Tabs } from "./primitives";
 import { SkeletonRows } from "./skeletons";
@@ -171,10 +171,6 @@ export function Members() {
   const memberList = useQuery(trpc.membership.members.queryOptions());
   const academy = useAcademy();
   const owner = isOwner(academy);
-  const leads = useQuery({
-    ...trpc.dropIn.list.queryOptions(),
-    enabled: owner,
-  });
   const archivedList = useQuery({
     ...trpc.membership.archived.queryOptions(),
     enabled: owner,
@@ -184,6 +180,7 @@ export function Members() {
   // here) opens that member's detail on first render.
   const searchParams = useSearchParams();
   const overdueParam = searchParams.get("filter") === "overdue";
+  const stageParam = searchParams.get("stage");
   const memberParam = searchParams.get("member");
   const [openId, setOpenId] = useState<string | null>(memberParam);
   const toggle = (id: string) =>
@@ -543,65 +540,7 @@ export function Members() {
               academyId={academy.academyId}
               academyName={academy.name}
             />
-            {leads.isError ? (
-              <ErrorState
-                label="drop-in leads"
-                onRetry={() => void leads.refetch()}
-              />
-            ) : (leads.data ?? []).length === 0 ? (
-              <EmptyState title="No drop-in leads yet.">
-                First-time visitors who check in via the gym QR show up here to
-                follow up.
-              </EmptyState>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {(leads.data ?? []).map((l) => (
-                  <div
-                    key={l.id}
-                    className={cn(
-                      cardClass(),
-                      "flex flex-wrap items-center justify-between gap-3",
-                    )}
-                  >
-                    <div className="flex flex-col gap-0.5">
-                      <span className="font-medium">
-                        {l.firstName} {l.lastName}
-                        {l.visitCount > 1 && (
-                          <span className="text-muted-foreground ml-2 text-xs uppercase">
-                            visited {l.visitCount}×
-                          </span>
-                        )}
-                      </span>
-                      <span className="text-muted-foreground flex flex-wrap items-center gap-x-1.5 text-sm">
-                        <span>{l.phone}</span>
-                        <CopyButton
-                          value={l.phone}
-                          iconOnly
-                          variant="ghost"
-                          label={`Copy phone ${l.phone}`}
-                          toastMessage="Phone copied"
-                          className="size-6"
-                        />
-                        {l.email && (
-                          <>
-                            <span>·</span>
-                            <span>{l.email}</span>
-                            <CopyButton
-                              value={l.email}
-                              iconOnly
-                              variant="ghost"
-                              label={`Copy email ${l.email}`}
-                              toastMessage="Email copied"
-                              className="size-6"
-                            />
-                          </>
-                        )}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <LeadsPipeline initialFilter={stageParam ?? undefined} />
           </div>
         )}
       </div>

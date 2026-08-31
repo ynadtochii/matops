@@ -15,7 +15,7 @@ import {
   gt,
   hasOtherMemberships,
   inArray,
-  isNull,
+  linkLeadOnJoin,
   resolveInviteToken,
   setMemberRoleIfNotLastOwner,
   setMemberRoleStatus,
@@ -27,19 +27,15 @@ import {
 import {
   classInstance,
   classParticipation,
-  memberDues,
-  membershipPlan,
   paymentClaim,
 } from "@matops/db/schema";
 import {
   approveMembership,
-  autoAssignedPlan,
   bookingAccess,
   canApprove,
   canDecideSeat,
   classifyDrift,
   CODE_JOIN_ROLE,
-  firstDueAt,
   isActiveMember,
   isArchived,
   isOnRoster,
@@ -58,9 +54,8 @@ import {
 import type { createTRPCContext } from "../trpc";
 import { academyTimeZone } from "../academy-tz";
 import { releaseSeats } from "../classes";
-import { requireMember, rosterOf, staffOf } from "../members";
+import { activateMember, requireMember, rosterOf, staffOf } from "../members";
 import { LAST_OWNER } from "../messages";
-import { notifyMembershipApproved } from "../notify";
 import { readAllDuesWithPlan, readPaymentSettings } from "../payments-read";
 import {
   ownerIdentityProcedure,
@@ -112,6 +107,7 @@ async function joinPending(
     },
     ctx.baseDb,
   );
+  await linkLeadOnJoin(input.academyId, input.phone, userId, ctx.baseDb);
   if (!ctx.session.session.activeOrganizationId) {
     await ctx.authApi.setActiveOrganization({
       body: { organizationId: input.academyId },
@@ -432,37 +428,11 @@ export const membershipRouter = {
           message: "This member is not pending approval.",
         });
       }
-      const granted = approveMembership(m);
-      await setMemberRoleStatus(input.memberId, granted, ctx.baseDb);
-      if (granted.role === "student") {
-        await ctx.withTenant(async (db) => {
-          const onlyPlan = autoAssignedPlan(
-            await db
-              .select({ id: membershipPlan.id })
-              .from(membershipPlan)
-              .where(isNull(membershipPlan.deletedAt))
-              .limit(2),
-          );
-          if (onlyPlan) {
-            await db
-              .insert(memberDues)
-              .values({
-                academyId: ctx.academyId,
-                memberId: input.memberId,
-                planId: onlyPlan.id,
-                nextDueAt: firstDueAt(new Date()),
-              })
-              .onConflictDoNothing({
-                target: [memberDues.academyId, memberDues.memberId],
-              });
-          }
-        });
-      }
-      // Welcome push to the newly approved member (§4/S3, docs/issues/17).
-      await notifyMembershipApproved(
-        { academyId: ctx.academyId, userId: m.userId },
-        ctx.baseDb,
-      );
+      await activateMember(ctx, {
+        memberId: input.memberId,
+        userId: m.userId,
+        granted: approveMembership(m),
+      });
       return { ok: true as const };
     }),
 

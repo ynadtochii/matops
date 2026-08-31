@@ -3,7 +3,12 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { academyMapUrl, timeZoneOptions } from "@matops/domain";
+import {
+  academyCountry,
+  academyMapUrl,
+  DIAL_COUNTRIES,
+  timeZoneOptions,
+} from "@matops/domain";
 import { Button } from "@matops/ui/button";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
@@ -99,6 +104,53 @@ export function AcademyLocation({
                 {settings.data.drifting.join(", ")}. Changing this setting never
                 re-times a class that students have already booked. Edit those
                 templates on Schedule if they should move.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <div>
+          <SectionHeading>Country</SectionHeading>
+          <p className="text-muted-foreground text-sm">
+            Which country code every phone field starts on. Until you set one,
+            matops guesses from the time zone, which is only a guess.
+          </p>
+        </div>
+        {settings.isPending ? (
+          <SkeletonControlPanel />
+        ) : settings.isError ? null : (
+          <div className="border-border flex flex-col gap-3 rounded-lg border p-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <Label htmlFor="academy-country" className="sr-only">
+                Academy country
+              </Label>
+              <Select
+                id="academy-country"
+                className="max-w-xs flex-1"
+                value={academyCountry(
+                  settings.data.country,
+                  settings.data.timeZone,
+                )}
+                disabled={save.isPending}
+                onChange={(e) => {
+                  save.mutate(
+                    { country: e.target.value },
+                    { onSuccess: () => toast.success("Country saved") },
+                  );
+                }}
+              >
+                {DIAL_COUNTRIES.map((c) => (
+                  <option key={c.iso} value={c.iso}>
+                    {c.name} ({c.dial})
+                  </option>
+                ))}
+              </Select>
+            </div>
+            {!settings.data.country && (
+              <p className="text-muted-foreground text-xs">
+                Guessed from {settings.data.timeZone}. Save it to make it yours.
               </p>
             )}
           </div>

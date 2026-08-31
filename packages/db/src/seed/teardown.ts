@@ -20,6 +20,7 @@ import {
   curriculumBlockTemplate,
   curriculumTrack,
   dropIn,
+  dropInVisit,
   member,
   memberDues,
   memberNote,
@@ -73,6 +74,9 @@ export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
   );
   await del("member_referral", () =>
     exec.delete(memberReferral).where(inArray(memberReferral.academyId, ids)),
+  );
+  await del("drop_in_visit", () =>
+    exec.delete(dropInVisit).where(inArray(dropInVisit.academyId, ids)),
   );
   await del("drop_in", () =>
     exec.delete(dropIn).where(inArray(dropIn.academyId, ids)),

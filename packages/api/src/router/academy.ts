@@ -7,18 +7,25 @@ import {
   findAcademyByCode,
   getAcademyCode,
   getAcademySettings,
+  getPublicApiSettings,
   listMembershipsForUser,
+  listPublicClasses,
+  rotatePublicApiKey,
+  setPublicApiEnabled,
+  setPublicApiOrigins,
   softDeleteAcademy,
   updateAcademySettings,
 } from "@matops/db";
 import { classTemplate } from "@matops/db/schema";
 import {
   canEnroll,
+  DAY_MS,
   driftingTemplateZones,
   isStudentLensMembership,
   isValidTimeZone,
   isWebLensMembership,
   matchesDeleteAcademyPhrase,
+  PUBLIC_RANGE_DEFAULT_DAYS,
   slugify,
 } from "@matops/domain";
 import {
@@ -26,16 +33,19 @@ import {
   CreateAcademySchema,
   DeleteAcademySchema,
   IdSchema,
+  PublicApiOriginsSchema,
+  PublicBookingEnabledSchema,
   UpdateAcademySettingsSchema,
 } from "@matops/validators";
 
-import { academyTimeZone } from "../academy-tz";
+import { academyContext } from "../academy-tz";
 import { requireMembership } from "../members";
 import {
   ownerIdentityProcedure,
   ownerProcedure,
   protectedProcedure,
   refreshSessionCookie,
+  staffIdentityProcedure,
 } from "../trpc";
 
 export const academyRouter = {
@@ -92,6 +102,7 @@ export const academyRouter = {
       status: academy.status,
       joinedAt: academy.joinedAt,
       timeZone: academy.timeZone,
+      country: academy.country,
       address: academy.address,
       mapUrl: academy.mapUrl,
       curriculumForStudents: academy.curriculumForStudents,
@@ -100,12 +111,13 @@ export const academyRouter = {
   }),
 
   settings: ownerProcedure.query(async ({ ctx }) => {
-    const timeZone = await academyTimeZone(ctx);
+    const { timeZone, country } = await academyContext(ctx);
     const zones = await ctx.db
       .selectDistinct({ timeZone: classTemplate.timeZone })
       .from(classTemplate);
     return {
       timeZone,
+      country,
       drifting: driftingTemplateZones(
         timeZone,
         zones.map((z) => z.timeZone),
@@ -123,6 +135,87 @@ export const academyRouter = {
         });
       }
       await updateAcademySettings(ctx.academyId, input, ctx.baseDb);
+      return { ok: true as const };
+    }),
+
+  /**
+   * What staff send to someone who asks about training (spec O6): whether the
+   * public booking page is live and the code its URL is built from. Staff, not
+   * owner, because the instructor reading the gym's messages is usually the one
+   * asked. It returns three fields and never the publishable key, which stays
+   * on the owner-only `publicApi` query.
+   *
+   * `hasSharedClass` looks at the same window the visitor's page asks for, so
+   * an empty one means a working link that shows nothing — the one failure a
+   * link on its own cannot reveal.
+   */
+  shareLinks: staffIdentityProcedure.query(async ({ ctx }) => {
+    const settings = await getPublicApiSettings(ctx.academyId, ctx.baseDb);
+    if (!settings) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Academy not found" });
+    }
+    const now = new Date();
+    const shared = settings.enabled
+      ? await listPublicClasses(
+          ctx.academyId,
+          now,
+          new Date(now.getTime() + PUBLIC_RANGE_DEFAULT_DAYS * DAY_MS),
+          1,
+          ctx.baseDb,
+        )
+      : [];
+    return {
+      bookingEnabled: settings.enabled,
+      publicCode: settings.publicCode,
+      hasSharedClass: shared.length > 0,
+    };
+  }),
+
+  /**
+   * The public booking surface (spec O6, ADR 115): the master switch, the
+   * publishable key and the optional origin allowlist. Owner-only, and it reads
+   * the base connection because `organization` carries no tenant policy.
+   */
+  publicApi: ownerIdentityProcedure.query(async ({ ctx }) => {
+    const settings = await getPublicApiSettings(ctx.academyId, ctx.baseDb);
+    if (!settings) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Academy not found" });
+    }
+    return settings;
+  }),
+
+  /**
+   * Switch public booking on or off. Switching on mints the key the first time;
+   * switching off keeps it, because a gym that pauses for a week should not have
+   * to re-paste a key into its website afterwards.
+   */
+  setPublicApi: ownerIdentityProcedure
+    .input(PublicBookingEnabledSchema)
+    .mutation(async ({ ctx, input }) => {
+      const settings = await setPublicApiEnabled(
+        ctx.academyId,
+        input.enabled,
+        ctx.baseDb,
+      );
+      if (!settings) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Academy not found",
+        });
+      }
+      return settings;
+    }),
+
+  /** Rotate the key: the old one stops working the moment this commits. */
+  rotatePublicApiKey: ownerIdentityProcedure.mutation(async ({ ctx }) => {
+    return { apiKey: await rotatePublicApiKey(ctx.academyId, ctx.baseDb) };
+  }),
+
+  /** The websites allowed to call the API from a browser. Empty means any. */
+  setPublicApiOrigins: ownerIdentityProcedure
+    .input(PublicApiOriginsSchema)
+    .mutation(async ({ ctx, input }) => {
+      await setPublicApiOrigins(ctx.academyId, input.origins, ctx.baseDb);
       return { ok: true as const };
     }),
 

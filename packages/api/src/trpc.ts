@@ -161,22 +161,17 @@ const timingMiddleware = t.middleware(async ({ next, path }) => {
 });
 
 /**
- * Public (unauthed) procedure
- *
- * This is the base piece you use to build new queries and mutations on your
- * tRPC API. It does not guarantee that a user querying is authorized, but you
- * can still access user session data if they are logged in
- */
-export const publicProcedure = t.procedure.use(timingMiddleware);
-
-/**
  * Cap an unauthenticated procedure per caller IP. The join QR is on a public
  * wall, so anything behind it can be flooded from one laptop: the drop-in form
  * fills the lead table, and magic-link send burns the shared Resend quota.
  */
 export function rateLimited(max: number, windowMs: number) {
   return t.middleware(({ ctx, path, next }) => {
-    if (!take(`${path}:${clientIp(ctx.headers)}`, max, windowMs)) {
+    // A procedure with its own cap runs this middleware twice, once for the
+    // default below and once for its own. Sharing one counter would trip the
+    // tighter cap early, so the limit is part of the key.
+    const key = `${path}:${max}:${windowMs}:${clientIp(ctx.headers)}`;
+    if (!take(key, max, windowMs)) {
       throw new TRPCError({
         code: "TOO_MANY_REQUESTS",
         message: "Too many requests. Wait a minute and try again.",
@@ -185,6 +180,24 @@ export function rateLimited(max: number, windowMs: number) {
     return next();
   });
 }
+
+/**
+ * Generous on purpose: a gym's students share one wifi address, so the whole
+ * room is one caller here.
+ */
+export const PUBLIC_DEFAULT_MAX = 120;
+export const PUBLIC_DEFAULT_WINDOW_MS = 60_000;
+
+/**
+ * Public (unauthed) procedure
+ *
+ * This is the base piece you use to build new queries and mutations on your
+ * tRPC API. It does not guarantee that a user querying is authorized, but you
+ * can still access user session data if they are logged in
+ */
+export const publicProcedure = t.procedure
+  .use(timingMiddleware)
+  .use(rateLimited(PUBLIC_DEFAULT_MAX, PUBLIC_DEFAULT_WINDOW_MS));
 
 /**
  * Protected (authenticated) procedure

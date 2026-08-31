@@ -8,3 +8,4 @@ export * from "./payments";
 export * from "./rank";
 export * from "./referrals";
 export * from "./notifications";
+export * from "./public-api";

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -12,6 +12,7 @@ import { Spinner } from "@matops/ui/spinner";
 import { toast } from "@matops/ui/toast";
 
 import type { MagicLinkState } from "~/app/_components/sign-in-actions";
+import { EmailField, PhoneField } from "~/app/_components/form-fields";
 import {
   OrDivider,
   SocialSignIn,
@@ -78,7 +79,8 @@ export function JoinFlow({
     );
   }
 
-  const { academyName, academyAddress, role } = invite.data;
+  const { academyName, academyAddress, academyTimeZone, academyCountry, role } =
+    invite.data;
 
   return (
     <div className="flex w-full max-w-sm flex-col gap-5">
@@ -98,10 +100,17 @@ export function JoinFlow({
       </div>
 
       {!signedIn ? (
-        <SignUp token={token} academyName={academyName} />
+        <SignUp
+          token={token}
+          academyName={academyName}
+          timeZone={academyTimeZone}
+          country={academyCountry}
+        />
       ) : (
         <ProfileForm
           academyName={academyName}
+          timeZone={academyTimeZone}
+          country={academyCountry}
           defaults={profile}
           pending={join.isPending}
           onSubmit={(p) => join.mutate({ token, ...p })}
@@ -114,10 +123,15 @@ export function JoinFlow({
 function SignUp({
   token,
   academyName,
+  timeZone,
+  country,
 }: {
   token: string;
   academyName: string;
+  timeZone: string | null;
+  country: string | null;
 }) {
+  const [email, setEmail] = useState("");
   const [state, formAction] = useActionState<MagicLinkState, FormData>(
     sendJoinLinkAction.bind(null, token),
     { status: "idle" },
@@ -140,19 +154,15 @@ function SignUp({
       <SocialSignIn callbackURL={`/join/${token}`} />
       <OrDivider />
       <form action={formAction} className="flex flex-col gap-3">
-        <NameFields />
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="email">Email</Label>
-          <Input
-            id="email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            placeholder="you@example.com"
-            required
-            aria-invalid={state.status === "error"}
-          />
-        </div>
+        <NameFields timeZone={timeZone} country={country} />
+        <EmailField
+          name="email"
+          value={email}
+          onChange={setEmail}
+          placeholder="you@example.com"
+          required
+          invalid={state.status === "error"}
+        />
         <SubmitButton className="w-full" pendingLabel="Sending…">
           Join {academyName}
         </SubmitButton>
@@ -172,11 +182,15 @@ function SignUp({
 
 function ProfileForm({
   academyName,
+  timeZone,
+  country,
   defaults,
   pending,
   onSubmit,
 }: {
   academyName: string;
+  timeZone: string | null;
+  country: string | null;
   defaults?: JoinProfile;
   pending: boolean;
   onSubmit: (profile: JoinProfile) => void;
@@ -198,7 +212,7 @@ function ProfileForm({
         });
       }}
     >
-      <NameFields defaults={defaults} />
+      <NameFields defaults={defaults} timeZone={timeZone} country={country} />
       <Button type="submit" size="lg" disabled={pending}>
         {pending && <Spinner size="sm" className="text-current" />}
         {pending ? "Joining\u2026" : `Join ${academyName}`}
@@ -212,7 +226,16 @@ function ProfileForm({
   );
 }
 
-function NameFields({ defaults }: { defaults?: JoinProfile }) {
+function NameFields({
+  defaults,
+  timeZone,
+  country,
+}: {
+  defaults?: JoinProfile;
+  timeZone: string | null;
+  country: string | null;
+}) {
+  const [phone, setPhone] = useState(defaults?.phone ?? "");
   return (
     <>
       <div className="flex flex-col gap-1.5">
@@ -237,18 +260,14 @@ function NameFields({ defaults }: { defaults?: JoinProfile }) {
           required
         />
       </div>
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="phone">Phone</Label>
-        <Input
-          id="phone"
-          name="phone"
-          type="tel"
-          defaultValue={defaults?.phone}
-          autoComplete="tel"
-          maxLength={30}
-          required
-        />
-      </div>
+      <PhoneField
+        timeZone={timeZone}
+        country={country}
+        name="phone"
+        value={phone}
+        onChange={setPhone}
+        required
+      />
     </>
   );
 }

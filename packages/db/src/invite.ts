@@ -143,6 +143,8 @@ export async function resolveInviteToken(
   academyId: string;
   academyName: string;
   academyAddress: string | null;
+  academyTimeZone: string | null;
+  academyCountry: string | null;
   role: string;
 } | null> {
   const rows = await exec
@@ -151,6 +153,8 @@ export async function resolveInviteToken(
       role: academyInvite.role,
       academyName: organization.name,
       academyAddress: organization.address,
+      academyTimeZone: organization.timeZone,
+      academyCountry: organization.country,
     })
     .from(academyInvite)
     .innerJoin(organization, eq(academyInvite.academyId, organization.id))

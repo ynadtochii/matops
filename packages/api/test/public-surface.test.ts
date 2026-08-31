@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { Harness } from "./helpers";
 import { resetRateLimits } from "../src/rate-limit";
+import { PUBLIC_DEFAULT_MAX } from "../src/trpc";
 import { harness, rejectionCode, seedAcademies, seedClasses } from "./helpers";
 
 const A = "academy_A";
@@ -14,6 +15,7 @@ const VISITOR = {
   firstName: "Ana",
   lastName: "Silva",
   phone: "+351911111111",
+  email: "ana@example.com",
   consent: true as const,
 };
 
@@ -50,12 +52,34 @@ interface LeadRow {
   first_name: string;
   last_name: string;
   visit_count: number;
-  class_id: string | null;
 }
 
 async function leads(h: Harness): Promise<LeadRow[]> {
   const res = await h.pg.query<LeadRow>(
-    `SELECT first_name, last_name, visit_count, class_id FROM "drop_in"`,
+    `SELECT d.first_name, d.last_name,
+            (SELECT count(*)::int FROM "drop_in_visit" v
+              WHERE v.drop_in_id = d.id AND v.attendance_status = 'present') AS visit_count
+       FROM "drop_in" d`,
+  );
+  return res.rows;
+}
+
+async function visitClasses(h: Harness): Promise<(string | null)[]> {
+  const res = await h.pg.query<{ class_id: string }>(
+    `SELECT class_id FROM "drop_in_visit"`,
+  );
+  return res.rows.map((r) => r.class_id);
+}
+
+interface VisitRow {
+  class_id: string;
+  booking_status: string;
+  attendance_status: string;
+}
+
+async function visits(h: Harness): Promise<VisitRow[]> {
+  const res = await h.pg.query<VisitRow>(
+    `SELECT class_id, booking_status, attendance_status FROM "drop_in_visit"`,
   );
   return res.rows;
 }
@@ -67,10 +91,31 @@ describe("dropIn.submit, the stranger-writable insert behind the wall poster", (
       .as("nobody", null, from("1.1.1.1"))
       .dropIn.submit({ academyId: A, ...VISITOR });
 
-    expect(res).toEqual({ ok: true, firstVisit: true });
+    expect(res).toEqual({
+      ok: true,
+      firstVisit: true,
+      booked: false,
+      classTitle: null,
+    });
     expect(await leads(h)).toMatchObject([
-      { first_name: "Ana", visit_count: 1 },
+      { first_name: "Ana", visit_count: 0 },
     ]);
+  });
+
+  it("refuses a visitor with no email, the address a member account needs", async () => {
+    const h = await base();
+    const { email: _drop, ...noEmail } = VISITOR;
+
+    expect(
+      await rejectionCode(
+        h.as("nobody", null, from("1.1.1.1")).dropIn.submit({
+          academyId: A,
+          ...noEmail,
+        } as typeof VISITOR & {
+          academyId: string;
+        }),
+      ),
+    ).toBe("BAD_REQUEST");
   });
 
   it("keeps a returning walk-in on one row instead of making a second", async () => {
@@ -126,14 +171,22 @@ describe("dropIn.submit, the stranger-writable insert behind the wall poster", (
       },
     ]);
     const caller = h.as("nobody", null, from("1.1.1.1"));
-    await caller.dropIn.submit({ academyId: A, ...VISITOR });
+    await caller.dropIn.submit({
+      academyId: A,
+      ...VISITOR,
+      classId: CLASS_NOW,
+    });
     await h.pg.exec(
       `UPDATE "class" SET starts_at = now() - interval '80 minutes' WHERE id = '${"CLASS_NOW_ID"}';`.replace(
         "CLASS_NOW_ID",
         CLASS_NOW,
       ),
     );
-    const second = await caller.dropIn.submit({ academyId: A, ...VISITOR });
+    const second = await caller.dropIn.submit({
+      academyId: A,
+      ...VISITOR,
+      classId: CLASS_LATER,
+    });
 
     expect(second.firstVisit).toBe(false);
     expect((await leads(h))[0]?.visit_count).toBe(2);
@@ -155,15 +208,174 @@ describe("dropIn.submit, the stranger-writable insert behind the wall poster", (
       .as("nobody", null, from("1.1.1.1"))
       .dropIn.submit({ academyId: A, ...VISITOR });
 
-    expect((await leads(h))[0]?.class_id).toBe(CLASS_NOW);
+    expect(await visitClasses(h)).toEqual([CLASS_NOW]);
   });
 
-  it("leaves the class empty when nothing is on", async () => {
+  it("records no visit when nothing is on", async () => {
     const h = await base();
     await h
       .as("nobody", null, from("1.1.1.1"))
       .dropIn.submit({ academyId: A, ...VISITOR });
-    expect((await leads(h))[0]?.class_id).toBeNull();
+    expect(await visitClasses(h)).toEqual([]);
+  });
+
+  it("keeps a visitor on the first class's register after a second class", async () => {
+    const h = await base();
+    await seedClasses(h.pg, [
+      {
+        id: CLASS_NOW,
+        academyId: A,
+        instructorId: COACH,
+        startsInMinutes: -10,
+        durationMinutes: 30,
+      },
+      {
+        id: CLASS_LATER,
+        academyId: A,
+        instructorId: COACH,
+        startsInMinutes: 45,
+        durationMinutes: 60,
+      },
+    ]);
+    const caller = h.as("nobody", null, from("1.1.1.1"));
+    await caller.dropIn.submit({
+      academyId: A,
+      ...VISITOR,
+      classId: CLASS_NOW,
+    });
+    await h.pg.exec(
+      `UPDATE "class" SET starts_at = now() - interval '80 minutes' WHERE id = '${CLASS_NOW}';`,
+    );
+    await caller.dropIn.submit({
+      academyId: A,
+      ...VISITOR,
+      classId: CLASS_LATER,
+    });
+
+    expect((await visitClasses(h)).sort()).toEqual(
+      [CLASS_NOW, CLASS_LATER].sort(),
+    );
+  });
+
+  it("records the class the visitor picked when two are on at once", async () => {
+    const h = await base();
+    await seedClasses(h.pg, [
+      {
+        id: CLASS_NOW,
+        academyId: A,
+        instructorId: COACH,
+        startsInMinutes: -10,
+        durationMinutes: 60,
+      },
+      {
+        id: CLASS_LATER,
+        academyId: A,
+        instructorId: COACH,
+        startsInMinutes: 45,
+        durationMinutes: 60,
+      },
+    ]);
+    await h
+      .as("nobody", null, from("1.1.1.1"))
+      .dropIn.submit({ academyId: A, ...VISITOR, classId: CLASS_LATER });
+
+    expect(await visitClasses(h)).toEqual([CLASS_LATER]);
+  });
+
+  it("still takes the lead when the visitor picks no class at all", async () => {
+    const h = await base();
+    await seedClasses(h.pg, [
+      {
+        id: CLASS_NOW,
+        academyId: A,
+        instructorId: COACH,
+        startsInMinutes: -10,
+        durationMinutes: 60,
+      },
+      {
+        id: CLASS_LATER,
+        academyId: A,
+        instructorId: COACH,
+        startsInMinutes: 45,
+        durationMinutes: 60,
+      },
+    ]);
+    await h
+      .as("nobody", null, from("1.1.1.1"))
+      .dropIn.submit({ academyId: A, ...VISITOR });
+
+    expect(await leads(h)).toHaveLength(1);
+    expect(await visitClasses(h)).toEqual([]);
+  });
+
+  it("books a class later today rather than marking them present", async () => {
+    const h = await base();
+    await seedClasses(h.pg, [
+      {
+        id: CLASS_LATER,
+        academyId: A,
+        instructorId: COACH,
+        startsInMinutes: 300,
+        durationMinutes: 60,
+      },
+    ]);
+    const res = await h
+      .as("nobody", null, from("1.1.1.1"))
+      .dropIn.submit({ academyId: A, ...VISITOR, classId: CLASS_LATER });
+
+    expect(res.booked).toBe(true);
+    expect(await visits(h)).toMatchObject([
+      {
+        class_id: CLASS_LATER,
+        booking_status: "booked",
+        attendance_status: "unmarked",
+      },
+    ]);
+  });
+
+  it("refuses a class the page was never entitled to offer", async () => {
+    const h = await base();
+    await seedAcademies(h.pg, [
+      { id: "academy_B", code: "100002", members: [] },
+    ]);
+    await seedClasses(h.pg, [
+      {
+        id: CLASS_NOW,
+        academyId: "academy_B",
+        instructorId: COACH,
+        startsInMinutes: -10,
+        durationMinutes: 60,
+      },
+    ]);
+    expect(
+      await rejectionCode(
+        h
+          .as("nobody", null, from("1.1.1.1"))
+          .dropIn.submit({ academyId: A, ...VISITOR, classId: CLASS_NOW }),
+      ),
+    ).toBe("PRECONDITION_FAILED");
+    expect(await visitClasses(h)).toEqual([]);
+  });
+
+  it("refuses a class that ended while the form sat open", async () => {
+    const h = await base();
+    await seedClasses(h.pg, [
+      {
+        id: CLASS_NOW,
+        academyId: A,
+        instructorId: COACH,
+        startsInMinutes: -400,
+        durationMinutes: 60,
+      },
+    ]);
+    expect(
+      await rejectionCode(
+        h
+          .as("nobody", null, from("1.1.1.1"))
+          .dropIn.submit({ academyId: A, ...VISITOR, classId: CLASS_NOW }),
+      ),
+    ).toBe("PRECONDITION_FAILED");
+    expect(await leads(h)).toHaveLength(0);
   });
 
   it("refuses a gym that does not exist, writing nothing", async () => {
@@ -241,6 +453,32 @@ describe("the rate limit, driven through a real procedure", () => {
           phone: `+35191111111${i}`,
         }),
       );
+    }
+
+    await expect(
+      h.as(OWNER, A, ip).academy.findByCode({ code: "100001" }),
+    ).resolves.toMatchObject({ academyId: A });
+  });
+});
+
+describe("the default cap every public procedure carries", () => {
+  it("caps a public procedure that declares no limit of its own", async () => {
+    const h = await base();
+    const caller = h.as("nobody", null, from("6.6.6.6"));
+    for (let i = 0; i < PUBLIC_DEFAULT_MAX; i++) {
+      await expect(caller.system.health()).resolves.toEqual({ ok: true });
+    }
+    expect(await rejectionCode(caller.system.health())).toBe(
+      "TOO_MANY_REQUESTS",
+    );
+  });
+
+  it("leaves an authed procedure alone", async () => {
+    const h = await base();
+    const ip = from("5.5.5.5");
+    const caller = h.as("nobody", null, ip);
+    for (let i = 0; i < PUBLIC_DEFAULT_MAX; i++) {
+      await caller.system.health();
     }
 
     await expect(

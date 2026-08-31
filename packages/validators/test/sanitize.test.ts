@@ -75,6 +75,25 @@ describe("PhoneSchema", () => {
   it("rejects a number with too few digits", () => {
     expect(PhoneSchema.safeParse("+1 2").success).toBe(false);
   });
+
+  it("stores one string for every spelling of the same number", () => {
+    for (const value of [
+      "+351 912 345 678",
+      "+351-912.345.678",
+      "+351912345678",
+    ]) {
+      expect(ok(PhoneSchema.safeParse(value))).toBe("+351912345678");
+    }
+  });
+
+  it("holds a number that carries a country code to E.164", () => {
+    expect(PhoneSchema.safeParse("+0351912345678").success).toBe(false);
+    expect(PhoneSchema.safeParse(`+${"9".repeat(16)}`).success).toBe(false);
+  });
+
+  it("still takes a number with no country code, which the app still sends", () => {
+    expect(ok(PhoneSchema.safeParse("(555) 123-4567"))).toBe("5551234567");
+  });
 });
 
 describe("EmailSchema", () => {
@@ -222,7 +241,7 @@ describe("composed schemas still accept real input", () => {
       token: "abc123",
       firstName: "Sam",
       lastName: "Lee",
-      phone: "+380 50 111 22 33",
+      phone: "+380501112233",
     });
   });
 

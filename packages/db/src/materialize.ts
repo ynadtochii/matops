@@ -23,7 +23,7 @@ import {
   classInstance,
   classParticipation,
   classTemplate,
-  dropIn,
+  dropInVisit,
 } from "./scheduling";
 
 /**
@@ -103,6 +103,7 @@ export async function materializeTemplate(
       startsAt,
       durationMinutes: template.durationMinutes,
       capacity: template.capacity,
+      publicBookable: template.publicBookable,
     }));
     const insert = exec.insert(classInstance).values(values);
     // A concurrent run or a prior tick may already hold this instant; only the
@@ -119,6 +120,7 @@ export async function materializeTemplate(
               discipline: template.discipline,
               durationMinutes: template.durationMinutes,
               capacity: template.capacity,
+              publicBookable: template.publicBookable,
             },
           })
         : insert.onConflictDoNothing()
@@ -315,12 +317,9 @@ export async function rebuildSchedule(
     await exec
       .delete(classParticipation)
       .where(inArray(classParticipation.classId, ids));
-    // A walk-in lead attached to a class it can outlive: keep the lead, drop
-    // the link. The column is already nullable ("null = general lead").
-    await exec
-      .update(dropIn)
-      .set({ classId: null })
-      .where(inArray(dropIn.classId, ids));
+    // A visitor's visits die with the class; the LEAD outlives it and stays in
+    // the owner's follow-up queue (ADR 115).
+    await exec.delete(dropInVisit).where(inArray(dropInVisit.classId, ids));
     await exec.delete(classInstance).where(inArray(classInstance.id, ids));
   }
 

@@ -11,12 +11,13 @@ import {
   gte,
   isNull,
   lt,
+  ne,
   sql,
 } from "@matops/db";
 import {
   classInstance,
   classParticipation,
-  dropIn,
+  dropInVisit,
   user,
 } from "@matops/db/schema";
 import {
@@ -259,8 +260,13 @@ export const classRouter = {
 
       const [dropIns] = await ctx.db
         .select({ count: sql<number>`count(*)::int` })
-        .from(dropIn)
-        .where(eq(dropIn.classId, input.id));
+        .from(dropInVisit)
+        .where(
+          and(
+            eq(dropInVisit.classId, input.id),
+            ne(dropInVisit.bookingStatus, "cancelled"),
+          ),
+        );
 
       return visibleAttendees(rows, dropIns?.count ?? 0, {
         id: ctx.session.user.id,
@@ -292,6 +298,7 @@ export const classRouter = {
           startsAt,
           durationMinutes: input.durationMinutes,
           capacity: input.capacity,
+          publicBookable: input.publicBookable,
         })
         .returning();
       return row;
@@ -332,6 +339,7 @@ export const classRouter = {
           instructorId: input.instructorId,
           durationMinutes: input.durationMinutes,
           capacity: input.capacity,
+          publicBookable: input.publicBookable,
           startsAt,
         })
         .where(liveClass(input.id))

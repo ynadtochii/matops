@@ -122,6 +122,7 @@ interface OneOffForm {
   time: string; // HH:MM
   durationMinutes: number;
   capacity: number;
+  publicBookable: boolean;
   timeZone: string;
 }
 
@@ -133,6 +134,7 @@ const emptyOneOff = (instructorId: string): OneOffForm => ({
   time: "18:00",
   durationMinutes: 60,
   capacity: 20,
+  publicBookable: false,
   timeZone: browserTz(),
 });
 
@@ -218,6 +220,7 @@ export function Schedule() {
       startsAtMinutes: timeToMinutes(form.time),
       durationMinutes: form.durationMinutes,
       capacity: form.capacity,
+      publicBookable: form.publicBookable,
       timeZone: form.timeZone,
     });
   };
@@ -394,6 +397,20 @@ export function Schedule() {
                     required
                   />
                 </div>
+                <label
+                  title="Only classes you share appear on your booking link and in the public API."
+                  className="text-muted-foreground hover:text-foreground flex min-h-11 cursor-pointer items-center gap-2 text-sm sm:col-span-2"
+                >
+                  <input
+                    type="checkbox"
+                    className="accent-brand size-4"
+                    checked={form.publicBookable}
+                    onChange={(e) =>
+                      setForm({ ...form, publicBookable: e.target.checked })
+                    }
+                  />
+                  Share this class publicly
+                </label>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="cl-instructor">Coach</Label>
                   <Select

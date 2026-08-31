@@ -1,7 +1,10 @@
 # Public booking API and the drop-in lead path: plan
 
-**Status: DECIDED, not started.** Product decisions, the lead lifecycle and the
-wire contract. No code, no ADR, no roadmap row yet. Supersedes
+**Status: BUILT (v6.2, ADR [115](issues/115-public-booking-api-and-the-lead-path.md)).** Slices A.0 to A.7 all shipped;
+see [roadmap.md](roadmap.md) v6.2 for what landed and [public-api.md](public-api.md) for
+the integrator page. Two §15 decisions were settled by the owner: five stages, and
+**no durable rate limiter in this wave** (a separate piece of work), so the four
+write buckets stay on the per-process brake. Supersedes
 [visitor-booking-plan.md](visitor-booking-plan.md).
 
 | | |

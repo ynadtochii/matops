@@ -20,6 +20,7 @@ const CY = "u_cy";
 const YESTERDAY = "aaaaaaaa-0000-4000-8000-000000000001";
 const LONG_AGO = "aaaaaaaa-0000-4000-8000-000000000002";
 const NEXT_WEEK = "aaaaaaaa-0000-4000-8000-000000000003";
+const TODAY = "aaaaaaaa-0000-4000-8000-000000000004";
 
 let open: Harness | null = null;
 
@@ -50,6 +51,12 @@ async function base(): Promise<Harness> {
       academyId: A,
       instructorId: COACH,
       startsInMinutes: -1440,
+    },
+    {
+      id: TODAY,
+      academyId: A,
+      instructorId: COACH,
+      startsInMinutes: -60,
     },
     {
       id: LONG_AGO,
@@ -89,13 +96,11 @@ describe("attendance.mark", () => {
       { classId: YESTERDAY, academyId: A, studentId: ANA },
     ]);
 
-    await h
-      .as(COACH, A)
-      .attendance.mark({
-        classId: YESTERDAY,
-        studentId: ANA,
-        status: "present",
-      });
+    await h.as(COACH, A).attendance.mark({
+      classId: YESTERDAY,
+      studentId: ANA,
+      status: "present",
+    });
 
     const res = await h.pg.query<{
       attendance_status: string;
@@ -298,13 +303,104 @@ describe("attendance.addVisitor", () => {
     const rows = await h.pg.query<{
       first_name: string;
       consent: boolean;
-      class_id: string | null;
-    }>(`SELECT first_name, consent, class_id FROM "drop_in"`);
+      class_id: string;
+      attendance_status: string;
+    }>(
+      `SELECT d.first_name, d.consent, v.class_id, v.attendance_status
+         FROM "drop_in" d JOIN "drop_in_visit" v ON v.drop_in_id = d.id`,
+    );
     expect(rows.rows[0]).toMatchObject({
       first_name: "Dee",
       consent: false,
       class_id: YESTERDAY,
+      attendance_status: "present",
     });
+  });
+
+  it("keeps the first class's register when the visitor returns on another day", async () => {
+    const h = await base();
+    const visitor = {
+      firstName: "Dee",
+      lastName: "Reis",
+      phone: "+351911111111",
+    };
+    await h
+      .as(COACH, A)
+      .attendance.addVisitor({ classId: YESTERDAY, ...visitor });
+    await h.as(COACH, A).attendance.addVisitor({ classId: TODAY, ...visitor });
+
+    const rows = await h.pg.query<{ class_id: string }>(
+      `SELECT class_id FROM "drop_in_visit" ORDER BY class_id`,
+    );
+    expect(rows.rows.map((r) => r.class_id).sort()).toEqual(
+      [YESTERDAY, TODAY].sort(),
+    );
+  });
+
+  it("marks a booked visitor absent, so a no-show is not read as present", async () => {
+    const h = await base();
+    await h.as(COACH, A).attendance.addVisitor({
+      classId: YESTERDAY,
+      firstName: "Dee",
+      lastName: "Reis",
+      phone: "+351911111111",
+    });
+    const roster = await h.as(COACH, A).attendance.list({ id: YESTERDAY });
+    const visitId = roster.dropIns[0]?.id ?? "";
+    await h.as(COACH, A).attendance.markVisitor({
+      classId: YESTERDAY,
+      visitId,
+      status: "absent",
+    });
+
+    const rows = await h.pg.query<{ attendance_status: string }>(
+      `SELECT attendance_status FROM "drop_in_visit"`,
+    );
+    expect(rows.rows[0]?.attendance_status).toBe("absent");
+  });
+
+  it("stores the phone the visitor typed, country code and all", async () => {
+    const h = await base();
+    await h.as(COACH, A).attendance.addVisitor({
+      classId: YESTERDAY,
+      firstName: "Dee",
+      lastName: "Reis",
+      phone: "+351 911 111 111",
+    });
+
+    const rows = await h.pg.query<{ phone: string }>(
+      `SELECT phone FROM "drop_in"`,
+    );
+    expect(rows.rows[0]?.phone).toBe("+351911111111");
+  });
+
+  it("refuses to mark a visitor who cancelled their booking", async () => {
+    const h = await base();
+    await h.as(COACH, A).attendance.addVisitor({
+      classId: YESTERDAY,
+      firstName: "Dee",
+      lastName: "Reis",
+      phone: "+351911111111",
+    });
+    const roster = await h.as(COACH, A).attendance.list({ id: YESTERDAY });
+    const visitId = roster.dropIns[0]?.id ?? "";
+    await h.pg.query(
+      `UPDATE "drop_in_visit" SET booking_status = 'cancelled', attendance_status = 'unmarked'`,
+    );
+
+    expect(
+      await rejectionCode(
+        h.as(COACH, A).attendance.markVisitor({
+          classId: YESTERDAY,
+          visitId,
+          status: "present",
+        }),
+      ),
+    ).toBe("NOT_FOUND");
+    const rows = await h.pg.query<{ attendance_status: string }>(
+      `SELECT attendance_status FROM "drop_in_visit"`,
+    );
+    expect(rows.rows[0]?.attendance_status).toBe("unmarked");
   });
 
   it("refuses a class outside the backfill window", async () => {

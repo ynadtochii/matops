@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { canRemoveOrDemote } from "@matops/domain";
 
@@ -99,6 +99,7 @@ export interface UserAcademy {
   name: string;
   slug: string;
   timeZone: string | null;
+  country: string | null;
   address: string | null;
   mapUrl: string | null;
   curriculumForStudents: boolean;
@@ -125,6 +126,7 @@ export async function listMembershipsForUser(
       name: organization.name,
       slug: organization.slug,
       timeZone: organization.timeZone,
+      country: organization.country,
       address: organization.address,
       mapUrl: organization.mapUrl,
       curriculumForStudents: organization.curriculumForStudents,
@@ -398,4 +400,46 @@ export async function createPendingMembership(
     createdAt: new Date(),
   });
   return { status: "pending", alreadyMember: false };
+}
+
+export interface ResolvedAccount {
+  userId: string;
+  /** True when the address already had an account before this call. */
+  existed: boolean;
+}
+
+/**
+ * The account an owner-promoted lead signs into (ADR 118). Email is Better
+ * Auth's identity, so the address alone decides: an existing user is reused and
+ * their name and phone are left alone (they own that profile, the gym does
+ * not), and a new one is written unverified. Better Auth's magic-link verify
+ * finds a user by email and flips `email_verified` itself on first sign-in, so
+ * nothing here has to claim the address is proven.
+ *
+ * The lookup is case-insensitive because `user.email` is unique on the exact
+ * string, and an owner typing `Pat@Example.com` must not fork a second account.
+ */
+export async function resolveAccountByEmail(
+  input: { email: string; name: string; phone: string },
+  exec: DbExec,
+): Promise<ResolvedAccount> {
+  const email = input.email.trim().toLowerCase();
+  const existing = await exec
+    .select({ id: user.id })
+    .from(user)
+    .where(eq(sql`lower(${user.email})`, email))
+    .limit(1);
+
+  const found = existing[0];
+  if (found) return { userId: found.id, existed: true };
+
+  const userId = randomUUID();
+  await exec.insert(user).values({
+    id: userId,
+    name: input.name,
+    email,
+    emailVerified: false,
+    phone: input.phone,
+  });
+  return { userId, existed: false };
 }

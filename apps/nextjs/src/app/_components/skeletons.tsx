@@ -347,11 +347,11 @@ export function SkeletonBreakdown() {
 /** The O1 "needs you" strip — equal channels on a hairline grid. */
 export function SkeletonQueue({ tiles = 4 }: { tiles?: number }) {
   return (
-    <Panel aria-hidden>
+    <Panel aria-hidden cols={tiles}>
       {Array.from({ length: tiles }).map((_, i) => (
-        <div key={i} className={cn(panelCell, "px-3 py-3 sm:py-3.5")}>
-          <Bar className="h-7 w-10 sm:h-9" />
-          <Bar className="mt-2 h-2.5 w-20 sm:mt-2.5" />
+        <div key={i} className={cn(panelCell, "px-2.5 py-3")}>
+          <Bar className="h-7 w-10" />
+          <Bar className="mt-2 h-2.5 w-20" />
         </div>
       ))}
     </Panel>

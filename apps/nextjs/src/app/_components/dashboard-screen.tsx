@@ -19,8 +19,8 @@ import {
   isFirstRun,
   isOwner as isOwnerOf,
   isStaff as isStaffOf,
+  leadQueues,
   needsAttendance,
-  newLeadCount,
   rosterSummary,
   startOfDay,
   upcomingClassCount,
@@ -108,12 +108,11 @@ export function DashboardScreen() {
   const isOwner = isOwnerOf(c);
   const isStaff = isStaffOf(c);
 
-  const { today, tomorrow, leadsSince } = useMemo(() => {
+  const { today, tomorrow } = useMemo(() => {
     const at = new Date();
     return {
       today: startOfDay(at),
       tomorrow: dayWindow(at, { aheadDays: 1 }).to,
-      leadsSince: dayWindow(at, { backDays: 6, aheadDays: 0 }).from,
     };
   }, []);
   // The query window is a query key, so it stays frozen. The clock is not, and
@@ -162,9 +161,15 @@ export function DashboardScreen() {
   const weekCount = upcomingClassCount(weekRows, today);
   const unmarked = weekRows.filter((r) => needsAttendance(r, now));
   const unmarkedIds = new Set(unmarked.map((r) => r.id));
-  const newLeads = newLeadCount(
-    (leads.data ?? []).map((l) => ({ lastVisitAt: new Date(l.lastVisitAt) })),
-    leadsSince,
+  const { newLeads, trainedNotJoined } = leadQueues(
+    (leads.data ?? []).map((l) => ({
+      stage: l.stage,
+      activity: {
+        visits: l.visitCount,
+        lastVisitAt: l.lastVisitAt ? new Date(l.lastVisitAt) : null,
+        nextBookingAt: l.nextBookingAt ? new Date(l.nextBookingAt) : null,
+      },
+    })),
   );
 
   const queue: QueueItem[] = [
@@ -204,9 +209,15 @@ export function DashboardScreen() {
           },
           {
             key: "leads",
-            href: "/members?tab=leads",
+            href: "/members?tab=leads&stage=new",
             count: newLeads,
             label: "New drop-in leads",
+          },
+          {
+            key: "leads-trained",
+            href: "/members?tab=leads&stage=trained",
+            count: trainedNotJoined,
+            label: "Trained, not joined",
           },
         ]),
   ].filter((i) => i.count > 0);
@@ -253,7 +264,7 @@ export function DashboardScreen() {
         {queueLoading ? (
           <SkeletonQueue />
         ) : (
-          <Panel className={RESOLVE}>
+          <Panel className={RESOLVE} cols={Math.max(queue.length, 1)}>
             {firstRun ? (
               <PanelNotice title="Your academy is empty. Three steps to open it.">
                 <Link
@@ -418,11 +429,10 @@ export function DashboardScreen() {
 }
 
 /**
- * One job on the queue: a mono count over a mono label. The channel floor is
- * 10.5rem so all six jobs fit the 1088px content column; a label longer than
- * that truncates rather than wrapping the tile taller than its neighbours. One
- * job and six jobs draw the identical tile; what changes is how many channels
- * the strip fills, and the grid shows through the rest.
+ * One job on the queue: a mono count over a mono label. From `lg` up the strip
+ * is always one row, so the channels divide the content column evenly however
+ * many jobs there are; a label wider than its channel truncates rather than
+ * wrapping the tile taller than its neighbours.
  */
 function QueueSegment({ href, count, label, sub }: Omit<QueueItem, "key">) {
   return (
@@ -430,19 +440,19 @@ function QueueSegment({ href, count, label, sub }: Omit<QueueItem, "key">) {
       href={href}
       className={cn(
         panelCell,
-        "group hover:bg-muted px-3 py-3 transition-[background-color,scale] duration-150 sm:py-3.5",
+        "group hover:bg-muted px-2.5 py-3 transition-[background-color,scale] duration-150",
         FOCUS_RING_INSET,
         PRESS,
       )}
     >
-      <p className="text-brand-strong font-mono text-3xl leading-none tabular-nums sm:text-4xl">
+      <p className="text-brand-strong font-mono text-3xl leading-none tabular-nums">
         {count}
       </p>
-      <p className="text-muted-foreground group-hover:text-foreground mt-2 truncate font-mono text-[10px] tracking-wider uppercase transition-colors sm:mt-2.5">
+      <p className="text-muted-foreground group-hover:text-foreground mt-2 truncate font-mono text-[10px] tracking-wide uppercase transition-colors">
         {label}
       </p>
       {sub && (
-        <p className="text-muted-foreground/70 mt-1 font-mono text-[10px] tabular-nums">
+        <p className="text-muted-foreground/70 mt-1 truncate font-mono text-[10px] tabular-nums">
           {sub}
         </p>
       )}

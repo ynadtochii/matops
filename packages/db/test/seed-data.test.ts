@@ -231,8 +231,11 @@ describe("buildSeedGraph — pure dataset", () => {
   it("seeds a class-linked lead and a lead with no contact consent", () => {
     const g = build();
     const classIds = new Set(g.pastClasses.map((c) => c.id));
+    const leadIds = new Set(g.dropIns.map((d) => d.id));
     expect(
-      g.dropIns.some((d) => d.classId != null && classIds.has(d.classId)),
+      g.dropInVisits.some(
+        (v) => classIds.has(v.classId) && leadIds.has(v.dropInId),
+      ),
     ).toBe(true);
     expect(g.dropIns.some((d) => !d.consent)).toBe(true);
   });
