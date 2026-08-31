@@ -347,7 +347,7 @@ export function WeekGrid({
                         <button
                           type="button"
                           className="absolute inset-0 z-[1] cursor-pointer"
-                          aria-label={`${row.title} at ${time24Fmt.format(start)} — open details`}
+                          aria-label={`Open ${row.title} at ${time24Fmt.format(start)}`}
                           onClick={() => onSelect(row)}
                         />
                       )}

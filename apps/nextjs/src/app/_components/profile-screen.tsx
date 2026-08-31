@@ -196,7 +196,7 @@ export function ProfileScreen({
                           href={mapUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-brand-strong underline underline-offset-2"
+                          className="text-brand-strong inline-flex min-h-11 items-center underline underline-offset-2 sm:min-h-0"
                         >
                           Open in maps
                         </a>
@@ -247,7 +247,7 @@ export function ProfileScreen({
 
         <div className="flex flex-wrap items-center gap-4">
           <SignOutButton />
-          <FeedbackLink className="text-muted-foreground hover:text-foreground text-sm underline underline-offset-2" />
+          <FeedbackLink className="text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center text-sm underline underline-offset-2 sm:min-h-0" />
         </div>
       </div>
     </>

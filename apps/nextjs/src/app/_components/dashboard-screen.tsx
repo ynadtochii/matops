@@ -572,7 +572,7 @@ function Insights({
 }) {
   return (
     <div className={cn("flex flex-col gap-4", RESOLVE)}>
-      <div className="grid grid-cols-2 gap-x-6 gap-y-4 lg:grid-cols-1">
+      <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-1">
         {revenue.map((m) => (
           <Stat
             key={m.currency}

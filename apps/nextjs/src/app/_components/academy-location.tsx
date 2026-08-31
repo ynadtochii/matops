@@ -260,7 +260,7 @@ export function AcademyLocation({
                     href={savedUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2"
+                    className="text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center text-xs underline underline-offset-2 sm:min-h-0"
                   >
                     {mapUrl ? "Open the pinned map" : "Open in Maps"}
                   </a>

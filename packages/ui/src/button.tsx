@@ -42,11 +42,14 @@ const webHover: Record<ButtonVariant, string> = {
 };
 
 /**
- * A 44px floor on the compact size: `sm` is the list-row size, and a 32px row
- * action is under the touch target on a phone. Desktop keeps the dense 32px.
+ * A 44px floor on every size for touch. The drawn heights (32/36/40px) are all
+ * under the target on a phone; desktop keeps the dense original.
  */
 const webSize: Partial<Record<NonNullable<ButtonVariants["size"]>, string>> = {
+  default: "min-h-11 sm:min-h-9",
   sm: "min-h-11 sm:min-h-8",
+  lg: "min-h-11 sm:min-h-10",
+  icon: "min-h-11 min-w-11 sm:min-h-9 sm:min-w-9",
 };
 
 /**
@@ -59,7 +62,7 @@ export function buttonClass({ variant, size }: ButtonVariants = {}) {
     buttonTextVariants({ variant }),
     webAdornments,
     webHover[variant ?? "primary"],
-    size && webSize[size],
+    webSize[size ?? "default"],
   );
 }
 

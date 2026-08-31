@@ -74,7 +74,7 @@ export function SkeletonHeader({ subtitle = true }: { subtitle?: boolean }) {
   return (
     <div aria-hidden className="mb-6 flex flex-col gap-2">
       <Bar className="h-7 w-44" />
-      {subtitle && <Bar className="h-4 w-80" />}
+      {subtitle && <Bar className="h-4 w-80 max-w-full" />}
     </div>
   );
 }
@@ -539,7 +539,7 @@ export function SkeletonCoachCards({
 export function SkeletonRoster({ rows = 5 }: { rows?: number }) {
   return (
     <div aria-hidden className="flex flex-col gap-4">
-      <Bar className="h-8 w-64 rounded-md" />
+      <Bar className="h-8 w-64 max-w-full rounded-md" />
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between gap-4">
           <Bar className="h-3 w-48" />
@@ -569,7 +569,7 @@ export function SkeletonInviteCard() {
         <Bar className="h-4 w-32" />
         <Bar className="h-8 w-24 shrink-0 rounded-md" />
       </div>
-      <Bar className="h-3 w-96" />
+      <Bar className="h-3 w-96 max-w-full" />
       <div className="flex gap-2 pt-1">
         <Bar className="h-9 flex-1 rounded-md" />
         <Bar className="h-9 w-20 shrink-0 rounded-md" />

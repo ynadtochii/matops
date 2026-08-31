@@ -27,7 +27,14 @@ import type { Member, MemberHistory } from "./members";
 import { dateFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { useAcademy } from "./academy";
-import { cardClass, DriftBadge, DUES_TONE, Stat, Tabs } from "./primitives";
+import {
+  cardClass,
+  DriftBadge,
+  DUES_TONE,
+  Stat,
+  Tabs,
+  TAP,
+} from "./primitives";
 import { SkeletonLines, SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 
@@ -606,7 +613,7 @@ function Detail({
             variant="ghost"
             label={`Copy ${term.toLowerCase()}`}
             toastMessage={`${term} copied`}
-            className="size-6 shrink-0"
+            className={cn(TAP, "shrink-0")}
           />
         )}
       </dd>

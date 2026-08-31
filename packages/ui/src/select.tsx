@@ -26,7 +26,7 @@ export function Select({
       data-slot="select"
       style={{ backgroundImage: CHEVRON, ...style }}
       className={cn(
-        "border-input text-foreground h-9 appearance-none rounded-md border bg-transparent bg-no-repeat py-1 pr-8 pl-3 text-sm shadow-xs transition-[color,box-shadow] outline-none",
+        "border-input text-foreground h-11 max-w-full appearance-none rounded-md border bg-transparent bg-no-repeat py-1 pr-8 pl-3 text-base shadow-xs transition-[color,box-shadow] outline-none sm:h-9 md:text-sm",
         "bg-[length:1rem] bg-[position:right_0.55rem_center]",
         "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
         "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",

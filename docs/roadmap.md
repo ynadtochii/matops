@@ -111,6 +111,9 @@ One row per slice. This is the single answer to _"what's left, on which surface?
 | A.5 | `POST /bookings` and `DELETE /bookings/{token}`, on the in-process limiter | — | done | — | — | done | — |
 | A.6 | The shared `/book/<code>` page, built on the public API, plus the link and QR | — | — | done | — | — | — |
 | A.7 | Integrator docs ([public-api.md](public-api.md)) | — | — | — | — | done | — |
+| **v7.1** | **The web app fits a phone** _(ADR 123 - no migration)_ | | | | | | |
+| B.8 | A 44px floor in `packages/ui` (button, input, select, menu), and `Select` stops zooming iOS | — | — | done | — | done | — |
+| B.9 | The bottom bar caps at five tabs with a **More** menu; the phone header sheds its duplicates (O11) | — | — | done | — | done | — |
 | **v7.0** | **The booking page groups by day and opens on three** _(no migration)_ | | | | | | |
 | B.7 | `dayKey` / `groupByDay` take an optional zone; the picker groups and caps at 3 days (§4) | — | — | done | — | done | — |
 | **v6.9** | **Ticking "Share this class publicly" reaches the classes** _(bug fix - no migration, one hand-run fill)_ | | | | | | |

@@ -220,7 +220,7 @@ function ComposeAnnouncement() {
             type="button"
             aria-pressed={draft.audience === a}
             onClick={() => setDraft({ ...draft, audience: a })}
-            className={`rounded-md border px-3 py-1.5 text-sm transition-colors ${
+            className={`min-h-11 rounded-md border px-3 py-1.5 text-sm transition-colors sm:min-h-0 ${
               draft.audience === a
                 ? "border-brand bg-brand-wash text-brand-strong font-medium"
                 : "border-border text-muted-foreground hover:bg-muted"

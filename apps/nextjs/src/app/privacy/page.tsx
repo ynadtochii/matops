@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 export default function PrivacyPage() {
   return (
     <main className="container flex min-h-screen flex-col items-start gap-6 py-16">
-      <Link href="/">
+      <Link href="/" className="inline-flex min-h-11 items-center sm:min-h-0">
         <Logo size={26} />
       </Link>
 

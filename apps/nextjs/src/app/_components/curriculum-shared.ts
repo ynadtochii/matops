@@ -63,6 +63,7 @@ export const STEP = cn(
 
 export const ICON_BTN = cn(
   "text-muted-foreground hover:text-foreground grid size-7 shrink-0 place-items-center rounded",
+  "relative after:absolute after:-inset-2 after:content-[''] sm:after:hidden",
   "disabled:pointer-events-none disabled:opacity-40",
   SURFACE,
 );

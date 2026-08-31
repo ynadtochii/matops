@@ -12,6 +12,12 @@ import {
   isPendingCoach,
   isStaff as isStaffOf,
 } from "@matops/domain";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@matops/ui/dropdown-menu";
 import { Logo } from "@matops/ui/logo";
 import { ThemeToggle } from "@matops/ui/theme";
 
@@ -37,6 +43,8 @@ interface NavItem {
 const iconClass = "size-[18px] shrink-0";
 
 const NARROW_ROUTES = ["/class", "/profile"];
+
+const MAX_TABS = 5;
 
 function contentWidth(pathname: string, isStaff: boolean): string {
   if (pathname.startsWith("/schedule")) return "max-w-[1600px]";
@@ -182,6 +190,19 @@ const CoachesIcon = () => (
     className={iconClass}
   >
     <path d="M2.5 13V9M6.5 13V5.5M10.5 13v-3M14.5 13V3" />
+  </svg>
+);
+
+const MoreIcon = () => (
+  <svg
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={1.5}
+    strokeLinecap="round"
+    className={iconClass}
+  >
+    <path d="M3 5.5h10M3 10.5h10" />
   </svg>
 );
 
@@ -387,6 +408,15 @@ function ShellChrome({
   // Phones reach the feed from the header bell, so it never spends a tab slot.
   const tabItems = items.filter((i) => i.href !== "/notifications");
 
+  // A phone gives a tab about 50px. An owner has seven of them, which shreds
+  // every label, so past the cap the tail moves into one "More" menu and its
+  // badges roll up onto that tab.
+  const overflows = tabItems.length > MAX_TABS;
+  const barItems = overflows ? tabItems.slice(0, MAX_TABS - 1) : tabItems;
+  const moreItems = overflows ? tabItems.slice(MAX_TABS - 1) : [];
+  const moreBadge = moreItems.reduce((n, i) => n + (i.badge ?? 0), 0);
+  const moreActive = moreItems.some((i) => isCurrent(i.href));
+
   const columnClass = `mx-auto w-full ${contentWidth(pathname, isStaff)} px-6 md:px-8`;
 
   return (
@@ -458,8 +488,12 @@ function ShellChrome({
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* Mobile top bar — top padding clears the status-bar notch when installed
             as a PWA (viewport-fit=cover; ADR 42). env() is 0 elsewhere. */}
-        <header className="bg-sidebar border-sidebar-border flex items-center gap-2 border-b px-4 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-3 md:hidden">
-          <Link href="/" aria-label="Home">
+        <header className="bg-sidebar border-sidebar-border flex items-center gap-0.5 border-b px-2 pt-[calc(0.5rem+env(safe-area-inset-top))] pb-2 md:hidden">
+          <Link
+            href="/"
+            aria-label="Home"
+            className="-m-1.5 flex size-11 shrink-0 items-center justify-center p-1.5 md:m-0 md:size-auto md:p-0"
+          >
             <Logo size={22} withWordmark={false} />
           </Link>
           <div className="min-w-0 flex-1">
@@ -477,14 +511,13 @@ function ShellChrome({
                 <button
                   type="button"
                   aria-label="Send someone a link"
-                  className="text-muted-foreground hover:text-foreground flex size-8 shrink-0 items-center justify-center rounded-md transition-colors"
+                  className="text-muted-foreground hover:text-foreground flex size-11 shrink-0 items-center justify-center rounded-md transition-colors"
                 >
                   <ShareIcon />
                 </button>
               }
             />
           )}
-          <ThemeToggle />
           {!isPending && (
             <Link
               href="/notifications"
@@ -494,7 +527,7 @@ function ShellChrome({
                   : "Notifications"
               }
               aria-current={isCurrent("/notifications") ? "page" : undefined}
-              className={`relative flex size-8 shrink-0 items-center justify-center rounded-md transition-colors ${
+              className={`relative flex size-11 shrink-0 items-center justify-center rounded-md transition-colors ${
                 isCurrent("/notifications")
                   ? "text-brand-strong"
                   : "text-muted-foreground hover:text-foreground"
@@ -510,11 +543,10 @@ function ShellChrome({
             href="/profile"
             aria-label="Profile"
             aria-current={isCurrent("/profile") ? "page" : undefined}
-            className="bg-muted text-muted-foreground flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold uppercase"
+            className="bg-muted text-muted-foreground relative flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold uppercase after:absolute after:-inset-1 after:content-['']"
           >
             {initials(user.name, user.email)}
           </Link>
-          <SignOutButton iconOnly />
         </header>
 
         {isPending && (
@@ -556,32 +588,73 @@ function ShellChrome({
           aria-label="Primary"
           className="bg-sidebar border-sidebar-border fixed inset-x-0 bottom-0 z-20 flex border-t pb-[env(safe-area-inset-bottom)] md:hidden"
         >
-          {tabItems.map((i) => {
-            const active = isCurrent(i.href);
-            return (
-              <Link
-                key={i.href}
-                href={i.href}
-                aria-current={active ? "page" : undefined}
-                className={`flex min-h-14 flex-1 flex-col items-center justify-center gap-1 px-1 py-2 text-[10px] font-medium tracking-tight ${
-                  active ? "text-brand-strong" : "text-muted-foreground"
-                }`}
+          {barItems.map((i) => (
+            <Link
+              key={i.href}
+              href={i.href}
+              aria-current={isCurrent(i.href) ? "page" : undefined}
+              className={tabClass(isCurrent(i.href))}
+            >
+              <TabFace icon={i.icon} badge={i.badge} />
+              <span className="max-w-full truncate">{i.label}</span>
+            </Link>
+          ))}
+
+          {moreItems.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger className={tabClass(moreActive)}>
+                <TabFace icon={<MoreIcon />} badge={moreBadge} />
+                <span className="max-w-full truncate">More</span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                side="top"
+                align="end"
+                sideOffset={8}
+                className="mr-2 min-w-44"
               >
-                <span className="relative">
-                  {i.icon}
-                  {!!i.badge && i.badge > 0 && (
-                    <span className="bg-brand text-brand-foreground absolute -top-1.5 -right-2 flex min-w-4 items-center justify-center rounded-full px-1 py-px font-mono text-[10px] leading-none tabular-nums">
-                      {i.badge > 9 ? "9+" : i.badge}
-                    </span>
-                  )}
-                </span>
-                <span className="max-w-full truncate">{i.label}</span>
-              </Link>
-            );
-          })}
+                {moreItems.map((i) => (
+                  <DropdownMenuItem key={i.href} asChild>
+                    <Link
+                      href={i.href}
+                      aria-current={isCurrent(i.href) ? "page" : undefined}
+                      className={
+                        isCurrent(i.href) ? "text-brand-strong font-medium" : ""
+                      }
+                    >
+                      {i.icon}
+                      <span className="flex-1">{i.label}</span>
+                      {!!i.badge && i.badge > 0 && (
+                        <span className="bg-brand text-brand-foreground rounded-full px-1.5 font-mono text-[10px]">
+                          {i.badge}
+                        </span>
+                      )}
+                    </Link>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </nav>
       )}
     </div>
+  );
+}
+
+const tabClass = (active: boolean) =>
+  `flex min-h-14 flex-1 flex-col items-center justify-center gap-1 px-1 py-2 text-[10px] font-medium tracking-tight ${
+    active ? "text-brand-strong" : "text-muted-foreground"
+  }`;
+
+function TabFace({ icon, badge }: { icon: ReactNode; badge?: number }) {
+  return (
+    <span className="relative">
+      {icon}
+      {!!badge && badge > 0 && (
+        <span className="bg-brand text-brand-foreground absolute -top-1.5 -right-2 flex min-w-4 items-center justify-center rounded-full px-1 py-px font-mono text-[10px] leading-none tabular-nums">
+          {badge > 9 ? "9+" : badge}
+        </span>
+      )}
+    </span>
   );
 }
 

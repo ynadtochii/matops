@@ -2,6 +2,14 @@
 
 One line per shipped slice (see `docs/delivery.md` §4). Newest first.
 
+## The web app fits a phone
+
+- **No control was big enough to hit.** `webSize` in `packages/ui/src/button.tsx` had a 44px floor for `size="sm"` and nothing else, and even that never ran: `buttonClass` gated it on `size && webSize[size]`, and `size` is `undefined` whenever a caller takes the default. Every size now carries `min-h-11` up to `sm:`, `Input` and `Select` are `h-11 sm:h-9`, and `DropdownMenuItem` gets the same floor. An icon that sits inside a line of text keeps its drawn size and grows only its hit box, through `TAP` in `primitives.tsx` and `ICON_BTN` on the curriculum screen.
+- **`Select` zoomed iOS Safari on focus.** `Input` and `Textarea` both carry `text-base md:text-sm`, the rule that stops a phone zooming into a focused field. `Select` was `text-sm` at every width, so a form's select jumped the page while its inputs sat still.
+- **Seven tabs shared a phone's width.** An owner's bottom bar gave each tab 53px at 390px and 45px at 320px. Past `MAX_TABS = 5` the tail moves into a **More** menu and the hidden items' badges are summed onto that tab, so a waiting payment claim still shows. The mobile header drops its theme toggle and sign-out, which the Profile screen the avatar opens already holds, and the four controls left are 44px instead of 32px.
+- **Three skeleton bars were wider than the phone.** `w-96` is 384px inside a 327px column, so the page scrolled sideways while it loaded. Dialogs use `dvh` rather than `vh`, tighten to `p-4` on a phone, and keep the title clear of the close button; tab strips scroll instead of clipping their tail; the schedule header and the one-off class form wrap.
+- Verified with Playwright against a signed-in owner at 390px and 320px across every app route and the four public pages: no sideways scroll, no control under 40px, no text field under 16px. ADR [123](docs/issues/123-the-web-app-fits-a-phone.md).
+
 ## The lead phone keeps its country code, and a cancelled visit stays off the register
 
 - **`normalizePhone` no longer throws the `+` away.** `drop_in.phone` is both the dedupe key behind `UNIQUE(academy_id, phone)` and the number the owner dials back, and stripping the plus served the first at the cost of the second: `351912345678` does not say whether `351` is a country or an area. It now strips the formatting only, so two spellings of one number still collapse, a number typed with no country code is still left alone, and `canSubmitDropIn` counts digits directly so its floor did not move. Amends ADR 119, which had said storage was untouched. The hand-run fill for rows written before this is `packages/db/scripts/2026-08-31-lead-phone-plus.sql`, which prefixes only a row whose digits start with the academy's own dial code and guesses at nothing else.

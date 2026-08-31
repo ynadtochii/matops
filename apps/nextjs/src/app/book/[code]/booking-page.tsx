@@ -275,7 +275,7 @@ export function BookingPage({ apiKey }: { apiKey: string }) {
           {hiddenDays > 0 && (
             <button
               type="button"
-              className="text-muted-foreground hover:text-foreground self-start text-sm underline underline-offset-2"
+              className="text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center self-start text-sm underline underline-offset-2 sm:min-h-0"
               onClick={() => setAllDays(true)}
             >
               Show the rest of the week

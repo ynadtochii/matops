@@ -34,7 +34,7 @@ import { toast } from "@matops/ui/toast";
 import { dateYearFmt, dayShortFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { EmailField } from "./form-fields";
-import { cardClass, Eyebrow, MoreIcon, Tabs } from "./primitives";
+import { cardClass, Eyebrow, MoreIcon, Tabs, TAP } from "./primitives";
 import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 
@@ -200,7 +200,6 @@ export function LeadsPipeline({ initialFilter }: { initialFilter?: string }) {
           label: f.label,
           count: f.id === "new" ? newCount : undefined,
         }))}
-        className="overflow-x-auto"
       />
 
       {shown.length === 0 ? (
@@ -239,26 +238,26 @@ export function LeadsPipeline({ initialFilter }: { initialFilter?: string }) {
                     </span>
                   </span>
                   <span className="text-muted-foreground flex flex-wrap items-center gap-x-1.5 text-sm">
-                    <span>{l.phone}</span>
+                    <span className="font-mono tabular-nums">{l.phone}</span>
                     <CopyButton
                       value={l.phone}
                       iconOnly
                       variant="ghost"
                       label={`Copy phone ${l.phone}`}
                       toastMessage="Phone copied"
-                      className="size-6"
+                      className={TAP}
                     />
                     {l.email && (
                       <>
                         <span>·</span>
-                        <span className="truncate">{l.email}</span>
+                        <span className="min-w-0 truncate">{l.email}</span>
                         <CopyButton
                           value={l.email}
                           iconOnly
                           variant="ghost"
                           label={`Copy email ${l.email}`}
                           toastMessage="Email copied"
-                          className="size-6"
+                          className={TAP}
                         />
                       </>
                     )}

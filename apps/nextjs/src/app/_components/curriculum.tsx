@@ -322,7 +322,7 @@ export function Curriculum() {
         />
       ) : (
         <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:gap-6">
-          <div className={cn("lg:order-2 lg:w-80 lg:shrink-0 xl:w-96", ENTER)}>
+          <div className={cn("order-2 lg:w-80 lg:shrink-0 xl:w-96", ENTER)}>
             <h3 className="font-mono text-[11px] font-medium tracking-[0.16em] uppercase">
               Blocks
             </h3>
@@ -410,7 +410,7 @@ export function Curriculum() {
             )}
           </div>
 
-          <div className="min-w-0 flex-1 lg:order-1">
+          <div className="order-1 min-w-0 flex-1">
             <h3 className="mb-3 font-mono text-[11px] font-medium tracking-[0.16em] uppercase">
               The plan
             </h3>

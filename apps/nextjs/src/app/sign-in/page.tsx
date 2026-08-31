@@ -83,7 +83,7 @@ async function SignInGate() {
             Running a gym?{" "}
             <Link
               href="/start"
-              className="text-brand-strong font-medium underline-offset-4 hover:underline"
+              className="text-brand-strong inline-flex min-h-11 items-center font-medium underline-offset-4 hover:underline sm:min-h-0"
             >
               Start a gym
             </Link>

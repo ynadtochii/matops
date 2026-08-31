@@ -22,7 +22,7 @@ import { useAcademy } from "./academy";
 import { MyDues } from "./my-dues";
 import { PageHeader } from "./page-header";
 import { PaymentRequisites } from "./payment-requisites";
-import { cardClass, Section, Tabs } from "./primitives";
+import { cardClass, Section, Tabs, TAP } from "./primitives";
 import { SkeletonRows, SkeletonSection } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 
@@ -132,7 +132,7 @@ function ClaimsToConfirm() {
                 "flex flex-wrap items-center justify-between gap-3",
               )}
             >
-              <div className="flex flex-col gap-1">
+              <div className="flex min-w-0 flex-col gap-1">
                 <span className="font-medium">
                   {c.memberName}
                   <span className="text-muted-foreground ml-2 text-sm font-normal">
@@ -141,14 +141,14 @@ function ClaimsToConfirm() {
                 </span>
                 <span className="text-muted-foreground flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm">
                   <span>Ref:</span>
-                  <span className="font-mono">{c.reference}</span>
+                  <span className="font-mono break-all">{c.reference}</span>
                   <CopyButton
                     value={c.reference}
                     iconOnly
                     variant="ghost"
                     label={`Copy reference ${c.reference}`}
                     toastMessage="Reference copied"
-                    className="size-6"
+                    className={TAP}
                   />
                   <span>
                     · said paid {dateYearFmt.format(new Date(c.claimedAt))}

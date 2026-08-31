@@ -126,7 +126,10 @@ export function RiskText({ academyName }: { academyName: string }) {
 export function BackToMatops() {
   return (
     <p className="text-muted-foreground mt-10 text-sm">
-      <Link href="/" className="underline underline-offset-2">
+      <Link
+        href="/"
+        className="inline-flex min-h-11 items-center underline underline-offset-2 sm:min-h-0"
+      >
         Back to matops
       </Link>
     </p>

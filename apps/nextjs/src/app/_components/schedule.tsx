@@ -276,7 +276,7 @@ export function Schedule() {
   return (
     <section className="flex flex-col gap-4">
       {detailDialog}
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-0.5">
           <Button
             size="icon"
@@ -345,7 +345,7 @@ export function Schedule() {
                   required
                 />
               </div>
-              <div className="flex flex-wrap gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="cl-date">Date</Label>
                   <Input
@@ -399,7 +399,7 @@ export function Schedule() {
                 </div>
                 <label
                   title="Only classes you share appear on your booking link and in the public API."
-                  className="text-muted-foreground hover:text-foreground flex min-h-11 cursor-pointer items-center gap-2 text-sm sm:col-span-2"
+                  className="text-muted-foreground hover:text-foreground flex min-h-11 w-full cursor-pointer items-center gap-2 text-sm"
                 >
                   <input
                     type="checkbox"
