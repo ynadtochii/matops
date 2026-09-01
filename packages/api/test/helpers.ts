@@ -198,16 +198,29 @@ export async function seedAcademies(
     }
   }
 
-  await pg.exec(`
-    INSERT INTO "user" (id, name, email, email_verified, created_at, updated_at)
-      VALUES ${users.join(",")};
-    INSERT INTO "organization" (id, name, slug, public_code, created_at)
-      VALUES ${orgs.join(",")};
-    INSERT INTO "member" (id, organization_id, user_id, role, status, invited_role, created_at)
-      VALUES ${members.join(",")};
-    INSERT INTO "curriculum_track" (academy_id, name, is_default)
-      VALUES ${orgIds.map((id) => `(${lit(id)}, 'All classes', true)`).join(",")};
-  `);
+  const statements: string[] = [];
+  if (users.length)
+    statements.push(
+      `INSERT INTO "user" (id, name, email, email_verified, created_at, updated_at)
+         VALUES ${users.join(",")};`,
+    );
+  if (orgs.length)
+    statements.push(
+      `INSERT INTO "organization" (id, name, slug, public_code, created_at)
+         VALUES ${orgs.join(",")};`,
+    );
+  if (members.length)
+    statements.push(
+      `INSERT INTO "member" (id, organization_id, user_id, role, status, invited_role, created_at)
+         VALUES ${members.join(",")};`,
+    );
+  if (orgIds.length)
+    statements.push(
+      `INSERT INTO "curriculum_track" (academy_id, name, is_default)
+         VALUES ${orgIds.map((id) => `(${lit(id)}, 'All classes', true)`).join(",")};`,
+    );
+
+  if (statements.length) await pg.exec(statements.join("\n"));
 }
 
 export interface ClassSpec {

@@ -150,16 +150,19 @@ describe("rebuildSchedule", () => {
   it("keeps a walk-in lead when the class it attached to is removed", async () => {
     const t = uuid(8);
     const c = uuid(9);
+    const lead = uuid(10);
     await daily(t, "Dropped", "paused");
     await classAt(c, t, new Date(Date.now() + 2 * DAY_MS));
     await pg.exec(
-      `INSERT INTO "drop_in" (academy_id, class_id, first_name, last_name, phone, consent)
-       VALUES ('${ACAD}', '${c}', 'Ana', 'Silva', '+351900000000', true)`,
+      `INSERT INTO "drop_in" (id, academy_id, first_name, last_name, phone, consent)
+         VALUES ('${lead}', '${ACAD}', 'Ana', 'Silva', '+351900000000', true);
+       INSERT INTO "drop_in_visit" (academy_id, drop_in_id, class_id)
+         VALUES ('${ACAD}', '${lead}', '${c}');`,
     );
 
     await rebuildSchedule(exec());
 
     expect(await count("drop_in")).toBe(1);
-    expect(await exists("drop_in", "class_id IS NULL")).toBe(true);
+    expect(await count("drop_in_visit")).toBe(0);
   });
 });
