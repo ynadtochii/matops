@@ -29,15 +29,18 @@ Diagnosis is read-only. Report findings; a fix is a separate step the user appro
 
 **Sentry.** Prefer the `mcp__sentry__*` MCP tools (`search_issues`, `search_events`, `get_sentry_resource`); fall back to the user-level `sentry-cli` skill. The app tags every tRPC server error with `trpcPath`, `trpcType`, `user.id`, and `extra.academyId`. Search by those. Only `INTERNAL_SERVER_ERROR` tRPC failures reach Sentry; expected errors (FORBIDDEN, BAD_REQUEST) do not.
 
-**Database (live Neon, production data).** Only through the guard script, never raw `psql`:
+**Database (live Neon).** Only through the guard script, never raw `psql`. It defaults to **dev**; add `--prod` to read production:
 
 ```sh
 sh .claude/skills/debug/scripts/sql.sh "select id, kind, created_at, read_at from notification order by created_at desc limit 20"
+sh .claude/skills/debug/scripts/sql.sh --prod "select count(*) from organization"
 ```
+
+It prints `target:` and the host it connected to on stderr before every query, so a result is never ambiguous about which database produced it. `--prod` reads the connection string from the macOS Keychain (`POSTGRES_URL_PROD` overrides it); store it once with `security add-generic-password -a "$USER" -s matops-prod-db -w`, which prompts so the value never reaches shell history. `vercel env pull` cannot supply it: Vercel returns `[SENSITIVE]` for variables marked sensitive.
 
 The script wraps your statement in `BEGIN READ ONLY`, so any write fails, and it connects to the **direct** (non `-pooler`) host. Never point a psql session at the `-pooler` host: PgBouncer shares one server connection between many clients, so a session-level `SET` from psql leaks into the app's own queries. A leaked read-only setting takes the whole app down for whichever database you are on. Since 2026-09-01 dev and production are separate Neon branches, so `POSTGRES_URL` in `.env` is the **dev** one; reaching production needs its own string, deliberately. This connection bypasses RLS: always filter by `academy_id` yourself, and never show one academy's data while discussing another.
 
-**Vercel logs (prod runtime).** `vercel logs --json` from `apps/nextjs` (add `--follow` to stream). If `apps/nextjs/.vercel/project.json` is missing, do not fail around it: tell the user to run `vercel login` and `vercel link` in `apps/nextjs` once. Prod URL: `https://matops.app`.
+**Vercel logs (prod runtime).** `vercel logs --json` from the **repo root**, which is where `.vercel/project.json` lives (project `matops-nextjs`); add `--follow` to stream. Not from `apps/nextjs`, which has no `.vercel` directory. If the CLI reports no credentials, run `vercel login` once. Prod URL: `https://matops.app`.
 
 **Cron.** History: `gh run list --workflow=cron.yml` and `gh run view <run-id> --log`. The routes log nothing; the evidence is the JSON response body echoed in the workflow log. Reproduce on demand: `curl -H "Authorization: Bearer $CRON_SECRET" https://matops.app/api/cron/remind`. Note `/api/cron/materialize` is not scheduled at all (ADR 79); the horizon is filled on template save and by the owner's Rebuild schedule button.
 
