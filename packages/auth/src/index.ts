@@ -181,9 +181,9 @@ export function initAuth<
           }
           await sendEmail({
             to: email,
-            subject: "Your matops sign-in link",
-            text: `Sign in to matops by opening this link:\n\n${url}\n\nThis link expires shortly. If you didn't request it, you can ignore this email.`,
-            html: `<p>Sign in to matops by clicking the link below:</p><p><a href="${escapeHtml(url)}">Sign in to matops</a></p><p>This link expires shortly. If you didn't request it, you can ignore this email.</p>`,
+            subject: "Your MatOps sign-in link",
+            text: `Sign in to MatOps by opening this link:\n\n${url}\n\nThis link expires shortly. If you didn't request it, you can ignore this email.`,
+            html: `<p>Sign in to MatOps by clicking the link below:</p><p><a href="${escapeHtml(url)}">Sign in to MatOps</a></p><p>This link expires shortly. If you didn't request it, you can ignore this email.</p>`,
           });
         },
       }),

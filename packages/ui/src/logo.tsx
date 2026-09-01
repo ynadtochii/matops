@@ -50,7 +50,7 @@ export function Logo({
       <Mark size={size} />
       {withWordmark && (
         <span className="text-lg font-semibold tracking-tight">
-          mat<span className="text-brand-strong">ops</span>
+          Mat<span className="text-brand-strong">Ops</span>
         </span>
       )}
     </span>

@@ -77,7 +77,7 @@ export const PhoneSchema = cleanedString(120)
     z
       .string()
       .max(30)
-      .regex(/^[+\d][\d\s().-]*$/, "Use digits and + ( ) - . only"),
+      .regex(/^[+\d(][\d\s().-]*$/, "Use digits and + ( ) - . only"),
   )
   .transform((v) => {
     const digits = v.replace(/\D/g, "");

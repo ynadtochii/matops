@@ -74,7 +74,7 @@ export function Logo({
             color: c.foreground,
           }}
         >
-          mat<Text style={{ color: c.brandStrong }}>ops</Text>
+          Mat<Text style={{ color: c.brandStrong }}>Ops</Text>
         </Text>
       )}
     </View>

@@ -1,8 +1,12 @@
 import type { Config } from "drizzle-kit";
 
+import { assertDevDatabase } from "./src/env-guard";
+
 if (!process.env.POSTGRES_URL) {
   throw new Error("Missing POSTGRES_URL");
 }
+
+assertDevDatabase("run drizzle-kit");
 
 /**
  * Migrations (DDL) run against Neon's DIRECT (non-pooled) endpoint. At runtime the

@@ -42,6 +42,10 @@ async function base(): Promise<Harness> {
   await seedClasses(h.pg, [
     { id: TODAY, academyId: A, instructorId: COACH, startsInMinutes: -60 },
   ]);
+  await h.pg.query(
+    `INSERT INTO "user" (id, name, email, email_verified, created_at, updated_at)
+     VALUES ('u_new', 'New Joiner', 'u_new@test.local', true, now(), now())`,
+  );
   return h;
 }
 
@@ -208,14 +212,9 @@ describe("a lead becomes a member on a phone match at self-join", () => {
  * change that could break that by accident, so it is a written rule with a test.
  */
 describe("no statistics query joins the visits table", () => {
-  const READERS = [
-    "router/dropin.ts",
-    "router/attendance.ts",
-    "router/class.ts",
-    "public/index.ts",
-  ];
+  const READERS = ["router/attendance.ts", "router/class.ts"];
 
-  it("is read by the roster, the leads screen and the public API, and nowhere else", async () => {
+  it("is read by the roster and the class screen, and nowhere else", async () => {
     const srcDir = fileURLToPath(new URL("../src", import.meta.url));
     const files = (await readdir(srcDir, { recursive: true }))
       .map(String)
@@ -332,6 +331,9 @@ describe("the owner turns a lead into a member", () => {
   it("refuses a lead with no email at all", async () => {
     const h = await base();
     const lead = await consentedLead(h);
+    await h.pg.query(`UPDATE drop_in SET email = NULL WHERE id = $1`, [
+      lead.id,
+    ]);
 
     expect(
       await rejectionCode(

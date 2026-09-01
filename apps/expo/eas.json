@@ -23,13 +23,13 @@
         "simulator": true
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://matops.grapplerscollective.com"
+        "EXPO_PUBLIC_API_URL": "https://matops.app"
       }
     },
     "production": {
       "extends": "base",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://matops.grapplerscollective.com"
+        "EXPO_PUBLIC_API_URL": "https://matops.app"
       }
     }
   },

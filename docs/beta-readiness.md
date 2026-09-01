@@ -3,7 +3,7 @@
 Gap analysis for running a beta with an **external potential customer**, on the
 **web app only** (no Expo app), using the seeded demo academy as the example.
 Written 2026-08-20 against the working tree at v2.7, and against the live
-deployment at `https://matops.grapplerscollective.com`.
+deployment at `https://matops.app`.
 
 This is a backlog, not a decision record. Nothing here is an ADR. When an item
 is picked up it becomes a roadmap slice; when it changes a decision it gets its
@@ -26,7 +26,7 @@ needed to show both loops.
 
 ### 1.1 Deployment — done, but stale
 
-**Live** at `https://matops.grapplerscollective.com` on Vercel, serving the same
+**Live** at `https://matops.app` on Vercel, serving the same
 Neon database. Verified 2026-08-20: `/sign-in` returns 200, `system.health`
 answers, and `dropIn.academyInfo` on `seed_org_alpha` returns "Ironside BJJ
 Academy", so the demo seed is already in the production database.

@@ -15,6 +15,12 @@ const NOT_MEMBER_DATA: Record<string, string> = {
     "A lead is not a member. It carries no member_id and is erased with the academy, not with a member (spec O4).",
   drop_in_visit:
     "A visitor's class, which belongs to a lead and not to a member. Erased with the academy, like the lead itself (ADR 115).",
+  curriculum_track:
+    "One of the gym's teaching plans. It outlives every member who trained under it (ADR 111).",
+  curriculum_block_template:
+    "The gym's reusable block library. A theme belongs to the syllabus, not to a person (ADR 105).",
+  curriculum_block:
+    "One stretch of weeks on the gym's plan. It names a theme and its dates, never a member (ADR 104).",
   academy_invite:
     "A shareable link belongs to the academy and to the role, not to whoever used it.",
   tenant_probe:

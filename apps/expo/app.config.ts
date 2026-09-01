@@ -2,7 +2,7 @@ import type { ConfigContext, ExpoConfig } from "expo/config";
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
-  name: "matops",
+  name: "MatOps",
   slug: "matops",
   scheme: "matops",
   version: "0.1.0",

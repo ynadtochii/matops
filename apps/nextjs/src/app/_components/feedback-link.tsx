@@ -11,7 +11,7 @@ export function FeedbackLink({ className }: { className?: string }) {
   const { name, academyId, role } = useAcademy();
   const pathname = usePathname();
 
-  const subject = encodeURIComponent(`matops feedback: ${name}`);
+  const subject = encodeURIComponent(`MatOps feedback: ${name}`);
   const body = encodeURIComponent(
     `What happened?\n\n\nWhat did you expect?\n\n\n---\nAcademy: ${name} (${academyId})\nRole: ${role}\nScreen: ${pathname}\n`,
   );

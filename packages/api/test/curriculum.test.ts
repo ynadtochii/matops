@@ -61,7 +61,7 @@ describe("curriculum blocks and the plan", () => {
       await h.as(OWNER, ACAD).curriculum.place({
         trackId: mainTrack,
         blockId: made.id,
-        atIndex: 999,
+        atIndex: 500,
       });
       ids.push(made.id);
     }
@@ -227,9 +227,9 @@ describe("curriculum blocks and the plan", () => {
     await reset();
     const made = await block("Last month");
     await h.pg.query(
-      `INSERT INTO curriculum_block (academy_id, template_id, starts_on, ends_on, weeks)
-       VALUES ($1, $2, current_date - 30, current_date - 17, 2)`,
-      [ACAD, made.id],
+      `INSERT INTO curriculum_block (academy_id, template_id, track_id, slot_id, starts_on, ends_on, weeks)
+       VALUES ($1, $2, $3, gen_random_uuid(), current_date - 30, current_date - 17, 2)`,
+      [ACAD, made.id, mainTrack],
     );
     const extra = await block("Dropped");
     expect(
@@ -247,9 +247,9 @@ describe("curriculum blocks and the plan", () => {
     await reset();
     const made = await block("Last month");
     await h.pg.query(
-      `INSERT INTO curriculum_block (academy_id, template_id, starts_on, ends_on, weeks)
-       VALUES ($1, $2, current_date - 30, current_date - 17, 2)`,
-      [ACAD, made.id],
+      `INSERT INTO curriculum_block (academy_id, template_id, track_id, slot_id, starts_on, ends_on, weeks)
+       VALUES ($1, $2, $3, gen_random_uuid(), current_date - 30, current_date - 17, 2)`,
+      [ACAD, made.id, mainTrack],
     );
     const board = await h.as(OWNER, ACAD).curriculum.board();
     expect(board.plan[0]?.state).toBe("settled");
@@ -496,7 +496,7 @@ describe("curriculum blocks and the plan", () => {
       const made = await block(theme, weeks);
       await h
         .as(OWNER, ACAD)
-        .curriculum.place({ trackId, blockId: made.id, atIndex: 999 });
+        .curriculum.place({ trackId, blockId: made.id, atIndex: 500 });
       return made.id;
     };
 
@@ -716,12 +716,10 @@ describe("curriculum blocks and the plan", () => {
         ),
       ).toBe("PRECONDITION_FAILED");
 
-      await h
-        .as(COACH, ACAD)
-        .curriculum.setRunNote({
-          placementId: row,
-          note: "We only got through mount",
-        });
+      await h.as(COACH, ACAD).curriculum.setRunNote({
+        placementId: row,
+        note: "We only got through mount",
+      });
       expect(
         (await h.as(OWNER, ACAD).curriculum.board()).plan[0]?.themes[0]?.note,
       ).toBe("We only got through mount");
@@ -767,14 +765,14 @@ describe("curriculum blocks and the plan", () => {
       const slot = await h.as(OWNER, ACAD).curriculum.place({
         trackId: mainTrack,
         blockId: first.id,
-        atIndex: 999,
+        atIndex: 500,
       });
       for (const theme of rest) {
         const made = await block(theme, weeks);
         await h.as(OWNER, ACAD).curriculum.place({
           trackId: mainTrack,
           blockId: made.id,
-          atIndex: 999,
+          atIndex: 500,
           slotId: slot.slotId,
         });
       }
@@ -801,7 +799,7 @@ describe("curriculum blocks and the plan", () => {
       await h.as(OWNER, ACAD).curriculum.place({
         trackId: mainTrack,
         blockId: (await block("Guard", 1)).id,
-        atIndex: 999,
+        atIndex: 500,
       });
       await h.as(OWNER, ACAD).curriculum.resize({ slotId: slot, weeks: 5 });
 

@@ -86,12 +86,15 @@ describe("procedures that write identity tables", () => {
       ).toBe("NOT_FOUND");
     });
 
-    it("stays owner-only and never leaks another academy's links", async () => {
+    it("is staff-readable, owner-written, and never leaks another academy's links", async () => {
       await h.as(OWNER, ACAD).invite.create({ role: "instructor" });
 
-      expect(await rejectionCode(h.as(COACH, ACAD).invite.list())).toBe(
-        "FORBIDDEN",
-      );
+      await expect(h.as(COACH, ACAD).invite.list()).resolves.toHaveLength(1);
+      expect(
+        await rejectionCode(
+          h.as(COACH, ACAD).invite.create({ role: "student" }),
+        ),
+      ).toBe("FORBIDDEN");
       expect(await rejectionCode(h.as(STUDENT, ACAD).invite.list())).toBe(
         "FORBIDDEN",
       );

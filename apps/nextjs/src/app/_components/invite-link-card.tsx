@@ -163,7 +163,7 @@ export function InviteLinkCard({
               onClick={() =>
                 void shareLink({
                   url,
-                  title: "Join our academy on matops",
+                  title: "Join our academy on MatOps",
                   text: "Here's your link to join our academy:",
                 })
               }

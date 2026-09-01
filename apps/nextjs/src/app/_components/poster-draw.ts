@@ -356,7 +356,7 @@ export function drawPoster(
 
   ctx.fillStyle = QUIET;
   ctx.font = `400 15px ${sans}`;
-  ctx.fillText("Book your spot in the matops app", PAD + 22, footY + 3);
+  ctx.fillText("Book your spot in the MatOps app", PAD + 22, footY + 3);
 
   ctx.textAlign = "right";
   ctx.font = `500 15px ${mono}`;

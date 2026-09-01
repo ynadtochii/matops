@@ -143,7 +143,7 @@ function MemberActions({
             <br />
             If they ever come back they start from nothing, with no history. Any
             students they referred lose that credit. Their sign-in is deleted
-            too unless they belong to another gym on matops.
+            too unless they belong to another gym on MatOps.
             <br />
             <br />
             To keep their record and just end their membership, close this and

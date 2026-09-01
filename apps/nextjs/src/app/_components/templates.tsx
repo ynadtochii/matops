@@ -207,7 +207,7 @@ export function Templates() {
         />
       ) : templates.length === 0 ? (
         <EmptyState title="No recurring classes yet.">
-          Create a weekly template and matops fills the calendar for you.
+          Create a weekly template and MatOps fills the calendar for you.
         </EmptyState>
       ) : (
         <div className="flex flex-col gap-2">

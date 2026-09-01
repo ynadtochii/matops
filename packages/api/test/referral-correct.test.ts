@@ -85,12 +85,10 @@ describe("referral.correct", () => {
     const h = await base();
     expect(
       await rejectionCode(
-        h
-          .as(OWNER, A)
-          .referral.correct({
-            studentMemberId: m(ANA),
-            referrerMemberId: m(BO),
-          }),
+        h.as(OWNER, A).referral.correct({
+          studentMemberId: m(ANA),
+          referrerMemberId: m(BO),
+        }),
       ),
     ).toBe("PRECONDITION_FAILED");
   });
@@ -103,12 +101,10 @@ describe("referral.correct", () => {
 
     expect(
       await rejectionCode(
-        h
-          .as(OWNER, A)
-          .referral.correct({
-            studentMemberId: m(ANA),
-            referrerMemberId: m(BO),
-          }),
+        h.as(OWNER, A).referral.correct({
+          studentMemberId: m(ANA),
+          referrerMemberId: m(BO),
+        }),
       ),
     ).toBe("PRECONDITION_FAILED");
   });
@@ -133,12 +129,10 @@ describe("referral.correct", () => {
     const h = await base();
     expect(
       await rejectionCode(
-        h
-          .as(COACH, A)
-          .referral.correct({
-            studentMemberId: m(ANA),
-            referrerMemberId: m(CY),
-          }),
+        h.as(COACH, A).referral.correct({
+          studentMemberId: m(ANA),
+          referrerMemberId: m(CY),
+        }),
       ),
     ).toBe("FORBIDDEN");
   });

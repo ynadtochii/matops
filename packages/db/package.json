@@ -30,6 +30,8 @@
     "generate": "pnpm with-env drizzle-kit generate",
     "lint": "eslint --flag unstable_native_nodejs_ts_config",
     "migrate": "pnpm with-env drizzle-kit migrate",
+    "migrate:deploy": "node scripts/deploy-migrate.mjs",
+    "verify": "pnpm with-env node scripts/verify-db.mjs",
     "push": "pnpm with-env drizzle-kit push",
     "seed": "pnpm with-env tsx src/seed/cli.ts",
     "seed:health": "pnpm with-env tsx src/seed.ts",

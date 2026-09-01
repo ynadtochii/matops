@@ -2,6 +2,10 @@
 
 One line per shipped slice (see `docs/delivery.md` §4). Newest first.
 
+## The brand reads MatOps
+
+- **The name was lowercase everywhere a person could see it.** The wordmark, the browser tab, the PWA manifest, the iOS/Android app name, the sign-in email, the privacy page and every sentence that mentions the product now read **MatOps**. The package scope `@matops/*`, the `matops://` scheme, the bundle ids, the host name and the `X-Matops-Key` header are unchanged: they are wire contracts, not copy.
+
 ## The web app fits a phone
 
 - **No control was big enough to hit.** `webSize` in `packages/ui/src/button.tsx` had a 44px floor for `size="sm"` and nothing else, and even that never ran: `buttonClass` gated it on `size && webSize[size]`, and `size` is `undefined` whenever a caller takes the default. Every size now carries `min-h-11` up to `sm:`, `Input` and `Select` are `h-11 sm:h-9`, and `DropdownMenuItem` gets the same floor. An icon that sits inside a line of text keeps its drawn size and grows only its hit box, through `TAP` in `primitives.tsx` and `ICON_BTN` on the curriculum screen.

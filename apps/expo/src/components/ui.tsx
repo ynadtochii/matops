@@ -752,7 +752,7 @@ export function Logo({ size = 24 }: { size?: number }) {
           color: t.foreground,
         }}
       >
-        mat<Text style={{ color: t.brandStrong }}>ops</Text>
+        Mat<Text style={{ color: t.brandStrong }}>Ops</Text>
       </Text>
     </View>
   );

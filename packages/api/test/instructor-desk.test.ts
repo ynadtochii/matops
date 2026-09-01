@@ -143,7 +143,9 @@ describe("an instructor runs the desk", () => {
     ).toBe("FORBIDDEN");
     expect(await rejectionCode(coach().membership.staff())).toBe("FORBIDDEN");
     expect(await rejectionCode(coach().dropIn.list())).toBe("FORBIDDEN");
-    expect(await rejectionCode(coach().invite.list())).toBe("FORBIDDEN");
+    expect(
+      await rejectionCode(coach().invite.create({ role: "student" })),
+    ).toBe("FORBIDDEN");
   });
 
   it("cannot let a coach seat itself a colleague", async () => {
