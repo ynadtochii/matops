@@ -9,6 +9,7 @@ Blocked by: —
 **Refines [09](09-mvp-product-spec.md) / [05](05-multitenancy-model.md).** "Multi-academy native" is a headline constraint that shaped the schema (membership-in-academy as a first-class join), but the product surface for it is thin — the spec only mentions "a switcher if >1" and never specifies the flows.
 
 Decide the actual UX:
+
 1. **Student joining a 2nd academy** — open another invite link while already signed in → creates a second membership (pending) → how is this surfaced? Does the app auto-switch to the new academy on approval?
 2. **Active-academy context** — how does a student/owner switch between academies they belong to? Where does the current-academy live (per-session? persisted? Better Auth "active organization")? Every scoped query keys off it — tie to [12](12-tenant-isolation-mechanism.md) / [15](15-api-deployment-shape.md).
 3. **A person who is owner of one gym and student at another** — does the same account span both roles across academies? (The role is per-membership, so yes — confirm the UX doesn't assume one global role.)
@@ -27,5 +28,19 @@ Output: the join-second-academy flow, the active-academy switch mechanism, and t
 - **Default active academy on login:** the persisted `activeOrganizationId`; else the only membership for this client's lens; else (client-lens has none) show a clear empty state (e.g. web with only student memberships → "You don't manage any academies — use the mobile app to train").
 
 **v1 non-goals (deferred):** cross-academy aggregated dashboards, a single schedule spanning gyms, bulk multi-academy management. The data model needs no change to add these later.
+
+> **Corrected 2026-09-01.** The last sentence is wrong. "The data model needs no
+> change" held only for one person belonging to several unrelated gyms. It does
+> not hold for one gym running two locations, which is what a real owner asked
+> for. A shared owner, per-location settings and per-location memberships all
+> need new tables. ADR [124](124-the-organization-owns-typed-entities.md)
+> supersedes that claim: the organization becomes the owner group and each
+> location becomes a typed `entity` below it. Two more things in this note change
+> with it. The **active academy** stops living on the session: the client names
+> the entity on every request with the `x-matops-entity` header, so two browser
+> tabs can show two locations. And **client-as-role-lens** stops being the
+> switch: the web app lists every entity you may reach, students included, and a
+> new `/overview` shows an owner all of them at once. The rest of this note, the
+> join-second flow and the approval gate, still holds.
 
 **Refines** the product spec ([09](09-mvp-product-spec.md)): the switcher, the join-second flow, and the client-as-role-lens rule.
