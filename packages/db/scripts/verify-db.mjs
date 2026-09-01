@@ -5,7 +5,10 @@ import pg from "pg";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const journal = JSON.parse(
-  readFileSync(path.join(here, "..", "migrations", "meta", "_journal.json"), "utf8"),
+  readFileSync(
+    path.join(here, "..", "migrations", "meta", "_journal.json"),
+    "utf8",
+  ),
 );
 
 const url = process.env.POSTGRES_URL;
@@ -18,7 +21,9 @@ await client.connect();
 let failed = 0;
 const check = (ok, label, detail = "") => {
   if (!ok) failed += 1;
-  console.log(`${ok ? "ok  " : "FAIL"}  ${label}${detail ? `  ${detail}` : ""}`);
+  console.log(
+    `${ok ? "ok  " : "FAIL"}  ${label}${detail ? `  ${detail}` : ""}`,
+  );
 };
 
 try {

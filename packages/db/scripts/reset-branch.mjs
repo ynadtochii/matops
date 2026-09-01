@@ -46,7 +46,8 @@ try {
 
   console.log(`host: ${host}`);
   console.log(`about to drop:`);
-  for (const r of before) console.log(`  schema ${r.schema}: ${r.tables} tables`);
+  for (const r of before)
+    console.log(`  schema ${r.schema}: ${r.tables} tables`);
   if (before.length === 0) console.log("  nothing (already empty)");
 
   await client.query("drop schema if exists drizzle cascade");

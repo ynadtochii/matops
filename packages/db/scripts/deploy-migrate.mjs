@@ -21,7 +21,10 @@ const url = process.env.POSTGRES_URL;
 if (!url) throw new Error("[migrate:deploy] POSTGRES_URL is not set");
 
 const journal = JSON.parse(
-  readFileSync(path.join(pkgRoot, "migrations", "meta", "_journal.json"), "utf8"),
+  readFileSync(
+    path.join(pkgRoot, "migrations", "meta", "_journal.json"),
+    "utf8",
+  ),
 );
 const expected = journal.entries.length;
 
