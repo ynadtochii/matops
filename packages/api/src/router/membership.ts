@@ -6,6 +6,7 @@ import type { Membership } from "@matops/domain";
 import {
   and,
   createPendingMembership,
+  deleteEntityMembership,
   deleteMemberRow,
   deleteUserRow,
   desc,
@@ -14,6 +15,7 @@ import {
   findAcademyByCode,
   gt,
   hasOtherMemberships,
+  hasSiblingEntityMemberships,
   inArray,
   linkLeadOnJoin,
   resolveInviteToken,
@@ -83,6 +85,7 @@ type AuthedContext = BaseContext & {
 async function joinPending(
   ctx: AuthedContext,
   input: {
+    organizationId: string;
     academyId: string;
     invitedRole: string;
     firstName: string;
@@ -102,7 +105,8 @@ async function joinPending(
   const result = await createPendingMembership(
     {
       userId,
-      academyId: input.academyId,
+      organizationId: input.organizationId,
+      entityId: input.academyId,
       invitedRole: input.invitedRole,
     },
     ctx.baseDb,
@@ -110,7 +114,7 @@ async function joinPending(
   await linkLeadOnJoin(input.academyId, input.phone, userId, ctx.baseDb);
   if (!ctx.session.session.activeOrganizationId) {
     await ctx.authApi.setActiveOrganization({
-      body: { organizationId: input.academyId },
+      body: { organizationId: input.organizationId },
       headers: ctx.headers,
     });
   }
@@ -226,6 +230,7 @@ export const membershipRouter = {
         });
       }
       return joinPending(ctx, {
+        organizationId: invite.organizationId,
         academyId: invite.academyId,
         invitedRole: invite.role,
         firstName: input.firstName,
@@ -252,6 +257,7 @@ export const membershipRouter = {
         });
       }
       return joinPending(ctx, {
+        organizationId: academy.organizationId,
         academyId: academy.academyId,
         invitedRole: CODE_JOIN_ROLE,
         firstName: input.firstName,
@@ -442,7 +448,12 @@ export const membershipRouter = {
     .mutation(async ({ ctx, input }) => {
       const m = await requireMember(identityScope(ctx), input.memberId);
       requireSeatDecider(ctx, m);
-      await setMemberStatus(input.memberId, "removed", ctx.baseDb);
+      await setMemberStatus(
+        ctx.academyId,
+        input.memberId,
+        "removed",
+        ctx.baseDb,
+      );
       return { ok: true as const };
     }),
 
@@ -516,12 +527,20 @@ export const membershipRouter = {
           actorId: ctx.session.user.id,
         }),
       );
-      await deleteMemberRow(ctx.baseDb, ctx.academyId, input.memberId);
-      const elsewhere = await hasOtherMemberships(
+      await deleteEntityMembership(ctx.baseDb, ctx.academyId, m.userId);
+      // The organization membership is what lets them into the gym's OTHER
+      // mats, so it only goes once the last entity membership has (ADR 124).
+      const stillHere = await hasSiblingEntityMemberships(
         ctx.baseDb,
         m.userId,
-        ctx.academyId,
+        ctx.organizationId,
       );
+      if (!stillHere) {
+        await deleteMemberRow(ctx.baseDb, ctx.academyId, input.memberId);
+      }
+      const elsewhere =
+        stillHere ||
+        (await hasOtherMemberships(ctx.baseDb, m.userId, ctx.academyId));
       if (!elsewhere) {
         await deleteUserRow(ctx.baseDb, m.userId);
       }
@@ -561,7 +580,12 @@ export const membershipRouter = {
           message: "This member is not suspended or archived.",
         });
       }
-      await setMemberStatus(input.memberId, "active", ctx.baseDb);
+      await setMemberStatus(
+        ctx.academyId,
+        input.memberId,
+        "active",
+        ctx.baseDb,
+      );
       return { ok: true as const };
     }),
 
@@ -571,6 +595,7 @@ export const membershipRouter = {
     .mutation(async ({ ctx, input }) => {
       await requireMember(identityScope(ctx), input.memberId);
       await setMemberRoleStatus(
+        ctx.academyId,
         input.memberId,
         { role: "owner", status: "active" },
         ctx.baseDb,

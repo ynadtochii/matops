@@ -619,6 +619,10 @@ function identityProcedure(allow: (m: Membership) => boolean, denial: string) {
     return next({
       ctx: {
         academyId,
+        // The same value as `academyId` on this tier: the active organization
+        // is still the default entity. Named apart so a resolver can say which
+        // one it means, and so Wave 4 can split them without touching callers.
+        organizationId: academyId,
         membership,
         withScope: <T>(fn: (tx: TenantTx) => Promise<T>): Promise<T> =>
           withScope(

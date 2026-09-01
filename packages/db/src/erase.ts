@@ -5,6 +5,7 @@ import type { TenantTx } from "./tenant";
 import {
   classInstance,
   classParticipation,
+  entityMembership,
   member,
   memberDues,
   memberNote,
@@ -180,6 +181,26 @@ export async function eraseMemberData(
   return report;
 }
 
+/**
+ * Drop the person's access to ONE entity. Their memberships of sibling entities
+ * in the same organization are untouched: erasing someone from the Tuesday mat
+ * must not remove them from the Thursday one (ADR 124).
+ */
+export async function deleteEntityMembership(
+  exec: DbExec,
+  entityId: string,
+  userId: string,
+): Promise<void> {
+  await exec
+    .delete(entityMembership)
+    .where(
+      and(
+        eq(entityMembership.entityId, entityId),
+        eq(entityMembership.userId, userId),
+      ),
+    );
+}
+
 export async function deleteMemberRow(
   exec: DbExec,
   academyId: string,
@@ -188,6 +209,31 @@ export async function deleteMemberRow(
   await exec
     .delete(member)
     .where(and(eq(member.id, memberId), eq(member.organizationId, academyId)));
+}
+
+/**
+ * Does this person still belong to any entity of this organization?
+ *
+ * Purging someone from one mat must not take away the organization membership
+ * that is their way into the other one, so the Better Auth row is only removed
+ * once the last entity membership is gone (ADR 124).
+ */
+export async function hasSiblingEntityMemberships(
+  exec: DbExec,
+  userId: string,
+  organizationId: string,
+): Promise<boolean> {
+  const rows = await exec
+    .select({ id: entityMembership.id })
+    .from(entityMembership)
+    .where(
+      and(
+        eq(entityMembership.userId, userId),
+        eq(entityMembership.organizationId, organizationId),
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
 }
 
 export async function hasOtherMemberships(

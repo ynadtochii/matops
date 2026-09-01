@@ -363,7 +363,8 @@ export const dropInRouter = {
       await createPendingMembership(
         {
           userId: account.userId,
-          academyId: ctx.academyId,
+          organizationId: ctx.academyId,
+          entityId: ctx.academyId,
           invitedRole: CODE_JOIN_ROLE,
         },
         ctx.baseDb,

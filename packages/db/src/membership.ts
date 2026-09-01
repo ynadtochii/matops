@@ -4,7 +4,7 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { canRemoveOrDemote } from "@matops/domain";
 
 import type { DbExec } from "./client";
-import type { DbReader } from "./tenant";
+import type { DbReader, TenantTx } from "./tenant";
 import { member, organization, user } from "./auth-schema";
 import { entity, entityMembership } from "./entity-schema";
 
@@ -361,25 +361,86 @@ export async function getMemberById(
   return { ...row, status: row.status ?? "pending" };
 }
 
+/**
+ * Write role and status for one person at one entity (ADR 124).
+ *
+ * `entity_membership` is the operational record and the source of truth. The
+ * Better Auth `member` row is written to match and is a MIRROR: it is what the
+ * academy procedure tiers still read, and both clients still use those tiers,
+ * so letting the two disagree would show a person one thing and let them do
+ * another. Wave 7 drops `member.status` and `member.invited_role` and the
+ * mirror goes with them.
+ *
+ * The caller names the person by `member.id` because that is the id every
+ * router and both clients already hold; the entity row is found through the
+ * user behind it.
+ */
+type DbWriter = DbExec | TenantTx;
+
+async function writeMembership(
+  input: {
+    entityId: string;
+    memberId: string;
+    next: { role?: string; status?: string };
+  },
+  exec: DbWriter,
+): Promise<void> {
+  const rows = await exec
+    .select({ userId: member.userId })
+    .from(member)
+    .where(eq(member.id, input.memberId))
+    .limit(1);
+  const userId = rows[0]?.userId;
+  const { role, status } = input.next;
+
+  const entityPatch: { role?: string; status?: string; joinedAt?: Date } = {};
+  if (role !== undefined) entityPatch.role = role;
+  if (status !== undefined) {
+    entityPatch.status = status;
+    if (status === "active") entityPatch.joinedAt = new Date();
+  }
+
+  if (userId && Object.keys(entityPatch).length > 0) {
+    await exec
+      .update(entityMembership)
+      .set(entityPatch)
+      .where(
+        and(
+          eq(entityMembership.entityId, input.entityId),
+          eq(entityMembership.userId, userId),
+        ),
+      );
+  }
+
+  const memberPatch: { role?: string; status?: string } = {};
+  if (role !== undefined) memberPatch.role = role;
+  if (status !== undefined) memberPatch.status = status;
+  if (Object.keys(memberPatch).length > 0) {
+    await exec
+      .update(member)
+      .set(memberPatch)
+      .where(eq(member.id, input.memberId));
+  }
+}
+
 /** Write a new role + status (owner approval grants the role here). */
 export async function setMemberRoleStatus(
+  entityId: string,
   memberId: string,
   next: { role: string; status: string },
   exec: DbExec,
 ): Promise<void> {
-  await exec
-    .update(member)
-    .set({ role: next.role, status: next.status })
-    .where(eq(member.id, memberId));
+  await writeMembership({ entityId, memberId, next }, exec);
 }
 
 /** Set only the status (suspend, or soft-remove — keeps the row + its history). */
 export async function setMemberStatus(
+  entityId: string,
   memberId: string,
   status: string,
   exec: DbExec,
 ): Promise<void> {
-  await exec.update(member).set({ status }).where(eq(member.id, memberId));
+  await writeMembership({ entityId, memberId, next: { status } }, exec);
 }
 
 /**
@@ -396,30 +457,83 @@ export async function setMemberStatus(
  * domain tables, docs/issues/12); isolation comes from the explicit `academyId`
  * filter plus the row lock.
  */
+/**
+ * Lock the entity's memberships and answer whether this change may go ahead.
+ *
+ * Two checks, both of which must pass. The ENTITY check runs over
+ * `entity_membership`, because that is where the operational role and status
+ * live now: a mat left with no active owner is the thing worth refusing. The
+ * ORGANIZATION check runs over the Better Auth rows, because those still decide
+ * who may reach every entity. The person is named by `member.id`, so both sets
+ * are keyed by the user behind each row and the pure rule compares those.
+ */
+async function mayChangeEntityMembership(
+  tx: TenantTx,
+  entityId: string,
+  memberId: string,
+): Promise<boolean> {
+  const targets = await tx
+    .select({ userId: member.userId })
+    .from(member)
+    .where(eq(member.id, memberId))
+    .limit(1);
+  const targetUserId = targets[0]?.userId;
+  if (!targetUserId) return false;
+
+  const rows = await tx
+    .select({
+      userId: entityMembership.userId,
+      role: entityMembership.role,
+      status: entityMembership.status,
+      organizationId: entityMembership.organizationId,
+    })
+    .from(entityMembership)
+    .where(eq(entityMembership.entityId, entityId))
+    .for("update");
+
+  const keepsTheMat = canRemoveOrDemote(
+    rows.map((r) => ({ id: r.userId, role: r.role, status: r.status })),
+    targetUserId,
+  );
+  if (!keepsTheMat) return false;
+
+  // And the organization itself. The Better Auth row is written to match the
+  // entity one, so stepping someone down at one mat also strips their
+  // organization role — which is how an owner of two mats could end up locking
+  // themselves out of both. Both checks must pass.
+  const organizationId = rows[0]?.organizationId;
+  if (!organizationId) return true;
+  const orgRows = await tx
+    .select({
+      userId: member.userId,
+      role: member.role,
+      status: member.status,
+    })
+    .from(member)
+    .where(eq(member.organizationId, organizationId))
+    .for("update");
+
+  return canRemoveOrDemote(
+    orgRows.map((r) => ({
+      id: r.userId,
+      role: r.role,
+      status: r.status ?? "pending",
+    })),
+    targetUserId,
+  );
+}
+
 export async function setMemberStatusIfNotLastOwner(
-  academyId: string,
+  entityId: string,
   memberId: string,
   status: string,
   exec: DbExec,
 ): Promise<{ ok: boolean }> {
   return exec.transaction(async (tx) => {
-    const rows = await tx
-      .select({ id: member.id, role: member.role, status: member.status })
-      .from(member)
-      .where(eq(member.organizationId, academyId))
-      .for("update");
-
-    const members = rows.map((r) => ({
-      id: r.id,
-      role: r.role,
-      status: r.status ?? "pending",
-    }));
-
-    if (!canRemoveOrDemote(members, memberId)) {
+    if (!(await mayChangeEntityMembership(tx, entityId, memberId))) {
       return { ok: false };
     }
-
-    await tx.update(member).set({ status }).where(eq(member.id, memberId));
+    await writeMembership({ entityId, memberId, next: { status } }, tx);
     return { ok: true };
   });
 }
@@ -442,58 +556,106 @@ export async function setMemberRole(
  * least one active owner; returns `{ ok: false }` (no write) otherwise.
  */
 export async function setMemberRoleIfNotLastOwner(
-  academyId: string,
+  entityId: string,
   memberId: string,
   role: string,
   exec: DbExec,
 ): Promise<{ ok: boolean }> {
   return exec.transaction(async (tx) => {
-    const rows = await tx
-      .select({ id: member.id, role: member.role, status: member.status })
-      .from(member)
-      .where(eq(member.organizationId, academyId))
-      .for("update");
-
-    const members = rows.map((r) => ({
-      id: r.id,
-      role: r.role,
-      status: r.status ?? "pending",
-    }));
-
-    if (!canRemoveOrDemote(members, memberId)) {
+    if (!(await mayChangeEntityMembership(tx, entityId, memberId))) {
       return { ok: false };
     }
-
-    await tx.update(member).set({ role }).where(eq(member.id, memberId));
+    await writeMembership({ entityId, memberId, next: { role } }, tx);
     return { ok: true };
   });
 }
 
 /**
  * Create — or re-open — a PENDING membership for a self-joining user
- * (docs/issues/14, 20). The member holds the harmless Better Auth default role
- * (`member`, not an academy role); the real role is granted only at approval. The
- * intended role rides on `invitedRole`.
+ * (docs/issues/14, 20, ADR 124).
  *
- * Idempotent by (user, academy): if a live membership already exists it is left
- * as-is; a previously removed one is re-opened to pending. Returns the resulting
- * status so the API can tell "joined" from "already a member".
+ * Two rows, two jobs. The Better Auth `member` row records that the person
+ * belongs to the ORGANIZATION at all, and is reused untouched if they already
+ * do — someone who trains at one mat and opens a link to a second must not have
+ * their first membership reset. The `entity_membership` row is the operational
+ * one: pending, holding no academy role, with the intended role on
+ * `invitedRole` until an owner approves.
+ *
+ * Idempotent on both. The status returned is the ENTITY's, because that is what
+ * the join screen is telling the person about.
  */
-export async function createPendingMembership(
+async function upsertPendingEntityMembership(
   input: {
     userId: string;
-    academyId: string;
+    organizationId: string;
+    entityId: string;
     invitedRole: string;
   },
   exec: DbExec,
 ): Promise<{ status: string; alreadyMember: boolean }> {
+  const existing = await exec
+    .select({ id: entityMembership.id, status: entityMembership.status })
+    .from(entityMembership)
+    .where(
+      and(
+        eq(entityMembership.userId, input.userId),
+        eq(entityMembership.entityId, input.entityId),
+      ),
+    )
+    .limit(1);
+
+  const row = existing[0];
+  if (row) {
+    if (row.status === "pending") {
+      await exec
+        .update(entityMembership)
+        .set({ invitedRole: input.invitedRole })
+        .where(eq(entityMembership.id, row.id));
+      return { status: row.status, alreadyMember: true };
+    }
+    if (row.status === "active") {
+      return { status: row.status, alreadyMember: true };
+    }
+    await exec
+      .update(entityMembership)
+      .set({
+        status: "pending",
+        role: "member",
+        invitedRole: input.invitedRole,
+        joinedAt: null,
+      })
+      .where(eq(entityMembership.id, row.id));
+    return { status: "pending", alreadyMember: false };
+  }
+
+  await exec.insert(entityMembership).values({
+    organizationId: input.organizationId,
+    entityId: input.entityId,
+    userId: input.userId,
+    role: "member",
+    status: "pending",
+    invitedRole: input.invitedRole,
+  });
+  return { status: "pending", alreadyMember: false };
+}
+
+export async function createPendingMembership(
+  input: {
+    userId: string;
+    organizationId: string;
+    entityId: string;
+    invitedRole: string;
+  },
+  exec: DbExec,
+): Promise<{ status: string; alreadyMember: boolean }> {
+  const academyId = input.organizationId;
   const existing = await exec
     .select({ id: member.id, status: member.status })
     .from(member)
     .where(
       and(
         eq(member.userId, input.userId),
-        eq(member.organizationId, input.academyId),
+        eq(member.organizationId, academyId),
       ),
     )
     .limit(1);
@@ -508,35 +670,33 @@ export async function createPendingMembership(
         .update(member)
         .set({ invitedRole: input.invitedRole })
         .where(eq(member.id, row.id));
-      return { status, alreadyMember: true };
+    } else if (status !== "active") {
+      // Removed/rejected/suspended → re-open as pending with the fresh intent.
+      // An ACTIVE row is left alone: changing an approved member's role is the
+      // owner's call (membership.setRole), not a link's, and someone already
+      // training at a sibling entity must keep the access they have.
+      await exec
+        .update(member)
+        .set({
+          status: "pending",
+          role: "member",
+          invitedRole: input.invitedRole,
+        })
+        .where(eq(member.id, row.id));
     }
-    // Already active: changing an approved member's role is the owner's call
-    // (membership.setRole), not a link's.
-    if (status === "active") {
-      return { status, alreadyMember: true };
-    }
-    // Removed/rejected/suspended → re-open as pending with the fresh intent.
-    await exec
-      .update(member)
-      .set({
-        status: "pending",
-        role: "member",
-        invitedRole: input.invitedRole,
-      })
-      .where(eq(member.id, row.id));
-    return { status: "pending", alreadyMember: false };
+  } else {
+    await exec.insert(member).values({
+      id: randomUUID(),
+      organizationId: academyId,
+      userId: input.userId,
+      role: "member",
+      status: "pending",
+      invitedRole: input.invitedRole,
+      createdAt: new Date(),
+    });
   }
 
-  await exec.insert(member).values({
-    id: randomUUID(),
-    organizationId: input.academyId,
-    userId: input.userId,
-    role: "member",
-    status: "pending",
-    invitedRole: input.invitedRole,
-    createdAt: new Date(),
-  });
-  return { status: "pending", alreadyMember: false };
+  return upsertPendingEntityMembership(input, exec);
 }
 
 export interface ResolvedAccount {

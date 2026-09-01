@@ -1,7 +1,7 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { createEntity, provisionOrganization } from "@matops/db";
+import { and, createEntity, eq, provisionOrganization } from "@matops/db";
 import { entityMembership } from "@matops/db/schema";
 
 import type { Harness } from "./helpers";
@@ -69,30 +69,18 @@ describe("the entity tiers", () => {
     );
     secondEntity = second.entityId;
 
-    await h.exec.insert(entityMembership).values([
-      {
-        organizationId: ORG_A,
-        entityId: ORG_A,
-        userId: COACH,
-        role: "instructor",
-        status: "active",
-        joinedAt: new Date(),
-      },
-      {
-        organizationId: ORG_A,
-        entityId: ORG_A,
-        userId: PENDING,
-        role: "student",
-        status: "pending",
-      },
-      {
-        organizationId: ORG_A,
-        entityId: ORG_A,
-        userId: SUSPENDED,
-        role: "student",
-        status: "suspended",
-      },
-    ]);
+    // The fixture already mirrors every member onto the default entity. Only the
+    // suspended case differs from the organization row: live in the
+    // organization, suspended at this mat.
+    await h.exec
+      .update(entityMembership)
+      .set({ status: "suspended" })
+      .where(
+        and(
+          eq(entityMembership.entityId, ORG_A),
+          eq(entityMembership.userId, SUSPENDED),
+        ),
+      );
   });
 
   afterAll(() => h.close());
@@ -204,14 +192,6 @@ describe("listing the entities a caller may open", () => {
       h.exec,
     );
     secondEntity = second.entityId;
-    await h.exec.insert(entityMembership).values({
-      organizationId: ORG_A,
-      entityId: ORG_A,
-      userId: COACH,
-      role: "instructor",
-      status: "active",
-      joinedAt: new Date(),
-    });
   });
 
   afterAll(() => h.close());

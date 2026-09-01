@@ -319,7 +319,7 @@ Gate:
 
 ### Wave 2: Move invites and memberships
 
-Status: pending
+Status: done
 
 Goal: make `entity_membership` the operational access record.
 
@@ -332,15 +332,15 @@ Primary files:
 
 Tasks:
 
-- [ ] Make entity invites resolve an organization and entity.
-- [ ] On join, create or reuse the Better Auth organization membership and create one pending entity membership.
-- [ ] Move approval, suspension, archive, restore, and removal to entity membership.
-- [ ] Keep last-owner protection at organization level and entity-owner protection at entity level where needed.
-- [ ] Leads stay in `drop_in` per entity.
-- [ ] Update erase behavior so deleting one entity membership preserves sibling memberships.
-- [ ] Delete the global user only when no surviving organization relationship requires it.
-- [ ] Extend `erase-coverage.test.ts` to the new tables.
-- [ ] Update member, invite, and erase tests.
+- [x] Make entity invites resolve an organization and entity.
+- [x] On join, create or reuse the Better Auth organization membership and create one pending entity membership.
+- [x] Move approval, suspension, archive, restore, and removal to entity membership.
+- [x] Keep last-owner protection at organization level and entity-owner protection at entity level where needed.
+- [x] Leads stay in `drop_in` per entity.
+- [x] Update erase behavior so deleting one entity membership preserves sibling memberships.
+- [x] Delete the global user only when no surviving organization relationship requires it.
+- [x] Extend `erase-coverage.test.ts` to the new tables.
+- [x] Update member, invite, and erase tests.
 
 Gate:
 
@@ -594,7 +594,7 @@ Not part of this pivot. Each needs its own ADR and gate.
 
 ## Current Wave
 
-Wave 2: Move invites and memberships.
+Wave 3: Convert BJJ domain tables and RLS.
 
 ## Progress
 
@@ -604,7 +604,7 @@ Wave 2: Move invites and memberships.
 - [x] Plan reviewed and revised for an empty production database.
 - [x] Wave 0 complete.
 - [x] Wave 1 complete.
-- [ ] Wave 2 complete.
+- [x] Wave 2 complete.
 - [ ] Wave 3 complete.
 - [ ] Wave 4 complete.
 - [ ] Wave 5 complete.

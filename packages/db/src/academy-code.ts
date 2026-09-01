@@ -46,13 +46,19 @@ export async function generateAcademyCode(exec: DbExec): Promise<string> {
 }
 
 /**
- * Resolve a shared code → the academy id + name, or null. Backs the mobile
- * `academy.findByCode` search; the caller then confirms and joins.
+ * Resolve a shared code → the entity it names, the organization above it, and
+ * the display fields. Backs the mobile `academy.findByCode` search; the caller
+ * then confirms and joins.
+ *
+ * Reads `entity`, not `organization`: a gym's second academy has a code of its
+ * own and no organization row carries it. `academyId` is the entity id, which
+ * for the default academy is also the organization id (Decision 5).
  */
 export async function findAcademyByCode(
   code: string,
   exec: DbReader,
 ): Promise<{
+  organizationId: string;
   academyId: string;
   name: string;
   address: string | null;
@@ -61,16 +67,15 @@ export async function findAcademyByCode(
 } | null> {
   const rows = await exec
     .select({
-      academyId: organization.id,
-      name: organization.name,
-      address: organization.address,
-      timeZone: organization.timeZone,
-      country: organization.country,
+      organizationId: entity.organizationId,
+      academyId: entity.id,
+      name: entity.name,
+      address: entity.address,
+      timeZone: entity.timeZone,
+      country: entity.country,
     })
-    .from(organization)
-    .where(
-      and(eq(organization.publicCode, code), isNull(organization.deletedAt)),
-    )
+    .from(entity)
+    .where(and(eq(entity.publicCode, code), isNull(entity.deletedAt)))
     .limit(1);
   return rows[0] ?? null;
 }

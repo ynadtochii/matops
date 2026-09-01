@@ -3,6 +3,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import type { DbExec } from "./client";
 import type { DbReader } from "./tenant";
 import { organization } from "./auth-schema";
+import { entity } from "./entity-schema";
 
 export interface AcademySettings {
   academyId: string;
@@ -65,14 +66,31 @@ export async function updateAcademySettings(
     .where(and(eq(organization.id, academyId), isNull(organization.deletedAt)));
 }
 
+/**
+ * Close the gym. Every entity it runs goes with it, in the same transaction:
+ * an entity is where the classes, the codes and the booking links live, so
+ * leaving one behind would keep the gym findable by code after its owner said
+ * to delete it.
+ */
 export async function softDeleteAcademy(
   academyId: string,
   exec: DbExec,
 ): Promise<boolean> {
-  const rows = await exec
-    .update(organization)
-    .set({ deletedAt: new Date() })
-    .where(and(eq(organization.id, academyId), isNull(organization.deletedAt)))
-    .returning({ id: organization.id });
-  return rows.length > 0;
+  return exec.transaction(async (tx) => {
+    const rows = await tx
+      .update(organization)
+      .set({ deletedAt: new Date() })
+      .where(
+        and(eq(organization.id, academyId), isNull(organization.deletedAt)),
+      )
+      .returning({ id: organization.id });
+    if (rows.length === 0) return false;
+    await tx
+      .update(entity)
+      .set({ deletedAt: new Date() })
+      .where(
+        and(eq(entity.organizationId, academyId), isNull(entity.deletedAt)),
+      );
+    return true;
+  });
 }

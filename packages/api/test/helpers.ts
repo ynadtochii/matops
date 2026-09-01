@@ -2,8 +2,13 @@ import type { PGlite } from "@electric-sql/pglite";
 import { TRPCError } from "@trpc/server";
 
 import type { DbExec } from "@matops/db/client";
-import { eq, generateAcademyCode, setMemberActive } from "@matops/db";
-import { member, organization } from "@matops/db/schema";
+import {
+  eq,
+  generateAcademyCode,
+  provisionOrganization,
+  setMemberActive,
+} from "@matops/db";
+import { entityMembership, member, organization } from "@matops/db/schema";
 import { execOn, freshDb } from "@matops/db/testing";
 
 import type { createTRPCContext } from "../src/trpc";
@@ -179,7 +184,6 @@ export async function seedAcademies(
   const seen = new Set<string>();
   const users: string[] = [];
   const orgs: string[] = [];
-  const orgIds = academies.map((a) => a.id);
   const members: string[] = [];
 
   for (const academy of academies) {
@@ -215,13 +219,39 @@ export async function seedAcademies(
       `INSERT INTO "member" (id, organization_id, user_id, role, status, invited_role, created_at)
          VALUES ${members.join(",")};`,
     );
-  if (orgIds.length)
-    statements.push(
-      `INSERT INTO "curriculum_track" (academy_id, name, is_default)
-         VALUES ${orgIds.map((id) => `(${lit(id)}, 'All classes', true)`).join(",")};`,
-    );
-
   if (statements.length) await pg.exec(statements.join("\n"));
+
+  // Give each academy the rows production gives it: the default entity (whose id
+  // is the organization id), its academy profile, an owner entity membership and
+  // a curriculum track. Uses the REAL provisioner, so a fixture cannot drift
+  // from what `academy.create` actually builds (ADR 124).
+  const exec = execOn(pg);
+  for (const academy of academies) {
+    const owner =
+      academy.members.find((m) => m.role === "owner") ?? academy.members[0];
+    if (!owner) continue;
+    await provisionOrganization(
+      { organizationId: academy.id, ownerUserId: owner.userId },
+      exec,
+    );
+    const others = academy.members.filter((m) => m.userId !== owner.userId);
+    if (others.length) {
+      await exec
+        .insert(entityMembership)
+        .values(
+          others.map((m) => ({
+            organizationId: academy.id,
+            entityId: academy.id,
+            userId: m.userId,
+            role: m.role,
+            status: m.status,
+            invitedRole: m.invitedRole ?? null,
+            joinedAt: m.status === "active" ? new Date() : null,
+          })),
+        )
+        .onConflictDoNothing();
+    }
+  }
 }
 
 export interface ClassSpec {

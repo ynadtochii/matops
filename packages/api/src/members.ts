@@ -153,7 +153,12 @@ export async function activateMember(
     granted: { role: string; status: string };
   },
 ): Promise<void> {
-  await setMemberRoleStatus(input.memberId, input.granted, ctx.baseDb);
+  await setMemberRoleStatus(
+    ctx.academyId,
+    input.memberId,
+    input.granted,
+    ctx.baseDb,
+  );
   if (input.granted.role === "student") {
     await ctx.withScope(async (db) => {
       const onlyPlan = autoAssignedPlan(
