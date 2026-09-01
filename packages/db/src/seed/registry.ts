@@ -17,6 +17,7 @@
 // Type-only import — erased at runtime, so this file (and teardown) stay free of
 // the `./client` connection side effect and remain unit-testable without a DB.
 import type { db } from "../client";
+import { assertDevDatabase } from "../env-guard";
 
 /** A base drizzle handle (node-postgres in prod; a cast PGlite handle in tests). */
 export type SeedExec = typeof db;
@@ -78,6 +79,8 @@ export const isSeedId = (id: string): boolean => id.startsWith(SEED_MARKER);
  * accidental prod run. Override with `SEED_ALLOW=1`.
  */
 export function assertSeedableTarget(env = process.env): void {
+  assertDevDatabase("seed", env);
+
   if (env.NODE_ENV === "production" && env.SEED_ALLOW !== "1") {
     throw new Error(
       "Refusing to seed a production database. Set SEED_ALLOW=1 to override.",
