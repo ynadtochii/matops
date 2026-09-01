@@ -5,7 +5,7 @@ import { freshDb, single } from "./helpers";
 
 type Tx = Parameters<Parameters<PGlite["transaction"]>[0]>[0];
 
-/** Mirrors withTenant (packages/db/src/tenant.ts): restricted role + academy GUC. */
+/** Mirrors withScope (packages/db/src/tenant.ts): restricted role + entity GUC. */
 function asTenant<T>(
   pg: PGlite,
   academyId: string,

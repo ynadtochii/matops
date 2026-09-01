@@ -20,11 +20,14 @@ import { computeOccurrences, paymentPeriod } from "@matops/domain";
 
 import type {
   academyInvite,
+  academyProfile,
   classInstance,
   classParticipation,
   classTemplate,
   dropIn,
   dropInVisit,
+  entity,
+  entityMembership,
   member,
   memberDues,
   memberNote,
@@ -39,11 +42,19 @@ import type {
   user,
 } from "../schema";
 import type { SeedAcademy } from "./registry";
-import { SEED_ACADEMY, seedMemberId, seedUserId } from "./registry";
+import {
+  SEED_ACADEMY,
+  seedEntityMembershipId,
+  seedMemberId,
+  seedUserId,
+} from "./registry";
 
 type NewUser = typeof user.$inferInsert;
 type NewOrganization = typeof organization.$inferInsert;
 type NewMember = typeof member.$inferInsert;
+type NewEntity = typeof entity.$inferInsert;
+type NewAcademyProfile = typeof academyProfile.$inferInsert;
+type NewEntityMembership = typeof entityMembership.$inferInsert;
 type NewInvite = typeof academyInvite.$inferInsert;
 type NewTemplate = typeof classTemplate.$inferInsert;
 type NewClass = typeof classInstance.$inferInsert;
@@ -67,6 +78,9 @@ export interface SeedGraph {
   users: NewUser[];
   organizations: NewOrganization[];
   members: NewMember[];
+  entities: NewEntity[];
+  academyProfiles: NewAcademyProfile[];
+  entityMemberships: NewEntityMembership[];
   invites: NewInvite[];
   templates: NewTemplate[];
   pastClasses: NewClass[];
@@ -852,6 +866,41 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
     })),
   ];
 
+  // The default BJJ academy entity carries the organization's own id, so every
+  // `academy_id` already on a seed row keeps pointing at the right place and the
+  // printed QR posters and check-in links stay valid (ADR 124, Decision 5).
+  const entities: NewEntity[] = [
+    {
+      id: academy.id,
+      organizationId: academy.id,
+      type: "bjj_academy",
+      name: academy.name,
+      slug: academy.slug,
+      isDefault: true,
+      timeZone: academy.timeZone,
+      publicCode: academy.publicCode,
+      createdAt: now,
+      updatedAt: now,
+    },
+  ];
+
+  const academyProfiles: NewAcademyProfile[] = [
+    { entityId: academy.id, createdAt: now, updatedAt: now },
+  ];
+
+  const entityMemberships: NewEntityMembership[] = members.map((m) => ({
+    id: seedEntityMembershipId(m.id),
+    organizationId: academy.id,
+    entityId: academy.id,
+    userId: m.userId,
+    role: m.role ?? "student",
+    status: m.status ?? "pending",
+    invitedRole: m.invitedRole ?? null,
+    joinedAt: m.status === "active" ? m.createdAt : null,
+    createdAt: m.createdAt,
+    updatedAt: m.createdAt,
+  }));
+
   // One live invite link per role (drives the invite/staff cards). The tester
   // joins the beta through the instructor link.
   const invites: NewInvite[] = [
@@ -1120,6 +1169,9 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
     users,
     organizations,
     members,
+    entities,
+    academyProfiles,
+    entityMemberships,
     invites,
     templates: data.templates,
     pastClasses: data.pastClasses,

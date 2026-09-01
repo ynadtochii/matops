@@ -14,6 +14,7 @@ export const Health = pgTable("_health", (t) => ({
 
 export * from "./auth-schema";
 export * from "./curriculum-schema";
+export * from "./entity-schema";
 export * from "./invite-schema";
 export * from "./notification-schema";
 export * from "./payments-schema";

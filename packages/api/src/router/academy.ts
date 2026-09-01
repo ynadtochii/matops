@@ -10,6 +10,7 @@ import {
   getPublicApiSettings,
   listMembershipsForUser,
   listPublicClasses,
+  provisionOrganization,
   rotatePublicApiKey,
   setPublicApiEnabled,
   setPublicApiOrigins,
@@ -282,8 +283,15 @@ export const academyRouter = {
           message: "Could not create the academy",
         });
       }
+      // Belt to the hook's braces (ADR 124). `afterCreateOrganization` already
+      // ran the same provisioner; running it again creates nothing and repairs
+      // an organization whose setup died half way.
+      const { entityId } = await provisionOrganization(
+        { organizationId: org.id, ownerUserId: ctx.session.user.id },
+        ctx.baseDb,
+      );
       await refreshSessionCookie(ctx);
-      return { academyId: org.id };
+      return { academyId: org.id, organizationId: org.id, entityId };
     }),
 
   /**

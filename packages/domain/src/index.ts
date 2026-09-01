@@ -25,6 +25,7 @@ export * from "./csv";
 export * from "./curriculum";
 export * from "./dashboard";
 export * from "./dropin";
+export * from "./entity";
 export * from "./format";
 export * from "./freshness";
 export * from "./grid";

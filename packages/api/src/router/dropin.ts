@@ -321,7 +321,7 @@ export const dropInRouter = {
   promote: ownerIdentityProcedure
     .input(PromoteLeadSchema)
     .mutation(async ({ ctx, input }) => {
-      const lead = await ctx.withTenant(async (db) => {
+      const lead = await ctx.withScope(async (db) => {
         const rows = await db
           .select({
             firstName: dropIn.firstName,
@@ -392,7 +392,7 @@ export const dropInRouter = {
         });
       }
 
-      await ctx.withTenant((db) =>
+      await ctx.withScope((db) =>
         db
           .update(dropIn)
           .set({ stage: "joined", convertedUserId: account.userId })

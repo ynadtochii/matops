@@ -3,7 +3,7 @@
  *
  * Runs on the BASE connection (the trusted service role that owns the tables),
  * setting `academy_id` explicitly on every row — the same pattern the
- * materialization sweep and drop-in helpers use (docs/issues/12). No `withTenant`
+ * materialization sweep and drop-in helpers use (docs/issues/12). No `withScope`
  * is needed: the seed is trusted infrastructure, not request-scoped app code.
  *
  * The executor is INJECTED (never imported here) so this module has no
@@ -17,12 +17,15 @@ import { DEFAULT_TRACK_NAME } from "../curriculum";
 import { materializeTemplate } from "../materialize";
 import {
   academyInvite,
+  academyProfile,
   classInstance,
   classParticipation,
   classTemplate,
   curriculumTrack,
   dropIn,
   dropInVisit,
+  entity,
+  entityMembership,
   member,
   memberDues,
   memberNote,
@@ -100,7 +103,22 @@ export async function seedAll(
       isDefault: true,
     })),
   );
+  await insert(report, "entity", exec, entity, graph.entities);
+  await insert(
+    report,
+    "academy_profile",
+    exec,
+    academyProfile,
+    graph.academyProfiles,
+  );
   await insert(report, "member", exec, member, graph.members);
+  await insert(
+    report,
+    "entity_membership",
+    exec,
+    entityMembership,
+    graph.entityMemberships,
+  );
   await insert(report, "academy_invite", exec, academyInvite, graph.invites);
 
   // 2. Payments price list first (dues + claims FK the plan).

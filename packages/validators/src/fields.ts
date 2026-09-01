@@ -1,5 +1,7 @@
 import { z } from "zod/v4";
 
+import { ENTITY_TYPES } from "@matops/domain";
+
 /**
  * Zod schemas shared by the tRPC API and the clients (Phase 1: identity &
  * tenancy). Kept framework-free so both `apps/*` and `packages/api` import the
@@ -167,6 +169,12 @@ export const CreateAcademySchema = z.object({
   name: lineText(2, 80),
 });
 export type CreateAcademyInput = z.infer<typeof CreateAcademySchema>;
+
+export const CreateEntitySchema = z.object({
+  name: lineText(2, 80),
+  type: z.enum(ENTITY_TYPES),
+});
+export type CreateEntityInput = z.infer<typeof CreateEntitySchema>;
 
 export const UpdateAcademySettingsSchema = z.object({
   timeZone: lineText(1, 64)

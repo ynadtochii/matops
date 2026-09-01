@@ -117,6 +117,7 @@ export async function harness(): Promise<Harness> {
       user: { id: userId, name: `User ${userId}` },
       session: { activeOrganizationId: academyId },
     } as unknown as Ctx["session"],
+    requestedEntityId: headers.get("x-matops-entity") ?? undefined,
     baseDb: exec,
   });
 

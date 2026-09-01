@@ -7,6 +7,7 @@ import { checkinRouter } from "./router/checkin";
 import { classRouter } from "./router/class";
 import { curriculumRouter } from "./router/curriculum";
 import { dropInRouter } from "./router/dropin";
+import { entityRouter } from "./router/entity";
 import { inviteRouter } from "./router/invite";
 import { membershipRouter } from "./router/membership";
 import { noteRouter } from "./router/note";
@@ -23,6 +24,7 @@ import { createTRPCRouter } from "./trpc";
 export const appRouter = createTRPCRouter({
   auth: authRouter,
   academy: academyRouter,
+  entity: entityRouter,
   account: accountRouter,
   invite: inviteRouter,
   membership: membershipRouter,

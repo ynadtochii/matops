@@ -476,7 +476,7 @@ export const membershipRouter = {
           ctx.baseDb,
         ),
       );
-      const freed = await ctx.withTenant((db) =>
+      const freed = await ctx.withScope((db) =>
         releaseUpcomingSeats({ db, academyId: ctx.academyId }, m.userId),
       );
       return { ok: true as const, seatsFreed: freed };
@@ -508,7 +508,7 @@ export const membershipRouter = {
           ctx.baseDb,
         ),
       );
-      const report = await ctx.withTenant((db) =>
+      const report = await ctx.withScope((db) =>
         eraseMemberData(db, {
           academyId: ctx.academyId,
           memberId: input.memberId,

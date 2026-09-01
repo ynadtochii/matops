@@ -6,8 +6,15 @@ export type { DbExec } from "./client";
 
 /** Restricted, non-BYPASSRLS role the request transaction runs as. */
 export const APP_ROLE = "matops_app";
-/** Transaction-local GUC that the RLS policies read. */
-export const TENANT_GUC = "app.academy_id";
+/**
+ * Transaction-local GUCs the RLS policies read (ADR 124 §3).
+ *
+ * `ENTITY_GUC` is still spelled `app.academy_id` in Postgres on purpose: every
+ * policy written since migration `0001` reads that name, and renaming it is 77
+ * references for no behaviour change. It now holds an ENTITY id.
+ */
+export const ORGANIZATION_GUC = "app.organization_id";
+export const ENTITY_GUC = "app.academy_id";
 
 // The role name is a constant we control, but assert its shape so it can never
 // become an injection vector if someone later makes it configurable (it is
@@ -34,30 +41,42 @@ export type TenantTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
  */
 export type DbReader = DbExec | TenantTx;
 
+/** What a request transaction is scoped to. An organization read omits the entity. */
+export interface Scope {
+  organizationId: string;
+  entityId?: string;
+}
+
 /**
- * Run `fn` inside a transaction scoped to one academy.
+ * Run `fn` inside a transaction scoped to one organization and, when given, one
+ * entity.
  *
- * It drops to the restricted role and sets `app.academy_id` — BOTH
- * transaction-local (`set_config(..., true)`), so they reset at COMMIT and never
- * leak to a reused pooled connection (safe under Neon transaction-mode pooling).
- * Postgres RLS then filters every statement `fn` runs on `tx`, so app queries
- * stay plain Drizzle and cannot leak across academies.
+ * It drops to the restricted role and sets the GUCs — ALL transaction-local
+ * (`set_config(..., true)`), so they reset at COMMIT and never leak to a reused
+ * pooled connection (safe under Neon transaction-mode pooling). Postgres RLS
+ * then filters every statement `fn` runs on `tx`, so app queries stay plain
+ * Drizzle and cannot leak across organizations or entities.
  *
  * `SET LOCAL ROLE x` is defined as `SET LOCAL role = x`, so the role goes
- * through set_config too and both settings fit in one round trip (ADR 81).
+ * through set_config too and the whole scope fits in one round trip (ADR 81).
  *
- * academyId is the Better Auth organization id (text). See
- * docs/architecture.md §5 and docs/issues/12-tenant-isolation-mechanism.md.
+ * Omitting `entityId` leaves `app.academy_id` unset, so every entity policy
+ * matches nothing and an organization transaction cannot read entity rows by
+ * accident. See docs/architecture.md §5 and docs/issues/124.
  */
-export async function withTenant<T>(
-  academyId: string,
+export async function withScope<T>(
+  scope: Scope,
   fn: (tx: TenantTx) => Promise<T>,
   exec: DbExec,
 ): Promise<T> {
-  if (!academyId) throw new Error("withTenant: academyId is required");
+  const { organizationId, entityId } = scope;
+  if (!organizationId) throw new Error("withScope: organizationId is required");
+  if (entityId === "") throw new Error("withScope: entityId cannot be empty");
   return exec.transaction(async (tx) => {
     await tx.execute(
-      sql`SELECT set_config(${TENANT_GUC}, ${academyId}, true), set_config('role', ${APP_ROLE}, true)`,
+      entityId
+        ? sql`SELECT set_config(${ORGANIZATION_GUC}, ${organizationId}, true), set_config(${ENTITY_GUC}, ${entityId}, true), set_config('role', ${APP_ROLE}, true)`
+        : sql`SELECT set_config(${ORGANIZATION_GUC}, ${organizationId}, true), set_config('role', ${APP_ROLE}, true)`,
     );
     return fn(tx);
   });

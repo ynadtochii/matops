@@ -12,6 +12,7 @@ import { count, eq, inArray, like } from "drizzle-orm";
 import type { SeedExec } from "./registry";
 import {
   academyInvite,
+  academyProfile,
   account,
   classInstance,
   classParticipation,
@@ -21,6 +22,8 @@ import {
   curriculumTrack,
   dropIn,
   dropInVisit,
+  entity,
+  entityMembership,
   member,
   memberDues,
   memberNote,
@@ -121,6 +124,20 @@ export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
   );
   await del("curriculum_track", () =>
     exec.delete(curriculumTrack).where(inArray(curriculumTrack.academyId, ids)),
+  );
+
+  // Entity foundation rows, scoped by the seed org id (ADR 124). Membership and
+  // profile before the entity they key on.
+  await del("entity_membership", () =>
+    exec
+      .delete(entityMembership)
+      .where(inArray(entityMembership.organizationId, ids)),
+  );
+  await del("academy_profile", () =>
+    exec.delete(academyProfile).where(inArray(academyProfile.entityId, ids)),
+  );
+  await del("entity", () =>
+    exec.delete(entity).where(inArray(entity.organizationId, ids)),
   );
 
   // Better Auth membership rows, scoped by the seed org id.

@@ -136,7 +136,7 @@ export async function requireMembership(
 export interface ActivateScope {
   academyId: string;
   baseDb: DbExec;
-  withTenant: <T>(fn: (tx: TenantTx) => Promise<T>) => Promise<T>;
+  withScope: <T>(fn: (tx: TenantTx) => Promise<T>) => Promise<T>;
 }
 
 /**
@@ -155,7 +155,7 @@ export async function activateMember(
 ): Promise<void> {
   await setMemberRoleStatus(input.memberId, input.granted, ctx.baseDb);
   if (input.granted.role === "student") {
-    await ctx.withTenant(async (db) => {
+    await ctx.withScope(async (db) => {
       const onlyPlan = autoAssignedPlan(
         await db
           .select({ id: membershipPlan.id })

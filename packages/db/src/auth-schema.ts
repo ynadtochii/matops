@@ -1,5 +1,12 @@
 import { relations } from "drizzle-orm";
-import { boolean, index, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  index,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -121,7 +128,7 @@ export const member = pgTable(
     invitedRole: text("invited_role"),
   },
   (table) => [
-    index("member_by_org_user").on(table.organizationId, table.userId),
+    uniqueIndex("member_by_org_user").on(table.organizationId, table.userId),
     index("member_by_user").on(table.userId),
   ],
 );

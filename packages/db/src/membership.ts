@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 
 import { canRemoveOrDemote } from "@matops/domain";
 
 import type { DbExec } from "./client";
 import type { DbReader } from "./tenant";
 import { member, organization, user } from "./auth-schema";
+import { entity, entityMembership } from "./entity-schema";
 
 export interface Membership {
   /** Better Auth role on the member row: "owner" | "instructor" | "student". */
@@ -28,7 +29,7 @@ export interface Membership {
  */
 export async function getMembership(
   userId: string,
-  academyId: string,
+  organizationId: string,
   exec: DbReader,
 ): Promise<Membership | null> {
   const rows = await exec
@@ -43,7 +44,7 @@ export async function getMembership(
     .where(
       and(
         eq(member.userId, userId),
-        eq(member.organizationId, academyId),
+        eq(member.organizationId, organizationId),
         isNull(organization.deletedAt),
       ),
     )
@@ -57,6 +58,142 @@ export async function getMembership(
     status: row.status ?? "pending",
     joinedAt: row.joinedAt,
   };
+}
+
+/** One entity the caller may act in, and how (ADR 124). */
+export interface EntityMembership {
+  id: string;
+  organizationId: string;
+  entityId: string;
+  role: string;
+  status: string;
+  joinedAt: Date | null;
+  createdAt: Date;
+}
+
+/**
+ * Look up the caller's membership in one entity. Reads on the BASE connection
+ * because it runs before the request transaction opens, which is the same
+ * reason {@link getMembership} does (docs/issues/60). Returns null when the
+ * person has no membership row for that entity, which the entity procedure
+ * turns into a refusal.
+ */
+export async function getEntityMembership(
+  userId: string,
+  entityId: string,
+  exec: DbReader,
+): Promise<EntityMembership | null> {
+  const rows = await exec
+    .select({
+      id: entityMembership.id,
+      organizationId: entityMembership.organizationId,
+      entityId: entityMembership.entityId,
+      role: entityMembership.role,
+      status: entityMembership.status,
+      joinedAt: entityMembership.joinedAt,
+      createdAt: entityMembership.createdAt,
+    })
+    .from(entityMembership)
+    .where(
+      and(
+        eq(entityMembership.userId, userId),
+        eq(entityMembership.entityId, entityId),
+      ),
+    )
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/** One entity, as the request tiers need to see it. */
+export interface ScopedEntity {
+  id: string;
+  organizationId: string;
+  type: string;
+  name: string;
+}
+
+/**
+ * Load one live entity, but only if it belongs to `organizationId`. A caller
+ * naming an entity of another organization gets null, so the tier answers the
+ * same way it does for an entity that does not exist and cannot be used to
+ * enumerate other people's gyms. Base connection, pre-transaction.
+ */
+export async function getEntityInOrganization(
+  entityId: string,
+  organizationId: string,
+  exec: DbReader,
+): Promise<ScopedEntity | null> {
+  const rows = await exec
+    .select({
+      id: entity.id,
+      organizationId: entity.organizationId,
+      type: entity.type,
+      name: entity.name,
+    })
+    .from(entity)
+    .where(
+      and(
+        eq(entity.id, entityId),
+        eq(entity.organizationId, organizationId),
+        isNull(entity.deletedAt),
+      ),
+    )
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/**
+ * Every live entity of one organization, oldest first with the default first.
+ * The entity selector and the organization overview both read it.
+ */
+export async function listEntitiesOf(
+  organizationId: string,
+  exec: DbReader,
+): Promise<ScopedEntity[]> {
+  return exec
+    .select({
+      id: entity.id,
+      organizationId: entity.organizationId,
+      type: entity.type,
+      name: entity.name,
+    })
+    .from(entity)
+    .where(
+      and(eq(entity.organizationId, organizationId), isNull(entity.deletedAt)),
+    )
+    .orderBy(desc(entity.isDefault), entity.createdAt);
+}
+
+/**
+ * The entities of one organization that this person actually holds a live
+ * membership in. The organization owner is not special here: the caller decides
+ * whether to use this or {@link listEntitiesOf}, because an owner reaches every
+ * entity and a coach must not be offered a door that would refuse them.
+ */
+export async function listEntitiesForUser(
+  organizationId: string,
+  userId: string,
+  exec: DbReader,
+): Promise<ScopedEntity[]> {
+  return exec
+    .select({
+      id: entity.id,
+      organizationId: entity.organizationId,
+      type: entity.type,
+      name: entity.name,
+    })
+    .from(entity)
+    .innerJoin(
+      entityMembership,
+      and(
+        eq(entityMembership.entityId, entity.id),
+        eq(entityMembership.userId, userId),
+      ),
+    )
+    .where(
+      and(eq(entity.organizationId, organizationId), isNull(entity.deletedAt)),
+    )
+    .orderBy(desc(entity.isDefault), entity.createdAt);
 }
 
 /**

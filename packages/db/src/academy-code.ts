@@ -4,6 +4,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import type { DbExec } from "./client";
 import type { DbReader } from "./tenant";
 import { organization } from "./auth-schema";
+import { entity } from "./entity-schema";
 
 /**
  * Academy-code helpers (docs/issues/32). The code is the plain 6-digit number an
@@ -26,12 +27,20 @@ const CODE_MAX = 999999;
 export async function generateAcademyCode(exec: DbExec): Promise<string> {
   for (let attempt = 0; attempt < 50; attempt++) {
     const code = String(randomInt(CODE_MIN, CODE_MAX + 1));
-    const clash = await exec
+    const onOrg = await exec
       .select({ id: organization.id })
       .from(organization)
       .where(eq(organization.publicCode, code))
       .limit(1);
-    if (!clash[0]) return code;
+    if (onOrg[0]) continue;
+    // Both tables hand out codes from the same six-digit space while the pivot
+    // is in flight, and a student typing one must reach exactly one gym.
+    const onEntity = await exec
+      .select({ id: entity.id })
+      .from(entity)
+      .where(eq(entity.publicCode, code))
+      .limit(1);
+    if (!onEntity[0]) return code;
   }
   throw new Error("could not allocate a unique academy code after 50 tries");
 }

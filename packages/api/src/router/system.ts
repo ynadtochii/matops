@@ -23,7 +23,7 @@ export const systemRouter = {
       academyId: ctx.academyId,
       role: ctx.membership.role,
       status: ctx.membership.status,
-      // Proves the resolver ran inside withTenant with the RLS scope applied.
+      // Proves the resolver ran inside withScope with the RLS scope applied.
       rlsScope: scoped.rows[0]?.academy_id ?? null,
     };
   }),

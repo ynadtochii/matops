@@ -255,7 +255,7 @@ Gate:
 
 ### Wave 1: Foundation schema, authorization split, and provisioning
 
-Status: pending
+Status: done
 
 Goal: add the new tables, the two-scope authorization, and the provisioner in one dev-only wave. No old path has to keep working in between.
 
@@ -278,34 +278,35 @@ Tasks:
 
 Schema:
 
-- [ ] Add `entity`, `academy_profile`, and `entity_membership`.
-- [ ] Add the missing unique constraint on Better Auth `member(organization_id, user_id)`. Check dev for duplicate rows first.
-- [ ] Add composite uniqueness and foreign-key support for organization-safe references, without cascade.
-- [ ] Update Drizzle relations and exports.
-- [ ] Update seeds so new organizations contain the new foundation rows, with the default entity id equal to the organization id.
+- [x] Add `entity`, `academy_profile`, and `entity_membership`.
+- [x] Add the missing unique constraint on Better Auth `member(organization_id, user_id)`. Check dev for duplicate rows first.
+- [x] Add composite uniqueness and foreign-key support for organization-safe references, without cascade.
+- [x] Enable RLS and add the policies for `entity`, `academy_profile` and `entity_membership`.
+- [x] Update Drizzle relations and exports.
+- [x] Update seeds so new organizations contain the new foundation rows, with the default entity id equal to the organization id.
 
 Authorization:
 
-- [ ] Replace `withTenant` with `withScope` and add `app.organization_id`.
-- [ ] Read `x-matops-entity` in `createTRPCContext` and expose `ctx.requestedEntityId`.
-- [ ] Add organization membership and entity membership readers.
-- [ ] Add the organization and entity procedure tiers defined above.
-- [ ] Keep entity RLS exact and fail closed when the header is missing or foreign.
-- [ ] Make organization ownership grant access to every organization entity.
-- [ ] Require explicit entity membership for non-owner staff and students.
-- [ ] Add authorization tests for sibling entities, unrelated organizations, suspended memberships, organization owners, a missing header, and a foreign header.
-- [ ] Add structural checks for organization and entity policy coverage.
+- [x] Replace `withTenant` with `withScope` and add `app.organization_id`.
+- [x] Read `x-matops-entity` in `createTRPCContext` and expose `ctx.requestedEntityId`.
+- [x] Add organization membership and entity membership readers.
+- [x] Add the organization and entity procedure tiers defined above.
+- [x] Keep entity RLS exact and fail closed when the header is missing or foreign.
+- [x] Make organization ownership grant access to every organization entity.
+- [x] Require explicit entity membership for non-owner staff and students.
+- [x] Add structural checks for organization and entity policy coverage.
 
 Provisioning:
 
-- [ ] Replace academy creation with an idempotent organization provisioner.
-- [ ] Create the default BJJ entity, owner entity membership, academy profile, public code, and default curriculum track.
-- [ ] Return both `organizationId` and `entityId` from the creation flow.
-- [ ] Make incomplete provisioning recoverable by retrying missing steps.
-- [ ] Add an owner-only `entity.create` mutation.
-- [ ] Allow only `bjj_academy` during this pivot.
-- [ ] Ensure another BJJ academy gets independent settings, public code, schedule, curriculum, and membership rows.
-- [ ] Add provisioning and retry tests.
+- [x] Replace academy creation with an idempotent organization provisioner.
+- [x] Create the default BJJ entity, owner entity membership, academy profile, public code, and default curriculum track.
+- [x] Return both `organizationId` and `entityId` from the creation flow.
+- [x] Make incomplete provisioning recoverable by retrying missing steps.
+- [x] Add an owner-only `entity.create` mutation.
+- [x] Allow only `bjj_academy` during this pivot.
+- [x] Ensure another BJJ academy gets independent settings, public code, schedule, curriculum, and membership rows.
+- [x] Add authorization tests for sibling entities, unrelated organizations, suspended memberships, organization owners, a missing header, and a foreign header.
+- [x] Add provisioning and retry tests.
 
 Gate:
 
@@ -593,7 +594,7 @@ Not part of this pivot. Each needs its own ADR and gate.
 
 ## Current Wave
 
-Wave 1: Foundation schema, authorization split, and provisioning.
+Wave 2: Move invites and memberships.
 
 ## Progress
 
@@ -602,7 +603,7 @@ Wave 1: Foundation schema, authorization split, and provisioning.
 - [x] Durable wave plan created.
 - [x] Plan reviewed and revised for an empty production database.
 - [x] Wave 0 complete.
-- [ ] Wave 1 complete.
+- [x] Wave 1 complete.
 - [ ] Wave 2 complete.
 - [ ] Wave 3 complete.
 - [ ] Wave 4 complete.

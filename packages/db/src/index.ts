@@ -2,7 +2,7 @@ export * from "drizzle-orm/sql";
 export { getTableColumns } from "drizzle-orm";
 export { alias } from "drizzle-orm/pg-core";
 
-// Tenant seam (RLS): withTenant(academyId, fn) — see ./tenant.ts.
+// Tenant seam (RLS): withScope({ organizationId, entityId }, fn) — see ./tenant.ts.
 export * from "./tenant";
 // Membership lookup for the tRPC tenant middleware — see ./membership.ts.
 export * from "./membership";
@@ -30,3 +30,5 @@ export * from "./erase";
 export * from "./public-api";
 // Default curriculum track for a new academy — see ./curriculum.ts.
 export * from "./curriculum";
+// Idempotent organization setup (entity, profile, owner membership, track).
+export * from "./provision";

@@ -5,8 +5,8 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { magicLink, oAuthProxy, organization } from "better-auth/plugins";
 
 import {
-  createDefaultTrack,
   generateAcademyCode,
+  provisionOrganization,
   setMemberActive,
 } from "@matops/db";
 import { db } from "@matops/db/client";
@@ -116,7 +116,10 @@ export function initAuth<
           },
           afterCreateOrganization: async ({ member, organization }) => {
             await setMemberActive(member.id, db);
-            await createDefaultTrack(organization.id, db);
+            await provisionOrganization(
+              { organizationId: organization.id, ownerUserId: member.userId },
+              db,
+            );
           },
         },
         schema: {
