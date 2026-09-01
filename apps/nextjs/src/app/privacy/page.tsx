@@ -11,7 +11,7 @@ import {
 
 export const metadata: Metadata = {
   title: "Privacy",
-  description: "What matops stores about you, why, and how to get it removed.",
+  description: "What MatOps stores about you, why, and how to get it removed.",
 };
 
 export default function PrivacyPage() {
@@ -23,7 +23,7 @@ export default function PrivacyPage() {
 
       <div className="max-w-2xl">
         <h1 className="text-2xl font-semibold tracking-tight">
-          Privacy at matops
+          Privacy at MatOps
         </h1>
         <p className="text-muted-foreground mt-2 text-sm">
           Last updated {PRIVACY_UPDATED}. Written in plain English on purpose.

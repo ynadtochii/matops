@@ -32,7 +32,7 @@ export function AppHeader({ right }: { right?: ReactNode }) {
       <Mark size={22} />
       <View style={{ flex: 1, minWidth: 0 }}>
         <Txt size={14} weight={500} numberOfLines={1}>
-          {current.data?.name ?? "matops"}
+          {current.data?.name ?? "MatOps"}
         </Txt>
       </View>
       <NotificationBell />

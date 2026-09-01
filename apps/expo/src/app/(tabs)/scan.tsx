@@ -80,7 +80,7 @@ export default function Scan() {
         {blocked ? (
           <UIStack gap={12}>
             <Txt size={14} tone="muted">
-              Camera access is off for matops. Turn it on to scan.
+              Camera access is off for MatOps. Turn it on to scan.
             </Txt>
             <Button
               label="Open settings"

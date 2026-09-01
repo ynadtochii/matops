@@ -164,7 +164,7 @@ export function ProfileScreen({
     <>
       <PageHeader
         title="Profile"
-        subtitle="Your details and how matops looks."
+        subtitle="Your details and how MatOps looks."
       />
       <div className="flex flex-col gap-8">
         <Section label="Your details" className={ENTER}>

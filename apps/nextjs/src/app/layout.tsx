@@ -13,25 +13,25 @@ import "~/app/styles.css";
 export const metadata: Metadata = {
   metadataBase: new URL(
     env.VERCEL_ENV === "production"
-      ? "https://matops.grapplerscollective.com"
+      ? "https://matops.app"
       : "http://localhost:3004",
   ),
-  title: "matops",
+  title: "MatOps",
   description: "Schedule, members, and attendance for grappling academies.",
   openGraph: {
-    title: "matops",
+    title: "MatOps",
     description: "Schedule, members, and attendance for grappling academies.",
-    siteName: "matops",
+    siteName: "MatOps",
   },
   twitter: {
     card: "summary_large_image",
   },
   // PWA install (ADR 42). `manifest.ts` supplies the web manifest; these add the
   // iOS home-screen bits (Safari ignores the manifest for add-to-home-screen).
-  applicationName: "matops",
+  applicationName: "MatOps",
   appleWebApp: {
     capable: true,
-    title: "matops",
+    title: "MatOps",
     statusBarStyle: "default",
   },
   icons: {

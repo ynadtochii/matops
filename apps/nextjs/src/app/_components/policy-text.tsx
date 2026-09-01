@@ -24,12 +24,12 @@ export function PrivacyText() {
     <div className="text-muted-foreground text-sm">
       <Heading>Who is responsible</Heading>
       <p>
-        matops is run by <strong>[ENTITY]</strong>, [ADDRESS]. Write to{" "}
+        MatOps is run by <strong>[ENTITY]</strong>, [ADDRESS]. Write to{" "}
         <strong>[CONTACT EMAIL]</strong> for a copy of your data or to have it
         deleted. We answer within 30 days.
       </p>
       <p className="mt-2">
-        Your academy decides what happens to its members&apos; data. matops
+        Your academy decides what happens to its members&apos; data. MatOps
         stores it on the academy&apos;s behalf, so ask your academy first.
       </p>
 
@@ -42,8 +42,8 @@ export function PrivacyText() {
           about your training.
         </li>
         <li>
-          Whether your fee is paid. matops never sees a card number: dues are
-          paid by bank transfer, outside matops.
+          Whether your fee is paid. MatOps never sees a card number: dues are
+          paid by bank transfer, outside MatOps.
         </li>
         <li>
           If you check in as a visitor: your name, phone, email, and that you
@@ -66,14 +66,14 @@ export function PrivacyText() {
         academy&apos;s data: the database enforces that, not just the app.
       </p>
       <p className="mt-2">
-        Your data is stored in the EU. The companies that host matops and send
+        Your data is stored in the EU. The companies that host MatOps and send
         its email process it on our instructions and nothing more.
       </p>
 
       <Heading>How long we keep it</Heading>
       <p>
         While you are a member, and afterwards for as long as your academy keeps
-        its records. When an academy deletes its matops account, its data goes
+        its records. When an academy deletes its MatOps account, its data goes
         with it.
       </p>
 
@@ -130,7 +130,7 @@ export function BackToMatops() {
         href="/"
         className="inline-flex min-h-11 items-center underline underline-offset-2 sm:min-h-0"
       >
-        Back to matops
+        Back to MatOps
       </Link>
     </p>
   );

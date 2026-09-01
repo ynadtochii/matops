@@ -115,7 +115,7 @@ export function AcademyLocation({
           <SectionHeading>Country</SectionHeading>
           <p className="text-muted-foreground text-sm">
             Which country code every phone field starts on. Until you set one,
-            matops guesses from the time zone, which is only a guess.
+            MatOps guesses from the time zone, which is only a guess.
           </p>
         </div>
         {settings.isPending ? (

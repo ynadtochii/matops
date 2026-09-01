@@ -11,8 +11,8 @@ import type { MetadataRoute } from "next";
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: "/",
-    name: "matops",
-    short_name: "matops",
+    name: "MatOps",
+    short_name: "MatOps",
     description:
       "Book your classes, run your schedule, take attendance — for grappling academies.",
     start_url: "/",

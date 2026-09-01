@@ -124,7 +124,7 @@ export function ConsentChecks({
       >
         <PolicyDialog
           link="What the gym stores about you"
-          title="Privacy at matops"
+          title="Privacy at MatOps"
           subtitle={`Last updated ${PRIVACY_UPDATED}. Written in plain English on purpose.`}
         >
           <PrivacyText />

@@ -22,7 +22,7 @@ jobs:
       - name: Dues reminders
         env:
           EVENT: ${{ github.event_name }}
-          APP_URL: https://matops.grapplerscollective.com
+          APP_URL: https://matops.app
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           hour=$(TZ=Europe/Lisbon date +%H)

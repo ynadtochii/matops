@@ -53,7 +53,7 @@ function NotificationToggle() {
         if (!reg) {
           // Permission denied or no device token — don't leave the switch "on".
           revert(
-            "We couldn't turn on notifications. Check that notifications are allowed for matops in your phone's Settings.",
+            "We couldn't turn on notifications. Check that notifications are allowed for MatOps in your phone's Settings.",
           );
           return;
         }
