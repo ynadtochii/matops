@@ -177,6 +177,31 @@ export async function eraseMemberData(
     );
   }
 
+  // Other students' history still names this person as a referrer. The row is
+  // append-only and belongs to the student it is about, so the credit is
+  // forgotten rather than the row deleted, exactly as the live referral above.
+  const oldCredit = await exec
+    .update(memberReferralAudit)
+    .set({ oldReferrerMemberId: null })
+    .where(
+      and(
+        eq(memberReferralAudit.academyId, academyId),
+        eq(memberReferralAudit.oldReferrerMemberId, memberId),
+      ),
+    )
+    .returning({ id: memberReferralAudit.id });
+  const newCredit = await exec
+    .update(memberReferralAudit)
+    .set({ newReferrerMemberId: null })
+    .where(
+      and(
+        eq(memberReferralAudit.academyId, academyId),
+        eq(memberReferralAudit.newReferrerMemberId, memberId),
+      ),
+    )
+    .returning({ id: memberReferralAudit.id });
+  report.referral_history_cleared = oldCredit.length + newCredit.length;
+
   await recomputeBookingCounts(exec, academyId);
   return report;
 }
@@ -203,12 +228,14 @@ export async function deleteEntityMembership(
 
 export async function deleteMemberRow(
   exec: DbExec,
-  academyId: string,
-  memberId: string,
+  organizationId: string,
+  userId: string,
 ): Promise<void> {
   await exec
     .delete(member)
-    .where(and(eq(member.id, memberId), eq(member.organizationId, academyId)));
+    .where(
+      and(eq(member.userId, userId), eq(member.organizationId, organizationId)),
+    );
 }
 
 /**

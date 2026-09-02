@@ -5,7 +5,7 @@ import { isActiveMember, isOwner } from "@matops/domain";
 import { CreateEntitySchema } from "@matops/validators";
 
 import {
-  entityEnrolledProcedure,
+  enrolledProcedure,
   organizationMemberProcedure,
   organizationOwnerIdentityProcedure,
 } from "../trpc";
@@ -30,7 +30,7 @@ export const entityRouter = {
   }),
 
   /** The entity this request named, once the tier has authorized it. */
-  current: entityEnrolledProcedure.query(({ ctx }) => ({
+  current: enrolledProcedure.query(({ ctx }) => ({
     id: ctx.entity.id,
     name: ctx.entity.name,
     type: ctx.entity.type,

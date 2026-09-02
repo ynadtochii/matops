@@ -9,7 +9,7 @@ import {
 } from "@matops/db/schema";
 
 import type { Harness } from "./helpers";
-import { harness, seedAcademies } from "./helpers";
+import { harness, memberId, seedAcademies } from "./helpers";
 
 const ORG = "org_a";
 const OWNER = "u_owner";
@@ -191,7 +191,7 @@ describe("owner actions write the entity membership", () => {
   it("grants the invited role on approval", async () => {
     await h
       .as(OWNER, ORG)
-      .membership.approve({ memberId: `mem_${ORG}_${JOINER}` });
+      .membership.approve({ memberId: memberId(ORG, JOINER) });
     const row = await rowFor(ORG);
     expect([row?.role, row?.status]).toEqual(["student", "active"]);
     expect(row?.joinedAt).not.toBeNull();
@@ -207,7 +207,7 @@ describe("owner actions write the entity membership", () => {
   it("suspends at one entity and leaves the sibling alone", async () => {
     await h
       .as(OWNER, ORG)
-      .membership.suspend({ memberId: `mem_${ORG}_${JOINER}` });
+      .membership.suspend({ memberId: memberId(ORG, JOINER) });
     expect((await rowFor(ORG))?.status).toBe("suspended");
     expect((await rowFor(secondEntity))?.status).toBe("active");
   });
@@ -215,7 +215,7 @@ describe("owner actions write the entity membership", () => {
   it("restores the same one entity", async () => {
     await h
       .as(OWNER, ORG)
-      .membership.restore({ memberId: `mem_${ORG}_${JOINER}` });
+      .membership.restore({ memberId: memberId(ORG, JOINER) });
     expect((await rowFor(ORG))?.status).toBe("active");
     expect((await rowFor(secondEntity))?.status).toBe("active");
   });
@@ -223,7 +223,7 @@ describe("owner actions write the entity membership", () => {
   it("refuses to strip the entity of its last active owner", async () => {
     const refused = await h
       .as(OWNER, ORG)
-      .membership.setRole({ memberId: `mem_${ORG}_${OWNER}`, role: "student" })
+      .membership.setRole({ memberId: memberId(ORG, OWNER), role: "student" })
       .then(() => "allowed")
       .catch((e: { code?: string }) => e.code ?? "threw");
     expect(refused).toBe("PRECONDITION_FAILED");
@@ -267,7 +267,7 @@ describe("erasing a member from one entity", () => {
 
     await h
       .as(OWNER, ORG)
-      .membership.purge({ memberId: `mem_${ORG}_${JOINER}` });
+      .membership.purge({ memberId: memberId(ORG, JOINER) });
   });
 
   afterAll(() => h.close());

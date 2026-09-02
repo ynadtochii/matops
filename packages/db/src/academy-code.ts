@@ -86,9 +86,9 @@ export async function getAcademyCode(
   exec: DbReader,
 ): Promise<string | null> {
   const rows = await exec
-    .select({ code: organization.publicCode })
-    .from(organization)
-    .where(and(eq(organization.id, academyId), isNull(organization.deletedAt)))
+    .select({ code: entity.publicCode })
+    .from(entity)
+    .where(and(eq(entity.id, academyId), isNull(entity.deletedAt)))
     .limit(1);
   return rows[0]?.code ?? null;
 }

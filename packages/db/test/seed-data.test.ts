@@ -224,8 +224,13 @@ describe("buildSeedGraph — pure dataset", () => {
     expect(coaches.length).toBeGreaterThanOrEqual(3);
     const teaching = new Set(g.templates.map((t) => t.instructorId));
     expect(coaches.some((c) => !teaching.has(c.userId))).toBe(true);
-    const coachIds = new Set(coaches.map((c) => c.id));
-    expect(g.ranks.some((r) => coachIds.has(r.memberId))).toBe(true);
+    const coachUsers = new Set(coaches.map((c) => c.userId));
+    const coachMemberships = new Set(
+      g.entityMemberships
+        .filter((m) => coachUsers.has(m.userId))
+        .map((m) => m.id),
+    );
+    expect(g.ranks.some((r) => coachMemberships.has(r.memberId))).toBe(true);
   });
 
   it("seeds a class-linked lead and a lead with no contact consent", () => {

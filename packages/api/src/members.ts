@@ -2,8 +2,8 @@ import { TRPCError } from "@trpc/server";
 
 import type { DbExec, DbReader, MemberRow, TenantTx } from "@matops/db";
 import {
+  getAcademyMembership,
   getMemberById,
-  getMembership,
   isNull,
   listMembersOf,
   setMemberRoleStatus,
@@ -124,8 +124,8 @@ export async function requireMembership(
   academyId: string,
   exec: DbReader,
   message: string,
-): Promise<NonNullable<Awaited<ReturnType<typeof getMembership>>>> {
-  const membership = await getMembership(userId, academyId, exec);
+): Promise<NonNullable<Awaited<ReturnType<typeof getAcademyMembership>>>> {
+  const membership = await getAcademyMembership(userId, academyId, exec);
   if (!membership) {
     throw new TRPCError({ code: "NOT_FOUND", message });
   }

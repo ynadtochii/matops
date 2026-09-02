@@ -92,6 +92,14 @@ export async function seedAll(
   // 1. Auth rows (fake users; real user already exists) → orgs → members → invites.
   await insert(report, "user", exec, user, graph.users);
   await insert(report, "organization", exec, organization, graph.organizations);
+  await insert(report, "entity", exec, entity, graph.entities);
+  await insert(
+    report,
+    "academy_profile",
+    exec,
+    academyProfile,
+    graph.academyProfiles,
+  );
   await insert(
     report,
     "curriculum_track",
@@ -102,14 +110,6 @@ export async function seedAll(
       name: DEFAULT_TRACK_NAME,
       isDefault: true,
     })),
-  );
-  await insert(report, "entity", exec, entity, graph.entities);
-  await insert(
-    report,
-    "academy_profile",
-    exec,
-    academyProfile,
-    graph.academyProfiles,
   );
   await insert(report, "member", exec, member, graph.members);
   await insert(

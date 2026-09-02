@@ -28,7 +28,7 @@ describe("seed fill/clear — augment a real academy", () => {
     (await pg.query<{ n: number }>(sqlText, params)).rows[0]?.n ?? 0;
 
   beforeAll(async () => {
-    pg = await freshDb();
+    pg = await freshDb([]);
     exec = drizzle(pg, { schema, casing: "snake_case" }) as unknown as SeedExec;
 
     // A real academy: owner + one real student, one real plan, one upcoming
@@ -39,6 +39,8 @@ describe("seed fill/clear — augment a real academy", () => {
         ('stud_real', 'Real Student', 'stud@real.test', true, now(), now());
       INSERT INTO "organization" (id, name, slug, public_code, created_at)
         VALUES ('${ACAD}', 'Grapplers', 'grapplers', '860275', now());
+      INSERT INTO "entity" (id, organization_id, type, name, slug, is_default, public_code)
+        VALUES ('${ACAD}', '${ACAD}', 'bjj_academy', 'Grapplers', 'grapplers', true, '860275');
       INSERT INTO "member" (id, organization_id, user_id, role, status, created_at) VALUES
         ('mem_owner', '${ACAD}', 'owner_real', 'owner', 'active', now()),
         ('mem_stud', '${ACAD}', 'stud_real', 'student', 'active', now());

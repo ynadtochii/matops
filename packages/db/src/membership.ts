@@ -6,7 +6,7 @@ import { canRemoveOrDemote } from "@matops/domain";
 import type { DbExec } from "./client";
 import type { DbReader, TenantTx } from "./tenant";
 import { member, organization, user } from "./auth-schema";
-import { entity, entityMembership } from "./entity-schema";
+import { academyProfile, entity, entityMembership } from "./entity-schema";
 
 export interface Membership {
   /** Better Auth role on the member row: "owner" | "instructor" | "student". */
@@ -104,6 +104,53 @@ export async function getEntityMembership(
   return rows[0] ?? null;
 }
 
+/**
+ * The caller's membership at one entity, in the shape the academy tiers read.
+ *
+ * Role and status come from `entity_membership`, and `memberId` is that row's
+ * id, because every dues, claim, rank, note and referral row keys on it. A
+ * closed academy is not a membership, so the entity and its organization must
+ * both still be live.
+ */
+export async function getAcademyMembership(
+  userId: string,
+  entityId: string,
+  exec: DbReader,
+): Promise<Membership | null> {
+  const rows = await exec
+    .select({
+      memberId: entityMembership.id,
+      role: entityMembership.role,
+      status: entityMembership.status,
+      joinedAt: entityMembership.joinedAt,
+      createdAt: entityMembership.createdAt,
+    })
+    .from(entityMembership)
+    .innerJoin(entity, eq(entity.id, entityMembership.entityId))
+    .innerJoin(
+      organization,
+      eq(organization.id, entityMembership.organizationId),
+    )
+    .where(
+      and(
+        eq(entityMembership.userId, userId),
+        eq(entityMembership.entityId, entityId),
+        isNull(entity.deletedAt),
+        isNull(organization.deletedAt),
+      ),
+    )
+    .limit(1);
+
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    memberId: row.memberId,
+    role: row.role,
+    status: row.status,
+    joinedAt: row.joinedAt ?? row.createdAt,
+  };
+}
+
 /** One entity, as the request tiers need to see it. */
 export interface ScopedEntity {
   id: string;
@@ -197,20 +244,25 @@ export async function listEntitiesForUser(
 }
 
 /**
- * Resolve the caller's `member.id` in one academy (base connection — the member
- * table has no RLS). Payment tables key dues + claims by `member.id`, but the
- * tRPC context only carries `user.id` + `academyId`, so a student-facing payments
- * resolver maps one to the other here. Returns null if not a member.
+ * Resolve the caller's `entity_membership.id` at one entity. Dues, claims,
+ * ranks, notes and referrals all key on that id, but the tRPC context only
+ * carries `user.id` and the entity id, so a student-facing resolver maps one to
+ * the other here. Returns null if the person has no membership there.
  */
 export async function getMemberIdForUser(
   userId: string,
-  academyId: string,
+  entityId: string,
   exec: DbReader,
 ): Promise<string | null> {
   const rows = await exec
-    .select({ id: member.id })
-    .from(member)
-    .where(and(eq(member.userId, userId), eq(member.organizationId, academyId)))
+    .select({ id: entityMembership.id })
+    .from(entityMembership)
+    .where(
+      and(
+        eq(entityMembership.userId, userId),
+        eq(entityMembership.entityId, entityId),
+      ),
+    )
     .limit(1);
   return rows[0]?.id ?? null;
 }
@@ -233,6 +285,7 @@ export async function setMemberActive(
 /** One academy the user belongs to, with the caller's role/status there. */
 export interface UserAcademy {
   academyId: string;
+  organizationId: string;
   name: string;
   slug: string;
   timeZone: string | null;
@@ -247,7 +300,9 @@ export interface UserAcademy {
 }
 
 /**
- * Every academy the user is a member of (any status), for the switcher lens.
+ * Every academy the user trains or works at, for the switcher lens. One row per
+ * ENTITY membership, with that entity's own name, time zone and address, so a
+ * gym with two mats shows two (ADR 124).
  *
  * `exec` is REQUIRED like every other reader in this module (docs/issues/60).
  * It was the one helper still closing over the module singleton, so the router
@@ -259,24 +314,37 @@ export async function listMembershipsForUser(
 ): Promise<UserAcademy[]> {
   const rows = await exec
     .select({
-      academyId: organization.id,
-      name: organization.name,
-      slug: organization.slug,
-      timeZone: organization.timeZone,
-      country: organization.country,
-      address: organization.address,
-      mapUrl: organization.mapUrl,
-      curriculumForStudents: organization.curriculumForStudents,
-      role: member.role,
-      status: member.status,
-      invitedRole: member.invitedRole,
-      joinedAt: member.createdAt,
+      academyId: entity.id,
+      organizationId: entity.organizationId,
+      name: entity.name,
+      slug: entity.slug,
+      timeZone: entity.timeZone,
+      country: entity.country,
+      address: entity.address,
+      mapUrl: entity.mapUrl,
+      curriculumForStudents: academyProfile.curriculumForStudents,
+      role: entityMembership.role,
+      status: entityMembership.status,
+      invitedRole: entityMembership.invitedRole,
+      joinedAt: entityMembership.joinedAt,
+      createdAt: entityMembership.createdAt,
     })
-    .from(member)
-    .innerJoin(organization, eq(member.organizationId, organization.id))
-    .where(and(eq(member.userId, userId), isNull(organization.deletedAt)));
+    .from(entityMembership)
+    .innerJoin(entity, eq(entity.id, entityMembership.entityId))
+    .innerJoin(academyProfile, eq(academyProfile.entityId, entity.id))
+    .innerJoin(organization, eq(organization.id, entity.organizationId))
+    .where(
+      and(
+        eq(entityMembership.userId, userId),
+        isNull(entity.deletedAt),
+        isNull(organization.deletedAt),
+      ),
+    );
 
-  return rows.map((r) => ({ ...r, status: r.status ?? "pending" }));
+  return rows.map(({ createdAt, joinedAt, ...r }) => ({
+    ...r,
+    joinedAt: joinedAt ?? createdAt,
+  }));
 }
 
 /** Set the user's display name + phone at self-join (spec S1, minimal fields). */
@@ -304,34 +372,32 @@ export interface MemberRow {
   createdAt: Date;
 }
 
-/** Every member of one academy, newest first, with the user profile joined. */
+/** Every member of one entity, newest first, with the user profile joined. */
 export async function listMembersOf(
-  academyId: string,
+  entityId: string,
   exec: DbReader,
 ): Promise<MemberRow[]> {
   const rows = await exec
     .select({
-      memberId: member.id,
-      userId: member.userId,
-      role: member.role,
-      status: member.status,
-      invitedRole: member.invitedRole,
+      memberId: entityMembership.id,
+      userId: entityMembership.userId,
+      role: entityMembership.role,
+      status: entityMembership.status,
+      invitedRole: entityMembership.invitedRole,
       name: user.name,
       email: user.email,
       phone: user.phone,
-      createdAt: member.createdAt,
+      createdAt: entityMembership.createdAt,
     })
-    .from(member)
-    .innerJoin(user, eq(member.userId, user.id))
-    .where(eq(member.organizationId, academyId));
+    .from(entityMembership)
+    .innerJoin(user, eq(entityMembership.userId, user.id))
+    .where(eq(entityMembership.entityId, entityId));
 
-  return rows
-    .map((r) => ({ ...r, status: r.status ?? "pending" }))
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  return rows.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 }
 
-/** One member row by id, or null. Includes the academy id so owner mutations can
- * verify the target belongs to the caller's academy (the table has no RLS). */
+/** One entity membership by id, or null. Includes the entity id so owner
+ * mutations can verify the target belongs to the caller's academy. */
 export async function getMemberById(
   memberId: string,
   exec: DbReader,
@@ -345,20 +411,18 @@ export async function getMemberById(
 } | null> {
   const rows = await exec
     .select({
-      id: member.id,
-      academyId: member.organizationId,
-      userId: member.userId,
-      role: member.role,
-      status: member.status,
-      invitedRole: member.invitedRole,
+      id: entityMembership.id,
+      academyId: entityMembership.entityId,
+      userId: entityMembership.userId,
+      role: entityMembership.role,
+      status: entityMembership.status,
+      invitedRole: entityMembership.invitedRole,
     })
-    .from(member)
-    .where(eq(member.id, memberId))
+    .from(entityMembership)
+    .where(eq(entityMembership.id, memberId))
     .limit(1);
 
-  const row = rows[0];
-  if (!row) return null;
-  return { ...row, status: row.status ?? "pending" };
+  return rows[0] ?? null;
 }
 
 /**
@@ -371,9 +435,9 @@ export async function getMemberById(
  * another. Wave 7 drops `member.status` and `member.invited_role` and the
  * mirror goes with them.
  *
- * The caller names the person by `member.id` because that is the id every
- * router and both clients already hold; the entity row is found through the
- * user behind it.
+ * The caller names the person by `entity_membership.id`, which is the id every
+ * router and both clients hold; the Better Auth row is found through the user
+ * and organization behind it.
  */
 type DbWriter = DbExec | TenantTx;
 
@@ -385,12 +449,6 @@ async function writeMembership(
   },
   exec: DbWriter,
 ): Promise<void> {
-  const rows = await exec
-    .select({ userId: member.userId })
-    .from(member)
-    .where(eq(member.id, input.memberId))
-    .limit(1);
-  const userId = rows[0]?.userId;
   const { role, status } = input.next;
 
   const entityPatch: { role?: string; status?: string; joinedAt?: Date } = {};
@@ -399,28 +457,37 @@ async function writeMembership(
     entityPatch.status = status;
     if (status === "active") entityPatch.joinedAt = new Date();
   }
+  if (Object.keys(entityPatch).length === 0) return;
 
-  if (userId && Object.keys(entityPatch).length > 0) {
-    await exec
-      .update(entityMembership)
-      .set(entityPatch)
-      .where(
-        and(
-          eq(entityMembership.entityId, input.entityId),
-          eq(entityMembership.userId, userId),
-        ),
-      );
-  }
+  const written = await exec
+    .update(entityMembership)
+    .set(entityPatch)
+    .where(
+      and(
+        eq(entityMembership.id, input.memberId),
+        eq(entityMembership.entityId, input.entityId),
+      ),
+    )
+    .returning({
+      userId: entityMembership.userId,
+      organizationId: entityMembership.organizationId,
+    });
+
+  const target = written[0];
+  if (!target) return;
 
   const memberPatch: { role?: string; status?: string } = {};
   if (role !== undefined) memberPatch.role = role;
   if (status !== undefined) memberPatch.status = status;
-  if (Object.keys(memberPatch).length > 0) {
-    await exec
-      .update(member)
-      .set(memberPatch)
-      .where(eq(member.id, input.memberId));
-  }
+  await exec
+    .update(member)
+    .set(memberPatch)
+    .where(
+      and(
+        eq(member.userId, target.userId),
+        eq(member.organizationId, target.organizationId),
+      ),
+    );
 }
 
 /** Write a new role + status (owner approval grants the role here). */
@@ -464,8 +531,9 @@ export async function setMemberStatus(
  * `entity_membership`, because that is where the operational role and status
  * live now: a mat left with no active owner is the thing worth refusing. The
  * ORGANIZATION check runs over the Better Auth rows, because those still decide
- * who may reach every entity. The person is named by `member.id`, so both sets
- * are keyed by the user behind each row and the pure rule compares those.
+ * who may reach every entity. The person is named by `entity_membership.id`, so
+ * both sets are keyed by the user behind each row and the pure rule compares
+ * those.
  */
 async function mayChangeEntityMembership(
   tx: TenantTx,
@@ -473,9 +541,14 @@ async function mayChangeEntityMembership(
   memberId: string,
 ): Promise<boolean> {
   const targets = await tx
-    .select({ userId: member.userId })
-    .from(member)
-    .where(eq(member.id, memberId))
+    .select({ userId: entityMembership.userId })
+    .from(entityMembership)
+    .where(
+      and(
+        eq(entityMembership.id, memberId),
+        eq(entityMembership.entityId, entityId),
+      ),
+    )
     .limit(1);
   const targetUserId = targets[0]?.userId;
   if (!targetUserId) return false;
@@ -536,15 +609,6 @@ export async function setMemberStatusIfNotLastOwner(
     await writeMembership({ entityId, memberId, next: { status } }, tx);
     return { ok: true };
   });
-}
-
-/** Set only the role (promote a member to co-owner). */
-export async function setMemberRole(
-  memberId: string,
-  role: string,
-  exec: DbExec,
-): Promise<void> {
-  await exec.update(member).set({ role }).where(eq(member.id, memberId));
 }
 
 /**

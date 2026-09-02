@@ -1,7 +1,7 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { freshDb, single } from "./helpers";
+import { freshDb, seedMemberships, single } from "./helpers";
 
 type Tx = Parameters<Parameters<PGlite["transaction"]>[0]>[0];
 
@@ -30,6 +30,7 @@ describe("RLS — payments tables isolation", () => {
 
   beforeAll(async () => {
     pg = await freshDb();
+    await seedMemberships(pg, "academy_A", ["member_1"]);
     // Seed as the bootstrap superuser (mimics a trusted base-connection write).
     await pg.exec(
       `INSERT INTO "membership_plan" (academy_id, name, price_minor, currency) VALUES
@@ -99,6 +100,7 @@ describe("payment_claim — one open claim per period (P.1)", () => {
 
   beforeAll(async () => {
     pg = await freshDb();
+    await seedMemberships(pg, "academy_A", ["member_1"]);
     await pg.exec(
       `INSERT INTO "membership_plan" (id, academy_id, name, price_minor, currency)
          VALUES ('11111111-1111-1111-1111-111111111111', 'academy_A', 'Adult', 5000, 'USD');`,

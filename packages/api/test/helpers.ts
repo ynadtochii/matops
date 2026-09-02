@@ -1,4 +1,4 @@
-import type { PGlite } from "@electric-sql/pglite";
+import { PGlite } from "@electric-sql/pglite";
 import { TRPCError } from "@trpc/server";
 
 import type { DbExec } from "@matops/db/client";
@@ -32,6 +32,18 @@ export interface Harness {
 
 function caller(ctx: Ctx) {
   return appRouter.createCaller(ctx);
+}
+
+/**
+ * Every tenant tier reads `x-matops-entity`, and in these fixtures the academy
+ * IS the organization's default entity, so a caller that does not care names
+ * it by default. Pass a bare `new Headers()` to make a request that names no
+ * entity, which is what the refusal tests are about.
+ */
+function entityHeaders(academyId: string | null): Headers {
+  const headers = new Headers();
+  if (academyId) headers.set("x-matops-entity", academyId);
+  return headers;
 }
 
 /**
@@ -105,8 +117,28 @@ function fakeAuthApi(
   });
 }
 
-export async function harness(): Promise<Harness> {
-  const pg = await freshDb();
+/**
+ * A seeded database, snapshotted once per test file.
+ *
+ * `seedAcademies` costs about 270ms, nearly all of it in one multi-statement
+ * `pg.exec`, and the files that rebuild a harness per test paid it 20-odd times
+ * each. Passing the spec to `harness` instead seeds once, dumps the result, and
+ * loads that dump for every later call — so the saving of seeding in a
+ * `beforeAll` is had without giving up the fresh database each test starts
+ * from. Vitest runs each file in its own worker, so this cache is per file.
+ */
+const snapshots = new Map<string, Blob>();
+
+export async function harness(academies?: AcademySpec[]): Promise<Harness> {
+  // No default academies: `seedAcademies` builds its own organizations and
+  // provisions their entities, so pre-made ones would collide on the id.
+  const key = academies ? JSON.stringify(academies) : "";
+  const cached = key ? snapshots.get(key) : undefined;
+  const pg = cached ? new PGlite({ loadDataDir: cached }) : await freshDb([]);
+  if (academies && !cached) {
+    await seedAcademies(pg, academies);
+    snapshots.set(key, await pg.dumpDataDir("gzip"));
+  }
   const exec = execOn(pg);
 
   const activeOrg = new Map<string, string>();
@@ -114,7 +146,7 @@ export async function harness(): Promise<Harness> {
   const ctxFor = (
     userId: string,
     academyId: string | null,
-    headers = new Headers(),
+    headers = entityHeaders(academyId),
   ): Ctx => ({
     authApi: fakeAuthApi(userId, exec, activeOrg) as unknown as Ctx["authApi"],
     headers,
@@ -173,7 +205,12 @@ export interface AcademySpec {
   members: MemberSpec[];
 }
 
+/** The `entity_membership.id` every product row keys on (ADR 124). */
 export function memberId(academyId: string, userId: string): string {
+  return `emem_${academyId}_${userId}`;
+}
+
+function orgMemberId(academyId: string, userId: string): string {
   return `mem_${academyId}_${userId}`;
 }
 
@@ -198,7 +235,7 @@ export async function seedAcademies(
         );
       }
       members.push(
-        `(${lit(memberId(academy.id, m.userId))}, ${lit(academy.id)}, ${lit(m.userId)}, ${lit(m.role)}, ${lit(m.status)}, ${m.invitedRole ? lit(m.invitedRole) : "NULL"}, now())`,
+        `(${lit(orgMemberId(academy.id, m.userId))}, ${lit(academy.id)}, ${lit(m.userId)}, ${lit(m.role)}, ${lit(m.status)}, ${m.invitedRole ? lit(m.invitedRole) : "NULL"}, now())`,
       );
     }
   }
@@ -222,35 +259,30 @@ export async function seedAcademies(
   if (statements.length) await pg.exec(statements.join("\n"));
 
   // Give each academy the rows production gives it: the default entity (whose id
-  // is the organization id), its academy profile, an owner entity membership and
-  // a curriculum track. Uses the REAL provisioner, so a fixture cannot drift
-  // from what `academy.create` actually builds (ADR 124).
+  // is the organization id), its academy profile and a curriculum track. Uses
+  // the REAL provisioner, so a fixture cannot drift from what `academy.create`
+  // actually builds (ADR 124). The memberships are written here instead, with
+  // predictable ids, because dues, ranks, notes and referrals key on them and a
+  // test has to be able to name one.
   const exec = execOn(pg);
   for (const academy of academies) {
-    const owner =
-      academy.members.find((m) => m.role === "owner") ?? academy.members[0];
-    if (!owner) continue;
-    await provisionOrganization(
-      { organizationId: academy.id, ownerUserId: owner.userId },
-      exec,
-    );
-    const others = academy.members.filter((m) => m.userId !== owner.userId);
-    if (others.length) {
-      await exec
-        .insert(entityMembership)
-        .values(
-          others.map((m) => ({
-            organizationId: academy.id,
-            entityId: academy.id,
-            userId: m.userId,
-            role: m.role,
-            status: m.status,
-            invitedRole: m.invitedRole ?? null,
-            joinedAt: m.status === "active" ? new Date() : null,
-          })),
-        )
-        .onConflictDoNothing();
-    }
+    await provisionOrganization({ organizationId: academy.id }, exec);
+    if (!academy.members.length) continue;
+    await exec
+      .insert(entityMembership)
+      .values(
+        academy.members.map((m) => ({
+          id: memberId(academy.id, m.userId),
+          organizationId: academy.id,
+          entityId: academy.id,
+          userId: m.userId,
+          role: m.role,
+          status: m.status,
+          invitedRole: m.invitedRole ?? null,
+          joinedAt: m.status === "active" ? new Date() : null,
+        })),
+      )
+      .onConflictDoNothing();
   }
 }
 

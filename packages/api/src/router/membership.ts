@@ -536,7 +536,7 @@ export const membershipRouter = {
         ctx.organizationId,
       );
       if (!stillHere) {
-        await deleteMemberRow(ctx.baseDb, ctx.academyId, input.memberId);
+        await deleteMemberRow(ctx.baseDb, ctx.organizationId, m.userId);
       }
       const elsewhere =
         stillHere ||

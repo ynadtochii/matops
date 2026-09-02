@@ -40,7 +40,6 @@ import {
 } from "@matops/validators";
 
 import { academyContext } from "../academy-tz";
-import { requireMembership } from "../members";
 import {
   ownerIdentityProcedure,
   ownerProcedure,
@@ -313,18 +312,30 @@ export const academyRouter = {
       return { ok: true as const };
     }),
 
-  /** Switch the active academy (multi-academy switcher, docs/issues/18). */
+  /**
+   * Switch the active academy (multi-academy switcher, docs/issues/18).
+   *
+   * The caller names an ENTITY, which is what the switcher lists. Better Auth
+   * only knows organizations, so the entity's own organization is what goes on
+   * the session; the entity id is what the client sends as `x-matops-entity`
+   * from then on (ADR 124).
+   */
   setActive: protectedProcedure
     .input(z.object({ academyId: IdSchema }))
     .mutation(async ({ ctx, input }) => {
-      await requireMembership(
+      const mine = await listMembershipsForUser(
         ctx.session.user.id,
-        input.academyId,
         ctx.baseDb,
-        "You are not a member of that academy",
       );
+      const academy = mine.find((a) => a.academyId === input.academyId);
+      if (!academy) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "You are not a member of that academy",
+        });
+      }
       await ctx.authApi.setActiveOrganization({
-        body: { organizationId: input.academyId },
+        body: { organizationId: academy.organizationId },
         headers: ctx.headers,
       });
       return { ok: true as const };

@@ -56,7 +56,7 @@ describe("membership booking gate", () => {
       DELETE FROM "member_dues";
       DELETE FROM "membership_plan";
       DELETE FROM "payment_settings";
-      UPDATE "member" SET created_at = now();
+      UPDATE "entity_membership" SET created_at = now(), joined_at = now();
     `);
     const created = await h.as(OWNER, ACAD).payments.createPlan({
       name: "Unlimited",
@@ -100,7 +100,7 @@ describe("membership booking gate", () => {
   it("no plan past the window: booking locks", async () => {
     await enforce();
     await h.pg.query(
-      `UPDATE "member" SET created_at = now() - interval '30 days' WHERE id = $1`,
+      `UPDATE "entity_membership" SET created_at = now() - interval '30 days', joined_at = now() - interval '30 days' WHERE id = $1`,
       [STUDENT_MEMBER],
     );
     await h.pg.exec(
@@ -119,7 +119,7 @@ describe("membership booking gate", () => {
 
   it("turning enforcement on grants an old plan-less member the window", async () => {
     await h.pg.query(
-      `UPDATE "member" SET created_at = now() - interval '300 days' WHERE id = $1`,
+      `UPDATE "entity_membership" SET created_at = now() - interval '300 days', joined_at = now() - interval '300 days' WHERE id = $1`,
       [STUDENT_MEMBER],
     );
     await enforce();
@@ -168,7 +168,7 @@ describe("membership booking gate", () => {
   it("a pending member's provisional booking is never gated", async () => {
     await enforce();
     await h.pg.exec(
-      `UPDATE "member" SET created_at = now() - interval '300 days'`,
+      `UPDATE "entity_membership" SET created_at = now() - interval '300 days', joined_at = now() - interval '300 days'`,
     );
     await h.pg.exec(
       `UPDATE "payment_settings" SET enforced_at = now() - interval '300 days'`,
@@ -183,7 +183,7 @@ describe("membership booking gate", () => {
       `UPDATE "payment_settings" SET enforced_at = now() - interval '300 days'`,
     );
     await h.pg.exec(
-      `UPDATE "member" SET created_at = now() - interval '300 days'`,
+      `UPDATE "entity_membership" SET created_at = now() - interval '300 days', joined_at = now() - interval '300 days'`,
     );
     const res = await h.as(OWNER, ACAD).booking.book({ classId: CLASS });
     expect(res.tier).toBe("confirmed");
@@ -218,7 +218,7 @@ describe("membership booking gate", () => {
     );
     expect(res.rows[0]?.plan_id).toBe(planId);
     await h.pg.query(
-      `UPDATE "member" SET role = 'member', status = 'pending' WHERE id = $1`,
+      `UPDATE "entity_membership" SET role = 'member', status = 'pending' WHERE id = $1`,
       [memberId(ACAD, PENDING)],
     );
   });
@@ -239,7 +239,7 @@ describe("membership booking gate", () => {
     );
     expect(res.rows).toHaveLength(0);
     await h.pg.query(
-      `UPDATE "member" SET role = 'member', status = 'pending' WHERE id = $1`,
+      `UPDATE "entity_membership" SET role = 'member', status = 'pending' WHERE id = $1`,
       [memberId(ACAD, PENDING)],
     );
   });

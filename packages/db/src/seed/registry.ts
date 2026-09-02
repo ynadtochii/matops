@@ -73,6 +73,11 @@ export const seedMemberId = (academyKey: string, handle: string): string =>
 export const seedEntityMembershipId = (memberId: string): string =>
   memberId.replace(`${SEED_MARKER}mem_`, `${SEED_MARKER}emem_`);
 
+/** The seed `entity_membership.id` for one academy + persona. Dues, claims,
+ * ranks, notes and referrals key on this, not on `member.id` (ADR 124). */
+export const seedMembershipId = (academyKey: string, handle: string): string =>
+  seedEntityMembershipId(seedMemberId(academyKey, handle));
+
 /** True if an id was created by the seed (used by teardown to spare real rows). */
 export const isSeedId = (id: string): boolean => id.startsWith(SEED_MARKER);
 

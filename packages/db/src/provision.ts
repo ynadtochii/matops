@@ -24,7 +24,8 @@ export interface EntityRows {
   name: string;
   slug: string;
   publicCode: string;
-  ownerUserId: string;
+  /** Omitted when the organization has no owner row yet; the place is still made. */
+  ownerUserId?: string;
   timeZone?: string | null;
   country?: string | null;
   address?: string | null;
@@ -90,21 +91,23 @@ async function provisionEntityRows(
       .returning({ id: academyProfile.entityId }),
   );
 
-  mark(
-    "entity_membership",
-    await exec
-      .insert(entityMembership)
-      .values({
-        organizationId: input.organizationId,
-        entityId: input.entityId,
-        userId: input.ownerUserId,
-        role: "owner",
-        status: "active",
-        joinedAt: new Date(),
-      })
-      .onConflictDoNothing()
-      .returning({ id: entityMembership.id }),
-  );
+  if (input.ownerUserId) {
+    mark(
+      "entity_membership",
+      await exec
+        .insert(entityMembership)
+        .values({
+          organizationId: input.organizationId,
+          entityId: input.entityId,
+          userId: input.ownerUserId,
+          role: "owner",
+          status: "active",
+          joinedAt: new Date(),
+        })
+        .onConflictDoNothing()
+        .returning({ id: entityMembership.id }),
+    );
+  }
 
   mark(
     "curriculum_track",
@@ -135,7 +138,7 @@ async function provisionEntityRows(
  * resolves. Runs on the base connection, beside the other creation writes.
  */
 export async function provisionOrganization(
-  input: { organizationId: string; ownerUserId: string },
+  input: { organizationId: string; ownerUserId?: string },
   exec: DbExec,
 ): Promise<ProvisionResult> {
   const { organizationId, ownerUserId } = input;
@@ -190,7 +193,7 @@ export async function createEntity(
     organizationId: string;
     type: string;
     name: string;
-    ownerUserId: string;
+    ownerUserId?: string;
     timeZone?: string | null;
   },
   exec: DbExec,

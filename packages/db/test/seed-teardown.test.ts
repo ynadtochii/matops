@@ -28,7 +28,7 @@ describe("seed roundtrip — up then down", () => {
     ).rows[0]?.n ?? 0;
 
   beforeAll(async () => {
-    pg = await freshDb();
+    pg = await freshDb([]);
     exec = drizzle(pg, { schema, casing: "snake_case" }) as unknown as SeedExec;
 
     // The real user you sign in as (NOT a seed id).
@@ -40,6 +40,8 @@ describe("seed roundtrip — up then down", () => {
     await pg.exec(
       `INSERT INTO "organization" (id, name, slug, public_code, created_at)
        VALUES ('real_org', 'Real Gym', 'real-gym', '123456', now());
+       INSERT INTO "entity" (id, organization_id, type, name, slug, is_default, public_code)
+       VALUES ('real_org', 'real_org', 'bjj_academy', 'Real Gym', 'real-gym', true, '123456');
        INSERT INTO "member" (id, organization_id, user_id, role, status, created_at)
        VALUES ('real_mem', 'real_org', '${realUser.id}', 'owner', 'active', now());
        INSERT INTO "membership_plan" (academy_id, name, price_minor, currency)

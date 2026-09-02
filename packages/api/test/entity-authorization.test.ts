@@ -86,9 +86,9 @@ describe("the entity tiers", () => {
   afterAll(() => h.close());
 
   it("refuses a request that names no entity", async () => {
-    expect(await rejectionCode(h.as(COACH, ORG_A).entity.current())).toBe(
-      "BAD_REQUEST",
-    );
+    expect(
+      await rejectionCode(h.as(COACH, ORG_A, new Headers()).entity.current()),
+    ).toBe("BAD_REQUEST");
   });
 
   it("refuses an entity of another organization", async () => {

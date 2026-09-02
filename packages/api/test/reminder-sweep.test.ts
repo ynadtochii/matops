@@ -275,7 +275,7 @@ describe("class reminder sweep", () => {
       `UPDATE "class" SET deleted_at = now() WHERE id = '${C_DEL}';`,
     );
     await h.pg.exec(
-      `UPDATE "organization" SET deleted_at = now() WHERE id = '${B}';`,
+      `UPDATE "entity" SET deleted_at = now() WHERE id = '${B}';`,
     );
 
     const r = recorder();

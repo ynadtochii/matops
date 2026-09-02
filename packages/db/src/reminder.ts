@@ -3,7 +3,7 @@ import { and, asc, eq, gt, isNull, lte } from "drizzle-orm";
 import { REMINDER_LEAD_MINUTES } from "@matops/domain";
 
 import type { DbExec } from "./client";
-import { organization } from "./auth-schema";
+import { entity } from "./entity-schema";
 import { classInstance, classParticipation, classTemplate } from "./scheduling";
 
 /**
@@ -73,10 +73,10 @@ export async function claimDueReminderClasses(
       ),
     )
     .leftJoin(classTemplate, eq(classTemplate.id, classInstance.templateId))
-    .innerJoin(organization, eq(organization.id, classInstance.academyId))
+    .innerJoin(entity, eq(entity.id, classInstance.academyId))
     .where(
       and(
-        isNull(organization.deletedAt),
+        isNull(entity.deletedAt),
         eq(classInstance.status, "scheduled"),
         isNull(classInstance.deletedAt),
         isNull(classInstance.reminderSentAt),

@@ -9,8 +9,8 @@ import {
   createPendingMembership,
   desc,
   eq,
+  getAcademyMembership,
   getAcademyPublic,
-  getMembership,
   listAcademyClassesInWindow,
   ne,
   resolveAccountByEmail,
@@ -369,7 +369,7 @@ export const dropInRouter = {
         },
         ctx.baseDb,
       );
-      const membership = await getMembership(
+      const membership = await getAcademyMembership(
         account.userId,
         ctx.academyId,
         ctx.baseDb,

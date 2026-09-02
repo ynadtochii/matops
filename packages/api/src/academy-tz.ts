@@ -1,6 +1,6 @@
 import type { TenantTx } from "@matops/db";
 import { desc, eq, sql } from "@matops/db";
-import { classTemplate, organization } from "@matops/db/schema";
+import { academyProfile, classTemplate, entity } from "@matops/db/schema";
 import { resolveAcademyTimeZone } from "@matops/domain";
 
 export { FALLBACK_TIME_ZONE as DEFAULT_TIME_ZONE } from "@matops/domain";
@@ -22,12 +22,13 @@ export async function academyContext(
 ): Promise<AcademyContext> {
   const [org] = await ctx.db
     .select({
-      timeZone: organization.timeZone,
-      country: organization.country,
-      curriculumForStudents: organization.curriculumForStudents,
+      timeZone: entity.timeZone,
+      country: entity.country,
+      curriculumForStudents: academyProfile.curriculumForStudents,
     })
-    .from(organization)
-    .where(eq(organization.id, ctx.academyId))
+    .from(entity)
+    .innerJoin(academyProfile, eq(academyProfile.entityId, entity.id))
+    .where(eq(entity.id, ctx.academyId))
     .limit(1);
   const curriculumForStudents = org?.curriculumForStudents ?? false;
   const country = org?.country ?? null;

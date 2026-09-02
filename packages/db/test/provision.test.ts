@@ -27,7 +27,7 @@ describe("provisioning an organization", () => {
   let pg: PGlite;
 
   beforeAll(async () => {
-    pg = await freshDb();
+    pg = await freshDb([]);
     await seedOrganization(pg, ORG, "100001");
   });
 
@@ -103,7 +103,7 @@ describe("repairing a half-provisioned organization", () => {
   let pg: PGlite;
 
   beforeAll(async () => {
-    pg = await freshDb();
+    pg = await freshDb([]);
     await seedOrganization(pg, ORG, "100001");
   });
 
@@ -139,7 +139,7 @@ describe("adding a second entity", () => {
   let secondId: string;
 
   beforeAll(async () => {
-    pg = await freshDb();
+    pg = await freshDb([]);
     await seedOrganization(pg, ORG, "100001");
     await provisionOrganization(
       { organizationId: ORG, ownerUserId: OWNER },

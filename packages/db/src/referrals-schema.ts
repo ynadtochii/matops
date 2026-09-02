@@ -1,11 +1,14 @@
 import { sql } from "drizzle-orm";
 import {
   check,
+  foreignKey,
   index,
   pgEnum,
   pgTable,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+
+import { entity, entityMembership } from "./entity-schema";
 
 /** Audit event emitted whenever the current referral state changes. */
 export const referralAction = pgEnum("referral_action", [
@@ -23,7 +26,10 @@ export const memberReferral = pgTable(
   "member_referral",
   (t) => ({
     id: t.uuid().notNull().primaryKey().defaultRandom(),
-    academyId: t.text().notNull(),
+    academyId: t
+      .text()
+      .notNull()
+      .references(() => entity.id),
     studentMemberId: t.text().notNull(),
     referrerMemberId: t.text(),
     assignedBy: t.text().notNull(),
@@ -47,6 +53,16 @@ export const memberReferral = pgTable(
       "mref_no_self_referral",
       sql`${table.referrerMemberId} IS NULL OR ${table.studentMemberId} <> ${table.referrerMemberId}`,
     ),
+    foreignKey({
+      name: "member_referral_student_membership",
+      columns: [table.academyId, table.studentMemberId],
+      foreignColumns: [entityMembership.entityId, entityMembership.id],
+    }),
+    foreignKey({
+      name: "member_referral_referrer_membership",
+      columns: [table.academyId, table.referrerMemberId],
+      foreignColumns: [entityMembership.entityId, entityMembership.id],
+    }),
   ],
 );
 
@@ -55,7 +71,10 @@ export const memberReferralAudit = pgTable(
   "member_referral_audit",
   (t) => ({
     id: t.uuid().notNull().primaryKey().defaultRandom(),
-    academyId: t.text().notNull(),
+    academyId: t
+      .text()
+      .notNull()
+      .references(() => entity.id),
     studentMemberId: t.text().notNull(),
     oldReferrerMemberId: t.text(),
     newReferrerMemberId: t.text(),
@@ -73,5 +92,20 @@ export const memberReferralAudit = pgTable(
       "mref_audit_no_self_referral",
       sql`${table.newReferrerMemberId} IS NULL OR ${table.studentMemberId} <> ${table.newReferrerMemberId}`,
     ),
+    foreignKey({
+      name: "member_referral_audit_student_membership",
+      columns: [table.academyId, table.studentMemberId],
+      foreignColumns: [entityMembership.entityId, entityMembership.id],
+    }),
+    foreignKey({
+      name: "member_referral_audit_old_referrer_membership",
+      columns: [table.academyId, table.oldReferrerMemberId],
+      foreignColumns: [entityMembership.entityId, entityMembership.id],
+    }),
+    foreignKey({
+      name: "member_referral_audit_new_referrer_membership",
+      columns: [table.academyId, table.newReferrerMemberId],
+      foreignColumns: [entityMembership.entityId, entityMembership.id],
+    }),
   ],
 );

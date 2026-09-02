@@ -23,6 +23,8 @@ import { recomputeBookingCounts } from "../erase";
 import {
   classInstance,
   classParticipation,
+  entity,
+  entityMembership,
   member,
   memberDues,
   memberNote,
@@ -30,7 +32,6 @@ import {
   memberReferral,
   memberReferralAudit,
   membershipPlan,
-  organization,
   paymentClaim,
   rankPromotion,
   user,
@@ -93,6 +94,7 @@ const LAST_NAMES = [
 /** A fake student to add to a real academy, all ids `seed_`-prefixed. */
 interface FakeStudent {
   userId: string;
+  orgMemberId: string;
   memberId: string;
   name: string;
   email: string;
@@ -139,7 +141,8 @@ function buildFakeStudents(academyId: string, count = 20): FakeStudent[] {
     }
     return {
       userId: `${SEED_MARKER}user_${handle}`,
-      memberId: `${SEED_MARKER}mem_${handle}`,
+      orgMemberId: `${SEED_MARKER}mem_${handle}`,
+      memberId: `${SEED_MARKER}emem_${handle}`,
       name,
       email: `${name.toLowerCase().replace(/[^a-z]+/g, ".")}.${key}${i + 1}@example.com`,
       phone: `+38050${String(2000000 + i).slice(-7)}`,
@@ -173,9 +176,9 @@ export async function findAcademyByPublicCode(
   code: string,
 ): Promise<{ id: string; name: string } | null> {
   const rows = await exec
-    .select({ id: organization.id, name: organization.name })
-    .from(organization)
-    .where(eq(organization.publicCode, code))
+    .select({ id: entity.id, name: entity.name })
+    .from(entity)
+    .where(and(eq(entity.publicCode, code), isNull(entity.deletedAt)))
     .limit(1);
   return rows[0] ?? null;
 }
@@ -238,7 +241,7 @@ export async function fillAcademy(
     .insert(member)
     .values(
       students.map((s, i) => ({
-        id: s.memberId,
+        id: s.orgMemberId,
         organizationId: academyId,
         userId: s.userId,
         role: s.role,
@@ -249,6 +252,28 @@ export async function fillAcademy(
     )
     .onConflictDoNothing();
   report.member = students.length;
+
+  await exec
+    .insert(entityMembership)
+    .values(
+      students.map((s, i) => {
+        const createdAt = new Date(now.getTime() - (150 - i * 3) * DAY_MS);
+        return {
+          id: s.memberId,
+          organizationId: academyId,
+          entityId: academyId,
+          userId: s.userId,
+          role: s.role,
+          status: s.status,
+          invitedRole: s.invitedRole,
+          joinedAt: s.status === "active" ? createdAt : null,
+          createdAt,
+          updatedAt: createdAt,
+        };
+      }),
+    )
+    .onConflictDoNothing();
+  report.entity_membership = students.length;
 
   // 2. Dues on the academy's EXISTING plans (skip if the owner has none yet).
   const plans = await exec
@@ -635,6 +660,16 @@ export async function clearAcademy(
         and(
           eq(memberNote.academyId, academyId),
           like(memberNote.memberId, seedLike),
+        ),
+      ),
+  );
+  await del("entity_membership", () =>
+    exec
+      .delete(entityMembership)
+      .where(
+        and(
+          eq(entityMembership.entityId, academyId),
+          like(entityMembership.id, seedLike),
         ),
       ),
   );

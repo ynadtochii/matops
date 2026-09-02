@@ -18,20 +18,27 @@ const seed = async (pg: PGlite) => {
   const members = statuses
     .map((s) => `('mem_${s}', '${ACAD}', 'u_${s}', 'student', '${s}', now())`)
     .join(",");
+  const entityMemberships = statuses
+    .map(
+      (s) =>
+        `('emem_${s}', '${ACAD}', '${ACAD}', 'u_${s}', 'student', '${s}', now())`,
+    )
+    .join(",");
   const dues = statuses
     .map(
       (s) =>
-        `(gen_random_uuid(), '${ACAD}', 'mem_${s}', '${PLAN}', now() + interval '1 day', now(), now())`,
+        `(gen_random_uuid(), '${ACAD}', 'emem_${s}', '${PLAN}', now() + interval '1 day', now(), now())`,
     )
     .join(",");
 
   await pg.exec(`
     INSERT INTO "user" (id, name, email, email_verified, created_at, updated_at)
       VALUES ${users};
-    INSERT INTO "organization" (id, name, slug, public_code, created_at)
-      VALUES ('${ACAD}', 'Dues Gym', 'dues-gym', '700086', now());
     INSERT INTO "member" (id, organization_id, user_id, role, status, created_at)
       VALUES ${members};
+    INSERT INTO "entity_membership"
+      (id, organization_id, entity_id, user_id, role, status, joined_at)
+      VALUES ${entityMemberships};
     INSERT INTO "membership_plan" (id, academy_id, name, price_minor, currency)
       VALUES ('${PLAN}', '${ACAD}', 'Unlimited', 8000, 'EUR');
     INSERT INTO "member_dues" (id, academy_id, member_id, plan_id, next_due_at, created_at, updated_at)
@@ -43,7 +50,7 @@ describe("dues reminders never chase someone who left (docs/issues/84)", () => {
   let pg: PGlite;
 
   beforeEach(async () => {
-    pg = await freshDb();
+    pg = await freshDb([ACAD]);
     await seed(pg);
   });
 
@@ -62,7 +69,7 @@ describe("dues reminders never chase someone who left (docs/issues/84)", () => {
     expect(single(stamped).n).toBe(1);
 
     await pg.exec(
-      `UPDATE "member" SET status = 'active' WHERE id = 'mem_archived';`,
+      `UPDATE "entity_membership" SET status = 'active' WHERE id = 'emem_archived';`,
     );
     const second = await claimDueDuesReminders({ exec: execOn(pg) });
     expect(second.map((c) => c.userId)).toEqual(["u_archived"]);

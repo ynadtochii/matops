@@ -1,6 +1,8 @@
 import { sql } from "drizzle-orm";
 import { index, pgEnum, pgTable, uniqueIndex } from "drizzle-orm/pg-core";
 
+import { entity } from "./entity-schema";
+
 /**
  * Scheduling domain schema (Phase 2). Owns ONLY the scheduling tables; identity
  * (academy / member / user) comes from Better Auth (docs/issues/08). FKs to those
@@ -76,7 +78,10 @@ export const classTemplate = pgTable(
   "class_template",
   (t) => ({
     id: t.uuid().notNull().primaryKey().defaultRandom(),
-    academyId: t.text().notNull(), // → organization.id
+    academyId: t
+      .text()
+      .notNull()
+      .references(() => entity.id),
     instructorId: t.text().notNull(), // → user.id
     title: t.text().notNull(),
     discipline: discipline(), // nullable optional tag
@@ -122,7 +127,10 @@ export const classInstance = pgTable(
   "class",
   (t) => ({
     id: t.uuid().notNull().primaryKey().defaultRandom(),
-    academyId: t.text().notNull(),
+    academyId: t
+      .text()
+      .notNull()
+      .references(() => entity.id),
     templateId: t.uuid().references(() => classTemplate.id), // null = one-off
     instructorId: t.text().notNull(),
     title: t.text().notNull(), // copied from template; per-instance overridable
@@ -179,7 +187,10 @@ export const classParticipation = pgTable(
   "class_participation",
   (t) => ({
     id: t.uuid().notNull().primaryKey().defaultRandom(),
-    academyId: t.text().notNull(), // → organization.id (RLS scope)
+    academyId: t
+      .text()
+      .notNull()
+      .references(() => entity.id),
     classId: t
       .uuid()
       .notNull()
@@ -251,7 +262,10 @@ export const dropIn = pgTable(
   "drop_in",
   (t) => ({
     id: t.uuid().notNull().primaryKey().defaultRandom(),
-    academyId: t.text().notNull(), // → organization.id (RLS scope)
+    academyId: t
+      .text()
+      .notNull()
+      .references(() => entity.id),
     firstName: t.text().notNull(),
     lastName: t.text().notNull(),
     phone: t.text().notNull(),
@@ -292,7 +306,10 @@ export const dropInVisit = pgTable(
   "drop_in_visit",
   (t) => ({
     id: t.uuid().notNull().primaryKey().defaultRandom(),
-    academyId: t.text().notNull(), // → organization.id (RLS scope)
+    academyId: t
+      .text()
+      .notNull()
+      .references(() => entity.id),
     dropInId: t
       .uuid()
       .notNull()

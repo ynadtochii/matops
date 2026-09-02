@@ -6,11 +6,11 @@ import { memberNote } from "@matops/db/schema";
 
 import type { Harness } from "./helpers";
 import { createTRPCRouter, memberProcedure } from "../src/trpc";
-import { harness, rejectionCode, seedAcademies } from "./helpers";
+import { harness, memberId, rejectionCode, seedAcademies } from "./helpers";
 
 const A = "acad_rollback_a";
 const OWNER_A = "u_rollback_owner";
-const MEMBER_ROW = "m_rollback_probe";
+const MEMBER_ROW = memberId(A, OWNER_A);
 
 const probeRouter = createTRPCRouter({
   writeThenThrow: memberProcedure.mutation(async ({ ctx }) => {

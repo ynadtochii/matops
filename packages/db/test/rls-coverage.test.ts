@@ -9,6 +9,14 @@ const NO_RLS_BY_DESIGN: Record<string, string> = {
 };
 
 /**
+ * `academy_id` holds an entity id (ADR 124), and the foreign key is what makes
+ * that a fact rather than a convention. One table is out: `tenant_probe` is
+ * hand-written in migration 0001 and exists to prove the seam bites, so it is
+ * never given a parent to point at.
+ */
+const NO_ENTITY_KEY_BY_DESIGN = ["tenant_probe"];
+
+/**
  * The organization/entity foundation (ADR 124). These carry no `academy_id`, so
  * the discovery query below has to name them, and each must read the GUC its
  * scope says it should: an entity-table policy that read the organization GUC
@@ -115,6 +123,35 @@ describe("every tenant-scoped table is covered by RLS", () => {
       .filter((t) => t.quals.includes("app.organization_id"))
       .map((t) => t.table_name);
     expect(leaky).toEqual([]);
+  });
+
+  it("points every academy_id at an entity", async () => {
+    const res = await pg.query<{ table_name: string }>(`
+      SELECT c.relname AS table_name
+        FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE n.nspname = 'public' AND c.relkind = 'r'
+         AND EXISTS (SELECT 1 FROM pg_attribute a
+                      WHERE a.attrelid = c.oid AND a.attname = 'academy_id'
+                        AND a.attnum > 0 AND NOT a.attisdropped)
+         AND NOT EXISTS (SELECT 1 FROM pg_constraint k
+                          WHERE k.conrelid = c.oid AND k.contype = 'f'
+                            AND k.confrelid = 'entity'::regclass
+                            AND pg_get_constraintdef(k.oid) ILIKE '%(academy_id)%')
+       ORDER BY 1
+    `);
+    expect(res.rows.map((r) => r.table_name)).toEqual(NO_ENTITY_KEY_BY_DESIGN);
+  });
+
+  it("carries the organization match on the one row that joins two parents", async () => {
+    const res = await pg.query<{ def: string }>(`
+      SELECT pg_get_constraintdef(oid) AS def
+        FROM pg_constraint
+       WHERE conname = 'entity_membership_entity_same_org'
+    `);
+    expect(single(res).def).toContain(
+      "FOREIGN KEY (organization_id, entity_id) REFERENCES entity(organization_id, id)",
+    );
   });
 
   it("denies the app role every privilege on an exception table", async () => {

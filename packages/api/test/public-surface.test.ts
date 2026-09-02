@@ -33,9 +33,7 @@ afterEach(async () => {
 });
 
 async function base(): Promise<Harness> {
-  const h = await harness();
-  open = h;
-  await seedAcademies(h.pg, [
+  const h = await harness([
     {
       id: A,
       code: "100001",
@@ -45,6 +43,7 @@ async function base(): Promise<Harness> {
       ],
     },
   ]);
+  open = h;
   return h;
 }
 

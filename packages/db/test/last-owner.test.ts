@@ -1,5 +1,5 @@
 import type { PGlite } from "@electric-sql/pglite";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { setMemberRoleIfNotLastOwner } from "../src/membership";
@@ -14,9 +14,11 @@ const COACH = "u_coach";
 describe("never ownerless, at both levels", () => {
   let pg: PGlite;
   let secondEntity: string;
+  let ownerAtSecond: string;
+  let ownerAtDefault: string;
 
   beforeAll(async () => {
-    pg = await freshDb();
+    pg = await freshDb([]);
     await pg.exec(`
       INSERT INTO "user" (id, name, email, email_verified, created_at, updated_at) VALUES
         ('${OWNER}', 'Owner', 'owner@test.local', true, now(), now()),
@@ -52,6 +54,22 @@ describe("never ownerless, at both levels", () => {
       status: "active",
       joinedAt: new Date(),
     });
+    const idAt = async (entityId: string) => {
+      const rows = await exec
+        .select({ id: entityMembership.id })
+        .from(entityMembership)
+        .where(
+          and(
+            eq(entityMembership.entityId, entityId),
+            eq(entityMembership.userId, OWNER),
+          ),
+        );
+      const row = rows[0];
+      if (!row) throw new Error(`no owner membership at ${entityId}`);
+      return row.id;
+    };
+    ownerAtSecond = await idAt(secondEntity);
+    ownerAtDefault = await idAt(ORG);
   });
 
   afterAll(() => pg.close());
@@ -59,7 +77,7 @@ describe("never ownerless, at both levels", () => {
   it("refuses a demotion the entity check alone would allow", async () => {
     const result = await setMemberRoleIfNotLastOwner(
       secondEntity,
-      "mem_owner",
+      ownerAtSecond,
       "instructor",
       execOn(pg),
     );
@@ -83,7 +101,7 @@ describe("never ownerless, at both levels", () => {
 
     const result = await setMemberRoleIfNotLastOwner(
       secondEntity,
-      "mem_owner",
+      ownerAtSecond,
       "instructor",
       exec,
     );
@@ -93,7 +111,7 @@ describe("never ownerless, at both levels", () => {
   it("refuses stripping the entity of its last owner even when the organization has spares", async () => {
     const result = await setMemberRoleIfNotLastOwner(
       ORG,
-      "mem_owner",
+      ownerAtDefault,
       "student",
       execOn(pg),
     );

@@ -1,5 +1,7 @@
 import { index, pgTable } from "drizzle-orm/pg-core";
 
+import { entity } from "./entity-schema";
+
 /**
  * The notification center (v3.7, docs/issues/77). One row per RECIPIENT per
  * event, written by the same `deliver()` choke point that sends the push,
@@ -17,7 +19,10 @@ export const notification = pgTable(
   "notification",
   (t) => ({
     id: t.uuid().notNull().primaryKey().defaultRandom(),
-    academyId: t.text().notNull(),
+    academyId: t
+      .text()
+      .notNull()
+      .references(() => entity.id),
     userId: t.text().notNull(),
     kind: t.text().notNull(),
     title: t.text().notNull(),

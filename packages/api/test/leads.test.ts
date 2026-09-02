@@ -7,7 +7,7 @@ import { leadQueues, needsFollowUp } from "@matops/domain";
 
 import type { Harness } from "./helpers";
 import { resetRateLimits } from "../src/rate-limit";
-import { harness, rejectionCode, seedAcademies, seedClasses } from "./helpers";
+import { harness, rejectionCode, seedClasses } from "./helpers";
 
 const A = "org_a";
 const OWNER = "u_owner";
@@ -26,9 +26,7 @@ afterEach(async () => {
 });
 
 async function base(): Promise<Harness> {
-  const h = await harness();
-  open = h;
-  await seedAcademies(h.pg, [
+  const h = await harness([
     {
       id: A,
       code: "100001",
@@ -39,6 +37,7 @@ async function base(): Promise<Harness> {
       ],
     },
   ]);
+  open = h;
   await seedClasses(h.pg, [
     { id: TODAY, academyId: A, instructorId: COACH, startsInMinutes: -60 },
   ]);

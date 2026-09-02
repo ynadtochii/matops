@@ -351,7 +351,7 @@ Gate:
 
 ### Wave 3: Convert BJJ domain tables and RLS
 
-Status: pending
+Status: done
 
 Goal: move all BJJ behavior from academy scope to entity scope in one controlled cutover.
 
@@ -366,16 +366,17 @@ Primary areas:
 
 Tasks:
 
-- [ ] Keep the column name `academy_id` on BJJ tables. It now references `entity.id` where `entity.type = 'bjj_academy'`. Add the foreign key and the composite `(organization_id, academy_id)` reference.
-- [ ] Add `organization_id` where the ADR requires it.
-- [ ] Point `member_id` columns at `entity_membership.id`.
-- [ ] Replace academy policies and indexes with entity equivalents that also carry the organization match where a join needs it.
-- [ ] Add composite integrity checks so child and parent rows cannot belong to different organizations or entities.
-- [ ] Move scheduling, curriculum, attendance, bookings, ranks, notes, referrals, notifications, public booking, and current manual dues to entity context.
-- [ ] Keep BJJ product terms such as academy, class, instructor, rank, and curriculum inside the BJJ module.
-- [ ] Update cron and public exceptions to resolve and validate entity scope.
-- [ ] Update seed, teardown, erase coverage, policy coverage, and cross-entity tests.
-- [ ] Wipe and reseed the dev database.
+- [x] Keep the column name `academy_id` on BJJ tables. It now references `entity.id` where `entity.type = 'bjj_academy'`. Add the foreign key and the composite `(organization_id, academy_id)` reference.
+- [x] Add `organization_id` where the ADR requires it.
+- [x] Point `member_id` columns at `entity_membership.id`.
+- [x] Replace academy policies and indexes with entity equivalents that also carry the organization match where a join needs it.
+- [x] Add composite integrity checks so child and parent rows cannot belong to different organizations or entities.
+- [x] Move scheduling, curriculum, attendance, bookings, ranks, notes, referrals, notifications, public booking, and current manual dues to entity context.
+- [x] Keep BJJ product terms such as academy, class, instructor, rank, and curriculum inside the BJJ module.
+- [x] Update cron and public exceptions to resolve and validate entity scope.
+- [x] Update seed, teardown, erase coverage, policy coverage, and cross-entity tests.
+- [x] Make the test suite repeatable under `pnpm test` again (db-suite PGlite contention).
+- [x] Wipe and reseed the dev database.
 
 Gate:
 
@@ -594,7 +595,7 @@ Not part of this pivot. Each needs its own ADR and gate.
 
 ## Current Wave
 
-Wave 3: Convert BJJ domain tables and RLS.
+Wave 4: Restructure web routes and shell.
 
 ## Progress
 
@@ -605,7 +606,7 @@ Wave 3: Convert BJJ domain tables and RLS.
 - [x] Wave 0 complete.
 - [x] Wave 1 complete.
 - [x] Wave 2 complete.
-- [ ] Wave 3 complete.
+- [x] Wave 3 complete.
 - [ ] Wave 4 complete.
 - [ ] Wave 5 complete.
 - [ ] Wave 6 complete.
