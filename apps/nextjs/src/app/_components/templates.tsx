@@ -22,8 +22,8 @@ import { toast } from "@matops/ui/toast";
 
 import { optimistic, rollback } from "~/lib/optimistic";
 import { useTRPC } from "~/trpc/react";
-import { useAcademy } from "./academy";
 import { InstructorOptions } from "./coach-select";
+import { useEntity } from "./entity";
 import { cardClass, SectionHeading } from "./primitives";
 import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
@@ -97,7 +97,7 @@ export function Templates() {
   const queryClient = useQueryClient();
   const list = useQuery(trpc.template.list.queryOptions());
   const board = useQuery(trpc.curriculum.board.queryOptions({}));
-  const me = useAcademy();
+  const me = useEntity();
 
   const [form, setForm] = useState<FormState | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);

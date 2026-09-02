@@ -36,8 +36,8 @@ import { FOCUS_RING, FOCUS_RING_INSET, PRESS } from "@matops/ui/motion";
 
 import { clockParts, dayLongFmt, timeFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
-import { useAcademy } from "./academy";
 import { ClassRoster } from "./class-roster";
+import { useEntity, useEntityHref } from "./entity";
 import { PageHeader } from "./page-header";
 import {
   cardClass,
@@ -101,8 +101,9 @@ function outstanding(
  * get the schedule half without the owner-only queue.
  */
 export function DashboardScreen() {
+  const href = useEntityHref();
   const trpc = useTRPC();
-  const c = useAcademy();
+  const c = useEntity();
   const [detailId, setDetailId] = useState<string | null>(null);
 
   const isOwner = isOwnerOf(c);
@@ -175,7 +176,7 @@ export function DashboardScreen() {
   const queue: QueueItem[] = [
     {
       key: "attendance",
-      href: "/attendance",
+      href: href("/attendance"),
       count: unmarked.length,
       label: "Classes to mark",
     },
@@ -268,18 +269,21 @@ export function DashboardScreen() {
             {firstRun ? (
               <PanelNotice title="Your academy is empty. Three steps to open it.">
                 <Link
-                  href="/schedule"
+                  href={href("/schedule")}
                   className="text-brand-strong font-medium"
                 >
                   1. Add your weekly classes
                 </Link>
                 {" · "}
-                <Link href="/members" className="text-brand-strong font-medium">
+                <Link
+                  href={href("/members")}
+                  className="text-brand-strong font-medium"
+                >
                   2. Share your join link
                 </Link>
                 {" · "}
                 <Link
-                  href="/members?tab=leads"
+                  href={href("/members?tab=leads")}
                   className="text-brand-strong font-medium"
                 >
                   3. Print the QR poster
@@ -340,7 +344,7 @@ export function DashboardScreen() {
                 title="No classes today."
                 action={
                   <Link
-                    href="/schedule"
+                    href={href("/schedule")}
                     className="text-brand-strong text-sm font-medium"
                   >
                     Add a class →

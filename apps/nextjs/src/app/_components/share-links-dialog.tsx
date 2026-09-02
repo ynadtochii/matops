@@ -19,7 +19,7 @@ import { toast } from "@matops/ui/toast";
 
 import { shareLink, useCanShare } from "~/lib/share";
 import { useTRPC } from "~/trpc/react";
-import { useAcademy } from "./academy";
+import { useEntity } from "./entity";
 import { cardClass } from "./primitives";
 import { SkeletonRows } from "./skeletons";
 import { ErrorState } from "./states";
@@ -58,7 +58,7 @@ export function ShareLinksDialog({ trigger }: { trigger: ReactNode }) {
 
 function ShareLinksBody() {
   const trpc = useTRPC();
-  const academy = useAcademy();
+  const academy = useEntity();
   const isOwner = isOwnerOf(academy);
   const links = useQuery(trpc.academy.shareLinks.queryOptions());
   const invites = useQuery(trpc.invite.list.queryOptions());
@@ -100,7 +100,7 @@ function BookingRow({
 }) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const academyName = useAcademy().name;
+  const academyName = useEntity().name;
 
   const turnOn = useMutation(
     trpc.academy.setPublicApi.mutationOptions({
@@ -164,7 +164,7 @@ function BookingRow({
 }
 
 function CheckInRow() {
-  const { academyId, name } = useAcademy();
+  const { academyId, name } = useEntity();
 
   return (
     <LinkCard
@@ -192,7 +192,7 @@ function JoinRow({
 }) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const academyName = useAcademy().name;
+  const academyName = useEntity().name;
 
   const create = useMutation(
     trpc.invite.create.mutationOptions({

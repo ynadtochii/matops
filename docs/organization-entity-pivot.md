@@ -389,7 +389,7 @@ Gate:
 
 ### Wave 4: Restructure web routes and shell
 
-Status: pending
+Status: done
 
 Goal: add an organization overview and explicit entity routes without changing BJJ screens.
 
@@ -425,16 +425,16 @@ Target routes:
 
 Tasks:
 
-- [ ] Add organization and entity providers to the web shell.
-- [ ] Set `x-matops-entity` in `react.tsx` and `server.tsx` from the route segment.
-- [ ] Replace session-only academy selection with explicit entity routes.
-- [ ] Add an entity selector containing organization overview and authorized entities.
-- [ ] Move current BJJ routes, owner and student alike, under the entity route segment.
-- [ ] Move `ROUTE_ACCESS` in `routes.ts` to match on the path after the entity segment, and gate `/overview` on organization role.
-- [ ] Keep entity type checks in the route access configuration.
-- [ ] Add owner-only `Add entity`, with only BJJ academy enabled.
-- [ ] Preserve query prefetch, loading, mobile web tabs, deep links, and invalidation behavior.
-- [ ] Add route and shell tests using current patterns.
+- [x] Add organization and entity providers to the web shell.
+- [x] Set `x-matops-entity` in `react.tsx` and `server.tsx` from the route segment.
+- [x] Replace session-only academy selection with explicit entity routes.
+- [x] Add an entity selector containing organization overview and authorized entities.
+- [x] Move current BJJ routes, owner and student alike, under the entity route segment.
+- [x] Move `ROUTE_ACCESS` in `routes.ts` to match on the path after the entity segment, and gate `/overview` on organization role.
+- [x] Keep entity type checks in the route access configuration.
+- [x] Add owner-only `Add entity`, with only BJJ academy enabled.
+- [x] Preserve query prefetch, loading, mobile web tabs, deep links, and invalidation behavior.
+- [x] Add route and shell tests using current patterns.
 
 Gate:
 
@@ -595,7 +595,7 @@ Not part of this pivot. Each needs its own ADR and gate.
 
 ## Current Wave
 
-Wave 4: Restructure web routes and shell.
+Wave 5: Add the organization dashboard.
 
 ## Progress
 
@@ -607,7 +607,7 @@ Wave 4: Restructure web routes and shell.
 - [x] Wave 1 complete.
 - [x] Wave 2 complete.
 - [x] Wave 3 complete.
-- [ ] Wave 4 complete.
+- [x] Wave 4 complete.
 - [ ] Wave 5 complete.
 - [ ] Wave 6 complete.
 - [ ] Wave 7 complete.

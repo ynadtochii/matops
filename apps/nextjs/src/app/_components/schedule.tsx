@@ -39,9 +39,9 @@ import {
 } from "~/lib/format";
 import { optimistic, rollback } from "~/lib/optimistic";
 import { useTRPC } from "~/trpc/react";
-import { useAcademy } from "./academy";
 import { ClassRoster } from "./class-roster";
 import { InstructorOptions } from "./coach-select";
+import { useEntity } from "./entity";
 import { Section } from "./primitives";
 import { SchedulePoster } from "./schedule-poster";
 import { SkeletonScheduleWeek } from "./skeletons";
@@ -160,7 +160,7 @@ export function Schedule() {
     [offset],
   );
   const week = useQuery(trpc.class.week.queryOptions(weekWindow));
-  const me = useAcademy();
+  const me = useEntity();
   const invalidate = () =>
     queryClient.invalidateQueries(trpc.class.week.pathFilter());
   const onError = (err: { message: string }) =>

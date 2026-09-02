@@ -286,6 +286,7 @@ export async function setMemberActive(
 export interface UserAcademy {
   academyId: string;
   organizationId: string;
+  type: string;
   name: string;
   slug: string;
   timeZone: string | null;
@@ -316,6 +317,7 @@ export async function listMembershipsForUser(
     .select({
       academyId: entity.id,
       organizationId: entity.organizationId,
+      type: entity.type,
       name: entity.name,
       slug: entity.slug,
       timeZone: entity.timeZone,

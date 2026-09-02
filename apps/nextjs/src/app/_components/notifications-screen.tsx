@@ -23,7 +23,7 @@ import { AnnounceSchema } from "@matops/validators";
 
 import { dayLongFmt, time24Fmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
-import { useAcademy } from "./academy";
+import { useEntity } from "./entity";
 import { PageHeader } from "./page-header";
 import { cardClass, Section } from "./primitives";
 import { SkeletonFeed } from "./skeletons";
@@ -40,7 +40,7 @@ type FeedItem = RouterOutputs["notification"]["list"][number];
 export function NotificationsScreen() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const academy = useAcademy();
+  const academy = useEntity();
   const isStaff = isStaffOf(academy);
 
   const feed = useQuery(trpc.notification.list.queryOptions());

@@ -21,7 +21,7 @@ import { UpdateProfileSchema } from "@matops/validators";
 
 import { dateYearFmt, monthYearFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
-import { useAcademy } from "./academy";
+import { useEntity, useEntityHref } from "./entity";
 import { FeedbackLink } from "./feedback-link";
 import { PhoneField } from "./form-fields";
 import { PageHeader } from "./page-header";
@@ -49,7 +49,7 @@ function ProfileDetails({
 }) {
   const trpc = useTRPC();
   const router = useRouter();
-  const academy = useAcademy();
+  const academy = useEntity();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({ ...splitName(name), phone });
 
@@ -157,7 +157,8 @@ export function ProfileScreen({
   email: string;
   phone: string;
 }) {
-  const academy = useAcademy();
+  const academy = useEntity();
+  const href = useEntityHref();
   const mapUrl = academyMapUrl(academy.address, academy.mapUrl);
 
   return (
@@ -216,7 +217,7 @@ export function ProfileScreen({
                 size="sm"
                 className="self-start"
               >
-                <Link href="/payments">Membership dues</Link>
+                <Link href={href("/payments")}>Membership dues</Link>
               </Button>
             )}
           </div>

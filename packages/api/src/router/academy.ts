@@ -86,16 +86,28 @@ export const academyRouter = {
     }));
   }),
 
-  /** The active academy (name, the caller's role/status, and the shareable code
-   * an owner gives students to join in the app — docs/issues/32), or null. */
+  /**
+   * The academy this request named (name, the caller's role/status, and the
+   * shareable code an owner gives students to join in the app —
+   * docs/issues/32), or null.
+   *
+   * The `x-matops-entity` header wins over the session's active organization,
+   * so two browser tabs can show two academies (ADR 124). It stays a
+   * `protectedProcedure` rather than an entity tier because the shell calls it
+   * to decide whether there is an academy to open at all, and a refusal there
+   * would be a crash instead of a gate.
+   */
   current: protectedProcedure.query(async ({ ctx }) => {
-    const academyId = ctx.session.session.activeOrganizationId;
+    const academyId =
+      ctx.requestedEntityId ?? ctx.session.session.activeOrganizationId;
     if (!academyId) return null;
     const mine = await listMembershipsForUser(ctx.session.user.id, ctx.baseDb);
     const academy = mine.find((a) => a.academyId === academyId);
     if (!academy) return null;
     return {
       academyId: academy.academyId,
+      organizationId: academy.organizationId,
+      type: academy.type,
       userId: ctx.session.user.id,
       name: academy.name,
       role: academy.role,

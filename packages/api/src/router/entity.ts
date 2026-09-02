@@ -26,7 +26,11 @@ export const entityRouter = {
           ctx.session.user.id,
           ctx.db,
         );
-    return rows.map((e) => ({ id: e.id, name: e.name, type: e.type }));
+    return {
+      organizationId: ctx.organizationId,
+      canAdd: owns,
+      entities: rows.map((e) => ({ id: e.id, name: e.name, type: e.type })),
+    };
   }),
 
   /** The entity this request named, once the tier has authorized it. */

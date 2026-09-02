@@ -7,10 +7,13 @@ import { useQuery } from "@tanstack/react-query";
 
 import {
   bookingAccessMessage,
+  canVisit,
+  entityHref,
   isActiveMember,
   isOwner as isOwnerOf,
   isPendingCoach,
   isStaff as isStaffOf,
+  pathWithinEntity,
 } from "@matops/domain";
 import {
   DropdownMenu,
@@ -22,17 +25,16 @@ import { Logo } from "@matops/ui/logo";
 import { ThemeToggle } from "@matops/ui/theme";
 
 import { useTRPC } from "~/trpc/react";
-import { AcademyProvider, useAcademy } from "./academy";
-import { AcademyGate } from "./academy-gate";
-import { AcademySwitcher } from "./academy-switcher";
+import { EntityProvider, useEntity, useOrganization } from "./entity";
+import { EntitySelector } from "./entity-selector";
 import { FeedbackLink } from "./feedback-link";
 import { PageLoader } from "./mat-loader";
-import { canVisit } from "./routes";
 import { ShareLinksDialog } from "./share-links-dialog";
 import { SignOutButton } from "./sign-out";
 import { ErrorState, NoAccessState } from "./states";
 
 interface NavItem {
+  path: string;
   href: string;
   label: string;
   icon: ReactNode;
@@ -230,71 +232,71 @@ const ShareIcon = () => (
  * That is convenience, not security. The tRPC tier is the guard.
  */
 export function AppShell({
+  entityId,
   user,
   children,
 }: {
+  entityId: string;
   user: { name: string; email: string };
   children: ReactNode;
 }) {
   const trpc = useTRPC();
   const pathname = usePathname();
   const current = useQuery(trpc.academy.current.queryOptions());
-  const mine = useQuery(trpc.academy.memberships.queryOptions());
 
   // Boot: no chrome to mirror yet, and the answer may be the shell or the gate,
   // so a skeleton would draw a layout that half the time never arrives (ADR 80).
-  if (current.isPending || mine.isPending) {
+  if (current.isPending) {
     return <PageLoader label="Opening your academy" />;
   }
 
-  if (current.isError || mine.isError) {
+  if (current.isError) {
     return (
       <div className="mx-auto w-full max-w-md p-8">
         <ErrorState
           label="your academy"
-          onRetry={() => {
-            void current.refetch();
-            void mine.refetch();
-          }}
+          onRetry={() => void current.refetch()}
         />
       </div>
     );
   }
 
-  const academies = mine.data.map((a) => ({
-    academyId: a.academyId,
-    name: a.name,
-  }));
-
-  // No active academy → the post-login gate decides where to land (ADR 49):
-  // open the one academy, pick among several, or join a new one by code.
+  // The URL names an academy this person cannot open. The tRPC tier refuses it
+  // anyway; this is the readable version of the same answer.
   if (!current.data) {
-    return <AcademyGate />;
+    return (
+      <div className="mx-auto w-full max-w-md p-8">
+        <NoAccessState />
+      </div>
+    );
   }
 
   return (
-    <AcademyProvider academy={current.data}>
-      <ShellChrome academies={academies} user={user} pathname={pathname}>
+    <EntityProvider entity={current.data}>
+      <ShellChrome entityId={entityId} user={user} pathname={pathname}>
         {children}
       </ShellChrome>
-    </AcademyProvider>
+    </EntityProvider>
   );
 }
 
 function ShellChrome({
-  academies,
+  entityId,
   user,
   pathname,
   children,
 }: {
-  academies: { academyId: string; name: string }[];
+  entityId: string;
   user: { name: string; email: string };
   pathname: string;
   children: ReactNode;
 }) {
   const trpc = useTRPC();
-  const academy = useAcademy();
-  const { name: academyName, academyId: activeId, role, status } = academy;
+  const academy = useEntity();
+  const organization = useOrganization();
+  const href = (path: string) => entityHref(entityId, path);
+  const within = pathWithinEntity(pathname);
+  const { academyId: activeId, role, status } = academy;
   const isOwner = isOwnerOf(academy);
   const isStaff = isStaffOf(academy);
   const isPending = status === "pending";
@@ -337,76 +339,78 @@ function ShellChrome({
 
   const items: NavItem[] = [
     {
-      href: "/",
+      path: "/",
       label: isStaff ? "Dashboard" : "Schedule",
       icon: isStaff ? <DashboardIcon /> : <ScheduleIcon />,
       show: true,
     },
     {
-      href: "/training",
+      path: "/training",
       label: "My classes",
       icon: <TrainingIcon />,
       show: !isStaff,
     },
     {
-      href: "/schedule",
+      path: "/schedule",
       label: "Schedule",
       icon: <ScheduleIcon />,
       show: canVisit("/schedule", academy),
     },
     {
-      href: "/members",
+      path: "/members",
       label: "Members",
       icon: <MembersIcon />,
       show: canVisit("/members", academy),
       badge: pendingStudentCount,
     },
     {
-      href: "/coaches",
+      path: "/coaches",
       label: "Coaches",
       icon: <CoachesIcon />,
       show: canVisit("/coaches", academy),
       badge: isOwner ? pendingCoachCount : 0,
     },
     {
-      href: "/referrals",
+      path: "/referrals",
       label: "Referrals",
       icon: <ReferralsIcon />,
       show: canVisit("/referrals", academy),
     },
     {
-      href: "/payments",
+      path: "/payments",
       label: isOwner ? "Payments" : "Dues",
       icon: <PaymentsIcon />,
       show: isOwner || (!isStaff && !isPending),
       badge: isOwner ? claimsCount : 0,
     },
     {
-      href: "/settings",
+      path: "/settings",
       label: "Settings",
       icon: <SettingsIcon />,
       show: canVisit("/settings", academy),
     },
     {
-      href: "/notifications",
+      path: "/notifications",
       label: "Notifications",
       icon: <NotificationsIcon />,
       show: !isPending,
       badge: unreadCount,
     },
     {
-      href: "/profile",
+      path: "/profile",
       label: "Profile",
       icon: <ProfileIcon />,
       show: !isStaff,
     },
-  ].filter((i) => i.show);
+  ]
+    .filter((i) => i.show)
+    .map((i) => ({ ...i, href: href(i.path) }));
 
-  const isCurrent = (href: string) =>
-    href === "/" ? pathname === "/" : pathname.startsWith(href);
+  const isCurrent = (path: string) =>
+    path === "/" ? within === "/" : within.startsWith(path);
 
   // Phones reach the feed from the header bell, so it never spends a tab slot.
-  const tabItems = items.filter((i) => i.href !== "/notifications");
+  const tabItems = items.filter((i) => i.path !== "/notifications");
 
   // A phone gives a tab about 50px. An owner has seven of them, which shreds
   // every label, so past the cap the tail moves into one "More" menu and its
@@ -415,32 +419,29 @@ function ShellChrome({
   const barItems = overflows ? tabItems.slice(0, MAX_TABS - 1) : tabItems;
   const moreItems = overflows ? tabItems.slice(MAX_TABS - 1) : [];
   const moreBadge = moreItems.reduce((n, i) => n + (i.badge ?? 0), 0);
-  const moreActive = moreItems.some((i) => isCurrent(i.href));
+  const moreActive = moreItems.some((i) => isCurrent(i.path));
 
-  const columnClass = `mx-auto w-full ${contentWidth(pathname, isStaff)} px-6 md:px-8`;
+  const columnClass = `mx-auto w-full ${contentWidth(within, isStaff)} px-6 md:px-8`;
 
   return (
     <div className="flex h-dvh overflow-hidden">
       {/* Desktop sidebar — pinned full height, never scrolls */}
       <aside className="bg-sidebar border-sidebar-border hidden h-full w-60 shrink-0 flex-col overflow-hidden border-r p-3 md:flex">
-        <Link href="/" className="flex items-center gap-2 px-2 pt-1 pb-4">
+        <Link
+          href={href("/")}
+          className="flex items-center gap-2 px-2 pt-1 pb-4"
+        >
           <Logo size={22} />
         </Link>
 
         <div className="mb-3 px-1">
-          {academies.length >= 2 ? (
-            <AcademySwitcher academies={academies} activeId={activeId} />
-          ) : (
-            <p className="text-sidebar-foreground px-1 text-sm font-medium">
-              {academyName}
-            </p>
-          )}
+          <EntitySelector organization={organization} activeId={activeId} />
         </div>
 
         {items.length > 1 && (
           <nav aria-label="Primary" className="flex flex-col gap-0.5">
             {items.map((i) => (
-              <NavLink key={i.href} item={i} active={isCurrent(i.href)} />
+              <NavLink key={i.href} item={i} active={isCurrent(i.path)} />
             ))}
           </nav>
         )}
@@ -460,7 +461,7 @@ function ShellChrome({
             />
           )}
           <Link
-            href="/profile"
+            href={href("/profile")}
             aria-current={isCurrent("/profile") ? "page" : undefined}
             className={`flex items-center gap-2 rounded-md p-1 transition-colors ${
               isCurrent("/profile") ? "bg-brand-wash" : "hover:bg-muted"
@@ -490,20 +491,14 @@ function ShellChrome({
             as a PWA (viewport-fit=cover; ADR 42). env() is 0 elsewhere. */}
         <header className="bg-sidebar border-sidebar-border flex items-center gap-0.5 border-b px-2 pt-[calc(0.5rem+env(safe-area-inset-top))] pb-2 md:hidden">
           <Link
-            href="/"
+            href={href("/")}
             aria-label="Home"
             className="-m-1.5 flex size-11 shrink-0 items-center justify-center p-1.5 md:m-0 md:size-auto md:p-0"
           >
             <Logo size={22} withWordmark={false} />
           </Link>
           <div className="min-w-0 flex-1">
-            {academies.length >= 2 ? (
-              <AcademySwitcher academies={academies} activeId={activeId} />
-            ) : (
-              <span className="block truncate text-sm font-medium">
-                {academyName}
-              </span>
-            )}
+            <EntitySelector organization={organization} activeId={activeId} />
           </div>
           {isStaff && (
             <ShareLinksDialog
@@ -520,7 +515,7 @@ function ShellChrome({
           )}
           {!isPending && (
             <Link
-              href="/notifications"
+              href={href("/notifications")}
               aria-label={
                 unreadCount > 0
                   ? `Notifications, ${unreadCount} unread`
@@ -540,7 +535,7 @@ function ShellChrome({
             </Link>
           )}
           <Link
-            href="/profile"
+            href={href("/profile")}
             aria-label="Profile"
             aria-current={isCurrent("/profile") ? "page" : undefined}
             className="bg-muted text-muted-foreground relative flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold uppercase after:absolute after:-inset-1 after:content-['']"
@@ -559,7 +554,7 @@ function ShellChrome({
 
         {duesStrip && (
           <Link
-            href="/payments"
+            href={href("/payments")}
             className={`block border-b transition-colors ${
               duesStripLocked
                 ? "border-error/25 bg-error/10 hover:bg-error/15"
@@ -576,7 +571,7 @@ function ShellChrome({
           <div
             className={`${columnClass} pt-6 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pt-8 md:pb-8`}
           >
-            {canVisit(pathname, academy) ? children : <NoAccessState />}
+            {canVisit(within, academy) ? children : <NoAccessState />}
           </div>
         </main>
       </div>
@@ -592,8 +587,8 @@ function ShellChrome({
             <Link
               key={i.href}
               href={i.href}
-              aria-current={isCurrent(i.href) ? "page" : undefined}
-              className={tabClass(isCurrent(i.href))}
+              aria-current={isCurrent(i.path) ? "page" : undefined}
+              className={tabClass(isCurrent(i.path))}
             >
               <TabFace icon={i.icon} badge={i.badge} />
               <span className="max-w-full truncate">{i.label}</span>
@@ -616,9 +611,9 @@ function ShellChrome({
                   <DropdownMenuItem key={i.href} asChild>
                     <Link
                       href={i.href}
-                      aria-current={isCurrent(i.href) ? "page" : undefined}
+                      aria-current={isCurrent(i.path) ? "page" : undefined}
                       className={
-                        isCurrent(i.href) ? "text-brand-strong font-medium" : ""
+                        isCurrent(i.path) ? "text-brand-strong font-medium" : ""
                       }
                     >
                       {i.icon}

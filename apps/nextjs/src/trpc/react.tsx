@@ -46,6 +46,8 @@ export function TRPCReactProvider(props: { children: React.ReactNode }) {
           headers() {
             const headers = new Headers();
             headers.set("x-trpc-source", "nextjs-react");
+            const entityId = entityFromPath(window.location.pathname);
+            if (entityId) headers.set("x-matops-entity", entityId);
             return headers;
           },
         }),
@@ -60,6 +62,16 @@ export function TRPCReactProvider(props: { children: React.ReactNode }) {
       </TRPCProvider>
     </QueryClientProvider>
   );
+}
+
+/**
+ * The entity the URL names (ADR 124). Read per request rather than captured in
+ * a provider, because a client-side navigation between two academies changes it
+ * without remounting the tRPC client.
+ */
+export function entityFromPath(pathname: string): string | null {
+  const match = /^\/entities\/([^/]+)/.exec(pathname);
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
 
 const getBaseUrl = () => {

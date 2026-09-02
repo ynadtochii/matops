@@ -26,7 +26,7 @@ import { toast } from "@matops/ui/toast";
 import type { Member, MemberHistory } from "./members";
 import { dateFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
-import { useAcademy } from "./academy";
+import { useEntity } from "./entity";
 import {
   cardClass,
   DriftBadge,
@@ -549,7 +549,7 @@ function Overview({ m, data }: { m: Member; data: MemberHistory }) {
  * instructors could also demote every owner but one (ADR 75).
  */
 function RoleControl({ m }: { m: Member }) {
-  const academy = useAcademy();
+  const academy = useEntity();
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const setRole = useMutation(

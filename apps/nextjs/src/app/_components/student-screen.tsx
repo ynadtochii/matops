@@ -17,7 +17,7 @@ import { Button } from "@matops/ui/button";
 
 import { dayKey, dayMediumFmt, timeFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
-import { useAcademy } from "./academy";
+import { useEntity, useEntityHref } from "./entity";
 import { InstallAppCard } from "./install-app-card";
 import { PageHeader } from "./page-header";
 import { cardClass, disciplineDot, ENTER, Section } from "./primitives";
@@ -33,7 +33,7 @@ const STAGGER = ["", "delay-100", "delay-200"];
 export function StudentScreen() {
   const trpc = useTRPC();
   const { book, cancel, busyFor, lockedMessage } = useBooking();
-  const suspended = useAcademy().status === "suspended";
+  const suspended = useEntity().status === "suspended";
 
   const { todayKey, windowStart, windowEnd } = useMemo(() => {
     const start = new Date();
@@ -139,6 +139,7 @@ function ClassRowCard({
   onBook: () => void;
   onCancel: () => void;
 }) {
+  const href = useEntityHref();
   const start = new Date(c.startsAt);
   const cancelled = c.status === "cancelled";
   const booked = c.myBooking === "booked";
@@ -155,7 +156,7 @@ function ClassRowCard({
       )}
     >
       <Link
-        href={`/class/${c.id}`}
+        href={href(`/class/${c.id}`)}
         className="flex min-w-0 flex-1 items-start gap-3"
       >
         <span

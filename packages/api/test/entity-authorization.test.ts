@@ -129,6 +129,26 @@ describe("the entity tiers", () => {
     expect([current.id, current.role]).toEqual([secondEntity, "owner"]);
   });
 
+  it("gives two tabs of one session two different academies", async () => {
+    const here = await h.as(OWNER, ORG_A, withEntity(ORG_A)).academy.current();
+    const there = await h
+      .as(OWNER, ORG_A, withEntity(secondEntity))
+      .academy.current();
+    expect([here?.academyId, there?.academyId]).toEqual([ORG_A, secondEntity]);
+    expect(here?.name).not.toBe(there?.name);
+  });
+
+  it("falls back to the session's academy when no entity is named", async () => {
+    const current = await h.as(OWNER, ORG_A, new Headers()).academy.current();
+    expect(current?.academyId).toBe(ORG_A);
+  });
+
+  it("has no academy for a header naming one the caller cannot open", async () => {
+    expect(
+      await h.as(COACH, ORG_A, withEntity(secondEntity)).academy.current(),
+    ).toBeNull();
+  });
+
   it("refuses a suspended membership", async () => {
     expect(
       await rejectionCode(
@@ -197,17 +217,23 @@ describe("listing the entities a caller may open", () => {
   afterAll(() => h.close());
 
   it("gives the owner every entity of their organization and no other", async () => {
-    const ids = (await h.as(OWNER, ORG_A).entity.list()).map((e) => e.id);
+    const ids = (await h.as(OWNER, ORG_A).entity.list()).entities.map(
+      (e) => e.id,
+    );
     expect(ids.sort()).toEqual([ORG_A, secondEntity].sort());
   });
 
   it("gives a coach only the entities they belong to", async () => {
-    const ids = (await h.as(COACH, ORG_A).entity.list()).map((e) => e.id);
+    const ids = (await h.as(COACH, ORG_A).entity.list()).entities.map(
+      (e) => e.id,
+    );
     expect(ids).toEqual([ORG_A]);
   });
 
   it("never shows another organization's entity", async () => {
-    const ids = (await h.as(OUTSIDER, ORG_B).entity.list()).map((e) => e.id);
+    const ids = (await h.as(OUTSIDER, ORG_B).entity.list()).entities.map(
+      (e) => e.id,
+    );
     expect(ids).toEqual([ORG_B]);
   });
 });

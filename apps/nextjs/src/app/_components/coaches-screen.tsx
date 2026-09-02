@@ -28,7 +28,7 @@ import { toast } from "@matops/ui/toast";
 
 import { dateTimeFmt, monthDayFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
-import { useAcademy } from "./academy";
+import { useEntity } from "./entity";
 import { PageHeader } from "./page-header";
 import {
   cardClass,
@@ -398,7 +398,7 @@ export function CoachesScreen() {
   const [window, setWindow] = useState<CoachWindowKey>("this_month");
   const [openId, setOpenId] = useState<string | null>(null);
 
-  const me = useAcademy();
+  const me = useEntity();
   const isOwner = isOwnerOf(me);
   const roster = useQuery({
     ...trpc.stats.coaches.queryOptions({ window }),

@@ -11,7 +11,7 @@ import { toast } from "@matops/ui/toast";
 
 import { dateFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
-import { useAcademy } from "./academy";
+import { useEntity } from "./entity";
 import { PageHeader } from "./page-header";
 import { cardClass, DUES_TONE, ENTER, Eyebrow, Section } from "./primitives";
 import { SkeletonDuesBody } from "./skeletons";
@@ -20,7 +20,7 @@ import { EmptyState, ErrorState, SuspendedState } from "./states";
 export function MyDues() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const { status } = useAcademy();
+  const { status } = useEntity();
 
   const dues = useQuery({
     ...trpc.payments.myDues.queryOptions(),

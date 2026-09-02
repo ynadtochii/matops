@@ -21,9 +21,9 @@ import { AddVisitorSchema } from "@matops/validators";
 import { optimistic, rollback } from "~/lib/optimistic";
 import { useInvalidate } from "~/trpc/invalidate";
 import { useTRPC } from "~/trpc/react";
-import { useAcademy } from "./academy";
 import { ClassTheme } from "./class-theme";
 import { CoachSelect } from "./coach-select";
+import { useEntity } from "./entity";
 import { PhoneField } from "./form-fields";
 import {
   cardClass,
@@ -141,7 +141,7 @@ function RowTag({ children }: { children: ReactNode }) {
  */
 export function ClassRoster({ cls }: { cls: ClassRow }) {
   const trpc = useTRPC();
-  const academy = useAcademy();
+  const academy = useEntity();
   const queryClient = useQueryClient();
   const invalidateFor = useInvalidate();
   const classId = cls.id;

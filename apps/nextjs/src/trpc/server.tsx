@@ -11,10 +11,22 @@ import { auth } from "~/auth/server";
 import { createQueryClient } from "./query-client";
 
 /**
+ * The entity this render is for. `cache()` scopes it to the one request, and
+ * the entity layout writes it before any child prefetches, which is the only
+ * way a server component can name the entity: the header the browser sends
+ * never reaches an RSC render (ADR 124).
+ */
+const requestEntity = cache(() => ({ id: undefined as string | undefined }));
+
+export function setRequestEntity(entityId: string): void {
+  requestEntity().id = entityId;
+}
+
+/**
  * This wraps the `createTRPCContext` helper and provides the required context for the tRPC API when
  * handling a tRPC call from a React Server Component.
  */
-const createContext = cache(async () => {
+const baseContext = cache(async () => {
   const heads = new Headers(await headers());
   heads.set("x-trpc-source", "rsc");
 
@@ -22,6 +34,17 @@ const createContext = cache(async () => {
     headers: heads,
     auth,
   });
+});
+
+/**
+ * The session read is cached for the request; the entity is not. The layout
+ * that owns the `[entityId]` segment writes it after the organization read has
+ * already built the context, so freezing it there would leave every screen
+ * under the entity naming no entity at all.
+ */
+const createContext = async () => ({
+  ...(await baseContext()),
+  requestedEntityId: requestEntity().id,
 });
 
 export const getQueryClient = cache(createQueryClient);
@@ -51,6 +74,19 @@ export function prefetch<T extends ReturnType<TRPCQueryOptions<any>>>(
     return;
   }
   void queryClient.prefetchQuery(queryOptions);
+}
+
+export async function myEntities() {
+  const queryClient = getQueryClient();
+  const options = trpc.entity.list.queryOptions();
+  await queryClient.prefetchQuery(options);
+  return (
+    queryClient.getQueryData(options.queryKey) ?? {
+      organizationId: "",
+      canAdd: false,
+      entities: [],
+    }
+  );
 }
 
 export async function currentAcademy() {

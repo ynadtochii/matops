@@ -2,13 +2,13 @@
 
 import { usePathname } from "next/navigation";
 
-import { useAcademy } from "./academy";
+import { useEntity } from "./entity";
 
 const FEEDBACK_EMAIL = "yevhenii.tech@gmail.com";
 
 /** Report a bug from where it happened, with the context prefilled. */
 export function FeedbackLink({ className }: { className?: string }) {
-  const { name, academyId, role } = useAcademy();
+  const { name, academyId, role } = useEntity();
   const pathname = usePathname();
 
   const subject = encodeURIComponent(`MatOps feedback: ${name}`);

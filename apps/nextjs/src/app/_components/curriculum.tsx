@@ -32,7 +32,6 @@ import type { BlockForm, RunNoteForm, TrackForm } from "./curriculum-dialogs";
 import type { Block, Placed, Theme } from "./curriculum-shared";
 import { monthShortFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
-import { useAcademy } from "./academy";
 import { useCurriculumBoard } from "./curriculum-board";
 import { BlockDialog, RunNoteDialog, TrackDialog } from "./curriculum-dialogs";
 import { useTimelineDrag } from "./curriculum-drag";
@@ -54,6 +53,7 @@ import {
   WEEK_H,
   weeksLabel,
 } from "./curriculum-shared";
+import { useEntity } from "./entity";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -582,7 +582,7 @@ export function Curriculum() {
 function StudentVisibility() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const academy = useAcademy();
+  const academy = useEntity();
   const on = academy.curriculumForStudents;
 
   const save = useMutation(

@@ -18,7 +18,7 @@ import { CreateMembershipPlanSchema } from "@matops/validators";
 
 import { dateYearFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
-import { useAcademy } from "./academy";
+import { useEntity } from "./entity";
 import { MyDues } from "./my-dues";
 import { PageHeader } from "./page-header";
 import { PaymentRequisites } from "./payment-requisites";
@@ -30,7 +30,7 @@ type Plan = RouterOutputs["payments"]["plans"][number];
 type Member = RouterOutputs["membership"]["members"][number];
 
 export function PaymentsScreen() {
-  const academy = useAcademy();
+  const academy = useEntity();
   return isOwner(academy) ? <OwnerPayments /> : <MyDues />;
 }
 
