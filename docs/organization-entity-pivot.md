@@ -447,7 +447,7 @@ Gate:
 
 ### Wave 5: Add the organization dashboard
 
-Status: pending
+Status: done
 
 Goal: give owners a general dashboard without weakening entity isolation.
 
@@ -460,16 +460,16 @@ Primary files:
 
 Tasks:
 
-- [ ] Define a small entity summary result shared by organization aggregation.
-- [ ] Reuse existing BJJ dashboard calculations behind an entity summary reader.
-- [ ] Authorize the organization owner before enumerating entities.
-- [ ] Read each entity through exact entity context and combine results on the server.
-- [ ] Deduplicate member totals by `user_id`.
-- [ ] Preserve currency grouping and entity time zones.
-- [ ] Group pending actions by entity and return entity links.
-- [ ] Show organization totals plus one card per entity.
-- [ ] Do not add a metrics projection until measurements justify it.
-- [ ] Add aggregation tests with sibling entities and an unrelated organization.
+- [x] Define a small entity summary result shared by organization aggregation.
+- [x] Reuse existing BJJ dashboard calculations behind an entity summary reader.
+- [x] Authorize the organization owner before enumerating entities.
+- [x] Read each entity through exact entity context and combine results on the server.
+- [x] Deduplicate member totals by `user_id`.
+- [x] Preserve currency grouping and entity time zones.
+- [x] Group pending actions by entity and return entity links.
+- [x] Show organization totals plus one card per entity.
+- [x] Do not add a metrics projection until measurements justify it.
+- [x] Add aggregation tests with sibling entities and an unrelated organization.
 
 Gate:
 
@@ -595,7 +595,7 @@ Not part of this pivot. Each needs its own ADR and gate.
 
 ## Current Wave
 
-Wave 5: Add the organization dashboard.
+Wave 6: Update mobile and public surfaces.
 
 ## Progress
 
@@ -608,6 +608,6 @@ Wave 5: Add the organization dashboard.
 - [x] Wave 2 complete.
 - [x] Wave 3 complete.
 - [x] Wave 4 complete.
-- [ ] Wave 5 complete.
+- [x] Wave 5 complete.
 - [ ] Wave 6 complete.
 - [ ] Wave 7 complete.

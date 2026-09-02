@@ -259,12 +259,12 @@ Provisioning:
 
 ### Wave 5: Add the organization dashboard
 
-- [ ] A small entity summary type in `packages/domain/src/dashboard.ts`, reused by organization aggregation.
-- [ ] An entity summary reader behind the existing BJJ dashboard calculations.
-- [ ] Organization dashboard procedure: authorize the owner, enumerate entities, read each through exact entity context, combine on the server, dedupe members by `user_id`, keep currency grouping and entity time zones, group pending actions by entity with links.
-- [ ] Overview screen: organization totals plus one card per entity.
-- [ ] Aggregation tests with sibling entities and an unrelated organization.
-- [ ] GATE 5: plan's Wave 5 gate conditions; per-wave Definition of done; commit.
+- [x] A small entity summary type in `packages/domain/src/dashboard.ts`, reused by organization aggregation.
+- [x] An entity summary reader behind the existing BJJ dashboard calculations.
+- [x] Organization dashboard procedure: authorize the owner, enumerate entities, read each through exact entity context, combine on the server, dedupe members by `user_id`, keep currency grouping and entity time zones, group pending actions by entity with links.
+- [x] Overview screen: organization totals plus one card per entity.
+- [x] Aggregation tests with sibling entities and an unrelated organization.
+- [x] GATE 5: plan's Wave 5 gate conditions; per-wave Definition of done; commit.
 
 ### Wave 6: Update mobile and public surfaces
 
@@ -527,3 +527,26 @@ you. At a gate, add a short wave summary block.
 **What surprised.** **The cached context.** `createContext` was `cache()`d for the request, so the entity was fixed by whichever tRPC call ran first, and that call is the organization prefetch in a layout that runs before any entity is known. Every entity screen would have server-rendered against no entity, then quietly refetched from the browser and looked slow rather than broken. Second, the **Suspense boundary**: rewriting the `(app)` layout lost the one the old one had, and Cache Components failed the build outright, which is the good outcome. Third, **`/profile` could not stay where the plan put it** — the screen is almost entirely made of facts about one mat.
 
 **What is carried forward.** **Mobile is still down**, and Wave 6 is what fixes it. Note for that wave: `academy.current` deliberately falls back to the session's active organization when no header arrives, which is the only reason the Expo app has not been broken twice over; when mobile starts sending the header, that fallback becomes dead weight and Wave 7 should take it out. Also `academy.setActive` still exists and still sets the Better Auth active organization from an entity id: the web no longer calls it, but the two mobile call sites do.
+
+### Wave 5
+
+- Wave 5 item 1: `EntitySummary` and `OrganizationSummary` in `packages/domain/src/dashboard.ts`, with `combineEntitySummaries` and `entitiesNeedingAttention` beside them. Small on purpose: an owner opening the overview wants to know **where the work is**, not to read every mat's dashboard at once, and Decision 14 says each entity is read in its own exact scope and combined on the server.
+- The one field that is not a number is `memberUserIds`. A count could not be deduplicated, and a person who trains at two mats has to count once in the organization total, which is a gate condition. Money is grouped by currency through the same `groupMoneyByCurrency` the referral ledger uses, so two currencies are never added together.
+- 7 tests in `packages/domain/test/organization-summary.test.ts`: the person at two mats, the summed queues, the two currencies, each mat keeping its own time zone, the empty organization, and the attention list's order including its tie-break by name so the cards do not jump between reloads.
+- Wave 5 items 2 and 3: `stats.organization`, on the organization owner identity tier. **The owner check runs before any entity is enumerated**, so a non-owner never learns a sibling mat exists, and each academy is then read inside its own `withScope({ organizationId, entityId })` transaction, one at a time, with a pure function combining the rows afterwards. There is no organization-wide query and no relaxed policy: entity isolation on this screen is exactly what it is on every other. That is slower than one big read and it is the point, because the alternative is a mode where one query sees two mats.
+- `readEntitySummary` reuses the readers the entity's own dashboard already uses: `academyTimeZone`, `rosterOf` and `readRevenue`. Nothing here is a second implementation of a figure the per-academy screen already shows, so the two cannot drift. The three counts it adds are `count(*)` on the same scoped connection: new leads, open claims, and classes in the next seven days.
+- No metrics projection, per the plan's follow-up list. Two mats cost two transactions, which is not worth a table until a measurement says so.
+- Item 4: `/overview` shows an owner the totals across their academies, a **Waiting on you** list ordered by how much is queued, and one card per mat with its people and classes. A non-owner sees the plain list and nothing else, which is the same answer `entity.list` already gives. The page prefetches the summary only when the caller may read it.
+- Item 5: 7 tests in `packages/api/test/organization-dashboard.test.ts`, over two academies of one organization and a third belonging to a rival. Every owned academy is included, the rival's never is, a coach is refused outright, and the rival's owner sees only their own. **The nomad who trains at both mats fills 5 seats across the two rows and counts as 3 people in the total.** The last test holds the gate's other condition: with the header naming one mat and then the other, `stats.dashboard` answers with that mat's revenue only.
+- Two things the build taught me. `stats.organization` needs `ne` and `withScope` exported from `@matops/db`, both already there. And a server component that prefetches must **read request data first**: `/overview` called `prefetch` synchronously and Cache Components refused the build, because the procedure reaches for `Date.now()` before anything has touched cookies or headers. Awaiting the organization read first fixes it and is also what decides whether the prefetch is worth doing.
+- **GATE 5 is green.** `pnpm typecheck` 17/17. `pnpm -F <pkg> lint` clean on `nextjs`, `api`, `domain` and `db`. `next build` compiles and prerenders all 30 pages. `pnpm test --force`: **1139 tests, no failures** (domain 552, api 389, db 163, validators 32, notifications 3), up from 1125.
+- The plan's Wave 5 gate conditions, each checked by name. **The organization dashboard includes every owned entity and no foreign entity**: the two-academies-and-a-rival fixture proves both halves, and the rival's owner reading the same procedure sees only their own. **A user in two entities counts once in organization totals**: 5 seats across the rows, 3 people in the total. **Entity dashboards still return entity-only values**: the same owner, two headers, and `stats.dashboard` answers with one mat's revenue and then the other's.
+- Docs: `CHANGELOG.md` line added, the plan doc's Wave 5 ticked (10 items), its status set to done, `Current Wave` reads Wave 6, `Progress` has Wave 5 complete. One commit on `dev`, `905bba2`. Nothing pushed.
+
+**Wave 5 summary.**
+
+**What landed.** `EntitySummary`, `OrganizationSummary`, `combineEntitySummaries` and `entitiesNeedingAttention` in `packages/domain`. `stats.organization` on the organization owner identity tier, reading one transaction per academy and combining on the server. An `/overview` that shows an owner the totals, where the work is waiting, and one card per mat, and shows everyone else the plain list. 14 new tests.
+
+**What surprised.** Very little, which is itself the result: **Wave 3's decision to keep entity RLS exact made this wave easy.** There was no temptation to add an organization-wide read, because no policy would have allowed one; the shape of the answer was fixed by the seam. The only build failure was Cache Components refusing a page that prefetched before touching request data, and it was right to.
+
+**What is carried forward.** The overview reads one transaction per academy. That is correct and it is O(entities): fine for the two or three a gym runs, and the plan's follow-up list already holds a metrics projection for the day someone runs twenty. Do not build it before a measurement asks. Also `stats.organization` returns `memberUserIds`, which is a list of user ids over the wire; it is what makes the dedupe honest, but if the overview ever grows a large-gym case, count on the server and send the number.

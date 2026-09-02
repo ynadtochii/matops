@@ -1,12 +1,29 @@
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
-import type { MemberRow } from "@matops/db";
-import type { ClassMark, CoachClass, CoachWindowKey } from "@matops/domain";
-import { and, eq, gte, inArray, isNull, lt, sql } from "@matops/db";
+import type { DbExec, MemberRow } from "@matops/db";
+import type {
+  ClassMark,
+  CoachClass,
+  CoachWindowKey,
+  EntitySummary,
+} from "@matops/domain";
+import {
+  and,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  listEntitiesOf,
+  lt,
+  ne,
+  sql,
+  withScope,
+} from "@matops/db";
 import {
   classInstance,
   classParticipation,
+  dropIn,
   paymentClaim,
 } from "@matops/db/schema";
 import {
@@ -17,6 +34,7 @@ import {
   coachWindowRange,
   coachWorkload,
   coachWorkloadFor,
+  combineEntitySummaries,
   groupMoneyByCurrency,
   gymInsights,
   isActiveMember,
@@ -33,7 +51,12 @@ import type { TimeZoneCtx } from "../academy-tz";
 import type { MemberScope } from "../members";
 import { academyTimeZone } from "../academy-tz";
 import { rosterOf, staffAmong, nameByUser as userNames } from "../members";
-import { enrolledProcedure, ownerProcedure, staffProcedure } from "../trpc";
+import {
+  enrolledProcedure,
+  organizationOwnerIdentityProcedure,
+  ownerProcedure,
+  staffProcedure,
+} from "../trpc";
 
 /**
  * How far back the revenue read pulls confirmed claims. This month plus last
@@ -45,6 +68,8 @@ const REVENUE_WINDOW_DAYS = 70;
 
 /** Days of marked attendance the gym-insights window looks back over. */
 const GYM_WINDOW_DAYS = 30;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * The rows every O10 read needs: classes whose START falls in the window, plus
@@ -132,6 +157,85 @@ async function loadCoachContext(
     instructorIds: staffAmong(members).map((m) => m.userId),
     nameByUser: userNames(members),
   };
+}
+
+/**
+ * The organization's academies, read on the base connection because the
+ * organization has no transaction of its own here: the identity tier opens one
+ * per entity below. `entity` matches on `app.organization_id`, so an
+ * organization read of it is exactly scoped too.
+ */
+async function readOrganizationEntities(
+  organizationId: string,
+  baseDb: DbExec,
+): Promise<{ id: string; name: string }[]> {
+  return withScope(
+    { organizationId },
+    async (tx) => {
+      const rows = await listEntitiesOf(organizationId, tx);
+      return rows.map((e) => ({ id: e.id, name: e.name }));
+    },
+    baseDb,
+  );
+}
+
+/**
+ * One academy's row for the overview, read through the same helpers its own
+ * dashboard uses: the roster, the academy time zone and the confirmed-revenue
+ * reader. Nothing here is a second implementation of a figure the entity
+ * dashboard already shows.
+ */
+async function readEntitySummary(
+  entity: { id: string; name: string },
+  organizationId: string,
+  baseDb: DbExec,
+  now: Date,
+): Promise<EntitySummary> {
+  return withScope(
+    { organizationId, entityId: entity.id },
+    async (db) => {
+      const scope = { academyId: entity.id, db };
+      const timeZone = await academyTimeZone(scope);
+      const members = await rosterOf(scope);
+      const revenue = await readRevenue(scope, now, timeZone);
+
+      const [leads] = await db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(dropIn)
+        .where(eq(dropIn.stage, "new"));
+      const [claims] = await db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(paymentClaim)
+        .where(eq(paymentClaim.status, "pending"));
+      const [classes] = await db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(classInstance)
+        .where(
+          and(
+            gte(classInstance.startsAt, now),
+            lt(classInstance.startsAt, new Date(now.getTime() + 7 * DAY_MS)),
+            ne(classInstance.status, "cancelled"),
+            isNull(classInstance.deletedAt),
+          ),
+        );
+
+      return {
+        entityId: entity.id,
+        name: entity.name,
+        timeZone,
+        memberUserIds: members.filter(isActiveMember).map((m) => m.userId),
+        pendingMembers: members.filter((m) => m.status === "pending").length,
+        newLeads: leads?.n ?? 0,
+        openClaims: claims?.n ?? 0,
+        upcomingClasses: classes?.n ?? 0,
+        revenue: revenue.map((r) => ({
+          currency: r.currency,
+          amountMinor: r.amountMinor,
+        })),
+      };
+    },
+    baseDb,
+  );
 }
 
 /**
@@ -316,6 +420,34 @@ export const statsRouter = {
       drifting: members ? await readDrifting(ctx, now, members) : null,
       revenue: owner ? await readRevenue(ctx, now, timeZone) : null,
     };
+  }),
+
+  /**
+   * Every academy the organization runs, and the totals across them (ADR 124,
+   * Decision 14). Owner-only, and the authorization happens BEFORE any entity
+   * is enumerated: a non-owner never learns that a sibling mat exists.
+   *
+   * Each academy is read inside its own exact scope, one transaction per
+   * entity, and the rows are combined by a pure function afterwards. There is
+   * no organization-wide query and no relaxed policy: entity isolation is
+   * exactly what it is on every other screen. That is slower than one big read
+   * and it is the point, because the alternative is a mode where one query can
+   * see two mats at once. No metrics projection until a measurement asks for
+   * one (the plan's follow-up slices).
+   */
+  organization: organizationOwnerIdentityProcedure.query(async ({ ctx }) => {
+    const now = new Date();
+    const entities = await readOrganizationEntities(
+      ctx.organizationId,
+      ctx.baseDb,
+    );
+    const summaries: EntitySummary[] = [];
+    for (const entity of entities) {
+      summaries.push(
+        await readEntitySummary(entity, ctx.organizationId, ctx.baseDb, now),
+      );
+    }
+    return combineEntitySummaries(summaries);
   }),
 
   /**
