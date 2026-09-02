@@ -268,12 +268,12 @@ Provisioning:
 
 ### Wave 6: Update mobile and public surfaces
 
-- [ ] List student entity memberships instead of academy organizations.
-- [ ] Replace `academy.setActive` with a stored entity pick in secure-store, sent as `x-matops-entity` from `apps/expo/src/utils/api.tsx`.
-- [ ] Join codes, QR check-in, public booking keys, and booking links resolve to entities.
-- [ ] Push registration and notifications keep organization and entity context.
-- [ ] Public and mobile contract tests.
-- [ ] GATE 6: plan's Wave 6 gate conditions on static gates alone; per-wave Definition of done; commit.
+- [x] List student entity memberships instead of academy organizations.
+- [x] Replace `academy.setActive` with a stored entity pick in secure-store, sent as `x-matops-entity` from `apps/expo/src/utils/api.tsx`.
+- [x] Join codes, QR check-in, public booking keys, and booking links resolve to entities.
+- [x] Push registration and notifications keep organization and entity context.
+- [x] Public and mobile contract tests.
+- [x] GATE 6: plan's Wave 6 gate conditions on static gates alone; per-wave Definition of done; commit.
 
 ### Wave 7: Contract cleanup and documentation
 
@@ -550,3 +550,23 @@ you. At a gate, add a short wave summary block.
 **What surprised.** Very little, which is itself the result: **Wave 3's decision to keep entity RLS exact made this wave easy.** There was no temptation to add an organization-wide read, because no policy would have allowed one; the shape of the answer was fixed by the seam. The only build failure was Cache Components refusing a page that prefetched before touching request data, and it was right to.
 
 **What is carried forward.** The overview reads one transaction per academy. That is correct and it is O(entities): fine for the two or three a gym runs, and the plan's follow-up list already holds a metrics projection for the day someone runs twenty. Do not build it before a measurement asks. Also `stats.organization` returns `memberUserIds`, which is a list of user ids over the wire; it is what makes the dedupe honest, but if the overview ever grows a large-gym case, count on the server and send the number.
+
+### Wave 6
+
+- Wave 6 items 1 and 2: the app is back up. A new `apps/expo/src/utils/entity-store.ts` holds the academy the student picked in secure-store, and `api.tsx` reads it **inside `headers()`**, per request, so switching mat does not mean rebuilding the tRPC client. `academy.listMineStudent` already listed entity memberships from Wave 3, so the mobile switcher was listing mats before it could open one.
+- **`academy.setActive` is no longer how a student changes academy.** Picking a mat is a local write plus a cache invalidation. The mutation survives for one job only: the session still holds the ORGANIZATION (Decision 1), so a mat belonging to a _different gym_ still needs it. The pick compares the row's `organizationId` with the session's and calls it only then, which for a gym with two mats is never.
+- Three flows had to remember the pick, or the next request would name nothing: joining by code, joining by invite link, and the QR check-in deep link, where the poster names the academy and the app follows it. Sign-out clears the stored academy for the same reason the query cache is cleared, and a fresh install with no stored academy picks the first one `listMineStudent` returns.
+- **A real bug in the join path, found by thinking about a student at two gyms.** `joinPending` set the active organization only when the session had _none_, so a student who already trained somewhere and joined a second gym kept the first organization active, and every request naming their new academy would have been refused for belonging to another organization. It now moves the session whenever the organization differs, which is also what "I just joined this gym" means.
+- Item 3 was mostly already true, which is the point of doing the schema first: join codes and invite tokens resolve `entity` since Wave 2, the public booking key and the six-digit code since Wave 3, and the QR poster's URL carries the entity id since Wave 4. Item 4 needed nothing at all: `push_token` is keyed by `user.id` and carries no academy, and `notification` rows carry `academy_id`, which is now an entity id read through the entity tier.
+- Item 5: 7 tests in `packages/api/test/entity-public-contract.test.ts`, over **two mats of one organization**, which is the case every earlier public test missed by using two separate organizations. Each key answers with its own academy and its own time zone, neither key ever shows the sibling's classes, the two mats hold different six-digit codes, a code resolves to the mat that owns it, the walk-in poster names the right mat, a student who trains at both is listed at both, and `academy.current` follows the header between them.
+- **GATE 6 is green, on static gates alone as the Authorizations allow.** `pnpm typecheck` 17/17. `pnpm -F <pkg> lint` clean on `expo`, `api`, `nextjs`, `db` and `domain`. `next build` compiles and prerenders all 30 pages. `pnpm test --force`: **1146 tests, no failures** (domain 552, api 396, db 163, validators 32, notifications 3), up from 1139.
+- The plan's Wave 6 gate conditions, each checked by name. **A student can belong to and switch between two entities in one organization**: `entity-public-contract.test.ts` lists both mats for the nomad and gets a different `academy.current` for each header, and the app's switcher writes the pick with no mutation at all when the organization is the same. **Public links cannot resolve another organization or entity by mistake**: two keys of ONE organization, and neither ever sees the other's classes, name, time zone or code. **Existing BJJ mobile behaviour remains intact**: no screen changed, only where the academy id comes from; the schedule, training, scan, profile and settings screens are untouched.
+- Docs: `CHANGELOG.md` line added, the plan doc's Wave 6 ticked (5 items), its status set to done, `Current Wave` reads Wave 7, `Progress` has Wave 6 complete. One commit on `dev`, `3c5bb6e`. Nothing pushed.
+
+**Wave 6 summary.**
+
+**What landed.** `entity-store.ts` and the header in `api.tsx`. The mobile switcher, both join flows, the QR check-in deep link and sign-out all writing or clearing the pick. `joinPending` following a person to the gym they just joined. 7 contract tests over two mats of one organization.
+
+**What surprised.** How little there was to do, and where the one bug was. Items 3 and 4 needed **no code at all**, because Waves 2, 3 and 4 had already moved the codes, keys, tokens and poster URLs onto the entity, and push registration never carried an academy. The single defect was in a path nobody would have looked at: a student who already trains somewhere joining a second gym. `joinPending` skipped `setActiveOrganization` whenever the session had any organization, which was correct while an organization was an academy and silently wrong the moment it was not.
+
+**What is carried forward, into Wave 7.** Three loose ends the last wave should close. `academy.current` still falls back to the session's active organization when no header arrives; both clients now always send one, so that fallback is dead weight and hides a missing header. `academy.setActive` is down to one caller-shape, moving the session's organization, and its name now lies about what it does. And `academy.listMineStudent` / `listMine` / `memberships` all read `listMembershipsForUser`, which returns entity rows through an interface still called `UserAcademy`. **The device test is the human's**, per the Authorizations: this wave passed on lint, typecheck, build and tests alone, and no simulator ran.

@@ -18,6 +18,7 @@ import {
 } from "~/components/ui";
 import { trpc } from "~/utils/api";
 import { authClient } from "~/utils/auth";
+import { setActiveEntity } from "~/utils/entity-store";
 import { timeFmt } from "~/utils/format";
 
 /**
@@ -47,8 +48,9 @@ export default function WalkInCheckin() {
   const [doneId, setDoneId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Scope RLS to the scanned gym before resolving its live class — a student who
-  // trains at several gyms may be checking in away from their active one. A
+  // The poster names the academy, so the app follows it: store the entity, then
+  // move the session's organization to the one that owns it. A student who
+  // trains at several gyms may be checking in away from their usual mat, and a
   // non-member is refused here (NOT_FOUND) and shown the safety-net message.
   const setActive = useMutation(
     trpc.academy.setActive.mutationOptions({
@@ -62,6 +64,7 @@ export default function WalkInCheckin() {
 
   useEffect(() => {
     if (session && academyId && !setActive.isPending && !scoped && !notMember) {
+      setActiveEntity(academyId);
       setActive.mutate({ academyId });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

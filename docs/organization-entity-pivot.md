@@ -481,7 +481,7 @@ Gate:
 
 ### Wave 6: Update mobile and public surfaces
 
-Status: pending
+Status: done
 
 Goal: make the student app and public links entity-aware.
 
@@ -496,11 +496,11 @@ Primary areas:
 
 Tasks:
 
-- [ ] List student entity memberships instead of academy organizations.
-- [ ] Replace `academy.setActive` with a stored entity pick in secure-store, and send it as `x-matops-entity` from `api.tsx`.
-- [ ] Resolve join codes, QR check-in, public booking keys, and booking links to entities.
-- [ ] Update push registration and notifications to retain organization and entity context.
-- [ ] Add public and mobile contract tests.
+- [x] List student entity memberships instead of academy organizations.
+- [x] Replace `academy.setActive` with a stored entity pick in secure-store, and send it as `x-matops-entity` from `api.tsx`.
+- [x] Resolve join codes, QR check-in, public booking keys, and booking links to entities.
+- [x] Update push registration and notifications to retain organization and entity context.
+- [x] Add public and mobile contract tests.
 
 Gate:
 
@@ -595,7 +595,7 @@ Not part of this pivot. Each needs its own ADR and gate.
 
 ## Current Wave
 
-Wave 6: Update mobile and public surfaces.
+Wave 7: Contract cleanup and documentation.
 
 ## Progress
 
@@ -609,5 +609,5 @@ Wave 6: Update mobile and public surfaces.
 - [x] Wave 3 complete.
 - [x] Wave 4 complete.
 - [x] Wave 5 complete.
-- [ ] Wave 6 complete.
+- [x] Wave 6 complete.
 - [ ] Wave 7 complete.

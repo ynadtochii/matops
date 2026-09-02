@@ -112,7 +112,11 @@ async function joinPending(
     ctx.baseDb,
   );
   await linkLeadOnJoin(input.academyId, input.phone, userId, ctx.baseDb);
-  if (!ctx.session.session.activeOrganizationId) {
+  // Follow the person to the gym they just joined. Only skipping when the
+  // session already names THIS organization: a student who joins a second gym
+  // would otherwise keep the first one active, and every request naming their
+  // new academy would be refused for belonging to another organization.
+  if (ctx.session.session.activeOrganizationId !== input.organizationId) {
     await ctx.authApi.setActiveOrganization({
       body: { organizationId: input.organizationId },
       headers: ctx.headers,

@@ -1,9 +1,11 @@
+import { useEffect } from "react";
 import { Redirect, Stack } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 
 import { ErrorState, Loading, Screen } from "~/components/ui";
 import { trpc } from "~/utils/api";
 import { authClient } from "~/utils/auth";
+import { getActiveEntity, setActiveEntity } from "~/utils/entity-store";
 
 /**
  * Auth gate (the student shell entry). Routes on session + active academy:
@@ -15,6 +17,21 @@ import { authClient } from "~/utils/auth";
  */
 export default function Index() {
   const { data: session, isPending: sessionPending } = authClient.useSession();
+
+  // A fresh install has no stored academy, so the first request names none and
+  // the server answers with the session's organization. Pick that academy and
+  // remember it, or every later request would keep guessing (ADR 124).
+  const mine = useQuery(
+    trpc.academy.listMineStudent.queryOptions(undefined, {
+      enabled: !!session && getActiveEntity() === null,
+    }),
+  );
+  const firstAcademy = mine.data?.[0]?.academyId;
+  useEffect(() => {
+    if (firstAcademy && getActiveEntity() === null) {
+      setActiveEntity(firstAcademy);
+    }
+  }, [firstAcademy]);
 
   const current = useQuery(
     trpc.academy.current.queryOptions(undefined, {

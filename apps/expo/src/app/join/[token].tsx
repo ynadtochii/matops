@@ -14,6 +14,7 @@ import {
 } from "~/components/ui";
 import { trpc } from "~/utils/api";
 import { authClient } from "~/utils/auth";
+import { setActiveEntity } from "~/utils/entity-store";
 
 /**
  * Invite landing (spec S2) — the RN twin of the web `join-flow.tsx`. Resolves
@@ -39,7 +40,8 @@ export default function JoinScreen() {
 
   const join = useMutation(
     trpc.membership.join.mutationOptions({
-      onSuccess: async () => {
+      onSuccess: async (joined) => {
+        setActiveEntity(joined.academyId);
         await queryClient.invalidateQueries();
         router.replace("/");
       },
