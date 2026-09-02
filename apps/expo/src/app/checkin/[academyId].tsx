@@ -55,6 +55,10 @@ export default function WalkInCheckin() {
   const setActive = useMutation(
     trpc.academy.setActive.mutationOptions({
       onSuccess: async () => {
+        // Only ever store an id the server has accepted. A mistyped poster or a
+        // QR from a gym the student left would otherwise wedge every later
+        // request behind an entity header they cannot use (ADR 124).
+        setActiveEntity(academyId);
         await queryClient.invalidateQueries(trpc.checkin.pathFilter());
         setScoped(true);
       },
@@ -64,7 +68,6 @@ export default function WalkInCheckin() {
 
   useEffect(() => {
     if (session && academyId && !setActive.isPending && !scoped && !notMember) {
-      setActiveEntity(academyId);
       setActive.mutate({ academyId });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

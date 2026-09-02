@@ -379,6 +379,12 @@ export const paymentsRouter = {
       if (!plan) {
         throw new TRPCError({ code: "NOT_FOUND", message: PLAN_NOT_FOUND });
       }
+      if (!ctx.membership.memberId) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "You are not enrolled at this academy.",
+        });
+      }
       const inserted = await ctx.db
         .insert(memberDues)
         .values({

@@ -172,6 +172,44 @@ describe("the entity tiers", () => {
       ),
     ).toBe("FORBIDDEN");
   });
+
+  it("lets the organization owner in at a mat that suspended them", async () => {
+    await h.exec
+      .update(entityMembership)
+      .set({ status: "suspended" })
+      .where(
+        and(
+          eq(entityMembership.entityId, ORG_A),
+          eq(entityMembership.userId, OWNER),
+        ),
+      );
+    try {
+      const current = await h
+        .as(OWNER, ORG_A, withEntity(ORG_A))
+        .entity.current();
+      expect([current.role, current.status]).toEqual(["owner", "active"]);
+    } finally {
+      await h.exec
+        .update(entityMembership)
+        .set({ status: "active" })
+        .where(
+          and(
+            eq(entityMembership.entityId, ORG_A),
+            eq(entityMembership.userId, OWNER),
+          ),
+        );
+    }
+  });
+
+  it("answers academy.current for an owner with no membership at that mat", async () => {
+    const current = await h
+      .as(OWNER, ORG_A, withEntity(secondEntity))
+      .academy.current();
+    expect([current?.academyId, current?.role]).toEqual([
+      secondEntity,
+      "owner",
+    ]);
+  });
 });
 
 describe("listing the entities a caller may open", () => {
@@ -236,6 +274,22 @@ describe("listing the entities a caller may open", () => {
       (e) => e.id,
     );
     expect(ids).toEqual([ORG_B]);
+  });
+
+  it("stops offering a coach a mat they were removed from", async () => {
+    await h.exec
+      .update(entityMembership)
+      .set({ status: "removed" })
+      .where(
+        and(
+          eq(entityMembership.entityId, ORG_A),
+          eq(entityMembership.userId, COACH),
+        ),
+      );
+    const ids = (await h.as(COACH, ORG_A).entity.list()).entities.map(
+      (e) => e.id,
+    );
+    expect(ids).toEqual([]);
   });
 });
 

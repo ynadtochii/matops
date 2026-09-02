@@ -1,4 +1,4 @@
-import type { DbReader, Membership } from "@matops/db";
+import type { DbReader } from "@matops/db";
 import type { BookingAccess } from "@matops/domain";
 import { and, eq } from "@matops/db";
 import { memberDues, paymentClaim } from "@matops/db/schema";
@@ -14,9 +14,10 @@ const OPEN_ACCESS: BookingAccess = {
 
 export async function loadBookingAccess(
   db: DbReader,
-  membership: Membership,
+  membership: { role: string; joinedAt: Date; memberId: string | null },
 ): Promise<BookingAccess> {
-  if (membership.role !== "student") return OPEN_ACCESS;
+  const memberId = membership.memberId;
+  if (membership.role !== "student" || !memberId) return OPEN_ACCESS;
   const settings = await readPaymentSettings(db);
   if (!settings.enforcedAt) return OPEN_ACCESS;
 
@@ -24,7 +25,7 @@ export async function loadBookingAccess(
     await db
       .select({ nextDueAt: memberDues.nextDueAt })
       .from(memberDues)
-      .where(eq(memberDues.memberId, membership.memberId))
+      .where(eq(memberDues.memberId, memberId))
       .limit(1)
   )[0];
   const openClaim = dues
@@ -34,7 +35,7 @@ export async function loadBookingAccess(
           .from(paymentClaim)
           .where(
             and(
-              eq(paymentClaim.memberId, membership.memberId),
+              eq(paymentClaim.memberId, memberId),
               eq(paymentClaim.status, "pending"),
             ),
           )

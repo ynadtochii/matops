@@ -268,6 +268,15 @@ async function resolveOrganization<U extends { id: string }>(ctx: {
   return { organizationId, orgMembership, user };
 }
 
+/** The caller's standing at the entity this request named. */
+export interface EntityMembershipContext {
+  role: string;
+  status: string;
+  joinedAt: Date;
+  /** `entity_membership.id`, or null for an owner who holds no membership here. */
+  memberId: string | null;
+}
+
 /**
  * ENTITY scope (ADR 124 §2). Starts from an authorized organization, then reads
  * the entity the CLIENT named in `x-matops-entity`. The session never selects
@@ -326,14 +335,25 @@ async function resolveEntity<U extends { id: string }>(ctx: {
     });
   }
 
-  const membership = entityMembership
+  // Organization ownership wins (ADR 124 §2, amended by the v7.2 review): an
+  // active owner reaches every entity, including one where a co-owner archived
+  // or suspended their entity membership, which they would otherwise have no
+  // way to undo. `memberId` is null when there is no entity membership at all,
+  // because every dues, rank, note and referral row keys on `entity_membership.id`
+  // and the Better Auth member id is a different id space.
+  const membership: EntityMembershipContext = entityMembership
     ? {
         memberId: entityMembership.id,
         joinedAt: entityMembership.joinedAt ?? entityMembership.createdAt,
-        role: entityMembership.role,
-        status: entityMembership.status,
+        role: ownsOrganization ? "owner" : entityMembership.role,
+        status: ownsOrganization ? "active" : entityMembership.status,
       }
-    : { ...orgMembership, role: "owner", status: "active" };
+    : {
+        memberId: null,
+        joinedAt: orgMembership.joinedAt,
+        role: "owner",
+        status: "active",
+      };
 
   if (!canEnroll(membership)) {
     throw new TRPCError({

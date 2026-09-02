@@ -263,10 +263,11 @@ export async function hasSiblingEntityMemberships(
   return rows.length > 0;
 }
 
+/** Does this person belong to any OTHER gym? Decides whether the account goes. */
 export async function hasOtherMemberships(
   exec: DbExec,
   userId: string,
-  excludingAcademyId: string,
+  excludingOrganizationId: string,
 ): Promise<boolean> {
   const rows = await exec
     .select({ id: member.id })
@@ -274,7 +275,7 @@ export async function hasOtherMemberships(
     .where(
       and(
         eq(member.userId, userId),
-        ne(member.organizationId, excludingAcademyId),
+        ne(member.organizationId, excludingOrganizationId),
       ),
     )
     .limit(1);

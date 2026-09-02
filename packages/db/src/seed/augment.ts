@@ -156,27 +156,37 @@ function buildFakeStudents(academyId: string, count = 20): FakeStudent[] {
 /** How many fake (seed_) members this academy currently holds. */
 export async function academyFakeCount(
   exec: SeedExec,
-  academyId: string,
+  organizationId: string,
 ): Promise<number> {
   const rows = await exec
     .select({ id: member.id })
     .from(member)
     .where(
       and(
-        eq(member.organizationId, academyId),
+        eq(member.organizationId, organizationId),
         like(member.id, `${SEED_MARKER}%`),
       ),
     );
   return rows.length;
 }
 
-/** Resolve an academy by its 6-digit public code → { id, name } or null. */
+/**
+ * Resolve an academy by its 6-digit public code, or null.
+ *
+ * Returns the organization id beside the entity id because the two are only
+ * equal for a gym's DEFAULT academy (ADR 124), and `member` keys on the
+ * organization while every tenant table keys on the entity.
+ */
 export async function findAcademyByPublicCode(
   exec: SeedExec,
   code: string,
-): Promise<{ id: string; name: string } | null> {
+): Promise<{ id: string; organizationId: string; name: string } | null> {
   const rows = await exec
-    .select({ id: entity.id, name: entity.name })
+    .select({
+      id: entity.id,
+      organizationId: entity.organizationId,
+      name: entity.name,
+    })
     .from(entity)
     .where(and(eq(entity.publicCode, code), isNull(entity.deletedAt)))
     .limit(1);
@@ -208,10 +218,16 @@ async function findOwnerUserId(
  */
 export async function fillAcademy(
   exec: SeedExec,
-  opts: { academyId: string; now?: Date; studentCount?: number },
+  opts: {
+    academyId: string;
+    organizationId: string;
+    now?: Date;
+    studentCount?: number;
+  },
 ): Promise<FillReport> {
   const now = opts.now ?? new Date();
   const academyId = opts.academyId;
+  const organizationId = opts.organizationId;
   const report: FillReport = {};
   const students = buildFakeStudents(academyId, opts.studentCount ?? 20);
   const active = students.filter((s) => s.status === "active");
@@ -242,7 +258,7 @@ export async function fillAcademy(
     .values(
       students.map((s, i) => ({
         id: s.orgMemberId,
-        organizationId: academyId,
+        organizationId,
         userId: s.userId,
         role: s.role,
         createdAt: new Date(now.getTime() - (150 - i * 3) * DAY_MS),
@@ -258,7 +274,7 @@ export async function fillAcademy(
         const createdAt = new Date(now.getTime() - (150 - i * 3) * DAY_MS);
         return {
           id: s.memberId,
-          organizationId: academyId,
+          organizationId,
           entityId: academyId,
           userId: s.userId,
           role: s.role,
@@ -567,7 +583,7 @@ export async function fillAcademy(
  */
 export async function clearAcademy(
   exec: SeedExec,
-  opts: { academyId: string },
+  opts: { academyId: string; organizationId: string },
 ): Promise<FillReport> {
   const academyId = opts.academyId;
   const seedLike = `${SEED_MARKER}%`;
@@ -677,7 +693,10 @@ export async function clearAcademy(
     exec
       .delete(member)
       .where(
-        and(eq(member.organizationId, academyId), like(member.id, seedLike)),
+        and(
+          eq(member.organizationId, opts.organizationId),
+          like(member.id, seedLike),
+        ),
       ),
   );
   await del("user", () =>

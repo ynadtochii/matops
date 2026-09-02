@@ -59,3 +59,35 @@ describe("a session that names no gym", () => {
     ).toBe("NOT_FOUND");
   });
 });
+
+describe("an owner whose gym never got its academy", () => {
+  let h: Harness;
+
+  beforeAll(async () => {
+    h = await harness();
+    // Better Auth's half of "Start a gym", with nothing after it: an
+    // organization row and an owner member row, no entity (ADR 125).
+    await h.pg.exec(`
+      INSERT INTO "user" (id, name, email, email_verified, created_at, updated_at)
+        VALUES ('${OWNER}', 'Owner', 'owner@test.local', true, now(), now()),
+               ('${STUDENT}', 'Student', 'student@test.local', true, now(), now());
+      INSERT INTO "organization" (id, name, slug, created_at)
+        VALUES ('${ORG}', 'Half Made', 'half-made', now());
+      INSERT INTO "member" (id, organization_id, user_id, role, created_at)
+        VALUES ('mem_owner', '${ORG}', '${OWNER}', 'owner', now()),
+               ('mem_student', '${ORG}', '${STUDENT}', 'member', now());
+    `);
+  });
+
+  afterAll(() => h.close());
+
+  it("repairs it at the gate instead of sending them to start a second one", async () => {
+    const mine = await h.as(OWNER, null).academy.memberships();
+    expect(mine.map((m) => m.academyId)).toEqual([ORG]);
+    expect(mine[0]?.role).toBe("owner");
+  });
+
+  it("does not repair a gym on behalf of someone who does not own it", async () => {
+    expect(await h.as(STUDENT, null).academy.memberships()).toEqual([]);
+  });
+});

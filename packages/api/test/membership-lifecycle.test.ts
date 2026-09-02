@@ -416,6 +416,27 @@ describe("member archive and permanent erase (docs/issues/84)", () => {
       expect(await memberStatus(h, memberId(ACAD, COOWNER))).toBe("gone");
     });
 
+    it("leaves the gym owner their organization and their account", async () => {
+      const res = await h
+        .as(OWNER, ACAD)
+        .membership.purge({ memberId: memberId(ACAD, COOWNER) });
+      expect(res.accountDeleted).toBe(false);
+      expect(
+        await countRows(
+          h,
+          `SELECT count(*)::int AS n FROM "member" WHERE user_id = $1`,
+          COOWNER,
+        ),
+      ).toBe(1);
+      expect(
+        await countRows(
+          h,
+          `SELECT count(*)::int AS n FROM "user" WHERE id = $1`,
+          COOWNER,
+        ),
+      ).toBe(1);
+    });
+
     it("is owner-only", async () => {
       expect(
         await rejectionCode(

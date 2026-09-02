@@ -112,7 +112,7 @@ No blank waiting screen. A **slim banner** on the schedule: "Pending approval �
 - **My Training stats** (v1.2 B.1 — surfaced on the My classes tab, S6): total attended sessions · this month · week **streak** · favorite discipline + weekday · days since last class. Per-academy, from attendance already stored (ADR 39). Empty state until the first check-in.
 - **My rank** (v1.4 G.3, ADR 41): your rank in each discipline (e.g. _BJJ · Blue · 2 stripes_) plus a short **promotion timeline** (when you were promoted). **Read-only** — only the gym sets rank. Empty until a coach sets it.
 - **Membership dues** (S9) live here (quiet). Arriving from the S11 overdue strip scrolls to this section.
-- **Academy switcher** — shown only if the student belongs to >1 academy; switching changes the active academy and all data follows.
+- **Academy switcher** — shown only if the student belongs to >1 academy; switching changes the active academy and all data follows. The phone remembers the last mat, but only as a preference inside the list of academies you actually train at _(v7.3, ADR 125)_: if the gym removed you from the mat your phone remembers, the app opens another one you still train at instead of asking you to join a gym.
 
 ### S8 · Check in (QR walk-in) _(redefined in v1.8 slice 4 — booking is the pre-commit; the owner marks attendance after class. In-app scanner added in v3.0, ADR 70.)_
 
@@ -407,6 +407,8 @@ No blank waiting screen. A **slim banner** on the schedule: "Pending approval �
 - **A pending person keeps attending:** the member list shows each pending member's **visit count** ("attended 3×") so the owner is nudged to approve them. No auto-approve.
 - **Duplicate drop-ins:** leads are **grouped by phone** — one lead per person with a **visit count**, not a row per visit.
 - **Sole owner:** an owner can **promote another member to owner** (co-owner) from the member list, so a gym is never left ownerless. Full ownership transfer / account deletion is deferred.
+- **The owner of the gym is an owner at every academy of it** _(v7.3, ADR 125)_: the person who runs the organization reaches all its mats with owner rights, whatever their membership at one mat says. Otherwise a co-owner could archive them at the second mat and only a button on that mat could put it back. The same person can still be **erased from one mat** — that clears the roster there — but the erase never takes their gym away, and never deletes their account, because nothing in the app can make someone the gym's owner again.
+- **The academy switcher only offers mats you may open:** a membership that was suspended, archived or removed is left out, rather than offered and then refused at the door.
 - **Removing / rejecting someone with history:** their **attendance and lead records are kept** (they did train); access is revoked. Re-joining later starts pending again.
 - **Referral history survives removal:** an archived or declined student is hidden from O9 by default but can be included for historical reporting; they remain eligible as referrers while their membership row exists. A **permanently deleted** member is the exception: their row is gone, so any credit pointing at them is cleared and the students they brought in move to "Nobody credited yet" (v4.1, ADR 84).
 - **QR scanned with no class on:** the app shows "No class right now"; the public form still captures the person as a **general visit lead** for that day.

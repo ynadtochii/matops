@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { AppShell } from "~/app/_components/app-shell";
 import { PageLoader } from "~/app/_components/mat-loader";
 import { getSession } from "~/auth/server";
+import { EntityCacheBoundary } from "~/trpc/react";
 import { currentAcademy, HydrateClient, setRequestEntity } from "~/trpc/server";
 
 export default async function EntityLayout({
@@ -37,13 +38,16 @@ async function EntityShell({
   await currentAcademy();
 
   return (
-    <HydrateClient>
-      <AppShell
-        entityId={entityId}
-        user={{ name: session.user.name, email: session.user.email }}
-      >
-        {children}
-      </AppShell>
-    </HydrateClient>
+    <>
+      <EntityCacheBoundary entityId={entityId} />
+      <HydrateClient>
+        <AppShell
+          entityId={entityId}
+          user={{ name: session.user.name, email: session.user.email }}
+        >
+          {children}
+        </AppShell>
+      </HydrateClient>
+    </>
   );
 }

@@ -444,6 +444,18 @@ Alongside them sit the **identity tiers**, `staffIdentityProcedure` and `ownerId
 > `bjj_academy` **entity** id, `app.organization_id` is added beside them, and
 > per-academy settings leave `organization`. This section is rewritten when the
 > pivot reaches its last wave.
+>
+> **Two amendments from the v7.2 review**, ADR
+> [125](issues/125-the-pivot-review-fixes.md). First, **I10's list is longer**:
+> the base connection now also writes `entity_membership` (its never-ownerless
+> guard opens its own `FOR UPDATE` transaction) and `entity` inside
+> `softDeleteAcademy` (which also stamps `organization`). Every other write to
+> `entity` and `academy_profile` runs under the seam. Second, **`entity` and
+> `entity_membership` are organization-wide tables**: their policies match on
+> `app.organization_id`, so inside an entity transaction for mat A a bare select
+> of either returns mat B's rows too. That is deliberate, so an entity
+> transaction can join to them, and it means every read of those two tables must
+> carry its own entity filter.
 
 - **Shared DB, `academyId` on every tenant row, academyId-leading indexes.**
 - **Postgres RLS is the guarantee.** Every tenant table has RLS enabled + a policy `USING (academy_id = current_setting('app.academy_id'))` (and a matching `WITH CHECK` for writes). Note `academy_id` is **`text`** (it holds Better Auth's `organization.id`, a random string, not a UUID) — the policy compares text to text, no cast. The app connects with a **non-`BYPASSRLS` role**. The tenant middleware opens a per-request transaction and runs `select set_config('app.academy_id', <id>, true)` (transaction-local) — the local scope matches the Neon pooler's checkout boundary, so the setting never leaks to a reused connection ([21]).

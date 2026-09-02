@@ -10,6 +10,7 @@ import {
   getPublicApiSettings,
   listMembershipsForUser,
   listPublicClasses,
+  organizationsMissingEntity,
   provisionOrganization,
   rotatePublicApiKey,
   setPublicApiEnabled,
@@ -77,7 +78,25 @@ export const academyRouter = {
    * standing to land on.
    */
   memberships: protectedProcedure.query(async ({ ctx }) => {
-    const all = await listMembershipsForUser(ctx.session.user.id, ctx.baseDb);
+    let all = await listMembershipsForUser(ctx.session.user.id, ctx.baseDb);
+    if (all.length === 0) {
+      // The only route back for an owner whose provisioning died half way:
+      // "Start a gym" would make them a SECOND organization, and nothing else
+      // in the app can write the rows that are missing (ADR 124).
+      const stranded = await organizationsMissingEntity(
+        ctx.session.user.id,
+        ctx.baseDb,
+      );
+      for (const organizationId of stranded) {
+        await provisionOrganization(
+          { organizationId, ownerUserId: ctx.session.user.id },
+          ctx.baseDb,
+        );
+      }
+      if (stranded.length > 0) {
+        all = await listMembershipsForUser(ctx.session.user.id, ctx.baseDb);
+      }
+    }
     return all.filter(canEnroll).map((a) => ({
       academyId: a.academyId,
       organizationId: a.organizationId,
@@ -149,7 +168,9 @@ export const academyRouter = {
           message: "That is not a time zone we recognise",
         });
       }
-      await updateAcademySettings(ctx.academyId, input, ctx.baseDb);
+      await ctx.withScope((db) =>
+        updateAcademySettings(ctx.academyId, input, db),
+      );
       return { ok: true as const };
     }),
 
@@ -165,20 +186,25 @@ export const academyRouter = {
    * link on its own cannot reveal.
    */
   shareLinks: staffIdentityProcedure.query(async ({ ctx }) => {
-    const settings = await getPublicApiSettings(ctx.academyId, ctx.baseDb);
+    const { settings, shared } = await ctx.withScope(async (db) => {
+      const settings = await getPublicApiSettings(ctx.academyId, db);
+      const now = new Date();
+      return {
+        settings,
+        shared: settings?.enabled
+          ? await listPublicClasses(
+              ctx.academyId,
+              now,
+              new Date(now.getTime() + PUBLIC_RANGE_DEFAULT_DAYS * DAY_MS),
+              1,
+              db,
+            )
+          : [],
+      };
+    });
     if (!settings) {
       throw new TRPCError({ code: "NOT_FOUND", message: "Academy not found" });
     }
-    const now = new Date();
-    const shared = settings.enabled
-      ? await listPublicClasses(
-          ctx.academyId,
-          now,
-          new Date(now.getTime() + PUBLIC_RANGE_DEFAULT_DAYS * DAY_MS),
-          1,
-          ctx.baseDb,
-        )
-      : [];
     return {
       bookingEnabled: settings.enabled,
       publicCode: settings.publicCode,
@@ -188,11 +214,12 @@ export const academyRouter = {
 
   /**
    * The public booking surface (spec O6, ADR 115): the master switch, the
-   * publishable key and the optional origin allowlist. Owner-only, and it reads
-   * the base connection because `organization` carries no tenant policy.
+   * publishable key and the optional origin allowlist. Owner-only.
    */
   publicApi: ownerIdentityProcedure.query(async ({ ctx }) => {
-    const settings = await getPublicApiSettings(ctx.academyId, ctx.baseDb);
+    const settings = await ctx.withScope((db) =>
+      getPublicApiSettings(ctx.academyId, db),
+    );
     if (!settings) {
       throw new TRPCError({ code: "NOT_FOUND", message: "Academy not found" });
     }
@@ -207,10 +234,8 @@ export const academyRouter = {
   setPublicApi: ownerIdentityProcedure
     .input(PublicBookingEnabledSchema)
     .mutation(async ({ ctx, input }) => {
-      const settings = await setPublicApiEnabled(
-        ctx.academyId,
-        input.enabled,
-        ctx.baseDb,
+      const settings = await ctx.withScope((db) =>
+        setPublicApiEnabled(ctx.academyId, input.enabled, db),
       );
       if (!settings) {
         throw new TRPCError({
@@ -223,14 +248,20 @@ export const academyRouter = {
 
   /** Rotate the key: the old one stops working the moment this commits. */
   rotatePublicApiKey: ownerIdentityProcedure.mutation(async ({ ctx }) => {
-    return { apiKey: await rotatePublicApiKey(ctx.academyId, ctx.baseDb) };
+    return {
+      apiKey: await ctx.withScope((db) =>
+        rotatePublicApiKey(ctx.academyId, db),
+      ),
+    };
   }),
 
   /** The websites allowed to call the API from a browser. Empty means any. */
   setPublicApiOrigins: ownerIdentityProcedure
     .input(PublicApiOriginsSchema)
     .mutation(async ({ ctx, input }) => {
-      await setPublicApiOrigins(ctx.academyId, input.origins, ctx.baseDb);
+      await ctx.withScope((db) =>
+        setPublicApiOrigins(ctx.academyId, input.origins, db),
+      );
       return { ok: true as const };
     }),
 
@@ -241,7 +272,9 @@ export const academyRouter = {
   remove: ownerIdentityProcedure
     .input(DeleteAcademySchema)
     .mutation(async ({ ctx, input }) => {
-      const academy = await getAcademySettings(ctx.academyId, ctx.baseDb);
+      const academy = await ctx.withScope((db) =>
+        getAcademySettings(ctx.academyId, db),
+      );
       if (!academy) {
         throw new TRPCError({
           code: "NOT_FOUND",

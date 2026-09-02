@@ -13,6 +13,7 @@ import {
   eq,
   eraseMemberData,
   findAcademyByCode,
+  getMembership,
   gt,
   hasOtherMemberships,
   hasSiblingEntityMemberships,
@@ -539,12 +540,23 @@ export const membershipRouter = {
         m.userId,
         ctx.organizationId,
       );
-      if (!stillHere) {
+      // `member.role = "owner"` is written once, by Better Auth, when the gym is
+      // created, and no code path can write it back. So the never-ownerless guard
+      // above counts owners of THIS mat only, so it must not be the last thing
+      // standing between an owner of one mat and the founder's whole organization.
+      const orgMembership = await getMembership(
+        m.userId,
+        ctx.organizationId,
+        ctx.baseDb,
+      );
+      const foundedOrganization = orgMembership?.role === "owner";
+      if (!stillHere && !foundedOrganization) {
         await deleteMemberRow(ctx.baseDb, ctx.organizationId, m.userId);
       }
       const elsewhere =
         stillHere ||
-        (await hasOtherMemberships(ctx.baseDb, m.userId, ctx.academyId));
+        foundedOrganization ||
+        (await hasOtherMemberships(ctx.baseDb, m.userId, ctx.organizationId));
       if (!elsewhere) {
         await deleteUserRow(ctx.baseDb, m.userId);
       }

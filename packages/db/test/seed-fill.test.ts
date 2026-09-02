@@ -58,7 +58,7 @@ describe("seed fill/clear — augment a real academy", () => {
   });
 
   it("fill adds fake students and books them onto the real class", async () => {
-    await fillAcademy(exec, { academyId: ACAD, now });
+    await fillAcademy(exec, { academyId: ACAD, organizationId: ACAD, now });
     expect(await academyFakeCount(exec, ACAD)).toBe(20);
     // The upcoming real class now has the real student + fake bookings.
     const booked = await scalar(
@@ -81,7 +81,7 @@ describe("seed fill/clear — augment a real academy", () => {
   });
 
   it("clear removes every fake and restores the real academy exactly", async () => {
-    await clearAcademy(exec, { academyId: ACAD });
+    await clearAcademy(exec, { academyId: ACAD, organizationId: ACAD });
     expect(await academyFakeCount(exec, ACAD)).toBe(0);
 
     // No fake rows remain anywhere in the academy.

@@ -1,7 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 
 import type { DbExec } from "./client";
-import type { DbReader } from "./tenant";
+import type { DbReader, DbWriter } from "./tenant";
 import { organization } from "./auth-schema";
 import { academyProfile, entity } from "./entity-schema";
 
@@ -46,7 +46,7 @@ export async function updateAcademySettings(
     mapUrl?: string;
     curriculumForStudents?: boolean;
   },
-  exec: DbExec,
+  exec: DbWriter,
 ): Promise<void> {
   const next: {
     name?: string;

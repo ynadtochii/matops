@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { canRemoveOrDemote } from "@matops/domain";
 
@@ -7,6 +7,9 @@ import type { DbExec } from "./client";
 import type { DbReader, TenantTx } from "./tenant";
 import { member, organization, user } from "./auth-schema";
 import { academyProfile, entity, entityMembership } from "./entity-schema";
+
+/** The statuses `canEnroll` admits, as a SQL filter (docs/issues/23). */
+const ENROLLABLE_STATUSES = ["pending", "active"];
 
 export interface Membership {
   /** Better Auth role on the member row: "owner" | "instructor" | "student". */
@@ -168,6 +171,9 @@ export interface ScopedEntity {
  * naming an entity of another organization gets null, so the tier answers the
  * same way it does for an entity that does not exist and cannot be used to
  * enumerate other people's gyms. Base connection, pre-transaction.
+ *
+ * `status` is read beside `deleted_at` so the column is an access control
+ * rather than decoration: setting it to anything but `active` closes the mat.
  */
 export async function getEntityInOrganization(
   entityId: string,
@@ -186,6 +192,7 @@ export async function getEntityInOrganization(
       and(
         eq(entity.id, entityId),
         eq(entity.organizationId, organizationId),
+        eq(entity.status, "active"),
         isNull(entity.deletedAt),
       ),
     )
@@ -210,7 +217,11 @@ export async function listEntitiesOf(
     })
     .from(entity)
     .where(
-      and(eq(entity.organizationId, organizationId), isNull(entity.deletedAt)),
+      and(
+        eq(entity.organizationId, organizationId),
+        eq(entity.status, "active"),
+        isNull(entity.deletedAt),
+      ),
     )
     .orderBy(desc(entity.isDefault), entity.createdAt);
 }
@@ -220,6 +231,10 @@ export async function listEntitiesOf(
  * membership in. The organization owner is not special here: the caller decides
  * whether to use this or {@link listEntitiesOf}, because an owner reaches every
  * entity and a coach must not be offered a door that would refuse them.
+ *
+ * `suspended`, `archived` and `removed` rows are left out for the same reason:
+ * the entity tier would refuse the click, so offering it is offering a door
+ * that does not open.
  */
 export async function listEntitiesForUser(
   organizationId: string,
@@ -242,7 +257,12 @@ export async function listEntitiesForUser(
       ),
     )
     .where(
-      and(eq(entity.organizationId, organizationId), isNull(entity.deletedAt)),
+      and(
+        eq(entity.organizationId, organizationId),
+        eq(entity.status, "active"),
+        isNull(entity.deletedAt),
+        inArray(entityMembership.status, ENROLLABLE_STATUSES),
+      ),
     )
     .orderBy(desc(entity.isDefault), entity.createdAt);
 }
@@ -294,6 +314,13 @@ export interface UserAcademy {
  * ENTITY membership, with that entity's own name, time zone and address, so a
  * gym with two mats shows two (ADR 124).
  *
+ * An active ORGANIZATION owner gets a row for every entity of that organization
+ * whether or not they hold a membership at it, and their organization role wins
+ * over whatever the entity membership says. That is ADR 124 §2 ("an active
+ * organization owner reaches every entity") and it is the same rule
+ * `resolveEntity` applies, so the screen and the API cannot disagree about which
+ * mats are open.
+ *
  * `exec` is REQUIRED like every other reader in this module (docs/issues/60).
  * It was the one helper still closing over the module singleton, so the router
  * tests could not reach it and it hit the real pool from inside a test run.
@@ -302,18 +329,38 @@ export async function listMembershipsForUser(
   userId: string,
   exec: DbReader,
 ): Promise<UserAcademy[]> {
+  const entityCols = {
+    academyId: entity.id,
+    organizationId: entity.organizationId,
+    type: entity.type,
+    name: entity.name,
+    slug: entity.slug,
+    timeZone: entity.timeZone,
+    country: entity.country,
+    address: entity.address,
+    mapUrl: entity.mapUrl,
+    curriculumForStudents: academyProfile.curriculumForStudents,
+  };
+
+  const owned = await exec
+    .select({ ...entityCols, joinedAt: member.createdAt })
+    .from(member)
+    .innerJoin(entity, eq(entity.organizationId, member.organizationId))
+    .innerJoin(academyProfile, eq(academyProfile.entityId, entity.id))
+    .innerJoin(organization, eq(organization.id, entity.organizationId))
+    .where(
+      and(
+        eq(member.userId, userId),
+        eq(member.role, "owner"),
+        eq(entity.status, "active"),
+        isNull(entity.deletedAt),
+        isNull(organization.deletedAt),
+      ),
+    );
+
   const rows = await exec
     .select({
-      academyId: entity.id,
-      organizationId: entity.organizationId,
-      type: entity.type,
-      name: entity.name,
-      slug: entity.slug,
-      timeZone: entity.timeZone,
-      country: entity.country,
-      address: entity.address,
-      mapUrl: entity.mapUrl,
-      curriculumForStudents: academyProfile.curriculumForStudents,
+      ...entityCols,
       role: entityMembership.role,
       status: entityMembership.status,
       invitedRole: entityMembership.invitedRole,
@@ -327,15 +374,27 @@ export async function listMembershipsForUser(
     .where(
       and(
         eq(entityMembership.userId, userId),
+        eq(entity.status, "active"),
         isNull(entity.deletedAt),
         isNull(organization.deletedAt),
       ),
     );
 
-  return rows.map(({ createdAt, joinedAt, ...r }) => ({
-    ...r,
-    joinedAt: joinedAt ?? createdAt,
-  }));
+  const byEntity = new Map<string, UserAcademy>();
+  for (const { createdAt, joinedAt, ...r } of rows) {
+    byEntity.set(r.academyId, { ...r, joinedAt: joinedAt ?? createdAt });
+  }
+  for (const r of owned) {
+    const held = byEntity.get(r.academyId);
+    byEntity.set(r.academyId, {
+      ...r,
+      role: "owner",
+      status: "active",
+      invitedRole: held?.invitedRole ?? null,
+      joinedAt: held?.joinedAt ?? r.joinedAt,
+    });
+  }
+  return [...byEntity.values()];
 }
 
 /** Set the user's display name + phone at self-join (spec S1, minimal fields). */

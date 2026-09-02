@@ -1,17 +1,22 @@
 import { randomBytes } from "node:crypto";
 import { and, asc, eq, gte, isNull, lt } from "drizzle-orm";
 
-import type { DbExec } from "./client";
-import type { DbReader } from "./tenant";
+import type { DbReader, DbWriter } from "./tenant";
 import { academyProfile, entity } from "./entity-schema";
 import { classInstance } from "./scheduling";
 
 /**
- * Public booking API helpers (ADR 115). Every function here runs on the BASE
- * connection: the caller has no session and no academy scope, so there is no
- * tenant transaction to run inside. This is the SECOND enumerated exception to
- * the tenant seam, with the drop-in submit as its precedent (docs/issues/12,
- * 25). Each function is pinned to an academy id the key already resolved.
+ * Public booking API helpers (ADR 115). The functions the PUBLIC surface calls
+ * run on the BASE connection: that caller has no session and no academy scope,
+ * so there is no tenant transaction to run inside. This is the SECOND enumerated
+ * exception to the tenant seam, with the drop-in submit as its precedent
+ * (docs/issues/12, 25). Each function is pinned to an academy id the key already
+ * resolved.
+ *
+ * The three settings writers are not part of that exception: an owner changing
+ * the switch, the key or the origins has a scope, so they take a `DbWriter` and
+ * the owner router hands them the scoped transaction, where `academy_profile`'s
+ * policy applies.
  *
  * The class reads select the published columns and nothing else, so the deny
  * list in the plan is enforced by the query rather than by a mapping step
@@ -145,7 +150,7 @@ export async function getPublicApiSettings(
 export async function setPublicApiEnabled(
   academyId: string,
   enabled: boolean,
-  exec: DbExec,
+  exec: DbWriter,
 ): Promise<PublicApiSettings | null> {
   const current = await getPublicApiSettings(academyId, exec);
   if (!current) return null;
@@ -162,7 +167,7 @@ export async function setPublicApiEnabled(
 /** Rotate the key: the old one stops working the moment this commits. */
 export async function rotatePublicApiKey(
   academyId: string,
-  exec: DbExec,
+  exec: DbWriter,
 ): Promise<string> {
   const apiKey = newPublicApiKey();
   await exec
@@ -175,7 +180,7 @@ export async function rotatePublicApiKey(
 export async function setPublicApiOrigins(
   academyId: string,
   origins: string[],
-  exec: DbExec,
+  exec: DbWriter,
 ): Promise<void> {
   await exec
     .update(academyProfile)

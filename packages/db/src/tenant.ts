@@ -41,6 +41,15 @@ export type TenantTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
  */
 export type DbReader = DbExec | TenantTx;
 
+/**
+ * Either handle, for a WRITE that runs on whichever one the caller opened. The
+ * tenant tables the pivot added (`entity`, `academy_profile`) carry a policy and
+ * a full `matops_app` grant, so their writes belong on the scoped transaction
+ * where RLS is a second line of defence, not on the base connection that
+ * `organization` and `member` are stuck with (ADR 124, docs/architecture.md §5).
+ */
+export type DbWriter = DbExec | TenantTx;
+
 /** What a request transaction is scoped to. An organization read omits the entity. */
 export interface Scope {
   organizationId: string;

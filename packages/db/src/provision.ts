@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, notExists } from "drizzle-orm";
 
 import { slugify } from "@matops/domain";
 
 import type { DbExec } from "./client";
+import type { DbReader } from "./tenant";
 import { generateAcademyCode } from "./academy-code";
-import { organization } from "./auth-schema";
+import { member, organization } from "./auth-schema";
 import { DEFAULT_TRACK_NAME } from "./curriculum";
 import { curriculumTrack } from "./curriculum-schema";
 import { academyProfile, entity, entityMembership } from "./entity-schema";
@@ -72,7 +73,11 @@ async function provisionEntityRows(
         mapUrl: input.mapUrl,
         publicCode: input.publicCode,
       })
-      .onConflictDoNothing()
+      // Named target on purpose: the row carries three unique constraints, and
+      // only the primary key means "already provisioned". A public-code or slug
+      // collision has to raise rather than silently skip the entity and leave
+      // the academy_profile insert to fail on a foreign key instead.
+      .onConflictDoNothing({ target: entity.id })
       .returning({ id: entity.id }),
   );
 
@@ -215,4 +220,42 @@ export async function createEntity(
     exec,
   );
   return { organizationId: input.organizationId, entityId, created };
+}
+
+/**
+ * The organizations this person OWNS that hold no live entity.
+ *
+ * Better Auth can write the `organization` row and then die before our own rows
+ * land, which strands the owner: they are signed in to a gym with no place to
+ * run classes, and "Start a gym" would only make a second organization. The
+ * post-login gate reads this and re-runs {@link provisionOrganization}, which
+ * is idempotent, so a repair costs nothing when nothing is missing.
+ */
+export async function organizationsMissingEntity(
+  userId: string,
+  exec: DbReader,
+): Promise<string[]> {
+  const rows = await exec
+    .select({ id: organization.id })
+    .from(member)
+    .innerJoin(organization, eq(organization.id, member.organizationId))
+    .where(
+      and(
+        eq(member.userId, userId),
+        eq(member.role, "owner"),
+        isNull(organization.deletedAt),
+        notExists(
+          exec
+            .select({ id: entity.id })
+            .from(entity)
+            .where(
+              and(
+                eq(entity.organizationId, organization.id),
+                isNull(entity.deletedAt),
+              ),
+            ),
+        ),
+      ),
+    );
+  return rows.map((r) => r.id);
 }
