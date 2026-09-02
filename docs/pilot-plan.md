@@ -153,7 +153,7 @@ thing on this page, and it costs one email.
 > - Twenty minutes on a call each week for the first four weeks.
 > - Permission for me to look at your gym's data when something breaks.
 >
-> **After 31 January** it will cost somewhere around €39 a month. If it is not
+> **After 31 January** it will cost somewhere around €49 a month. If it is not
 > worth that by then, tell me and we stop. No hard feelings, and I will export
 > your data.
 
@@ -162,7 +162,7 @@ Three deliberate choices in that text:
 - **A date, not "free for now".** From [business-model.md](business-model.md):
   without a date the pricing conversation never happens, because there is never a
   good week to raise it.
-- **A price mentioned but not charged.** Naming €39 now means the number is never
+- **A price mentioned but not charged.** Naming €49 now means the number is never
   a surprise. It also tells you immediately if they flinch.
 - **Explicit permission to read their data.** You will need it, and asking
   afterwards is worse.

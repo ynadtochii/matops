@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 import { Curriculum } from "./curriculum";
 import { PageHeader } from "./page-header";
@@ -15,6 +15,8 @@ import { Templates } from "./templates";
  */
 export function ScheduleScreen() {
   const [tab, setTab] = useState<"week" | "templates" | "curriculum">("week");
+  const [openTemplateId, setOpenTemplateId] = useState<string | null>(null);
+  const onOpened = useCallback(() => setOpenTemplateId(null), []);
   return (
     <>
       <PageHeader
@@ -34,9 +36,14 @@ export function ScheduleScreen() {
       />
       <div>
         {tab === "week" ? (
-          <Schedule />
+          <Schedule
+            onOpenTemplate={(id) => {
+              setOpenTemplateId(id);
+              setTab("templates");
+            }}
+          />
         ) : tab === "templates" ? (
-          <Templates />
+          <Templates openTemplateId={openTemplateId} onOpened={onOpened} />
         ) : (
           <Curriculum />
         )}

@@ -79,30 +79,49 @@ export async function updateAcademySettings(
 }
 
 /**
- * Close the gym. Every entity it runs goes with it, in the same transaction:
- * an entity is where the classes, the codes and the booking links live, so
- * leaving one behind would keep the gym findable by code after its owner said
- * to delete it.
+ * Close one academy (ADR 68, entity-scoped by ADR 124).
+ *
+ * The named ENTITY is what closes, so a gym running two mats can shut one and
+ * keep the other's classes, roster and join code working. The organization
+ * follows only when that was its last live entity: an owner group with no place
+ * to run classes is a closed gym, and leaving it open would keep an owner
+ * signed in to nothing.
  */
 export async function softDeleteAcademy(
-  academyId: string,
+  entityId: string,
   exec: DbExec,
 ): Promise<boolean> {
   return exec.transaction(async (tx) => {
-    const rows = await tx
-      .update(organization)
-      .set({ deletedAt: new Date() })
-      .where(
-        and(eq(organization.id, academyId), isNull(organization.deletedAt)),
-      )
-      .returning({ id: organization.id });
-    if (rows.length === 0) return false;
-    await tx
+    const closedAt = new Date();
+    const closed = await tx
       .update(entity)
-      .set({ deletedAt: new Date() })
+      .set({ deletedAt: closedAt })
+      .where(and(eq(entity.id, entityId), isNull(entity.deletedAt)))
+      .returning({ organizationId: entity.organizationId });
+    const organizationId = closed[0]?.organizationId;
+    if (!organizationId) return false;
+
+    const live = await tx
+      .select({ id: entity.id })
+      .from(entity)
       .where(
-        and(eq(entity.organizationId, academyId), isNull(entity.deletedAt)),
-      );
+        and(
+          eq(entity.organizationId, organizationId),
+          isNull(entity.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (live.length === 0) {
+      await tx
+        .update(organization)
+        .set({ deletedAt: closedAt })
+        .where(
+          and(
+            eq(organization.id, organizationId),
+            isNull(organization.deletedAt),
+          ),
+        );
+    }
     return true;
   });
 }

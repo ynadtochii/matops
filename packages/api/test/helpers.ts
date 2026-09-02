@@ -3,7 +3,12 @@ import { TRPCError } from "@trpc/server";
 
 import type { DbExec } from "@matops/db/client";
 import { eq, provisionOrganization } from "@matops/db";
-import { entity, entityMembership, member, organization } from "@matops/db/schema";
+import {
+  entity,
+  entityMembership,
+  member,
+  organization,
+} from "@matops/db/schema";
 import { execOn, freshDb } from "@matops/db/testing";
 
 import type { createTRPCContext } from "../src/trpc";

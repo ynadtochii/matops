@@ -1,10 +1,11 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 
+import type { EntityPageProps } from "~/trpc/server";
 import { ProfileScreen } from "~/app/_components/profile-screen";
 import { ProfileSkeleton } from "~/app/_components/skeletons";
 import { getSession } from "~/auth/server";
-import { HydrateClient, prefetch, trpc } from "~/trpc/server";
+import { HydrateClient, prefetch, setRequestEntity, trpc } from "~/trpc/server";
 
 async function ProfileData() {
   const session = await getSession();
@@ -25,7 +26,9 @@ async function ProfileData() {
   );
 }
 
-export default function ProfilePage() {
+export default async function ProfilePage({ params }: EntityPageProps) {
+  setRequestEntity((await params).entityId);
+
   return (
     <Suspense fallback={<ProfileSkeleton />}>
       <ProfileData />

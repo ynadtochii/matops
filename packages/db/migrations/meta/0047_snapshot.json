@@ -144,12 +144,8 @@
           "name": "account_user_id_user_id_fk",
           "tableFrom": "account",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -221,12 +217,8 @@
           "name": "invitation_organization_id_organization_id_fk",
           "tableFrom": "invitation",
           "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["organization_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -234,12 +226,8 @@
           "name": "invitation_inviter_id_user_id_fk",
           "tableFrom": "invitation",
           "tableTo": "user",
-          "columnsFrom": [
-            "inviter_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["inviter_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -329,12 +317,8 @@
           "name": "member_organization_id_organization_id_fk",
           "tableFrom": "member",
           "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["organization_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -342,12 +326,8 @@
           "name": "member_user_id_user_id_fk",
           "tableFrom": "member",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -412,9 +392,7 @@
         "organization_slug_unique": {
           "name": "organization_slug_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "slug"
-          ]
+          "columns": ["slug"]
         }
       },
       "policies": {},
@@ -503,12 +481,8 @@
           "name": "session_user_id_user_id_fk",
           "tableFrom": "session",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -518,9 +492,7 @@
         "session_token_unique": {
           "name": "session_token_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "token"
-          ]
+          "columns": ["token"]
         }
       },
       "policies": {},
@@ -590,9 +562,7 @@
         "user_email_unique": {
           "name": "user_email_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "email"
-          ]
+          "columns": ["email"]
         }
       },
       "policies": {},
@@ -858,12 +828,8 @@
           "name": "curriculum_block_academy_id_entity_id_fk",
           "tableFrom": "curriculum_block",
           "tableTo": "entity",
-          "columnsFrom": [
-            "academy_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["academy_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -953,12 +919,8 @@
           "name": "curriculum_block_template_academy_id_entity_id_fk",
           "tableFrom": "curriculum_block_template",
           "tableTo": "entity",
-          "columnsFrom": [
-            "academy_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["academy_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1052,12 +1014,8 @@
           "name": "curriculum_track_academy_id_entity_id_fk",
           "tableFrom": "curriculum_track",
           "tableTo": "entity",
-          "columnsFrom": [
-            "academy_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["academy_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1125,12 +1083,8 @@
           "name": "academy_profile_entity_id_entity_id_fk",
           "tableFrom": "academy_profile",
           "tableTo": "entity",
-          "columnsFrom": [
-            "entity_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["entity_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1140,9 +1094,7 @@
         "academy_profile_publicApiKey_unique": {
           "name": "academy_profile_publicApiKey_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "public_api_key"
-          ]
+          "columns": ["public_api_key"]
         }
       },
       "policies": {},
@@ -1328,12 +1280,8 @@
           "name": "entity_organization_id_organization_id_fk",
           "tableFrom": "entity",
           "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["organization_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1343,9 +1291,7 @@
         "entity_publicCode_unique": {
           "name": "entity_publicCode_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "public_code"
-          ]
+          "columns": ["public_code"]
         }
       },
       "policies": {},
@@ -1511,12 +1457,8 @@
           "name": "entity_membership_organization_id_organization_id_fk",
           "tableFrom": "entity_membership",
           "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["organization_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1524,12 +1466,8 @@
           "name": "entity_membership_user_id_user_id_fk",
           "tableFrom": "entity_membership",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1537,14 +1475,8 @@
           "name": "entity_membership_entity_same_org",
           "tableFrom": "entity_membership",
           "tableTo": "entity",
-          "columnsFrom": [
-            "organization_id",
-            "entity_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
+          "columnsFrom": ["organization_id", "entity_id"],
+          "columnsTo": ["organization_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1633,12 +1565,8 @@
           "name": "academy_invite_academy_id_entity_id_fk",
           "tableFrom": "academy_invite",
           "tableTo": "entity",
-          "columnsFrom": [
-            "academy_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["academy_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1648,9 +1576,7 @@
         "academy_invite_token_unique": {
           "name": "academy_invite_token_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "token"
-          ]
+          "columns": ["token"]
         }
       },
       "policies": {},
@@ -1758,12 +1684,8 @@
           "name": "notification_academy_id_entity_id_fk",
           "tableFrom": "notification",
           "tableTo": "entity",
-          "columnsFrom": [
-            "academy_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["academy_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1873,12 +1795,8 @@
           "name": "member_dues_academy_id_entity_id_fk",
           "tableFrom": "member_dues",
           "tableTo": "entity",
-          "columnsFrom": [
-            "academy_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["academy_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1886,12 +1804,8 @@
           "name": "member_dues_plan_id_membership_plan_id_fk",
           "tableFrom": "member_dues",
           "tableTo": "membership_plan",
-          "columnsFrom": [
-            "plan_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["plan_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1899,14 +1813,8 @@
           "name": "member_dues_membership",
           "tableFrom": "member_dues",
           "tableTo": "entity_membership",
-          "columnsFrom": [
-            "academy_id",
-            "member_id"
-          ],
-          "columnsTo": [
-            "entity_id",
-            "id"
-          ],
+          "columnsFrom": ["academy_id", "member_id"],
+          "columnsTo": ["entity_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2003,12 +1911,8 @@
           "name": "membership_plan_academy_id_entity_id_fk",
           "tableFrom": "membership_plan",
           "tableTo": "entity",
-          "columnsFrom": [
-            "academy_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["academy_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2191,12 +2095,8 @@
           "name": "payment_claim_academy_id_entity_id_fk",
           "tableFrom": "payment_claim",
           "tableTo": "entity",
-          "columnsFrom": [
-            "academy_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["academy_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2204,12 +2104,8 @@
           "name": "payment_claim_plan_id_membership_plan_id_fk",
           "tableFrom": "payment_claim",
           "tableTo": "membership_plan",
-          "columnsFrom": [
-            "plan_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["plan_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2217,14 +2113,8 @@
           "name": "payment_claim_membership",
           "tableFrom": "payment_claim",
           "tableTo": "entity_membership",
-          "columnsFrom": [
-            "academy_id",
-            "member_id"
-          ],
-          "columnsTo": [
-            "entity_id",
-            "id"
-          ],
+          "columnsFrom": ["academy_id", "member_id"],
+          "columnsTo": ["entity_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2286,12 +2176,8 @@
           "name": "payment_settings_academy_id_entity_id_fk",
           "tableFrom": "payment_settings",
           "tableTo": "entity",
-          "columnsFrom": [
-            "academy_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["academy_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2374,12 +2260,8 @@
           "name": "push_token_user_id_user_id_fk",
           "tableFrom": "push_token",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2389,9 +2271,7 @@
         "push_token_token_unique": {
           "name": "push_token_token_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "token"
-          ]
+          "columns": ["token"]
         }
       },
       "policies": {},
@@ -2476,12 +2356,8 @@
           "name": "member_note_academy_id_entity_id_fk",
           "tableFrom": "member_note",
           "tableTo": "entity",
-          "columnsFrom": [
-            "academy_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["academy_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2489,14 +2365,8 @@
           "name": "member_note_membership",
           "tableFrom": "member_note",
           "tableTo": "entity_membership",
-          "columnsFrom": [
-            "academy_id",
-            "member_id"
-          ],
-          "columnsTo": [
-            "entity_id",
-            "id"
-          ],
+          "columnsFrom": ["academy_id", "member_id"],
+          "columnsTo": ["entity_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2604,12 +2474,8 @@
           "name": "member_rank_academy_id_entity_id_fk",
           "tableFrom": "member_rank",
           "tableTo": "entity",
-          "columnsFrom": [
-            "academy_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["academy_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2617,14 +2483,8 @@
           "name": "member_rank_membership",
           "tableFrom": "member_rank",
           "tableTo": "entity_membership",
-          "columnsFrom": [
-            "academy_id",
-            "member_id"
-          ],
-          "columnsTo": [
-            "entity_id",
-            "id"
-          ],
+          "columnsFrom": ["academy_id", "member_id"],
+          "columnsTo": ["entity_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2730,12 +2590,8 @@
           "name": "rank_promotion_academy_id_entity_id_fk",
           "tableFrom": "rank_promotion",
           "tableTo": "entity",
-          "columnsFrom": [
-            "academy_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["academy_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2743,14 +2599,8 @@
           "name": "rank_promotion_membership",
           "tableFrom": "rank_promotion",
           "tableTo": "entity_membership",
-          "columnsFrom": [
-            "academy_id",
-            "member_id"
-          ],
-          "columnsTo": [
-            "entity_id",
-            "id"
-          ],
+          "columnsFrom": ["academy_id", "member_id"],
+          "columnsTo": ["entity_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2860,12 +2710,8 @@
           "name": "member_referral_academy_id_entity_id_fk",
           "tableFrom": "member_referral",
           "tableTo": "entity",
-          "columnsFrom": [
-            "academy_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["academy_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2873,14 +2719,8 @@
           "name": "member_referral_student_membership",
           "tableFrom": "member_referral",
           "tableTo": "entity_membership",
-          "columnsFrom": [
-            "academy_id",
-            "student_member_id"
-          ],
-          "columnsTo": [
-            "entity_id",
-            "id"
-          ],
+          "columnsFrom": ["academy_id", "student_member_id"],
+          "columnsTo": ["entity_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2888,14 +2728,8 @@
           "name": "member_referral_referrer_membership",
           "tableFrom": "member_referral",
           "tableTo": "entity_membership",
-          "columnsFrom": [
-            "academy_id",
-            "referrer_member_id"
-          ],
-          "columnsTo": [
-            "entity_id",
-            "id"
-          ],
+          "columnsFrom": ["academy_id", "referrer_member_id"],
+          "columnsTo": ["entity_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -3001,12 +2835,8 @@
           "name": "member_referral_audit_academy_id_entity_id_fk",
           "tableFrom": "member_referral_audit",
           "tableTo": "entity",
-          "columnsFrom": [
-            "academy_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["academy_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -3014,14 +2844,8 @@
           "name": "member_referral_audit_student_membership",
           "tableFrom": "member_referral_audit",
           "tableTo": "entity_membership",
-          "columnsFrom": [
-            "academy_id",
-            "student_member_id"
-          ],
-          "columnsTo": [
-            "entity_id",
-            "id"
-          ],
+          "columnsFrom": ["academy_id", "student_member_id"],
+          "columnsTo": ["entity_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -3029,14 +2853,8 @@
           "name": "member_referral_audit_old_referrer_membership",
           "tableFrom": "member_referral_audit",
           "tableTo": "entity_membership",
-          "columnsFrom": [
-            "academy_id",
-            "old_referrer_member_id"
-          ],
-          "columnsTo": [
-            "entity_id",
-            "id"
-          ],
+          "columnsFrom": ["academy_id", "old_referrer_member_id"],
+          "columnsTo": ["entity_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -3044,14 +2862,8 @@
           "name": "member_referral_audit_new_referrer_membership",
           "tableFrom": "member_referral_audit",
           "tableTo": "entity_membership",
-          "columnsFrom": [
-            "academy_id",
-            "new_referrer_member_id"
-          ],
-          "columnsTo": [
-            "entity_id",
-            "id"
-          ],
+          "columnsFrom": ["academy_id", "new_referrer_member_id"],
+          "columnsTo": ["entity_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -3283,12 +3095,8 @@
           "name": "class_academy_id_entity_id_fk",
           "tableFrom": "class",
           "tableTo": "entity",
-          "columnsFrom": [
-            "academy_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["academy_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -3296,12 +3104,8 @@
           "name": "class_template_id_class_template_id_fk",
           "tableFrom": "class",
           "tableTo": "class_template",
-          "columnsFrom": [
-            "template_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["template_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -3474,12 +3278,8 @@
           "name": "class_participation_academy_id_entity_id_fk",
           "tableFrom": "class_participation",
           "tableTo": "entity",
-          "columnsFrom": [
-            "academy_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["academy_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -3487,12 +3287,8 @@
           "name": "class_participation_class_id_class_id_fk",
           "tableFrom": "class_participation",
           "tableTo": "class",
-          "columnsFrom": [
-            "class_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["class_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -3682,12 +3478,8 @@
           "name": "class_template_academy_id_entity_id_fk",
           "tableFrom": "class_template",
           "tableTo": "entity",
-          "columnsFrom": [
-            "academy_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["academy_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -3830,12 +3622,8 @@
           "name": "drop_in_academy_id_entity_id_fk",
           "tableFrom": "drop_in",
           "tableTo": "entity",
-          "columnsFrom": [
-            "academy_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["academy_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -4015,12 +3803,8 @@
           "name": "drop_in_visit_academy_id_entity_id_fk",
           "tableFrom": "drop_in_visit",
           "tableTo": "entity",
-          "columnsFrom": [
-            "academy_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["academy_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -4028,12 +3812,8 @@
           "name": "drop_in_visit_drop_in_id_drop_in_id_fk",
           "tableFrom": "drop_in_visit",
           "tableTo": "drop_in",
-          "columnsFrom": [
-            "drop_in_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["drop_in_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -4041,12 +3821,8 @@
           "name": "drop_in_visit_class_id_class_id_fk",
           "tableFrom": "drop_in_visit",
           "tableTo": "class",
-          "columnsFrom": [
-            "class_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["class_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -4062,102 +3838,57 @@
     "public.payment_claim_status": {
       "name": "payment_claim_status",
       "schema": "public",
-      "values": [
-        "pending",
-        "confirmed",
-        "rejected"
-      ]
+      "values": ["pending", "confirmed", "rejected"]
     },
     "public.payment_cycle": {
       "name": "payment_cycle",
       "schema": "public",
-      "values": [
-        "monthly"
-      ]
+      "values": ["monthly"]
     },
     "public.referral_action": {
       "name": "referral_action",
       "schema": "public",
-      "values": [
-        "assigned",
-        "corrected",
-        "cleared"
-      ]
+      "values": ["assigned", "corrected", "cleared"]
     },
     "public.attendance_status": {
       "name": "attendance_status",
       "schema": "public",
-      "values": [
-        "unmarked",
-        "present",
-        "absent"
-      ]
+      "values": ["unmarked", "present", "absent"]
     },
     "public.booking_status": {
       "name": "booking_status",
       "schema": "public",
-      "values": [
-        "booked",
-        "cancelled",
-        "none"
-      ]
+      "values": ["booked", "cancelled", "none"]
     },
     "public.booking_tier": {
       "name": "booking_tier",
       "schema": "public",
-      "values": [
-        "confirmed",
-        "provisional"
-      ]
+      "values": ["confirmed", "provisional"]
     },
     "public.class_status": {
       "name": "class_status",
       "schema": "public",
-      "values": [
-        "scheduled",
-        "cancelled"
-      ]
+      "values": ["scheduled", "cancelled"]
     },
     "public.discipline": {
       "name": "discipline",
       "schema": "public",
-      "values": [
-        "bjj",
-        "nogi",
-        "judo",
-        "mma",
-        "other"
-      ]
+      "values": ["bjj", "nogi", "judo", "mma", "other"]
     },
     "public.lead_source": {
       "name": "lead_source",
       "schema": "public",
-      "values": [
-        "link",
-        "web",
-        "wall_qr",
-        "staff",
-        "api"
-      ]
+      "values": ["link", "web", "wall_qr", "staff", "api"]
     },
     "public.lead_stage": {
       "name": "lead_stage",
       "schema": "public",
-      "values": [
-        "new",
-        "contacted",
-        "invited",
-        "joined",
-        "ghosted"
-      ]
+      "values": ["new", "contacted", "invited", "joined", "ghosted"]
     },
     "public.template_status": {
       "name": "template_status",
       "schema": "public",
-      "values": [
-        "active",
-        "paused"
-      ]
+      "values": ["active", "paused"]
     }
   },
   "schemas": {},

@@ -137,3 +137,82 @@ describe("academy settings", () => {
     ).not.toBeNull();
   });
 });
+
+describe("closing one academy of a gym that runs two", () => {
+  const ORG = "acad_settings_two";
+  const OWNER = "u_settings_two_owner";
+  let h: Harness;
+  let secondId: string;
+
+  const withEntity = (id: string) => {
+    const headers = new Headers();
+    headers.set("x-matops-entity", id);
+    return headers;
+  };
+
+  beforeAll(async () => {
+    h = await harness();
+    await seedAcademies(h.pg, [
+      {
+        id: ORG,
+        code: "700022",
+        members: [{ userId: OWNER, role: "owner", status: "active" }],
+      },
+    ]);
+    const made = await h
+      .as(OWNER, ORG)
+      .entity.create({ name: "Second Mat", type: "bjj_academy" });
+    secondId = made.entityId;
+  });
+
+  afterAll(() => h.close());
+
+  const liveOrganization = async () => {
+    const row = await h.pg.query<{ deleted_at: string | null }>(
+      `SELECT deleted_at FROM "organization" WHERE id = $1`,
+      [ORG],
+    );
+    return row.rows[0]?.deleted_at === null;
+  };
+
+  it("closes only the academy that was named", async () => {
+    await h
+      .as(OWNER, ORG, withEntity(secondId))
+      .academy.remove({ confirm: "delete Second Mat" });
+
+    expect(
+      await h.as(OWNER, ORG, withEntity(secondId)).academy.current(),
+    ).toBeNull();
+    const kept = await h.as(OWNER, ORG, withEntity(ORG)).academy.current();
+    expect(kept?.academyId).toBe(ORG);
+    expect(
+      await h.as(OWNER, null).academy.findByCode({ code: "700022" }),
+    ).not.toBeNull();
+  });
+
+  it("keeps the gym open while one academy is left", async () => {
+    expect(await liveOrganization()).toBe(true);
+    expect(await h.as(OWNER, ORG).entity.list()).toMatchObject({
+      entities: [{ id: ORG }],
+    });
+  });
+
+  it("closes the gym with its last academy", async () => {
+    await h
+      .as(OWNER, ORG, withEntity(ORG))
+      .academy.remove({ confirm: `delete Academy ${ORG}` });
+
+    expect(await liveOrganization()).toBe(false);
+    expect(await h.as(OWNER, ORG).academy.memberships()).toEqual([]);
+  });
+
+  it("refuses a second delete of an academy already closed", async () => {
+    expect(
+      await rejectionCode(
+        h
+          .as(OWNER, ORG, withEntity(secondId))
+          .academy.remove({ confirm: "delete Second Mat" }),
+      ),
+    ).toBe("FORBIDDEN");
+  });
+});

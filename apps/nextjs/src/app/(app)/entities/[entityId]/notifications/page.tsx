@@ -2,9 +2,16 @@ import { Suspense } from "react";
 
 import { isStaff } from "@matops/domain";
 
+import type { EntityPageProps } from "~/trpc/server";
 import { NotificationsScreen } from "~/app/_components/notifications-screen";
 import { NotificationsSkeleton } from "~/app/_components/skeletons";
-import { currentAcademy, HydrateClient, prefetch, trpc } from "~/trpc/server";
+import {
+  currentAcademy,
+  HydrateClient,
+  prefetch,
+  setRequestEntity,
+  trpc,
+} from "~/trpc/server";
 
 async function NotificationsData() {
   const academy = await currentAcademy();
@@ -21,7 +28,9 @@ async function NotificationsData() {
   );
 }
 
-export default function NotificationsPage() {
+export default async function NotificationsPage({ params }: EntityPageProps) {
+  setRequestEntity((await params).entityId);
+
   return (
     <Suspense fallback={<NotificationsSkeleton />}>
       <NotificationsData />

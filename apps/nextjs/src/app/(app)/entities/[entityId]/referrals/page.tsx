@@ -2,9 +2,16 @@ import { Suspense } from "react";
 
 import { isOwner } from "@matops/domain";
 
+import type { EntityPageProps } from "~/trpc/server";
 import { ReferralsScreen } from "~/app/_components/referrals-screen";
 import { ReferralsSkeleton } from "~/app/_components/skeletons";
-import { currentAcademy, HydrateClient, prefetch, trpc } from "~/trpc/server";
+import {
+  currentAcademy,
+  HydrateClient,
+  prefetch,
+  setRequestEntity,
+  trpc,
+} from "~/trpc/server";
 
 async function ReferralsData() {
   const academy = await currentAcademy();
@@ -20,7 +27,9 @@ async function ReferralsData() {
   );
 }
 
-export default function ReferralsPage() {
+export default async function ReferralsPage({ params }: EntityPageProps) {
+  setRequestEntity((await params).entityId);
+
   return (
     <Suspense fallback={<ReferralsSkeleton />}>
       <ReferralsData />

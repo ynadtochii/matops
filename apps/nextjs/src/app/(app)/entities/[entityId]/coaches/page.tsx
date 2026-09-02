@@ -2,9 +2,16 @@ import { Suspense } from "react";
 
 import { isOwner, isStaff } from "@matops/domain";
 
+import type { EntityPageProps } from "~/trpc/server";
 import { CoachesScreen } from "~/app/_components/coaches-screen";
 import { CoachesSkeleton } from "~/app/_components/skeletons";
-import { currentAcademy, HydrateClient, prefetch, trpc } from "~/trpc/server";
+import {
+  currentAcademy,
+  HydrateClient,
+  prefetch,
+  setRequestEntity,
+  trpc,
+} from "~/trpc/server";
 
 async function CoachesData() {
   const academy = await currentAcademy();
@@ -25,7 +32,9 @@ async function CoachesData() {
   );
 }
 
-export default function CoachesPage() {
+export default async function CoachesPage({ params }: EntityPageProps) {
+  setRequestEntity((await params).entityId);
+
   return (
     <Suspense fallback={<CoachesSkeleton />}>
       <CoachesData />

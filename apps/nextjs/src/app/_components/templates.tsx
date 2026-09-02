@@ -92,7 +92,13 @@ const formFromTemplate = (t: Template): FormState => ({
  * takes the academy time zone (O6); an existing one keeps its own until someone
  * moves it on purpose (ADR 68).
  */
-export function Templates() {
+export function Templates({
+  openTemplateId,
+  onOpened,
+}: {
+  openTemplateId?: string | null;
+  onOpened?: () => void;
+} = {}) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const list = useQuery(trpc.template.list.queryOptions());
@@ -112,6 +118,7 @@ export function Templates() {
   const closeForm = () => {
     setForm(null);
     setEditingId(null);
+    onOpened?.();
   };
 
   const create = useMutation(
@@ -155,30 +162,33 @@ export function Templates() {
 
   const busy = create.isPending || update.isPending;
   const templates = list.data ?? [];
-  const editingTemplate = list.data?.find((t) => t.id === editingId);
+  const openId = editingId ?? openTemplateId ?? null;
+  const editingTemplate = list.data?.find((t) => t.id === openId);
+  const shown =
+    form ?? (editingTemplate ? formFromTemplate(editingTemplate) : null);
   const tracks = board.data?.tracks ?? [];
   const defaultTrack = tracks.find((t) => t.isDefault);
 
   const submit = () => {
-    if (!form) return;
-    if (form.title.trim().length < 1 || form.daysOfWeek.length === 0) {
+    if (!shown) return;
+    if (shown.title.trim().length < 1 || shown.daysOfWeek.length === 0) {
       toast.error("Add a title and pick at least one day");
       return;
     }
     const payload = {
-      title: form.title.trim(),
-      instructorId: form.instructorId || undefined,
-      discipline: form.discipline === "" ? null : form.discipline,
+      title: shown.title.trim(),
+      instructorId: shown.instructorId || undefined,
+      discipline: shown.discipline === "" ? null : shown.discipline,
       curriculumTrackId:
-        form.curriculumTrackId === "" ? null : form.curriculumTrackId,
-      daysOfWeek: form.daysOfWeek,
-      startsAtMinutes: timeToMinutes(form.time),
-      durationMinutes: form.durationMinutes,
-      capacity: form.capacity,
-      timeZone: form.timeZone,
-      publicBookable: form.publicBookable,
+        shown.curriculumTrackId === "" ? null : shown.curriculumTrackId,
+      daysOfWeek: shown.daysOfWeek,
+      startsAtMinutes: timeToMinutes(shown.time),
+      durationMinutes: shown.durationMinutes,
+      capacity: shown.capacity,
+      timeZone: shown.timeZone,
+      publicBookable: shown.publicBookable,
     };
-    if (editingId) update.mutate({ id: editingId, ...payload });
+    if (openId) update.mutate({ id: openId, ...payload });
     else create.mutate(payload);
   };
 
@@ -292,11 +302,11 @@ export function Templates() {
       )}
 
       <Dialog
-        open={form !== null}
+        open={shown !== null}
         onOpenChange={(next) => !next && closeForm()}
       >
         <DialogContent>
-          {form !== null && (
+          {shown !== null && (
             <form
               className="flex flex-col gap-4"
               onSubmit={(e) => {
@@ -305,14 +315,14 @@ export function Templates() {
               }}
             >
               <DialogTitle>
-                {editingId ? "Edit template" : "New template"}
+                {openId ? "Edit template" : "New template"}
               </DialogTitle>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="tpl-title">Title</Label>
                 <Input
                   id="tpl-title"
-                  value={form.title}
-                  onChange={(e) => setForm({ ...form, title: e.target.value })}
+                  value={shown.title}
+                  onChange={(e) => setForm({ ...shown, title: e.target.value })}
                   placeholder="Evening No-Gi"
                   maxLength={80}
                   required
@@ -323,7 +333,7 @@ export function Templates() {
                 <Label>Days</Label>
                 <div className="flex flex-wrap gap-1.5">
                   {DAY_LABELS.map((label, day) => {
-                    const on = form.daysOfWeek.includes(day);
+                    const on = shown.daysOfWeek.includes(day);
                     return (
                       <button
                         key={day}
@@ -331,10 +341,10 @@ export function Templates() {
                         aria-pressed={on}
                         onClick={() =>
                           setForm({
-                            ...form,
+                            ...shown,
                             daysOfWeek: on
-                              ? form.daysOfWeek.filter((d) => d !== day)
-                              : [...form.daysOfWeek, day],
+                              ? shown.daysOfWeek.filter((d) => d !== day)
+                              : [...shown.daysOfWeek, day],
                           })
                         }
                         className={`rounded-md border px-3 py-1.5 text-sm ${
@@ -356,8 +366,10 @@ export function Templates() {
                   <Input
                     id="tpl-time"
                     type="time"
-                    value={form.time}
-                    onChange={(e) => setForm({ ...form, time: e.target.value })}
+                    value={shown.time}
+                    onChange={(e) =>
+                      setForm({ ...shown, time: e.target.value })
+                    }
                     required
                   />
                 </div>
@@ -368,10 +380,10 @@ export function Templates() {
                     type="number"
                     min={5}
                     max={600}
-                    value={form.durationMinutes}
+                    value={shown.durationMinutes}
                     onChange={(e) =>
                       setForm({
-                        ...form,
+                        ...shown,
                         durationMinutes: e.target.valueAsNumber,
                       })
                     }
@@ -385,9 +397,9 @@ export function Templates() {
                     type="number"
                     min={0}
                     max={1000}
-                    value={form.capacity}
+                    value={shown.capacity}
                     onChange={(e) =>
-                      setForm({ ...form, capacity: e.target.valueAsNumber })
+                      setForm({ ...shown, capacity: e.target.valueAsNumber })
                     }
                     required
                   />
@@ -399,9 +411,9 @@ export function Templates() {
                   <input
                     type="checkbox"
                     className="accent-brand size-4"
-                    checked={form.publicBookable}
+                    checked={shown.publicBookable}
                     onChange={(e) =>
-                      setForm({ ...form, publicBookable: e.target.checked })
+                      setForm({ ...shown, publicBookable: e.target.checked })
                     }
                   />
                   Share this class publicly
@@ -410,13 +422,13 @@ export function Templates() {
                   <Label htmlFor="tpl-instructor">Coach</Label>
                   <Select
                     id="tpl-instructor"
-                    value={form.instructorId}
+                    value={shown.instructorId}
                     onChange={(e) =>
-                      setForm({ ...form, instructorId: e.target.value })
+                      setForm({ ...shown, instructorId: e.target.value })
                     }
                   >
                     <InstructorOptions
-                      value={form.instructorId}
+                      value={shown.instructorId}
                       fallbackLabel={editingTemplate?.instructorName ?? "You"}
                     />
                   </Select>
@@ -425,10 +437,10 @@ export function Templates() {
                   <Label htmlFor="tpl-discipline">Discipline</Label>
                   <Select
                     id="tpl-discipline"
-                    value={form.discipline}
+                    value={shown.discipline}
                     onChange={(e) =>
                       setForm({
-                        ...form,
+                        ...shown,
                         discipline: e.target.value as Discipline | "",
                       })
                     }
@@ -446,9 +458,9 @@ export function Templates() {
                     <Label htmlFor="tpl-track">Curriculum</Label>
                     <Select
                       id="tpl-track"
-                      value={form.curriculumTrackId}
+                      value={shown.curriculumTrackId}
                       onChange={(e) =>
-                        setForm({ ...form, curriculumTrackId: e.target.value })
+                        setForm({ ...shown, curriculumTrackId: e.target.value })
                       }
                     >
                       <option value="">
@@ -471,8 +483,8 @@ export function Templates() {
               <div className="flex flex-col gap-1.5">
                 <Label>Time zone</Label>
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-sm">{form.timeZone}</span>
-                  {form.timeZone === academyTz ? (
+                  <span className="font-mono text-sm">{shown.timeZone}</span>
+                  {shown.timeZone === academyTz ? (
                     <span className="text-muted-foreground text-xs">
                       Your academy time zone, set in Settings.
                     </span>
@@ -486,7 +498,7 @@ export function Templates() {
                         size="sm"
                         variant="outline"
                         onClick={() =>
-                          setForm({ ...form, timeZone: academyTz })
+                          setForm({ ...shown, timeZone: academyTz })
                         }
                       >
                         Move to {academyTz}
@@ -501,7 +513,7 @@ export function Templates() {
                   {busy && <Spinner size="sm" className="text-current" />}
                   {busy
                     ? "Saving…"
-                    : editingId
+                    : openId
                       ? "Save changes"
                       : "Create template"}
                 </Button>

@@ -2,10 +2,17 @@ import { Suspense } from "react";
 
 import { attendanceWindow, isStaff } from "@matops/domain";
 
+import type { EntityPageProps } from "~/trpc/server";
 import { Attendance } from "~/app/_components/attendance";
 import { PageHeader } from "~/app/_components/page-header";
 import { AttendanceSkeleton } from "~/app/_components/skeletons";
-import { currentAcademy, HydrateClient, prefetch, trpc } from "~/trpc/server";
+import {
+  currentAcademy,
+  HydrateClient,
+  prefetch,
+  setRequestEntity,
+  trpc,
+} from "~/trpc/server";
 
 async function AttendanceData() {
   const academy = await currentAcademy();
@@ -25,7 +32,9 @@ async function AttendanceData() {
   );
 }
 
-export default function AttendancePage() {
+export default async function AttendancePage({ params }: EntityPageProps) {
+  setRequestEntity((await params).entityId);
+
   return (
     <Suspense fallback={<AttendanceSkeleton />}>
       <AttendanceData />

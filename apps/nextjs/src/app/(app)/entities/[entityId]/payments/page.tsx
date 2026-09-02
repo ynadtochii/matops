@@ -2,9 +2,16 @@ import { Suspense } from "react";
 
 import { isOwner } from "@matops/domain";
 
+import type { EntityPageProps } from "~/trpc/server";
 import { PaymentsScreen } from "~/app/_components/payments-screen";
 import { PaymentsSkeleton } from "~/app/_components/skeletons";
-import { currentAcademy, HydrateClient, prefetch, trpc } from "~/trpc/server";
+import {
+  currentAcademy,
+  HydrateClient,
+  prefetch,
+  setRequestEntity,
+  trpc,
+} from "~/trpc/server";
 
 async function PaymentsData() {
   const academy = await currentAcademy();
@@ -24,7 +31,9 @@ async function PaymentsData() {
   );
 }
 
-export default function PaymentsPage() {
+export default async function PaymentsPage({ params }: EntityPageProps) {
+  setRequestEntity((await params).entityId);
+
   return (
     <Suspense fallback={<PaymentsSkeleton />}>
       <PaymentsData />

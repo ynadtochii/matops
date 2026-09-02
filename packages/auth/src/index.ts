@@ -108,7 +108,6 @@ export function initAuth<
             );
           },
         },
-
       }),
       magicLink({
         sendMagicLink: async ({ email, token, url }) => {

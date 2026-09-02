@@ -80,6 +80,7 @@ export const academyRouter = {
     const all = await listMembershipsForUser(ctx.session.user.id, ctx.baseDb);
     return all.filter(canEnroll).map((a) => ({
       academyId: a.academyId,
+      organizationId: a.organizationId,
       name: a.name,
       role: a.role,
       status: a.status,

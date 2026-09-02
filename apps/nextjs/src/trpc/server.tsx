@@ -10,11 +10,16 @@ import { appRouter, createTRPCContext } from "@matops/api";
 import { auth } from "~/auth/server";
 import { createQueryClient } from "./query-client";
 
+export interface EntityPageProps {
+  params: Promise<{ entityId: string }>;
+}
+
 /**
  * The entity this render is for. `cache()` scopes it to the one request, and
- * the entity layout writes it before any child prefetches, which is the only
- * way a server component can name the entity: the header the browser sends
- * never reaches an RSC render (ADR 124).
+ * every page under `[entityId]` writes it before it prefetches, which is the
+ * only way a server component can name the entity: the header the browser
+ * sends never reaches an RSC render (ADR 124). The layout cannot do it alone,
+ * because a client navigation re-renders the page and not the layout above it.
  */
 const requestEntity = cache(() => ({ id: undefined as string | undefined }));
 

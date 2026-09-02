@@ -267,3 +267,19 @@ table from that proof.
 A `person` table for a login-less lead who visits two entities, renaming
 `academy_id` to `entity_id`, and a metrics projection for the organization
 dashboard. Each is a follow-up slice with its own ADR.
+
+## 10. Amendment (2026-09-02): delete closes one academy
+
+Wave 7 left `softDeleteAcademy` matching the ENTITY id against the
+`organization` row. On the default entity, whose id equals the organization's,
+that closed the whole gym and every mat under it. On a second entity it matched
+nothing and the delete silently did nothing.
+
+It is now entity-scoped: the named entity gets `deleted_at`, and the
+organization follows only when no live entity is left. So an owner running two
+mats can shut one and keep the other's classes, roster, dues and join code, and
+closing the last one still closes the gym. Every read that hides a deleted
+academy already keyed on `entity.deleted_at` (the tenant tier's
+`getEntityInOrganization`, `listMembershipsForUser`, `resolveInviteToken`), so
+nothing else moved. `entity.is_default` is only a sort key, so the default mat
+closing before its sibling leaves nothing to repair.

@@ -342,9 +342,21 @@ describe("an invite link names one entity", () => {
     expect(resolved.organizationId).toBe(ORG);
   });
 
-  it("stops resolving once the gym is closed", async () => {
+  it("keeps resolving when a SIBLING academy closes", async () => {
     await h.as(OWNER, ORG).academy.remove({
       confirm: `delete Academy ${ORG}`,
+    });
+    const resolved = await h
+      .as("nobody", null)
+      .invite.resolve({ token: "second-mat-token" });
+    expect(resolved.academyId).toBe(secondEntity);
+  });
+
+  it("stops resolving once its own academy closes", async () => {
+    const headers = new Headers();
+    headers.set("x-matops-entity", secondEntity);
+    await h.as(OWNER, ORG, headers).academy.remove({
+      confirm: "delete Second Mat",
     });
     const code = await h
       .as("nobody", null)

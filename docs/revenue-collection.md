@@ -74,7 +74,7 @@ For 2026 the number is **€15,000** of annual turnover. Under it, Article 53
 exemption applies and no IVA is charged. Cross **€18,750** (the threshold plus
 25%) during the year and the regime is exited immediately.
 
-**€15,000 at €39/month is about 32 gyms.** That sits just past a 15-gym target,
+**€15,000 at €49/month is about 25 gyms.** That sits past a 15-gym target,
 so it is a cliff to plan for rather than stumble into.
 
 ### Not every customer costs the same to serve
@@ -96,7 +96,7 @@ Article 53 exempt.
 | Customers | Setup |
 |---|---|
 | **1-5 (the pilot)** | **Nothing.** No Stripe, no invoices, no billing product. Just the free pilots and a written end date. |
-| **5-25** | **Stripe Payment Links.** One recurring Price at €39/mo and one at €390/yr. Email each gym its link once. Stripe runs the renewal, the retries, the card-expiry emails and the receipt. Issue the fatura-recibo by hand on the Portal das Finanças. |
+| **5-25** | **Stripe Payment Links.** One recurring Price at €49/mo and one at €490/yr. Email each gym its link once. Stripe runs the renewal, the retries, the card-expiry emails and the receipt. Issue the fatura-recibo by hand on the Portal das Finanças. |
 | **25-60** | Add **InvoiceXpress** or **Vendus** (AT-certified; InvoiceXpress cert #192, Moloni #2860, both Visma-owned since 2023/2024) and connect Stripe so the certified invoice issues itself. Buy this step when manual invoicing stops being twenty minutes. |
 | **60+** | Now consider self-serve signup inside matops, VAT registration, and everything deliberately skipped above. |
 

@@ -1,9 +1,10 @@
 import { Suspense } from "react";
 import { connection } from "next/server";
 
+import type { EntityPageProps } from "~/trpc/server";
 import { MyClassesScreen } from "~/app/_components/my-classes-screen";
 import { MyClassesSkeleton } from "~/app/_components/skeletons";
-import { HydrateClient, prefetch, trpc } from "~/trpc/server";
+import { HydrateClient, prefetch, setRequestEntity, trpc } from "~/trpc/server";
 
 async function TrainingData() {
   await connection();
@@ -18,7 +19,9 @@ async function TrainingData() {
   );
 }
 
-export default function TrainingPage() {
+export default async function TrainingPage({ params }: EntityPageProps) {
+  setRequestEntity((await params).entityId);
+
   return (
     <Suspense fallback={<MyClassesSkeleton />}>
       <TrainingData />
