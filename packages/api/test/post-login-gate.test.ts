@@ -65,8 +65,6 @@ describe("an owner whose gym never got its academy", () => {
 
   beforeAll(async () => {
     h = await harness();
-    // Better Auth's half of "Start a gym", with nothing after it: an
-    // organization row and an owner member row, no entity (ADR 125).
     await h.pg.exec(`
       INSERT INTO "user" (id, name, email, email_verified, created_at, updated_at)
         VALUES ('${OWNER}', 'Owner', 'owner@test.local', true, now(), now()),

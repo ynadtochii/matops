@@ -216,3 +216,50 @@ describe("closing one academy of a gym that runs two", () => {
     ).toBe("FORBIDDEN");
   });
 });
+
+describe("closing the last two academies together", () => {
+  const ORG = "acad_settings_concurrent";
+  const OWNER = "u_settings_concurrent_owner";
+  let h: Harness;
+  let secondId: string;
+
+  const withEntity = (id: string) => {
+    const headers = new Headers();
+    headers.set("x-matops-entity", id);
+    return headers;
+  };
+
+  beforeAll(async () => {
+    h = await harness();
+    await seedAcademies(h.pg, [
+      {
+        id: ORG,
+        code: "700023",
+        members: [{ userId: OWNER, role: "owner", status: "active" }],
+      },
+    ]);
+    const made = await h
+      .as(OWNER, ORG)
+      .entity.create({ name: "Second Mat", type: "bjj_academy" });
+    secondId = made.entityId;
+  });
+
+  afterAll(() => h.close());
+
+  it("closes the organization", async () => {
+    await Promise.all([
+      h
+        .as(OWNER, ORG, withEntity(ORG))
+        .academy.remove({ confirm: `delete Academy ${ORG}` }),
+      h
+        .as(OWNER, ORG, withEntity(secondId))
+        .academy.remove({ confirm: "delete Second Mat" }),
+    ]);
+
+    const row = await h.pg.query<{ deleted_at: string | null }>(
+      `SELECT deleted_at FROM "organization" WHERE id = $1`,
+      [ORG],
+    );
+    expect(row.rows[0]?.deleted_at).not.toBeNull();
+  });
+});

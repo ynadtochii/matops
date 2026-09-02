@@ -8,20 +8,8 @@ const NO_RLS_BY_DESIGN: Record<string, string> = {
     "The public join screen resolves a token with no active academy, so a policy on app.academy_id would match nothing (docs/issues/28). Migration 0020 revokes every matops_app grant on the table instead, which is stricter than a policy.",
 };
 
-/**
- * `academy_id` holds an entity id (ADR 124), and the foreign key is what makes
- * that a fact rather than a convention. One table is out: `tenant_probe` is
- * hand-written in migration 0001 and exists to prove the seam bites, so it is
- * never given a parent to point at.
- */
 const NO_ENTITY_KEY_BY_DESIGN = ["tenant_probe"];
 
-/**
- * The organization/entity foundation (ADR 124). These carry no `academy_id`, so
- * the discovery query below has to name them, and each must read the GUC its
- * scope says it should: an entity-table policy that read the organization GUC
- * would let a sibling entity through.
- */
 const SCOPE_GUC: Record<string, string> = {
   entity: "app.organization_id",
   entity_membership: "app.organization_id",

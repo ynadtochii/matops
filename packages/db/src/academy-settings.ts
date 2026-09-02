@@ -92,14 +92,39 @@ export async function softDeleteAcademy(
   exec: DbExec,
 ): Promise<boolean> {
   return exec.transaction(async (tx) => {
+    const targets = await tx
+      .select({ organizationId: entity.organizationId })
+      .from(entity)
+      .where(and(eq(entity.id, entityId), isNull(entity.deletedAt)))
+      .limit(1);
+    const organizationId = targets[0]?.organizationId;
+    if (!organizationId) return false;
+
+    const locked = await tx
+      .select({ id: organization.id })
+      .from(organization)
+      .where(
+        and(
+          eq(organization.id, organizationId),
+          isNull(organization.deletedAt),
+        ),
+      )
+      .for("update");
+    if (locked.length === 0) return false;
+
     const closedAt = new Date();
     const closed = await tx
       .update(entity)
       .set({ deletedAt: closedAt })
-      .where(and(eq(entity.id, entityId), isNull(entity.deletedAt)))
-      .returning({ organizationId: entity.organizationId });
-    const organizationId = closed[0]?.organizationId;
-    if (!organizationId) return false;
+      .where(
+        and(
+          eq(entity.id, entityId),
+          eq(entity.organizationId, organizationId),
+          isNull(entity.deletedAt),
+        ),
+      )
+      .returning({ id: entity.id });
+    if (closed.length === 0) return false;
 
     const live = await tx
       .select({ id: entity.id })

@@ -6,10 +6,6 @@ import { freshDb, single } from "./helpers";
 // The transaction object PGlite hands to its transaction() callback.
 type Tx = Parameters<Parameters<PGlite["transaction"]>[0]>[0];
 
-/**
- * Mirrors packages/db/src/tenant.ts `withScope`: drop to the restricted role and
- * set app.academy_id, both transaction-local, then run the caller's queries.
- */
 function asTenant<T>(
   pg: PGlite,
   academyId: string,
@@ -88,12 +84,6 @@ describe("RLS tenant isolation", () => {
   });
 });
 
-/**
- * Two mats under ONE owner. `entity` and `entity_membership` are shared across
- * the organization so the overview can enumerate them, and this is the test
- * that the product rows are not: a request scoped to one mat must not see the
- * other's, even though nothing separates them at the organization level.
- */
 describe("RLS between two entities of one organization", () => {
   let pg: PGlite;
   const ORG = "org_two_mats";

@@ -23,19 +23,6 @@ const MIGRATIONS_DIR = path.join(import.meta.dirname, "..", "migrations");
  * policies (docs/issues/12) testable with zero external services, so the leak
  * test runs anywhere, including CI.
  */
-/**
- * The migrated database, cached on disk and reused by every test file.
- *
- * Replaying every migration costs about half a second, and a suite is dozens of
- * files across several worker processes, each booting its own WASM Postgres.
- * That was enough to push the machine into swapping and time hooks out at
- * random. Loading a dump instead makes the cost a file read.
- *
- * The cache key is the content of the migrations, so adding one invalidates it
- * and nobody has to remember to clear anything. The write goes to a temp name
- * and is renamed, which is atomic, so two workers racing cannot leave a
- * half-written dump behind.
- */
 function migrationFiles(): string[] {
   return readdirSync(MIGRATIONS_DIR)
     .filter((f) => f.endsWith(".sql"))
@@ -81,17 +68,8 @@ export async function freshDb(
   return pg;
 }
 
-/** The two tenant ids nearly every isolation test uses. */
 const DEFAULT_ACADEMIES = ["academy_A", "academy_B"] as const;
 
-/**
- * Give each id an organization and a default entity, so a row keyed by
- * `academy_id` has a parent to point at. Every BJJ table has referenced
- * `entity.id` since migration `0045`, and an isolation test that inserted a
- * bare `academy_id` would now be refused by the foreign key rather than by RLS,
- * which is a confusing way to fail. Pass different ids to `freshDb` when a test
- * needs them; pass none to skip.
- */
 export async function seedEntities(
   pg: PGlite,
   ids: readonly string[],
@@ -117,13 +95,6 @@ export async function seedEntities(
   }
 }
 
-/**
- * Give an entity memberships with the ids a test wants to key rows by. Dues,
- * claims, ranks, notes and referrals reference `entity_membership(entity_id,
- * id)` since migration `0046`, so a fixture that made a row up would be refused
- * by the key rather than by RLS, which is a confusing way to fail. Each id gets
- * its own user, so the one-membership-per-user index never bites.
- */
 export async function seedMemberships(
   pg: PGlite,
   entityId: string,

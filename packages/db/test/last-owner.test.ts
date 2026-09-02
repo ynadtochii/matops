@@ -44,8 +44,6 @@ describe("never ownerless, one mat at a time", () => {
       exec,
     );
     secondEntity = made.entityId;
-    // The coach runs the second mat but is only an instructor of the
-    // organization: two owners on that mat, one on the default one.
     await exec.insert(entityMembership).values({
       organizationId: ORG,
       entityId: secondEntity,

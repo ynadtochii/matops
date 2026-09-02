@@ -572,7 +572,7 @@ Use affected-package commands first. The root guide documents existing workspace
 - A Better Auth organization may exist after application provisioning fails. Provisioning must be idempotent and repairable.
 - Old migrations stay untouched. New migrations may drop and recreate freely because no database holds data worth keeping.
 - A user can own one organization and train in another. Organization and entity roles must not leak across those relationships.
-- Entity deletion must not delete the organization.
+- Deleting one entity must keep the organization open while a live sibling remains. Deleting the last live entity closes the organization.
 - Organization deletion must define the order for entities, entity data, and Better Auth rows.
 - General dashboard reads must not open unrestricted entity-table access.
 - The current payment module stays functional as entity-scoped manual dues during this pivot. Do not redesign it for future providers.

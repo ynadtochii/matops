@@ -44,7 +44,10 @@ describe("the entity tiers", () => {
       {
         id: ORG_B,
         code: "100002",
-        members: [{ userId: OUTSIDER, role: "owner", status: "active" }],
+        members: [
+          { userId: OUTSIDER, role: "owner", status: "active" },
+          { userId: OWNER, role: "student", status: "active" },
+        ],
       },
     ]);
 
@@ -69,9 +72,6 @@ describe("the entity tiers", () => {
     );
     secondEntity = second.entityId;
 
-    // The fixture already mirrors every member onto the default entity. Only the
-    // suspended case differs from the organization row: live in the
-    // organization, suspended at this mat.
     await h.exec
       .update(entityMembership)
       .set({ status: "suspended" })
@@ -95,6 +95,16 @@ describe("the entity tiers", () => {
     expect(
       await rejectionCode(
         h.as(OWNER, ORG_A, withEntity(foreignEntity)).entity.current(),
+      ),
+    ).toBe("FORBIDDEN");
+  });
+
+  it("refuses to rename an entity of another organization", async () => {
+    expect(
+      await rejectionCode(
+        h
+          .as(OWNER, ORG_A, withEntity(foreignEntity))
+          .academy.rename({ name: "Not mine" }),
       ),
     ).toBe("FORBIDDEN");
   });
@@ -150,12 +160,47 @@ describe("the entity tiers", () => {
     ).toBeNull();
   });
 
+  it("has no academy when the active organization does not own it", async () => {
+    expect(
+      await h.as(OWNER, ORG_B, withEntity(ORG_A)).academy.current(),
+    ).toBeNull();
+  });
+
   it("refuses a suspended membership", async () => {
     expect(
       await rejectionCode(
         h.as(SUSPENDED, ORG_A, withEntity(ORG_A)).entity.current(),
       ),
     ).toBe("FORBIDDEN");
+  });
+
+  it("hides every inactive membership from academy.current", async () => {
+    try {
+      for (const status of ["suspended", "archived", "removed"]) {
+        await h.exec
+          .update(entityMembership)
+          .set({ status })
+          .where(
+            and(
+              eq(entityMembership.entityId, ORG_A),
+              eq(entityMembership.userId, SUSPENDED),
+            ),
+          );
+        expect(
+          await h.as(SUSPENDED, ORG_A, withEntity(ORG_A)).academy.current(),
+        ).toBeNull();
+      }
+    } finally {
+      await h.exec
+        .update(entityMembership)
+        .set({ status: "suspended" })
+        .where(
+          and(
+            eq(entityMembership.entityId, ORG_A),
+            eq(entityMembership.userId, SUSPENDED),
+          ),
+        );
+    }
   });
 
   it("admits a pending membership to the enrolled tier, as the academy tiers do", async () => {

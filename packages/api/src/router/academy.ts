@@ -123,8 +123,15 @@ export const academyRouter = {
   current: protectedProcedure.query(async ({ ctx }) => {
     const academyId = ctx.requestedEntityId;
     if (!academyId) return null;
+    const activeOrganizationId = ctx.session.session.activeOrganizationId;
+    if (!activeOrganizationId) return null;
     const mine = await listMembershipsForUser(ctx.session.user.id, ctx.baseDb);
-    const academy = mine.find((a) => a.academyId === academyId);
+    const academy = mine.find(
+      (a) =>
+        a.academyId === academyId &&
+        a.organizationId === activeOrganizationId &&
+        canEnroll(a),
+    );
     if (!academy) return null;
     return {
       academyId: academy.academyId,
@@ -351,10 +358,8 @@ export const academyRouter = {
   rename: ownerIdentityProcedure
     .input(CreateAcademySchema)
     .mutation(async ({ ctx, input }) => {
-      await updateAcademySettings(
-        ctx.academyId,
-        { name: input.name.trim() },
-        ctx.baseDb,
+      await ctx.withScope((db) =>
+        updateAcademySettings(ctx.academyId, { name: input.name.trim() }, db),
       );
       return { ok: true as const };
     }),

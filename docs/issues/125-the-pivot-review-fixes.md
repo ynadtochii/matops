@@ -170,3 +170,13 @@ Two writers stay on the base connection, and this is the whole exception list:
   [beta-launch-plan.md](../beta-launch-plan.md) §1.2 and makes the deploy a
   one-way door. Production is empty, so the cost is zero and it ships as-is. A
   deliberate exception, not a precedent.
+
+## 9. Pre-merge follow-up
+
+The final review found three smaller gaps in the accepted fixes.
+
+- `academy.rename` was the only `entity` settings writer still using the base connection. It now runs through `ctx.withScope`, matching every other settings write.
+- `academy.current` could return an inactive membership or an academy outside the session's active organization. It now applies `canEnroll` and requires the organization match before the shell opens.
+- Two concurrent academy closures could each see one live sibling and leave the organization open with no academy. `softDeleteAcademy` now locks the shared organization row before closing an entity and checking for a sibling.
+
+Migration `0047` remains in this release. Production has no real users or rows, the release is an intentional hard cutover, and the migration contains structural statements only.

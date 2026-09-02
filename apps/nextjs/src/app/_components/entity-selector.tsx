@@ -20,9 +20,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@matops/ui/dropdown-menu";
+import { FieldError } from "@matops/ui/field";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
 import { toast } from "@matops/ui/toast";
+import { CreateEntitySchema } from "@matops/validators";
 
 import type { Organization } from "./entity";
 import { useTRPC } from "~/trpc/react";
@@ -148,12 +150,15 @@ function AddEntityDialog({
   const router = useRouter();
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
+  const [nameError, setNameError] = useState<string | null>(null);
+  const errorId = "entity-name-error";
 
   const create = useMutation(
     trpc.entity.create.mutationOptions({
       onSuccess: async (made) => {
         onOpenChange(false);
         setName("");
+        setNameError(null);
         await queryClient.invalidateQueries();
         router.push(entityHref(made.entityId));
       },
@@ -172,7 +177,16 @@ function AddEntityDialog({
           className="flex flex-col gap-4"
           onSubmit={(e) => {
             e.preventDefault();
-            create.mutate({ name: name.trim(), type: "bjj_academy" });
+            const parsed = CreateEntitySchema.safeParse({
+              name,
+              type: "bjj_academy",
+            });
+            if (!parsed.success) {
+              setNameError("Enter a name with 2-80 characters.");
+              return;
+            }
+            setNameError(null);
+            create.mutate(parsed.data);
           }}
         >
           <div className="flex flex-col gap-2">
@@ -180,16 +194,19 @@ function AddEntityDialog({
             <Input
               id="entity-name"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setName(e.target.value);
+                setNameError(null);
+              }}
               placeholder="Second Mat"
               autoFocus
+              aria-invalid={nameError ? true : undefined}
+              aria-describedby={nameError ? errorId : undefined}
             />
+            {nameError && <FieldError id={errorId}>{nameError}</FieldError>}
           </div>
           <div className="flex justify-end">
-            <Button
-              type="submit"
-              disabled={name.trim().length === 0 || create.isPending}
-            >
+            <Button type="submit" disabled={create.isPending}>
               {create.isPending ? "Adding…" : "Add academy"}
             </Button>
           </div>
