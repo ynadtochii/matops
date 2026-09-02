@@ -91,15 +91,17 @@ export const academyRouter = {
    * shareable code an owner gives students to join in the app —
    * docs/issues/32), or null.
    *
-   * The `x-matops-entity` header wins over the session's active organization,
-   * so two browser tabs can show two academies (ADR 124). It stays a
-   * `protectedProcedure` rather than an entity tier because the shell calls it
-   * to decide whether there is an academy to open at all, and a refusal there
-   * would be a crash instead of a gate.
+   * The academy is the one the request NAMED, and only that: the web reads it
+   * from the URL and the app from secure-store, and there is no falling back to
+   * the session's active organization, which would quietly answer for the
+   * default academy whenever a client forgot the header (ADR 124).
+   *
+   * It stays a `protectedProcedure` rather than an entity tier because the
+   * shell calls it to decide whether there is an academy to open at all, and a
+   * refusal there would be a crash instead of a gate.
    */
   current: protectedProcedure.query(async ({ ctx }) => {
-    const academyId =
-      ctx.requestedEntityId ?? ctx.session.session.activeOrganizationId;
+    const academyId = ctx.requestedEntityId;
     if (!academyId) return null;
     const mine = await listMembershipsForUser(ctx.session.user.id, ctx.baseDb);
     const academy = mine.find((a) => a.academyId === academyId);
@@ -306,21 +308,20 @@ export const academyRouter = {
     }),
 
   /**
-   * Rename the active academy (owner only). The **name is a mutable label** — not
+   * Rename the academy (owner only). The **name is a mutable label** — not
    * unique-constrained, because identity is the immutable `public_code` (the
-   * Academy code) + the org id. Updates via Better Auth so its org permission
-   * check applies; the code is never touched.
+   * Academy code) and the entity id. It writes `entity.name`, not the
+   * organization's: a gym with two mats renames one of them, and the name every
+   * screen shows is the entity's (ADR 124). The code is never touched.
    */
   rename: ownerIdentityProcedure
     .input(CreateAcademySchema)
     .mutation(async ({ ctx, input }) => {
-      await ctx.authApi.updateOrganization({
-        body: {
-          organizationId: ctx.academyId,
-          data: { name: input.name.trim() },
-        },
-        headers: ctx.headers,
-      });
+      await updateAcademySettings(
+        ctx.academyId,
+        { name: input.name.trim() },
+        ctx.baseDb,
+      );
       return { ok: true as const };
     }),
 

@@ -197,11 +197,11 @@ describe("owner actions write the entity membership", () => {
     expect(row?.joinedAt).not.toBeNull();
   });
 
-  it("keeps the Better Auth row in step, since the academy tiers still read it", async () => {
+  it("leaves the organization row alone, because it only records belonging", async () => {
     const orgRow = (
       await h.exec.select().from(member).where(eq(member.userId, JOINER))
     )[0];
-    expect([orgRow?.role, orgRow?.status]).toEqual(["student", "active"]);
+    expect(orgRow?.role).toBe("member");
   });
 
   it("suspends at one entity and leaves the sibling alone", async () => {

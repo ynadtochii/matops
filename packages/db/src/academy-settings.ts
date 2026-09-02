@@ -39,6 +39,7 @@ export async function getAcademySettings(
 export async function updateAcademySettings(
   academyId: string,
   patch: {
+    name?: string;
     timeZone?: string;
     country?: string;
     address?: string;
@@ -48,12 +49,14 @@ export async function updateAcademySettings(
   exec: DbExec,
 ): Promise<void> {
   const next: {
+    name?: string;
     timeZone?: string;
     country?: string | null;
     address?: string | null;
     mapUrl?: string | null;
     curriculumForStudents?: boolean;
   } = {};
+  if (patch.name !== undefined) next.name = patch.name;
   if (patch.timeZone !== undefined) next.timeZone = patch.timeZone;
   if (patch.country !== undefined) next.country = patch.country || null;
   if (patch.address !== undefined) next.address = patch.address || null;

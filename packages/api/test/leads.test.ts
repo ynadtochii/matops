@@ -255,8 +255,8 @@ async function memberRows(h: Harness) {
     email_verified: boolean;
   }>(
     `SELECT m.user_id, u.email, m.status, m.role, u.email_verified
-       FROM "member" m JOIN "user" u ON u.id = m.user_id
-      WHERE m.organization_id = ${"'"}${A}${"'"} ORDER BY u.email`,
+       FROM "entity_membership" m JOIN "user" u ON u.id = m.user_id
+      WHERE m.entity_id = ${"'"}${A}${"'"} ORDER BY u.email`,
   );
   return res.rows;
 }

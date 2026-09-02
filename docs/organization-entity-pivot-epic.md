@@ -277,13 +277,13 @@ Provisioning:
 
 ### Wave 7: Contract cleanup and documentation
 
-- [ ] Contract migration: remove academy fields from `organization`; drop `member.status` and `member.invited_role`; keep `member.role`.
-- [ ] Remove `AcademyProvider`, the old academy switcher, `withTenant`, and stale exports.
-- [ ] Remove obsolete indexes, policies, and seed mappings.
-- [ ] Search all file types for stale `ctx.academyId`, `withTenant`, and `organization = academy` assumptions.
-- [ ] Update `docs/architecture.md`, `docs/spec.md`, `docs/roadmap.md`, `docs/map.md`, `docs/public-api.md`, `CHANGELOG.md`, and `CLAUDE.md`.
-- [ ] Update the plan doc's `Progress` and this file's final summary.
-- [ ] GATE 7: plan's Wave 7 gate conditions; per-wave Definition of done; commit; then stop the loop and hand over the click-through, the device test, and the merge.
+- [x] Contract migration: remove academy fields from `organization`; drop `member.status` and `member.invited_role`; keep `member.role`.
+- [x] Remove `AcademyProvider`, the old academy switcher, `withTenant`, and stale exports.
+- [x] Remove obsolete indexes, policies, and seed mappings.
+- [x] Search all file types for stale `ctx.academyId`, `withTenant`, and `organization = academy` assumptions.
+- [x] Update `docs/architecture.md`, `docs/spec.md`, `docs/roadmap.md`, `docs/map.md`, `docs/public-api.md`, `CHANGELOG.md`, and `CLAUDE.md`.
+- [x] Update the plan doc's `Progress` and this file's final summary.
+- [x] GATE 7: plan's Wave 7 gate conditions; per-wave Definition of done; commit; then stop the loop and hand over the click-through, the device test, and the merge.
 
 ---
 
@@ -570,3 +570,51 @@ you. At a gate, add a short wave summary block.
 **What surprised.** How little there was to do, and where the one bug was. Items 3 and 4 needed **no code at all**, because Waves 2, 3 and 4 had already moved the codes, keys, tokens and poster URLs onto the entity, and push registration never carried an academy. The single defect was in a path nobody would have looked at: a student who already trains somewhere joining a second gym. `joinPending` skipped `setActiveOrganization` whenever the session had any organization, which was correct while an organization was an academy and silently wrong the moment it was not.
 
 **What is carried forward, into Wave 7.** Three loose ends the last wave should close. `academy.current` still falls back to the session's active organization when no header arrives; both clients now always send one, so that fallback is dead weight and hides a missing header. `academy.setActive` is down to one caller-shape, moving the session's organization, and its name now lies about what it does. And `academy.listMineStudent` / `listMine` / `memberships` all read `listMembershipsForUser`, which returns entity rows through an interface still called `UserAcademy`. **The device test is the human's**, per the Authorizations: this wave passed on lint, typecheck, build and tests alone, and no simulator ran.
+
+### Wave 7
+
+- Wave 7 item 1: migration `0047_the_organization_stops_being_an_academy` drops the nine academy columns from `organization` and `member.status` / `member.invited_role`. `member.role` stays: the Better Auth organization plugin owns it, `permissions.ts` defines its values and `creatorRole: "owner"` writes it.
+- **The mirror is gone, and with it the second half of the never-ownerless guard.** That was flagged in Wave 2's summary as needing thought rather than deletion, so here is the thought. The organization check existed because `writeMembership` copied the entity role onto the Better Auth row, which meant demoting someone at one mat also stripped the organization role that was their way into the other. With the mirror removed, `member.role` is written only when Better Auth creates the row, so no entity change can touch it and there is nothing left to guard. The entity check stays and is the whole rule. `last-owner.test.ts` was rewritten around that: it now proves a mat refuses to lose its last active owner, allows the same demotion at a mat with two, and **leaves the organization role untouched**.
+- `getMembership` returns `status: "active"` as a constant now. The row's existence IS the organization membership: whether a person may do anything at a place is `entity_membership`'s answer, and `purge` already deletes the Better Auth row once the last entity membership is gone.
+- Two knock-on simplifications. `createPendingMembership` no longer reopens or re-intends the organization row, because the row carries no status or intent for a second link to change: it is one `onConflictDoNothing` insert. And `generateAcademyCode` checks one table instead of two, since the six-digit space now belongs to `entity` alone.
+- The provisioner had to stop copying. It read nine settings off the organization to seed the entity; those columns are gone, so it mints the code with `generateAcademyCode` and leaves the rest null. A repair run reuses the code the entity already has rather than minting a second one. The Better Auth `beforeCreateOrganization` hook and both `additionalFields` blocks went with them.
+- Nine test fixtures wrote the dropped columns and had to follow, and one test changed meaning rather than shape: "keeps the Better Auth row in step" is now "leaves the organization row alone, because it only records belonging". `academy-code.test.ts` moved from `organization.public_code` to `entity.public_code`, which is where the constraint lives now.
+- `pnpm test --force`: **1146 tests, no failures**. `pnpm typecheck` 17/17.
+- Wave 7 items 2 and 3: nothing was left to remove, because each wave took its own old path with it. `withTenant` went in Wave 1, `AcademyProvider` and `AcademySwitcher` in Wave 4, `notification_pref` in migration `0045`, the `organization.public_code` and `public_api_key` unique constraints with their columns in `0047`. A dead-export sweep over the seventeen `packages/db` membership helpers found one, `setMemberActive`, which had no job left once `member.status` was gone. Every mention of the removed names now lives in `docs/issues/**` and the history sections of `architecture.md` and `map.md`, which is where it belongs: those are append-only records of decisions, not descriptions of the code.
+- **Item 4's sweep found two real bugs, both the same mistake in different clothes: code that still believed an organization is an academy.** `academy.rename` renamed the ORGANIZATION through Better Auth using `ctx.academyId`, an entity id. Every screen shows `entity.name`, so renaming the second mat would have changed nothing visible and quietly written the wrong row; it writes `entity.name` now, through `updateAcademySettings`. And `dropIn.promote` passed `organizationId: ctx.academyId` into `createPendingMembership`, so promoting a lead at a second academy would have written a membership of an organization that does not exist. It uses `ctx.organizationId`, which the identity tier has carried since Wave 5. A test in `entity-public-contract.test.ts` renames one mat and asserts the sibling keeps its name.
+- The last carried-forward item from Wave 6 is closed: **`academy.current` no longer falls back to the session's active organization.** Both clients name the entity now, and the fallback would have quietly answered for the default academy whenever one forgot. The mobile entry screen had to change with it, since a fresh install has no stored academy: it reads the student's academies first, remembers the first one, and only then asks about it.
+- Applied `0047` to dev: **48 rows** in `drizzle.__drizzle_migrations`. `organization` is down to `id, name, slug, logo, created_at, metadata, deleted_at` and `member` to `id, organization_id, user_id, role, created_at`. `pnpm -F @matops/db verify` reports 48 of 48, the `matops_app` role, and RLS with a policy and four grants on all 19 reachable tables.
+- Wave 7 items 5 and 6, the documentation pass. `docs/architecture.md` §0 no longer says "one model is being replaced": it describes the model that runs, and marks the sections below it as the old one. `docs/spec.md` gains **O0, one gym, more than one mat**, the behaviour a reader needs before any other owner screen makes sense, and O11's "in this academy" line says why Profile sits under the academy rather than above it. `docs/map.md`'s ADR 124 entry moves from "planned" to built, with the six migrations and the five bugs the pivot turned up. `docs/public-api.md` says plainly that a gym with two mats has two keys. `docs/roadmap.md` and `CLAUDE.md` carry the new current state, and `CLAUDE.md`'s tenancy line now describes `withScope` and the two GUCs rather than a single academy id.
+- **A correction worth recording: `pnpm lint` at the workspace root is green, 15/15.** `CLAUDE.md` has claimed since before this epic that it fails on `@matops/nextjs` and `@matops/expo` with "type that could not be resolved" in Sentry and expo-camera files. It does not, with both eslint caches cleared. Nothing in this pivot targeted it, so the note is corrected rather than claimed as a fix.
+- The plan doc is closed: every wave `Status: done`, all 8 Wave 7 tasks ticked, `Current Wave` reads none, and a new **Outcome** section records what the pivot bought, what it cost, and the seven bugs it found — five of which were caught by a foreign key or a type rather than by a test.
+- **GATE 7 is green.** `pnpm typecheck` 17/17. **`pnpm lint` at the workspace root 15/15**, and each of the eight packages clean on its own. `next build` compiles and prerenders all 30 pages. `pnpm test --force`: **1147 tests across 103 files, no failures** (domain 552, api 397, db 163, validators 32, notifications 3), from 1040 at the start of the epic. Dev is at **48** migrations.
+- The plan's Wave 7 gate conditions, each checked by name. **One architecture path remains**: `withTenant`, `AcademyProvider`, `AcademySwitcher`, `setMemberActive` and `notification_pref` are gone, and the nine academy columns and two member columns went with `0047`. **Repository-wide searches find no stale tenant assumptions outside migration history and historical documentation**: every remaining mention of the removed names is in `docs/issues/**` or the history sections of `architecture.md` and `map.md`, and the two live ones the sweep did find were fixed. **Workspace lint and typecheck pass** — and the documented pre-existing lint failure turned out not to exist any more, which is corrected rather than claimed as a fix. **`pnpm test` is green.** **The user receives the exact targeted test commands**, below.
+- Docs: `architecture.md`, `spec.md` (new **O0**), `roadmap.md`, `map.md`, `public-api.md`, `CHANGELOG.md` and `CLAUDE.md` all updated; the plan doc closed with an `Outcome` section. One commit on `dev`, `1396dd3`. Nothing pushed.
+
+---
+
+## The epic is done
+
+Seven waves, seven commits on `dev`, migrations `0042`-`0047`, **1040 tests to 1147**. Nothing was pushed and nothing merged to `main`.
+
+**What it bought.** One gym runs two academies from one login. Each has its own name, time zone, address, schedule, roster, dues, curriculum, six-digit join code and public booking link, and shares nothing with its sibling but the owner. A person can own one mat and train at the other, and be approved, suspended or removed at one without touching the other. The URL names the academy, so two browser tabs show two mats, a reload keeps the one you were on, and a pasted link opens the right place. An owner gets `/overview` across all of them without one query ever reading two academies at once.
+
+**The seven bugs it found, none from a bug report.** A permanent erase left the erased person's id in other students' referral history. `softDeleteAcademy` closed the organization and left every entity live, so a shut gym stayed findable by its code. `joinPending` set the active organization only when the session had none, so a student joining a second gym could not reach it. The web's RSC tRPC context was cached per request, freezing the entity at a prefetch that runs before any entity is known. `academy.rename` renamed the organization rather than the mat. `dropIn.promote` passed an entity id as an organization id. `wipe-academies.sql` was two waves out of date and would have failed on its first delete. **Five of the seven were caught by a foreign key or a type, not by a test.**
+
+**What is now the human's.**
+
+1. **Click through the web app.** `pnpm dev:next` → http://localhost:3004, sign in with the magic link printed in the terminal. Worth walking: the landing redirect into your one academy, Settings → rename, **Add academy** from the selector, `/overview` with two mats, and switching between them in two tabs at once.
+2. **Run the device test.** `docs/mobile-device-test.md`. Every mobile wave since v1.8 is static-gates-green only, and Wave 6 changed how the app names its academy on every request.
+3. **Merge `dev` into `main` when satisfied.** That is the production deploy, and `0042`-`0047` run against the production branch as part of it. Production is empty of real academies apart from the ones you know about; the pivot was designed for that and there is no backfill.
+
+**Targeted commands for the final verification:**
+
+```
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm -F @matops/db exec vitest run test/rls.test.ts test/rls-coverage.test.ts test/member-id-source.test.ts test/last-owner.test.ts test/provision.test.ts
+pnpm -F @matops/api exec vitest run test/entity-authorization.test.ts test/entity-join.test.ts test/entity-public-contract.test.ts test/organization-dashboard.test.ts
+pnpm -F @matops/domain exec vitest run test/entity-routes.test.ts test/organization-summary.test.ts
+pnpm -F @matops/db verify
+```

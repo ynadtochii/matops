@@ -831,12 +831,14 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
       id: academy.id,
       name: academy.name,
       slug: academy.slug,
-      publicCode: academy.publicCode,
       createdAt: now,
     },
   ];
 
-  const members: NewMember[] = [
+  // One seat per person. The Better Auth `member` row records only that they
+  // belong to the gym; the status and the invited role are the entity
+  // membership's, which is where every screen reads them (ADR 124).
+  const seats = [
     // YOU — the owner.
     {
       id: seedMemberId(academy.key, "you"),
@@ -867,6 +869,14 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
     })),
   ];
 
+  const members: NewMember[] = seats.map((seat) => ({
+    id: seat.id,
+    organizationId: seat.organizationId,
+    userId: seat.userId,
+    role: seat.role,
+    createdAt: seat.createdAt,
+  }));
+
   // The default BJJ academy entity carries the organization's own id, so every
   // `academy_id` already on a seed row keeps pointing at the right place and the
   // printed QR posters and check-in links stay valid (ADR 124, Decision 5).
@@ -889,17 +899,17 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
     { entityId: academy.id, createdAt: now, updatedAt: now },
   ];
 
-  const entityMemberships: NewEntityMembership[] = members.map((m) => ({
-    id: seedEntityMembershipId(m.id),
+  const entityMemberships: NewEntityMembership[] = seats.map((seat) => ({
+    id: seedEntityMembershipId(seat.id),
     organizationId: academy.id,
     entityId: academy.id,
-    userId: m.userId,
-    role: m.role ?? "student",
-    status: m.status ?? "pending",
-    invitedRole: m.invitedRole ?? null,
-    joinedAt: m.status === "active" ? m.createdAt : null,
-    createdAt: m.createdAt,
-    updatedAt: m.createdAt,
+    userId: seat.userId,
+    role: seat.role,
+    status: seat.status,
+    invitedRole: seat.invitedRole,
+    joinedAt: seat.status === "active" ? seat.createdAt : null,
+    createdAt: seat.createdAt,
+    updatedAt: seat.createdAt,
   }));
 
   // One live invite link per role (drives the invite/staff cards). The tester

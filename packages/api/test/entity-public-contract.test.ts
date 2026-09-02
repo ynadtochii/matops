@@ -152,6 +152,27 @@ describe("a public link names one academy, never its sibling", () => {
     expect([info.name, info.timeZone]).toEqual(["South Mat", "Europe/Kyiv"]);
   });
 
+  it("renames one mat and leaves its sibling alone", async () => {
+    await h
+      .as(
+        OWNER,
+        ORG,
+        (() => {
+          const headers = new Headers();
+          headers.set("x-matops-entity", south);
+          return headers;
+        })(),
+      )
+      .academy.rename({ name: "South Mat, renamed" });
+
+    const rows = await h.exec
+      .select({ id: entity.id, name: entity.name })
+      .from(entity);
+    const byId = new Map(rows.map((r) => [r.id, r.name]));
+    expect(byId.get(south)).toBe("South Mat, renamed");
+    expect(byId.get(ORG)).toBe("Academy org_alma");
+  });
+
   it("lists both mats for a student who trains at both", async () => {
     const mine = await h.as(NOMAD, ORG).academy.listMineStudent();
     expect(mine.map((a) => a.academyId).sort()).toEqual([ORG, south].sort());

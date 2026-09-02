@@ -11,7 +11,7 @@ const ORG = "org_alma";
 const OWNER = "u_owner";
 const COACH = "u_coach";
 
-describe("never ownerless, at both levels", () => {
+describe("never ownerless, one mat at a time", () => {
   let pg: PGlite;
   let secondEntity: string;
   let ownerAtSecond: string;
@@ -23,11 +23,11 @@ describe("never ownerless, at both levels", () => {
       INSERT INTO "user" (id, name, email, email_verified, created_at, updated_at) VALUES
         ('${OWNER}', 'Owner', 'owner@test.local', true, now(), now()),
         ('${COACH}', 'Coach', 'coach@test.local', true, now(), now());
-      INSERT INTO "organization" (id, name, slug, public_code, created_at)
-        VALUES ('${ORG}', 'Alma', 'alma', '100001', now());
-      INSERT INTO "member" (id, organization_id, user_id, role, status, created_at) VALUES
-        ('mem_owner', '${ORG}', '${OWNER}', 'owner', 'active', now()),
-        ('mem_coach', '${ORG}', '${COACH}', 'instructor', 'active', now());
+      INSERT INTO "organization" (id, name, slug, created_at)
+        VALUES ('${ORG}', 'Alma', 'alma', now());
+      INSERT INTO "member" (id, organization_id, user_id, role, created_at) VALUES
+        ('mem_owner', '${ORG}', '${OWNER}', 'owner', now()),
+        ('mem_coach', '${ORG}', '${COACH}', 'instructor', now());
     `);
     const exec = execOn(pg);
     await provisionOrganization(
@@ -45,7 +45,7 @@ describe("never ownerless, at both levels", () => {
     );
     secondEntity = made.entityId;
     // The coach runs the second mat but is only an instructor of the
-    // organization: two owners on that mat, one owner in the organization.
+    // organization: two owners on that mat, one on the default one.
     await exec.insert(entityMembership).values({
       organizationId: ORG,
       entityId: secondEntity,
@@ -74,41 +74,7 @@ describe("never ownerless, at both levels", () => {
 
   afterAll(() => pg.close());
 
-  it("refuses a demotion the entity check alone would allow", async () => {
-    const result = await setMemberRoleIfNotLastOwner(
-      secondEntity,
-      ownerAtSecond,
-      "instructor",
-      execOn(pg),
-    );
-    expect(result.ok).toBe(false);
-  });
-
-  it("wrote nothing when it refused", async () => {
-    const rows = await execOn(pg)
-      .select()
-      .from(member)
-      .where(eq(member.id, "mem_owner"));
-    expect(rows[0]?.role).toBe("owner");
-  });
-
-  it("allows it once the organization has a second owner", async () => {
-    const exec = execOn(pg);
-    await exec
-      .update(member)
-      .set({ role: "owner" })
-      .where(eq(member.id, "mem_coach"));
-
-    const result = await setMemberRoleIfNotLastOwner(
-      secondEntity,
-      ownerAtSecond,
-      "instructor",
-      exec,
-    );
-    expect(result.ok).toBe(true);
-  });
-
-  it("refuses stripping the entity of its last owner even when the organization has spares", async () => {
+  it("refuses stripping a mat of its last active owner", async () => {
     const result = await setMemberRoleIfNotLastOwner(
       ORG,
       ownerAtDefault,
@@ -116,5 +82,31 @@ describe("never ownerless, at both levels", () => {
       execOn(pg),
     );
     expect(result.ok).toBe(false);
+  });
+
+  it("wrote nothing when it refused", async () => {
+    const rows = await execOn(pg)
+      .select({ role: entityMembership.role })
+      .from(entityMembership)
+      .where(eq(entityMembership.id, ownerAtDefault));
+    expect(rows[0]?.role).toBe("owner");
+  });
+
+  it("allows it at a mat that has a second owner", async () => {
+    const result = await setMemberRoleIfNotLastOwner(
+      secondEntity,
+      ownerAtSecond,
+      "instructor",
+      execOn(pg),
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it("leaves the organization role alone, because nothing mirrors it now", async () => {
+    const rows = await execOn(pg)
+      .select({ role: member.role })
+      .from(member)
+      .where(eq(member.id, "mem_owner"));
+    expect(rows[0]?.role).toBe("owner");
   });
 });

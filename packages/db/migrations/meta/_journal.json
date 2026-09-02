@@ -330,6 +330,13 @@
       "when": 1789257600000,
       "tag": "0046_rows_name_their_membership",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1789344000000,
+      "tag": "0047_the_organization_stops_being_an_academy",
+      "breakpoints": true
     }
   ]
 }

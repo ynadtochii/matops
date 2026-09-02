@@ -18,30 +18,36 @@ import { getActiveEntity, setActiveEntity } from "~/utils/entity-store";
 export default function Index() {
   const { data: session, isPending: sessionPending } = authClient.useSession();
 
-  // A fresh install has no stored academy, so the first request names none and
-  // the server answers with the session's organization. Pick that academy and
-  // remember it, or every later request would keep guessing (ADR 124).
+  // A fresh install has no stored academy, and nothing answers for one that was
+  // never named (ADR 124). So pick the student's first academy, remember it,
+  // and only then ask about it.
+  const stored = getActiveEntity();
   const mine = useQuery(
     trpc.academy.listMineStudent.queryOptions(undefined, {
-      enabled: !!session && getActiveEntity() === null,
+      enabled: !!session && stored === null,
     }),
   );
-  const firstAcademy = mine.data?.[0]?.academyId;
+  const firstAcademy = mine.data?.[0]?.academyId ?? null;
+  const entityId = stored ?? firstAcademy;
   useEffect(() => {
-    if (firstAcademy && getActiveEntity() === null) {
-      setActiveEntity(firstAcademy);
-    }
+    if (firstAcademy) setActiveEntity(firstAcademy);
   }, [firstAcademy]);
 
   const current = useQuery(
     trpc.academy.current.queryOptions(undefined, {
-      enabled: !!session,
+      enabled: !!session && entityId !== null,
     }),
   );
 
   const target = () => {
     if (sessionPending) return <Loading />;
     if (!session) return <Redirect href="/sign-in" />;
+    if (entityId === null && mine.isPending) {
+      return <Loading label="Finding your academy" />;
+    }
+    if (entityId === null && (mine.data?.length ?? 0) === 0) {
+      return <Redirect href="/onboarding" />;
+    }
     if (current.isPending) return <Loading label="Opening your academy" />;
     // A failed load is NOT "no gym" — retry instead of dumping a member who
     // already belongs somewhere into the join screen.

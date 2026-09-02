@@ -38,12 +38,12 @@ describe("seed roundtrip — up then down", () => {
     );
     // A completely separate REAL academy that must never be touched.
     await pg.exec(
-      `INSERT INTO "organization" (id, name, slug, public_code, created_at)
-       VALUES ('real_org', 'Real Gym', 'real-gym', '123456', now());
+      `INSERT INTO "organization" (id, name, slug, created_at)
+       VALUES ('real_org', 'Real Gym', 'real-gym', now());
        INSERT INTO "entity" (id, organization_id, type, name, slug, is_default, public_code)
        VALUES ('real_org', 'real_org', 'bjj_academy', 'Real Gym', 'real-gym', true, '123456');
-       INSERT INTO "member" (id, organization_id, user_id, role, status, created_at)
-       VALUES ('real_mem', 'real_org', '${realUser.id}', 'owner', 'active', now());
+       INSERT INTO "member" (id, organization_id, user_id, role, created_at)
+       VALUES ('real_mem', 'real_org', '${realUser.id}', 'owner', now());
        INSERT INTO "membership_plan" (academy_id, name, price_minor, currency)
        VALUES ('real_org', 'Adult', 5000, 'EUR');`,
     );

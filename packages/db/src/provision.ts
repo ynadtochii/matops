@@ -133,9 +133,11 @@ async function provisionEntityRows(
  * to run classes. Calling this again creates nothing and reports an empty
  * `created`.
  *
- * The default entity takes the organization's OWN id (Decision 5) and its
- * public code, so a QR poster or check-in link printed before the pivot still
- * resolves. Runs on the base connection, beside the other creation writes.
+ * The default entity takes the organization's OWN id (Decision 5), so a QR
+ * poster or check-in link that names the organization still resolves. Its
+ * six-digit code is minted here: the code lives on the entity now, because a
+ * gym's second academy needs one of its own. Runs on the base connection,
+ * beside the other creation writes.
  */
 export async function provisionOrganization(
   input: { organizationId: string; ownerUserId?: string },
@@ -146,15 +148,6 @@ export async function provisionOrganization(
     .select({
       name: organization.name,
       slug: organization.slug,
-      publicCode: organization.publicCode,
-      timeZone: organization.timeZone,
-      country: organization.country,
-      address: organization.address,
-      mapUrl: organization.mapUrl,
-      curriculumForStudents: organization.curriculumForStudents,
-      publicBookingEnabled: organization.publicBookingEnabled,
-      publicApiKey: organization.publicApiKey,
-      publicApiOrigins: organization.publicApiOrigins,
     })
     .from(organization)
     .where(
@@ -166,12 +159,20 @@ export async function provisionOrganization(
   if (!org)
     throw new Error(`provision: no live organization ${organizationId}`);
 
+  // A repair run must not mint a second code for a place that already has one.
+  const existing = await exec
+    .select({ code: entity.publicCode })
+    .from(entity)
+    .where(eq(entity.id, organizationId))
+    .limit(1);
+
   const created = await provisionEntityRows(
     {
       ...org,
       organizationId,
       entityId: organizationId,
       type: "bjj_academy",
+      publicCode: existing[0]?.code ?? (await generateAcademyCode(exec)),
       ownerUserId,
       isDefault: true,
     },

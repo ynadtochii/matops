@@ -2,13 +2,8 @@ import { PGlite } from "@electric-sql/pglite";
 import { TRPCError } from "@trpc/server";
 
 import type { DbExec } from "@matops/db/client";
-import {
-  eq,
-  generateAcademyCode,
-  provisionOrganization,
-  setMemberActive,
-} from "@matops/db";
-import { entityMembership, member, organization } from "@matops/db/schema";
+import { eq, provisionOrganization } from "@matops/db";
+import { entity, entityMembership, member, organization } from "@matops/db/schema";
 import { execOn, freshDb } from "@matops/db/testing";
 
 import type { createTRPCContext } from "../src/trpc";
@@ -48,10 +43,10 @@ function entityHeaders(academyId: string | null): Headers {
 
 /**
  * The four Better Auth calls the routers make, over PGlite. This stands in for
- * the organization plugin, so it must reproduce what the plugin's hooks do or
- * the tests would be testing the stand-in: `beforeCreateOrganization` assigns
- * `publicCode` (NOT NULL since migration 0010) and `afterCreateOrganization`
- * flips the creator's membership to active. Both reuse the real helpers.
+ * the organization plugin, so it must reproduce what the plugin does or the
+ * tests would be testing the stand-in: an organization row plus an owner
+ * `member` row. The six-digit code and the default academy come from
+ * `provisionOrganization`, which the routers call themselves.
  *
  * Anything not implemented here still throws, so a router reaching for an
  * untested Better Auth call fails loudly instead of silently doing nothing.
@@ -70,19 +65,15 @@ function fakeAuthApi(
         id,
         name: arg.body.name,
         slug: arg.body.slug,
-        publicCode: await generateAcademyCode(exec),
         createdAt: new Date(),
       });
-      const memberId = `mem_${id}_${userId}`;
       await exec.insert(member).values({
-        id: memberId,
+        id: `mem_${id}_${userId}`,
         organizationId: id,
         userId,
         role: "owner",
-        status: "pending",
         createdAt: new Date(),
       });
-      await setMemberActive(memberId, exec);
       activeOrg.set(userId, id);
       return { id, name: arg.body.name, slug: arg.body.slug };
     },
@@ -225,7 +216,7 @@ export async function seedAcademies(
 
   for (const academy of academies) {
     orgs.push(
-      `(${lit(academy.id)}, ${lit(`Academy ${academy.id}`)}, ${lit(`slug-${academy.id}`)}, ${lit(academy.code)}, now())`,
+      `(${lit(academy.id)}, ${lit(`Academy ${academy.id}`)}, ${lit(`slug-${academy.id}`)}, now())`,
     );
     for (const m of academy.members) {
       if (!seen.has(m.userId)) {
@@ -235,7 +226,7 @@ export async function seedAcademies(
         );
       }
       members.push(
-        `(${lit(orgMemberId(academy.id, m.userId))}, ${lit(academy.id)}, ${lit(m.userId)}, ${lit(m.role)}, ${lit(m.status)}, ${m.invitedRole ? lit(m.invitedRole) : "NULL"}, now())`,
+        `(${lit(orgMemberId(academy.id, m.userId))}, ${lit(academy.id)}, ${lit(m.userId)}, ${lit(m.role)}, now())`,
       );
     }
   }
@@ -248,12 +239,12 @@ export async function seedAcademies(
     );
   if (orgs.length)
     statements.push(
-      `INSERT INTO "organization" (id, name, slug, public_code, created_at)
+      `INSERT INTO "organization" (id, name, slug, created_at)
          VALUES ${orgs.join(",")};`,
     );
   if (members.length)
     statements.push(
-      `INSERT INTO "member" (id, organization_id, user_id, role, status, invited_role, created_at)
+      `INSERT INTO "member" (id, organization_id, user_id, role, created_at)
          VALUES ${members.join(",")};`,
     );
   if (statements.length) await pg.exec(statements.join("\n"));
@@ -267,6 +258,11 @@ export async function seedAcademies(
   const exec = execOn(pg);
   for (const academy of academies) {
     await provisionOrganization({ organizationId: academy.id }, exec);
+    // The provisioner mints a code; the spec names one so a test can type it.
+    await exec
+      .update(entity)
+      .set({ publicCode: academy.code })
+      .where(eq(entity.id, academy.id));
     if (!academy.members.length) continue;
     await exec
       .insert(entityMembership)

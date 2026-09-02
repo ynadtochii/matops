@@ -27,12 +27,12 @@ describe("member ids come from entity_membership", () => {
         ('${OWNER}', 'Owner', 'owner@test.local', true, now(), now()),
         ('${STUDENT}', 'Student', 'student@test.local', true, now(), now()),
         ('${ORG_ONLY}', 'Org Only', 'orgonly@test.local', true, now(), now());
-      INSERT INTO "organization" (id, name, slug, public_code, created_at)
-        VALUES ('${ORG}', 'Alma', 'alma', '100001', now());
-      INSERT INTO "member" (id, organization_id, user_id, role, status, created_at) VALUES
-        ('mem_owner', '${ORG}', '${OWNER}', 'owner', 'active', now()),
-        ('mem_student', '${ORG}', '${STUDENT}', 'student', 'active', now()),
-        ('mem_org_only', '${ORG}', '${ORG_ONLY}', 'student', 'active', now());
+      INSERT INTO "organization" (id, name, slug, created_at)
+        VALUES ('${ORG}', 'Alma', 'alma', now());
+      INSERT INTO "member" (id, organization_id, user_id, role, created_at) VALUES
+        ('mem_owner', '${ORG}', '${OWNER}', 'owner', now()),
+        ('mem_student', '${ORG}', '${STUDENT}', 'student', now()),
+        ('mem_org_only', '${ORG}', '${ORG_ONLY}', 'student', now());
     `);
     const exec = execOn(pg);
     await provisionOrganization(

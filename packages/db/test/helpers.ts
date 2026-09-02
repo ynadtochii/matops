@@ -98,8 +98,8 @@ export async function seedEntities(
 ): Promise<void> {
   for (const id of ids) {
     await pg.query(
-      `INSERT INTO "organization" (id, name, slug, public_code, created_at)
-         VALUES ($1, $1, $1, substr(md5($1), 1, 6), now())
+      `INSERT INTO "organization" (id, name, slug, created_at)
+         VALUES ($1, $1, $1, now())
          ON CONFLICT (id) DO NOTHING`,
       [id],
     );

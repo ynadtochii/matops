@@ -16,7 +16,7 @@ const seed = async (pg: PGlite) => {
     )
     .join(",");
   const members = statuses
-    .map((s) => `('mem_${s}', '${ACAD}', 'u_${s}', 'student', '${s}', now())`)
+    .map((s) => `('mem_${s}', '${ACAD}', 'u_${s}', 'student', now())`)
     .join(",");
   const entityMemberships = statuses
     .map(
@@ -34,7 +34,7 @@ const seed = async (pg: PGlite) => {
   await pg.exec(`
     INSERT INTO "user" (id, name, email, email_verified, created_at, updated_at)
       VALUES ${users};
-    INSERT INTO "member" (id, organization_id, user_id, role, status, created_at)
+    INSERT INTO "member" (id, organization_id, user_id, role, created_at)
       VALUES ${members};
     INSERT INTO "entity_membership"
       (id, organization_id, entity_id, user_id, role, status, joined_at)

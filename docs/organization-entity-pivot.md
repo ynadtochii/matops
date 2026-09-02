@@ -512,20 +512,20 @@ Gate:
 
 ### Wave 7: Contract cleanup and documentation
 
-Status: pending
+Status: done
 
 Goal: remove the old architecture and leave one source of truth.
 
 Tasks:
 
-- [ ] Remove academy fields moved out of `organization` through a contract migration.
-- [ ] Drop `member.status` and `member.invited_role` (added in migration `0002`) once every caller reads `entity_membership`. Keep `member.role`: Better Auth's organization plugin owns it, `packages/auth/src/permissions.ts` defines its values, and `creatorRole: "owner"` writes it.
-- [ ] Remove `AcademyProvider`, the old academy switcher, old tenant helpers, and stale exports.
-- [ ] Remove obsolete indexes, policies, and seed mappings.
-- [ ] Search all file types for stale `ctx.academyId`, `withTenant`, and `organization = academy` assumptions.
-- [ ] Keep BJJ-facing academy language, including the `academy_id` column and GUC, where it names the product domain rather than the tenant architecture.
-- [ ] Update `/Users/kuna/projects/matops/docs/architecture.md`, `/Users/kuna/projects/matops/docs/spec.md`, `/Users/kuna/projects/matops/docs/roadmap.md`, `/Users/kuna/projects/matops/docs/map.md`, `/Users/kuna/projects/matops/docs/public-api.md`, `/Users/kuna/projects/matops/CHANGELOG.md`, and `/Users/kuna/projects/matops/CLAUDE.md`.
-- [ ] Update this plan with final outcomes and any follow-up work.
+- [x] Remove academy fields moved out of `organization` through a contract migration.
+- [x] Drop `member.status` and `member.invited_role` (added in migration `0002`) once every caller reads `entity_membership`. Keep `member.role`: Better Auth's organization plugin owns it, `packages/auth/src/permissions.ts` defines its values, and `creatorRole: "owner"` writes it.
+- [x] Remove `AcademyProvider`, the old academy switcher, old tenant helpers, and stale exports.
+- [x] Remove obsolete indexes, policies, and seed mappings.
+- [x] Search all file types for stale `ctx.academyId`, `withTenant`, and `organization = academy` assumptions.
+- [x] Keep BJJ-facing academy language, including the `academy_id` column and GUC, where it names the product domain rather than the tenant architecture.
+- [x] Update `/Users/kuna/projects/matops/docs/architecture.md`, `/Users/kuna/projects/matops/docs/spec.md`, `/Users/kuna/projects/matops/docs/roadmap.md`, `/Users/kuna/projects/matops/docs/map.md`, `/Users/kuna/projects/matops/docs/public-api.md`, `/Users/kuna/projects/matops/CHANGELOG.md`, and `/Users/kuna/projects/matops/CLAUDE.md`.
+- [x] Update this plan with final outcomes and any follow-up work.
 
 Gate:
 
@@ -595,7 +595,19 @@ Not part of this pivot. Each needs its own ADR and gate.
 
 ## Current Wave
 
-Wave 7: Contract cleanup and documentation.
+None. The pivot is complete; the click-through, the device test and the merge to `main` are the human's.
+
+## Outcome
+
+Built over seven waves on `dev`, one commit each, migrations `0042`-`0047`, from 1040 tests to 1147. Nothing was pushed and nothing merged to `main`.
+
+**What the pivot bought.** One gym can run two academies from one login. Each has its own name, time zone, address, schedule, roster, dues, curriculum, six-digit join code and public booking link, and shares nothing with its sibling but the owner. A person can own one mat and train at the other. The URL names the academy, so two browser tabs show two mats, a reload keeps the one you were on, and a link opens the right place. An owner gets `/overview` across all of them without a single query that reads two academies at once.
+
+**What it cost.** Six migrations, a hard cutover with no old path kept alive, and a wipe of the dev database between `0045` and `0046`. Both clients were down for part of the run: the web from Wave 3 until Wave 4, mobile from Wave 3 until Wave 6.
+
+**The bugs it found, none of which came from a bug report.** A permanent erase left the erased person's id in other students' referral history. `softDeleteAcademy` closed the organization and left every entity live, so a shut gym stayed findable by its code. `joinPending` set the active organization only when the session had none, so a student joining a second gym could not reach it. The web's RSC tRPC context was cached per request, freezing the entity at a prefetch that runs before any entity is known. `academy.rename` renamed the organization rather than the mat. `dropIn.promote` passed an entity id as an organization id. `wipe-academies.sql` was two waves out of date. Five of the seven were caught by a foreign key or a type, not by a test.
+
+**Follow-up work, unchanged from the list below.** A `person` record for a login-less lead who visits two mats. Renaming `academy_id` to `entity_id`, 818 hits across 131 files. A metrics projection for the overview, once a measurement asks for one. Each needs its own ADR and gate.
 
 ## Progress
 
@@ -610,4 +622,4 @@ Wave 7: Contract cleanup and documentation.
 - [x] Wave 4 complete.
 - [x] Wave 5 complete.
 - [x] Wave 6 complete.
-- [ ] Wave 7 complete.
+- [x] Wave 7 complete.

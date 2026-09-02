@@ -234,14 +234,14 @@ async function bookFutureClasses(
   now: Date,
   academyIds: string[],
 ): Promise<number> {
-  // Active students + pending students per academy, from the graph's member rows.
+  // Active students + pending students per academy, from the entity memberships.
   // Students the dataset marked as drifting are skipped: a booking tomorrow
   // would contradict the "dormant" band the O1 widget shows for them.
   const quiet = new Set(graph.quietStudentIds);
   const activeByAcademy = new Map<string, string[]>();
   const pendingByAcademy = new Map<string, string[]>();
-  for (const m of graph.members) {
-    const acad = m.organizationId;
+  for (const m of graph.entityMemberships) {
+    const acad = m.entityId;
     if (quiet.has(m.userId)) continue;
     if (m.role === "student" && m.status === "active") {
       activeByAcademy.set(acad, [

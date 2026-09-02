@@ -138,9 +138,10 @@ describe("the entity tiers", () => {
     expect(here?.name).not.toBe(there?.name);
   });
 
-  it("falls back to the session's academy when no entity is named", async () => {
-    const current = await h.as(OWNER, ORG_A, new Headers()).academy.current();
-    expect(current?.academyId).toBe(ORG_A);
+  it("has no academy when the request names none", async () => {
+    expect(
+      await h.as(OWNER, ORG_A, new Headers()).academy.current(),
+    ).toBeNull();
   });
 
   it("has no academy for a header naming one the caller cannot open", async () => {

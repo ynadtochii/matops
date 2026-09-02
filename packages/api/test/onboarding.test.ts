@@ -31,7 +31,7 @@ async function base(): Promise<Harness> {
 
 async function codeOf(h: Harness, academyId: string): Promise<string> {
   const res = await h.pg.query<{ public_code: string }>(
-    `SELECT public_code FROM "organization" WHERE id = $1`,
+    `SELECT public_code FROM "entity" WHERE id = $1`,
     [academyId],
   );
   return res.rows[0]?.public_code ?? "";
@@ -47,8 +47,8 @@ async function membership(
     status: string;
     invited_role: string | null;
   }>(
-    `SELECT role, status, invited_role FROM "member"
-      WHERE organization_id = $1 AND user_id = $2`,
+    `SELECT role, status, invited_role FROM "entity_membership"
+      WHERE entity_id = $1 AND user_id = $2`,
     [academyId, userId],
   );
   return res.rows[0] ?? { role: "none", status: "none", invited_role: null };

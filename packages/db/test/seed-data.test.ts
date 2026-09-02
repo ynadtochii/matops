@@ -31,11 +31,12 @@ describe("buildSeedGraph — pure dataset", () => {
     });
     expect(
       g.members.find((m) => m.id === seedMemberId(SEED_ACADEMY.key, "you")),
-    ).toMatchObject({
-      userId: realUser.id,
-      role: "owner",
-      status: "active",
-    });
+    ).toMatchObject({ userId: realUser.id, role: "owner" });
+    expect(
+      g.entityMemberships.find(
+        (m) => m.userId === realUser.id && m.entityId === SEED_ACADEMY.id,
+      ),
+    ).toMatchObject({ role: "owner", status: "active" });
     expect(g.members.filter((m) => m.role === "owner")).toHaveLength(1);
   });
 
@@ -49,13 +50,13 @@ describe("buildSeedGraph — pure dataset", () => {
 
   it("covers every member status on the member list", () => {
     const g = build();
-    const statuses = new Set(g.members.map((m) => m.status));
+    const statuses = new Set(g.entityMemberships.map((m) => m.status));
     for (const s of ["active", "pending", "suspended", "removed"]) {
       expect(statuses).toContain(s);
     }
     // A pending instructor exists (web-lens approval queue).
     expect(
-      g.members.some(
+      g.entityMemberships.some(
         (m) => m.status === "pending" && m.invitedRole === "instructor",
       ),
     ).toBe(true);
@@ -101,10 +102,10 @@ describe("buildSeedGraph — pure dataset", () => {
     );
     expect(g.templates.some((t) => t.status === "paused")).toBe(true);
     const withDues = new Set(g.dues.map((d) => d.memberId));
-    const activeStudents = g.members.filter(
+    const activeStudents = g.entityMemberships.filter(
       (m) => m.role === "student" && m.status === "active",
     );
-    expect(activeStudents.some((m) => !withDues.has(m.id))).toBe(true);
+    expect(activeStudents.some((m) => !withDues.has(m.id ?? ""))).toBe(true);
   });
 
   it("seeds attendance history with both present and absent marks", () => {
@@ -157,11 +158,11 @@ describe("buildSeedGraph — pure dataset", () => {
     const assignedStudents = new Set(
       g.referrals.map((row) => row.studentMemberId),
     );
-    const studentMembers = g.members.filter(
+    const studentMembers = g.entityMemberships.filter(
       (member) => member.role === "student" || member.invitedRole === "student",
     );
     expect(
-      studentMembers.some((member) => !assignedStudents.has(member.id)),
+      studentMembers.some((member) => !assignedStudents.has(member.id ?? "")),
     ).toBe(true);
   });
 
@@ -192,7 +193,7 @@ describe("buildSeedGraph — pure dataset", () => {
       if (!seen || startsAt > seen) lastPresent.set(p.studentId, startsAt);
     }
     const bands = new Set(
-      g.members
+      g.entityMemberships
         .filter((m) => m.role === "student" && m.status === "active")
         .map((m) => classifyDrift(lastPresent.get(m.userId) ?? null, now)),
     );

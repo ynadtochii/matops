@@ -189,13 +189,13 @@ async function findOwnerUserId(
   academyId: string,
 ): Promise<string | null> {
   const rows = await exec
-    .select({ userId: member.userId })
-    .from(member)
+    .select({ userId: entityMembership.userId })
+    .from(entityMembership)
     .where(
       and(
-        eq(member.organizationId, academyId),
-        eq(member.role, "owner"),
-        eq(member.status, "active"),
+        eq(entityMembership.entityId, academyId),
+        eq(entityMembership.role, "owner"),
+        eq(entityMembership.status, "active"),
       ),
     )
     .limit(1);
@@ -245,8 +245,6 @@ export async function fillAcademy(
         organizationId: academyId,
         userId: s.userId,
         role: s.role,
-        status: s.status,
-        invitedRole: s.invitedRole,
         createdAt: new Date(now.getTime() - (150 - i * 3) * DAY_MS),
       })),
     )

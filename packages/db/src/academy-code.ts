@@ -3,7 +3,6 @@ import { and, eq, isNull } from "drizzle-orm";
 
 import type { DbExec } from "./client";
 import type { DbReader } from "./tenant";
-import { organization } from "./auth-schema";
 import { entity } from "./entity-schema";
 
 /**
@@ -27,20 +26,12 @@ const CODE_MAX = 999999;
 export async function generateAcademyCode(exec: DbExec): Promise<string> {
   for (let attempt = 0; attempt < 50; attempt++) {
     const code = String(randomInt(CODE_MIN, CODE_MAX + 1));
-    const onOrg = await exec
-      .select({ id: organization.id })
-      .from(organization)
-      .where(eq(organization.publicCode, code))
-      .limit(1);
-    if (onOrg[0]) continue;
-    // Both tables hand out codes from the same six-digit space while the pivot
-    // is in flight, and a student typing one must reach exactly one gym.
-    const onEntity = await exec
+    const taken = await exec
       .select({ id: entity.id })
       .from(entity)
       .where(eq(entity.publicCode, code))
       .limit(1);
-    if (!onEntity[0]) return code;
+    if (!taken[0]) return code;
   }
   throw new Error("could not allocate a unique academy code after 50 tries");
 }

@@ -13,13 +13,13 @@ import { execOn, freshDb } from "./helpers";
 const ORG = "org_alma";
 const OWNER = "u_owner";
 
-async function seedOrganization(pg: PGlite, id: string, code: string) {
+async function seedOrganization(pg: PGlite, id: string) {
   await pg.exec(`
     INSERT INTO "user" (id, name, email, email_verified, created_at, updated_at)
       VALUES ('${OWNER}', 'Owner', '${id}@test.local', true, now(), now())
       ON CONFLICT (id) DO NOTHING;
-    INSERT INTO "organization" (id, name, slug, public_code, created_at, time_zone)
-      VALUES ('${id}', 'Alma', 'alma-${id}', '${code}', now(), 'Europe/Lisbon');
+    INSERT INTO "organization" (id, name, slug, created_at)
+      VALUES ('${id}', 'Alma', 'alma-${id}', now());
   `);
 }
 
@@ -28,7 +28,7 @@ describe("provisioning an organization", () => {
 
   beforeAll(async () => {
     pg = await freshDb([]);
-    await seedOrganization(pg, ORG, "100001");
+    await seedOrganization(pg, ORG);
   });
 
   afterAll(() => pg.close());
@@ -46,19 +46,15 @@ describe("provisioning an organization", () => {
     ]);
   });
 
-  it("gives the default entity the organization's own id and code", async () => {
+  it("gives the default entity the organization's own id", async () => {
     const rows = await execOn(pg).select().from(entity);
     expect(rows).toHaveLength(1);
-    expect([rows[0]?.id, rows[0]?.publicCode, rows[0]?.isDefault]).toEqual([
-      ORG,
-      "100001",
-      true,
-    ]);
+    expect([rows[0]?.id, rows[0]?.isDefault]).toEqual([ORG, true]);
   });
 
-  it("carries the organization's settings onto the entity", async () => {
+  it("mints it a six-digit code of its own", async () => {
     const rows = await execOn(pg).select().from(entity);
-    expect(rows[0]?.timeZone).toBe("Europe/Lisbon");
+    expect(rows[0]?.publicCode).toMatch(/^\d{6}$/);
     expect(rows[0]?.type).toBe("bjj_academy");
   });
 
@@ -104,7 +100,7 @@ describe("repairing a half-provisioned organization", () => {
 
   beforeAll(async () => {
     pg = await freshDb([]);
-    await seedOrganization(pg, ORG, "100001");
+    await seedOrganization(pg, ORG);
   });
 
   afterAll(() => pg.close());
@@ -140,7 +136,7 @@ describe("adding a second entity", () => {
 
   beforeAll(async () => {
     pg = await freshDb([]);
-    await seedOrganization(pg, ORG, "100001");
+    await seedOrganization(pg, ORG);
     await provisionOrganization(
       { organizationId: ORG, ownerUserId: OWNER },
       execOn(pg),
