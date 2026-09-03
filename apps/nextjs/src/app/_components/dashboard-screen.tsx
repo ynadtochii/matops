@@ -182,7 +182,7 @@ export function DashboardScreen() {
     },
     {
       key: "approvals",
-      href: "/members?tab=requests",
+      href: href("/members?tab=requests"),
       count: pendingCount,
       label: "Pending approvals",
     },
@@ -191,32 +191,32 @@ export function DashboardScreen() {
       : [
           {
             key: "claims",
-            href: "/payments",
+            href: href("/payments"),
             count: claims.data?.length ?? 0,
             label: "Payments to confirm",
           },
           {
             key: "coach-requests",
-            href: "/coaches",
+            href: href("/coaches"),
             count: pendingCoaches,
             label: "Coach requests",
           },
           {
             key: "overdue",
-            href: "/members?tab=members&filter=overdue",
+            href: href("/members?tab=members&filter=overdue"),
             count: overdue.length,
             label: "Overdue members",
             sub: outstanding(overdue),
           },
           {
             key: "leads",
-            href: "/members?tab=leads&stage=new",
+            href: href("/members?tab=leads&stage=new"),
             count: newLeads,
             label: "New drop-in leads",
           },
           {
             key: "leads-trained",
-            href: "/members?tab=leads&stage=trained",
+            href: href("/members?tab=leads&stage=trained"),
             count: trainedNotJoined,
             label: "Trained, not joined",
           },
@@ -656,13 +656,14 @@ function BusiestRow({ row, top }: { row: BusiestClass; top: number }) {
 
 /** One "who's drifting" row — links to the member's detail (C.2). */
 function DriftRow({ m, today }: { m: DriftMember; today: Date }) {
+  const href = useEntityHref();
   const days = daysSince(
     m.lastAttendance ? new Date(m.lastAttendance) : null,
     today,
   );
   return (
     <Link
-      href={`/members?member=${m.memberId}`}
+      href={href(`/members?member=${m.memberId}`)}
       className={cn(
         cardClass({ variant: "outline", interactive: true }),
         "flex items-center justify-between gap-3 p-3",
