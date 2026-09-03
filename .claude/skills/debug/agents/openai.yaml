@@ -1,0 +1,4 @@
+interface:
+  display_name: "MatOps Debug"
+  short_description: "Debug MatOps with live read-only evidence"
+  default_prompt: "Use $matops-debug to investigate this MatOps problem with live evidence."

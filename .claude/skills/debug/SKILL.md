@@ -1,51 +1,64 @@
 ---
-name: debug
-description: Evidence-first debugging for the matops stack (Next.js web, Expo app, tRPC, Neon Postgres, Sentry, Vercel, GitHub Actions cron). Use whenever something is broken, erroring, crashing, slow, missing, or behaving wrong, in production or dev. 500s, failed sign-ins, missing notifications or reminders, wrong data, cron failures, user bug reports, incidents, "why did X happen". Pulls real evidence from Sentry, the live database, Vercel logs, and cron run history before naming a cause.
+name: matops-debug
+description: Diagnose MatOps production and development problems from real evidence in Neon Postgres, Sentry, Vercel, and GitHub Actions. Use when MatOps data is wrong or missing, a request fails, a job does not run, or the user asks what happened in the live app.
 ---
 
-# Debug (matops)
+# MatOps debug
 
-## The rule
+Diagnose from real evidence. Do not name a cause from code alone when a live source can confirm it.
 
-Never diagnose from code alone. Before naming a cause, pull evidence from at least one real source below. Quote the evidence in your answer: the Sentry event id, the DB row, the log line, the cron run number. If no source can show the failure, say that explicitly instead of guessing.
+Diagnosis is read-only. Report the cause and evidence. Do not edit data or deploy a fix unless the user separately asks.
 
-Diagnosis is read-only. Report findings; a fix is a separate step the user approves.
+## Pick the first source
 
-## Triage: symptom → first source
+| Symptom                          | First source                                             |
+| -------------------------------- | -------------------------------------------------------- |
+| Wrong or missing app data        | Production Neon through the guarded SQL helper           |
+| Web error or 500                 | Sentry org `matops`, project `javascript-nextjs`         |
+| Missing notification or reminder | Neon `notification` and `push_token`, then Vercel logs   |
+| Cron failure                     | GitHub Actions workflow `cron.yml`                       |
+| Slow request                     | Vercel `[TRPC]` timing logs                              |
+| Local development failure        | The `pnpm dev:next` terminal                             |
+| Mobile crash                     | Ask for a device reproduction because Expo has no Sentry |
 
-| Symptom | Go to |
-|---|---|
-| Web error, 500, crash report | Sentry (org `matops`, project `javascript-nextjs`) |
-| Notification / push / reminder did not arrive | DB: `notification`, `push_token`, then Vercel logs for `[notify]` / `[notifications]` (these paths swallow errors; Sentry never sees them) |
-| Dues reminder / cron question | `gh run list --workflow=cron.yml`, then `gh run view <id> --log` |
-| Slow request | Vercel logs, grep `[TRPC]` timing lines. Sentry has NO traces or logs (`tracesSampleRate: 0`), do not look there |
-| Data looks wrong | Read-only SQL via `scripts/sql.sh` |
-| Local dev problem | The `pnpm dev:next` terminal output (log prefixes in the reference file) |
-| Mobile (Expo) crash | No source exists. Expo has no Sentry. Say so; ask for a device repro instead of guessing |
-| Schema / migration doubt | `pnpm -F @matops/db check` (no DB connection needed) |
-| Seed / demo data state | `pnpm -F @matops/db seed status <code>` |
+Read [references/evidence-map.md](references/evidence-map.md) only when you need table names, log prefixes, or source limits.
 
-## How to query each source
+## Query production Neon
 
-**Sentry.** Prefer the `mcp__sentry__*` MCP tools (`search_issues`, `search_events`, `get_sentry_resource`); fall back to the user-level `sentry-cli` skill. The app tags every tRPC server error with `trpcPath`, `trpcType`, `user.id`, and `extra.academyId`. Search by those. Only `INTERNAL_SERVER_ERROR` tRPC failures reach Sentry; expected errors (FORBIDDEN, BAD_REQUEST) do not.
-
-**Database (live Neon).** Only through the guard script, never raw `psql`. It defaults to **dev**; add `--prod` to read production:
+Use only this helper from the MatOps repository root:
 
 ```sh
-sh .claude/skills/debug/scripts/sql.sh "select id, kind, created_at, read_at from notification order by created_at desc limit 20"
-sh .claude/skills/debug/scripts/sql.sh --prod "select count(*) from organization"
+sh .claude/skills/debug/scripts/sql.sh --entity <entity-id> "select id, name from curriculum_block_template order by created_at desc"
 ```
 
-It prints `target:` and the host it connected to on stderr before every query, so a result is never ambiguous about which database produced it. `--prod` reads the connection string from the macOS Keychain (`POSTGRES_URL_PROD` overrides it); store it once with `security add-generic-password -a "$USER" -s matops-prod-db -w`, which prompts so the value never reaches shell history. `vercel env pull` cannot supply it: Vercel returns `[SENSITIVE]` for variables marked sensitive.
+Add `--organization <organization-id>` for `entity` and `entity_membership` queries. Most BJJ tables need `--entity`. Use both when a query joins organization-level and entity-level tables.
 
-The script wraps your statement in `BEGIN READ ONLY`, so any write fails, and it connects to the **direct** (non `-pooler`) host. Never point a psql session at the `-pooler` host: PgBouncer shares one server connection between many clients, so a session-level `SET` from psql leaks into the app's own queries. A leaked read-only setting takes the whole app down for whichever database you are on. Since 2026-09-01 dev and production are separate Neon branches, so `POSTGRES_URL` in `.env` is the **dev** one; reaching production needs its own string, deliberately. This connection bypasses RLS: always filter by `academy_id` yourself, and never show one academy's data while discussing another.
+The helper uses the dedicated `matops_debug_agent` Neon login and the `matops_debug_ro` role. It cannot write. It applies MatOps row-level security, uses a read-only transaction, rejects multiple statements, times out after 10 seconds, and returns at most 100 rows unless a smaller or larger limit is requested.
 
-**Vercel logs (prod runtime).** `vercel logs --json` from the **repo root**, which is where `.vercel/project.json` lives (project `matops-nextjs`); add `--follow` to stream. Not from `apps/nextjs`, which has no `.vercel` directory. If the CLI reports no credentials, run `vercel login` once. Prod URL: `https://matops.app`.
+Rules:
 
-**Cron.** History: `gh run list --workflow=cron.yml` and `gh run view <run-id> --log`. The routes log nothing; the evidence is the JSON response body echoed in the workflow log. Reproduce on demand: `curl -H "Authorization: Bearer $CRON_SECRET" https://matops.app/api/cron/remind`. Note `/api/cron/materialize` is not scheduled at all (ADR 79); the horizon is filled on template save and by the owner's Rebuild schedule button.
+- Never use `POSTGRES_URL`, raw `psql`, Drizzle Studio, or the Neon owner login for production diagnosis.
+- Select only the columns needed to answer the question.
+- Start with a narrow time range or exact record id.
+- Use `--limit` only when 100 rows are not enough. The maximum is 500.
+- Do not show email addresses, phone numbers, bank details, notes, or other private data unless the question requires that exact value.
+- Never print, inspect, or return the database connection string.
+- If the helper reports missing credentials or roles, stop. Read [references/database-setup.md](references/database-setup.md) and tell the user which setup step is missing.
+- Quote the target, row ids, timestamps, and relevant field values in the finding.
+- If the query returns no evidence, say so. Do not guess.
 
-**Local dev.** Logs go only to the terminal running `pnpm dev:next`. If you own the process, capture output; otherwise ask the user to paste the lines around the failure.
+Useful sequence for an entity-scoped issue:
 
-## Detail map
+1. Get the entity id from the app URL, Sentry event, or user report.
+2. Query the smallest table that records the action.
+3. Join related tables only if the first query leaves more than one cause possible.
+4. Compare the stored state with the code path that reads or writes it.
+5. Report the cause, evidence, and confidence.
 
-Table purposes, every log prefix with its file, Sentry coverage and blind spots: read `references/evidence-map.md` in this skill's directory when you need them.
+## Other sources
+
+Use Sentry tools when available. Search by `trpcPath`, `trpcType`, `user.id`, and `extra.academyId`. Expected tRPC errors do not reach Sentry.
+
+Run Vercel log commands from the repository root. The linked project is `matops-nextjs`. Notification transport failures are swallowed and exist only in these logs.
+
+For cron history, use `gh run list --workflow=cron.yml`, then `gh run view <run-id> --log`. The JSON response in the workflow log is the record.
