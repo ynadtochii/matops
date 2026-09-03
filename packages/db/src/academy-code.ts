@@ -3,7 +3,7 @@ import { and, eq, isNull } from "drizzle-orm";
 
 import type { DbExec } from "./client";
 import type { DbReader } from "./tenant";
-import { organization } from "./auth-schema";
+import { entity } from "./entity-schema";
 
 /**
  * Academy-code helpers (docs/issues/32). The code is the plain 6-digit number an
@@ -26,24 +26,30 @@ const CODE_MAX = 999999;
 export async function generateAcademyCode(exec: DbExec): Promise<string> {
   for (let attempt = 0; attempt < 50; attempt++) {
     const code = String(randomInt(CODE_MIN, CODE_MAX + 1));
-    const clash = await exec
-      .select({ id: organization.id })
-      .from(organization)
-      .where(eq(organization.publicCode, code))
+    const taken = await exec
+      .select({ id: entity.id })
+      .from(entity)
+      .where(eq(entity.publicCode, code))
       .limit(1);
-    if (!clash[0]) return code;
+    if (!taken[0]) return code;
   }
   throw new Error("could not allocate a unique academy code after 50 tries");
 }
 
 /**
- * Resolve a shared code → the academy id + name, or null. Backs the mobile
- * `academy.findByCode` search; the caller then confirms and joins.
+ * Resolve a shared code → the entity it names, the organization above it, and
+ * the display fields. Backs the mobile `academy.findByCode` search; the caller
+ * then confirms and joins.
+ *
+ * Reads `entity`, not `organization`: a gym's second academy has a code of its
+ * own and no organization row carries it. `academyId` is the entity id, which
+ * for the default academy is also the organization id (Decision 5).
  */
 export async function findAcademyByCode(
   code: string,
   exec: DbReader,
 ): Promise<{
+  organizationId: string;
   academyId: string;
   name: string;
   address: string | null;
@@ -52,16 +58,15 @@ export async function findAcademyByCode(
 } | null> {
   const rows = await exec
     .select({
-      academyId: organization.id,
-      name: organization.name,
-      address: organization.address,
-      timeZone: organization.timeZone,
-      country: organization.country,
+      organizationId: entity.organizationId,
+      academyId: entity.id,
+      name: entity.name,
+      address: entity.address,
+      timeZone: entity.timeZone,
+      country: entity.country,
     })
-    .from(organization)
-    .where(
-      and(eq(organization.publicCode, code), isNull(organization.deletedAt)),
-    )
+    .from(entity)
+    .where(and(eq(entity.publicCode, code), isNull(entity.deletedAt)))
     .limit(1);
   return rows[0] ?? null;
 }
@@ -72,9 +77,9 @@ export async function getAcademyCode(
   exec: DbReader,
 ): Promise<string | null> {
   const rows = await exec
-    .select({ code: organization.publicCode })
-    .from(organization)
-    .where(and(eq(organization.id, academyId), isNull(organization.deletedAt)))
+    .select({ code: entity.publicCode })
+    .from(entity)
+    .where(and(eq(entity.id, academyId), isNull(entity.deletedAt)))
     .limit(1);
   return rows[0]?.code ?? null;
 }

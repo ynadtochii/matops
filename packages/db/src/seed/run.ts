@@ -3,7 +3,7 @@
  *
  * Runs on the BASE connection (the trusted service role that owns the tables),
  * setting `academy_id` explicitly on every row — the same pattern the
- * materialization sweep and drop-in helpers use (docs/issues/12). No `withTenant`
+ * materialization sweep and drop-in helpers use (docs/issues/12). No `withScope`
  * is needed: the seed is trusted infrastructure, not request-scoped app code.
  *
  * The executor is INJECTED (never imported here) so this module has no
@@ -17,12 +17,15 @@ import { DEFAULT_TRACK_NAME } from "../curriculum";
 import { materializeTemplate } from "../materialize";
 import {
   academyInvite,
+  academyProfile,
   classInstance,
   classParticipation,
   classTemplate,
   curriculumTrack,
   dropIn,
   dropInVisit,
+  entity,
+  entityMembership,
   member,
   memberDues,
   memberNote,
@@ -89,6 +92,14 @@ export async function seedAll(
   // 1. Auth rows (fake users; real user already exists) → orgs → members → invites.
   await insert(report, "user", exec, user, graph.users);
   await insert(report, "organization", exec, organization, graph.organizations);
+  await insert(report, "entity", exec, entity, graph.entities);
+  await insert(
+    report,
+    "academy_profile",
+    exec,
+    academyProfile,
+    graph.academyProfiles,
+  );
   await insert(
     report,
     "curriculum_track",
@@ -101,6 +112,13 @@ export async function seedAll(
     })),
   );
   await insert(report, "member", exec, member, graph.members);
+  await insert(
+    report,
+    "entity_membership",
+    exec,
+    entityMembership,
+    graph.entityMemberships,
+  );
   await insert(report, "academy_invite", exec, academyInvite, graph.invites);
 
   // 2. Payments price list first (dues + claims FK the plan).
@@ -216,14 +234,14 @@ async function bookFutureClasses(
   now: Date,
   academyIds: string[],
 ): Promise<number> {
-  // Active students + pending students per academy, from the graph's member rows.
+  // Active students + pending students per academy, from the entity memberships.
   // Students the dataset marked as drifting are skipped: a booking tomorrow
   // would contradict the "dormant" band the O1 widget shows for them.
   const quiet = new Set(graph.quietStudentIds);
   const activeByAcademy = new Map<string, string[]>();
   const pendingByAcademy = new Map<string, string[]>();
-  for (const m of graph.members) {
-    const acad = m.organizationId;
+  for (const m of graph.entityMemberships) {
+    const acad = m.entityId;
     if (quiet.has(m.userId)) continue;
     if (m.role === "student" && m.status === "active") {
       activeByAcademy.set(acad, [

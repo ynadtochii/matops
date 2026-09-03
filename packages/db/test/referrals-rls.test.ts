@@ -1,7 +1,7 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { freshDb, single } from "./helpers";
+import { freshDb, seedMemberships, single } from "./helpers";
 
 type Tx = Parameters<Parameters<PGlite["transaction"]>[0]>[0];
 
@@ -24,6 +24,21 @@ describe("RLS — referral attribution and audit", () => {
 
   beforeAll(async () => {
     pg = await freshDb();
+    await seedMemberships(pg, "academy_A", [
+      "student_A",
+      "referrer_A",
+      "student_1",
+      "referrer_1",
+      "referrer_2",
+      "referrer_old",
+      "referrer_new",
+      "same",
+    ]);
+    await seedMemberships(pg, "academy_B", [
+      "student_B",
+      "referrer_B",
+      "sneak",
+    ]);
     await pg.exec(`
       INSERT INTO member_referral
         (academy_id, student_member_id, referrer_member_id, assigned_by)
@@ -88,6 +103,21 @@ describe("member_referral database invariants", () => {
 
   beforeAll(async () => {
     pg = await freshDb();
+    await seedMemberships(pg, "academy_A", [
+      "student_A",
+      "referrer_A",
+      "student_1",
+      "referrer_1",
+      "referrer_2",
+      "referrer_old",
+      "referrer_new",
+      "same",
+    ]);
+    await seedMemberships(pg, "academy_B", [
+      "student_B",
+      "referrer_B",
+      "sneak",
+    ]);
   });
 
   afterAll(async () => {
@@ -129,6 +159,21 @@ describe("referral reporting state transitions", () => {
 
   beforeAll(async () => {
     pg = await freshDb();
+    await seedMemberships(pg, "academy_A", [
+      "student_A",
+      "referrer_A",
+      "student_1",
+      "referrer_1",
+      "referrer_2",
+      "referrer_old",
+      "referrer_new",
+      "same",
+    ]);
+    await seedMemberships(pg, "academy_B", [
+      "student_B",
+      "referrer_B",
+      "sneak",
+    ]);
   });
 
   afterAll(async () => {

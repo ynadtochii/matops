@@ -14,7 +14,12 @@ import type { Auth } from "@matops/auth";
 import type { TenantTx } from "@matops/db";
 import type { DbExec } from "@matops/db/client";
 import type { Membership } from "@matops/domain";
-import { getMembership, withTenant } from "@matops/db";
+import {
+  getEntityInOrganization,
+  getEntityMembership,
+  getMembership,
+  withScope,
+} from "@matops/db";
 import { db } from "@matops/db/client";
 import {
   canEnroll,
@@ -44,7 +49,7 @@ export const createTRPCContext = async (opts: {
   auth: Auth;
   /**
    * The base (non-RLS) connection. The ONE injection point the router tests use:
-   * they pass a PGlite-backed handle, so the whole seam (`withTenant`, the
+   * they pass a PGlite-backed handle, so the whole seam (`withScope`, the
    * membership lookup, every `member`-table helper) runs its REAL query against
    * an ephemeral Postgres instead of a hand-written double. Production passes
    * nothing and gets the singleton pool. See docs/issues/60.
@@ -55,10 +60,16 @@ export const createTRPCContext = async (opts: {
   const session = await authApi.getSession({
     headers: opts.headers,
   });
+  // The client names the entity it is acting in on every request (ADR 124 §2).
+  // Web sets it from the `[entityId]` route segment, mobile from the entity the
+  // student picked. It is a REQUEST, not a fact: the entity procedure checks the
+  // caller may use it and fails closed when it is missing or foreign.
+  const requestedEntityId = opts.headers.get("x-matops-entity") ?? undefined;
   return {
     authApi,
     session,
-    // Two db handles, two jobs. `ctx.db` (added by `enforceTenant` below) is the
+    requestedEntityId,
+    // Two db handles, two jobs. `ctx.db` (added by `enforceEntity` below) is the
     // RLS-scoped transaction and is the ONLY handle that may touch a tenant
     // table: a resolver on a non-tenant procedure has no `ctx.db` at all and
     // fails at typecheck if it reaches for one. `ctx.baseDb` is the base
@@ -222,18 +233,10 @@ export const protectedProcedure = t.procedure
   });
 
 /**
- * Tenant seam (the important bit for a multi-academy app).
- *
- * Requires an authenticated user with an ACTIVE academy selected — Better Auth's
- * `session.activeOrganizationId` is the academy id. It loads the caller's
- * membership (role + status) in that academy, then runs the WHOLE resolver inside
- * `withTenant(academyId, …)` — a transaction that sets the RLS scope. So inside
- * these procedures `ctx.db` is the scoped transaction and every query is filtered
- * to the caller's academy by Postgres, even if a `where` is forgotten.
- *
- * See docs/issues/12 (RLS), 20 (roles), 23 (pending capability).
+ * ORGANIZATION scope (ADR 124). The caller, their live Better Auth membership,
+ * and nothing about a place. Resolved before any transaction opens.
  */
-async function resolveActiveMembership<U extends { id: string }>(ctx: {
+async function resolveOrganization<U extends { id: string }>(ctx: {
   session?: {
     user?: U | null;
     session: { activeOrganizationId?: string | null };
@@ -243,85 +246,227 @@ async function resolveActiveMembership<U extends { id: string }>(ctx: {
   if (!ctx.session?.user) {
     throw new TRPCError({ code: "UNAUTHORIZED" });
   }
-  const academyId = ctx.session.session.activeOrganizationId;
-  if (!academyId) {
+  const organizationId = ctx.session.session.activeOrganizationId;
+  if (!organizationId) {
     throw new TRPCError({
       code: "FORBIDDEN",
-      message: "No active academy selected",
+      message: "No active organization selected",
     });
   }
   const user = ctx.session.user;
-  // Membership lookup on the base connection (member table has no RLS), BEFORE
-  // opening the scoped transaction.
-  const membership = await getMembership(user.id, academyId, ctx.baseDb);
-  if (!membership) {
+  const orgMembership = await getMembership(
+    user.id,
+    organizationId,
+    ctx.baseDb,
+  );
+  if (!orgMembership) {
     throw new TRPCError({
       code: "FORBIDDEN",
-      message: "You are not a member of this academy",
+      message: "You are not a member of this organization",
     });
   }
-  // A membership row is kept after suspend/remove (history), so existence is not
-  // access. Only `pending` and `active` may enter the enrolled tier — otherwise a
-  // suspended/removed member could still read (and, once Phase 3 lands on this
-  // tier, book). See docs/issues/23 and spec §4.
+  return { organizationId, orgMembership, user };
+}
+
+/** The caller's standing at the entity this request named. */
+export interface EntityMembershipContext {
+  role: string;
+  status: string;
+  joinedAt: Date;
+  /** `entity_membership.id`, or null for an owner who holds no membership here. */
+  memberId: string | null;
+}
+
+/**
+ * ENTITY scope (ADR 124 §2). Starts from an authorized organization, then reads
+ * the entity the CLIENT named in `x-matops-entity`. The session never selects
+ * it, which is what lets two browser tabs show two places.
+ *
+ * Fails closed, and does so BEFORE a transaction opens: a missing header is a
+ * `BAD_REQUEST` (the client is broken), a foreign or unknown entity is a
+ * `FORBIDDEN`. An entity of another organization reads as null and gets the
+ * same answer as one that does not exist, so this cannot enumerate other
+ * people's gyms.
+ *
+ * An active organization owner reaches every entity of the organization. Anyone
+ * else needs a live `entity_membership`.
+ */
+async function resolveEntity<U extends { id: string }>(ctx: {
+  session?: {
+    user?: U | null;
+    session: { activeOrganizationId?: string | null };
+  } | null;
+  requestedEntityId?: string;
+  baseDb: DbExec;
+}) {
+  const { organizationId, orgMembership, user } =
+    await resolveOrganization(ctx);
+  const entityId = ctx.requestedEntityId;
+  if (!entityId) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "No entity named. Send the x-matops-entity header.",
+    });
+  }
+  const entity = await getEntityInOrganization(
+    entityId,
+    organizationId,
+    ctx.baseDb,
+  );
+  if (!entity) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "You cannot use this entity",
+    });
+  }
+
+  const entityMembership = await getEntityMembership(
+    user.id,
+    entityId,
+    ctx.baseDb,
+  );
+  const ownsOrganization =
+    isActiveMember(orgMembership) && isOwner(orgMembership);
+
+  if (!entityMembership && !ownsOrganization) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "You cannot use this entity",
+    });
+  }
+
+  // Organization ownership wins (ADR 124 §2, amended by the v7.2 review): an
+  // active owner reaches every entity, including one where a co-owner archived
+  // or suspended their entity membership, which they would otherwise have no
+  // way to undo. `memberId` is null when there is no entity membership at all,
+  // because every dues, rank, note and referral row keys on `entity_membership.id`
+  // and the Better Auth member id is a different id space.
+  const membership: EntityMembershipContext = entityMembership
+    ? {
+        memberId: entityMembership.id,
+        joinedAt: entityMembership.joinedAt ?? entityMembership.createdAt,
+        role: ownsOrganization ? "owner" : entityMembership.role,
+        status: ownsOrganization ? "active" : entityMembership.status,
+      }
+    : {
+        memberId: null,
+        joinedAt: orgMembership.joinedAt,
+        role: "owner",
+        status: "active",
+      };
+
   if (!canEnroll(membership)) {
     throw new TRPCError({
       code: "FORBIDDEN",
-      // A suspended member is reversible (an owner can restore them), so say so
-      // rather than the harsher "removed" — the mobile app also gates on this.
       message: isSuspended(membership)
         ? "Your membership is suspended — contact your gym to restore access."
         : "Your access to this academy has been removed",
     });
   }
-  return { academyId, membership, user };
+
+  return { organizationId, entity, membership, entityMembership, user };
 }
 
-const enforceTenant = t.middleware(async ({ ctx, next }) => {
-  const { academyId, membership, user } = await resolveActiveMembership(ctx);
-  // Work that must NOT run inside the tenant transaction: push + email sends,
-  // which are slow network calls and would otherwise hold a pooled Postgres
-  // connection open for their whole duration. Resolvers hand them here and they
-  // fire after COMMIT, so a notification can also never resurrect a rolled-back
-  // mutation. See docs/issues/60.
+/** Run the resolver inside a scoped transaction, deferring the after-commit work. */
+async function runScoped<T>(
+  baseDb: DbExec,
+  scope: { organizationId: string; entityId?: string },
+  body: (
+    tx: TenantTx,
+    afterCommit: (task: (exec: DbExec) => Promise<void>) => void,
+  ) => Promise<T>,
+): Promise<T> {
+  const tasks: ((exec: DbExec) => Promise<void>)[] = [];
+  const result = await withScope(
+    scope,
+    (tx) =>
+      body(tx, (task) => {
+        tasks.push(task);
+      }),
+    baseDb,
+  );
+  for (const task of tasks) await task(baseDb);
+  return result;
+}
+
+const enforceOrganization = t.middleware(async ({ ctx, next }) => {
+  const { organizationId, orgMembership, user } =
+    await resolveOrganization(ctx);
   const baseDb = ctx.baseDb;
-  const afterCommit: ((exec: DbExec) => Promise<void>)[] = [];
-  // Rethrow, do not return: tRPC reports a failed resolver as `{ ok: false }`,
-  // and returning that would COMMIT what the resolver wrote before it threw.
-  const result = await withTenant(
-    academyId,
-    async (tx) => {
+  return runScoped(baseDb, { organizationId }, async (tx, afterCommit) => {
+    const attempt = await next({
+      ctx: {
+        db: tx,
+        organizationId,
+        orgMembership,
+        baseDb: undefined,
+        afterCommit,
+        session: { ...ctx.session, user },
+      },
+    });
+    if (!attempt.ok) throw attempt.error;
+    return attempt;
+  });
+});
+
+const enforceEntity = t.middleware(async ({ ctx, next }) => {
+  const { organizationId, entity, membership, entityMembership, user } =
+    await resolveEntity(ctx);
+  const baseDb = ctx.baseDb;
+  return runScoped(
+    baseDb,
+    { organizationId, entityId: entity.id },
+    async (tx, afterCommit) => {
       const attempt = await next({
         ctx: {
           db: tx,
-          academyId,
+          organizationId,
+          entityId: entity.id,
+          entity,
+          academyId: entity.id,
           membership,
+          entityMembership,
           baseDb: undefined,
-          afterCommit: (task: (exec: DbExec) => Promise<void>) => {
-            afterCommit.push(task);
-          },
+          afterCommit,
           session: { ...ctx.session, user },
         },
       });
       if (!attempt.ok) throw attempt.error;
       return attempt;
     },
-    baseDb,
   );
-  for (const task of afterCommit) await task(baseDb);
-  return result;
 });
 
+/** Any live member of the organization. Sees the overview, never entity rows. */
+export const organizationMemberProcedure = t.procedure
+  .use(timingMiddleware)
+  .use(enforceOrganization);
+
+/** Active owner of the organization: adds entities, sees every entity summary. */
+export const organizationOwnerProcedure = organizationMemberProcedure.use(
+  ({ ctx, next }) => {
+    if (!isActiveMember(ctx.orgMembership) || !isOwner(ctx.orgMembership)) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Owner only" });
+    }
+    return next();
+  },
+);
+
 /**
- * Enrolled procedure — any member of the active academy, INCLUDING `pending`
- * ones (view-only: browse the schedule, provisionally book/check-in). The full
- * `student` role is only granted at approval. See docs/issues/23.
+ * The tenant tiers. Every one of them runs at ONE entity, the one the request
+ * named in `x-matops-entity`, inside `withScope({ organizationId, entityId })`.
+ * So `ctx.db` is the scoped transaction and Postgres filters every query to
+ * that entity even if a `where` is forgotten (ADR 124, docs/issues/12, 20, 23).
+ *
+ * Enrolled — any member of the entity, INCLUDING `pending` ones (view-only:
+ * browse the schedule, provisionally book or check in). The full `student` role
+ * is granted at approval (docs/issues/23).
  */
 export const enrolledProcedure = t.procedure
   .use(timingMiddleware)
-  .use(enforceTenant);
+  .use(enforceEntity);
 
-/** Member procedure — an APPROVED (active) member. */
+/** Member — an APPROVED (active) member of the entity. */
 export const memberProcedure = enrolledProcedure.use(({ ctx, next }) => {
   if (!isActiveMember(ctx.membership)) {
     throw new TRPCError({
@@ -332,7 +477,7 @@ export const memberProcedure = enrolledProcedure.use(({ ctx, next }) => {
   return next();
 });
 
-/** Staff procedure — active owner OR instructor: runs the schedule + attendance. */
+/** Staff — active owner OR instructor: runs the schedule and attendance. */
 export const staffProcedure = memberProcedure.use(({ ctx, next }) => {
   if (!isStaff(ctx.membership)) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Staff only" });
@@ -340,7 +485,7 @@ export const staffProcedure = memberProcedure.use(({ ctx, next }) => {
   return next();
 });
 
-/** Owner procedure — active owner: academy settings, invites, members. */
+/** Owner — active owner: academy settings, invites, members. */
 export const ownerProcedure = memberProcedure.use(({ ctx, next }) => {
   if (!isOwner(ctx.membership)) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Owner only" });
@@ -353,29 +498,55 @@ export const ownerProcedure = memberProcedure.use(({ ctx, next }) => {
  * transaction. They exist for the writes that touch `organization` or `member`
  * (ADR 68, 84). Those tables carry no RLS policy and migration `0020` revoked
  * `matops_app`'s write access, so the write must run on the base connection —
- * and doing that from inside `withTenant` checks out a SECOND pool connection
+ * and doing that from inside `withScope` checks out a SECOND pool connection
  * and holds both (ADR 66), which deadlocks outright on a single-connection
- * PGlite. `ctx.withTenant(fn)` lets a resolver that also touches tenant tables
+ * PGlite. `ctx.withScope(fn)` lets a resolver that also touches tenant tables
  * open the scoped transaction around just that part, so the ORDER of the two
  * writes stays with the resolver, the only thing that knows which order is
  * recoverable.
  */
 function identityProcedure(allow: (m: Membership) => boolean, denial: string) {
   return protectedProcedure.use(async ({ ctx, next }) => {
-    const { academyId, membership } = await resolveActiveMembership(ctx);
+    const { organizationId, entity, membership, entityMembership } =
+      await resolveEntity(ctx);
     if (!isActiveMember(membership) || !allow(membership)) {
       throw new TRPCError({ code: "FORBIDDEN", message: denial });
     }
+    const baseDb = ctx.baseDb;
     return next({
       ctx: {
-        academyId,
+        organizationId,
+        entityId: entity.id,
+        entity,
+        academyId: entity.id,
         membership,
-        withTenant: <T>(fn: (tx: TenantTx) => Promise<T>): Promise<T> =>
-          withTenant(academyId, fn, ctx.baseDb),
+        entityMembership,
+        withScope: <T>(fn: (tx: TenantTx) => Promise<T>): Promise<T> =>
+          withScope({ organizationId, entityId: entity.id }, fn, baseDb),
       },
     });
   });
 }
+
+/**
+ * Organization owner, with NO ambient transaction (ADR 92, applied to the new
+ * scope). Adding an entity writes `academy_profile` and `curriculum_track`,
+ * whose policies match on `app.academy_id` — and an organization transaction
+ * leaves that unset on purpose, so those inserts would be refused by the very
+ * rule that keeps entities apart. The write belongs on the base connection.
+ */
+export const organizationOwnerIdentityProcedure = protectedProcedure.use(
+  async ({ ctx, next }) => {
+    const { organizationId, orgMembership, user } =
+      await resolveOrganization(ctx);
+    if (!isActiveMember(orgMembership) || !isOwner(orgMembership)) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Owner only" });
+    }
+    return next({
+      ctx: { organizationId, orgMembership, session: { ...ctx.session, user } },
+    });
+  },
+);
 
 export const staffIdentityProcedure = identityProcedure(isStaff, "Staff only");
 export const ownerIdentityProcedure = identityProcedure(isOwner, "Owner only");

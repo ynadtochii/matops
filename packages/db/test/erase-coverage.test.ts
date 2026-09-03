@@ -23,6 +23,8 @@ const NOT_MEMBER_DATA: Record<string, string> = {
     "One stretch of weeks on the gym's plan. It names a theme and its dates, never a member (ADR 104).",
   academy_invite:
     "A shareable link belongs to the academy and to the role, not to whoever used it.",
+  academy_profile:
+    "The place's own settings: its booking switch, its API key, its curriculum visibility. Not member data (ADR 124).",
   tenant_probe:
     "The seed:health probe row. Not member data and not reachable by a member.",
 };
@@ -43,7 +45,7 @@ describe("eraseMemberData names every table that holds member data", () => {
       JOIN pg_attribute a ON a.attrelid = c.oid
       WHERE n.nspname = 'public'
         AND c.relkind = 'r'
-        AND a.attname = 'academy_id'
+        AND a.attname IN ('academy_id', 'entity_id')
         AND a.attnum > 0
         AND NOT a.attisdropped
       ORDER BY 1

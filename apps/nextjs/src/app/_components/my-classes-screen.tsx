@@ -15,7 +15,7 @@ import { Button } from "@matops/ui/button";
 
 import { dayMediumFmt, timeFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
-import { useAcademy } from "./academy";
+import { useEntity, useEntityHref } from "./entity";
 import { PageHeader } from "./page-header";
 import { cardClass, ENTER, Section, Stat } from "./primitives";
 import { SkeletonMyClassesBody, SkeletonStats } from "./skeletons";
@@ -26,9 +26,10 @@ import { useMinuteClock } from "./use-clock";
 type MyClass = RouterOutputs["booking"]["mine"][number];
 
 export function MyClassesScreen() {
+  const href = useEntityHref();
   const trpc = useTRPC();
   const { cancel, busyFor } = useBooking();
-  const suspended = useAcademy().status === "suspended";
+  const suspended = useEntity().status === "suspended";
 
   const mine = useQuery({
     ...trpc.booking.mine.queryOptions(),
@@ -69,7 +70,7 @@ export function MyClassesScreen() {
           {next && (
             <Section label="Next class" className={ENTER}>
               <Link
-                href={`/class/${next.classId}`}
+                href={href(`/class/${next.classId}`)}
                 className={cn(
                   cardClass({ interactive: true }),
                   "border-brand/30 bg-brand-wash block",
@@ -165,6 +166,7 @@ function ClassRow({
   now: Date;
   action?: React.ReactNode;
 }) {
+  const href = useEntityHref();
   const cancelled = c.status === "cancelled";
   const past = c.startsAt.getTime() <= now.getTime();
   return (
@@ -175,7 +177,7 @@ function ClassRow({
         (cancelled || past) && "opacity-70",
       )}
     >
-      <Link href={`/class/${c.classId}`} className="min-w-0 flex-1">
+      <Link href={href(`/class/${c.classId}`)} className="min-w-0 flex-1">
         <p className="flex items-baseline gap-2">
           <span className="font-mono text-sm font-semibold tabular-nums">
             {timeFmt.format(c.startsAt)}

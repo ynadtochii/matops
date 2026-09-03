@@ -1,8 +1,9 @@
 import { and, eq, isNull } from "drizzle-orm";
 
 import type { DbExec } from "./client";
-import type { DbReader } from "./tenant";
+import type { DbReader, DbWriter } from "./tenant";
 import { organization } from "./auth-schema";
+import { academyProfile, entity } from "./entity-schema";
 
 export interface AcademySettings {
   academyId: string;
@@ -20,16 +21,17 @@ export async function getAcademySettings(
 ): Promise<AcademySettings | null> {
   const rows = await exec
     .select({
-      academyId: organization.id,
-      name: organization.name,
-      code: organization.publicCode,
-      timeZone: organization.timeZone,
-      address: organization.address,
-      mapUrl: organization.mapUrl,
-      curriculumForStudents: organization.curriculumForStudents,
+      academyId: entity.id,
+      name: entity.name,
+      code: entity.publicCode,
+      timeZone: entity.timeZone,
+      address: entity.address,
+      mapUrl: entity.mapUrl,
+      curriculumForStudents: academyProfile.curriculumForStudents,
     })
-    .from(organization)
-    .where(and(eq(organization.id, academyId), isNull(organization.deletedAt)))
+    .from(entity)
+    .innerJoin(academyProfile, eq(academyProfile.entityId, entity.id))
+    .where(and(eq(entity.id, academyId), isNull(entity.deletedAt)))
     .limit(1);
   return rows[0] ?? null;
 }
@@ -37,42 +39,114 @@ export async function getAcademySettings(
 export async function updateAcademySettings(
   academyId: string,
   patch: {
+    name?: string;
     timeZone?: string;
     country?: string;
     address?: string;
     mapUrl?: string;
     curriculumForStudents?: boolean;
   },
-  exec: DbExec,
+  exec: DbWriter,
 ): Promise<void> {
   const next: {
+    name?: string;
     timeZone?: string;
     country?: string | null;
     address?: string | null;
     mapUrl?: string | null;
     curriculumForStudents?: boolean;
   } = {};
+  if (patch.name !== undefined) next.name = patch.name;
   if (patch.timeZone !== undefined) next.timeZone = patch.timeZone;
   if (patch.country !== undefined) next.country = patch.country || null;
   if (patch.address !== undefined) next.address = patch.address || null;
   if (patch.mapUrl !== undefined) next.mapUrl = patch.mapUrl.trim() || null;
   if (patch.curriculumForStudents !== undefined)
     next.curriculumForStudents = patch.curriculumForStudents;
-  if (Object.keys(next).length === 0) return;
-  await exec
-    .update(organization)
-    .set(next)
-    .where(and(eq(organization.id, academyId), isNull(organization.deletedAt)));
+  const { curriculumForStudents, ...place } = next;
+  if (Object.keys(place).length > 0) {
+    await exec
+      .update(entity)
+      .set(place)
+      .where(and(eq(entity.id, academyId), isNull(entity.deletedAt)));
+  }
+  if (curriculumForStudents !== undefined) {
+    await exec
+      .update(academyProfile)
+      .set({ curriculumForStudents })
+      .where(eq(academyProfile.entityId, academyId));
+  }
 }
 
+/**
+ * Close one academy (ADR 68, entity-scoped by ADR 124).
+ *
+ * The named ENTITY is what closes, so a gym running two mats can shut one and
+ * keep the other's classes, roster and join code working. The organization
+ * follows only when that was its last live entity: an owner group with no place
+ * to run classes is a closed gym, and leaving it open would keep an owner
+ * signed in to nothing.
+ */
 export async function softDeleteAcademy(
-  academyId: string,
+  entityId: string,
   exec: DbExec,
 ): Promise<boolean> {
-  const rows = await exec
-    .update(organization)
-    .set({ deletedAt: new Date() })
-    .where(and(eq(organization.id, academyId), isNull(organization.deletedAt)))
-    .returning({ id: organization.id });
-  return rows.length > 0;
+  return exec.transaction(async (tx) => {
+    const targets = await tx
+      .select({ organizationId: entity.organizationId })
+      .from(entity)
+      .where(and(eq(entity.id, entityId), isNull(entity.deletedAt)))
+      .limit(1);
+    const organizationId = targets[0]?.organizationId;
+    if (!organizationId) return false;
+
+    const locked = await tx
+      .select({ id: organization.id })
+      .from(organization)
+      .where(
+        and(
+          eq(organization.id, organizationId),
+          isNull(organization.deletedAt),
+        ),
+      )
+      .for("update");
+    if (locked.length === 0) return false;
+
+    const closedAt = new Date();
+    const closed = await tx
+      .update(entity)
+      .set({ deletedAt: closedAt })
+      .where(
+        and(
+          eq(entity.id, entityId),
+          eq(entity.organizationId, organizationId),
+          isNull(entity.deletedAt),
+        ),
+      )
+      .returning({ id: entity.id });
+    if (closed.length === 0) return false;
+
+    const live = await tx
+      .select({ id: entity.id })
+      .from(entity)
+      .where(
+        and(
+          eq(entity.organizationId, organizationId),
+          isNull(entity.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (live.length === 0) {
+      await tx
+        .update(organization)
+        .set({ deletedAt: closedAt })
+        .where(
+          and(
+            eq(organization.id, organizationId),
+            isNull(organization.deletedAt),
+          ),
+        );
+    }
+    return true;
+  });
 }

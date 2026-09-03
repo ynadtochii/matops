@@ -4,11 +4,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { magicLink, oAuthProxy, organization } from "better-auth/plugins";
 
-import {
-  createDefaultTrack,
-  generateAcademyCode,
-  setMemberActive,
-} from "@matops/db";
+import { provisionOrganization } from "@matops/db";
 import { db } from "@matops/db/client";
 import { sendEmail } from "@matops/notifications";
 
@@ -96,66 +92,20 @@ export function initAuth<
       organization({
         ac,
         roles,
-        // The academy creator becomes an owner (docs/issues/20). The hook below
-        // also flips that owner membership to `active` at once, so onboarding is
-        // seamless — the creator is a working owner with no approval step.
+        // The academy creator becomes an owner of the ORGANIZATION
+        // (docs/issues/20). The hook below gives them the default academy and an
+        // active owner membership of it, so onboarding is seamless — the creator
+        // is a working owner with no approval step.
         creatorRole: "owner",
         organizationHooks: {
-          // Give the new gym its shareable 6-digit code (docs/issues/32) BEFORE
-          // the row is inserted. `public_code` is NOT NULL (migration 0010), so
-          // it must be part of the INSERT — assigning it in afterCreate runs too
-          // late and the insert fails the constraint. `generateAcademyCode`
-          // checks uniqueness; the unique index is the final backstop on a race.
-          beforeCreateOrganization: async ({ organization }) => {
-            return {
-              data: {
-                ...organization,
-                publicCode: await generateAcademyCode(db),
-              },
-            };
-          },
+          // The shareable 6-digit code lives on the ENTITY now (ADR 124), so
+          // the provisioner mints it with the default academy rather than the
+          // organization carrying one.
           afterCreateOrganization: async ({ member, organization }) => {
-            await setMemberActive(member.id, db);
-            await createDefaultTrack(organization.id, db);
-          },
-        },
-        schema: {
-          organization: {
-            additionalFields: {
-              // The shareable 6-digit code (docs/issues/32). NOT NULL in the DB;
-              // server-set in beforeCreateOrganization (`input: false` → clients
-              // cannot pass it). The drizzle adapter resolves this by the drizzle
-              // property key `publicCode` (auth-schema maps it to the existing
-              // `public_code` column) — so no fieldName override, no migration,
-              // no schema regen.
-              publicCode: {
-                type: "string",
-                required: false,
-                input: false,
-              },
-            },
-          },
-          member: {
-            additionalFields: {
-              // Everyone who self-joins via an invite link starts `pending` and
-              // sees a view-only app until an owner approves (docs/issues/20, 23).
-              // `input: false` → clients cannot set it; the server controls it.
-              status: {
-                type: "string",
-                defaultValue: "pending",
-                input: false,
-              },
-              // The role to grant AT approval (docs/issues/14, 20). A pending
-              // member holds the harmless Better Auth default role (`member`) —
-              // not one of our academy roles — so it passes no role check even if
-              // a status guard is missed; approval sets `role := invitedRole`.
-              // Server-controlled (`input: false`); set from the invite at join.
-              invitedRole: {
-                type: "string",
-                required: false,
-                input: false,
-              },
-            },
+            await provisionOrganization(
+              { organizationId: organization.id, ownerUserId: member.userId },
+              db,
+            );
           },
         },
       }),

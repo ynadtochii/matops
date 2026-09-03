@@ -11,6 +11,6 @@ export default defineConfig({
     env: { POSTGRES_URL: "postgres://api-test-dummy/db" },
     // PGlite boots a WASM Postgres on first use — give it headroom.
     testTimeout: 30_000,
-    hookTimeout: 30_000,
+    hookTimeout: 60_000,
   },
 });

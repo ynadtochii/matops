@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { pgTable, uniqueIndex } from "drizzle-orm/pg-core";
 
-import { organization } from "./auth-schema";
+import { entity } from "./entity-schema";
 
 /**
  * Shareable per-role invite links (spec O4, docs/issues/20).
@@ -22,11 +22,13 @@ export const academyInvite = pgTable(
   "academy_invite",
   (t) => ({
     id: t.uuid().notNull().primaryKey().defaultRandom(),
-    // Better Auth organization id (text). Cascades so invites die with the gym.
+    // The `bjj_academy` entity this link joins (ADR 124). No cascade: teardown
+    // and erase delete invites explicitly, and a cascade would hide the table
+    // from the coverage tests that prove they do.
     academyId: t
       .text()
       .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+      .references(() => entity.id),
     // The role granted AT approval: "student" | "instructor" (never "owner").
     role: t.text().notNull(),
     // Opaque URL-safe token shared in the link. Server-generated, never client-set.

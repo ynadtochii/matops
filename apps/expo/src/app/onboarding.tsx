@@ -15,6 +15,7 @@ import {
 } from "~/components/ui";
 import { trpc } from "~/utils/api";
 import { authClient } from "~/utils/auth";
+import { setActiveEntity } from "~/utils/entity-store";
 
 /** Exactly six digits — matches AcademyCodeSchema / isValidAcademyCode. */
 const CODE_RE = /^\d{6}$/;
@@ -46,7 +47,8 @@ export default function Onboarding() {
 
   const join = useMutation(
     trpc.membership.joinByCode.mutationOptions({
-      onSuccess: async () => {
+      onSuccess: async (joined) => {
+        setActiveEntity(joined.academyId);
         await queryClient.invalidateQueries();
         router.replace("/");
       },

@@ -8,6 +8,7 @@ import { staleTimeForQueryKey } from "@matops/domain";
 
 import { authClient } from "./auth";
 import { getBaseUrl } from "./base-url";
+import { getActiveEntity } from "./entity-store";
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -52,6 +53,13 @@ export const trpc = createTRPCOptionsProxy<AppRouter>({
           const cookies = authClient.getCookie();
           if (cookies) {
             headers.set("Cookie", cookies);
+          }
+          // The academy the student picked, named on every request (ADR 124).
+          // Read here rather than captured once: a switch changes it without
+          // rebuilding the client.
+          const entityId = getActiveEntity();
+          if (entityId) {
+            headers.set("x-matops-entity", entityId);
           }
           return headers;
         },

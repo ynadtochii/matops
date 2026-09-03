@@ -6,14 +6,17 @@ import type { Membership } from "@matops/domain";
 import {
   and,
   createPendingMembership,
+  deleteEntityMembership,
   deleteMemberRow,
   deleteUserRow,
   desc,
   eq,
   eraseMemberData,
   findAcademyByCode,
+  getMembership,
   gt,
   hasOtherMemberships,
+  hasSiblingEntityMemberships,
   inArray,
   linkLeadOnJoin,
   resolveInviteToken,
@@ -83,6 +86,7 @@ type AuthedContext = BaseContext & {
 async function joinPending(
   ctx: AuthedContext,
   input: {
+    organizationId: string;
     academyId: string;
     invitedRole: string;
     firstName: string;
@@ -102,15 +106,20 @@ async function joinPending(
   const result = await createPendingMembership(
     {
       userId,
-      academyId: input.academyId,
+      organizationId: input.organizationId,
+      entityId: input.academyId,
       invitedRole: input.invitedRole,
     },
     ctx.baseDb,
   );
   await linkLeadOnJoin(input.academyId, input.phone, userId, ctx.baseDb);
-  if (!ctx.session.session.activeOrganizationId) {
+  // Follow the person to the gym they just joined. Only skipping when the
+  // session already names THIS organization: a student who joins a second gym
+  // would otherwise keep the first one active, and every request naming their
+  // new academy would be refused for belonging to another organization.
+  if (ctx.session.session.activeOrganizationId !== input.organizationId) {
     await ctx.authApi.setActiveOrganization({
-      body: { organizationId: input.academyId },
+      body: { organizationId: input.organizationId },
       headers: ctx.headers,
     });
   }
@@ -226,6 +235,7 @@ export const membershipRouter = {
         });
       }
       return joinPending(ctx, {
+        organizationId: invite.organizationId,
         academyId: invite.academyId,
         invitedRole: invite.role,
         firstName: input.firstName,
@@ -252,6 +262,7 @@ export const membershipRouter = {
         });
       }
       return joinPending(ctx, {
+        organizationId: academy.organizationId,
         academyId: academy.academyId,
         invitedRole: CODE_JOIN_ROLE,
         firstName: input.firstName,
@@ -442,7 +453,12 @@ export const membershipRouter = {
     .mutation(async ({ ctx, input }) => {
       const m = await requireMember(identityScope(ctx), input.memberId);
       requireSeatDecider(ctx, m);
-      await setMemberStatus(input.memberId, "removed", ctx.baseDb);
+      await setMemberStatus(
+        ctx.academyId,
+        input.memberId,
+        "removed",
+        ctx.baseDb,
+      );
       return { ok: true as const };
     }),
 
@@ -476,7 +492,7 @@ export const membershipRouter = {
           ctx.baseDb,
         ),
       );
-      const freed = await ctx.withTenant((db) =>
+      const freed = await ctx.withScope((db) =>
         releaseUpcomingSeats({ db, academyId: ctx.academyId }, m.userId),
       );
       return { ok: true as const, seatsFreed: freed };
@@ -508,7 +524,7 @@ export const membershipRouter = {
           ctx.baseDb,
         ),
       );
-      const report = await ctx.withTenant((db) =>
+      const report = await ctx.withScope((db) =>
         eraseMemberData(db, {
           academyId: ctx.academyId,
           memberId: input.memberId,
@@ -516,12 +532,31 @@ export const membershipRouter = {
           actorId: ctx.session.user.id,
         }),
       );
-      await deleteMemberRow(ctx.baseDb, ctx.academyId, input.memberId);
-      const elsewhere = await hasOtherMemberships(
+      await deleteEntityMembership(ctx.baseDb, ctx.academyId, m.userId);
+      // The organization membership is what lets them into the gym's OTHER
+      // mats, so it only goes once the last entity membership has (ADR 124).
+      const stillHere = await hasSiblingEntityMemberships(
         ctx.baseDb,
         m.userId,
-        ctx.academyId,
+        ctx.organizationId,
       );
+      // `member.role = "owner"` is written once, by Better Auth, when the gym is
+      // created, and no code path can write it back. So the never-ownerless guard
+      // above counts owners of THIS mat only, so it must not be the last thing
+      // standing between an owner of one mat and the founder's whole organization.
+      const orgMembership = await getMembership(
+        m.userId,
+        ctx.organizationId,
+        ctx.baseDb,
+      );
+      const foundedOrganization = orgMembership?.role === "owner";
+      if (!stillHere && !foundedOrganization) {
+        await deleteMemberRow(ctx.baseDb, ctx.organizationId, m.userId);
+      }
+      const elsewhere =
+        stillHere ||
+        foundedOrganization ||
+        (await hasOtherMemberships(ctx.baseDb, m.userId, ctx.organizationId));
       if (!elsewhere) {
         await deleteUserRow(ctx.baseDb, m.userId);
       }
@@ -561,7 +596,12 @@ export const membershipRouter = {
           message: "This member is not suspended or archived.",
         });
       }
-      await setMemberStatus(input.memberId, "active", ctx.baseDb);
+      await setMemberStatus(
+        ctx.academyId,
+        input.memberId,
+        "active",
+        ctx.baseDb,
+      );
       return { ok: true as const };
     }),
 
@@ -571,6 +611,7 @@ export const membershipRouter = {
     .mutation(async ({ ctx, input }) => {
       await requireMember(identityScope(ctx), input.memberId);
       await setMemberRoleStatus(
+        ctx.academyId,
         input.memberId,
         { role: "owner", status: "active" },
         ctx.baseDb,

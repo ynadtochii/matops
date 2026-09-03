@@ -24,7 +24,7 @@ describe("materialization sweep", () => {
   let pg: PGlite;
 
   beforeAll(async () => {
-    pg = await freshDb();
+    pg = await freshDb(["acad_a", "acad_b"]);
   });
 
   afterAll(() => pg.close());

@@ -17,6 +17,7 @@ import {
 } from "~/components/ui";
 import { queryClient, trpc } from "~/utils/api";
 import { authClient } from "~/utils/auth";
+import { clearActiveEntity } from "~/utils/entity-store";
 import {
   forgetPushToken,
   getPushToken,
@@ -172,7 +173,9 @@ export default function Settings() {
       await authClient.signOut();
     } finally {
       // Query keys carry no user id, so anything left cached would be served to
-      // the next person who signs in on this device.
+      // the next person who signs in on this device. The stored academy goes
+      // with them: it would otherwise name a gym the next person cannot open.
+      await clearActiveEntity();
       queryClient.clear();
       router.replace("/");
     }

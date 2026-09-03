@@ -8,7 +8,7 @@ import {
   handleClasses,
 } from "../src/public";
 import { resetRateLimits } from "../src/rate-limit";
-import { harness, seedAcademies, seedClasses } from "./helpers";
+import { harness, seedClasses } from "./helpers";
 
 const A = "org_a";
 const B = "org_b";
@@ -44,9 +44,7 @@ beforeEach(() => {
 });
 
 async function base(): Promise<Harness> {
-  const h = await harness();
-  open = h;
-  await seedAcademies(h.pg, [
+  const h = await harness([
     {
       id: A,
       code: "100001",
@@ -61,14 +59,17 @@ async function base(): Promise<Harness> {
       members: [{ userId: "u_other", role: "owner", status: "active" }],
     },
   ]);
+  open = h;
   await h.pg.exec(`
-    UPDATE "organization"
-       SET public_booking_enabled = true, public_api_key = '${KEY_A}',
-           time_zone = 'Europe/Lisbon', address = 'Rua Example 12'
+    UPDATE "academy_profile"
+       SET public_booking_enabled = true, public_api_key = '${KEY_A}'
+     WHERE entity_id = '${A}';
+    UPDATE "entity"
+       SET time_zone = 'Europe/Lisbon', address = 'Rua Example 12'
      WHERE id = '${A}';
-    UPDATE "organization"
+    UPDATE "academy_profile"
        SET public_booking_enabled = true, public_api_key = '${KEY_B}'
-     WHERE id = '${B}';
+     WHERE entity_id = '${B}';
   `);
   await seedClasses(h.pg, [
     {
@@ -157,7 +158,7 @@ describe("the key is the only way in", () => {
   it("says so when the gym switched the surface off", async () => {
     const h = await base();
     await h.pg.exec(
-      `UPDATE "organization" SET public_booking_enabled = false WHERE id = '${A}'`,
+      `UPDATE "academy_profile" SET public_booking_enabled = false WHERE entity_id = '${A}'`,
     );
     const res = await handleAcademy(get("/academy"), h.exec);
     expect(res.status).toBe(403);
@@ -169,7 +170,7 @@ describe("the key is the only way in", () => {
   it("refuses an origin outside the gym's allowlist", async () => {
     const h = await base();
     await h.pg.exec(
-      `UPDATE "organization" SET public_api_origins = ARRAY['https://almabjj.com'] WHERE id = '${A}'`,
+      `UPDATE "academy_profile" SET public_api_origins = ARRAY['https://almabjj.com'] WHERE entity_id = '${A}'`,
     );
     const req = new Request("https://matops.test/academy", {
       headers: new Headers({

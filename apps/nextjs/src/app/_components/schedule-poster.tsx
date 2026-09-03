@@ -14,7 +14,7 @@ import { Spinner } from "@matops/ui/spinner";
 import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
-import { useAcademy } from "./academy";
+import { useEntity } from "./entity";
 import { POSTER_H, POSTER_W } from "./poster-size";
 
 const updatedFmt = new Intl.DateTimeFormat("en-GB", {
@@ -31,7 +31,7 @@ const fileSlug = (name: string) =>
 
 export function SchedulePoster() {
   const trpc = useTRPC();
-  const academy = useAcademy();
+  const academy = useEntity();
   const name = academy.name;
   const code = academy.code ?? "";
   const [open, setOpen] = useState(false);

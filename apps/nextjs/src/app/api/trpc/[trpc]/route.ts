@@ -36,7 +36,9 @@ const handler = async (req: NextRequest) => {
           ? { id: ctx.session.user.id, email: ctx.session.user.email }
           : undefined,
         extra: {
-          academyId: ctx?.session?.session.activeOrganizationId ?? undefined,
+          organizationId:
+            ctx?.session?.session.activeOrganizationId ?? undefined,
+          entityId: ctx?.requestedEntityId,
         },
       });
     },

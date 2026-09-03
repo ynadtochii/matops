@@ -1,34 +1,23 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 
-import { ProfileScreen } from "~/app/_components/profile-screen";
-import { ProfileSkeleton } from "~/app/_components/skeletons";
-import { getSession } from "~/auth/server";
-import { HydrateClient, prefetch, trpc } from "~/trpc/server";
+import { entityHref } from "@matops/domain";
 
-async function ProfileData() {
-  const session = await getSession();
-  if (!session) redirect("/sign-in");
+import { PageLoader } from "~/app/_components/mat-loader";
+import { myEntities } from "~/trpc/server";
 
-  prefetch(trpc.rank.mine.queryOptions());
-
-  const phone = session.user.phone;
-
+// A profile shows rank, join date and the mat's address, so the screen lives
+// under the entity. This path exists only to forward an older link.
+export default function ProfileRedirectPage() {
   return (
-    <HydrateClient>
-      <ProfileScreen
-        name={session.user.name}
-        email={session.user.email}
-        phone={typeof phone === "string" ? phone : ""}
-      />
-    </HydrateClient>
+    <Suspense fallback={<PageLoader label="Opening your profile" />}>
+      <ProfileRedirect />
+    </Suspense>
   );
 }
 
-export default function ProfilePage() {
-  return (
-    <Suspense fallback={<ProfileSkeleton />}>
-      <ProfileData />
-    </Suspense>
-  );
+async function ProfileRedirect() {
+  const { entities } = await myEntities();
+  const first = entities[0];
+  return redirect(first ? entityHref(first.id, "/profile") : "/");
 }

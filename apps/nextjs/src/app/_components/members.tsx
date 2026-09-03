@@ -27,7 +27,7 @@ import { toast } from "@matops/ui/toast";
 
 import { dateFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
-import { useAcademy } from "./academy";
+import { useEntity } from "./entity";
 import { LeadsPipeline } from "./leads";
 import { MemberDetail, MemberRow } from "./member-detail";
 import { cardClass, Eyebrow, MoreIcon, Tabs } from "./primitives";
@@ -169,7 +169,7 @@ export function Members() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const memberList = useQuery(trpc.membership.members.queryOptions());
-  const academy = useAcademy();
+  const academy = useEntity();
   const owner = isOwner(academy);
   const archivedList = useQuery({
     ...trpc.membership.archived.queryOptions(),

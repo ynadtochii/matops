@@ -1,10 +1,10 @@
 "use client";
 
-import { useAcademy } from "./academy";
 import { AcademyDangerZone } from "./academy-danger-zone";
 import { AcademyIdentity } from "./academy-identity";
 import { AcademyLocation } from "./academy-location";
 import { BookingGate } from "./booking-gate";
+import { useEntity } from "./entity";
 import { PageHeader } from "./page-header";
 import { PublicBooking } from "./public-booking";
 
@@ -17,7 +17,7 @@ import { PublicBooking } from "./public-booking";
  * server procedures).
  */
 export function SettingsScreen() {
-  const academy = useAcademy();
+  const academy = useEntity();
 
   return (
     <>

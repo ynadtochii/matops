@@ -24,7 +24,7 @@ describe("rebuildSchedule", () => {
   let pg: PGlite;
 
   beforeAll(async () => {
-    pg = await freshDb();
+    pg = await freshDb(["acad_rebuild"]);
   });
 
   afterAll(() => pg.close());

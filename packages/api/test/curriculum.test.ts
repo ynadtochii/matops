@@ -330,7 +330,9 @@ describe("curriculum blocks and the plan", () => {
   describe("the theme on a class (ADR 110)", () => {
     const TODAY_CLASS = "33333333-3333-4333-8333-000000000001";
     const setOn = (on: boolean) =>
-      h.pg.query(`UPDATE organization SET curriculum_for_students = $1`, [on]);
+      h.pg.query(`UPDATE academy_profile SET curriculum_for_students = $1`, [
+        on,
+      ]);
 
     const planNow = async () => {
       await reset();

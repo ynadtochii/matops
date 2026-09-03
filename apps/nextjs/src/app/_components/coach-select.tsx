@@ -7,7 +7,7 @@ import { Select } from "@matops/ui/select";
 import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
-import { useAcademy } from "./academy";
+import { useEntity } from "./entity";
 
 interface Props {
   classId: string;
@@ -65,7 +65,7 @@ export function CoachSelect({
 }: Props) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const me = useAcademy();
+  const me = useEntity();
 
   const allowed = canReassignCoach(me, new Date(startsAt), new Date());
 

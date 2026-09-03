@@ -2,13 +2,14 @@ import { randomBytes } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
 
 import type { DbExec } from "./client";
-import { organization } from "./auth-schema";
+import { entity } from "./entity-schema";
 import { academyInvite } from "./invite-schema";
 
 /**
  * Invite-link helpers (spec O4, docs/issues/20). All run on the BASE connection —
  * `academy_invite` has no RLS (the public join screen resolves a token with no
- * active academy), so owner-side reads filter by `academyId` explicitly.
+ * active entity), so owner-side reads filter by `academyId` explicitly.
+ * `academyId` names the `bjj_academy` entity the link joins (ADR 124).
  */
 
 export interface InviteRow {
@@ -132,14 +133,20 @@ export async function revokeInvite(
 }
 
 /**
- * Resolve a token on the public join screen → the academy + intended role, or
- * null if the token is unknown or revoked. Used by a public procedure with no
- * session; joins the organization for its display name.
+ * Resolve a token on the public join screen → the entity it joins, the
+ * organization above it, and the intended role. Null if the token is unknown,
+ * revoked or points at a deleted entity. Used by a public procedure with no
+ * session.
+ *
+ * `academyId` IS the entity id (Decision 11), kept under that name because both
+ * join screens read it. `organizationId` is what the join flow needs to create
+ * the Better Auth organization membership before the entity one.
  */
 export async function resolveInviteToken(
   token: string,
   exec: DbExec,
 ): Promise<{
+  organizationId: string;
   academyId: string;
   academyName: string;
   academyAddress: string | null;
@@ -149,20 +156,21 @@ export async function resolveInviteToken(
 } | null> {
   const rows = await exec
     .select({
+      organizationId: entity.organizationId,
       academyId: academyInvite.academyId,
       role: academyInvite.role,
-      academyName: organization.name,
-      academyAddress: organization.address,
-      academyTimeZone: organization.timeZone,
-      academyCountry: organization.country,
+      academyName: entity.name,
+      academyAddress: entity.address,
+      academyTimeZone: entity.timeZone,
+      academyCountry: entity.country,
     })
     .from(academyInvite)
-    .innerJoin(organization, eq(academyInvite.academyId, organization.id))
+    .innerJoin(entity, eq(academyInvite.academyId, entity.id))
     .where(
       and(
         eq(academyInvite.token, token),
         isNull(academyInvite.revokedAt),
-        isNull(organization.deletedAt),
+        isNull(entity.deletedAt),
       ),
     )
     .limit(1);

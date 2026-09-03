@@ -1,42 +1,30 @@
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
 
-import {
-  dashboardWeekWindow,
-  isOwner,
-  isStaff,
-  studentWeekWindow,
-} from "@matops/domain";
+import { entityHref } from "@matops/domain";
 
-import { DashboardScreen } from "~/app/_components/dashboard-screen";
-import { HomeSkeleton } from "~/app/_components/skeletons";
-import { currentAcademy, HydrateClient, prefetch, trpc } from "~/trpc/server";
+import { JoinByCode } from "~/app/_components/join-by-code";
+import { PageLoader } from "~/app/_components/mat-loader";
+import { myEntities } from "~/trpc/server";
 
-async function DashboardData() {
-  const academy = await currentAcademy();
-
-  if (academy && isStaff(academy)) {
-    prefetch(trpc.class.week.queryOptions(dashboardWeekWindow(new Date())));
-    prefetch(trpc.membership.members.queryOptions());
-    prefetch(trpc.stats.dashboard.queryOptions());
-    if (isOwner(academy)) {
-      prefetch(trpc.dropIn.list.queryOptions());
-      prefetch(trpc.payments.claims.queryOptions());
-    }
-  } else if (academy) {
-    prefetch(trpc.class.mine.queryOptions(studentWeekWindow(new Date())));
-  }
-
+export default function LandingPage() {
   return (
-    <HydrateClient>
-      <DashboardScreen />
-    </HydrateClient>
+    <Suspense fallback={<PageLoader label="Finding your academy" />}>
+      <Landing />
+    </Suspense>
   );
 }
 
-export default function DashboardPage() {
+async function Landing() {
+  const { entities } = await myEntities();
+
+  const only = entities.length === 1 ? entities[0] : undefined;
+  if (only) redirect(entityHref(only.id));
+  if (entities.length > 1) redirect("/overview");
+
   return (
-    <Suspense fallback={<HomeSkeleton />}>
-      <DashboardData />
-    </Suspense>
+    <div className="flex min-h-screen items-center justify-center p-6">
+      <JoinByCode />
+    </div>
   );
 }

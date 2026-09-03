@@ -1,5 +1,12 @@
 import { relations } from "drizzle-orm";
-import { boolean, index, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  index,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -82,26 +89,6 @@ export const organization = pgTable("organization", {
   logo: text("logo"),
   createdAt: timestamp("created_at").notNull(),
   metadata: text("metadata"),
-  // Plain 6-digit number an owner shares so a student can find + join the gym in
-  // the mobile app (docs/issues/32). Assigned at creation by the auth hook,
-  // unique across academies. Not secret — it only names the academy in search.
-  publicCode: text("public_code").notNull().unique(),
-  timeZone: text("time_zone"),
-  country: text("country"),
-  address: text("address"),
-  mapUrl: text("map_url"),
-  curriculumForStudents: boolean("curriculum_for_students")
-    .notNull()
-    .default(false),
-  // Public booking API (ADR 115). The master switch is the off button for the
-  // whole surface; the key is publishable (it ships in a browser) and exists for
-  // attribution, revocation and per-academy limits, not secrecy. An empty
-  // origin list means any origin.
-  publicBookingEnabled: boolean("public_booking_enabled")
-    .notNull()
-    .default(false),
-  publicApiKey: text("public_api_key").unique(),
-  publicApiOrigins: text("public_api_origins").array(),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
 
@@ -117,11 +104,9 @@ export const member = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     role: text("role").default("member").notNull(),
     createdAt: timestamp("created_at").notNull(),
-    status: text("status").default("pending"),
-    invitedRole: text("invited_role"),
   },
   (table) => [
-    index("member_by_org_user").on(table.organizationId, table.userId),
+    uniqueIndex("member_by_org_user").on(table.organizationId, table.userId),
     index("member_by_user").on(table.userId),
   ],
 );

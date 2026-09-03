@@ -12,6 +12,7 @@ import { count, eq, inArray, like } from "drizzle-orm";
 import type { SeedExec } from "./registry";
 import {
   academyInvite,
+  academyProfile,
   account,
   classInstance,
   classParticipation,
@@ -21,6 +22,8 @@ import {
   curriculumTrack,
   dropIn,
   dropInVisit,
+  entity,
+  entityMembership,
   member,
   memberDues,
   memberNote,
@@ -49,7 +52,15 @@ const SEED_ID_LIKE = `${SEED_MARKER}%`;
  * deletes nothing.
  */
 export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
-  const ids = [...seedAcademyIds];
+  const orgIds = [...seedAcademyIds];
+  // Tenant rows key on an ENTITY id, and only the DEFAULT entity's equals the
+  // organization's (ADR 124). A gym that grew a second mat has rows under an id
+  // that is not in the registry, so read the entities rather than assume.
+  const entityIds = await exec
+    .select({ id: entity.id })
+    .from(entity)
+    .where(inArray(entity.organizationId, orgIds));
+  const ids = [...new Set([...orgIds, ...entityIds.map((e) => e.id)])];
   const report: TeardownReport = {};
   // Count deleted rows without a per-table `.returning()` type dance.
   const del = async (
@@ -123,9 +134,23 @@ export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
     exec.delete(curriculumTrack).where(inArray(curriculumTrack.academyId, ids)),
   );
 
+  // Entity foundation rows, scoped by the seed org id (ADR 124). Membership and
+  // profile before the entity they key on.
+  await del("entity_membership", () =>
+    exec
+      .delete(entityMembership)
+      .where(inArray(entityMembership.organizationId, orgIds)),
+  );
+  await del("academy_profile", () =>
+    exec.delete(academyProfile).where(inArray(academyProfile.entityId, ids)),
+  );
+  await del("entity", () =>
+    exec.delete(entity).where(inArray(entity.organizationId, orgIds)),
+  );
+
   // Better Auth membership rows, scoped by the seed org id.
   await del("member", () =>
-    exec.delete(member).where(inArray(member.organizationId, ids)),
+    exec.delete(member).where(inArray(member.organizationId, orgIds)),
   );
 
   // Auth rows the seed created, scoped by the `seed_` id prefix — NEVER the real
@@ -140,7 +165,7 @@ export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
 
   // Finally the orgs themselves.
   await del("organization", () =>
-    exec.delete(organization).where(inArray(organization.id, ids)),
+    exec.delete(organization).where(inArray(organization.id, orgIds)),
   );
 
   return report;

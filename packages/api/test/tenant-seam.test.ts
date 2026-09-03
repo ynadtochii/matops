@@ -59,7 +59,7 @@ describe("tenant seam", () => {
 
   it("rejects a caller with no active academy", async () => {
     await expect(h.as(STUDENT_A, null).class.mine(WEEK)).rejects.toThrow(
-      /No active academy/,
+      /No active organization/,
     );
   });
 

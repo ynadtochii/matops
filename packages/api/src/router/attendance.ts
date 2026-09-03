@@ -203,7 +203,7 @@ export const attendanceRouter = {
   addVisitor: staffIdentityProcedure
     .input(AddVisitorSchema)
     .mutation(async ({ ctx, input }) => {
-      await ctx.withTenant((db) => assertMarkable(db, input.classId));
+      await ctx.withScope((db) => assertMarkable(db, input.classId));
       const { visitCount } = await createDropIn(
         {
           academyId: ctx.academyId,

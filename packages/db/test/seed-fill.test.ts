@@ -28,7 +28,7 @@ describe("seed fill/clear — augment a real academy", () => {
     (await pg.query<{ n: number }>(sqlText, params)).rows[0]?.n ?? 0;
 
   beforeAll(async () => {
-    pg = await freshDb();
+    pg = await freshDb([]);
     exec = drizzle(pg, { schema, casing: "snake_case" }) as unknown as SeedExec;
 
     // A real academy: owner + one real student, one real plan, one upcoming
@@ -37,11 +37,13 @@ describe("seed fill/clear — augment a real academy", () => {
       INSERT INTO "user" (id, name, email, email_verified, created_at, updated_at) VALUES
         ('owner_real', 'Real Owner', 'owner@real.test', true, now(), now()),
         ('stud_real', 'Real Student', 'stud@real.test', true, now(), now());
-      INSERT INTO "organization" (id, name, slug, public_code, created_at)
-        VALUES ('${ACAD}', 'Grapplers', 'grapplers', '860275', now());
-      INSERT INTO "member" (id, organization_id, user_id, role, status, created_at) VALUES
-        ('mem_owner', '${ACAD}', 'owner_real', 'owner', 'active', now()),
-        ('mem_stud', '${ACAD}', 'stud_real', 'student', 'active', now());
+      INSERT INTO "organization" (id, name, slug, created_at)
+        VALUES ('${ACAD}', 'Grapplers', 'grapplers', now());
+      INSERT INTO "entity" (id, organization_id, type, name, slug, is_default, public_code)
+        VALUES ('${ACAD}', '${ACAD}', 'bjj_academy', 'Grapplers', 'grapplers', true, '860275');
+      INSERT INTO "member" (id, organization_id, user_id, role, created_at) VALUES
+        ('mem_owner', '${ACAD}', 'owner_real', 'owner', now()),
+        ('mem_stud', '${ACAD}', 'stud_real', 'student', now());
       INSERT INTO "membership_plan" (id, academy_id, name, price_minor, currency)
         VALUES ('${REAL_PLAN}', '${ACAD}', 'Adult', 5000, 'EUR');
       INSERT INTO "class" (id, academy_id, instructor_id, title, starts_at, duration_minutes, capacity, booking_count, status)
@@ -56,7 +58,7 @@ describe("seed fill/clear — augment a real academy", () => {
   });
 
   it("fill adds fake students and books them onto the real class", async () => {
-    await fillAcademy(exec, { academyId: ACAD, now });
+    await fillAcademy(exec, { academyId: ACAD, organizationId: ACAD, now });
     expect(await academyFakeCount(exec, ACAD)).toBe(20);
     // The upcoming real class now has the real student + fake bookings.
     const booked = await scalar(
@@ -79,7 +81,7 @@ describe("seed fill/clear — augment a real academy", () => {
   });
 
   it("clear removes every fake and restores the real academy exactly", async () => {
-    await clearAcademy(exec, { academyId: ACAD });
+    await clearAcademy(exec, { academyId: ACAD, organizationId: ACAD });
     expect(await academyFakeCount(exec, ACAD)).toBe(0);
 
     // No fake rows remain anywhere in the academy.

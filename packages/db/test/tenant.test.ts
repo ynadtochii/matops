@@ -2,10 +2,25 @@ import type { PGlite } from "@electric-sql/pglite";
 import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { APP_ROLE, TENANT_GUC, withTenant } from "../src/tenant";
+import {
+  APP_ROLE,
+  ENTITY_GUC,
+  ORGANIZATION_GUC,
+  withScope,
+} from "../src/tenant";
 import { execOn, freshDb, single } from "./helpers";
 
-describe("withTenant", () => {
+type ScopeRow = Record<string, unknown> & {
+  role: string;
+  organization: string | null;
+  entity: string | null;
+};
+
+const READ_SCOPE = sql`SELECT current_user AS role,
+  current_setting(${ORGANIZATION_GUC}, true) AS organization,
+  current_setting(${ENTITY_GUC}, true) AS entity`;
+
+describe("withScope", () => {
   let pg: PGlite;
 
   beforeAll(async () => {
@@ -16,38 +31,60 @@ describe("withTenant", () => {
     await pg.close();
   });
 
-  it("sets the restricted role and the academy GUC inside the transaction", async () => {
-    const inside = await withTenant(
-      "academy-1",
-      async (tx) =>
-        single(
-          await tx.execute<{ role: string; academy: string }>(
-            sql`SELECT current_user AS role, current_setting(${TENANT_GUC}) AS academy`,
-          ),
-        ),
+  it("sets the restricted role and both GUCs inside the transaction", async () => {
+    const inside = await withScope(
+      { organizationId: "org-1", entityId: "entity-1" },
+      async (tx) => single(await tx.execute<ScopeRow>(READ_SCOPE)),
       execOn(pg),
     );
 
     expect(inside.role).toBe(APP_ROLE);
-    expect(inside.academy).toBe("academy-1");
+    expect(inside.organization).toBe("org-1");
+    expect(inside.entity).toBe("entity-1");
   });
 
-  it("resets both at COMMIT so a reused pooled connection cannot inherit them", async () => {
-    await withTenant("academy-1", () => Promise.resolve(undefined), execOn(pg));
-
-    const after = single(
-      await execOn(pg).execute<{ role: string; academy: string }>(
-        sql`SELECT current_user AS role, current_setting(${TENANT_GUC}, true) AS academy`,
-      ),
+  it("leaves the entity GUC unset when the scope names no entity", async () => {
+    const inside = await withScope(
+      { organizationId: "org-1" },
+      async (tx) => single(await tx.execute<ScopeRow>(READ_SCOPE)),
+      execOn(pg),
     );
 
-    expect(after.role).not.toBe(APP_ROLE);
-    expect(after.academy).toBeFalsy();
+    expect(inside.organization).toBe("org-1");
+    expect(inside.entity).toBeFalsy();
   });
 
-  it("refuses an empty academy id", async () => {
+  it("resets everything at COMMIT so a reused pooled connection cannot inherit it", async () => {
+    await withScope(
+      { organizationId: "org-1", entityId: "entity-1" },
+      () => Promise.resolve(undefined),
+      execOn(pg),
+    );
+
+    const after = single(await execOn(pg).execute<ScopeRow>(READ_SCOPE));
+
+    expect(after.role).not.toBe(APP_ROLE);
+    expect(after.organization).toBeFalsy();
+    expect(after.entity).toBeFalsy();
+  });
+
+  it("refuses an empty organization id", async () => {
     await expect(
-      withTenant("", () => Promise.resolve(undefined), execOn(pg)),
-    ).rejects.toThrow(/academyId is required/);
+      withScope(
+        { organizationId: "" },
+        () => Promise.resolve(undefined),
+        execOn(pg),
+      ),
+    ).rejects.toThrow(/organizationId is required/);
+  });
+
+  it("refuses an empty entity id rather than silently widening the scope", async () => {
+    await expect(
+      withScope(
+        { organizationId: "org-1", entityId: "" },
+        () => Promise.resolve(undefined),
+        execOn(pg),
+      ),
+    ).rejects.toThrow(/entityId cannot be empty/);
   });
 });

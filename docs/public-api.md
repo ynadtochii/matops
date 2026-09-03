@@ -34,10 +34,15 @@ Send it on every request:
 X-Matops-Key: mk_pub_...
 ```
 
-The key names the academy, so no request carries an academy id and a caller
+The key names one academy, so no request carries an academy id and a caller
 cannot reach another gym by editing a URL. It is **not a secret**: it ships
 inside a browser page. Its job is attribution, revocation and per-academy limits.
 The owner can replace it at any time, and the old one stops working immediately.
+
+**A gym with two mats has two keys.** Each academy is its own place, with its
+own schedule, its own six-digit code and its own booking link, so a key never
+answers for a sibling academy even under the same owner. Publish the key of the
+academy whose page you are building.
 
 Base URL: `https://<your matops host>/api/public/v1`
 
@@ -130,32 +135,37 @@ test guesses.
 Always the same shape:
 
 ```json
-{ "error": { "code": "class_closed", "message": "That class starts too soon to book online." } }
+{
+  "error": {
+    "code": "class_closed",
+    "message": "That class starts too soon to book online."
+  }
+}
 ```
 
 `message` is a plain sentence your page can show a person.
 
-| Status | Code | When |
-|---|---|---|
-| 401 | `invalid_key` | Missing, unknown or replaced key |
-| 403 | `origin_not_allowed` | Your website is not on the gym's allowlist |
-| 403 | `public_api_disabled` | The owner switched public booking off |
-| 404 | `class_not_found` | Unknown, unshared, deleted or past class |
-| 409 | `class_cancelled` | The gym cancelled it after your page loaded |
-| 409 | `class_closed` | Inside the 60-minute cut-off, or already started |
-| 422 | `validation_error` | A field failed validation. Names the field |
-| 429 | `rate_limited` | Over a limit below. Carries `Retry-After` in seconds |
+| Status | Code                  | When                                                 |
+| ------ | --------------------- | ---------------------------------------------------- |
+| 401    | `invalid_key`         | Missing, unknown or replaced key                     |
+| 403    | `origin_not_allowed`  | Your website is not on the gym's allowlist           |
+| 403    | `public_api_disabled` | The owner switched public booking off                |
+| 404    | `class_not_found`     | Unknown, unshared, deleted or past class             |
+| 409    | `class_cancelled`     | The gym cancelled it after your page loaded          |
+| 409    | `class_closed`        | Inside the 60-minute cut-off, or already started     |
+| 422    | `validation_error`    | A field failed validation. Names the field           |
+| 429    | `rate_limited`        | Over a limit below. Carries `Retry-After` in seconds |
 
 ## Limits
 
-| Bucket | Limit |
-|---|---|
-| Reads per key | 60 per minute |
-| Reads per address | 60 per minute |
+| Bucket               | Limit            |
+| -------------------- | ---------------- |
+| Reads per key        | 60 per minute    |
+| Reads per address    | 60 per minute    |
 | Bookings per address | 5 per 10 minutes |
-| Bookings per phone | 3 per day |
-| Bookings per academy | 30 per day |
-| Cancels per address | 10 per hour |
+| Bookings per phone   | 3 per day        |
+| Bookings per academy | 30 per day       |
+| Cancels per address  | 10 per hour      |
 
 Known ceiling: the counters live in the server process, so on a scaled-out host
 each instance keeps its own and a cold start forgets them. Treat the numbers

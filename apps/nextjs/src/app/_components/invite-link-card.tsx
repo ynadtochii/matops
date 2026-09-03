@@ -20,7 +20,7 @@ import { toast } from "@matops/ui/toast";
 
 import { shareLink, useCanShare } from "~/lib/share";
 import { useTRPC } from "~/trpc/react";
-import { useAcademy } from "./academy";
+import { useEntity } from "./entity";
 import { cardClass } from "./primitives";
 import { SkeletonInviteCard } from "./skeletons";
 import { ErrorState } from "./states";
@@ -52,7 +52,7 @@ export function InviteLinkCard({
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const invites = useQuery(trpc.invite.list.queryOptions());
-  const academy = useAcademy();
+  const academy = useEntity();
   const academyName = academy.name;
   const isOwner = isOwnerOf(academy);
 

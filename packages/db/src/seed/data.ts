@@ -20,11 +20,14 @@ import { computeOccurrences, paymentPeriod } from "@matops/domain";
 
 import type {
   academyInvite,
+  academyProfile,
   classInstance,
   classParticipation,
   classTemplate,
   dropIn,
   dropInVisit,
+  entity,
+  entityMembership,
   member,
   memberDues,
   memberNote,
@@ -39,11 +42,20 @@ import type {
   user,
 } from "../schema";
 import type { SeedAcademy } from "./registry";
-import { SEED_ACADEMY, seedMemberId, seedUserId } from "./registry";
+import {
+  SEED_ACADEMY,
+  seedEntityMembershipId,
+  seedMemberId,
+  seedMembershipId,
+  seedUserId,
+} from "./registry";
 
 type NewUser = typeof user.$inferInsert;
 type NewOrganization = typeof organization.$inferInsert;
 type NewMember = typeof member.$inferInsert;
+type NewEntity = typeof entity.$inferInsert;
+type NewAcademyProfile = typeof academyProfile.$inferInsert;
+type NewEntityMembership = typeof entityMembership.$inferInsert;
 type NewInvite = typeof academyInvite.$inferInsert;
 type NewTemplate = typeof classTemplate.$inferInsert;
 type NewClass = typeof classInstance.$inferInsert;
@@ -67,6 +79,9 @@ export interface SeedGraph {
   users: NewUser[];
   organizations: NewOrganization[];
   members: NewMember[];
+  entities: NewEntity[];
+  academyProfiles: NewAcademyProfile[];
+  entityMemberships: NewEntityMembership[];
   invites: NewInvite[];
   templates: NewTemplate[];
   pastClasses: NewClass[];
@@ -495,7 +510,7 @@ function buildAcademy(args: {
     .map((s, i) => ({
       id: newId(),
       academyId: academy.id,
-      memberId: seedMemberId(academy.key, s.persona.handle),
+      memberId: seedMembershipId(academy.key, s.persona.handle),
       planId: i === 4 ? planArchivedId : i % 3 === 0 ? planLiteId : planId,
       nextDueAt: new Date(
         now.getTime() + (dueOffsets[i % dueOffsets.length] ?? 0) * DAY_MS,
@@ -514,7 +529,7 @@ function buildAcademy(args: {
     claims.push({
       id: newId(),
       academyId: academy.id,
-      memberId: seedMemberId(academy.key, claimant.persona.handle),
+      memberId: seedMembershipId(academy.key, claimant.persona.handle),
       planId,
       amountMinor: plan.priceMinor,
       currency: academy.currency,
@@ -533,7 +548,7 @@ function buildAcademy(args: {
     claims.push({
       id: newId(),
       academyId: academy.id,
-      memberId: seedMemberId(academy.key, rejected.persona.handle),
+      memberId: seedMembershipId(academy.key, rejected.persona.handle),
       planId,
       amountMinor: plan.priceMinor,
       currency: academy.currency,
@@ -546,7 +561,7 @@ function buildAcademy(args: {
   // predate attribution in the seed graph: reporting is retroactive (ADR 52).
   activeStudents.slice(0, 8).forEach((student, index) => {
     const selectedPlan = index % 3 === 0 ? planLite : plan;
-    const memberId = seedMemberId(academy.key, student.persona.handle);
+    const memberId = seedMembershipId(academy.key, student.persona.handle);
     claims.push(
       {
         id: newId(),
@@ -592,7 +607,7 @@ function buildAcademy(args: {
     ranks.push({
       id: newId(),
       academyId: academy.id,
-      memberId: seedMemberId(academy.key, s.persona.handle),
+      memberId: seedMembershipId(academy.key, s.persona.handle),
       discipline: "bjj",
       belt,
       stripes,
@@ -602,7 +617,7 @@ function buildAcademy(args: {
     promotions.push({
       id: newId(),
       academyId: academy.id,
-      memberId: seedMemberId(academy.key, s.persona.handle),
+      memberId: seedMembershipId(academy.key, s.persona.handle),
       discipline: "bjj",
       fromBelt: null,
       fromStripes: null,
@@ -615,7 +630,7 @@ function buildAcademy(args: {
       promotions.push({
         id: newId(),
         academyId: academy.id,
-        memberId: seedMemberId(academy.key, s.persona.handle),
+        memberId: seedMembershipId(academy.key, s.persona.handle),
         discipline: "bjj",
         fromBelt: "White",
         fromStripes: 4,
@@ -632,7 +647,7 @@ function buildAcademy(args: {
     ranks.push({
       id: newId(),
       academyId: academy.id,
-      memberId: seedMemberId(academy.key, r.memberHandle),
+      memberId: seedMembershipId(academy.key, r.memberHandle),
       discipline: "bjj",
       belt: r.belt,
       stripes: 0,
@@ -641,7 +656,7 @@ function buildAcademy(args: {
     promotions.push({
       id: newId(),
       academyId: academy.id,
-      memberId: seedMemberId(academy.key, r.memberHandle),
+      memberId: seedMembershipId(academy.key, r.memberHandle),
       discipline: "bjj",
       fromBelt: "Brown",
       fromStripes: 4,
@@ -657,7 +672,7 @@ function buildAcademy(args: {
     ranks.push({
       id: newId(),
       academyId: academy.id,
-      memberId: seedMemberId(academy.key, activeStudents[0].persona.handle),
+      memberId: seedMembershipId(academy.key, activeStudents[0].persona.handle),
       discipline: "judo",
       belt: "Green",
       stripes: 0,
@@ -682,7 +697,7 @@ function buildAcademy(args: {
     notes.push({
       id: newId(),
       academyId: academy.id,
-      memberId: seedMemberId(academy.key, s.persona.handle),
+      memberId: seedMembershipId(academy.key, s.persona.handle),
       body: NOTE_BODIES[i] ?? "",
       authorId: staffInstructorId,
       createdAt: new Date(now.getTime() - (20 - i * 3) * DAY_MS),
@@ -816,12 +831,14 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
       id: academy.id,
       name: academy.name,
       slug: academy.slug,
-      publicCode: academy.publicCode,
       createdAt: now,
     },
   ];
 
-  const members: NewMember[] = [
+  // One seat per person. The Better Auth `member` row records only that they
+  // belong to the gym; the status and the invited role are the entity
+  // membership's, which is where every screen reads them (ADR 124).
+  const seats = [
     // YOU — the owner.
     {
       id: seedMemberId(academy.key, "you"),
@@ -851,6 +868,49 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
       createdAt: new Date(now.getTime() - (150 - i * 3) * DAY_MS),
     })),
   ];
+
+  const members: NewMember[] = seats.map((seat) => ({
+    id: seat.id,
+    organizationId: seat.organizationId,
+    userId: seat.userId,
+    role: seat.role,
+    createdAt: seat.createdAt,
+  }));
+
+  // The default BJJ academy entity carries the organization's own id, so every
+  // `academy_id` already on a seed row keeps pointing at the right place and the
+  // printed QR posters and check-in links stay valid (ADR 124, Decision 5).
+  const entities: NewEntity[] = [
+    {
+      id: academy.id,
+      organizationId: academy.id,
+      type: "bjj_academy",
+      name: academy.name,
+      slug: academy.slug,
+      isDefault: true,
+      timeZone: academy.timeZone,
+      publicCode: academy.publicCode,
+      createdAt: now,
+      updatedAt: now,
+    },
+  ];
+
+  const academyProfiles: NewAcademyProfile[] = [
+    { entityId: academy.id, createdAt: now, updatedAt: now },
+  ];
+
+  const entityMemberships: NewEntityMembership[] = seats.map((seat) => ({
+    id: seedEntityMembershipId(seat.id),
+    organizationId: academy.id,
+    entityId: academy.id,
+    userId: seat.userId,
+    role: seat.role,
+    status: seat.status,
+    invitedRole: seat.invitedRole,
+    joinedAt: seat.status === "active" ? seat.createdAt : null,
+    createdAt: seat.createdAt,
+    updatedAt: seat.createdAt,
+  }));
 
   // One live invite link per role (drives the invite/staff cards). The tester
   // joins the beta through the instructor link.
@@ -1043,12 +1103,12 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
       occurredAt: new Date(now.getTime() - 60 * DAY_MS),
     });
   };
-  const ownerMemberId = seedMemberId(academy.key, "you");
-  const coach1MemberId = seedMemberId(academy.key, coach1.handle);
+  const ownerMemberId = seedMembershipId(academy.key, "you");
+  const coach1MemberId = seedMembershipId(academy.key, coach1.handle);
   students.slice(0, 8).forEach((student, index) => {
     addReferral(
       academy.id,
-      seedMemberId(academy.key, student.persona.handle),
+      seedMembershipId(academy.key, student.persona.handle),
       index % 2 === 0 ? coach1MemberId : ownerMemberId,
       opts.realUser.id,
     );
@@ -1059,7 +1119,7 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
   if (removedStudent) {
     addReferral(
       academy.id,
-      seedMemberId(academy.key, removedStudent.persona.handle),
+      seedMembershipId(academy.key, removedStudent.persona.handle),
       coach1MemberId,
       opts.realUser.id,
     );
@@ -1068,7 +1128,7 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
   // Corrected: credited to the coach at first, moved to the owner a month later.
   const correctedStudent = students[8];
   if (correctedStudent) {
-    const studentMemberId = seedMemberId(
+    const studentMemberId = seedMembershipId(
       academy.key,
       correctedStudent.persona.handle,
     );
@@ -1094,7 +1154,7 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
   // against a fresh guess by another staff member (ADR 52).
   const clearedStudent = students[9];
   if (clearedStudent) {
-    const studentMemberId = seedMemberId(
+    const studentMemberId = seedMembershipId(
       academy.key,
       clearedStudent.persona.handle,
     );
@@ -1120,6 +1180,9 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
     users,
     organizations,
     members,
+    entities,
+    academyProfiles,
+    entityMemberships,
     invites,
     templates: data.templates,
     pastClasses: data.pastClasses,

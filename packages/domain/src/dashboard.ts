@@ -1,6 +1,8 @@
+import type { MoneyAmount } from "./referrals";
 import { onSameLocalDay } from "./calendar";
 import { DAY_MS } from "./local-date";
 import { isPendingCoach } from "./membership";
+import { groupMoneyByCurrency } from "./referrals";
 
 export interface DashClass {
   startsAt: Date;
@@ -91,4 +93,71 @@ export function isFirstRun(
 export function daysSince(when: Date | null, now: Date): number | null {
   if (!when) return null;
   return Math.floor((now.getTime() - when.getTime()) / DAY_MS);
+}
+
+/**
+ * One academy, as the organization overview sees it (ADR 124). Small on
+ * purpose: an owner opening the overview wants to know where the work is, not
+ * to read every mat's dashboard at once. Decision 14 says each entity is read
+ * in its own exact scope and combined on the server, so this is the shape that
+ * crosses that boundary.
+ *
+ * `memberUserIds` is here rather than a bare count because one person can train
+ * at two mats and must count once in the organization total.
+ */
+export interface EntitySummary {
+  entityId: string;
+  name: string;
+  timeZone: string;
+  memberUserIds: string[];
+  pendingMembers: number;
+  newLeads: number;
+  openClaims: number;
+  upcomingClasses: number;
+  revenue: MoneyAmount[];
+}
+
+export interface OrganizationSummary {
+  members: number;
+  pendingMembers: number;
+  newLeads: number;
+  openClaims: number;
+  upcomingClasses: number;
+  revenue: MoneyAmount[];
+  entities: EntitySummary[];
+}
+
+/**
+ * Organization totals from the per-entity reads. Members are deduplicated by
+ * user id; money is grouped by currency and never summed across them, the same
+ * rule the referral ledger follows.
+ */
+export function combineEntitySummaries(
+  rows: readonly EntitySummary[],
+): OrganizationSummary {
+  const people = new Set<string>();
+  for (const row of rows) for (const id of row.memberUserIds) people.add(id);
+  const sum = (pick: (r: EntitySummary) => number) =>
+    rows.reduce((n, r) => n + pick(r), 0);
+
+  return {
+    members: people.size,
+    pendingMembers: sum((r) => r.pendingMembers),
+    newLeads: sum((r) => r.newLeads),
+    openClaims: sum((r) => r.openClaims),
+    upcomingClasses: sum((r) => r.upcomingClasses),
+    revenue: groupMoneyByCurrency(rows.flatMap((r) => r.revenue)),
+    entities: [...rows],
+  };
+}
+
+/** The mats with something waiting on the owner, busiest first. */
+export function entitiesNeedingAttention(
+  rows: readonly EntitySummary[],
+): EntitySummary[] {
+  const waiting = (r: EntitySummary) =>
+    r.pendingMembers + r.newLeads + r.openClaims;
+  return rows
+    .filter((r) => waiting(r) > 0)
+    .sort((a, b) => waiting(b) - waiting(a) || a.name.localeCompare(b.name));
 }

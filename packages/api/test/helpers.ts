@@ -1,9 +1,14 @@
-import type { PGlite } from "@electric-sql/pglite";
+import { PGlite } from "@electric-sql/pglite";
 import { TRPCError } from "@trpc/server";
 
 import type { DbExec } from "@matops/db/client";
-import { eq, generateAcademyCode, setMemberActive } from "@matops/db";
-import { member, organization } from "@matops/db/schema";
+import { eq, provisionOrganization } from "@matops/db";
+import {
+  entity,
+  entityMembership,
+  member,
+  organization,
+} from "@matops/db/schema";
 import { execOn, freshDb } from "@matops/db/testing";
 
 import type { createTRPCContext } from "../src/trpc";
@@ -29,16 +34,12 @@ function caller(ctx: Ctx) {
   return appRouter.createCaller(ctx);
 }
 
-/**
- * The four Better Auth calls the routers make, over PGlite. This stands in for
- * the organization plugin, so it must reproduce what the plugin's hooks do or
- * the tests would be testing the stand-in: `beforeCreateOrganization` assigns
- * `publicCode` (NOT NULL since migration 0010) and `afterCreateOrganization`
- * flips the creator's membership to active. Both reuse the real helpers.
- *
- * Anything not implemented here still throws, so a router reaching for an
- * untested Better Auth call fails loudly instead of silently doing nothing.
- */
+function entityHeaders(academyId: string | null): Headers {
+  const headers = new Headers();
+  if (academyId) headers.set("x-matops-entity", academyId);
+  return headers;
+}
+
 function fakeAuthApi(
   userId: string,
   exec: DbExec,
@@ -53,19 +54,15 @@ function fakeAuthApi(
         id,
         name: arg.body.name,
         slug: arg.body.slug,
-        publicCode: await generateAcademyCode(exec),
         createdAt: new Date(),
       });
-      const memberId = `mem_${id}_${userId}`;
       await exec.insert(member).values({
-        id: memberId,
+        id: `mem_${id}_${userId}`,
         organizationId: id,
         userId,
         role: "owner",
-        status: "pending",
         createdAt: new Date(),
       });
-      await setMemberActive(memberId, exec);
       activeOrg.set(userId, id);
       return { id, name: arg.body.name, slug: arg.body.slug };
     },
@@ -100,8 +97,16 @@ function fakeAuthApi(
   });
 }
 
-export async function harness(): Promise<Harness> {
-  const pg = await freshDb();
+const snapshots = new Map<string, Blob>();
+
+export async function harness(academies?: AcademySpec[]): Promise<Harness> {
+  const key = academies ? JSON.stringify(academies) : "";
+  const cached = key ? snapshots.get(key) : undefined;
+  const pg = cached ? new PGlite({ loadDataDir: cached }) : await freshDb([]);
+  if (academies && !cached) {
+    await seedAcademies(pg, academies);
+    snapshots.set(key, await pg.dumpDataDir("gzip"));
+  }
   const exec = execOn(pg);
 
   const activeOrg = new Map<string, string>();
@@ -109,7 +114,7 @@ export async function harness(): Promise<Harness> {
   const ctxFor = (
     userId: string,
     academyId: string | null,
-    headers = new Headers(),
+    headers = entityHeaders(academyId),
   ): Ctx => ({
     authApi: fakeAuthApi(userId, exec, activeOrg) as unknown as Ctx["authApi"],
     headers,
@@ -117,6 +122,7 @@ export async function harness(): Promise<Harness> {
       user: { id: userId, name: `User ${userId}` },
       session: { activeOrganizationId: academyId },
     } as unknown as Ctx["session"],
+    requestedEntityId: headers.get("x-matops-entity") ?? undefined,
     baseDb: exec,
   });
 
@@ -168,6 +174,10 @@ export interface AcademySpec {
 }
 
 export function memberId(academyId: string, userId: string): string {
+  return `emem_${academyId}_${userId}`;
+}
+
+function orgMemberId(academyId: string, userId: string): string {
   return `mem_${academyId}_${userId}`;
 }
 
@@ -178,12 +188,11 @@ export async function seedAcademies(
   const seen = new Set<string>();
   const users: string[] = [];
   const orgs: string[] = [];
-  const orgIds = academies.map((a) => a.id);
   const members: string[] = [];
 
   for (const academy of academies) {
     orgs.push(
-      `(${lit(academy.id)}, ${lit(`Academy ${academy.id}`)}, ${lit(`slug-${academy.id}`)}, ${lit(academy.code)}, now())`,
+      `(${lit(academy.id)}, ${lit(`Academy ${academy.id}`)}, ${lit(`slug-${academy.id}`)}, now())`,
     );
     for (const m of academy.members) {
       if (!seen.has(m.userId)) {
@@ -193,7 +202,7 @@ export async function seedAcademies(
         );
       }
       members.push(
-        `(${lit(memberId(academy.id, m.userId))}, ${lit(academy.id)}, ${lit(m.userId)}, ${lit(m.role)}, ${lit(m.status)}, ${m.invitedRole ? lit(m.invitedRole) : "NULL"}, now())`,
+        `(${lit(orgMemberId(academy.id, m.userId))}, ${lit(academy.id)}, ${lit(m.userId)}, ${lit(m.role)}, now())`,
       );
     }
   }
@@ -206,21 +215,40 @@ export async function seedAcademies(
     );
   if (orgs.length)
     statements.push(
-      `INSERT INTO "organization" (id, name, slug, public_code, created_at)
+      `INSERT INTO "organization" (id, name, slug, created_at)
          VALUES ${orgs.join(",")};`,
     );
   if (members.length)
     statements.push(
-      `INSERT INTO "member" (id, organization_id, user_id, role, status, invited_role, created_at)
+      `INSERT INTO "member" (id, organization_id, user_id, role, created_at)
          VALUES ${members.join(",")};`,
     );
-  if (orgIds.length)
-    statements.push(
-      `INSERT INTO "curriculum_track" (academy_id, name, is_default)
-         VALUES ${orgIds.map((id) => `(${lit(id)}, 'All classes', true)`).join(",")};`,
-    );
-
   if (statements.length) await pg.exec(statements.join("\n"));
+
+  const exec = execOn(pg);
+  for (const academy of academies) {
+    await provisionOrganization({ organizationId: academy.id }, exec);
+    await exec
+      .update(entity)
+      .set({ publicCode: academy.code })
+      .where(eq(entity.id, academy.id));
+    if (!academy.members.length) continue;
+    await exec
+      .insert(entityMembership)
+      .values(
+        academy.members.map((m) => ({
+          id: memberId(academy.id, m.userId),
+          organizationId: academy.id,
+          entityId: academy.id,
+          userId: m.userId,
+          role: m.role,
+          status: m.status,
+          invitedRole: m.invitedRole ?? null,
+          joinedAt: m.status === "active" ? new Date() : null,
+        })),
+      )
+      .onConflictDoNothing();
+  }
 }
 
 export interface ClassSpec {

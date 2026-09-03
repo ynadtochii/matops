@@ -9,8 +9,8 @@ import {
   createPendingMembership,
   desc,
   eq,
+  getAcademyMembership,
   getAcademyPublic,
-  getMembership,
   listAcademyClassesInWindow,
   ne,
   resolveAccountByEmail,
@@ -321,7 +321,7 @@ export const dropInRouter = {
   promote: ownerIdentityProcedure
     .input(PromoteLeadSchema)
     .mutation(async ({ ctx, input }) => {
-      const lead = await ctx.withTenant(async (db) => {
+      const lead = await ctx.withScope(async (db) => {
         const rows = await db
           .select({
             firstName: dropIn.firstName,
@@ -363,12 +363,13 @@ export const dropInRouter = {
       await createPendingMembership(
         {
           userId: account.userId,
-          academyId: ctx.academyId,
+          organizationId: ctx.organizationId,
+          entityId: ctx.academyId,
           invitedRole: CODE_JOIN_ROLE,
         },
         ctx.baseDb,
       );
-      const membership = await getMembership(
+      const membership = await getAcademyMembership(
         account.userId,
         ctx.academyId,
         ctx.baseDb,
@@ -392,7 +393,7 @@ export const dropInRouter = {
         });
       }
 
-      await ctx.withTenant((db) =>
+      await ctx.withScope((db) =>
         db
           .update(dropIn)
           .set({ stage: "joined", convertedUserId: account.userId })

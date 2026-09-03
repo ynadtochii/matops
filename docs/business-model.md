@@ -1,200 +1,325 @@
-# Business model — what matops charges
+# MatOps monetization plan
 
-> **Status: reference and research. Not scheduled, not decided.**
-> The near-term plan is a **pilot with a few test academies, unpriced**. Nothing
-> in this file is being built or acted on. It exists so the research is not
-> repeated when pricing becomes a real question.
->
-> Companion: [revenue-collection.md](revenue-collection.md) — how money would
-> reach a bank account, and why the founders dashboard should not be built.
-> Researched 2026-08-22.
+> **Status: pricing hypothesis. Not approved for implementation.**
+> Updated 2026-09-01 from current competitor pricing and the planned
+> [organization and entity pivot](organization-entity-pivot.md).
 
-Scope note: this is about **gyms paying matops**. It has nothing to do with
-students paying gyms, which is the separate parked
-[card-billing-plan.md](card-billing-plan.md).
+This document covers what an academy or facility pays MatOps. It does not cover
+how members pay the academy. Member payments remain a separate provider
+integration. MatOps should not depend on payment processing revenue in this
+pricing model.
 
-Inputs this was researched against:
+## Recommendation
 
-| | |
-|---|---|
-| Entity | Portugal sole trader (recibos verdes), plus a Ukrainian FOP |
-| 12-month goal | 5-15 gyms, mostly ones already known personally |
-| Customer | The gym owner. Never the student |
+Do not launch a permanent public free plan yet.
 
----
+Launch with one paid plan for one BJJ academy. Give design partners free access
+with a written end date. Add a multi-entity plan only when the organization
+dashboard and shared access plans exist.
 
-## The shape, if it were decided today
+The working prices are:
 
-**One flat price per academy. €39 per month, or €390 per year. No tiers, no
-per-member pricing, no per-coach seats.**
+| Offer | Monthly | Annual | When it exists |
+|---|---:|---:|---|
+| Design Partner | €0 | Not applicable | Pilot only, with a written end date |
+| Academy | €49 | €490 | First paid release |
+| Facility | €99 | €990 | After multi-entity features ship |
+| Network | Custom | Custom | Only after real multi-site demand |
 
-First three to five gyms free as design partners, **with a written end date**.
+These prices are tests, not promises. The first paid conversions should decide
+whether €49 is too low, fair, or too high.
 
-Everything below is the reasoning, kept so it does not have to be rebuilt.
+## Why the proposed free tier is risky
 
----
+The original idea was a free plan for a small academy with one owner. The paid
+plan would allow unlimited students and a few instructors. A premium plan would
+allow more entities.
 
-## Market pricing, mid-2026
+Three parts of that model cause problems:
 
-| Product | Price | Model |
-|---|---|---|
-| Mindbody | $149 - $699+ | Feature tiers |
-| Zen Planner | $99 / $198 / $348 | Member tiers |
-| PushPress | Free / $159 / $229 | Feature tiers |
-| TeamUp | from $104, up to 100 active | Member tiers |
-| Gymdesk | $75 (up to 50) - $200 (up to 400) | Member tiers |
-| Gymsense | 1% of payment volume | Take rate |
+1. **Owner count does not measure customer value.** A small academy can have two
+   owners. One owner can run a large academy. An owner limit creates permission
+   problems without tracking usage or value.
+2. **Instructor limits reduce adoption.** Coaches need schedule, attendance, and
+   roster access. A coach kept outside MatOps creates duplicate work and weaker
+   data.
+3. **A permanent free plan needs a funding source.** Free academies still need
+   hosting, support, backups, email, and maintenance. PushPress pairs its free
+   plan with higher payment processing rates. MatOps plans to keep payment
+   providers separate, so it should not copy that model.
 
-At **150 members** the market splits hard: flat-rate platforms sit near **$169**
-while per-member platforms pass **$399**. That gap is the wedge.
+Free users can also give weak product signals. They may stop using the product
+without explaining why. A paying academy gives a clearer answer about value.
 
----
+## What MatOps should charge for
 
-## Why flat, against a tiered market
+Charge for the operational unit that adds product value and support cost:
 
-**"One price. Grow as big as you want."** holds against every name in that table,
-a gym owner understands it in one sentence, and it costs nothing at small scale.
+- One BJJ academy entity is the base paid unit.
+- Extra BJJ academy entities cost more because each adds a full schedule,
+  attendance system, staff roles, and reports.
+- Simple bookable spaces cost less because they have a smaller feature set.
+- Organization-wide reporting, shared people, and combined member access belong
+  in the Facility plan.
 
-The practical reasons matter more than the positioning:
+Do not charge per student, coach, class, booking, or check-in on paid plans.
+Unlimited students and staff can become a clear MatOps difference in a market
+that often charges by active member count.
 
-- **Tiers need counting and enforcing.** Member-count metering has to be built,
-  then an awkward conversation happens when a gym crosses a line. For maybe €20 a
-  month of extra revenue.
-- **Per-member pricing punishes the best customers.** The gym that grew from 40
-  students to 120 *because matops helped* is the one that gets a bigger bill. It
-  also gives every owner a reason not to add casual students, which destroys the
-  data the whole product runs on.
-- **Per-coach seats are worse.** A grappling gym has two to four coaches. Seat
-  pricing creates a "should I really add Miguel" decision, and every coach kept
-  out is a coach not using the product.
+Do not charge for data export. Customers must be able to leave with their data.
 
-## Why €39
+## Proposed packages
 
-Deliberately under Gymdesk's $75 entry tier. The real test is: **can the owner
-decide alone, in under a minute, without asking anyone.** Above roughly €60 they
-start thinking about it, and thinking is how small deals die.
+### Design Partner
 
-**Annual (€390) is worth pushing, and not for cashflow.** It turns twelve
-recibos verdes per gym per year into one. At 15 gyms that is 15 documents a year
-instead of 180. See [revenue-collection.md](revenue-collection.md).
+Use this only for the first 3-5 active pilot academies.
 
-## What never gets charged for
+- One BJJ academy entity
+- All current pilot features
+- Direct founder support
+- Free until a date agreed before onboarding
+- Expected future price shown as about €49 per month
+- No promise of lifetime free access or permanent discounts
 
-- **Students.** Never. They are the network that makes the product worth anything
-  to the owner. The moment a student hits a matops paywall, the owner's job got
-  harder, not easier.
-- **Extra coaches.** See above.
-- **Classes, bookings, or check-ins.** Usage pricing on the thing you want more
-  of is self-defeating.
+The academy must use MatOps weekly and give direct feedback. End access or move
+the academy to paid when the pilot ends.
 
-## Upsells that exist later, not now
+### Academy, €49 per month
 
-- **The card rail.** Charging dues on behalf of the gym, either as a flat uplift
-  or a small take rate. Gymsense sells 1% of dues volume as its entire model, so
-  the willingness exists. Parked: [card-billing-plan.md](card-billing-plan.md).
-- **SMS reminders.** Real cost, real value, priceable at cost plus a bit.
-- **A second location.** The one place a "per" charge is genuinely fair, because
-  it is genuinely more product.
+This is the first public paid offer.
 
-None of these are needed to reach 15 gyms. They are what gets sold to gyms 30
-through 100.
+- One BJJ academy entity
+- Unlimited active students
+- Unlimited owners, instructors, and staff accounts
+- Scheduling, capacity, booking, and attendance
+- Member management and BJJ progress tools
+- Academy dashboard and reports
+- Data export
+- Email support with a stated response time
+- 30-day trial after the design partner stage ends
 
----
+Use €490 per year as the annual option. It gives two months free and reduces
+invoice work.
 
-## The numbers
+Do not split BJJ features across several plans at launch. The product is too
+young to know which feature deserves a higher tier.
 
-```
-15 gyms x €39/mo                =  €585/mo    €7,020/yr
-Vercel Pro (required once paid)   -€20/mo
-Neon, Resend, EAS                 -€0-20/mo
-Apple Developer (€99/yr)          -€8/mo
-                                 ---------
-Net                             ≈  €540/mo   ≈ €6,500/yr
-```
+### Facility, €99 per month
 
-**Charging money triggers the Vercel trap already documented in
-[infra-costs.md](infra-costs.md).** Vercel Hobby forbids commercial use, and a
-paying gym makes the deployment commercial from the day the first €1 is charged.
-Once invoicing starts, Vercel Pro stops being a "reactively, if flagged"
-decision. Budget it as a fixed cost of charging at all.
+Do not sell this plan until the matching product works.
 
-### The fork that has to be chosen out loud
+- Everything in Academy
+- One BJJ academy entity
+- One additional simple bookable space entity
+- Shared person records across entities
+- Combined member access plans across included entities
+- Organization dashboard with totals and per-entity drill-down
+- Organization roles and entity-specific staff access
+- Cross-entity reporting
 
-- **If income is the goal:** €6,500 a year is a paid hobby with a real product,
-  not income. The shape that produces income is roughly 60 gyms at €49, and that
-  is a different amount of life. Decide it deliberately, not by drifting.
-- **If a great product for your own sport is the goal:** 15 gyms at €39 is
-  exactly right, it pays for itself and a bit more, and the number should stop
-  being optimised.
+Working add-on prices:
 
-Either way: **charging €39 versus €0 matters far more than €39 versus €59.** A
-paying customer answers emails, says what is broken, and forgives a bug. A free
-one quietly stops opening the app. The number is almost irrelevant. The fact of
-it is not.
+- Extra BJJ academy entity: €39 per month
+- Extra simple bookable space: €19 per month
 
----
+The lower price for a simple space matches its smaller booking and reporting
+scope. Revisit these prices after measuring support and usage.
 
-## What this means for the unpriced pilot
+### Network, custom price
 
-The pilot is the right next step and none of the above blocks it. Three things
-are worth carrying into it anyway, because they are free now and expensive to
-retrofit:
+Do not build or publish this plan before demand exists. It may later cover five
+or more entities, data migration, owner transfer, audit logs, service terms, and
+priority support.
 
-1. **Give every pilot academy an end date in writing, from day one.**
+## A possible free plan later
 
-   > "matops is free for you until [date]. After that it will be somewhere around
-   > €39 a month. In exchange I need you actually using it, and I need to hear
-   > when it annoys you."
+A permanent free plan can become a growth test after paid demand is proven. It
+should not be the launch default.
 
-   Without a date, the pricing conversation never happens, because there is never
-   a good week to bring it up. With one, it has already happened.
+If tested, use this narrow shape:
 
-2. **Track weekly active academies from the first pilot gym.** An academy with at
-   least one booking or attendance mark in the last seven days. This is the only
-   number that tells you whether pricing is even a question worth answering.
+- One BJJ academy entity
+- Up to 20 active students
+- Unlimited instructors
+- Core schedule, booking, attendance, and member list
+- Self-service onboarding and community or email support
+- Data export
+- No organization dashboard or extra entities
 
-3. **Do not promise "free forever" or "you'll be grandfathered".** Both are easy
-   to say to a friend during a pilot and permanently expensive afterwards.
+The active-student limit gives a clear upgrade point. Do not use owner or coach
+limits. Do not offer unlimited students for free unless another revenue source
+covers the account cost.
 
----
+Before launching free, measure:
 
-## How the pricing side fails
+- Support time per free academy
+- Monthly hosting and messaging cost per academy
+- Conversion from 20 active students to paid
+- Abuse and duplicate academy creation
+- Whether free academies remain active after 8 weeks
 
-1. **The pilots never convert.** No written end date, no conversation, no
-   revenue, and eighteen months gone. The most likely failure by a wide margin,
-   and it is fixed on day one by one sentence in an email.
-2. **Friends do not complain, they just stop.** Gyms known personally will not
-   say the schedule screen is confusing. They nod, then quietly go back to
-   WhatsApp. Ask directly and specifically, every month. Silence is not approval.
-3. **Vercel Pro is forgotten.** Charging makes the deployment commercial from day
-   one. Handle it before the first invoice, not when Vercel sends an email.
-4. **Support eats the evenings.** Fifteen gyms is real support load. Set the
-   expectation in writing at signup: email only, reply within two working days,
-   no phone. Owners accept this happily when told up front, and never when told
-   after the third call.
+Remove the free plan if it creates support work without active use or paid
+conversion.
 
-## The second-order effect worth naming before the first invoice
+## Competitor view, September 2026
 
-Charging money changes what matops is allowed to be. Today the schedule can break
-on a Tuesday and be fixed on Thursday. With fifteen paying gyms it cannot,
-because Tuesday is when a coach needs the roster. The real price of the first €39
-is not a support inbox. It is an obligation to keep it running on days you do not
-feel like it.
+| Product | Public price | Pricing unit | Lesson for MatOps |
+|---|---|---|---|
+| Kicksite | $49 for 0-25 students, then $99-$199 | Active students | €49 is a credible entry price for martial arts software |
+| Gymdesk | $75 for up to 50 members, then $100-$200 | Active members and locations | Full features and unlimited staff reduce plan friction |
+| Martialytics | $69 for up to 50 students, then $99-$199 | Active students | Martial arts products can charge without feature lockouts |
+| TeamUp | $189 for 101-200 active customers | Active customers | Shared customers can be counted once across many locations |
+| Zen Planner | Starts at $99 | Base product plus extensions | Marketing and branded products support higher prices later |
+| PushPress | Free, $159 Pro, $229 Max | Features and payment rates | Free unlimited usage works because processing rates fund it |
 
-That is a reasonable trade. It is worth making on purpose, before the first
-invoice, rather than discovering it on a Tuesday.
+Detailed observations:
 
----
+- [Gymdesk](https://gymdesk.com/pricing) includes all features and unlimited
+  staff at every member tier. It charges $50 for each extra location. Locations
+  share members, staff, and reporting.
+- [Kicksite](https://kicksite.com/) charges $49-$199 based on active students and
+  includes every tool at every size.
+- [Martialytics](https://www.martialytics.com/pricing) charges $69-$199 based on
+  active students. It advertises unlimited users and locations.
+- [TeamUp](https://wf.goteamup.com/pricing) counts an active customer once even
+  when the business has unlimited locations.
+- [Zen Planner](https://zenplanner.com/pricing/) starts at $99 for membership,
+  scheduling, attendance, reporting, and martial arts belt tracking. It sells
+  larger product extensions separately.
+- [PushPress](https://www.pushpress.com/pricing) offers unlimited members and
+  staff for $0 per month. Its free plan lists a 4.99% plus $0.30 card processing
+  rate. Pro costs $159 and lists a lower 2.89% plus $0.30 rate.
 
-## When to reopen this file
+The published market prices often start above €49. Member count is common, but
+it is not required. Extra operational locations are a normal paid unit.
 
-- A pilot academy asks what it will cost.
-- Three or more academies are using matops weekly without prompting.
-- The pilot end date is within two months.
+## Positioning
 
-## Sources
+The first useful position is:
 
-- [Gym management software cost 2026](https://gymdesk.com/blog/gym-management-software-cost)
-- [Gym software pricing compared 2026](https://www.chalkitpro.com/post/gym-software-pricing-comparison) (the flat vs per-member gap at 150 members)
-- [2026 vertical SaaS embedded payments benchmarking](https://www.rainforestpay.com/blog/2026-vertical-saas-embedded-payments-benchmarking-study)
-- [SaaS churn benchmarks 2026](https://getspike.ai/blog/saas-churn-rate-benchmarks/) (vertical SaaS churns 20-40% less than horizontal)
+> BJJ academy management without per-student or per-coach pricing.
+
+The later position is:
+
+> Run the whole facility from one member base, with BJJ at the center.
+
+Do not market MatOps as a general gym platform before the simple-space booking
+module and organization dashboard work. BJJ focus is the first reason to choose
+MatOps. Mixed-facility support becomes the expansion reason later.
+
+## Rollout waves
+
+### Wave 1: Prove weekly use
+
+- Onboard 3-5 design partners.
+- Put the free end date and expected €49 price in writing.
+- Track an academy as active when it records a booking or attendance event in
+  the last 7 days.
+- Require 3 academies to stay active for 4 consecutive weeks before public
+  pricing work starts.
+
+Exit condition: three academies use MatOps weekly without reminders.
+
+### Wave 2: Prove willingness to pay
+
+- Offer the Academy plan at €49 monthly or €490 annually.
+- Ask every active pilot for a real paid commitment.
+- Keep one package. Do not add feature tiers.
+- Record the objection when an academy declines.
+
+Exit condition: at least 2 of the first 3 active pilot academies agree to pay.
+If fewer agree, investigate product value before lowering the price.
+
+### Wave 3: Find the price range
+
+- Offer €49 to the first paid cohort.
+- Offer €69 to a later set of similar new prospects.
+- Compare conversion, time to close, support load, and retention.
+- Do this in sequence. The sample will be too small for a formal split test.
+
+Exit condition: choose the price that produces better retained revenue, not the
+price with the highest signup count.
+
+### Wave 4: Sell multi-entity value
+
+- Finish the organization and entity pivot.
+- Validate that at least three owners need mixed spaces or multiple academies.
+- Ship Facility only with shared people, combined access, and organization
+  reporting.
+- Test €99 with one extra simple space included.
+- Charge separately for more BJJ academies and simple spaces.
+
+Exit condition: two customers pay for Facility or sign a clear paid commitment.
+
+### Wave 5: Decide whether free helps growth
+
+- Estimate support and infrastructure cost from paid usage.
+- Test the 20-active-student free plan with a small cohort.
+- Compare free-to-paid conversion against a 30-day trial.
+- Keep only the model that brings more retained paid academies per support hour.
+
+## Customer interview questions
+
+Ask owners these questions before showing a plan table:
+
+1. What do you use today, and what does it cost each month?
+2. Which task wastes the most owner or coach time each week?
+3. What breaks when you manage BJJ, gym access, and other spaces separately?
+4. How many people need owner, staff, or coach access?
+5. Would €49 per month require approval from anyone else?
+6. At what monthly price would MatOps feel too cheap to trust?
+7. At what price would it feel expensive but still worth considering?
+8. At what price would you stop considering it?
+9. What must work before you would replace your current process?
+10. Would you pay €99 for shared members and reporting across two entities?
+
+Do not ask only whether a price sounds fair. Ask for a paid commitment, deposit,
+or signed pilot conversion date when the product is ready.
+
+## Metrics
+
+Track these before adding more plans:
+
+- Weekly active academies
+- Trial-to-paid conversion
+- 30-day and 90-day paid retention
+- Monthly recurring revenue
+- Support hours per academy
+- Activation time from signup to first published schedule
+- Percentage of active coaches using MatOps
+- Number of entities per organization
+- Facility plan conversion among eligible organizations
+
+Do not treat registered students or created academies as success unless those
+academies keep using the product.
+
+## Revenue examples
+
+| Mix | Monthly recurring revenue |
+|---|---:|
+| 15 Academy customers | €735 |
+| 10 Academy and 5 Facility customers | €985 |
+| 40 Academy and 10 Facility customers | €2,950 |
+
+Extra entity charges are not included. These numbers are revenue before hosting,
+support, tax, and payment costs.
+
+## Decisions to keep stable
+
+- MatOps bills the organization, never the student.
+- Paid plans do not meter students, instructors, classes, or bookings.
+- Payment-provider revenue is not required for the business model.
+- Payment processing fees remain visible and separate from the MatOps price.
+- The first paid release has one package.
+- Multi-entity pricing starts only when multi-entity value exists.
+- Every pilot has a written end date.
+- Customers can export their data.
+
+## When to review this plan
+
+- Three academies have used MatOps weekly for four weeks.
+- The first pilot end date is within two months.
+- A pilot refuses or accepts the €49 price.
+- Three owners request multiple entities.
+- Payment integration costs become known.
+- Support exceeds two hours per academy per month.

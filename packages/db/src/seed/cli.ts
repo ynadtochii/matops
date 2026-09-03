@@ -95,21 +95,27 @@ async function main(): Promise<void> {
   // --- Fill / clear a REAL academy (the recommended mode) -------------------
   if (command === "fill") {
     const academy = await requireAcademy(code);
-    if ((await academyFakeCount(exec, academy.id)) > 0) {
+    if ((await academyFakeCount(exec, academy.organizationId)) > 0) {
       console.log(
         `[seed] "${academy.name}" already has demo students — run ` +
           `\`seed clear ${code}\` first to rebuild.`,
       );
       return;
     }
-    const report = await fillAcademy(exec, { academyId: academy.id });
+    const report = await fillAcademy(exec, {
+      academyId: academy.id,
+      organizationId: academy.organizationId,
+    });
     console.log(`[seed] filled "${academy.name}" (${code}):`, report);
     return;
   }
 
   if (command === "clear") {
     const academy = await requireAcademy(code);
-    const report = await clearAcademy(exec, { academyId: academy.id });
+    const report = await clearAcademy(exec, {
+      academyId: academy.id,
+      organizationId: academy.organizationId,
+    });
     console.log(
       `[seed] cleared demo students from "${academy.name}" (${code}):`,
       report,
@@ -123,7 +129,7 @@ async function main(): Promise<void> {
       if (!academy) {
         console.log(`No academy found with code ${code}.`);
       } else {
-        const fakes = await academyFakeCount(exec, academy.id);
+        const fakes = await academyFakeCount(exec, academy.organizationId);
         console.log(
           `\n"${academy.name}" (${code}) — ${fakes} demo student(s) present.\n`,
         );

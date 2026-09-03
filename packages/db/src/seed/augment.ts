@@ -23,6 +23,8 @@ import { recomputeBookingCounts } from "../erase";
 import {
   classInstance,
   classParticipation,
+  entity,
+  entityMembership,
   member,
   memberDues,
   memberNote,
@@ -30,7 +32,6 @@ import {
   memberReferral,
   memberReferralAudit,
   membershipPlan,
-  organization,
   paymentClaim,
   rankPromotion,
   user,
@@ -93,6 +94,7 @@ const LAST_NAMES = [
 /** A fake student to add to a real academy, all ids `seed_`-prefixed. */
 interface FakeStudent {
   userId: string;
+  orgMemberId: string;
   memberId: string;
   name: string;
   email: string;
@@ -139,7 +141,8 @@ function buildFakeStudents(academyId: string, count = 20): FakeStudent[] {
     }
     return {
       userId: `${SEED_MARKER}user_${handle}`,
-      memberId: `${SEED_MARKER}mem_${handle}`,
+      orgMemberId: `${SEED_MARKER}mem_${handle}`,
+      memberId: `${SEED_MARKER}emem_${handle}`,
       name,
       email: `${name.toLowerCase().replace(/[^a-z]+/g, ".")}.${key}${i + 1}@example.com`,
       phone: `+38050${String(2000000 + i).slice(-7)}`,
@@ -153,29 +156,39 @@ function buildFakeStudents(academyId: string, count = 20): FakeStudent[] {
 /** How many fake (seed_) members this academy currently holds. */
 export async function academyFakeCount(
   exec: SeedExec,
-  academyId: string,
+  organizationId: string,
 ): Promise<number> {
   const rows = await exec
     .select({ id: member.id })
     .from(member)
     .where(
       and(
-        eq(member.organizationId, academyId),
+        eq(member.organizationId, organizationId),
         like(member.id, `${SEED_MARKER}%`),
       ),
     );
   return rows.length;
 }
 
-/** Resolve an academy by its 6-digit public code → { id, name } or null. */
+/**
+ * Resolve an academy by its 6-digit public code, or null.
+ *
+ * Returns the organization id beside the entity id because the two are only
+ * equal for a gym's DEFAULT academy (ADR 124), and `member` keys on the
+ * organization while every tenant table keys on the entity.
+ */
 export async function findAcademyByPublicCode(
   exec: SeedExec,
   code: string,
-): Promise<{ id: string; name: string } | null> {
+): Promise<{ id: string; organizationId: string; name: string } | null> {
   const rows = await exec
-    .select({ id: organization.id, name: organization.name })
-    .from(organization)
-    .where(eq(organization.publicCode, code))
+    .select({
+      id: entity.id,
+      organizationId: entity.organizationId,
+      name: entity.name,
+    })
+    .from(entity)
+    .where(and(eq(entity.publicCode, code), isNull(entity.deletedAt)))
     .limit(1);
   return rows[0] ?? null;
 }
@@ -186,13 +199,13 @@ async function findOwnerUserId(
   academyId: string,
 ): Promise<string | null> {
   const rows = await exec
-    .select({ userId: member.userId })
-    .from(member)
+    .select({ userId: entityMembership.userId })
+    .from(entityMembership)
     .where(
       and(
-        eq(member.organizationId, academyId),
-        eq(member.role, "owner"),
-        eq(member.status, "active"),
+        eq(entityMembership.entityId, academyId),
+        eq(entityMembership.role, "owner"),
+        eq(entityMembership.status, "active"),
       ),
     )
     .limit(1);
@@ -205,10 +218,16 @@ async function findOwnerUserId(
  */
 export async function fillAcademy(
   exec: SeedExec,
-  opts: { academyId: string; now?: Date; studentCount?: number },
+  opts: {
+    academyId: string;
+    organizationId: string;
+    now?: Date;
+    studentCount?: number;
+  },
 ): Promise<FillReport> {
   const now = opts.now ?? new Date();
   const academyId = opts.academyId;
+  const organizationId = opts.organizationId;
   const report: FillReport = {};
   const students = buildFakeStudents(academyId, opts.studentCount ?? 20);
   const active = students.filter((s) => s.status === "active");
@@ -238,17 +257,37 @@ export async function fillAcademy(
     .insert(member)
     .values(
       students.map((s, i) => ({
-        id: s.memberId,
-        organizationId: academyId,
+        id: s.orgMemberId,
+        organizationId,
         userId: s.userId,
         role: s.role,
-        status: s.status,
-        invitedRole: s.invitedRole,
         createdAt: new Date(now.getTime() - (150 - i * 3) * DAY_MS),
       })),
     )
     .onConflictDoNothing();
   report.member = students.length;
+
+  await exec
+    .insert(entityMembership)
+    .values(
+      students.map((s, i) => {
+        const createdAt = new Date(now.getTime() - (150 - i * 3) * DAY_MS);
+        return {
+          id: s.memberId,
+          organizationId,
+          entityId: academyId,
+          userId: s.userId,
+          role: s.role,
+          status: s.status,
+          invitedRole: s.invitedRole,
+          joinedAt: s.status === "active" ? createdAt : null,
+          createdAt,
+          updatedAt: createdAt,
+        };
+      }),
+    )
+    .onConflictDoNothing();
+  report.entity_membership = students.length;
 
   // 2. Dues on the academy's EXISTING plans (skip if the owner has none yet).
   const plans = await exec
@@ -544,7 +583,7 @@ export async function fillAcademy(
  */
 export async function clearAcademy(
   exec: SeedExec,
-  opts: { academyId: string },
+  opts: { academyId: string; organizationId: string },
 ): Promise<FillReport> {
   const academyId = opts.academyId;
   const seedLike = `${SEED_MARKER}%`;
@@ -638,13 +677,26 @@ export async function clearAcademy(
         ),
       ),
   );
+  await del("entity_membership", () =>
+    exec
+      .delete(entityMembership)
+      .where(
+        and(
+          eq(entityMembership.entityId, academyId),
+          like(entityMembership.id, seedLike),
+        ),
+      ),
+  );
   // The fake members themselves, then the fake user rows (scoped to THIS academy's
   // fill prefix — never another academy's fakes or any real user).
   await del("member", () =>
     exec
       .delete(member)
       .where(
-        and(eq(member.organizationId, academyId), like(member.id, seedLike)),
+        and(
+          eq(member.organizationId, opts.organizationId),
+          like(member.id, seedLike),
+        ),
       ),
   );
   await del("user", () =>

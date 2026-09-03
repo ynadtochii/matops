@@ -39,6 +39,7 @@ import {
 } from "~/components/ui";
 import { trpc } from "~/utils/api";
 import { authClient } from "~/utils/auth";
+import { setActiveEntity } from "~/utils/entity-store";
 
 /**
  * Editable personal details (spec S7, slice B.3). Name + phone are editable;
@@ -500,11 +501,22 @@ export default function Profile() {
 
   const refreshControl = useRefreshControl();
 
+  // Picking a mat is a local write, not a mutation: the header names it from
+  // now on (ADR 124). The session still holds the ORGANIZATION, so a mat of a
+  // different gym also needs `setActive` to move it.
   const setActive = useMutation(
     trpc.academy.setActive.mutationOptions({
       onSuccess: () => queryClient.invalidateQueries(),
     }),
   );
+  const pick = (academy: { academyId: string; organizationId: string }) => {
+    setActiveEntity(academy.academyId);
+    if (academy.organizationId === session?.session.activeOrganizationId) {
+      void queryClient.invalidateQueries();
+      return;
+    }
+    setActive.mutate({ academyId: academy.academyId });
+  };
 
   // Best-effort scroll to the dues section when arriving from the overdue strip.
   const scrollRef = useRef<ScrollView>(null);
@@ -611,7 +623,7 @@ export default function Profile() {
                     disabled: isActive || setActive.isPending,
                   }}
                   disabled={isActive || setActive.isPending}
-                  onPress={() => setActive.mutate({ academyId: a.academyId })}
+                  onPress={() => pick(a)}
                   style={{
                     flexDirection: "row",
                     alignItems: "center",

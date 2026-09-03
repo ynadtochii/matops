@@ -11,6 +11,7 @@ import { Button } from "@matops/ui/button";
 import { dayLongFmt, timeFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { ClassTheme } from "./class-theme";
+import { useEntityHref } from "./entity";
 import { PageHeader } from "./page-header";
 import { cardClass, ENTER, Eyebrow, Section } from "./primitives";
 import { ClassDetailSkeleton, SkeletonCard } from "./skeletons";
@@ -19,6 +20,7 @@ import { useBooking } from "./use-booking";
 import { useMinuteClock } from "./use-clock";
 
 export function ClassDetail({ classId }: { classId: string }) {
+  const href = useEntityHref();
   const trpc = useTRPC();
   const { book, cancel, busy, lockedMessage } = useBooking();
   const now = useMinuteClock();
@@ -37,7 +39,7 @@ export function ClassDetail({ classId }: { classId: string }) {
           title="We couldn't open that class."
           action={
             <Button asChild size="sm" variant="outline">
-              <Link href="/">Back to the schedule</Link>
+              <Link href={href("/")}>Back to the schedule</Link>
             </Button>
           }
         >

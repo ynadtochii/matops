@@ -6,10 +6,6 @@ import { freshDb, single } from "./helpers";
 // The transaction object PGlite hands to its transaction() callback.
 type Tx = Parameters<Parameters<PGlite["transaction"]>[0]>[0];
 
-/**
- * Mirrors packages/db/src/tenant.ts `withTenant`: drop to the restricted role and
- * set app.academy_id, both transaction-local, then run the caller's queries.
- */
 function asTenant<T>(
   pg: PGlite,
   academyId: string,
@@ -85,5 +81,65 @@ describe("RLS tenant isolation", () => {
       ),
     );
     expect(await asTenant(pg, "academy_A", (tx) => count(tx))).toBe(3);
+  });
+});
+
+describe("RLS between two entities of one organization", () => {
+  let pg: PGlite;
+  const ORG = "org_two_mats";
+  const MAT_A = "org_two_mats";
+  const MAT_B = "entity_two_mats_b";
+
+  beforeAll(async () => {
+    pg = await freshDb([ORG]);
+    await pg.exec(`
+      INSERT INTO "entity" (id, organization_id, type, name, slug, public_code)
+        VALUES ('${MAT_B}', '${ORG}', 'bjj_academy', 'Mat B', 'mat-b', '654321');
+      INSERT INTO "academy_profile" (entity_id) VALUES ('${MAT_B}');
+      INSERT INTO "tenant_probe" (academy_id, payload) VALUES
+        ('${MAT_A}', 'on mat a'), ('${MAT_B}', 'on mat b');
+    `);
+  });
+
+  afterAll(async () => {
+    await pg.close();
+  });
+
+  const scoped = <T>(entityId: string, run: (tx: Tx) => Promise<T>) =>
+    pg.transaction(async (tx) => {
+      await tx.query("SET LOCAL ROLE matops_app");
+      await tx.query(
+        "SELECT set_config('app.organization_id', $1, true), set_config('app.academy_id', $2, true)",
+        [ORG, entityId],
+      );
+      return run(tx);
+    });
+
+  it("shows one mat its own rows and not its sibling's", async () => {
+    const rows = await scoped(MAT_A, (tx) =>
+      tx
+        .query<{ payload: string }>(`SELECT payload FROM "tenant_probe"`)
+        .then((r) => r.rows.map((x) => x.payload)),
+    );
+    expect(rows).toEqual(["on mat a"]);
+  });
+
+  it("refuses a write aimed at the sibling mat", async () => {
+    await expect(
+      scoped(MAT_A, (tx) =>
+        tx.query(
+          `INSERT INTO "tenant_probe" (academy_id, payload) VALUES ('${MAT_B}', 'sneak')`,
+        ),
+      ),
+    ).rejects.toThrow();
+  });
+
+  it("still lets the organization read both entities", async () => {
+    const names = await scoped(MAT_A, (tx) =>
+      tx
+        .query<{ name: string }>(`SELECT name FROM "entity" ORDER BY name`)
+        .then((r) => r.rows.map((x) => x.name)),
+    );
+    expect(names).toHaveLength(2);
   });
 });

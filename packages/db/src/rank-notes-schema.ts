@@ -1,4 +1,6 @@
-import { index, pgTable, uniqueIndex } from "drizzle-orm/pg-core";
+import { foreignKey, index, pgTable, uniqueIndex } from "drizzle-orm/pg-core";
+
+import { entity, entityMembership } from "./entity-schema";
 
 /**
  * Member rank + staff notes schema (v1.4, docs/issues/41). Un-parks belts/rank.
@@ -26,8 +28,11 @@ export const memberRank = pgTable(
   "member_rank",
   (t) => ({
     id: t.uuid().notNull().primaryKey().defaultRandom(),
-    academyId: t.text().notNull(), // → organization.id (RLS scope)
-    memberId: t.text().notNull(), // → member.id
+    academyId: t
+      .text()
+      .notNull()
+      .references(() => entity.id),
+    memberId: t.text().notNull(), // → entity_membership.id
     discipline: t.text().notNull(), // free text; validated in the domain layer
     belt: t.text().notNull(),
     stripes: t.integer().notNull().default(0),
@@ -46,6 +51,11 @@ export const memberRank = pgTable(
       table.memberId,
       table.discipline,
     ),
+    foreignKey({
+      name: "member_rank_membership",
+      columns: [table.academyId, table.memberId],
+      foreignColumns: [entityMembership.entityId, entityMembership.id],
+    }),
   ],
 );
 
@@ -58,8 +68,11 @@ export const rankPromotion = pgTable(
   "rank_promotion",
   (t) => ({
     id: t.uuid().notNull().primaryKey().defaultRandom(),
-    academyId: t.text().notNull(), // → organization.id (RLS scope)
-    memberId: t.text().notNull(), // → member.id
+    academyId: t
+      .text()
+      .notNull()
+      .references(() => entity.id),
+    memberId: t.text().notNull(), // → entity_membership.id
     discipline: t.text().notNull(),
     fromBelt: t.text(), // null on first grant
     fromStripes: t.integer(),
@@ -68,7 +81,14 @@ export const rankPromotion = pgTable(
     promotedBy: t.text().notNull(), // → user.id of the staff member
     promotedAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
   }),
-  (table) => [index("rp_by_member").on(table.academyId, table.memberId)],
+  (table) => [
+    index("rp_by_member").on(table.academyId, table.memberId),
+    foreignKey({
+      name: "rank_promotion_membership",
+      columns: [table.academyId, table.memberId],
+      foreignColumns: [entityMembership.entityId, entityMembership.id],
+    }),
+  ],
 );
 
 /**
@@ -81,8 +101,11 @@ export const memberNote = pgTable(
   "member_note",
   (t) => ({
     id: t.uuid().notNull().primaryKey().defaultRandom(),
-    academyId: t.text().notNull(), // → organization.id (RLS scope)
-    memberId: t.text().notNull(), // → member.id
+    academyId: t
+      .text()
+      .notNull()
+      .references(() => entity.id),
+    memberId: t.text().notNull(), // → entity_membership.id
     body: t.text().notNull(),
     authorId: t.text().notNull(), // → user.id of the staff author
     createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -92,5 +115,12 @@ export const memberNote = pgTable(
       .defaultNow()
       .$onUpdateFn(() => new Date()),
   }),
-  (table) => [index("mn_by_member").on(table.academyId, table.memberId)],
+  (table) => [
+    index("mn_by_member").on(table.academyId, table.memberId),
+    foreignKey({
+      name: "member_note_membership",
+      columns: [table.academyId, table.memberId],
+      foreignColumns: [entityMembership.entityId, entityMembership.id],
+    }),
+  ],
 );

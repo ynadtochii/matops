@@ -10,6 +10,8 @@ import {
   getPublicApiSettings,
   listMembershipsForUser,
   listPublicClasses,
+  organizationsMissingEntity,
+  provisionOrganization,
   rotatePublicApiKey,
   setPublicApiEnabled,
   setPublicApiOrigins,
@@ -39,7 +41,6 @@ import {
 } from "@matops/validators";
 
 import { academyContext } from "../academy-tz";
-import { requireMembership } from "../members";
 import {
   ownerIdentityProcedure,
   ownerProcedure,
@@ -77,25 +78,65 @@ export const academyRouter = {
    * standing to land on.
    */
   memberships: protectedProcedure.query(async ({ ctx }) => {
-    const all = await listMembershipsForUser(ctx.session.user.id, ctx.baseDb);
+    let all = await listMembershipsForUser(ctx.session.user.id, ctx.baseDb);
+    if (all.length === 0) {
+      // The only route back for an owner whose provisioning died half way:
+      // "Start a gym" would make them a SECOND organization, and nothing else
+      // in the app can write the rows that are missing (ADR 124).
+      const stranded = await organizationsMissingEntity(
+        ctx.session.user.id,
+        ctx.baseDb,
+      );
+      for (const organizationId of stranded) {
+        await provisionOrganization(
+          { organizationId, ownerUserId: ctx.session.user.id },
+          ctx.baseDb,
+        );
+      }
+      if (stranded.length > 0) {
+        all = await listMembershipsForUser(ctx.session.user.id, ctx.baseDb);
+      }
+    }
     return all.filter(canEnroll).map((a) => ({
       academyId: a.academyId,
+      organizationId: a.organizationId,
       name: a.name,
       role: a.role,
       status: a.status,
     }));
   }),
 
-  /** The active academy (name, the caller's role/status, and the shareable code
-   * an owner gives students to join in the app — docs/issues/32), or null. */
+  /**
+   * The academy this request named (name, the caller's role/status, and the
+   * shareable code an owner gives students to join in the app —
+   * docs/issues/32), or null.
+   *
+   * The academy is the one the request NAMED, and only that: the web reads it
+   * from the URL and the app from secure-store, and there is no falling back to
+   * the session's active organization, which would quietly answer for the
+   * default academy whenever a client forgot the header (ADR 124).
+   *
+   * It stays a `protectedProcedure` rather than an entity tier because the
+   * shell calls it to decide whether there is an academy to open at all, and a
+   * refusal there would be a crash instead of a gate.
+   */
   current: protectedProcedure.query(async ({ ctx }) => {
-    const academyId = ctx.session.session.activeOrganizationId;
+    const academyId = ctx.requestedEntityId;
     if (!academyId) return null;
+    const activeOrganizationId = ctx.session.session.activeOrganizationId;
+    if (!activeOrganizationId) return null;
     const mine = await listMembershipsForUser(ctx.session.user.id, ctx.baseDb);
-    const academy = mine.find((a) => a.academyId === academyId);
+    const academy = mine.find(
+      (a) =>
+        a.academyId === academyId &&
+        a.organizationId === activeOrganizationId &&
+        canEnroll(a),
+    );
     if (!academy) return null;
     return {
       academyId: academy.academyId,
+      organizationId: academy.organizationId,
+      type: academy.type,
       userId: ctx.session.user.id,
       name: academy.name,
       role: academy.role,
@@ -134,7 +175,9 @@ export const academyRouter = {
           message: "That is not a time zone we recognise",
         });
       }
-      await updateAcademySettings(ctx.academyId, input, ctx.baseDb);
+      await ctx.withScope((db) =>
+        updateAcademySettings(ctx.academyId, input, db),
+      );
       return { ok: true as const };
     }),
 
@@ -150,20 +193,25 @@ export const academyRouter = {
    * link on its own cannot reveal.
    */
   shareLinks: staffIdentityProcedure.query(async ({ ctx }) => {
-    const settings = await getPublicApiSettings(ctx.academyId, ctx.baseDb);
+    const { settings, shared } = await ctx.withScope(async (db) => {
+      const settings = await getPublicApiSettings(ctx.academyId, db);
+      const now = new Date();
+      return {
+        settings,
+        shared: settings?.enabled
+          ? await listPublicClasses(
+              ctx.academyId,
+              now,
+              new Date(now.getTime() + PUBLIC_RANGE_DEFAULT_DAYS * DAY_MS),
+              1,
+              db,
+            )
+          : [],
+      };
+    });
     if (!settings) {
       throw new TRPCError({ code: "NOT_FOUND", message: "Academy not found" });
     }
-    const now = new Date();
-    const shared = settings.enabled
-      ? await listPublicClasses(
-          ctx.academyId,
-          now,
-          new Date(now.getTime() + PUBLIC_RANGE_DEFAULT_DAYS * DAY_MS),
-          1,
-          ctx.baseDb,
-        )
-      : [];
     return {
       bookingEnabled: settings.enabled,
       publicCode: settings.publicCode,
@@ -173,11 +221,12 @@ export const academyRouter = {
 
   /**
    * The public booking surface (spec O6, ADR 115): the master switch, the
-   * publishable key and the optional origin allowlist. Owner-only, and it reads
-   * the base connection because `organization` carries no tenant policy.
+   * publishable key and the optional origin allowlist. Owner-only.
    */
   publicApi: ownerIdentityProcedure.query(async ({ ctx }) => {
-    const settings = await getPublicApiSettings(ctx.academyId, ctx.baseDb);
+    const settings = await ctx.withScope((db) =>
+      getPublicApiSettings(ctx.academyId, db),
+    );
     if (!settings) {
       throw new TRPCError({ code: "NOT_FOUND", message: "Academy not found" });
     }
@@ -192,10 +241,8 @@ export const academyRouter = {
   setPublicApi: ownerIdentityProcedure
     .input(PublicBookingEnabledSchema)
     .mutation(async ({ ctx, input }) => {
-      const settings = await setPublicApiEnabled(
-        ctx.academyId,
-        input.enabled,
-        ctx.baseDb,
+      const settings = await ctx.withScope((db) =>
+        setPublicApiEnabled(ctx.academyId, input.enabled, db),
       );
       if (!settings) {
         throw new TRPCError({
@@ -208,14 +255,20 @@ export const academyRouter = {
 
   /** Rotate the key: the old one stops working the moment this commits. */
   rotatePublicApiKey: ownerIdentityProcedure.mutation(async ({ ctx }) => {
-    return { apiKey: await rotatePublicApiKey(ctx.academyId, ctx.baseDb) };
+    return {
+      apiKey: await ctx.withScope((db) =>
+        rotatePublicApiKey(ctx.academyId, db),
+      ),
+    };
   }),
 
   /** The websites allowed to call the API from a browser. Empty means any. */
   setPublicApiOrigins: ownerIdentityProcedure
     .input(PublicApiOriginsSchema)
     .mutation(async ({ ctx, input }) => {
-      await setPublicApiOrigins(ctx.academyId, input.origins, ctx.baseDb);
+      await ctx.withScope((db) =>
+        setPublicApiOrigins(ctx.academyId, input.origins, db),
+      );
       return { ok: true as const };
     }),
 
@@ -226,7 +279,9 @@ export const academyRouter = {
   remove: ownerIdentityProcedure
     .input(DeleteAcademySchema)
     .mutation(async ({ ctx, input }) => {
-      const academy = await getAcademySettings(ctx.academyId, ctx.baseDb);
+      const academy = await ctx.withScope((db) =>
+        getAcademySettings(ctx.academyId, db),
+      );
       if (!academy) {
         throw new TRPCError({
           code: "NOT_FOUND",
@@ -282,41 +337,57 @@ export const academyRouter = {
           message: "Could not create the academy",
         });
       }
+      // Belt to the hook's braces (ADR 124). `afterCreateOrganization` already
+      // ran the same provisioner; running it again creates nothing and repairs
+      // an organization whose setup died half way.
+      const { entityId } = await provisionOrganization(
+        { organizationId: org.id, ownerUserId: ctx.session.user.id },
+        ctx.baseDb,
+      );
       await refreshSessionCookie(ctx);
-      return { academyId: org.id };
+      return { academyId: org.id, organizationId: org.id, entityId };
     }),
 
   /**
-   * Rename the active academy (owner only). The **name is a mutable label** — not
+   * Rename the academy (owner only). The **name is a mutable label** — not
    * unique-constrained, because identity is the immutable `public_code` (the
-   * Academy code) + the org id. Updates via Better Auth so its org permission
-   * check applies; the code is never touched.
+   * Academy code) and the entity id. It writes `entity.name`, not the
+   * organization's: a gym with two mats renames one of them, and the name every
+   * screen shows is the entity's (ADR 124). The code is never touched.
    */
   rename: ownerIdentityProcedure
     .input(CreateAcademySchema)
     .mutation(async ({ ctx, input }) => {
-      await ctx.authApi.updateOrganization({
-        body: {
-          organizationId: ctx.academyId,
-          data: { name: input.name.trim() },
-        },
-        headers: ctx.headers,
-      });
+      await ctx.withScope((db) =>
+        updateAcademySettings(ctx.academyId, { name: input.name.trim() }, db),
+      );
       return { ok: true as const };
     }),
 
-  /** Switch the active academy (multi-academy switcher, docs/issues/18). */
+  /**
+   * Switch the active academy (multi-academy switcher, docs/issues/18).
+   *
+   * The caller names an ENTITY, which is what the switcher lists. Better Auth
+   * only knows organizations, so the entity's own organization is what goes on
+   * the session; the entity id is what the client sends as `x-matops-entity`
+   * from then on (ADR 124).
+   */
   setActive: protectedProcedure
     .input(z.object({ academyId: IdSchema }))
     .mutation(async ({ ctx, input }) => {
-      await requireMembership(
+      const mine = await listMembershipsForUser(
         ctx.session.user.id,
-        input.academyId,
         ctx.baseDb,
-        "You are not a member of that academy",
       );
+      const academy = mine.find((a) => a.academyId === input.academyId);
+      if (!academy) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "You are not a member of that academy",
+        });
+      }
       await ctx.authApi.setActiveOrganization({
-        body: { organizationId: input.academyId },
+        body: { organizationId: academy.organizationId },
         headers: ctx.headers,
       });
       return { ok: true as const };

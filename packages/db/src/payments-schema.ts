@@ -1,5 +1,13 @@
 import { sql } from "drizzle-orm";
-import { index, pgEnum, pgTable, uniqueIndex } from "drizzle-orm/pg-core";
+import {
+  foreignKey,
+  index,
+  pgEnum,
+  pgTable,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
+
+import { entity, entityMembership } from "./entity-schema";
 
 /**
  * Manual bank-transfer dues schema (v1.3, docs/issues/40). A NEW, self-contained
@@ -41,7 +49,10 @@ export const membershipPlan = pgTable(
   "membership_plan",
   (t) => ({
     id: t.uuid().notNull().primaryKey().defaultRandom(),
-    academyId: t.text().notNull(), // → organization.id (RLS scope)
+    academyId: t
+      .text()
+      .notNull()
+      .references(() => entity.id),
     name: t.text().notNull(),
     priceMinor: t.integer().notNull(), // price in the currency's minor unit (cents)
     currency: t.text().notNull(), // ISO-4217, 3 letters
@@ -68,8 +79,11 @@ export const memberDues = pgTable(
   "member_dues",
   (t) => ({
     id: t.uuid().notNull().primaryKey().defaultRandom(),
-    academyId: t.text().notNull(), // → organization.id (RLS scope)
-    memberId: t.text().notNull(), // → member.id
+    academyId: t
+      .text()
+      .notNull()
+      .references(() => entity.id),
+    memberId: t.text().notNull(), // → entity_membership.id
     planId: t
       .uuid()
       .notNull()
@@ -92,6 +106,11 @@ export const memberDues = pgTable(
     // One dues record per member per academy.
     uniqueIndex("md_uniq_academy_member").on(table.academyId, table.memberId),
     index("md_by_next_due").on(table.nextDueAt),
+    foreignKey({
+      name: "member_dues_membership",
+      columns: [table.academyId, table.memberId],
+      foreignColumns: [entityMembership.entityId, entityMembership.id],
+    }),
   ],
 );
 
@@ -106,8 +125,11 @@ export const paymentClaim = pgTable(
   "payment_claim",
   (t) => ({
     id: t.uuid().notNull().primaryKey().defaultRandom(),
-    academyId: t.text().notNull(), // → organization.id (RLS scope)
-    memberId: t.text().notNull(), // → member.id
+    academyId: t
+      .text()
+      .notNull()
+      .references(() => entity.id),
+    memberId: t.text().notNull(), // → entity_membership.id
     planId: t
       .uuid()
       .notNull()
@@ -136,6 +158,11 @@ export const paymentClaim = pgTable(
     uniqueIndex("pc_uniq_open_claim")
       .on(table.academyId, table.memberId, table.period)
       .where(sql`status = 'pending'`),
+    foreignKey({
+      name: "payment_claim_membership",
+      columns: [table.academyId, table.memberId],
+      foreignColumns: [entityMembership.entityId, entityMembership.id],
+    }),
   ],
 );
 
@@ -146,7 +173,11 @@ export const paymentClaim = pgTable(
  * code is derived at read time (not stored), so it is not a column here.
  */
 export const paymentSettings = pgTable("payment_settings", (t) => ({
-  academyId: t.text().notNull().primaryKey(), // → organization.id (RLS scope)
+  academyId: t
+    .text()
+    .notNull()
+    .primaryKey()
+    .references(() => entity.id),
   bankDetails: t.text().notNull().default(""),
   graceDays: t.integer().notNull().default(7),
   enforcedAt: t.timestamp({ withTimezone: true }),

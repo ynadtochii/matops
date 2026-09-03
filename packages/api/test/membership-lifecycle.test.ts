@@ -5,7 +5,6 @@ import {
   harness,
   memberId,
   rejectionCode,
-  seedAcademies,
   seedClasses,
   seedParticipations,
   storedBookingCount,
@@ -41,7 +40,7 @@ const countRows = async (h: Harness, sql: string, param: string) => {
 
 const memberStatus = async (h: Harness, id: string) => {
   const res = await h.pg.query<{ status: string | null }>(
-    `SELECT status FROM "member" WHERE id = $1`,
+    `SELECT status FROM "entity_membership" WHERE id = $1`,
     [id],
   );
   return res.rows[0]?.status ?? "gone";
@@ -52,8 +51,7 @@ describe("member archive and permanent erase (docs/issues/84)", () => {
   let planId: string;
 
   beforeEach(async () => {
-    h = await harness();
-    await seedAcademies(h.pg, [
+    h = await harness([
       {
         id: ACAD,
         code: "700084",
@@ -74,6 +72,7 @@ describe("member archive and permanent erase (docs/issues/84)", () => {
         ],
       },
     ]);
+
     await seedClasses(h.pg, [
       {
         id: PAST,
@@ -189,7 +188,7 @@ describe("member archive and permanent erase (docs/issues/84)", () => {
 
     it("refuses a pending applicant, who is declined instead", async () => {
       await h.pg.exec(
-        `UPDATE "member" SET status = 'pending', role = 'member' WHERE id = '${LEAVER_MEMBER}';`,
+        `UPDATE "entity_membership" SET status = 'pending', role = 'member' WHERE id = '${LEAVER_MEMBER}';`,
       );
       expect(
         await rejectionCode(
@@ -415,6 +414,27 @@ describe("member archive and permanent erase (docs/issues/84)", () => {
         .membership.purge({ memberId: memberId(ACAD, COOWNER) });
       expect(res.ok).toBe(true);
       expect(await memberStatus(h, memberId(ACAD, COOWNER))).toBe("gone");
+    });
+
+    it("leaves the gym owner their organization and their account", async () => {
+      const res = await h
+        .as(OWNER, ACAD)
+        .membership.purge({ memberId: memberId(ACAD, COOWNER) });
+      expect(res.accountDeleted).toBe(false);
+      expect(
+        await countRows(
+          h,
+          `SELECT count(*)::int AS n FROM "member" WHERE user_id = $1`,
+          COOWNER,
+        ),
+      ).toBe(1);
+      expect(
+        await countRows(
+          h,
+          `SELECT count(*)::int AS n FROM "user" WHERE id = $1`,
+          COOWNER,
+        ),
+      ).toBe(1);
     });
 
     it("is owner-only", async () => {

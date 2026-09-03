@@ -2,8 +2,8 @@ import { TRPCError } from "@trpc/server";
 
 import type { DbExec, DbReader, MemberRow, TenantTx } from "@matops/db";
 import {
+  getAcademyMembership,
   getMemberById,
-  getMembership,
   isNull,
   listMembersOf,
   setMemberRoleStatus,
@@ -124,8 +124,8 @@ export async function requireMembership(
   academyId: string,
   exec: DbReader,
   message: string,
-): Promise<NonNullable<Awaited<ReturnType<typeof getMembership>>>> {
-  const membership = await getMembership(userId, academyId, exec);
+): Promise<NonNullable<Awaited<ReturnType<typeof getAcademyMembership>>>> {
+  const membership = await getAcademyMembership(userId, academyId, exec);
   if (!membership) {
     throw new TRPCError({ code: "NOT_FOUND", message });
   }
@@ -136,7 +136,7 @@ export async function requireMembership(
 export interface ActivateScope {
   academyId: string;
   baseDb: DbExec;
-  withTenant: <T>(fn: (tx: TenantTx) => Promise<T>) => Promise<T>;
+  withScope: <T>(fn: (tx: TenantTx) => Promise<T>) => Promise<T>;
 }
 
 /**
@@ -153,9 +153,14 @@ export async function activateMember(
     granted: { role: string; status: string };
   },
 ): Promise<void> {
-  await setMemberRoleStatus(input.memberId, input.granted, ctx.baseDb);
+  await setMemberRoleStatus(
+    ctx.academyId,
+    input.memberId,
+    input.granted,
+    ctx.baseDb,
+  );
   if (input.granted.role === "student") {
-    await ctx.withTenant(async (db) => {
+    await ctx.withScope(async (db) => {
       const onlyPlan = autoAssignedPlan(
         await db
           .select({ id: membershipPlan.id })

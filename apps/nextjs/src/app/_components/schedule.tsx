@@ -39,9 +39,9 @@ import {
 } from "~/lib/format";
 import { optimistic, rollback } from "~/lib/optimistic";
 import { useTRPC } from "~/trpc/react";
-import { useAcademy } from "./academy";
 import { ClassRoster } from "./class-roster";
 import { InstructorOptions } from "./coach-select";
+import { useEntity } from "./entity";
 import { Section } from "./primitives";
 import { SchedulePoster } from "./schedule-poster";
 import { SkeletonScheduleWeek } from "./skeletons";
@@ -148,7 +148,11 @@ const timeToMinutes = (t: string) => {
  * the week, cancel a class, and add a one-off. Times render in this browser's
  * zone. Recurring generation lives in the templates panel (O3).
  */
-export function Schedule() {
+export function Schedule({
+  onOpenTemplate,
+}: {
+  onOpenTemplate?: (templateId: string) => void;
+} = {}) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const [offset, setOffset] = useState(0);
@@ -160,7 +164,8 @@ export function Schedule() {
     [offset],
   );
   const week = useQuery(trpc.class.week.queryOptions(weekWindow));
-  const me = useAcademy();
+  const templates = useQuery(trpc.template.list.queryOptions());
+  const me = useEntity();
   const invalidate = () =>
     queryClient.invalidateQueries(trpc.class.week.pathFilter());
   const onError = (err: { message: string }) =>
@@ -249,6 +254,9 @@ export function Schedule() {
   );
 
   const detail = (week.data ?? []).find((c) => c.id === detailId);
+  const detailTemplate = templates.data?.find(
+    (t) => t.id === detail?.templateId,
+  );
 
   const detailDialog = (
     <Dialog
@@ -266,6 +274,20 @@ export function Schedule() {
               {detail.discipline && ` · ${detail.discipline.toUpperCase()}`}
               {detail.status === "cancelled" && " · cancelled"}
             </DialogDescription>
+            {detailTemplate && onOpenTemplate && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="self-start"
+                onClick={() => {
+                  setDetailId(null);
+                  onOpenTemplate(detailTemplate.id);
+                }}
+              >
+                Open template · {detailTemplate.title}
+              </Button>
+            )}
             <ClassRoster key={detail.id} cls={detail} />
           </>
         )}

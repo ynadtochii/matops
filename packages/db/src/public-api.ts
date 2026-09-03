@@ -1,21 +1,30 @@
 import { randomBytes } from "node:crypto";
 import { and, asc, eq, gte, isNull, lt } from "drizzle-orm";
 
-import type { DbExec } from "./client";
-import type { DbReader } from "./tenant";
-import { organization } from "./auth-schema";
+import type { DbReader, DbWriter } from "./tenant";
+import { academyProfile, entity } from "./entity-schema";
 import { classInstance } from "./scheduling";
 
 /**
- * Public booking API helpers (ADR 115). Every function here runs on the BASE
- * connection: the caller has no session and no academy scope, so there is no
- * tenant transaction to run inside. This is the SECOND enumerated exception to
- * the tenant seam, with the drop-in submit as its precedent (docs/issues/12,
- * 25). Each function is pinned to an academy id the key already resolved.
+ * Public booking API helpers (ADR 115). The functions the PUBLIC surface calls
+ * run on the BASE connection: that caller has no session and no academy scope,
+ * so there is no tenant transaction to run inside. This is the SECOND enumerated
+ * exception to the tenant seam, with the drop-in submit as its precedent
+ * (docs/issues/12, 25). Each function is pinned to an academy id the key already
+ * resolved.
+ *
+ * The three settings writers are not part of that exception: an owner changing
+ * the switch, the key or the origins has a scope, so they take a `DbWriter` and
+ * the owner router hands them the scoped transaction, where `academy_profile`'s
+ * policy applies.
  *
  * The class reads select the published columns and nothing else, so the deny
  * list in the plan is enforced by the query rather than by a mapping step
  * somebody can forget.
+ *
+ * The academy is an `entity` and its switch, key and allowed origins live on
+ * its `academy_profile` (ADR 124). A gym with two mats publishes two booking
+ * links, each with its own key, because each is its own place.
  */
 
 export interface PublicApiAcademy {
@@ -40,15 +49,15 @@ export function newPublicApiKey(): string {
 }
 
 const academyCols = {
-  academyId: organization.id,
-  name: organization.name,
-  timeZone: organization.timeZone,
-  country: organization.country,
-  address: organization.address,
-  mapUrl: organization.mapUrl,
-  publicCode: organization.publicCode,
-  origins: organization.publicApiOrigins,
-  enabled: organization.publicBookingEnabled,
+  academyId: entity.id,
+  name: entity.name,
+  timeZone: entity.timeZone,
+  country: entity.country,
+  address: entity.address,
+  mapUrl: entity.mapUrl,
+  publicCode: entity.publicCode,
+  origins: academyProfile.publicApiOrigins,
+  enabled: academyProfile.publicBookingEnabled,
 };
 
 function toAcademy(row: {
@@ -77,10 +86,9 @@ export async function resolvePublicApiKey(
 ): Promise<PublicApiAcademy | null> {
   const rows = await exec
     .select(academyCols)
-    .from(organization)
-    .where(
-      and(eq(organization.publicApiKey, key), isNull(organization.deletedAt)),
-    )
+    .from(academyProfile)
+    .innerJoin(entity, eq(entity.id, academyProfile.entityId))
+    .where(and(eq(academyProfile.publicApiKey, key), isNull(entity.deletedAt)))
     .limit(1);
   const row = rows[0];
   return row ? toAcademy(row) : null;
@@ -92,13 +100,14 @@ export async function findPublicAcademyByCode(
   exec: DbReader,
 ): Promise<(PublicApiAcademy & { apiKey: string }) | null> {
   const rows = await exec
-    .select({ ...academyCols, apiKey: organization.publicApiKey })
-    .from(organization)
+    .select({ ...academyCols, apiKey: academyProfile.publicApiKey })
+    .from(entity)
+    .innerJoin(academyProfile, eq(academyProfile.entityId, entity.id))
     .where(
       and(
-        eq(organization.publicCode, code),
-        eq(organization.publicBookingEnabled, true),
-        isNull(organization.deletedAt),
+        eq(entity.publicCode, code),
+        eq(academyProfile.publicBookingEnabled, true),
+        isNull(entity.deletedAt),
       ),
     )
     .limit(1);
@@ -120,13 +129,14 @@ export async function getPublicApiSettings(
 ): Promise<PublicApiSettings | null> {
   const rows = await exec
     .select({
-      enabled: organization.publicBookingEnabled,
-      apiKey: organization.publicApiKey,
-      origins: organization.publicApiOrigins,
-      publicCode: organization.publicCode,
+      enabled: academyProfile.publicBookingEnabled,
+      apiKey: academyProfile.publicApiKey,
+      origins: academyProfile.publicApiOrigins,
+      publicCode: entity.publicCode,
     })
-    .from(organization)
-    .where(and(eq(organization.id, academyId), isNull(organization.deletedAt)))
+    .from(entity)
+    .innerJoin(academyProfile, eq(academyProfile.entityId, entity.id))
+    .where(and(eq(entity.id, academyId), isNull(entity.deletedAt)))
     .limit(1);
   const row = rows[0];
   return row ? { ...row, origins: row.origins ?? [] } : null;
@@ -140,7 +150,7 @@ export async function getPublicApiSettings(
 export async function setPublicApiEnabled(
   academyId: string,
   enabled: boolean,
-  exec: DbExec,
+  exec: DbWriter,
 ): Promise<PublicApiSettings | null> {
   const current = await getPublicApiSettings(academyId, exec);
   if (!current) return null;
@@ -148,34 +158,34 @@ export async function setPublicApiEnabled(
     ? (current.apiKey ?? newPublicApiKey())
     : current.apiKey;
   await exec
-    .update(organization)
+    .update(academyProfile)
     .set({ publicBookingEnabled: enabled, publicApiKey: apiKey })
-    .where(eq(organization.id, academyId));
+    .where(eq(academyProfile.entityId, academyId));
   return { ...current, enabled, apiKey };
 }
 
 /** Rotate the key: the old one stops working the moment this commits. */
 export async function rotatePublicApiKey(
   academyId: string,
-  exec: DbExec,
+  exec: DbWriter,
 ): Promise<string> {
   const apiKey = newPublicApiKey();
   await exec
-    .update(organization)
+    .update(academyProfile)
     .set({ publicApiKey: apiKey })
-    .where(eq(organization.id, academyId));
+    .where(eq(academyProfile.entityId, academyId));
   return apiKey;
 }
 
 export async function setPublicApiOrigins(
   academyId: string,
   origins: string[],
-  exec: DbExec,
+  exec: DbWriter,
 ): Promise<void> {
   await exec
-    .update(organization)
+    .update(academyProfile)
     .set({ publicApiOrigins: origins })
-    .where(eq(organization.id, academyId));
+    .where(eq(academyProfile.entityId, academyId));
 }
 
 export interface PublicClass {

@@ -16,20 +16,17 @@ import { ErrorState } from "./states";
 
 interface Membership {
   academyId: string;
+  organizationId: string;
   name: string;
   role: string;
   status: string;
 }
 
 /**
- * The post-login gate (ADR 49). Reached only when the session has no active
- * academy — a fresh session always starts without one. It routes the user by how
- * many academies they belong to (pending or active):
- *   - 0 → join your gym by code (new users).
- *   - 1 → open it automatically (the common case — no click).
- *   - 2+ → pick which one.
- * Creating a gym is NOT offered here; it lives behind the "Start a gym" link on
- * the landing page, because it is a rare, deliberate action.
+ * Better Auth writes `activeOrganizationId` when a gym is created or joined, and
+ * never at sign-in, so every fresh session arrives naming no gym and every
+ * organization-tier procedure refuses it. This gate is what a returning user
+ * lands on: 0 gyms joins by code, 1 opens itself, 2+ asks (ADR 49).
  */
 export function AcademyGate() {
   const trpc = useTRPC();
@@ -60,24 +57,27 @@ export function AcademyGate() {
     );
   }
 
-  const only = list.length === 1 ? list[0] : undefined;
+  const gyms = new Map<string, Membership>();
+  for (const m of list) {
+    if (!gyms.has(m.organizationId)) gyms.set(m.organizationId, m);
+  }
+  const only = gyms.size === 1 ? [...gyms.values()][0] : undefined;
+
   if (only) {
     return <OpenActive academyId={only.academyId} name={only.name} />;
   }
 
   return (
     <div className="flex min-h-screen items-center justify-center p-6">
-      <PickAcademy academies={list} />
+      <PickAcademy academies={[...gyms.values()]} />
     </div>
   );
 }
 
-/** Exactly one academy → open it and land the user in context, no click. */
 function OpenActive({ academyId, name }: { academyId: string; name: string }) {
   const trpc = useTRPC();
   const router = useRouter();
   const queryClient = useQueryClient();
-  // Guard the mount effect so React 18 strict-mode's double-invoke fires it once.
   const started = useRef(false);
 
   const setActive = useMutation(
@@ -94,7 +94,6 @@ function OpenActive({ academyId, name }: { academyId: string; name: string }) {
     if (started.current) return;
     started.current = true;
     setActive.mutate({ academyId });
-    // Run once on mount; the mutation identity is stable enough here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [academyId]);
 
@@ -109,7 +108,6 @@ function OpenActive({ academyId, name }: { academyId: string; name: string }) {
   );
 }
 
-/** Two or more academies → let the user choose which to open. */
 function PickAcademy({ academies }: { academies: Membership[] }) {
   const trpc = useTRPC();
   const router = useRouter();
@@ -129,11 +127,9 @@ function PickAcademy({ academies }: { academies: Membership[] }) {
     <div className="mx-auto flex w-full max-w-md flex-col gap-8">
       <Logo size={30} />
       <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Choose an academy
-        </h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Choose a gym</h1>
         <p className="text-muted-foreground text-sm">
-          You belong to a few gyms — pick the one to open.
+          You belong to a few gyms. Pick the one to open.
         </p>
       </div>
       <div className="flex flex-col gap-2">
@@ -143,7 +139,7 @@ function PickAcademy({ academies }: { academies: Membership[] }) {
             setActive.variables.academyId === a.academyId;
           return (
             <Button
-              key={a.academyId}
+              key={a.organizationId}
               variant="outline"
               size="lg"
               className="justify-between"

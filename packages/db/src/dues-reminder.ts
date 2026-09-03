@@ -3,7 +3,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { DUE_SOON_DAYS } from "@matops/domain";
 
 import type { DbExec } from "./client";
-import { member, organization } from "./auth-schema";
+import { entity, entityMembership } from "./entity-schema";
 import { memberDues, membershipPlan } from "./payments-schema";
 
 /**
@@ -63,8 +63,8 @@ export async function claimDueDuesReminders(
   // Atomic claim: flip the period for the eligible rows and return their ids.
   // A bounded subselect caps the batch (UPDATE has no LIMIT of its own).
   //
-  // The `member` join is what stops the gym billing people who are gone: only an
-  // ACTIVE membership is eligible. It sits in the CLAIM, not in the resolve below
+  // The membership join is what stops the gym billing people who are gone: only
+  // an ACTIVE one is eligible. It sits in the CLAIM, not in the resolve below
   // — claiming a non-active row would stamp its period and then drop it, so a
   // student restored later that month would silently never be reminded.
   const claimed = await exec.execute<{ id: string }>(sql`
@@ -73,7 +73,7 @@ export async function claimDueDuesReminders(
         "updated_at" = now()
     WHERE md."id" IN (
       SELECT md2."id" FROM "member_dues" md2
-      JOIN "member" m ON m."id" = md2."member_id" AND m."status" = 'active'
+      JOIN "entity_membership" em ON em."id" = md2."member_id" AND em."status" = 'active'
       WHERE (md2."dues_reminder_period" IS DISTINCT FROM
              to_char(md2."next_due_at" AT TIME ZONE 'UTC', 'YYYY-MM'))
         AND md2."next_due_at" <= ${windowEnd}
@@ -89,19 +89,19 @@ export async function claimDueDuesReminders(
   // Resolve the recipient user + gym name + plan amount for each claimed row.
   const rows = await exec
     .select({
-      userId: member.userId,
+      userId: entityMembership.userId,
       academyId: memberDues.academyId,
-      academyName: organization.name,
+      academyName: entity.name,
       planName: membershipPlan.name,
       priceMinor: membershipPlan.priceMinor,
       currency: membershipPlan.currency,
       nextDueAt: memberDues.nextDueAt,
     })
     .from(memberDues)
-    .innerJoin(member, eq(member.id, memberDues.memberId))
+    .innerJoin(entityMembership, eq(entityMembership.id, memberDues.memberId))
     .innerJoin(membershipPlan, eq(membershipPlan.id, memberDues.planId))
-    .innerJoin(organization, eq(organization.id, memberDues.academyId))
-    .where(and(inArray(memberDues.id, ids), isNull(organization.deletedAt)));
+    .innerJoin(entity, eq(entity.id, memberDues.academyId))
+    .where(and(inArray(memberDues.id, ids), isNull(entity.deletedAt)));
 
   return rows.map((r) => ({
     ...r,

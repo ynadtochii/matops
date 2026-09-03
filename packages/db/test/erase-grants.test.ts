@@ -1,7 +1,7 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { freshDb, single } from "./helpers";
+import { freshDb, seedMemberships, single } from "./helpers";
 
 type Tx = Parameters<Parameters<PGlite["transaction"]>[0]>[0];
 
@@ -31,6 +31,8 @@ describe("the app role can delete the rows a permanent erase must clear", () => 
 
   beforeAll(async () => {
     pg = await freshDb();
+    await seedMemberships(pg, "academy_A", ["mem_gone", "mem_ref"]);
+    await seedMemberships(pg, "academy_B", ["mem_other", "mem_ref_b"]);
     await pg.exec(`
       INSERT INTO notification (academy_id, user_id, kind, title, body, link)
       VALUES
@@ -40,7 +42,7 @@ describe("the app role can delete the rows a permanent erase must clear", () => 
         (academy_id, student_member_id, old_referrer_member_id, new_referrer_member_id, action, actor_id)
       VALUES
         ('academy_A', 'mem_gone', NULL, 'mem_ref', 'assigned', 'owner_A'),
-        ('academy_B', 'mem_other', NULL, 'mem_ref', 'assigned', 'owner_B');
+        ('academy_B', 'mem_other', NULL, 'mem_ref_b', 'assigned', 'owner_B');
     `);
   });
 

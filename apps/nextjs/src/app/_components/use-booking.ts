@@ -7,7 +7,7 @@ import { toast } from "@matops/ui/toast";
 
 import { useInvalidate } from "~/trpc/invalidate";
 import { useTRPC } from "~/trpc/react";
-import { useAcademy } from "./academy";
+import { useEntity } from "./entity";
 
 /**
  * Book and cancel, for every screen that offers them (the student schedule,
@@ -19,7 +19,7 @@ import { useAcademy } from "./academy";
 export function useBooking() {
   const trpc = useTRPC();
   const invalidateFor = useInvalidate();
-  const academy = useAcademy();
+  const academy = useEntity();
 
   const myDues = useQuery({
     ...trpc.payments.myDues.queryOptions(),

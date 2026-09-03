@@ -5,7 +5,7 @@ import { matchLeadByPhone } from "@matops/domain";
 
 import type { DbExec } from "./client";
 import type { DbReader } from "./tenant";
-import { organization } from "./auth-schema";
+import { entity } from "./entity-schema";
 import { classInstance, dropIn, dropInVisit } from "./scheduling";
 
 /**
@@ -28,13 +28,13 @@ export async function getAcademyPublic(
 } | null> {
   const rows = await exec
     .select({
-      academyId: organization.id,
-      name: organization.name,
-      timeZone: organization.timeZone,
-      country: organization.country,
+      academyId: entity.id,
+      name: entity.name,
+      timeZone: entity.timeZone,
+      country: entity.country,
     })
-    .from(organization)
-    .where(and(eq(organization.id, academyId), isNull(organization.deletedAt)))
+    .from(entity)
+    .where(and(eq(entity.id, academyId), isNull(entity.deletedAt)))
     .limit(1);
   return rows[0] ?? null;
 }
