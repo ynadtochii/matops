@@ -23,7 +23,7 @@ import { AnnounceSchema } from "@matops/validators";
 
 import { dayLongFmt, time24Fmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
-import { useEntity } from "./entity";
+import { useEntity, useEntityHref } from "./entity";
 import { PageHeader } from "./page-header";
 import { cardClass, Section } from "./primitives";
 import { SkeletonFeed } from "./skeletons";
@@ -113,6 +113,7 @@ function Feed({ items }: { items: FeedItem[] }) {
 }
 
 function FeedRow({ item }: { item: FeedItem }) {
+  const href = useEntityHref();
   const body = (
     <>
       <div className="flex items-baseline gap-2">
@@ -142,7 +143,10 @@ function FeedRow({ item }: { item: FeedItem }) {
   const link = item.link === "/notifications" ? null : item.link;
   if (!link) return <div className={cardClass()}>{body}</div>;
   return (
-    <Link href={link} className={cn(cardClass({ interactive: true }), "block")}>
+    <Link
+      href={href(link)}
+      className={cn(cardClass({ interactive: true }), "block")}
+    >
       {body}
     </Link>
   );
