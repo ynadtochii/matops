@@ -13,6 +13,7 @@
     "auth:generate": "pnpm -F @matops/auth generate",
     "db:push": "turbo -F @matops/db push",
     "db:studio": "turbo -F @matops/db studio",
+    "db:debug": "node packages/db/scripts/debug-query.mjs",
     "db:seed": "pnpm -F @matops/db seed",
     "db:seed:down": "pnpm -F @matops/db seed down",
     "db:seed:reset": "pnpm -F @matops/db seed reset",

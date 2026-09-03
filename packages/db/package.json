@@ -26,6 +26,7 @@
     "check": "pnpm with-env drizzle-kit check",
     "clean": "git clean -xdf .cache .turbo dist node_modules",
     "dev": "tsc",
+    "debug": "node scripts/debug-query.mjs",
     "format": "prettier --check . --ignore-path ../../.gitignore",
     "generate": "pnpm with-env drizzle-kit generate",
     "lint": "eslint --flag unstable_native_nodejs_ts_config",
