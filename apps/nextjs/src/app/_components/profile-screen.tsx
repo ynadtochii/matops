@@ -13,6 +13,7 @@ import {
 } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { Button } from "@matops/ui/button";
+import { FieldError } from "@matops/ui/field";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
 import { ThemeToggle } from "@matops/ui/theme";
@@ -23,10 +24,16 @@ import { dateYearFmt, monthYearFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { useEntity, useEntityHref } from "./entity";
 import { FeedbackLink } from "./feedback-link";
-import { PhoneField } from "./form-fields";
+import { fieldErrors, PhoneField } from "./form-fields";
 import { JoinAnotherBranch } from "./join-by-code";
 import { PageHeader } from "./page-header";
-import { cardClass, ENTER, Eyebrow, Section } from "./primitives";
+import {
+  cardClass,
+  ChevronDownIcon,
+  ENTER,
+  Eyebrow,
+  SectionHeading,
+} from "./primitives";
 import { SignOutButton } from "./sign-out";
 import { SkeletonCard } from "./skeletons";
 import { EmptyState, ErrorState, SuspendedState } from "./states";
@@ -52,6 +59,7 @@ function ProfileDetails({
   const router = useRouter();
   const academy = useEntity();
   const [editing, setEditing] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [draft, setDraft] = useState({ ...splitName(name), phone });
 
   const update = useMutation(
@@ -67,15 +75,32 @@ function ProfileDetails({
 
   const startEdit = () => {
     setDraft({ ...splitName(name), phone });
+    setSubmitted(false);
+    update.reset();
     setEditing(true);
   };
 
   const parsed = UpdateProfileSchema.safeParse(draft);
+  const errors =
+    submitted && !parsed.success
+      ? fieldErrors(parsed.error.issues, draft.phone)
+      : {};
 
   if (editing) {
     return (
-      <div className={cn(cardClass(), "flex flex-col gap-4")}>
-        <div className="grid gap-4 sm:grid-cols-2">
+      <form
+        className={cn(cardClass(), "flex flex-col gap-4")}
+        noValidate
+        onSubmit={(event) => {
+          event.preventDefault();
+          setSubmitted(true);
+          if (parsed.success && !update.isPending) update.mutate(parsed.data);
+        }}
+      >
+        <fieldset
+          disabled={update.isPending}
+          className="grid gap-4 sm:grid-cols-2"
+        >
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="firstName">First name</Label>
             <Input
@@ -84,9 +109,16 @@ function ProfileDetails({
               onChange={(e) =>
                 setDraft({ ...draft, firstName: e.target.value })
               }
+              aria-invalid={!!errors.firstName}
+              aria-describedby={
+                errors.firstName ? "firstName-error" : undefined
+              }
               autoComplete="given-name"
               autoFocus
             />
+            {errors.firstName && (
+              <FieldError id="firstName-error">{errors.firstName}</FieldError>
+            )}
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="lastName">Last name</Label>
@@ -94,30 +126,48 @@ function ProfileDetails({
               id="lastName"
               value={draft.lastName}
               onChange={(e) => setDraft({ ...draft, lastName: e.target.value })}
+              aria-invalid={!!errors.lastName}
+              aria-describedby={errors.lastName ? "lastName-error" : undefined}
               autoComplete="family-name"
             />
+            {errors.lastName && (
+              <FieldError id="lastName-error">{errors.lastName}</FieldError>
+            )}
           </div>
           <PhoneField
             timeZone={academy.timeZone}
             country={academy.country}
             value={draft.phone}
             onChange={(phone) => setDraft({ ...draft, phone })}
+            disabled={update.isPending}
+            error={errors.phone}
           />
-        </div>
+        </fieldset>
+        {update.isError && (
+          <p role="alert" className="text-error text-sm">
+            {update.error.message || "Could not save your profile. Try again."}
+          </p>
+        )}
         <div className="flex flex-wrap gap-2">
           <Button
             size="sm"
             busy={update.isPending}
-            disabled={!parsed.success || update.isPending}
-            onClick={() => parsed.success && update.mutate(parsed.data)}
+            disabled={update.isPending}
+            type="submit"
           >
-            Save
+            Save changes
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+          <Button
+            size="sm"
+            variant="ghost"
+            type="button"
+            disabled={update.isPending}
+            onClick={() => setEditing(false)}
+          >
             Cancel
           </Button>
         </div>
-      </div>
+      </form>
     );
   }
 
@@ -128,15 +178,15 @@ function ProfileDetails({
       <div className="flex flex-wrap items-center justify-between gap-3 p-4">
         <div className="min-w-0">
           <Eyebrow>Name</Eyebrow>
-          <p className="mt-1 text-base font-medium">{name || "—"}</p>
+          <p className="mt-1 text-base font-medium">{name || "Not provided"}</p>
         </div>
         <Button size="sm" variant="outline" onClick={startEdit}>
-          Edit
+          Edit details
         </Button>
       </div>
       <div className="p-4">
         <Eyebrow>Phone</Eyebrow>
-        <p className="mt-1 text-base">{phone || "—"}</p>
+        <p className="mt-1 text-base">{phone || "Not provided"}</p>
       </div>
       <div className="p-4">
         <Eyebrow>Email</Eyebrow>
@@ -166,101 +216,108 @@ export function ProfileScreen({
     <>
       <PageHeader
         title="Profile"
-        subtitle="Your details and how MatOps looks."
+        subtitle="Manage your account and view your training details."
       />
-      <div className="flex flex-col gap-8">
-        <Section label="Your details" className={ENTER}>
-          <ProfileDetails name={name} email={email} phone={phone} />
-        </Section>
-
-        <Section label="In this academy" className={cn(ENTER, "delay-100")}>
-          <div className="flex flex-col gap-3">
+      <div className="grid items-start gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.8fr)] xl:gap-10">
+        <div className={cn("flex min-w-0 flex-col gap-8", ENTER)}>
+          <section className="flex flex-col gap-4" aria-label="Account details">
+            <SectionHeading>Account details</SectionHeading>
+            <ProfileDetails name={name} email={email} phone={phone} />
+          </section>
+          <section className="flex flex-col gap-4" aria-label="Preferences">
+            <SectionHeading>Preferences</SectionHeading>
             <div
               className={cn(
                 cardClass(),
-                "flex flex-wrap items-start justify-between gap-3",
+                "flex flex-wrap items-center justify-between gap-3",
               )}
             >
-              <div className="min-w-0">
-                <p className="text-base font-medium">{academy.name}</p>
-                <p className="text-muted-foreground text-sm capitalize">
-                  {academy.status === "pending"
-                    ? "pending approval"
-                    : academy.role}
+              <div>
+                <p className="text-base font-medium">Appearance</p>
+                <p className="text-muted-foreground text-sm">
+                  Choose light, dark, or your system setting.
                 </p>
-                {academy.address && (
-                  <p className="text-muted-foreground mt-1 text-sm">
-                    {academy.address}
-                    {mapUrl && (
-                      <>
-                        {" · "}
-                        <a
-                          href={mapUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-brand-strong inline-flex min-h-11 items-center underline underline-offset-2 sm:min-h-0"
-                        >
-                          Open in maps
-                        </a>
-                      </>
-                    )}
-                  </p>
-                )}
               </div>
-              <p className="text-muted-foreground shrink-0 text-sm">
-                Member since {monthYearFmt.format(new Date(academy.joinedAt))}
-              </p>
+              <ThemeToggle />
             </div>
-            {!isStaff(academy) && academy.status === "active" && (
-              <Button
-                asChild
-                variant="outline"
-                size="sm"
-                className="self-start"
-              >
-                <Link href={href("/payments")}>Membership dues</Link>
-              </Button>
-            )}
+          </section>
+          <div className="border-border flex flex-wrap items-center justify-between gap-4 border-t pt-5">
+            <FeedbackLink className="text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center text-sm underline underline-offset-2" />
+            <SignOutButton />
           </div>
-        </Section>
-
-        {!isStaff(academy) && (
-          <Section label="My rank" className={cn(ENTER, "delay-200")}>
-            {academy.status === "suspended" ? <SuspendedState /> : <MyRank />}
-          </Section>
-        )}
-
-        <Section label="Another branch" className={cn(ENTER, "delay-200")}>
-          <div className={cn(cardClass(), "flex flex-col gap-3")}>
-            <p className="text-muted-foreground text-sm">
-              Train somewhere else too? Ask them for their 6-digit ID and join
-              it here. Switching between the places you already train at is the
-              picker at the top of the sidebar.
-            </p>
-            <JoinAnotherBranch />
-          </div>
-        </Section>
-
-        <Section label="Appearance" className={cn(ENTER, "delay-200")}>
-          <div
-            className={cn(
-              cardClass(),
-              "flex flex-wrap items-center justify-between gap-3",
-            )}
-          >
-            <div>
-              <p className="text-base font-medium">Theme</p>
+        </div>
+        <div
+          className={cn(
+            "border-border flex min-w-0 flex-col gap-8 xl:border-l xl:pl-8",
+            ENTER,
+            "delay-100",
+          )}
+        >
+          <section className="flex flex-col gap-4" aria-label="Your training">
+            <SectionHeading>Your training</SectionHeading>
+            <div className={cn(cardClass(), "flex flex-col gap-4")}>
+              <div>
+                <h3 className="text-lg font-semibold">{academy.name}</h3>
+                <p className="text-muted-foreground mt-1 text-sm capitalize">
+                  {academy.status === "pending"
+                    ? "Awaiting approval"
+                    : academy.status === "suspended"
+                      ? "Membership suspended"
+                      : academy.role}
+                </p>
+                <p className="text-muted-foreground mt-1 text-sm">
+                  Joined {monthYearFmt.format(new Date(academy.joinedAt))}
+                </p>
+              </div>
+              {(!!academy.address || !!mapUrl) && (
+                <div className="border-border border-t pt-3">
+                  {academy.address && (
+                    <p className="text-muted-foreground text-sm">
+                      {academy.address}
+                    </p>
+                  )}
+                  {mapUrl && (
+                    <a
+                      href={mapUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-brand-strong inline-flex min-h-11 items-center text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-4"
+                    >
+                      Open in maps
+                      <span className="sr-only"> (opens in a new tab)</span>
+                    </a>
+                  )}
+                </div>
+              )}
+              {!isStaff(academy) && academy.status === "active" && (
+                <Button
+                  asChild
+                  variant="outline"
+                  className="h-auto min-h-11 self-start whitespace-normal"
+                >
+                  <Link href={href("/payments")}>
+                    View membership and payments
+                  </Link>
+                </Button>
+              )}
+            </div>
+          </section>
+          {!isStaff(academy) && (
+            <section className="flex flex-col gap-4" aria-label="Your rank">
+              <SectionHeading>Your rank</SectionHeading>
+              {academy.status === "suspended" ? <SuspendedState /> : <MyRank />}
+            </section>
+          )}
+          <section className="border-border border-t pt-5">
+            <SectionHeading>More branches</SectionHeading>
+            <div className="flex flex-col gap-4 pt-3">
               <p className="text-muted-foreground text-sm">
-                Light, dark, or follow your system.
+                Enter the branch’s 6-digit ID to request access. Use the sidebar
+                picker to switch between branches you already joined.
               </p>
+              <JoinAnotherBranch />
             </div>
-            <ThemeToggle />
-          </div>
-        </Section>
-
-        <div className="flex flex-wrap items-center gap-4">
-          <SignOutButton />
-          <FeedbackLink className="text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center text-sm underline underline-offset-2 sm:min-h-0" />
+          </section>
         </div>
       </div>
     </>
@@ -303,10 +360,13 @@ function MyRank() {
         ))}
       </div>
       {history.length > 0 && (
-        <div className="border-border mt-4 border-t border-dashed pt-4">
-          <Eyebrow>Promotions</Eyebrow>
-          <div className="mt-2 flex flex-col gap-1.5">
-            {history.slice(0, 5).map((h) => (
+        <details className="group border-border mt-4 border-t pt-2">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-4 [&::-webkit-details-marker]:hidden">
+            Promotion history ({history.length})
+            <ChevronDownIcon className="shrink-0 transition-transform duration-200 group-open:rotate-180 motion-reduce:transition-none" />
+          </summary>
+          <div className="mt-2 flex flex-col gap-3">
+            {history.map((h) => (
               <div
                 key={h.id}
                 className="flex flex-wrap items-center justify-between gap-3 text-sm"
@@ -325,7 +385,7 @@ function MyRank() {
               </div>
             ))}
           </div>
-        </div>
+        </details>
       )}
     </div>
   );

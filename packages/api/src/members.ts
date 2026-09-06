@@ -2,14 +2,28 @@ import { TRPCError } from "@trpc/server";
 
 import type { DbExec, DbReader, MemberRow, TenantTx } from "@matops/db";
 import {
+  and,
+  eq,
   getAcademyMembership,
   getMemberById,
+  inArray,
   isNull,
   listMembersOf,
   setMemberRoleStatus,
 } from "@matops/db";
-import { memberDues, membershipPlan } from "@matops/db/schema";
-import { autoAssignedPlan, firstDueAt, isStaff } from "@matops/domain";
+import {
+  entity,
+  member,
+  memberDues,
+  membershipPlan,
+  user,
+} from "@matops/db/schema";
+import {
+  autoAssignedPlan,
+  firstDueAt,
+  isStaff,
+  isStudentMember,
+} from "@matops/domain";
 
 import { notifyMembershipApproved } from "./notify";
 
@@ -187,5 +201,62 @@ export async function activateMember(
   await notifyMembershipApproved(
     { academyId: ctx.academyId, userId: input.userId },
     ctx.baseDb,
+  );
+}
+
+export type DirectoryMemberRow = Omit<MemberRow, "memberId"> & {
+  memberId: string | null;
+  inheritedRole: boolean;
+};
+
+export async function directoryRosterOf(
+  ctx: MemberScope,
+): Promise<DirectoryMemberRow[]> {
+  const rows: DirectoryMemberRow[] = (await rosterOf(ctx)).map((row) => ({
+    ...row,
+    inheritedRole: false,
+  }));
+  const organizationStaff = await ctx.db
+    .select({
+      userId: member.userId,
+      role: member.role,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      createdAt: member.createdAt,
+    })
+    .from(member)
+    .innerJoin(entity, eq(entity.organizationId, member.organizationId))
+    .innerJoin(user, eq(user.id, member.userId))
+    .where(
+      and(
+        eq(entity.id, ctx.academyId),
+        inArray(member.role, ["owner", "manager"]),
+      ),
+    );
+  for (const person of organizationStaff) {
+    const held = rows.find((row) => row.userId === person.userId);
+    if (held) {
+      held.inheritedRole = true;
+      held.role = held.role === "owner" ? "owner" : person.role;
+      held.status = "active";
+      held.invitedRole = null;
+    } else {
+      rows.push({
+        ...person,
+        memberId: null,
+        status: "active",
+        invitedRole: null,
+        inheritedRole: true,
+      });
+    }
+  }
+  return rows;
+}
+
+export async function studentRosterOf(ctx: MemberScope): Promise<MemberRow[]> {
+  return (await directoryRosterOf(ctx)).filter(
+    (row): row is DirectoryMemberRow & { memberId: string } =>
+      row.memberId !== null && isStudentMember(row),
   );
 }

@@ -1,24 +1,78 @@
-import type { TenantTx } from "@matops/db";
+import type { DbReader, TenantTx } from "@matops/db";
 import type { AccessVerdict, ApplicableAssignment } from "@matops/domain";
 import { and, asc, eq, gt, inArray, isNull } from "@matops/db";
 import {
   accessAssignment,
   accessPlan,
   accessPlanEntity,
+  accessPlanPrice,
   classInstance,
   classParticipation,
+  entity,
   entityMembership,
+  member,
   membershipMonth,
+  organization,
   user,
 } from "@matops/db/schema";
 import {
   appliesInMonth,
+  isFreeMembershipMonth,
+  isStaff,
   membershipAccess,
   monthOf,
   payDeadline,
+  priceForMonth,
 } from "@matops/domain";
 
 import { membershipCalendar } from "./membership-status";
+
+export async function loadStaffAccess(
+  db: DbReader,
+  input: { entityIds: string[]; userIds: string[] },
+): Promise<Map<string, Set<string>>> {
+  const result = new Map<string, Set<string>>();
+  if (input.entityIds.length === 0 || input.userIds.length === 0) return result;
+  const rows = await db
+    .select({
+      entityId: entity.id,
+      userId: member.userId,
+      organizationRole: member.role,
+      role: entityMembership.role,
+      status: entityMembership.status,
+    })
+    .from(entity)
+    .innerJoin(organization, eq(organization.id, entity.organizationId))
+    .innerJoin(member, eq(member.organizationId, entity.organizationId))
+    .leftJoin(
+      entityMembership,
+      and(
+        eq(entityMembership.entityId, entity.id),
+        eq(entityMembership.userId, member.userId),
+      ),
+    )
+    .where(
+      and(
+        inArray(entity.id, input.entityIds),
+        inArray(member.userId, input.userIds),
+        isNull(entity.deletedAt),
+        isNull(organization.deletedAt),
+      ),
+    );
+  for (const row of rows) {
+    const inherited =
+      row.organizationRole === "owner" || row.organizationRole === "manager";
+    if (
+      !inherited &&
+      !isStaff({ role: row.role ?? "student", status: row.status ?? "removed" })
+    )
+      continue;
+    const users = result.get(row.entityId) ?? new Set<string>();
+    users.add(row.userId);
+    result.set(row.entityId, users);
+  }
+  return result;
+}
 
 /**
  * Whether one person may book or come in at ONE branch (ADR 126).
@@ -40,13 +94,14 @@ export interface MembershipAccess {
   atSession: AccessVerdict;
   /** The memberships considered, as judged for `now`. */
   assignments: ApplicableAssignment[];
+  accessSource: "staff" | "membership" | null;
 }
 
 interface AccessQuery {
   userId: string;
   entityId: string;
   /** Their standing at this branch, or null for an owner who holds none. */
-  membership: { status: string } | null;
+  membership: { status: string; role?: string } | null;
   now: Date;
   /** When the class starts. Defaults to `now` for a question about today. */
   sessionAt?: Date;
@@ -56,6 +111,18 @@ export async function loadMembershipAccess(
   db: TenantTx,
   input: AccessQuery,
 ): Promise<MembershipAccess> {
+  const staff = await loadStaffAccess(db, {
+    entityIds: [input.entityId],
+    userIds: [input.userId],
+  });
+  if (staff.get(input.entityId)?.has(input.userId)) {
+    return {
+      now: "ok",
+      atSession: "ok",
+      assignments: [],
+      accessSource: "staff",
+    };
+  }
   const sessionAt = input.sessionAt ?? input.now;
   const calendar = await membershipCalendar(db);
   const nowMonth = monthOf(input.now, calendar.timeZone);
@@ -80,7 +147,12 @@ export async function loadMembershipAccess(
       assignments: [],
       at: input.now,
     });
-    return { now: verdict, atSession: verdict, assignments: [] };
+    return {
+      now: verdict,
+      atSession: verdict,
+      assignments: [],
+      accessSource: null,
+    };
   }
 
   const coverage = await db
@@ -89,6 +161,8 @@ export async function loadMembershipAccess(
       entityId: accessPlanEntity.entityId,
     })
     .from(accessPlanEntity);
+
+  const prices = await db.select().from(accessPlanPrice);
 
   const months = await db
     .select({
@@ -119,6 +193,12 @@ export async function loadMembershipAccess(
         entityIds: coverage
           .filter((c) => c.planId === a.planId)
           .map((c) => c.entityId),
+        paymentRequired: !isFreeMembershipMonth(
+          priceForMonth(
+            prices.filter((p) => p.planId === a.planId),
+            month,
+          ),
+        ),
         paid:
           months.find((m) => m.assignmentId === a.id && m.month === month)
             ?.paid ?? false,
@@ -147,6 +227,11 @@ export async function loadMembershipAccess(
       at: sessionAt,
     }),
     assignments: nowAssignments,
+    accessSource: nowAssignments.some(
+      (a) => a.status === "active" && a.entityIds.includes(input.entityId),
+    )
+      ? "membership"
+      : null,
   };
 }
 
@@ -159,6 +244,7 @@ export interface RosterStanding {
   /** The plans that cover them here, for the roster to name. */
   planNames: string[];
   verdict: AccessVerdict;
+  accessSource: "staff" | "membership" | null;
 }
 
 /**
@@ -175,7 +261,7 @@ export async function loadRosterStanding(
   db: TenantTx,
   input: {
     entityId: string;
-    people: { userId: string; status: string }[];
+    people: { userId: string; status: string; role?: string }[];
     now: Date;
   },
 ): Promise<Map<string, RosterStanding>> {
@@ -183,6 +269,10 @@ export async function loadRosterStanding(
   if (input.people.length === 0) return answer;
 
   const userIds = input.people.map((p) => p.userId);
+  const staff = await loadStaffAccess(db, {
+    entityIds: [input.entityId],
+    userIds,
+  });
   const held = await db
     .select({
       id: accessAssignment.id,
@@ -226,6 +316,8 @@ export async function loadRosterStanding(
         )
     : [];
 
+  const prices = held.length ? await db.select().from(accessPlanPrice) : [];
+
   for (const person of input.people) {
     const theirs = held
       .filter((a) => a.userId === person.userId && appliesInMonth(a, month))
@@ -236,6 +328,12 @@ export async function loadRosterStanding(
         entityIds: coverage
           .filter((c) => c.planId === a.planId)
           .map((c) => c.entityId),
+        paymentRequired: !isFreeMembershipMonth(
+          priceForMonth(
+            prices.filter((p) => p.planId === a.planId),
+            month,
+          ),
+        ),
         paid: months.find((m) => m.assignmentId === a.id)?.paid ?? false,
         deadline: payDeadline({
           month,
@@ -251,12 +349,19 @@ export async function loadRosterStanding(
       enrolled: true,
       covered: covering.length > 0,
       planNames: [...new Set(covering.map((a) => a.planName))].sort(),
-      verdict: membershipAccess({
-        entityId: input.entityId,
-        membership: { status: person.status },
-        assignments: theirs,
-        at: input.now,
-      }),
+      accessSource: staff.get(input.entityId)?.has(person.userId)
+        ? "staff"
+        : covering.length > 0
+          ? "membership"
+          : null,
+      verdict: staff.get(input.entityId)?.has(person.userId)
+        ? "ok"
+        : membershipAccess({
+            entityId: input.entityId,
+            membership: { status: person.status },
+            assignments: theirs,
+            at: input.now,
+          }),
     });
   }
   return answer;
@@ -339,6 +444,7 @@ export async function bookingsNeedingReview(
       .innerJoin(user, eq(user.id, classParticipation.studentId))
       .where(
         and(
+          eq(classParticipation.academyId, input.entityId),
           eq(classParticipation.bookingStatus, "booked"),
           gt(classInstance.startsAt, input.now),
           isNull(classInstance.deletedAt),
@@ -379,7 +485,13 @@ export async function bookingsNeedingReview(
         ),
       );
 
+    const staff = await loadStaffAccess(db, {
+      entityIds: [input.entityId],
+      userIds,
+    });
+
     for (const b of booked) {
+      if (staff.get(input.entityId)?.has(b.userId)) continue;
       const month = monthOf(b.startsAt, calendar.timeZone);
       // The session's own month decides, not today's: a booking three weeks out
       // is judged against the membership that will be running then.

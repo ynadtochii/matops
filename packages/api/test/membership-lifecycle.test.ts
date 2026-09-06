@@ -73,6 +73,11 @@ describe("member archive and permanent erase (docs/issues/84)", () => {
       },
     ]);
 
+    await h.pg.query(
+      `UPDATE "member" SET role = 'member' WHERE organization_id = $1 AND user_id = $2`,
+      [ACAD, COOWNER],
+    );
+
     await seedClasses(h.pg, [
       {
         id: PAST,

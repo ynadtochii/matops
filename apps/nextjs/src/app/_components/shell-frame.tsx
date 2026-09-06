@@ -22,11 +22,6 @@ export interface NavItem {
   icon: ReactNode;
   show: boolean;
   badge?: number;
-  /**
-   * The heading this item sits under in the sidebar, and the drawer on a
-   * phone. Items with no group come first and carry no heading, which is what
-   * the branch's own work is (ADR 129).
-   */
   group?: string;
   /** Runs an action instead of navigating: "Add branch" in gym management. */
   onSelect?: () => void;
@@ -260,10 +255,12 @@ export function ShellFrame({
     : grouped;
   const moreBadge = moreItems.reduce((n, i) => n + (i.badge ?? 0), 0);
   const moreActive = moreItems.some((i) => isCurrent(i.path));
+  const hasGroups = items.some((i) => i.group);
 
   return (
     <div className="flex h-dvh overflow-hidden">
-      {/* Desktop sidebar — pinned full height, never scrolls */}
+      {/* Desktop sidebar — the logo, the branch picker and the footer are pinned;
+          only the nav list scrolls, so the picker cannot move under the pointer. */}
       <aside className="bg-sidebar border-sidebar-border hidden h-full w-60 shrink-0 flex-col overflow-hidden border-r p-3 md:flex">
         <Link
           href={homeHref}
@@ -281,9 +278,9 @@ export function ShellFrame({
           >
             {groupsOf(items).map(({ group, members }) => (
               <div key={group ?? ""} className="flex flex-col gap-0.5">
-                {group && (
+                {hasGroups && (
                   <p className="text-muted-foreground mt-3 px-2.5 pb-1 font-mono text-[10px] tracking-wide uppercase">
-                    {group}
+                    {group ?? "Branch"}
                   </p>
                 )}
                 {members.map((i) => (
@@ -424,7 +421,6 @@ export function ShellFrame({
   );
 }
 
-/** Ungrouped items first, then each group in the order it first appears. */
 function groupsOf(items: NavItem[]): { group?: string; members: NavItem[] }[] {
   const out: { group?: string; members: NavItem[] }[] = [];
   for (const item of items) {
@@ -468,7 +464,7 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
       )}
     </>
   );
-  const className = `relative flex items-center gap-3 rounded-md px-2.5 py-2 text-sm transition-colors ${
+  const className = `relative flex items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm transition-colors ${
     active
       ? "bg-brand-wash text-brand-strong font-medium"
       : "text-muted-foreground hover:text-foreground hover:bg-muted"

@@ -90,13 +90,22 @@ describe("class.booking_count invariant", () => {
     expect(await agree()).toBe(1);
   });
 
-  it("a pending member books provisionally and is never counted", async () => {
-    const res = await h.as(PENDING, ACAD).booking.book({ classId: CLASS });
-    expect(res.tier).toBe("provisional");
-    expect(await storedBookingCount(h.pg, CLASS)).toBe(0);
-    expect(await confirmedBookings(h.pg, CLASS)).toBe(0);
-    const mine = await h.as(PENDING, ACAD).booking.mine();
-    expect(mine).toHaveLength(1);
+  it("pending members can read but cannot book or check in", async () => {
+    const pending = h.as(PENDING, ACAD);
+    await expect(
+      pending.booking.book({ classId: CLASS }),
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    await expect(
+      pending.checkin.checkIn({ classId: CLASS }),
+    ).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    expect(await pending.booking.mine()).toEqual([]);
+    expect((await pending.class.get({ id: CLASS })).id).toBe(CLASS);
+    expect((await pending.booking.access()).locked).toBe(true);
+    expect(await agree()).toBe(0);
   });
 
   it("check-in books and counts once", async () => {
@@ -138,7 +147,6 @@ describe("class.booking_count invariant", () => {
 
   it("the count the schedule reads matches the participations", async () => {
     await h.as(STUDENT, ACAD).booking.book({ classId: CLASS });
-    await h.as(PENDING, ACAD).booking.book({ classId: CLASS });
     const [row] = await h.as(STUDENT, ACAD).class.mine({
       from: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
       to: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),

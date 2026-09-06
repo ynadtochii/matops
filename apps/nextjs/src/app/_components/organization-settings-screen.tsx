@@ -18,7 +18,7 @@ import { dateYearFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { useOrganization } from "./entity";
 import { PageHeader } from "./page-header";
-import { cardClass, Eyebrow } from "./primitives";
+import { cardClass, ENTER, Eyebrow } from "./primitives";
 import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 import { useMinuteClock } from "./use-clock";
@@ -36,17 +36,17 @@ export function OrganizationSettingsScreen() {
 
   if (!canRunOrganization) {
     return (
-      <EmptyState title="Only an owner can change the gym's settings.">
+      <EmptyState title="Only an owner can change the organization's settings.">
         Ask whoever runs it.
       </EmptyState>
     );
   }
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className={`${ENTER} flex flex-col gap-8`}>
       <PageHeader
         title="Settings"
-        subtitle="Your gym: its name, where members pay, and any branch still to move onto memberships."
+        subtitle="Your organization: its name, where members pay, and any branch still to move onto memberships."
       />
       <GymName />
       <Account />
@@ -163,10 +163,11 @@ function GymName() {
     trpc.organization.rename.mutationOptions({
       onSuccess: async () => {
         await queryClient.invalidateQueries(trpc.entity.pathFilter());
-        toast.success("Gym renamed");
+        toast.success("Organization renamed");
         setEditing(false);
       },
-      onError: (e) => toast.error(e.message || "Could not rename the gym"),
+      onError: (e) =>
+        toast.error(e.message || "Could not rename the organization"),
     }),
   );
 
@@ -194,7 +195,7 @@ function GymName() {
               maxLength={80}
               autoFocus
               className="max-w-xs"
-              aria-label="Gym name"
+              aria-label="Organization name"
             />
             <Button size="sm" onClick={save} disabled={rename.isPending}>
               {rename.isPending ? "Saving…" : "Save"}
@@ -213,7 +214,7 @@ function GymName() {
         ) : (
           <>
             <div>
-              <Eyebrow>Gym name</Eyebrow>
+              <Eyebrow>Organization name</Eyebrow>
               <p className="mt-1 text-base font-medium">{organizationName}</p>
             </div>
             <Button
@@ -230,7 +231,7 @@ function GymName() {
         )}
       </div>
       <p className="text-muted-foreground text-sm">
-        This is the gym as a whole. Each branch keeps its own name.
+        This is the organization as a whole. Each branch keeps its own name.
       </p>
     </section>
   );
@@ -460,7 +461,9 @@ function BranchRow({ entityId, name }: { entityId: string; name: string }) {
           readiness.unpricedPlans === 1 ? "plan has" : "plans have"
         } no price`
       : "",
-    readiness && !readiness.bankDetails ? "no bank details for the gym" : "",
+    readiness && !readiness.bankDetails
+      ? "no bank details for the organization"
+      : "",
     readiness?.pendingEnrolment
       ? `${readiness.pendingEnrolment} covered ${
           readiness.pendingEnrolment === 1 ? "person is" : "people are"
@@ -477,7 +480,7 @@ function BranchRow({ entityId, name }: { entityId: string; name: string }) {
         <p className="text-muted-foreground text-sm">
           {enforced
             ? "Moved to memberships. Its old dues are still here if you need to go back."
-            : "Still on its own dues. Moving it puts every member on the gym's memberships."}
+            : "Still on its own dues. Moving it puts every member on the organization's memberships."}
         </p>
       </div>
       {enforced ? (

@@ -74,6 +74,46 @@ describe("assigning a shared membership", () => {
 
   afterAll(() => h.close());
 
+  it("does not sell organization staff a membership", async () => {
+    expect(
+      await rejectionCode(
+        owner().accessPlan.assign({ userId: OWNER, planId: plan }),
+      ),
+    ).toBe("PRECONDITION_FAILED");
+  });
+
+  it("does not sell a coach membership for their staff branch", async () => {
+    const staffPlan = await owner().accessPlan.create({
+      name: "Staff mat",
+      entityIds: [ORG],
+    });
+    expect(
+      await rejectionCode(
+        owner().accessPlan.assign({ userId: COACH, planId: staffPlan.id }),
+      ),
+    ).toBe("PRECONDITION_FAILED");
+  });
+
+  it("allows a coach to buy student access at another branch", async () => {
+    const gymPlan = await owner().accessPlan.create({
+      name: "Coach training elsewhere",
+      entityIds: [gym],
+    });
+    const made = await owner().accessPlan.assign({
+      userId: COACH,
+      planId: gymPlan.id,
+    });
+    expect(made.created).toBe(true);
+    const memberships = await h.exec
+      .select()
+      .from(entityMembership)
+      .where(eq(entityMembership.userId, COACH));
+    expect(memberships.find((m) => m.entityId === ORG)?.role).toBe(
+      "instructor",
+    );
+    expect(memberships.find((m) => m.entityId === gym)?.role).toBe("student");
+  });
+
   it("is owner only", async () => {
     expect(
       await rejectionCode(

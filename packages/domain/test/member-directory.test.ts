@@ -185,3 +185,33 @@ describe("staffRows", () => {
     expect(pendingCoachCount(rows())).toBe(1);
   });
 });
+
+it("keeps suspended and archived instructors in Staff", () => {
+  const rows = combineDirectory([
+    entry({
+      entityId: "e_mat",
+      userId: "suspended",
+      role: "instructor",
+      status: "suspended",
+    }),
+    entry({
+      entityId: "e_mat",
+      userId: "archived",
+      role: "instructor",
+      status: "archived",
+    }),
+  ]);
+  expect(staffRows(rows)).toHaveLength(2);
+});
+
+it("represents an organization manager without a branch membership", () => {
+  const rows = combineDirectory([
+    entry({
+      entityId: "e_mat",
+      userId: "manager",
+      role: "manager",
+      memberId: null,
+    }),
+  ]);
+  expect(staffRows(rows)[0]?.branches[0]?.memberId).toBeNull();
+});

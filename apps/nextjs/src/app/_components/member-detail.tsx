@@ -9,6 +9,7 @@ import {
   disciplineLabel,
   formatMoney,
   formatRank,
+  isStaffRole,
   PAYMENT_STATUS_LABEL,
   RANK_SYSTEMS,
   rankDisciplines,
@@ -31,12 +32,13 @@ import {
   cardClass,
   DriftBadge,
   DUES_TONE,
+  RESOLVE,
   Stat,
-  Tabs,
   TAP,
 } from "./primitives";
 import { SkeletonLines, SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
+import { Tabs } from "./tabs";
 
 /**
  * One member's row and the detail panel behind it (spec O4): Overview, Rank,
@@ -83,7 +85,7 @@ export function MemberRow({
             booking locked
           </span>
         )}
-        {m.membership && m.membership.verdict !== "ok" && (
+        {!isStaffRole(m) && m.membership && m.membership.verdict !== "ok" && (
           <span className="text-error ml-2 text-xs font-medium uppercase">
             {MEMBERSHIP_TAG[m.membership.verdict]}
           </span>
@@ -96,12 +98,17 @@ export function MemberRow({
       </span>
       {/* Why they are on THIS branch's roster. Somebody whose plan covers the
           gym is a member of the gym, not a visitor (ADR 126). */}
-      {m.membership?.covered && (
+      {isStaffRole(m) && m.status === "active" && (
+        <span className="text-muted-foreground text-sm">
+          Staff access. No membership required
+        </span>
+      )}
+      {!isStaffRole(m) && m.membership?.covered && (
         <span className="text-muted-foreground text-sm">
           Covered by {m.membership.planNames.join(", ")}
         </span>
       )}
-      {m.membership && !m.membership.covered && (
+      {!isStaffRole(m) && m.membership && !m.membership.covered && (
         <span className="text-muted-foreground text-sm">
           Joined this branch, no membership covers it
         </span>
@@ -124,7 +131,10 @@ export function MemberRow({
           className="flex flex-1 items-center gap-2 text-left"
         >
           <span
-            className={`text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
+            className={cn(
+              "text-muted-foreground transition-transform duration-200 motion-reduce:transition-none",
+              open && "rotate-90",
+            )}
             aria-hidden
           >
             ›
@@ -158,7 +168,12 @@ export function MemberDetail({ m }: { m: Member }) {
   );
 
   return (
-    <div className="border-border bg-background rounded-b-lg border border-t-0 p-4">
+    <div
+      className={cn(
+        "border-border bg-background rounded-b-lg border border-t-0 p-4",
+        RESOLVE,
+      )}
+    >
       <Tabs
         label={`${m.name} detail`}
         value={tab}
@@ -169,13 +184,13 @@ export function MemberDetail({ m }: { m: Member }) {
           { id: "attendance", label: "Attendance" },
           { id: "rank", label: "Rank" },
           { id: "notes", label: "Notes" },
-          ...(owner
+          ...(owner && !isStaffRole(m)
             ? [{ id: "membership" as const, label: "Membership" }]
             : []),
         ]}
       />
 
-      <div>
+      <div key={tab} className={RESOLVE}>
         {tab === "rank" ? (
           <RankTab memberId={m.memberId} />
         ) : tab === "notes" ? (

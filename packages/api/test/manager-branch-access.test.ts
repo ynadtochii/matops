@@ -165,6 +165,62 @@ describe("a gym manager at a branch", () => {
     );
   });
 
+  it("cannot change an owner's branch status", async () => {
+    const input = { memberId: memberId(GYM, OWNER) };
+    expect(
+      await rejectionCode(at(MANAGER, GYM).membership.suspend(input)),
+    ).toBe("FORBIDDEN");
+    expect(
+      await rejectionCode(at(MANAGER, GYM).membership.archive(input)),
+    ).toBe("FORBIDDEN");
+    expect(
+      await rejectionCode(at(MANAGER, GYM).membership.restore(input)),
+    ).toBe("FORBIDDEN");
+  });
+
+  it("refuses branch changes that cannot remove inherited staff access", async () => {
+    const input = { memberId: memberId(GYM, OWNER) };
+    expect(await rejectionCode(at(OWNER, GYM).membership.suspend(input))).toBe(
+      "PRECONDITION_FAILED",
+    );
+    expect(await rejectionCode(at(OWNER, GYM).membership.archive(input))).toBe(
+      "PRECONDITION_FAILED",
+    );
+    expect(
+      await rejectionCode(
+        at(OWNER, GYM).membership.setRole({ ...input, role: "student" }),
+      ),
+    ).toBe("PRECONDITION_FAILED");
+  });
+
+  it("does not create a student branch record for organization staff", async () => {
+    expect(
+      await rejectionCode(
+        at(OWNER, GYM).entity.setBranchRole({
+          entityId: second,
+          userId: MANAGER,
+          role: "student",
+        }),
+      ),
+    ).toBe("PRECONDITION_FAILED");
+  });
+
+  it("keeps a branch owner role above an organization manager role", async () => {
+    await pg.exec(
+      `UPDATE "member" SET role = 'manager' WHERE user_id = '${OWNER}' AND organization_id = '${GYM}';`,
+    );
+    try {
+      const current = await at(OWNER, GYM).entity.current();
+      const staff = await at(OWNER, GYM).membership.staff();
+      expect(current.role).toBe("owner");
+      expect(staff.find((row) => row.userId === OWNER)?.role).toBe("owner");
+    } finally {
+      await pg.exec(
+        `UPDATE "member" SET role = 'owner' WHERE user_id = '${OWNER}' AND organization_id = '${GYM}';`,
+      );
+    }
+  });
+
   it("loses branch access the moment the gym membership goes", async () => {
     await pg.exec(
       `UPDATE "member" SET role = 'student' WHERE id = 'mem_${GYM}_${MANAGER}';`,

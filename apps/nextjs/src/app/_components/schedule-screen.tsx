@@ -7,8 +7,8 @@ import { isBjjAcademy } from "@matops/domain";
 import { Curriculum } from "./curriculum";
 import { useEntity } from "./entity";
 import { PageHeader } from "./page-header";
-import { Tabs } from "./primitives";
 import { Schedule } from "./schedule";
+import { Tabs } from "./tabs";
 import { Templates } from "./templates";
 
 /**

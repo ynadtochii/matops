@@ -46,6 +46,7 @@ import {
   isActiveMember,
   isOnRoster,
   isStaff,
+  isStudentMember,
   monthBucket,
   monthOf,
   monthVerdict,
@@ -63,7 +64,13 @@ import {
 import type { TimeZoneCtx } from "../academy-tz";
 import type { MemberScope } from "../members";
 import { academyTimeZone } from "../academy-tz";
-import { rosterOf, staffAmong, nameByUser as userNames } from "../members";
+import {
+  directoryRosterOf,
+  rosterOf,
+  staffAmong,
+  studentRosterOf,
+  nameByUser as userNames,
+} from "../members";
 import { loadRosterStanding } from "../membership-access";
 import { membershipCalendar } from "../membership-status";
 import { readOrganizationEntities } from "../organization-read";
@@ -194,10 +201,14 @@ async function readEntityMetrics(
   return withScope(
     { organizationId, entityId: entity.id },
     async (db) => {
-      const members = await rosterOf({ academyId: entity.id, db });
+      const members = await studentRosterOf({ academyId: entity.id, db });
       const standing = await loadRosterStanding(db, {
         entityId: entity.id,
-        people: members.map((m) => ({ userId: m.userId, status: m.status })),
+        people: members.map((m) => ({
+          userId: m.userId,
+          status: m.status,
+          role: m.role,
+        })),
         now: window.now,
       });
 
@@ -325,12 +336,16 @@ async function readEntityDirectory(
   return withScope(
     { organizationId, entityId: entity.id },
     async (db) => {
-      const members = await rosterOf({ academyId: entity.id, db });
+      const members = await directoryRosterOf({ academyId: entity.id, db });
       if (members.length === 0) return [];
 
       const standing = await loadRosterStanding(db, {
         entityId: entity.id,
-        people: members.map((m) => ({ userId: m.userId, status: m.status })),
+        people: members.map((m) => ({
+          userId: m.userId,
+          status: m.status,
+          role: m.role,
+        })),
         now: window.now,
       });
 
@@ -393,7 +408,7 @@ async function readEntitySummary(
     async (db) => {
       const scope = { academyId: entity.id, db };
       const timeZone = await academyTimeZone(scope);
-      const members = await rosterOf(scope);
+      const members = await studentRosterOf(scope);
       const revenue = await readRevenue(scope, now, timeZone);
 
       const [leads] = await db
@@ -472,6 +487,7 @@ async function readGymInsights(
     ? newMemberCounts(
         members
           .filter(isOnRoster)
+          .filter(isStudentMember)
           .map((m) => monthBucket(m.createdAt, timeZone)),
         monthBucket(now, timeZone),
       )
@@ -610,7 +626,7 @@ export const statsRouter = {
     const now = new Date();
     const timeZone = await academyTimeZone(ctx);
     const owner = runsBranch(ctx.membership);
-    const members = owner ? await rosterOf(ctx) : null;
+    const members = owner ? await studentRosterOf(ctx) : null;
 
     return {
       insights: await readGymInsights(ctx, now, timeZone, members),

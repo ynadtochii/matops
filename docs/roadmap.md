@@ -1,21 +1,59 @@
 <!-- matops — live implementation plan + scope matrix. Rules for this file live in delivery.md. -->
 
+**Staff and student separation, ADR 132**
+
+Status: implemented. Workspace typecheck passed 17/17 and lint passed 15/15. Tests written but not run under the user's session rule.
+
+- [x] Separate student classification from staff role and approval status.
+- [x] Student-only Members, staff lifecycle lists, inherited organization staff visibility.
+- [x] Staff access in coverage standing, activation, booking review, and overdue cancellation.
+- [x] Role badges for class attendance and explicit staff lifecycle controls.
+- [x] Guard unnecessary assignments and provide a read-only billing review report.
+- [x] Final workspace lint and typecheck.
+- [ ] User-run regression tests and browser acceptance.
+
+No migration. Existing billing records remain unchanged. [Plan](/Users/kuna/projects/matops/docs/staff-roster-isolation-plan.md).
+
+
 # matops — Roadmap (live plan + scope matrix)
+
+**Code implemented: student membership selection, release checks outstanding**
+
+Workspace typecheck passes 17/17 and lint passes 15/15. Tests were written but have not run. The migration has not been applied. Browser control timed out.
+
+Scope: SP1-SP7 in [the spec](/Users/kuna/projects/matops/docs/spec.md), [ADR 130](/Users/kuna/projects/matops/docs/issues/130-students-choose-a-membership.md).
+
+| Slice                                        | DB   | API  | Web  | Mobile     |
+| -------------------------------------------- | ---- | ---- | ---- | ---------- |
+| Published plans and pending purchases        | done | done | done | out        |
+| Transfer claim and staff confirmation        | done | done | done | out        |
+| Pending browsing without booking or check-in | n/a  | done | done | shared API |
+
+- [x] Define scope and approval behavior.
+- [x] Block pending booking and self check-in while preserving reads and cancellation.
+- [x] Finish purchase flow and static verification.
+- [ ] Apply the migration to dev and verify its schema.
+- [ ] Run focused regression tests when requested. Tests have not run in this session.
+- [ ] Walk the student and staff flow in a browser. Browser control timed out.
+
+Organization invitations, free trials, card processing and student plan replacement remain outside this release. Earlier release verification below does not verify this work.
+
+---
 
 **Built: the manager runs every branch, and a plan change waits for the 1st (v7.7)**
 
 Status: **built, not clicked through and the suites not run here**. Static gates green (`pnpm typecheck` 17/17, `pnpm lint` 15/15). **Tests were run** (2026-09-06, twice): the workspace suite is **green, 1611 tests across 130 files**. It had 25 failures on the baseline `b237f03`; this release fixed every one and introduced none. Migration `0065` is **applied to dev** (64 rows against 64 journal entries, checked 2026-09-06) and verified live: `end_month` nullable, the lifetime unique index replaced by the partial one on `(plan_id, user_id, start_month)`, `access_assignment_change` with its checks, six foreign keys and partial unique index, RLS on with all four `matops_app` grants, and all 15 existing assignments still open-ended. Product rules: MB1-MB8 in [spec.md](/Users/kuna/projects/matops/docs/spec.md). Decisions: [ADR 129](/Users/kuna/projects/matops/docs/issues/129-the-manager-runs-every-branch.md). Plan: [PLAN.md](/Users/kuna/projects/matops/PLAN.md).
 
-| Slice                                              | DB   | API  | Web  | Mob  | Shared | Infra |
-| -------------------------------------------------- | ---- | ---- | ---- | ---- | ------ | ----- |
-| Manager capabilities at every branch               | n/a  | done | done | n/a  | done   | n/a   |
-| Coverage as one workflow                           | n/a  | done | done | n/a  | n/a    | n/a   |
-| Next-month plan replacement                        | done | done | done | done | done   | n/a   |
-| Bookings needing review, never cancelled           | n/a  | done | done | n/a  | done   | n/a   |
-| Gym and branch navigation together                 | n/a  | done | done | n/a  | done   | n/a   |
-| People, Staff and person tasks in one screen       | n/a  | done | done | n/a  | done   | n/a   |
-| Daily work first on the overview and in setup      | n/a  | done | done | n/a  | done   | n/a   |
-| The mobile branch picker beside the schedule       | n/a  | n/a  | n/a  | done | n/a    | n/a   |
+| Slice                                         | DB   | API  | Web  | Mob  | Shared | Infra |
+| --------------------------------------------- | ---- | ---- | ---- | ---- | ------ | ----- |
+| Manager capabilities at every branch          | n/a  | done | done | n/a  | done   | n/a   |
+| Coverage as one workflow                      | n/a  | done | done | n/a  | n/a    | n/a   |
+| Next-month plan replacement                   | done | done | done | done | done   | n/a   |
+| Bookings needing review, never cancelled      | n/a  | done | done | n/a  | done   | n/a   |
+| Gym and branch navigation together            | n/a  | done | done | n/a  | done   | n/a   |
+| People, Staff and person tasks in one screen  | n/a  | done | done | n/a  | done   | n/a   |
+| Daily work first on the overview and in setup | n/a  | done | done | n/a  | done   | n/a   |
+| The mobile branch picker beside the schedule  | n/a  | n/a  | n/a  | done | n/a    | n/a   |
 
 - [x] Write ADR 129 and carry it into the spec, the map, the changelog and this file.
 - [x] Build the eight slices and hand the focused test commands over.
@@ -29,18 +67,18 @@ A manager is no longer stopped at the organization: they run every live branch w
 
 Status: **built, not clicked through and the suites not run here**. Static gates green (`pnpm typecheck` 17/17, `pnpm lint` 15/15). Migrations `0060` to `0064` are **applied to dev** (63 rows against 63 journal entries, checked 2026-09-04); two hand-run fills are outstanding, `2026-09-04-general-branches-backfill.sql` and `2026-09-04-paid-commitment.sql`. Product rules: FP1-FP10 in [spec.md](/Users/kuna/projects/matops/docs/spec.md). Decisions: [ADR 128](/Users/kuna/projects/matops/docs/issues/128-registration-creates-the-organization-only.md). Plan: [PLAN.md](/Users/kuna/projects/matops/PLAN.md). Loop state, one item per run: [EPIC.md](/Users/kuna/projects/matops/EPIC.md). Migrations start at `0060`; `0059` is reserved for the delayed `payment_settings.bank_details` drop and is not reused.
 
-| Slice                                              | DB   | API  | Web  | Mob  | Shared | Infra |
-| -------------------------------------------------- | ---- | ---- | ---- | ---- | ------ | ----- |
-| Organization-only creation                         | done | done | done | n/a  | n/a    | n/a   |
-| The zero-branch organization shell                 | n/a  | done | done | n/a  | n/a    | n/a   |
-| First-branch creation and branch capabilities      | done | done | done | n/a  | n/a    | n/a   |
-| The guided setup journey                           | n/a  | done | done | n/a  | done   | n/a   |
-| Membership prices and price history                | done | done | done | done | done   | n/a   |
-| Organization people and bulk migration             | n/a  | done | done | n/a  | done   | n/a   |
-| Organization manager permissions                   | n/a  | done | done | n/a  | done   | n/a   |
-| Legacy dues out of normal use                      | n/a  | done | done | n/a  | n/a    | n/a   |
-| Type-aware branch surfaces                         | n/a  | done | done | done | done   | n/a   |
-| Product entry, commercial state and measurement    | done | done | done | n/a  | done   | done  |
+| Slice                                           | DB   | API  | Web  | Mob  | Shared | Infra |
+| ----------------------------------------------- | ---- | ---- | ---- | ---- | ------ | ----- |
+| Organization-only creation                      | done | done | done | n/a  | n/a    | n/a   |
+| The zero-branch organization shell              | n/a  | done | done | n/a  | n/a    | n/a   |
+| First-branch creation and branch capabilities   | done | done | done | n/a  | n/a    | n/a   |
+| The guided setup journey                        | n/a  | done | done | n/a  | done   | n/a   |
+| Membership prices and price history             | done | done | done | done | done   | n/a   |
+| Organization people and bulk migration          | n/a  | done | done | n/a  | done   | n/a   |
+| Organization manager permissions                | n/a  | done | done | n/a  | done   | n/a   |
+| Legacy dues out of normal use                   | n/a  | done | done | n/a  | n/a    | n/a   |
+| Type-aware branch surfaces                      | n/a  | done | done | done | done   | n/a   |
+| Product entry, commercial state and measurement | done | done | done | n/a  | done   | done  |
 
 - [x] Write ADR 128 and carry it into the spec, the architecture doc, the map and this file.
 - [x] Build the ten slices, one epic item per run, and hand the focused test commands over.

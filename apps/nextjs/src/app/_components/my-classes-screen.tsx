@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 
@@ -17,15 +18,17 @@ import { dayMediumFmt, timeFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { useEntity, useEntityHref } from "./entity";
 import { PageHeader } from "./page-header";
-import { cardClass, ENTER, Section, Stat } from "./primitives";
+import { cardClass, ENTER, SectionHeading, Stat } from "./primitives";
 import { SkeletonMyClassesBody, SkeletonStats } from "./skeletons";
 import { EmptyState, ErrorState, SuspendedState } from "./states";
+import { Tabs } from "./tabs";
 import { useBooking } from "./use-booking";
 import { useMinuteClock } from "./use-clock";
 
 type MyClass = RouterOutputs["booking"]["mine"][number];
 
 export function MyClassesScreen() {
+  const [view, setView] = useState<"upcoming" | "attended">("upcoming");
   const href = useEntityHref();
   const trpc = useTRPC();
   const { cancel, busyFor } = useBooking();
@@ -38,12 +41,20 @@ export function MyClassesScreen() {
 
   const now = useMinuteClock();
   const { upcoming, past } = splitMyClasses(mine.data ?? [], now);
-  const next = nextClass(upcoming, now);
+  const next = nextClass(
+    upcoming.filter((c) => c.status !== "cancelled"),
+    now,
+  );
 
   const header = (
     <PageHeader
       title="My classes"
-      subtitle="What you booked, and what you have trained."
+      subtitle="Manage your bookings and review the classes you attended."
+      action={
+        <Button asChild variant="outline">
+          <Link href={href("/")}>Browse schedule</Link>
+        </Button>
+      }
     />
   );
 
@@ -56,7 +67,7 @@ export function MyClassesScreen() {
     );
   }
 
-  const rest = upcoming.filter((c) => c.classId !== next?.classId);
+  const classes = view === "upcoming" ? upcoming : past;
 
   return (
     <>
@@ -66,91 +77,77 @@ export function MyClassesScreen() {
       ) : mine.isError ? (
         <ErrorState label="your classes" onRetry={() => void mine.refetch()} />
       ) : (
-        <div className="flex flex-col gap-8">
-          {next && (
-            <Section label="Next class" className={ENTER}>
-              <Link
-                href={href(`/class/${next.classId}`)}
-                className={cn(
-                  cardClass({ interactive: true }),
-                  "border-brand/30 bg-brand-wash block",
-                )}
+        <div className="grid items-start gap-8 xl:grid-cols-[minmax(0,1fr)_20rem]">
+          <section className={cn(ENTER, "min-w-0 space-y-5")}>
+            <Tabs
+              label="My classes views"
+              value={view}
+              onChange={setView}
+              tabs={[
+                { id: "upcoming", label: `Upcoming (${upcoming.length})` },
+                { id: "attended", label: `Attended (${past.length})` },
+              ]}
+            />
+            <h2 className="sr-only">
+              {view === "upcoming" ? "Upcoming bookings" : "Classes attended"}
+            </h2>
+            {view === "attended" && (
+              <p className="text-muted-foreground text-sm">
+                Classes appear here after your gym records your attendance.
+              </p>
+            )}
+            {classes.length === 0 ? (
+              <EmptyState
+                title={
+                  view === "upcoming"
+                    ? "No upcoming bookings"
+                    : "No attendance recorded yet"
+                }
+                action={
+                  view === "upcoming" ? (
+                    <Button asChild size="sm">
+                      <Link href={href("/")}>Find a class</Link>
+                    </Button>
+                  ) : undefined
+                }
               >
-                <p className="text-lg font-semibold">{next.title}</p>
-                <p className="text-muted-foreground mt-1 text-sm">
-                  {dayMediumFmt.format(next.startsAt)} ·{" "}
-                  <span className="font-mono tabular-nums">
-                    {timeFmt.format(next.startsAt)}
-                  </span>
-                </p>
-                {next.bookingTier === "provisional" && (
-                  <p className="text-muted-foreground mt-2 font-mono text-[10px] tracking-wide uppercase">
-                    Pending approval
-                  </p>
-                )}
-              </Link>
-            </Section>
-          )}
-
-          <Section
-            label="My training"
-            className={cn(ENTER, next && "delay-100")}
-          >
+                {view === "upcoming"
+                  ? "Choose your next session from the schedule."
+                  : "Your gym records attendance after each class."}
+              </EmptyState>
+            ) : (
+              <ul className="flex flex-col gap-3">
+                {classes.map((c) => (
+                  <li key={c.classId}>
+                    <ClassRow
+                      c={c}
+                      next={view === "upcoming" && c.classId === next?.classId}
+                      action={
+                        view === "upcoming" && c.status !== "cancelled" ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            aria-label={`Cancel booking for ${c.title} on ${dayMediumFmt.format(c.startsAt)}`}
+                            busy={busyFor(c.classId)}
+                            disabled={busyFor(c.classId)}
+                            onClick={() =>
+                              cancel.mutate({ classId: c.classId })
+                            }
+                          >
+                            Cancel booking
+                          </Button>
+                        ) : undefined
+                      }
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+          <aside className="min-w-0 space-y-4 xl:border-l xl:pl-8">
+            <SectionHeading>My training</SectionHeading>
             <TrainingStats />
-          </Section>
-
-          <Section
-            label="Upcoming"
-            className={cn(ENTER, "delay-200")}
-            meta={rest.length > 0 ? `${rest.length}` : undefined}
-          >
-            {rest.length === 0 ? (
-              <EmptyState title="Nothing else booked yet.">
-                Pick a class from the schedule.
-              </EmptyState>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {rest.map((c) => (
-                  <ClassRow
-                    key={c.classId}
-                    c={c}
-                    now={now}
-                    action={
-                      c.status === "cancelled" ? undefined : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          busy={busyFor(c.classId)}
-                          disabled={busyFor(c.classId)}
-                          onClick={() => cancel.mutate({ classId: c.classId })}
-                        >
-                          Cancel
-                        </Button>
-                      )
-                    }
-                  />
-                ))}
-              </div>
-            )}
-          </Section>
-
-          <Section
-            label="Past"
-            className={cn(ENTER, "delay-200")}
-            meta={past.length > 0 ? `${past.length}` : undefined}
-          >
-            {past.length === 0 ? (
-              <EmptyState title="No sessions yet.">
-                Your gym marks the roster after class.
-              </EmptyState>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {past.map((c) => (
-                  <ClassRow key={c.classId} c={c} now={now} />
-                ))}
-              </div>
-            )}
-          </Section>
+          </aside>
         </div>
       )}
     </>
@@ -159,49 +156,51 @@ export function MyClassesScreen() {
 
 function ClassRow({
   c,
-  now,
+  next,
   action,
 }: {
   c: MyClass;
-  now: Date;
+  next: boolean;
   action?: React.ReactNode;
 }) {
   const href = useEntityHref();
   const cancelled = c.status === "cancelled";
-  const past = c.startsAt.getTime() <= now.getTime();
   return (
     <div
       className={cn(
-        cardClass({ interactive: true }),
-        "flex flex-wrap items-center justify-between gap-3",
-        (cancelled || past) && "opacity-70",
+        cardClass(),
+        "flex flex-wrap items-center justify-between gap-4",
+        next && "border-brand/30 bg-brand-wash",
       )}
     >
-      <Link href={href(`/class/${c.classId}`)} className="min-w-0 flex-1">
-        <p className="flex items-baseline gap-2">
+      <Link
+        href={href(`/class/${c.classId}`)}
+        className="hover:text-brand focus-visible:outline-brand min-w-0 flex-1 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4"
+      >
+        {next && (
+          <p className="text-brand mb-2 text-xs font-semibold">Next class</p>
+        )}
+        <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <span className="font-mono text-sm font-semibold tabular-nums">
             {timeFmt.format(c.startsAt)}
           </span>
           <span
-            className={cn("truncate font-medium", cancelled && "line-through")}
+            className={cn(
+              "min-w-0 font-semibold break-words",
+              cancelled && "line-through",
+            )}
           >
             {c.title}
           </span>
         </p>
         <p className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
           <span>{dayMediumFmt.format(c.startsAt)}</span>
-          {c.discipline && (
-            <span className="font-mono text-[10px] tracking-wide uppercase">
-              {c.discipline}
-            </span>
-          )}
+          {c.discipline && <span className="text-xs">{c.discipline}</span>}
           {cancelled && (
             <span className="text-error font-medium">Cancelled</span>
           )}
           {c.bookingTier === "provisional" && !cancelled && (
-            <span className="font-mono text-[10px] tracking-wide uppercase">
-              Pending approval
-            </span>
+            <span className="text-xs">Pending approval</span>
           )}
         </p>
       </Link>
@@ -233,8 +232,8 @@ function TrainingStats() {
   const s = stats.data;
   if (s.total === 0) {
     return (
-      <EmptyState title="No sessions yet.">
-        Train at your next class to start tracking.
+      <EmptyState title="Your training starts here">
+        Your totals update when your gym records your attendance.
       </EmptyState>
     );
   }

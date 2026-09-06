@@ -4,22 +4,28 @@ import {
   accessAssignment,
   accessPlan,
   accessPlanEntity,
+  accessPlanPrice,
   classInstance,
   classParticipation,
   entity,
+  entityMembership,
+  member,
   membershipMonth,
   membershipPolicy,
 } from "@matops/db/schema";
 import {
   appliesInMonth,
+  isFreeMembershipMonth,
   membershipWarning,
   monthOf,
   monthVerdict,
   payDeadline,
+  priceForMonth,
   resolveAcademyTimeZone,
 } from "@matops/domain";
 
 import type { PushSender } from "./notify";
+import { loadStaffAccess } from "./membership-access";
 import { notifyMembershipDue } from "./notify";
 
 const DEFAULT_MEMBERSHIP_GRACE_DAYS = 7;
@@ -176,10 +182,21 @@ export async function runMembershipCancellationSweep(
       ),
     );
 
+  const prices = await exec.select().from(accessPlanPrice);
+
   const isBlocked = (a: HeldAssignment): boolean => {
     const calendar = calendars.get(a.organizationId);
     if (!calendar) return false;
     const month = monthOf(now, calendar.timeZone);
+    if (
+      isFreeMembershipMonth(
+        priceForMonth(
+          prices.filter((p) => p.planId === a.planId),
+          month,
+        ),
+      )
+    )
+      return false;
     const paid =
       paidRows.find((m) => m.assignmentId === a.id && m.month === month)
         ?.paid ?? false;
@@ -236,6 +253,7 @@ export async function runMembershipCancellationSweep(
 
     cancelled += await cancelFutureBookings(exec, {
       assignmentId: assignment.id,
+      organizationId: assignment.organizationId,
       userId: assignment.userId,
       entityIds: losing,
       month: monthOf(
@@ -381,6 +399,7 @@ async function cancelFutureBookings(
   exec: DbExec,
   input: {
     assignmentId: string;
+    organizationId: string;
     userId: string;
     entityIds: string[];
     month: string;
@@ -388,6 +407,30 @@ async function cancelFutureBookings(
   },
 ): Promise<number> {
   return exec.transaction(async (tx) => {
+    await tx
+      .select({ id: member.id })
+      .from(member)
+      .where(
+        and(
+          eq(member.organizationId, input.organizationId),
+          eq(member.userId, input.userId),
+        ),
+      )
+      .orderBy(asc(member.id))
+      .for("share");
+    await tx
+      .select({ id: entityMembership.id })
+      .from(entityMembership)
+      .where(
+        and(
+          eq(entityMembership.organizationId, input.organizationId),
+          eq(entityMembership.userId, input.userId),
+          inArray(entityMembership.entityId, input.entityIds),
+        ),
+      )
+      .orderBy(asc(entityMembership.id))
+      .for("share");
+
     const locked = await tx
       .select({ paid: membershipMonth.paid })
       .from(membershipMonth)
@@ -400,6 +443,15 @@ async function cancelFutureBookings(
       .for("update");
     // Paid while this run was thinking. Leave everything alone.
     if (locked[0]?.paid === true) return 0;
+
+    const staff = await loadStaffAccess(tx, {
+      entityIds: input.entityIds,
+      userIds: [input.userId],
+    });
+    const losing = input.entityIds.filter(
+      (id) => !staff.get(id)?.has(input.userId),
+    );
+    if (losing.length === 0) return 0;
 
     const future = await tx
       .select({
@@ -416,7 +468,7 @@ async function cancelFutureBookings(
         and(
           eq(classParticipation.studentId, input.userId),
           eq(classParticipation.bookingStatus, "booked"),
-          inArray(classParticipation.academyId, input.entityIds),
+          inArray(classParticipation.academyId, losing),
           gt(classInstance.startsAt, input.now),
           isNull(classInstance.deletedAt),
         ),
@@ -536,13 +588,24 @@ export async function runMembershipReminderSweep(
       ),
     );
 
+  const prices = await exec.select().from(accessPlanPrice);
+
   const due: { assignment: (typeof live)[number]; month: string }[] = [];
   for (const assignment of live) {
     const calendar = calendars.get(assignment.organizationId);
     if (!calendar) continue;
     const month = monthOf(now, calendar.timeZone);
     // Nothing is owed on a month the membership does not cover (ADR 129).
-    if (!appliesInMonth(assignment, month)) continue;
+    if (
+      !appliesInMonth(assignment, month) ||
+      isFreeMembershipMonth(
+        priceForMonth(
+          prices.filter((p) => p.planId === assignment.planId),
+          month,
+        ),
+      )
+    )
+      continue;
     const held = months.find(
       (m) => m.assignmentId === assignment.id && m.month === month,
     );

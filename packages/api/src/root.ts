@@ -11,6 +11,7 @@ import { dropInRouter } from "./router/dropin";
 import { entityRouter } from "./router/entity";
 import { inviteRouter } from "./router/invite";
 import { membershipRouter } from "./router/membership";
+import { membershipPurchaseRouter } from "./router/membershipPurchase";
 import { noteRouter } from "./router/note";
 import { notificationRouter } from "./router/notification";
 import { organizationRouter } from "./router/organization";
@@ -32,6 +33,7 @@ export const appRouter = createTRPCRouter({
   account: accountRouter,
   invite: inviteRouter,
   membership: membershipRouter,
+  membershipPurchase: membershipPurchaseRouter,
   template: templateRouter,
   class: classRouter,
   curriculum: curriculumRouter,

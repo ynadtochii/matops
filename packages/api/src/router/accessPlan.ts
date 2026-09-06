@@ -15,6 +15,7 @@ import {
   isNull,
   recordActivity,
   recordMilestone,
+  sql,
   withScope,
 } from "@matops/db";
 import {
@@ -42,7 +43,8 @@ import {
   changeIsPending,
   formatDeadline,
   formatMonth,
-  isStaff,
+  isFreeMembershipMonth,
+  isStaffRole,
   monthOf,
   nextMonth,
   payDeadline,
@@ -50,6 +52,7 @@ import {
   periodsOverlap,
   priceForMonth,
   resolveAcademyTimeZone,
+  runsOrganization,
 } from "@matops/domain";
 import {
   AccessPlanIdSchema,
@@ -74,10 +77,11 @@ import {
 } from "@matops/validators";
 
 import type { BookingToReview } from "../membership-access";
-import { rosterOf } from "../members";
+import { studentRosterOf } from "../members";
 import {
   bookingsNeedingReview,
   loadRosterStanding,
+  loadStaffAccess,
 } from "../membership-access";
 import {
   assignmentAppliesInMonth,
@@ -205,7 +209,11 @@ async function assignOne(
     ? `${input.startMonth.slice(0, 7)}-01`
     : month;
 
-  const periods = await lockAssignmentsOf(ctx.db, input.userId);
+  const periods = await lockAssignmentsOf(
+    ctx.db,
+    input.userId,
+    ctx.organizationId,
+  );
   // The membership they hold on this plan over the month being assigned,
   // whatever its status: a suspended or cancelled one is restored, which is the
   // rule ADR 128 chose. A period that already ENDED is history and is never
@@ -219,6 +227,16 @@ async function assignOne(
   // it, and an owner may still put a paused one back on its feet.
   if (!held && plan.archivedAt !== null) {
     throw new TRPCError({ code: "CONFLICT", message: PLAN_CLOSED });
+  }
+
+  const entityIds = await coverageOf(ctx.db, plan.id);
+  if (held?.status !== "active") {
+    await requireStudentCoverage(
+      ctx.db,
+      ctx.organizationId,
+      input.userId,
+      entityIds,
+    );
   }
 
   let assignmentId: string;
@@ -260,7 +278,7 @@ async function assignOne(
     ctx.db,
     ctx.organizationId,
     input.userId,
-    await coverageOf(ctx.db, plan.id),
+    entityIds,
   );
   return { id: assignmentId, created, restored, ...reconciliation };
 }
@@ -273,7 +291,14 @@ async function assignOne(
  * "no overlap" and both write one. The lock is on the PERSON's rows, which is
  * the smallest thing that makes overlap decidable.
  */
-async function lockAssignmentsOf(db: TenantTx, userId: string) {
+async function lockAssignmentsOf(
+  db: TenantTx,
+  userId: string,
+  organizationId: string,
+) {
+  await db.execute(
+    sql`select pg_advisory_xact_lock(hashtext(${organizationId}), hashtext(${userId}))`,
+  );
   return db
     .select({
       id: accessAssignment.id,
@@ -499,11 +524,22 @@ async function assignmentCoverage(
 /** What a coverage edit would do, without doing it. */
 async function preview(db: TenantTx, planId: string, next: string[]) {
   const { month } = await currentMonthOf(db);
-  return affectedByCoverageChange(
+  const affected = affectedByCoverageChange(
     planId,
     next,
     await assignmentCoverage(db, month),
   );
+  const staff = await loadStaffAccess(db, {
+    entityIds: [...new Set(affected.flatMap((a) => [...a.gains, ...a.loses]))],
+    userIds: [...new Set(affected.map((a) => a.userId))],
+  });
+  return affected
+    .map((a) => ({
+      ...a,
+      gains: a.gains.filter((id) => !staff.get(id)?.has(a.userId)),
+      loses: a.loses.filter((id) => !staff.get(id)?.has(a.userId)),
+    }))
+    .filter((a) => a.gains.length > 0 || a.loses.length > 0);
 }
 
 /**
@@ -525,6 +561,49 @@ async function requireOrganizationMember(
     .limit(1);
   if (rows.length === 0) {
     throw new TRPCError({ code: "NOT_FOUND", message: NOT_A_MEMBER });
+  }
+}
+
+async function requireStudentCoverage(
+  db: TenantTx,
+  organizationId: string,
+  userId: string,
+  entityIds: string[],
+): Promise<void> {
+  const [organizationMember] = await db
+    .select({ role: member.role })
+    .from(member)
+    .where(
+      and(eq(member.organizationId, organizationId), eq(member.userId, userId)),
+    );
+  const branches = await db
+    .select({
+      entityId: entityMembership.entityId,
+      role: entityMembership.role,
+      status: entityMembership.status,
+      invitedRole: entityMembership.invitedRole,
+    })
+    .from(entityMembership)
+    .where(
+      and(
+        eq(entityMembership.organizationId, organizationId),
+        eq(entityMembership.userId, userId),
+      ),
+    )
+    .for("update");
+  if (
+    (organizationMember &&
+      runsOrganization({ ...organizationMember, status: "active" })) ||
+    (entityIds.length > 0 &&
+      entityIds.every((id) =>
+        branches.some((b) => b.entityId === id && isStaffRole(b)),
+      ))
+  ) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "Staff access covers these branches. No membership is required. Choose a plan for a branch where they are a student.",
+    });
   }
 }
 
@@ -568,7 +647,13 @@ async function enrolInCoveredBranches(
     );
   const byEntity = new Map(held.map((h) => [h.entityId, h.status]));
 
-  const missing = entityIds.filter((id) => !byEntity.has(id));
+  const staffAccess = await loadStaffAccess(db, {
+    entityIds,
+    userIds: [userId],
+  });
+  const missing = entityIds.filter(
+    (id) => !byEntity.has(id) && !staffAccess.get(id)?.has(userId),
+  );
   if (missing.length > 0) {
     await db
       .insert(entityMembership)
@@ -796,6 +881,7 @@ export const accessPlanRouter = {
       priceMinor: p.priceMinor,
       currency: p.currency,
       archived: p.archivedAt !== null,
+      studentSelectable: p.studentSelectable,
       entityIds: coverage
         .filter((c) => c.planId === p.id)
         .map((c) => c.entityId)
@@ -1259,15 +1345,16 @@ export const accessPlanRouter = {
           // Staff are not counted. An owner or a coach runs the mat rather
           // than buying access to it, and listing them here made the queue
           // permanently non-empty and activation permanently "not ready".
-          const active = (await rosterOf({ academyId: branch.id, db })).filter(
-            (m) => m.status === "active" && !isStaff(m),
-          );
+          const active = (
+            await studentRosterOf({ academyId: branch.id, db })
+          ).filter((m) => m.status === "active");
           if (active.length === 0) return [];
           const standing = await loadRosterStanding(db, {
             entityId: branch.id,
             people: active.map((m) => ({
               userId: m.userId,
               status: m.status,
+              role: m.role,
             })),
             now,
           });
@@ -1405,8 +1492,15 @@ export const accessPlanRouter = {
         .from(accessPlanPrice)
         .where(eq(accessPlanPrice.planId, target.id));
 
+      const staff = await loadStaffAccess(ctx.db, {
+        entityIds: [...new Set([...from, ...to])],
+        userIds: [source.userId],
+      });
       const losing = from.filter(
-        (id) => !to.includes(id) && !elsewhere.has(id),
+        (id) =>
+          !to.includes(id) &&
+          !elsewhere.has(id) &&
+          !staff.get(id)?.has(source.userId),
       );
       return {
         effectiveMonth: next,
@@ -1417,7 +1511,11 @@ export const accessPlanRouter = {
         targetPlanName: target.name,
         targetArchived: target.archivedAt !== null,
         amount: priceForMonth(prices, next),
-        gains: to.filter((id) => !from.includes(id)).sort(),
+        gains: to
+          .filter(
+            (id) => !from.includes(id) && !staff.get(id)?.has(source.userId),
+          )
+          .sort(),
         loses: losing.sort(),
         userId: source.userId,
         pending: (await pendingChanges(ctx.db, month)).some(
@@ -1442,7 +1540,11 @@ export const accessPlanRouter = {
     .mutation(async ({ ctx, input }) => {
       const { month, next } = await currentMonthOf(ctx.db);
       const source = await loadAssignment(ctx.db, input.assignmentId);
-      const periods = await lockAssignmentsOf(ctx.db, source.userId);
+      const periods = await lockAssignmentsOf(
+        ctx.db,
+        source.userId,
+        ctx.organizationId,
+      );
       if (source.status !== "active") {
         throw new TRPCError({
           code: "CONFLICT",
@@ -1460,6 +1562,12 @@ export const accessPlanRouter = {
       }
 
       const target = await loadPlan(ctx.db, input.targetPlanId);
+      await requireStudentCoverage(
+        ctx.db,
+        ctx.organizationId,
+        source.userId,
+        await coverageOf(ctx.db, target.id),
+      );
       if (target.archivedAt !== null) {
         throw new TRPCError({ code: "CONFLICT", message: PLAN_CLOSED });
       }
@@ -1552,7 +1660,7 @@ export const accessPlanRouter = {
           message: CHANGE_NOT_FOUND,
         });
       }
-      await lockAssignmentsOf(ctx.db, change.userId);
+      await lockAssignmentsOf(ctx.db, change.userId, ctx.organizationId);
       if (!changeIsPending(change, month)) {
         throw new TRPCError({
           code: "CONFLICT",
@@ -1632,6 +1740,7 @@ export const accessPlanRouter = {
           month: now?.month ?? null,
           monthLabel: now ? formatMonth(now.month, calendar.timeZone) : null,
           paid: now?.paid ?? false,
+          paymentRequired: now?.paymentRequired ?? true,
           amount: now?.amount ?? null,
           appliesNow: appliesInMonth(r, month),
           // The plan waiting for the 1st, so the profile can say what happens
@@ -1809,6 +1918,11 @@ export const accessPlanRouter = {
       : [];
 
     const rows = held.map((a) => {
+      const amount = priceForMonth(
+        prices.filter((p) => p.planId === a.planId),
+        month,
+      );
+      const paymentRequired = !isFreeMembershipMonth(amount);
       const deadline = payDeadline({
         month,
         startMonth: a.startMonth,
@@ -1827,13 +1941,11 @@ export const accessPlanRouter = {
           .sort(),
         paid: months.find((m) => m.assignmentId === a.id)?.paid ?? false,
         // What THIS month cost, which a later price change must not rewrite.
-        amount: priceForMonth(
-          prices.filter((p) => p.planId === a.planId),
-          month,
-        ),
+        amount,
+        paymentRequired,
         deadline,
         deadlineLabel: formatDeadline(deadline, calendar.timeZone),
-        overdue: deadline.getTime() <= Date.now(),
+        overdue: paymentRequired && deadline.getTime() <= Date.now(),
       };
     });
 
@@ -1995,6 +2107,20 @@ export const accessPlanRouter = {
 
       const calendar = await membershipCalendar(ctx.db);
       const month = monthOf(new Date(), calendar.timeZone);
+      const standing = await membershipStanding(
+        ctx.db,
+        ctx.session.user.id,
+        new Date(),
+      );
+      const current = standing.find(
+        (m) => m.assignmentId === input.assignmentId,
+      );
+      if (!current)
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "This membership does not apply this month.",
+        });
+      if (!current.paymentRequired) return { claimed: false, month };
       const [held] = await ctx.db
         .select({
           paid: membershipMonth.paid,

@@ -47,3 +47,7 @@ export function priceForMonth(
 export function canPriceFrom(month: MonthKey, currentMonth: MonthKey): boolean {
   return month > currentMonth;
 }
+
+export function isFreeMembershipMonth(amount: Money | null): boolean {
+  return amount?.priceMinor === 0;
+}

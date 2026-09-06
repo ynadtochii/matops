@@ -10,6 +10,7 @@ import {
   bulkMarkTargets,
   canMarkAttendance,
   isBjjAcademy,
+  isStaffRole,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { Button } from "@matops/ui/button";
@@ -84,7 +85,13 @@ function MarkRule({
   total: number;
 }) {
   if (total === 0) return null;
-  const pct = (n: number) => `${(n / total) * 100}%`;
+  const share = (n: number) => n / total;
+  // Both segments are the full width of the rule and are scaled down to their
+  // share, so the growth is a transform rather than a width: a width animation
+  // relays out the row on every marked student.
+  const bar = "absolute inset-y-0 left-0 w-full origin-left";
+  const move =
+    "transition-transform duration-300 motion-reduce:transition-none";
   return (
     <div
       role="progressbar"
@@ -92,15 +99,17 @@ function MarkRule({
       aria-valuemax={total}
       aria-valuenow={present + absent}
       aria-label={`${present + absent} of ${total} marked`}
-      className="bg-border flex h-0.5 w-full overflow-hidden rounded-full"
+      className="bg-border relative h-0.5 w-full overflow-hidden rounded-full"
     >
       <span
-        className="bg-success transition-[width] duration-300 motion-reduce:transition-none"
-        style={{ width: pct(present) }}
+        className={cn(bar, move, "bg-success")}
+        style={{ transform: `scaleX(${share(present)})` }}
       />
       <span
-        className="bg-error transition-[width] duration-300 motion-reduce:transition-none"
-        style={{ width: pct(absent) }}
+        className={cn(bar, move, "bg-error")}
+        style={{
+          transform: `translateX(${share(present) * 100}%) scaleX(${share(absent)})`,
+        }}
       />
     </div>
   );
@@ -406,6 +415,9 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
                 <span className="min-w-0 flex-1 truncate text-sm" title={name}>
                   {name}
                 </span>
+                {r.role && isStaffRole({ role: r.role }) && (
+                  <RowTag>{r.role}</RowTag>
+                )}
                 {r.bookingStatus === "none" && <RowTag>walk-in</RowTag>}
                 {r.bookingStatus === "booked" &&
                   r.bookingTier === "provisional" && <RowTag>pending</RowTag>}
@@ -539,18 +551,18 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
             <PlusIcon className="text-muted-foreground size-3.5 transition-transform group-open:rotate-45 motion-reduce:transition-none" />
             Add someone who isn&apos;t listed
             <span className="text-muted-foreground ml-auto text-xs font-normal">
-              member or visitor
+              member, staff or visitor
             </span>
           </summary>
 
           <div className={cn(cardClass(), "mt-2")}>
             <div className="flex flex-col gap-2">
               <p className="text-sm font-medium">
-                Members who didn&apos;t book
+                Members and staff who didn&apos;t book
               </p>
               {walkInCandidates.length === 0 ? (
                 <p className="text-muted-foreground text-sm">
-                  Every active member is already on this class.
+                  Every active member and staff person is already on this class.
                 </p>
               ) : (
                 <>
@@ -558,12 +570,12 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
                     type="search"
                     value={walkInQuery}
                     onChange={(e) => setWalkInQuery(e.target.value)}
-                    placeholder={`Search ${walkInCandidates.length} members`}
-                    aria-label="Search members"
+                    placeholder={`Search ${walkInCandidates.length} people`}
+                    aria-label="Search members and staff"
                   />
                   {matchingCandidates.length === 0 ? (
                     <p className="text-muted-foreground py-2 text-sm">
-                      No member matches “{walkInQuery}”. Record them as a
+                      No person matches “{walkInQuery}”. Record them as a
                       visitor below.
                     </p>
                   ) : (
@@ -585,6 +597,7 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
                               }
                             />
                             {m.name}
+                            {isStaffRole(m) && <RowTag>{m.role}</RowTag>}
                           </label>
                         </li>
                       ))}

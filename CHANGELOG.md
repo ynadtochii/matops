@@ -1,6 +1,38 @@
 # Changelog
 
+## Unreleased: staff stay separate from members
+
+Workspace typecheck passed 17/17 and lint passed 15/15. Regression tests were written but not run. No migration or billing cleanup was applied.
+
+Owners, managers, and instructors appear in Staff and need no paid membership for staff access. Members and member totals count students. Attendance labels staff participants. Coverage warnings and overdue cancellation respect branch staff access. Staff lifecycle actions preserve history. Existing paid plans remain for review. See [ADR 132](/Users/kuna/projects/matops/docs/issues/132-staff-roster-isolation.md).
+
+
 One line per shipped slice (see `docs/delivery.md` §4). Newest first.
+
+## Unreleased: switching branches drops the branch you left
+
+Static gates green (`pnpm typecheck`, `pnpm lint` for `@matops/nextjs`). No migration, no schema change. Not reproduced in a browser: the Chrome extension would not connect.
+
+- Switching branch sometimes left the old branch on screen, and a second or third switch made it likelier. The cache that has to be dropped on a switch was keyed off a prop from the entity layout, and a soft navigation can reuse that layout: the id stayed the branch you left, nothing was dropped, and the shell went on serving it under the new URL. `EntityCacheBoundary` now reads the branch off the client router, which changes on every navigation whatever the server re-rendered, and `AppShell` takes the branch from the same place before falling back to the prop.
+
+## Unreleased: the sidebar keeps the branch at the gym level
+
+Static gates green (`pnpm typecheck`, `pnpm lint` for `@matops/nextjs`). No migration, no schema change, no new dependency.
+
+- Opening a gym screen no longer swaps the whole sidebar out. `/overview`, `/people`, `/memberships` and organization settings now draw the branch section too, above an `Organization` group, so the menu is one list that changes section rather than two lists that replace each other. Both levels build the branch section from one `branchNavItems()`, so they cannot drift; at the gym level it carries no badges, because a count needs a branch scope those screens never open. The branch it points at is the last one this browser was in, kept in `localStorage`, falling back to the first. `Add branch` is in the group at both levels.
+- The branch picker moved out of the scrolling nav list and sits pinned under the logo, where it cannot move under the pointer or be scrolled out of reach. The branch section now renders above the `Organization` group, the order the shells already compose their items in, so the picker sits next to the screens it names.
+
+## Unreleased: one motion vocabulary for the owner screens
+
+Static gates green (`pnpm typecheck` 17/17, `pnpm lint` 15/15, `next build`). No migration, no schema change, no new dependency. Not verified in a browser: the Chrome extension would not connect.
+
+- The owner interface now shares one set of motion curves and one entrance vocabulary. `--ease-out` / `--ease-in-out` / `--ease-drawer` live in the shared Tailwind theme and the default transition curve is the ease-out, so a bare `transition-colors` stops starting slow. `ENTER` and `RESOLVE` name the curve; the dialog, confirm dialog and dropdown name their durations. A new `stagger()` deals list rows out 40ms apart and caps at six. The tab underline became one rail that travels between tabs, and every tab panel crossfades. Schedule keeps the week it has while the next one loads instead of flashing a skeleton, and the attendance rule animates a transform rather than a width. Schedule, Templates, Settings, Organization settings, Staff, Attendance and Notifications gained the entrance the rest of the app already had. Nothing animates on the sidebar or the tab bar. See [ADR 131](/Users/kuna/projects/matops/docs/issues/131-one-motion-vocabulary-for-the-owner-screens.md).
+
+## Unreleased: student membership selection
+
+Code implemented. Workspace typecheck passes 17/17 and lint passes 15/15. Tests were written but have not run. The migration has not been applied or deployed. Browser control timed out.
+
+- Approved students can select published shared memberships on the web, receive transfer instructions, and claim payment. Staff confirmation activates the purchase and adds eligible included branches. Pending students retain browsing, but booking and check-in require approval. See [ADR 130](/Users/kuna/projects/matops/docs/issues/130-students-choose-a-membership.md).
 
 ## v7.7a — the PR #6 review fixes
 

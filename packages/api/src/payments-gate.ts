@@ -7,6 +7,7 @@ import {
   accessReason,
   bookingAccess,
   bookingAccessMessage,
+  isActiveMember,
   isStaff,
 } from "@matops/domain";
 
@@ -124,6 +125,13 @@ export async function bookingGate(
     sessionAt?: Date;
   },
 ): Promise<BookingGate> {
+  if (!isActiveMember(input.membership)) {
+    return {
+      locked: true,
+      message: `${input.entity.name} has not approved you yet. You can browse classes while you wait.`,
+    };
+  }
+
   if (input.entity.membershipEnforcedAt) {
     if (isStaff(input.membership)) return { locked: false, message: null };
     const seen = await loadMembershipAccess(db, {

@@ -15,6 +15,7 @@ import {
   memberReferral,
   memberReferralAudit,
   membershipMonth,
+  membershipPurchase,
   notification,
   paymentClaim,
   rankPromotion,
@@ -245,6 +246,15 @@ export async function deleteOrganizationAssignments(
   organizationId: string,
   userId: string,
 ): Promise<number> {
+  await exec
+    .delete(membershipPurchase)
+    .where(
+      and(
+        eq(membershipPurchase.organizationId, organizationId),
+        eq(membershipPurchase.userId, userId),
+      ),
+    );
+
   // The months hang off the assignment with a foreign key, so they go first or
   // the delete below is refused. `membership_month_audit` deliberately has no
   // such key and is NOT deleted: who marked which month paid outlives the

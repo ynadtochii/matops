@@ -124,6 +124,25 @@ async function academyName(academyId: string, exec: DbExec): Promise<string> {
   }
 }
 
+export async function notifyMembershipPurchase(
+  input: { academyId: string; userId: string; title: string; body: string },
+  exec: DbExec,
+): Promise<void> {
+  await deliver(
+    [
+      {
+        academyId: input.academyId,
+        userId: input.userId,
+        kind: "membership_update",
+        push: { title: input.title, body: input.body },
+        data: { type: "membership" },
+        link: "/payments",
+      },
+    ],
+    exec,
+  );
+}
+
 export interface MembershipDueInput {
   /** Where the message is filed. ONE branch, never one per covered branch. */
   academyId: string;

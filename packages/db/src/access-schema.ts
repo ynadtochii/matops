@@ -38,6 +38,7 @@ export const accessPlan = pgTable(
       .notNull()
       .references(() => organization.id),
     name: t.text().notNull(),
+    studentSelectable: t.boolean().notNull().default(false),
     description: t.text(),
     /**
      * What the plan costs a member each month, in the currency's MINOR unit,
@@ -479,4 +480,74 @@ export const accessAssignmentRelations = relations(
       references: [accessPlan.id],
     }),
   }),
+);
+
+export const membershipPurchase = pgTable(
+  "membership_purchase",
+  (t) => ({
+    id: t.uuid().notNull().primaryKey().defaultRandom(),
+    organizationId: t
+      .text()
+      .notNull()
+      .references(() => organization.id),
+    userId: t
+      .text()
+      .notNull()
+      .references(() => user.id),
+    entityId: t.text().notNull(),
+    planId: t.uuid().notNull(),
+    planName: t.text().notNull(),
+    priceMinor: t.integer().notNull(),
+    currency: t.text().notNull(),
+    startMonth: t.date().notNull(),
+    entityIds: t.text().array().notNull(),
+    branchNames: t.text().array().notNull(),
+    version: t.text().notNull(),
+    reference: t.text().notNull(),
+    status: t.text().notNull().default("pending"),
+    reason: t.text(),
+    assignmentId: t.uuid(),
+    claimedAt: t.timestamp({ withTimezone: true }),
+    confirmedAt: t.timestamp({ withTimezone: true }),
+    reviewedBy: t.text().references(() => user.id, { onDelete: "set null" }),
+    reviewedAt: t.timestamp({ withTimezone: true }),
+    createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
+  }),
+  (table) => [
+    foreignKey({
+      name: "membership_purchase_plan_same_org",
+      columns: [table.organizationId, table.planId],
+      foreignColumns: [accessPlan.organizationId, accessPlan.id],
+    }),
+    foreignKey({
+      name: "membership_purchase_entity_same_org",
+      columns: [table.organizationId, table.entityId],
+      foreignColumns: [entity.organizationId, entity.id],
+    }),
+    foreignKey({
+      name: "membership_purchase_assignment_same_org",
+      columns: [table.organizationId, table.assignmentId],
+      foreignColumns: [accessAssignment.organizationId, accessAssignment.id],
+    }),
+    uniqueIndex("membership_purchase_one_unresolved")
+      .on(table.organizationId, table.userId)
+      .where(sql`status in ('pending','claimed','rejected','resolution')`),
+    uniqueIndex("membership_purchase_reference").on(table.reference),
+    index("membership_purchase_by_org_status").on(
+      table.organizationId,
+      table.status,
+    ),
+    check(
+      "membership_purchase_status_supported",
+      sql`status in ('pending','claimed','confirmed','rejected','cancelled','resolution')`,
+    ),
+    check(
+      "membership_purchase_price_sane",
+      sql`price_minor >= 0 and char_length(currency) = 3`,
+    ),
+    check(
+      "membership_purchase_is_a_month",
+      sql`date_trunc('month', start_month) = start_month`,
+    ),
+  ],
 );

@@ -28,9 +28,18 @@ export function useBooking() {
   // out must still be able to give their place back.
   const gate = useQuery({
     ...trpc.booking.access.queryOptions(),
-    enabled: !isStaff(academy) && isActiveMember(academy),
+    enabled: !isStaff(academy),
+    refetchInterval: (query) => (query.state.data?.locked ? 10000 : false),
   });
-  const lockedMessage = gate.data?.locked ? gate.data.message : null;
+  const lockedMessage = !isActiveMember(academy)
+    ? "Your gym has not approved you yet. You can browse classes while you wait."
+    : !isStaff(academy) && gate.isPending
+      ? "Checking your booking access…"
+      : gate.isError
+        ? "Could not check booking access. Refresh this page to try again."
+        : gate.data?.locked
+          ? gate.data.message
+          : null;
 
   const invalidate = () => invalidateFor("booking");
   const onError = (err: { message: string }) =>

@@ -8,7 +8,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   entityHref,
   formatMoney,
-  isPendingCoach,
+  isStaffRole,
+  isStudentMember,
   matchesDirectoryFilter,
   matchPeopleByEmail,
   parseEmailList,
@@ -23,9 +24,10 @@ import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
 import { useOrganization } from "./entity";
-import { cardClass, ENTER, Eyebrow, Tabs } from "./primitives";
+import { cardClass, ENTER, Eyebrow, stagger } from "./primitives";
 import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
+import { Tabs } from "./tabs";
 
 /**
  * Everybody the organization knows, one row per PERSON (ADR 126).
@@ -61,19 +63,31 @@ export function PeopleScreen() {
   // Memoised so the `?? []` fallback is not a new array on every render, which
   // would defeat the two useMemo hooks below.
   const rows = useMemo(() => directory.data?.rows ?? [], [directory.data]);
+  const students = useMemo(
+    () => rows.filter((r) => r.branches.some(isStudentMember)),
+    [rows],
+  );
   const plans = useMemo(
     () => [...new Set(rows.flatMap((r) => r.planNames))].sort(),
     [rows],
   );
   const shown = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    return (tab === "staff" ? staffRows(rows) : rows)
+    return (tab === "staff" ? staffRows(rows) : students)
       .filter((r) =>
-        matchesDirectoryFilter(r, {
-          entityId: entityId || undefined,
-          planName: planName || undefined,
-          status: status || undefined,
-        }),
+        matchesDirectoryFilter(
+          {
+            ...r,
+            branches: r.branches.filter((b) =>
+              tab === "staff" ? isStaffRole(b) : isStudentMember(b),
+            ),
+          },
+          {
+            entityId: entityId || undefined,
+            planName: planName || undefined,
+            status: status || undefined,
+          },
+        ),
       )
       .filter(
         (r) =>
@@ -81,7 +95,7 @@ export function PeopleScreen() {
           r.name.toLowerCase().includes(needle) ||
           r.email.toLowerCase().includes(needle),
       );
-  }, [rows, tab, search, entityId, planName, status]);
+  }, [rows, students, tab, search, entityId, planName, status]);
 
   if (!canRunOrganization) {
     return (
@@ -106,11 +120,15 @@ export function PeopleScreen() {
       </div>
 
       <Tabs
-        label="People or staff"
+        label="Members or staff"
         value={tab}
-        onChange={setTab}
+        onChange={(next) => {
+          setTab(next);
+          setSelected([]);
+          setPlanName("");
+        }}
         tabs={[
-          { id: "people", label: "People", count: rows.length },
+          { id: "people", label: "Members", count: students.length },
           { id: "staff", label: "Staff", count: staffRows(rows).length },
         ]}
       />
@@ -185,22 +203,28 @@ export function PeopleScreen() {
         </EmptyState>
       ) : (
         <ul className="flex flex-col gap-2">
-          {shown.map((r) => (
-            <li key={r.userId} className={`${cardClass()} ${ENTER}`}>
+          {shown.map((r, i) => (
+            <li
+              key={r.userId}
+              style={stagger(i)}
+              className={`${cardClass()} ${ENTER}`}
+            >
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <input
-                  type="checkbox"
-                  className="mt-1 size-4"
-                  aria-label={`Select ${r.name}`}
-                  checked={selected.includes(r.userId)}
-                  onChange={(e) =>
-                    setSelected((was) =>
-                      e.target.checked
-                        ? [...was, r.userId]
-                        : was.filter((id) => id !== r.userId),
-                    )
-                  }
-                />
+                {tab !== "staff" && (
+                  <input
+                    type="checkbox"
+                    className="mt-1 size-4"
+                    aria-label={`Select ${r.name}`}
+                    checked={selected.includes(r.userId)}
+                    onChange={(e) =>
+                      setSelected((was) =>
+                        e.target.checked
+                          ? [...was, r.userId]
+                          : was.filter((id) => id !== r.userId),
+                      )
+                    }
+                  />
+                )}
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <Link
                     href={`/people/${r.userId}`}
@@ -221,23 +245,32 @@ export function PeopleScreen() {
                   )}
                 </div>
                 <div className="flex flex-wrap justify-end gap-2">
-                  {r.branches.map((b) => (
-                    <Button
-                      key={b.entityId}
-                      asChild
-                      size="sm"
-                      variant="outline"
-                    >
-                      {/* Straight to this person at that branch, on the tab
+                  {r.branches
+                    .filter((b) =>
+                      tab === "staff" ? isStaffRole(b) : isStudentMember(b),
+                    )
+                    .map((b) => (
+                      <Button
+                        key={b.entityId}
+                        asChild
+                        size="sm"
+                        variant="outline"
+                      >
+                        {/* Straight to this person at that branch, on the tab
                           their standing belongs to, so nobody searches twice
                           (ADR 129). */}
-                      <Link href={branchHref(b, tab)}>
-                        {b.entityName}
-                        {b.status !== "active" ? ` · ${b.status}` : ""}
-                        {b.verdict && b.verdict !== "ok" ? " ·  ⚠" : ""}
-                      </Link>
-                    </Button>
-                  ))}
+                        <Link href={branchHref(b, tab)}>
+                          {b.entityName}
+                          {isStaffRole(b)
+                            ? ` · ${b.invitedRole === "instructor" && b.status === "pending" ? "instructor" : b.role}`
+                            : ""}
+                          {b.status !== "active" ? ` · ${b.status}` : ""}
+                          {!isStaffRole(b) && b.verdict && b.verdict !== "ok"
+                            ? " ·  ⚠"
+                            : ""}
+                        </Link>
+                      </Button>
+                    ))}
                 </div>
               </div>
             </li>
@@ -245,14 +278,25 @@ export function PeopleScreen() {
         </ul>
       )}
 
-      {selected.length > 0 && (
+      {tab !== "staff" && selected.length > 0 && (
         <BulkAssign selected={selected} onDone={() => setSelected([])} />
       )}
 
-      <div className="flex flex-wrap gap-2">
-        <PasteEmails people={rows} onMatched={(ids) => setSelected(ids)} />
-        <FromBranchPlan onPicked={(ids) => setSelected(ids)} />
-      </div>
+      {tab !== "staff" && (
+        <div className="flex flex-wrap gap-2">
+          <PasteEmails
+            people={students}
+            onMatched={(ids) => setSelected(ids)}
+          />
+          <FromBranchPlan
+            onPicked={(ids) =>
+              setSelected(
+                ids.filter((id) => students.some((r) => r.userId === id)),
+              )
+            }
+          />
+        </div>
+      )}
 
       <Eyebrow>
         {shown.length === 1 ? "1 person" : `${shown.length} people`}
@@ -271,14 +315,14 @@ type PeopleTab = "people" | "staff";
 function branchHref(
   b: {
     entityId: string;
-    memberId: string;
+    memberId: string | null;
     status: string;
     role: string;
     invitedRole: string | null;
   },
   tab: PeopleTab,
 ): string {
-  if (tab === "staff" || isPendingCoach(b)) {
+  if (tab === "staff" || isStaffRole(b) || !b.memberId) {
     return entityHref(b.entityId, "/coaches");
   }
   const branchTab =

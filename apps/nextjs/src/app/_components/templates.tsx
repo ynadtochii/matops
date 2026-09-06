@@ -26,7 +26,7 @@ import { optimistic, rollback } from "~/lib/optimistic";
 import { useTRPC } from "~/trpc/react";
 import { InstructorOptions } from "./coach-select";
 import { useEntity } from "./entity";
-import { cardClass, SectionHeading } from "./primitives";
+import { cardClass, RESOLVE, SectionHeading } from "./primitives";
 import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 
@@ -232,7 +232,7 @@ export function Templates({
           Create a weekly template and MatOps fills the calendar for you.
         </EmptyState>
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className={cn("flex flex-col gap-2", RESOLVE)}>
           {templates.map((t) => (
             <div
               key={t.id}

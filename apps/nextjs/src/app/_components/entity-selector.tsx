@@ -105,7 +105,9 @@ export function EntitySelector({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="sm" className="max-w-full">
-            <span className="truncate">{active?.name ?? "Gym overview"}</span>
+            <span className="truncate">
+              {active?.name ?? "Organization overview"}
+            </span>
             <ChevronDown />
           </Button>
         </DropdownMenuTrigger>
@@ -115,7 +117,7 @@ export function EntitySelector({
               href="/overview"
               aria-current={activeId === undefined ? "true" : undefined}
             >
-              <span className="flex-1">Gym overview</span>
+              <span className="flex-1">Organization overview</span>
               {activeId === undefined && <Check />}
             </Link>
           </DropdownMenuItem>

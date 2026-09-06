@@ -9,6 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   bookingAccessMessage,
   canVisit,
+  entityFromPath,
   entityHref,
   isActiveMember,
   isPendingCoach,
@@ -19,7 +20,12 @@ import {
 
 import type { NavItem } from "./shell-frame";
 import { useTRPC } from "~/trpc/react";
-import { EntityProvider, useEntity, useOrganization } from "./entity";
+import {
+  EntityProvider,
+  useEntity,
+  useOrganization,
+  useRememberBranch,
+} from "./entity";
 import { AddBranchDialog, EntitySelector } from "./entity-selector";
 import { PageLoader } from "./mat-loader";
 import { ShareLinksDialog } from "./share-links-dialog";
@@ -41,9 +47,9 @@ import { ErrorState, NoAccessState } from "./states";
 
 const NARROW_ROUTES = ["/class", "/profile"];
 
-const GYM_GROUP = "Gym management";
+export const GYM_GROUP = "Organization";
 
-const PlusIcon = () => (
+export const PlusIcon = () => (
   <svg
     viewBox="0 0 16 16"
     fill="none"
@@ -59,10 +65,126 @@ const PlusIcon = () => (
 
 function contentWidth(pathname: string, isStaff: boolean): string {
   if (pathname.startsWith("/schedule")) return "max-w-[1600px]";
-  if (!isStaff || NARROW_ROUTES.some((r) => pathname.startsWith(r))) {
+  if (!isStaff) {
+    return pathname.startsWith("/class") ||
+      pathname.startsWith("/notifications")
+      ? "max-w-3xl"
+      : "max-w-6xl";
+  }
+  if (NARROW_ROUTES.some((r) => pathname.startsWith(r))) {
     return "max-w-3xl";
   }
   return "max-w-6xl";
+}
+
+export interface BranchNav {
+  id: string;
+  type: string;
+  role: string;
+  status: string;
+  membershipEnforced?: boolean;
+  hasLegacyDues?: boolean;
+}
+
+/**
+ * The branch section of the sidebar, from one list both levels read. The
+ * organization screens draw it too (ADR 129), so opening the gym no longer
+ * swaps the whole menu out. They pass no badges: a count needs the branch
+ * scope those screens never open.
+ */
+export function branchNavItems(
+  branch: BranchNav,
+  badges: {
+    students?: number;
+    coaches?: number;
+    claims?: number;
+    unread?: number;
+  } = {},
+): NavItem[] {
+  const isOwner = runsBranch(branch);
+  const isStaff = isStaffOf(branch);
+  const isPending = branch.status === "pending";
+  return [
+    {
+      path: "/",
+      label: isStaff ? "Dashboard" : "Schedule",
+      icon: isStaff ? <DashboardIcon /> : <ScheduleIcon />,
+      show: true,
+    },
+    {
+      path: "/training",
+      label: "My classes",
+      icon: <TrainingIcon />,
+      show: !isStaff,
+    },
+    {
+      path: "/schedule",
+      label: "Schedule",
+      icon: <ScheduleIcon />,
+      show: canVisit("/schedule", branch),
+    },
+    {
+      path: "/members",
+      label: "Roster",
+      icon: <MembersIcon />,
+      show: canVisit("/members", branch),
+      badge: badges.students ?? 0,
+    },
+    {
+      path: "/coaches",
+      label: "Coaches",
+      icon: <CoachesIcon />,
+      show: canVisit("/coaches", branch),
+      badge: isOwner ? (badges.coaches ?? 0) : 0,
+    },
+    {
+      path: "/referrals",
+      label: "Referrals",
+      icon: <ReferralsIcon />,
+      show: canVisit("/referrals", branch),
+    },
+    {
+      path: "/payments",
+      label: isOwner
+        ? "Payments"
+        : branch.membershipEnforced
+          ? "Membership"
+          : "Dues",
+      icon: <PaymentsIcon />,
+      // An activated branch has no owner Payments screen: its plans, dues and
+      // claims belong to the gym, and Memberships is where they live (ADR 127).
+      // A branch opened after the cutover never ran branch dues at all, so it
+      // has no Payments screen even switched off (ADR 128): `hasLegacyDues`
+      // says whether there is a history to show.
+      show:
+        (isOwner &&
+          !branch.membershipEnforced &&
+          branch.hasLegacyDues === true) ||
+        !isStaff,
+      badge: isOwner ? (badges.claims ?? 0) : 0,
+    },
+    {
+      path: "/settings",
+      label: "Branch settings",
+      icon: <SettingsIcon />,
+      show: canVisit("/settings", branch),
+    },
+    {
+      path: "/notifications",
+      label: "Notifications",
+      icon: <NotificationsIcon />,
+      show: !isPending,
+      badge: badges.unread ?? 0,
+    },
+    {
+      path: "/profile",
+      label: "Profile",
+      icon: <ProfileIcon />,
+      show: !isStaff,
+    },
+  ]
+    .filter((i) => i.show)
+    .map((i) => ({ ...i, href: entityHref(branch.id, i.path) }));
 }
 
 /**
@@ -79,7 +201,7 @@ function contentWidth(pathname: string, isStaff: boolean): string {
  * and the route guard.
  */
 export function AppShell({
-  entityId,
+  entityId: fromLayout,
   user,
   children,
 }: {
@@ -89,7 +211,14 @@ export function AppShell({
 }) {
   const trpc = useTRPC();
   const pathname = usePathname();
-  const current = useQuery(trpc.academy.current.queryOptions());
+  // The URL wins over the prop: a soft navigation can reuse this layout, and
+  // then the prop still names the branch you left while the router has moved on.
+  const entityId = entityFromPath(pathname) ?? fromLayout;
+  const current = useQuery({
+    ...trpc.academy.current.queryOptions(),
+    refetchInterval: (query) =>
+      query.state.data?.status === "pending" ? 10000 : false,
+  });
 
   // Boot: no chrome to mirror yet, and the answer may be the shell or the gate,
   // so a skeleton would draw a layout that half the time never arrives (ADR 80).
@@ -142,6 +271,7 @@ function ShellChrome({
   const academy = useEntity();
   const organization = useOrganization();
   const [addingBranch, setAddingBranch] = useState(false);
+  useRememberBranch(entityId);
   const href = (path: string) => entityHref(entityId, path);
   const within = pathWithinEntity(pathname);
   const { academyId: activeId, role, status } = academy;
@@ -152,7 +282,7 @@ function ShellChrome({
   // same split as the two screens (ADR 64). Dedupes with their own queries.
   // An instructor sees the student queue (ADR 75), never the coach one.
   const memberList = useQuery({
-    ...trpc.membership.members.queryOptions(),
+    ...trpc.membership.members.queryOptions({ audience: "all" }),
     enabled: isStaff,
   });
   const waiting = memberList.data?.filter((m) => m.status === "pending") ?? [];
@@ -187,101 +317,39 @@ function ShellChrome({
     (overdue ? "Membership payment overdue — tap to pay." : null);
   const duesStripLocked = access?.state === "locked";
 
-  const items: NavItem[] = [
+  const items = branchNavItems(
+    { ...academy, id: entityId },
     {
-      path: "/",
-      label: isStaff ? "Dashboard" : "Schedule",
-      icon: isStaff ? <DashboardIcon /> : <ScheduleIcon />,
-      show: true,
+      students: pendingStudentCount,
+      coaches: pendingCoachCount,
+      claims: claimsCount,
+      unread: unreadCount,
     },
-    {
-      path: "/training",
-      label: "My classes",
-      icon: <TrainingIcon />,
-      show: !isStaff,
-    },
-    {
-      path: "/schedule",
-      label: "Schedule",
-      icon: <ScheduleIcon />,
-      show: canVisit("/schedule", academy),
-    },
-    {
-      path: "/members",
-      label: "Roster",
-      icon: <MembersIcon />,
-      show: canVisit("/members", academy),
-      badge: pendingStudentCount,
-    },
-    {
-      path: "/coaches",
-      label: "Coaches",
-      icon: <CoachesIcon />,
-      show: canVisit("/coaches", academy),
-      badge: isOwner ? pendingCoachCount : 0,
-    },
-    {
-      path: "/referrals",
-      label: "Referrals",
-      icon: <ReferralsIcon />,
-      show: canVisit("/referrals", academy),
-    },
-    {
-      path: "/payments",
-      label: isOwner
-        ? "Payments"
-        : academy.membershipEnforced
-          ? "Membership"
-          : "Dues",
-      icon: <PaymentsIcon />,
-      // An activated branch has no owner Payments screen: its plans, dues and
-      // claims belong to the gym, and Memberships is where they live (ADR 127).
-      // A branch opened after the cutover never ran branch dues at all, so it
-      // has no Payments screen even switched off (ADR 128): `hasLegacyDues`
-      // says whether there is a history to show.
-      show:
-        (isOwner && !academy.membershipEnforced && academy.hasLegacyDues) ||
-        (!isStaff && !isPending),
-      badge: isOwner ? claimsCount : 0,
-    },
-    {
-      path: "/settings",
-      label: "Branch settings",
-      icon: <SettingsIcon />,
-      show: canVisit("/settings", academy),
-    },
-    {
-      path: "/notifications",
-      label: "Notifications",
-      icon: <NotificationsIcon />,
-      show: !isPending,
-      badge: unreadCount,
-    },
-    {
-      path: "/profile",
-      label: "Profile",
-      icon: <ProfileIcon />,
-      show: !isStaff,
-    },
-  ]
-    .filter((i) => i.show)
-    .map((i) => ({ ...i, href: href(i.path) }));
+  );
 
   // The gym's own screens, beside the branch rather than behind a second menu
   // (ADR 129). Same paths the organization shell draws, so a link is a link
   // and nothing here sends `x-matops-entity`.
   const gymItems: NavItem[] = [
-    { path: "/overview", label: "Gym overview", icon: <DashboardIcon /> },
+    {
+      path: "/overview",
+      label: "Organization overview",
+      icon: <DashboardIcon />,
+    },
     { path: "/people", label: "People", icon: <MembersIcon /> },
     { path: "/memberships", label: "Memberships", icon: <PaymentsIcon /> },
-    { path: "/settings", label: "Gym settings", icon: <SettingsIcon /> },
+    {
+      path: "/settings",
+      label: "Organization settings",
+      icon: <SettingsIcon />,
+    },
   ].map((i) => ({
     ...i,
     show: organization.canRunOrganization,
     group: GYM_GROUP,
     href: i.path,
     // Namespaced so `isCurrent`, which reads the path within the branch, can
-    // never light up "Gym settings" because you are on the branch's own.
+    // never light up "Organization settings" because you are on the branch's own.
     path: `gym:${i.path}`,
   }));
 
@@ -378,7 +446,8 @@ function ShellChrome({
           {isPending && (
             <div className="border-brand/25 bg-brand-wash text-brand-strong border-b">
               <p className={`${columnClass} py-2.5 text-sm`}>
-                Pending approval — the owner will confirm you soon.
+                Waiting for branch approval. You can browse classes and
+                memberships, but booking is not available yet.
               </p>
             </div>
           )}

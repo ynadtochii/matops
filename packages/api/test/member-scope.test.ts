@@ -124,8 +124,6 @@ describe("member-scoped owner mutations reject a foreign memberId", () => {
 
   it("the member list never shows another academy's people", async () => {
     const rows = await owner().membership.members();
-    expect(rows.map((r) => r.memberId).sort()).toEqual(
-      [memberId(A, OWNER_A), OWN].sort(),
-    );
+    expect(rows.map((r) => r.memberId).sort()).toEqual([OWN]);
   });
 });

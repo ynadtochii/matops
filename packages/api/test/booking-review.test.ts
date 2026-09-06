@@ -1,7 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { and, eq } from "@matops/db";
-import { accessAssignment, classParticipation } from "@matops/db/schema";
+import {
+  accessAssignment,
+  classParticipation,
+  member,
+} from "@matops/db/schema";
 
 import type { Harness } from "./helpers";
 import { runMembershipCancellationSweep } from "../src/membership-sweep";
@@ -41,6 +45,8 @@ describe("bookings that need a review, not a cancellation", () => {
         members: [
           { userId: BOSS, role: "owner", status: "active" },
           { userId: ALEX, role: "student", status: "active" },
+          { userId: "review_coach", role: "instructor", status: "active" },
+          { userId: "review_manager", role: "student", status: "suspended" },
         ],
       },
     ]);
@@ -107,5 +113,43 @@ describe("bookings that need a review, not a cancellation", () => {
     });
     expect(swept.cancelled).toBe(0);
     expect(await bookingStatus()).toBe("booked");
+  });
+  it("excludes an active instructor booking without coverage", async () => {
+    await h.exec.insert(classParticipation).values({
+      academyId: ORG,
+      classId: NEXT_WEEK,
+      studentId: "review_coach",
+      bookingStatus: "booked",
+      bookingTier: "confirmed",
+    });
+    const seen = await owner().accessPlan.bookingsToReview({
+      limit: 50,
+      userId: "review_coach",
+    });
+    expect(seen.items).toEqual([]);
+  });
+
+  it("inherits manager access despite a suspended local relationship", async () => {
+    await h.exec
+      .update(member)
+      .set({ role: "manager" })
+      .where(
+        and(
+          eq(member.userId, "review_manager"),
+          eq(member.organizationId, ORG),
+        ),
+      );
+    await h.exec.insert(classParticipation).values({
+      academyId: ORG,
+      classId: NEXT_WEEK,
+      studentId: "review_manager",
+      bookingStatus: "booked",
+      bookingTier: "confirmed",
+    });
+    const seen = await owner().accessPlan.bookingsToReview({
+      limit: 50,
+      userId: "review_manager",
+    });
+    expect(seen.items).toEqual([]);
   });
 });

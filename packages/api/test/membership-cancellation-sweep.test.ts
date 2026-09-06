@@ -1,7 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { and, createEntity, eq } from "@matops/db";
-import { classInstance, classParticipation, entity } from "@matops/db/schema";
+import {
+  classInstance,
+  classParticipation,
+  entity,
+  entityMembership,
+  member,
+} from "@matops/db/schema";
 
 import type { Harness } from "./helpers";
 import {
@@ -386,5 +392,130 @@ describe("the membership reminder sweep", () => {
       now: new Date("2026-11-25T09:00:00Z"),
     });
     expect(result.sent).toBe(0);
+  });
+});
+
+describe("staff access during overdue cancellation", () => {
+  it("protects instructor branches and inherited manager access", async () => {
+    const h = await harness();
+    const org = "staff_sweep";
+    const boss = "staff_sweep_owner";
+    const coach = "staff_sweep_coach";
+    const matClass = "cccccccc-0000-4000-8000-000000000090";
+    const gymClass = "cccccccc-0000-4000-8000-000000000091";
+    try {
+      await seedAcademies(h.pg, [
+        {
+          id: org,
+          code: "700096",
+          members: [
+            { userId: boss, role: "owner", status: "active" },
+            { userId: coach, role: "student", status: "active" },
+          ],
+        },
+      ]);
+      const gym = (
+        await createEntity(
+          {
+            organizationId: org,
+            type: "general_space",
+            name: "Gym",
+            ownerUserId: boss,
+          },
+          h.exec,
+        )
+      ).entityId;
+      const owner = h.as(boss, org);
+      const plan = await owner.accessPlan.create({
+        name: "Both",
+        entityIds: [org, gym],
+        priceMinor: 5000,
+        currency: "EUR",
+      });
+      await owner.accessPlan.assign({
+        userId: coach,
+        planId: plan.id,
+        startMonth: "2026-09-01",
+      });
+      await h.exec
+        .update(entity)
+        .set({ membershipEnforcedAt: new Date("2026-01-01T00:00:00Z") })
+        .where(eq(entity.organizationId, org));
+      await h.exec
+        .update(entityMembership)
+        .set({ role: "instructor" })
+        .where(
+          and(
+            eq(entityMembership.userId, coach),
+            eq(entityMembership.entityId, org),
+          ),
+        );
+      await seedClasses(h.pg, [
+        {
+          id: matClass,
+          academyId: org,
+          instructorId: boss,
+          startsInMinutes: 600,
+        },
+        {
+          id: gymClass,
+          academyId: gym,
+          instructorId: boss,
+          startsInMinutes: 600,
+        },
+      ]);
+      await h.exec
+        .update(classInstance)
+        .set({ startsAt: new Date("2026-10-01T12:00:00Z"), bookingCount: 1 });
+      await h.exec.insert(classParticipation).values([
+        {
+          academyId: org,
+          classId: matClass,
+          studentId: coach,
+          bookingStatus: "booked",
+          bookingTier: "confirmed",
+        },
+        {
+          academyId: gym,
+          classId: gymClass,
+          studentId: coach,
+          bookingStatus: "booked",
+          bookingTier: "confirmed",
+        },
+      ]);
+      const first = await runMembershipCancellationSweep(h.exec, {
+        now: LATE_SEPTEMBER,
+      });
+      expect(first.cancelled).toBe(1);
+      const read = () =>
+        h.exec
+          .select({
+            classId: classParticipation.classId,
+            status: classParticipation.bookingStatus,
+          })
+          .from(classParticipation)
+          .where(eq(classParticipation.studentId, coach));
+      expect(await read()).toEqual(
+        expect.arrayContaining([
+          { classId: matClass, status: "booked" },
+          { classId: gymClass, status: "cancelled" },
+        ]),
+      );
+      await h.exec
+        .update(member)
+        .set({ role: "manager" })
+        .where(and(eq(member.organizationId, org), eq(member.userId, coach)));
+      await h.exec
+        .update(classParticipation)
+        .set({ bookingStatus: "booked" })
+        .where(eq(classParticipation.studentId, coach));
+      const second = await runMembershipCancellationSweep(h.exec, {
+        now: LATE_SEPTEMBER,
+      });
+      expect(second.cancelled).toBe(0);
+      expect((await read()).every((row) => row.status === "booked")).toBe(true);
+    } finally {
+      await h.close();
+    }
   });
 });

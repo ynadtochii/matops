@@ -7,7 +7,7 @@
  * dues and attendance on another's row.
  */
 
-import { isStaff } from "./access";
+import { isStaffRole, isStudentMember } from "./access";
 import { isPendingCoach } from "./membership";
 
 /** One person's standing at ONE branch, as that branch's own roster reports it. */
@@ -15,7 +15,7 @@ export interface DirectoryEntry {
   entityId: string;
   entityName: string;
   /** `entity_membership.id`, which is what a branch screen's `?member=` names. */
-  memberId: string;
+  memberId: string | null;
   userId: string;
   name: string;
   email: string;
@@ -35,7 +35,7 @@ export interface DirectoryEntry {
 export interface DirectoryBranch {
   entityId: string;
   entityName: string;
-  memberId: string;
+  memberId: string | null;
   status: string;
   role: string;
   invitedRole: string | null;
@@ -123,9 +123,7 @@ export function matchesDirectoryFilter(
  * the same rows, so they cannot disagree about who somebody is.
  */
 export function staffRows(rows: DirectoryRow[]): DirectoryRow[] {
-  return rows.filter((r) =>
-    r.branches.some((b) => isStaff(b) || isPendingCoach(b)),
-  );
+  return rows.filter((r) => r.branches.some((b) => isStaffRole(b)));
 }
 
 /**
@@ -136,4 +134,8 @@ export function staffRows(rows: DirectoryRow[]): DirectoryRow[] {
  */
 export function pendingCoachCount(rows: DirectoryRow[]): number {
   return rows.reduce((n, r) => n + r.branches.filter(isPendingCoach).length, 0);
+}
+
+export function studentRows(rows: DirectoryRow[]): DirectoryRow[] {
+  return rows.filter((row) => row.branches.some(isStudentMember));
 }

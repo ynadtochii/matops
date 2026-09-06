@@ -20,7 +20,7 @@ import { useTRPC } from "~/trpc/react";
 import { useEntity, useEntityHref } from "./entity";
 import { InstallAppCard } from "./install-app-card";
 import { PageHeader } from "./page-header";
-import { cardClass, disciplineDot, ENTER, Section } from "./primitives";
+import { cardClass, disciplineDot, ENTER } from "./primitives";
 import { SkeletonClassDays } from "./skeletons";
 import { EmptyState, ErrorState, SuspendedState } from "./states";
 import { useBooking } from "./use-booking";
@@ -32,24 +32,25 @@ const STAGGER = ["", "delay-100", "delay-200"];
 
 export function StudentScreen() {
   const trpc = useTRPC();
+  const href = useEntityHref();
   const { book, cancel, busyFor, lockedMessage } = useBooking();
   const suspended = useEntity().status === "suspended";
 
+  const now = useMinuteClock();
+  const currentDay = dayKey(now);
   const { todayKey, windowStart, windowEnd } = useMemo(() => {
-    const start = new Date();
+    const start = new Date(`${currentDay}T00:00:00`);
     start.setHours(0, 0, 0, 0);
     const end = new Date(start);
     end.setDate(end.getDate() + 7);
     return { todayKey: dayKey(start), windowStart: start, windowEnd: end };
-  }, []);
+  }, [currentDay]);
 
   const week = useQuery(
-    trpc.class.mine.queryOptions(studentWeekWindow(new Date()), {
+    trpc.class.mine.queryOptions(studentWeekWindow(now), {
       enabled: !suspended,
     }),
   );
-
-  const now = useMinuteClock();
 
   // The window is snapped to a UTC day so the server and the browser build the
   // same cache key. Filtering here is what keeps the list to seven local days.
@@ -77,44 +78,96 @@ export function StudentScreen() {
     <>
       <PageHeader
         title="Schedule"
-        subtitle="Your classes for the next seven days."
+        subtitle="Find and book a class for the next seven days."
+        action={
+          <Button asChild variant="outline">
+            <Link href={href("/training")}>My bookings</Link>
+          </Button>
+        }
       />
+      {lockedMessage && (
+        <div className="border-warning/30 bg-warning/10 mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
+          <div className="min-w-0">
+            <p className="font-medium">Booking unavailable</p>
+            <p className="text-muted-foreground mt-1 text-sm">
+              {lockedMessage}
+            </p>
+          </div>
+          <Button asChild variant="outline" size="sm">
+            <Link href={href("/payments")}>View membership</Link>
+          </Button>
+        </div>
+      )}
       {week.isPending ? (
         <SkeletonClassDays />
       ) : week.isError ? (
         <ErrorState label="your schedule" onRetry={() => void week.refetch()} />
       ) : byDay.length === 0 ? (
         <EmptyState title="No classes this week.">
-          Check back soon — your gym adds classes here as they schedule them.
+          Your gym will show new classes here when they are scheduled.
         </EmptyState>
       ) : (
         <div className="flex flex-col gap-8">
-          {byDay.map(([key, rows], i) => (
-            <div key={key} className={cn(ENTER, STAGGER[Math.min(i, 2)])}>
-              <Section
-                label={
-                  key === todayKey
-                    ? "Today"
-                    : dayMediumFmt.format(new Date(`${key}T12:00:00`))
-                }
-                meta={`${rows.length} ${rows.length === 1 ? "class" : "classes"}`}
+          {byDay.map(([key, rows], i) => {
+            const upcoming = rows.filter((c) => new Date(c.startsAt) > now);
+            const earlier = rows.filter((c) => new Date(c.startsAt) <= now);
+            const renderRow = (c: ClassRow) => (
+              <ClassRowCard
+                key={c.id}
+                c={c}
+                now={now}
+                busy={busyFor(c.id)}
+                locked={!!lockedMessage}
+                onBook={() => book.mutate({ classId: c.id })}
+                onCancel={() => cancel.mutate({ classId: c.id })}
+              />
+            );
+            return (
+              <section
+                key={key}
+                aria-labelledby={`day-${key}`}
+                className={cn(
+                  "border-border grid gap-4 border-t pt-5 lg:grid-cols-[9rem_minmax(0,1fr)] lg:gap-8",
+                  ENTER,
+                  STAGGER[Math.min(i, 2)],
+                )}
               >
-                <div className="flex flex-col gap-2">
-                  {rows.map((c) => (
-                    <ClassRowCard
-                      key={c.id}
-                      c={c}
-                      now={now}
-                      busy={busyFor(c.id)}
-                      locked={!!lockedMessage}
-                      onBook={() => book.mutate({ classId: c.id })}
-                      onCancel={() => cancel.mutate({ classId: c.id })}
-                    />
-                  ))}
+                <div>
+                  <h2 id={`day-${key}`} className="text-base font-semibold">
+                    {key === todayKey
+                      ? "Today"
+                      : dayMediumFmt.format(new Date(`${key}T12:00:00`))}
+                  </h2>
+                  {key === todayKey && (
+                    <p className="text-muted-foreground mt-1 text-sm">
+                      {dayMediumFmt.format(now)}
+                    </p>
+                  )}
+                  <p className="text-muted-foreground mt-1 text-sm">
+                    {rows.length} {rows.length === 1 ? "class" : "classes"}
+                  </p>
                 </div>
-              </Section>
-            </div>
-          ))}
+                <div className="flex min-w-0 flex-col gap-2">
+                  {upcoming.map(renderRow)}
+                  {upcoming.length === 0 && (
+                    <p className="text-muted-foreground py-2 text-sm">
+                      No more classes today.
+                    </p>
+                  )}
+                  {earlier.length > 0 && (
+                    <details className="group">
+                      <summary className="text-muted-foreground focus-visible:outline-brand cursor-pointer rounded-sm py-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-4">
+                        Earlier today ({earlier.length})
+                      </summary>
+                      <div className="flex flex-col gap-2 pt-1">
+                        {earlier.map(renderRow)}
+                      </div>
+                    </details>
+                  )}
+                </div>
+              </section>
+            );
+          })}
         </div>
       )}
       <div className="mt-8">
@@ -150,14 +203,12 @@ function ClassRowCard({
     <div
       className={cn(
         cardClass({ interactive: true }),
-        "flex flex-wrap items-center justify-between gap-3",
-        cancelled && "opacity-60",
-        past && !cancelled && "opacity-70",
+        "flex flex-wrap items-center justify-between gap-4 lg:flex-nowrap",
       )}
     >
       <Link
         href={href(`/class/${c.id}`)}
-        className="flex min-w-0 flex-1 items-start gap-3"
+        className="focus-visible:outline-brand flex min-w-0 flex-1 items-start gap-3 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4"
       >
         <span
           aria-hidden
@@ -167,13 +218,13 @@ function ClassRowCard({
           )}
         />
         <span className="flex min-w-0 flex-1 flex-col gap-1">
-          <span className="flex items-baseline gap-2">
-            <span className="font-mono text-sm font-semibold tabular-nums">
+          <span className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+            <span className="shrink-0 font-mono text-sm font-semibold tabular-nums">
               {timeFmt.format(start)}
             </span>
             <span
               className={cn(
-                "truncate font-medium",
+                "min-w-0 text-base font-semibold break-words",
                 cancelled && "line-through",
               )}
             >
@@ -209,9 +260,10 @@ function ClassRowCard({
           size="sm"
           busy={busy}
           disabled={busy}
+          aria-label={`Cancel booking for ${c.title} at ${timeFmt.format(start)}`}
           onClick={onCancel}
         >
-          Cancel
+          Cancel booking
         </Button>
       ) : full ? (
         <ConfirmDialog
@@ -225,9 +277,10 @@ function ClassRowCard({
               variant="secondary"
               size="sm"
               busy={busy}
+              aria-label={`Book ${c.title} at ${timeFmt.format(start)}`}
               disabled={busy || locked}
             >
-              Book
+              Book class
             </Button>
           }
         />
@@ -236,9 +289,10 @@ function ClassRowCard({
           size="sm"
           busy={busy}
           disabled={busy || locked}
+          aria-label={`Book ${c.title} at ${timeFmt.format(start)}`}
           onClick={onBook}
         >
-          Book
+          Book class
         </Button>
       )}
     </div>

@@ -22,21 +22,8 @@ import {
 } from "../classes";
 import { CLASS_NOT_FOUND } from "../messages";
 import { bookingGate } from "../payments-gate";
-import { enrolledProcedure } from "../trpc";
+import { enrolledProcedure, memberProcedure } from "../trpc";
 
-/**
- * Booking (slice 3.1, spec S5, §4; docs/issues/13, 22, 23). Book / cancel a
- * concrete class from the student app. On `enrolledProcedure`, so a PENDING
- * member may book too — their booking is `provisional` (recorded, tagged
- * "pending approval", never counted). An approved member books `confirmed`,
- * which increments `class.booking_count`.
- *
- * Booking is NEVER blocked (soft cap, §4): the capacity claim is a plain atomic
- * increment with NO `booking_count < capacity` guard. Safety comes from the
- * `UNIQUE(class_id, student_id)` upsert (no double-book) and the fact the whole
- * resolver runs inside the RLS per-request transaction (`ctx.db`), so the two
- * statements commit or roll back together. See docs/issues/13.
- */
 // ponytail: newest 300 by start time. A student who trains daily loses past rows
 // past ~10 months; `stats.me` is the lifetime figure, not this list. Paginate if
 // the Past list ever needs to go further back.
@@ -105,7 +92,7 @@ export const bookingRouter = {
    * class is a no-op that does not double-count. Re-booking a cancelled row
    * flips it back to `booked` (the `ON CONFLICT` upsert) and re-claims the spot.
    */
-  book: enrolledProcedure
+  book: memberProcedure
     .input(BookClassSchema)
     .mutation(async ({ ctx, input }) => {
       // 1. Pre-read for a precise, friendly error (NOT the race guard — that is
@@ -122,29 +109,19 @@ export const bookingRouter = {
         });
       }
 
-      // 2. Tier from the caller's membership: active → confirmed, pending →
-      //    provisional (never counted).
       const tier = bookingTier(ctx.membership);
 
-      // At an ACTIVATED branch the gate runs whatever the tier, so a pending
-      // member is refused outright instead of holding a provisional booking.
-      // A general space has one room and no trial: an unapproved person taking
-      // a place nobody counts is exactly the over-booking strict capacity
-      // exists to stop (ADR 126). At a legacy branch the old rule stands and a
-      // provisional booking skips the dues gate as it always has.
-      if (tier === "confirmed" || ctx.entity.membershipEnforcedAt) {
-        const gate = await bookingGate(ctx.db, {
-          entity: ctx.entity,
-          membership: ctx.membership,
-          userId: ctx.session.user.id,
-          sessionAt: cls.startsAt,
+      const gate = await bookingGate(ctx.db, {
+        entity: ctx.entity,
+        membership: ctx.membership,
+        userId: ctx.session.user.id,
+        sessionAt: cls.startsAt,
+      });
+      if (gate.locked) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: gate.message ?? "Booking is locked for you.",
         });
-        if (gate.locked) {
-          throw new TRPCError({
-            code: "PRECONDITION_FAILED",
-            message: gate.message ?? "Booking is locked for you.",
-          });
-        }
       }
 
       // 3. Transition the participation to booked, only if not already booked

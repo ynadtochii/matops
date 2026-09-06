@@ -495,9 +495,6 @@ export const organizationManagerProcedure = organizationMemberProcedure.use(
  * So `ctx.db` is the scoped transaction and Postgres filters every query to
  * that entity even if a `where` is forgotten (ADR 124, docs/issues/12, 20, 23).
  *
- * Enrolled — any member of the entity, INCLUDING `pending` ones (view-only:
- * browse the schedule, provisionally book or check in). The full `student` role
- * is granted at approval (docs/issues/23).
  */
 export const enrolledProcedure = t.procedure
   .use(timingMiddleware)

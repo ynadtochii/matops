@@ -127,7 +127,7 @@ export function DashboardScreen() {
     enabled: isStaff,
   });
   const memberList = useQuery({
-    ...trpc.membership.members.queryOptions(),
+    ...trpc.membership.members.queryOptions({ audience: "all" }),
     enabled: isStaff,
   });
   const leads = useQuery({

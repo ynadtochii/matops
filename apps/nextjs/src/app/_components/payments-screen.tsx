@@ -22,9 +22,10 @@ import { useTRPC } from "~/trpc/react";
 import { useEntity } from "./entity";
 import { MyDues } from "./my-dues";
 import { PageHeader } from "./page-header";
-import { cardClass, Section, Tabs, TAP } from "./primitives";
+import { cardClass, RESOLVE, Section, TAP } from "./primitives";
 import { SkeletonRows, SkeletonSection } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
+import { Tabs } from "./tabs";
 
 type Plan = RouterOutputs["payments"]["plans"][number];
 type Member = RouterOutputs["membership"]["members"][number];
@@ -65,7 +66,7 @@ function OwnerPayments() {
         ]}
         className="mb-6"
       />
-      <div>
+      <div key={tab} className={RESOLVE}>
         {tab === "claims" ? (
           <ClaimsToConfirm />
         ) : tab === "dues" ? (

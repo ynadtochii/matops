@@ -31,9 +31,10 @@ import { useTRPC } from "~/trpc/react";
 import { useEntity } from "./entity";
 import { LeadsPipeline } from "./leads";
 import { MemberDetail, MemberRow } from "./member-detail";
-import { cardClass, Eyebrow, MoreIcon, Tabs } from "./primitives";
+import { cardClass, Eyebrow, MoreIcon, RESOLVE } from "./primitives";
 import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
+import { Tabs } from "./tabs";
 import { VenueCheckin } from "./venue-checkin";
 
 export type Member = RouterOutputs["membership"]["members"][number];
@@ -350,7 +351,7 @@ export function Members() {
             : []),
         ]}
       />
-      <div>
+      <div key={shownTab} className={RESOLVE}>
         {shownTab === "requests" ? (
           <div className="flex flex-col gap-3">
             {listState ??

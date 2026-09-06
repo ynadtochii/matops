@@ -13,6 +13,7 @@ import { Select } from "@matops/ui/select";
 import { dateTimeFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { ClassRoster } from "./class-roster";
+import { RESOLVE } from "./primitives";
 import { EmptyState, ErrorState } from "./states";
 
 /**
@@ -62,7 +63,9 @@ export function Attendance() {
           onRetry={() => void classes.refetch()}
         />
       ) : selected ? (
-        <ClassRoster key={selected.id} cls={selected} />
+        <div key={selected.id} className={RESOLVE}>
+          <ClassRoster cls={selected} />
+        </div>
       ) : !classes.isPending && options.length === 0 ? (
         <EmptyState title="No recent classes.">
           Attendance opens once a class has run. Add classes on the schedule.

@@ -13,6 +13,7 @@ import {
   canClaim,
   canDecideClaim,
   firstDueAt,
+  isStaffRole,
   paymentPeriod,
   paymentReference,
   paymentStatus,
@@ -30,6 +31,7 @@ import {
 } from "@matops/validators";
 
 import { nameByMember, requireMember, rosterOf } from "../members";
+import { loadStaffAccess } from "../membership-access";
 import { membershipBankDetails } from "../membership-status";
 import { CLAIM_HANDLED, PLAN_NOT_FOUND } from "../messages";
 import { loadBookingAccess } from "../payments-gate";
@@ -173,12 +175,22 @@ export const paymentsRouter = {
     .input(SetMemberDuesSchema)
     .mutation(async ({ ctx, input }) => {
       refuseIfMigrated(ctx);
-      await requireMember(ctx, input.memberId);
+      const target = await requireMember(ctx, input.memberId);
       if (input.planId === null) {
         await ctx.db
           .delete(memberDues)
           .where(eq(memberDues.memberId, input.memberId));
         return { ok: true as const };
+      }
+      const staff = await loadStaffAccess(ctx.db, {
+        entityIds: [ctx.entityId],
+        userIds: [target.userId],
+      });
+      if (isStaffRole(target) || staff.get(ctx.entityId)?.has(target.userId)) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Staff access does not require a membership plan.",
+        });
       }
       const plan = (
         await ctx.db
@@ -384,6 +396,12 @@ export const paymentsRouter = {
     .input(ChoosePlanSchema)
     .mutation(async ({ ctx, input }) => {
       refuseIfMigrated(ctx);
+      if (isStaffRole(ctx.membership)) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "You have staff access. No membership plan is required.",
+        });
+      }
       const plan = (
         await ctx.db
           .select({ id: membershipPlan.id })

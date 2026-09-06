@@ -44,6 +44,7 @@ export function JoinByCode({ compact = false }: { compact?: boolean }) {
   // The gym confirmed by the code lookup — null until "Find my gym" succeeds.
   const [found, setFound] = useState<{
     academyId: string;
+    code: string;
     name: string;
     address: string | null;
     timeZone: string | null;
@@ -55,17 +56,21 @@ export function JoinByCode({ compact = false }: { compact?: boolean }) {
   const lookup = useMutation({
     mutationFn: (input: { code: string }) =>
       queryClient.fetchQuery(trpc.academy.findByCode.queryOptions(input)),
-    onSuccess: (data) => {
-      if (data) setFound(data);
-      else toast.error("No gym found with that ID — check the number.");
+    onSuccess: (data, input) => {
+      if (data) setFound({ ...data, code: input.code });
     },
-    onError: () => toast.error("Enter your gym's 6-digit ID"),
   });
+
+  const lookupError = lookup.isError
+    ? "Could not look up your gym. Try again."
+    : lookup.isSuccess && !lookup.data
+      ? "No gym found with that ID. Check the number and try again."
+      : null;
 
   const join = useMutation(
     trpc.membership.joinByCode.mutationOptions({
       onSuccess: async () => {
-        toast.success("You're in — pending approval");
+        toast.success("Join request sent. Waiting for approval.");
         await queryClient.invalidateQueries();
         router.replace("/");
         router.refresh();
@@ -102,7 +107,8 @@ export function JoinByCode({ compact = false }: { compact?: boolean }) {
           className="flex flex-col gap-3"
           onSubmit={(e) => {
             e.preventDefault();
-            if (/^\d{6}$/.test(code)) lookup.mutate({ code });
+            if (/^\d{6}$/.test(code) && !lookup.isPending)
+              lookup.mutate({ code });
           }}
         >
           <div className="flex flex-col gap-1.5">
@@ -110,9 +116,13 @@ export function JoinByCode({ compact = false }: { compact?: boolean }) {
             <Input
               id="code"
               value={code}
-              onChange={(e) =>
-                setCode(e.target.value.replace(/\D/g, "").slice(0, 6))
-              }
+              onChange={(e) => {
+                setCode(e.target.value.replace(/\D/g, "").slice(0, 6));
+                lookup.reset();
+              }}
+              disabled={lookup.isPending}
+              aria-invalid={lookup.isSuccess && !lookup.data}
+              aria-describedby={lookupError ? "gym-lookup-error" : undefined}
               inputMode="numeric"
               autoComplete="off"
               placeholder="123456"
@@ -120,6 +130,15 @@ export function JoinByCode({ compact = false }: { compact?: boolean }) {
               required
             />
           </div>
+          {lookupError && (
+            <p
+              id="gym-lookup-error"
+              role="alert"
+              className="text-error text-sm"
+            >
+              {lookupError}
+            </p>
+          )}
           <Button
             type="submit"
             size="lg"
@@ -134,18 +153,19 @@ export function JoinByCode({ compact = false }: { compact?: boolean }) {
           className="flex flex-col gap-3"
           onSubmit={(e) => {
             e.preventDefault();
+            if (join.isPending) return;
             join.mutate({
-              code,
+              code: found.code,
               firstName: firstName.trim(),
               lastName: lastName.trim(),
               phone: phone.trim(),
             });
           }}
         >
-          <div className="border-border bg-card flex items-center justify-between rounded-lg border px-4 py-3">
+          <div className="border-border bg-card flex items-center justify-between gap-3 rounded-lg border px-4 py-3">
             <div className="min-w-0">
               <p className="text-muted-foreground text-xs">Joining</p>
-              <p className="truncate font-medium">{found.name}</p>
+              <p className="font-medium break-words">{found.name}</p>
               {found.address && (
                 <p className="text-muted-foreground text-xs whitespace-pre-wrap">
                   {found.address}
@@ -156,7 +176,12 @@ export function JoinByCode({ compact = false }: { compact?: boolean }) {
               type="button"
               variant="ghost"
               size="sm"
-              onClick={() => setFound(null)}
+              disabled={join.isPending}
+              onClick={() => {
+                setFound(null);
+                lookup.reset();
+                join.reset();
+              }}
             >
               Change
             </Button>
@@ -167,6 +192,7 @@ export function JoinByCode({ compact = false }: { compact?: boolean }) {
               id="firstName"
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
+              disabled={join.isPending}
               autoComplete="given-name"
               maxLength={60}
               required
@@ -178,6 +204,7 @@ export function JoinByCode({ compact = false }: { compact?: boolean }) {
               id="lastName"
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
+              disabled={join.isPending}
               autoComplete="family-name"
               maxLength={60}
               required
@@ -188,9 +215,21 @@ export function JoinByCode({ compact = false }: { compact?: boolean }) {
             country={found.country}
             value={phone}
             onChange={setPhone}
+            disabled={join.isPending}
             required
           />
-          <Button type="submit" size="lg" disabled={join.isPending}>
+          {join.isError && (
+            <p role="alert" className="text-error text-sm">
+              {join.error.message ||
+                "Could not send your join request. Try again."}
+            </p>
+          )}
+          <Button
+            type="submit"
+            size="lg"
+            className="h-auto min-h-11 whitespace-normal"
+            disabled={join.isPending}
+          >
             {join.isPending && <Spinner size="sm" className="text-current" />}
             {join.isPending ? "Joining…" : `Join ${found.name}`}
           </Button>

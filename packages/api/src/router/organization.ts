@@ -35,7 +35,7 @@ import {
 } from "@matops/domain";
 import { CreateAcademySchema, IdSchema } from "@matops/validators";
 
-import { rosterOf } from "../members";
+import { studentRosterOf } from "../members";
 import { loadRosterStanding } from "../membership-access";
 import { assignmentAppliesNow } from "../membership-status";
 import { readOrganizationEntities } from "../organization-read";
@@ -248,9 +248,15 @@ export const organizationRouter = {
           // there does not ask about (ADR 127 §5).
           let uncovered = 0;
           if (branch.membershipEnforcedAt) {
-            const active = (await rosterOf({ academyId: branch.id, db: tx }))
+            const active = (
+              await studentRosterOf({ academyId: branch.id, db: tx })
+            )
               .filter((m) => m.status === "active")
-              .map((m) => ({ userId: m.userId, status: m.status }));
+              .map((m) => ({
+                userId: m.userId,
+                status: m.status,
+                role: m.role,
+              }));
             const standing = await loadRosterStanding(tx, {
               entityId: branch.id,
               people: active,

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
-import { isOwner } from "@matops/domain";
+import { isOwner, runsBranch } from "@matops/domain";
 import { cn } from "@matops/ui";
 import {
   AlertDialog,
@@ -27,21 +27,26 @@ import { toast } from "@matops/ui/toast";
 import { useTRPC } from "~/trpc/react";
 import { useEntity } from "./entity";
 import { InviteLinkCard } from "./invite-link-card";
-import { cardClass, MoreIcon, SectionHeading } from "./primitives";
+import { cardClass, MoreIcon, RESOLVE, SectionHeading } from "./primitives";
 import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 
 type StaffMember = RouterOutputs["membership"]["staff"][number];
-type Action = "promote" | "demote";
+type Action =
+  "promote" | "demote" | "student" | "suspend" | "archive" | "restore";
 
 /** Owners rank above instructors; then alphabetical by name. */
 function byRoleThenName(a: StaffMember, b: StaffMember): number {
-  if (a.role !== b.role) return a.role === "owner" ? -1 : 1;
+  const order: Record<string, number> = { owner: 0, manager: 1, instructor: 2 };
+  const rank = (order[a.role] ?? 3) - (order[b.role] ?? 3);
+  if (rank !== 0) return rank;
   return a.name.localeCompare(b.name);
 }
 
 function roleName(role: string): string {
-  return role === "owner" ? "Owner" : "Instructor";
+  if (role === "owner") return "Owner";
+  if (role === "manager") return "Manager";
+  return "Instructor";
 }
 
 const COPY: Record<
@@ -60,6 +65,34 @@ const COPY: Record<
     confirmLabel: "Make co-owner",
     variant: "primary",
   },
+  student: {
+    title: (name) => `Move ${name} to Members?`,
+    description:
+      "They lose staff tools and free staff access. Normal student membership rules apply. Their history stays. No payment plan is created or restarted.",
+    confirmLabel: "Move to Members",
+    variant: "destructive",
+  },
+  suspend: {
+    title: (name) => `Suspend ${name}?`,
+    description:
+      "They lose staff access and cannot book classes until you restore them. They stay in Staff with their history.",
+    confirmLabel: "Suspend staff access",
+    variant: "destructive",
+  },
+  archive: {
+    title: (name) => `Archive ${name}?`,
+    description:
+      "They lose branch access and their upcoming bookings are cancelled. Their attendance, rank, notes and payment history stay. You can restore them from Staff.",
+    confirmLabel: "Archive staff",
+    variant: "destructive",
+  },
+  restore: {
+    title: (name) => `Restore ${name}?`,
+    description:
+      "They regain staff access without a paid membership. Their history stays. Cancelled bookings do not return.",
+    confirmLabel: "Restore staff access",
+    variant: "primary",
+  },
   demote: {
     title: (name) => `Step ${name} down to instructor?`,
     description:
@@ -73,12 +106,14 @@ function StaffRow({
   m,
   ownerCount,
   owner,
+  manager,
   busy,
   onConfirm,
 }: {
   m: StaffMember;
   ownerCount: number;
   owner: boolean;
+  manager: boolean;
   busy: boolean;
   onConfirm: (action: Action, memberId: string) => Promise<void>;
 }) {
@@ -86,11 +121,18 @@ function StaffRow({
   const [confirming, setConfirming] = useState(false);
   // The last active owner can't be stepped down (§4) — the server enforces it,
   // and we grey the option so the intent is clear before the click.
-  const isOnlyOwner = m.role === "owner" && ownerCount <= 1;
+  const isOnlyOwner =
+    m.role === "owner" && m.status === "active" && ownerCount <= 1;
+  const canManage =
+    manager &&
+    m.memberId !== null &&
+    !m.inheritedRole &&
+    (m.role !== "owner" || owner) &&
+    ["active", "suspended", "archived"].includes(m.status);
 
   async function confirm(event: React.MouseEvent) {
     event.preventDefault();
-    if (!action) return;
+    if (!action || !m.memberId) return;
     setConfirming(true);
     try {
       await onConfirm(action, m.memberId);
@@ -107,11 +149,17 @@ function StaffRow({
       <div className="min-w-0 flex-1">
         <p className="truncate font-medium">{m.name}</p>
         <p className="text-muted-foreground truncate text-sm">{m.email}</p>
+        <p className="text-muted-foreground text-xs">
+          {m.status === "active"
+            ? "Staff access. No membership required."
+            : "Staff access is inactive."}
+        </p>
       </div>
       <span className="text-muted-foreground rounded-full border px-2 py-0.5 text-xs">
-        {roleName(m.role)}
+        {roleName(m.status === "pending" ? (m.invitedRole ?? m.role) : m.role)}{" "}
+        · {m.status}
       </span>
-      {owner && (
+      {canManage && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -124,16 +172,43 @@ function StaffRow({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            {m.role === "instructor" ? (
+            {owner && m.role === "instructor" && m.status === "active" && (
               <DropdownMenuItem onSelect={() => setAction("promote")}>
                 Make co-owner
               </DropdownMenuItem>
-            ) : (
+            )}
+            {owner && m.role === "owner" && (
               <DropdownMenuItem
                 disabled={isOnlyOwner}
                 onSelect={() => setAction("demote")}
               >
                 Step down to instructor
+              </DropdownMenuItem>
+            )}
+            {m.role === "instructor" && (
+              <DropdownMenuItem onSelect={() => setAction("student")}>
+                Move to Members
+              </DropdownMenuItem>
+            )}
+            {m.status === "active" && (
+              <DropdownMenuItem
+                disabled={isOnlyOwner}
+                onSelect={() => setAction("suspend")}
+              >
+                Suspend staff access
+              </DropdownMenuItem>
+            )}
+            {(m.status === "active" || m.status === "suspended") && (
+              <DropdownMenuItem
+                disabled={isOnlyOwner}
+                onSelect={() => setAction("archive")}
+              >
+                Archive staff
+              </DropdownMenuItem>
+            )}
+            {(m.status === "suspended" || m.status === "archived") && (
+              <DropdownMenuItem onSelect={() => setAction("restore")}>
+                Restore staff access
               </DropdownMenuItem>
             )}
           </DropdownMenuContent>
@@ -174,21 +249,21 @@ function StaffRow({
   );
 }
 
-/**
- * Staff section (spec O6) — the whole staff of the academy: active owners and
- * instructors. Add an instructor by sharing the instructor invite link. Owner
- * changes are rare, so they hide behind a per-person "⋯" menu (no loud button):
- * make a co-owner, or step an owner back down — never leaving the gym ownerless.
- * That menu is owners only; a manager reads the list without it (ADR 129).
- */
 export function Staff() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const staff = useQuery(trpc.membership.staff.queryOptions());
-  const owner = isOwner(useEntity());
+  const entity = useEntity();
+  const owner = isOwner(entity);
+  const manager = runsBranch(entity);
 
   const invalidate = () =>
-    queryClient.invalidateQueries(trpc.membership.staff.pathFilter());
+    Promise.all([
+      queryClient.invalidateQueries(trpc.membership.pathFilter()),
+      queryClient.invalidateQueries(trpc.attendance.pathFilter()),
+      queryClient.invalidateQueries(trpc.class.pathFilter()),
+      queryClient.invalidateQueries(trpc.stats.pathFilter()),
+    ]);
 
   const promote = useMutation(
     trpc.membership.promote.mutationOptions({
@@ -201,37 +276,94 @@ export function Staff() {
   );
   const demote = useMutation(
     trpc.membership.setRole.mutationOptions({
-      onSuccess: async () => {
+      onSuccess: async (_result, input) => {
         await invalidate();
-        toast.success("Stepped down to instructor");
+        toast.success(
+          input.role === "student"
+            ? "Moved to Members"
+            : "Stepped down to instructor",
+        );
       },
       onError: (e) => toast.error(e.message),
     }),
   );
 
-  const busy = promote.isPending || demote.isPending;
+  const suspend = useMutation(
+    trpc.membership.suspend.mutationOptions({
+      onSuccess: async () => {
+        await invalidate();
+        toast.success("Staff access suspended");
+      },
+      onError: (e) => toast.error(e.message),
+    }),
+  );
+  const archive = useMutation(
+    trpc.membership.archive.mutationOptions({
+      onSuccess: async () => {
+        await invalidate();
+        toast.success("Staff archived. Upcoming bookings cancelled.");
+      },
+      onError: (e) => toast.error(e.message),
+    }),
+  );
+  const restore = useMutation(
+    trpc.membership.restore.mutationOptions({
+      onSuccess: async () => {
+        await invalidate();
+        toast.success("Staff access restored");
+      },
+      onError: (e) => toast.error(e.message),
+    }),
+  );
+
+  const busy =
+    promote.isPending ||
+    demote.isPending ||
+    suspend.isPending ||
+    archive.isPending ||
+    restore.isPending;
   const onConfirm = async (action: Action, memberId: string) => {
-    if (action === "promote") await promote.mutateAsync({ memberId });
-    else await demote.mutateAsync({ memberId, role: "instructor" });
+    switch (action) {
+      case "promote":
+        await promote.mutateAsync({ memberId });
+        break;
+      case "demote":
+      case "student":
+        await demote.mutateAsync({
+          memberId,
+          role: action === "student" ? "student" : "instructor",
+        });
+        break;
+      case "suspend":
+        await suspend.mutateAsync({ memberId });
+        break;
+      case "archive":
+        await archive.mutateAsync({ memberId });
+        break;
+      case "restore":
+        await restore.mutateAsync({ memberId });
+    }
   };
 
   const members = [...(staff.data ?? [])].sort(byRoleThenName);
-  const ownerCount = members.filter((m) => m.role === "owner").length;
+  const ownerCount = members.filter(
+    (m) => m.role === "owner" && m.status === "active",
+  ).length;
 
   return (
     <section className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
         <SectionHeading>Staff</SectionHeading>
         <p className="text-muted-foreground text-sm">
-          The owners and instructors who run this academy. Share the instructor
-          link to add a coach — they land pending until you approve them.
+          Owners, managers and instructors have staff access without a paid
+          membership. New coaches wait for approval.
         </p>
       </div>
 
       <InviteLinkCard
         role="instructor"
         label="Add an instructor"
-        hint="For coaches. They land pending — approving grants schedule + attendance tools."
+        hint="For coaches. Approval grants staff access, schedule and attendance tools."
       />
 
       {staff.isPending ? (
@@ -243,13 +375,14 @@ export function Staff() {
           You&apos;re the only one running this academy so far.
         </EmptyState>
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className={cn("flex flex-col gap-2", RESOLVE)}>
           {members.map((m) => (
             <StaffRow
-              key={m.memberId}
+              key={m.userId}
               m={m}
               ownerCount={ownerCount}
               owner={owner}
+              manager={manager}
               busy={busy}
               onConfirm={onConfirm}
             />

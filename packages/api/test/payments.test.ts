@@ -109,7 +109,9 @@ describe("payments confirm loop", () => {
   });
 
   it("the member list dot agrees with the student's own view", async () => {
-    const [, student] = await h.as(OWNER, ACAD).membership.members();
+    const student = (await h.as(OWNER, ACAD).membership.members()).find(
+      (row) => row.userId === STUDENT,
+    );
     const mine = await h.as(STUDENT, ACAD).payments.myDues();
     expect(student?.dues?.status).toBe(mine.dues?.status);
   });

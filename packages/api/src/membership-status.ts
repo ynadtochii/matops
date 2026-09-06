@@ -12,6 +12,7 @@ import {
 } from "@matops/db/schema";
 import {
   appliesInMonth,
+  isFreeMembershipMonth,
   membershipWarning,
   monthOf,
   monthVerdict,
@@ -58,6 +59,7 @@ export interface MembershipStanding {
   /** The month being judged, as its first day. */
   month: string;
   paid: boolean;
+  paymentRequired: boolean;
   /** The first moment that is too late. */
   deadline: Date;
   /** When the member said they sent the money for this month. */
@@ -176,6 +178,11 @@ export async function membershipStanding(
   return applicable.map((r) => {
     const held = months.find((m) => m.assignmentId === r.id);
     const paid = held?.paid ?? false;
+    const amount = priceForMonth(
+      prices.filter((p) => p.planId === r.planId),
+      month,
+    );
+    const paymentRequired = !isFreeMembershipMonth(amount);
     const shared = {
       month,
       startMonth: r.startMonth,
@@ -191,10 +198,8 @@ export async function membershipStanding(
       status: r.status,
       // The amount they were asked for, and nothing about whether it arrived:
       // `paid` is a tick somebody made, never money the gym counted (ADR 127).
-      amount: priceForMonth(
-        prices.filter((p) => p.planId === r.planId),
-        month,
-      ),
+      amount,
+      paymentRequired,
       entityIds: coverage
         .filter((c) => c.planId === r.planId)
         .map((c) => c.entityId)
@@ -204,7 +209,7 @@ export async function membershipStanding(
       deadline,
       claimedAt: held?.claimedAt ?? null,
       warning:
-        r.status === "active"
+        r.status === "active" && paymentRequired
           ? membershipWarning({
               verdict: monthVerdict({ ...shared, paid, now }),
               month,
