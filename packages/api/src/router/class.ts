@@ -1,17 +1,22 @@
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
-import type { DbExec } from "@matops/db";
+import type { DbExec, TenantTx } from "@matops/db";
 import type { Membership } from "@matops/domain";
 import {
   and,
   asc,
   eq,
+  eventRole,
   getTableColumns,
   gte,
   isNull,
+  lockBranchSchedule,
   lt,
   ne,
+  overlappingSessions,
+  recordActivity,
+  recordMilestone,
   sql,
 } from "@matops/db";
 import {
@@ -23,8 +28,11 @@ import {
 import {
   canReassignCoach,
   classChange,
+  findOverlap,
   instantFromLocalDate,
+  instructorForNewSession,
   isActiveMember,
+  isGeneralSpace,
   visibleAttendees,
 } from "@matops/domain";
 import {
@@ -117,6 +125,32 @@ async function notifyBooked(
   );
 }
 
+const ROOM_TAKEN = "Another session already has the room at that time";
+
+/**
+ * One bookable room per general branch (ADR 126). Takes the branch lock and
+ * refuses if anything live is already in the way, both inside the request's own
+ * transaction, so two people adding a session at the same minute queue rather
+ * than both winning. A BJJ academy runs two mats at once and is not asked.
+ */
+async function assertRoomFree(
+  ctx: { db: TenantTx; academyId: string; entity: { type: string } },
+  span: { startsAt: Date; durationMinutes: number },
+  ignoreClassId?: string,
+): Promise<void> {
+  if (!isGeneralSpace(ctx.entity.type)) return;
+  await lockBranchSchedule(ctx.db, ctx.academyId);
+  const taken = await overlappingSessions(
+    ctx.db,
+    ctx.academyId,
+    [span],
+    ignoreClassId,
+  );
+  if (findOverlap(span, taken)) {
+    throw new TRPCError({ code: "CONFLICT", message: ROOM_TAKEN });
+  }
+}
+
 export const classRouter = {
   /**
    * Classes in [from, to) for the active academy, soonest first (O2 week view).
@@ -169,6 +203,7 @@ export const classRouter = {
       .select({
         id: classInstance.id,
         title: classInstance.title,
+        description: classInstance.description,
         discipline: classInstance.discipline,
         startsAt: classInstance.startsAt,
         durationMinutes: classInstance.durationMinutes,
@@ -212,6 +247,7 @@ export const classRouter = {
       .select({
         id: classInstance.id,
         title: classInstance.title,
+        description: classInstance.description,
         discipline: classInstance.discipline,
         startsAt: classInstance.startsAt,
         durationMinutes: classInstance.durationMinutes,
@@ -283,10 +319,18 @@ export const classRouter = {
         input.startsAtMinutes,
         input.timeZone,
       );
-      const instructorId = input.instructorId ?? ctx.session.user.id;
-      if (instructorId !== ctx.session.user.id) {
+      const instructorId = instructorForNewSession(
+        ctx.entity.type,
+        input.instructorId,
+        ctx.session.user.id,
+      );
+      if (instructorId !== null && instructorId !== ctx.session.user.id) {
         await requireInstructor(ctx, instructorId);
       }
+      await assertRoomFree(ctx, {
+        startsAt,
+        durationMinutes: input.durationMinutes,
+      });
       const [row] = await ctx.db
         .insert(classInstance)
         .values({
@@ -294,13 +338,26 @@ export const classRouter = {
           templateId: null,
           instructorId,
           title: input.title,
+          description: input.description,
           discipline: input.discipline ?? null,
           startsAt,
           durationMinutes: input.durationMinutes,
           capacity: input.capacity,
+          // A general space has one room, so a full session is full. A BJJ mat
+          // keeps the soft cap it has always had (spec §4, ADR 126).
+          capacityPolicy: isGeneralSpace(ctx.entity.type) ? "strict" : "soft",
           publicBookable: input.publicBookable,
         })
         .returning();
+      ctx.afterCommit(async (exec) => {
+        const event = {
+          organizationId: ctx.organizationId,
+          entityId: ctx.entityId,
+          actorRole: eventRole(ctx.membership.role),
+        };
+        await recordMilestone({ ...event, name: "first_schedule" }, exec);
+        await recordActivity({ ...event, name: "staff_action" }, exec);
+      });
       return row;
     }),
 
@@ -319,7 +376,9 @@ export const classRouter = {
       const now = new Date();
       if (input.instructorId !== before.instructorId) {
         assertCanReassignCoach(ctx.membership, before.startsAt, now);
-        await requireInstructor(ctx, input.instructorId);
+        if (input.instructorId !== null) {
+          await requireInstructor(ctx, input.instructorId);
+        }
       }
 
       const startsAt =
@@ -331,10 +390,16 @@ export const classRouter = {
             )
           : before.startsAt;
 
+      await assertRoomFree(
+        ctx,
+        { startsAt, durationMinutes: input.durationMinutes },
+        input.id,
+      );
       const [row] = await ctx.db
         .update(classInstance)
         .set({
           title: input.title,
+          description: input.description,
           discipline: input.discipline ?? null,
           instructorId: input.instructorId,
           durationMinutes: input.durationMinutes,

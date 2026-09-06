@@ -344,6 +344,104 @@
       "when": 1789430400000,
       "tag": "0048_debug_readonly",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1789516800000,
+      "tag": "0049_general_branches",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1789603200000,
+      "tag": "0050_general_sessions",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1789776000000,
+      "tag": "0052_access_plans",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1789862400000,
+      "tag": "0053_membership_months",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1789948800000,
+      "tag": "0054_membership_month_audit",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1790035200000,
+      "tag": "0055_membership_reminded",
+      "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1790121600000,
+      "tag": "0056_capacity_and_activation",
+      "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1790208000000,
+      "tag": "0057_membership_bank_details",
+      "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1790294400000,
+      "tag": "0058_membership_claim",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1790380800000,
+      "tag": "0060_general_branches_default",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1790467200000,
+      "tag": "0061_access_plan_price",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1790553600000,
+      "tag": "0062_access_plan_price_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1790640000000,
+      "tag": "0063_organization_commercial",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1790726400000,
+      "tag": "0064_product_event",
+      "breakpoints": true
     }
   ]
 }

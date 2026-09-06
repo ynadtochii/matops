@@ -24,6 +24,7 @@ import { useTRPC } from "~/trpc/react";
 import { useEntity, useEntityHref } from "./entity";
 import { FeedbackLink } from "./feedback-link";
 import { PhoneField } from "./form-fields";
+import { JoinAnotherBranch } from "./join-by-code";
 import { PageHeader } from "./page-header";
 import { cardClass, ENTER, Eyebrow, Section } from "./primitives";
 import { SignOutButton } from "./sign-out";
@@ -228,6 +229,17 @@ export function ProfileScreen({
             {academy.status === "suspended" ? <SuspendedState /> : <MyRank />}
           </Section>
         )}
+
+        <Section label="Another branch" className={cn(ENTER, "delay-200")}>
+          <div className={cn(cardClass(), "flex flex-col gap-3")}>
+            <p className="text-muted-foreground text-sm">
+              Train somewhere else too? Ask them for their 6-digit ID and join
+              it here. Switching between the places you already train at is the
+              picker at the top of the sidebar.
+            </p>
+            <JoinAnotherBranch />
+          </div>
+        </Section>
 
         <Section label="Appearance" className={cn(ENTER, "delay-200")}>
           <div

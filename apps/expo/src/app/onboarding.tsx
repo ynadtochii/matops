@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Stack, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -25,10 +25,17 @@ const CODE_RE = /^\d{6}$/;
  * active academy. Mobile v1 is a plain code lookup: the student types the gym's
  * 6-digit ID → we find the academy → they confirm + fill the minimal profile →
  * a PENDING membership → they land on the schedule with the S3 banner.
+ *
+ * The same screen serves a member who already trains somewhere and wants to add
+ * a second place (`?another=1`, spec FP9). Only the words and the way out
+ * change: a person with a gym is offered Cancel rather than Sign out, and the
+ * server does the rest, since `joinByCode` already follows them to whichever
+ * gym the code names.
  */
 export default function Onboarding() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const another = useLocalSearchParams<{ another?: string }>().another === "1";
 
   const [code, setCode] = useState("");
   const [query, setQuery] = useState<string | null>(null);
@@ -82,7 +89,9 @@ export default function Onboarding() {
 
   return (
     <Screen center avoidKeyboard>
-      <Stack.Screen options={{ title: "Join a gym" }} />
+      <Stack.Screen
+        options={{ title: another ? "Join another branch" : "Join a gym" }}
+      />
 
       <UIStack gap={24}>
         <Logo size={30} />
@@ -143,9 +152,13 @@ export default function Onboarding() {
           /* Phase 1 — enter the gym's ID. */
           <UIStack key="code" gap={24}>
             <UIStack gap={8}>
-              <Heading>Join a gym</Heading>
+              <Heading>
+                {another ? "Join another branch" : "Join a gym"}
+              </Heading>
               <Muted>
-                Ask your gym for its ID — a 6-digit number — and enter it here.
+                {another
+                  ? "Ask that branch for its ID — a 6-digit number — and enter it here."
+                  : "Ask your gym for its ID — a 6-digit number — and enter it here."}
               </Muted>
             </UIStack>
 
@@ -182,21 +195,29 @@ export default function Onboarding() {
           </UIStack>
         )}
 
-        <Button
-          label="Sign out"
-          variant="ghost"
-          onPress={() =>
-            confirm({
-              title: "Sign out?",
-              message: "You'll need your email sign-in link to get back in.",
-              confirmLabel: "Sign out",
-              onConfirm: () => {
-                void authClient.signOut();
-                router.replace("/");
-              },
-            })
-          }
-        />
+        {another ? (
+          <Button
+            label="Cancel"
+            variant="ghost"
+            onPress={() => router.back()}
+          />
+        ) : (
+          <Button
+            label="Sign out"
+            variant="ghost"
+            onPress={() =>
+              confirm({
+                title: "Sign out?",
+                message: "You'll need your email sign-in link to get back in.",
+                confirmLabel: "Sign out",
+                onConfirm: () => {
+                  void authClient.signOut();
+                  router.replace("/");
+                },
+              })
+            }
+          />
+        )}
       </UIStack>
     </Screen>
   );

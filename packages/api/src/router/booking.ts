@@ -1,19 +1,27 @@
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
-import { and, desc, eq, isNull, ne } from "@matops/db";
-import { classInstance, classParticipation } from "@matops/db/schema";
 import {
-  bookingAccessMessage,
-  bookingTier,
-  canBook,
-  notBookableMessage,
-} from "@matops/domain";
+  and,
+  desc,
+  eq,
+  isNull,
+  ne,
+  recordActivity,
+  recordMilestone,
+} from "@matops/db";
+import { classInstance, classParticipation } from "@matops/db/schema";
+import { bookingTier, canBook, notBookableMessage } from "@matops/domain";
 import { BookClassSchema, CancelBookingSchema } from "@matops/validators";
 
-import { claimSeat, releaseSeats, requireClassFacts } from "../classes";
+import {
+  claimSeat,
+  releaseSeats,
+  requireClassFacts,
+  SESSION_FULL,
+} from "../classes";
 import { CLASS_NOT_FOUND } from "../messages";
-import { loadBookingAccess } from "../payments-gate";
+import { bookingGate } from "../payments-gate";
 import { enrolledProcedure } from "../trpc";
 
 /**
@@ -35,6 +43,27 @@ import { enrolledProcedure } from "../trpc";
 const MINE_LIMIT = 300;
 
 export const bookingRouter = {
+  /**
+   * May the caller book at this branch right now, and if not, why?
+   *
+   * ONE answer for both clients, through the same `bookingGate` the booking
+   * mutation itself uses, so what a screen shows and what the server does can
+   * never disagree. It covers whichever gate the branch runs on, so neither
+   * client needs to know that the legacy dues path exists.
+   *
+   * Deliberately about NOW and not about a particular class: a screen showing a
+   * week of classes wants one line at the top, and the mutation still checks the
+   * individual class's own start before it books.
+   */
+  access: enrolledProcedure.query(async ({ ctx }) => {
+    const gate = await bookingGate(ctx.db, {
+      entity: ctx.entity,
+      membership: ctx.membership,
+      userId: ctx.session.user.id,
+    });
+    return { locked: gate.locked, message: gate.message };
+  }),
+
   /**
    * The caller's own participations, each joined to its class (slice B.2, spec
    * S6 "My classes"). The mobile Training tab feeds these to `splitMyClasses`,
@@ -97,13 +126,23 @@ export const bookingRouter = {
       //    provisional (never counted).
       const tier = bookingTier(ctx.membership);
 
-      if (tier === "confirmed") {
-        const access = await loadBookingAccess(ctx.db, ctx.membership);
-        if (access.state === "locked") {
+      // At an ACTIVATED branch the gate runs whatever the tier, so a pending
+      // member is refused outright instead of holding a provisional booking.
+      // A general space has one room and no trial: an unapproved person taking
+      // a place nobody counts is exactly the over-booking strict capacity
+      // exists to stop (ADR 126). At a legacy branch the old rule stands and a
+      // provisional booking skips the dues gate as it always has.
+      if (tier === "confirmed" || ctx.entity.membershipEnforcedAt) {
+        const gate = await bookingGate(ctx.db, {
+          entity: ctx.entity,
+          membership: ctx.membership,
+          userId: ctx.session.user.id,
+          sessionAt: cls.startsAt,
+        });
+        if (gate.locked) {
           throw new TRPCError({
             code: "PRECONDITION_FAILED",
-            message:
-              bookingAccessMessage(access) ?? "Booking is locked for you.",
+            message: gate.message ?? "Booking is locked for you.",
           });
         }
       }
@@ -133,10 +172,27 @@ export const bookingRouter = {
         .returning({ id: classParticipation.id });
 
       // 4. Claim capacity atomically — ONLY on a real transition AND only for a
-      //    confirmed booking. No capacity guard: the count may exceed capacity
-      //    (soft cap). Provisional bookings never touch the count (docs/issues/22).
+      //    confirmed booking. Provisional bookings never touch the count
+      //    (docs/issues/22). A `soft` class cannot refuse, so the BJJ rule is
+      //    unchanged; a `strict` one can, and the throw rolls the participation
+      //    row above back with it, so nobody is booked into a full session.
       if (transition && tier === "confirmed") {
-        await claimSeat(ctx.db, input.classId);
+        const took = await claimSeat(ctx.db, input.classId);
+        if (!took) {
+          throw new TRPCError({ code: "CONFLICT", message: SESSION_FULL });
+        }
+      }
+
+      if (ctx.membership.role === "student") {
+        ctx.afterCommit(async (exec) => {
+          const event = {
+            organizationId: ctx.organizationId,
+            entityId: ctx.entityId,
+            actorRole: "student" as const,
+          };
+          await recordMilestone({ ...event, name: "first_booking" }, exec);
+          await recordActivity({ ...event, name: "student_booking" }, exec);
+        });
       }
 
       return { ok: true as const, tier };

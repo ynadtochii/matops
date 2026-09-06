@@ -53,8 +53,26 @@ export const SEED_ACADEMY: SeedAcademy = {
   currency: "EUR",
 };
 
-/** Every seed academy as a list (one, kept as a list for the generic teardown). */
-export const seedAcademyList: readonly SeedAcademy[] = [SEED_ACADEMY];
+/**
+ * The general-branches pilot (ADR 126). Listed here so `seed down` removes it
+ * with everything else: teardown resolves each org's entities itself, so the
+ * gym and the sauna go with it without being named again.
+ */
+export const PILOT_ACADEMY: SeedAcademy = {
+  key: "pilot",
+  id: "seed_org_pilot",
+  name: "Pilot Gym",
+  slug: "seed-pilot-gym",
+  publicCode: "990002",
+  timeZone: "Europe/Lisbon",
+  currency: "EUR",
+};
+
+/** Every seed academy as a list, for the generic teardown. */
+export const seedAcademyList: readonly SeedAcademy[] = [
+  SEED_ACADEMY,
+  PILOT_ACADEMY,
+];
 
 /** The org ids that scope every seed tenant row — the teardown `IN (...)` set. */
 export const seedAcademyIds: readonly string[] = seedAcademyList.map(

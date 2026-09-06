@@ -29,6 +29,20 @@ async function base(): Promise<Harness> {
   return h;
 }
 
+async function startGym(
+  h: Harness,
+  userId: string,
+  name = "Alma",
+): Promise<{ organizationId: string; academyId: string }> {
+  const { organizationId } = await h
+    .as(userId, null)
+    .organization.create({ name });
+  const { entityId } = await h
+    .as(userId, null)
+    .entity.create({ type: "bjj_academy", name });
+  return { organizationId, academyId: entityId };
+}
+
 async function codeOf(h: Harness, academyId: string): Promise<string> {
   const res = await h.pg.query<{ public_code: string }>(
     `SELECT public_code FROM "entity" WHERE id = $1`,
@@ -57,24 +71,63 @@ async function membership(
 const PERSON = { firstName: "Ana", lastName: "Silva", phone: "+351911111111" };
 
 describe("start a gym", () => {
-  it("makes the creator a working owner with a six-digit code", async () => {
+  it("writes the organization and no branch", async () => {
     const h = await base();
-    const { academyId } = await h
+    const { organizationId } = await h
       .as(OWNER, null)
-      .academy.create({ name: "Alma Jiu-Jitsu" });
+      .organization.create({ name: "Alma Jiu-Jitsu" });
+
+    const entities = await h.pg.query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM "entity" WHERE organization_id = $1`,
+      [organizationId],
+    );
+    expect(entities.rows[0]?.n).toBe("0");
+    expect(h.activeOrgOf(OWNER)).toBe(organizationId);
+  });
+
+  it("leaves a gym with no branch alone, instead of repairing it", async () => {
+    const h = await base();
+    const { organizationId } = await h
+      .as(OWNER, null)
+      .organization.create({ name: "Alma" });
+
+    expect(await h.as(OWNER, null).academy.memberships()).toEqual([]);
+
+    const entities = await h.pg.query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM "entity" WHERE organization_id = $1`,
+      [organizationId],
+    );
+    expect(entities.rows[0]?.n).toBe("0");
+  });
+
+  it("lets the owner open the gym with no branch, so the overview can load", async () => {
+    const h = await base();
+    const { organizationId } = await h
+      .as(OWNER, null)
+      .organization.create({ name: "Alma" });
+
+    await expect(h.as(OWNER, null).entity.list()).resolves.toMatchObject({
+      organizationId,
+      canCreateBranches: true,
+      entities: [],
+    });
+  });
+
+  it("makes the creator a working owner of the first branch, with a six-digit code", async () => {
+    const h = await base();
+    const { academyId } = await startGym(h, OWNER, "Alma Jiu-Jitsu");
 
     expect(await membership(h, academyId, OWNER)).toMatchObject({
       role: "owner",
       status: "active",
     });
     expect(await codeOf(h, academyId)).toMatch(/^\d{6}$/);
-    expect(h.activeOrgOf(OWNER)).toBe(academyId);
   });
 
   it("gives two gyms two different codes", async () => {
     const h = await base();
-    const a = await h.as(OWNER, null).academy.create({ name: "Alma" });
-    const b = await h.as(COACH, null).academy.create({ name: "Beta" });
+    const a = await startGym(h, OWNER, "Alma");
+    const b = await startGym(h, COACH, "Beta");
     expect(await codeOf(h, a.academyId)).not.toBe(await codeOf(h, b.academyId));
   });
 
@@ -85,7 +138,7 @@ describe("start a gym", () => {
     const { appRouter } = await import("../src/root");
     expect(
       await rejectionCode(
-        appRouter.createCaller(caller).academy.create({ name: "Nope" }),
+        appRouter.createCaller(caller).organization.create({ name: "Nope" }),
       ),
     ).toBe("UNAUTHORIZED");
   });
@@ -94,9 +147,7 @@ describe("start a gym", () => {
 describe("joining a gym", () => {
   it("lands a student pending, with no academy role until approval", async () => {
     const h = await base();
-    const { academyId } = await h
-      .as(OWNER, null)
-      .academy.create({ name: "Alma" });
+    const { academyId } = await startGym(h, OWNER);
     const invite = await h
       .as(OWNER, academyId)
       .invite.create({ role: "student" });
@@ -117,9 +168,7 @@ describe("joining a gym", () => {
 
   it("carries the invited role so approval grants the right one", async () => {
     const h = await base();
-    const { academyId } = await h
-      .as(OWNER, null)
-      .academy.create({ name: "Alma" });
+    const { academyId } = await startGym(h, OWNER);
     const invite = await h
       .as(OWNER, academyId)
       .invite.create({ role: "instructor" });
@@ -133,9 +182,7 @@ describe("joining a gym", () => {
 
   it("saves the name and phone the joiner typed", async () => {
     const h = await base();
-    const { academyId } = await h
-      .as(OWNER, null)
-      .academy.create({ name: "Alma" });
+    const { academyId } = await startGym(h, OWNER);
     const invite = await h
       .as(OWNER, academyId)
       .invite.create({ role: "student" });
@@ -155,9 +202,7 @@ describe("joining a gym", () => {
 
   it("is idempotent, so a second tap on the link changes nothing", async () => {
     const h = await base();
-    const { academyId } = await h
-      .as(OWNER, null)
-      .academy.create({ name: "Alma" });
+    const { organizationId, academyId } = await startGym(h, OWNER);
     const invite = await h
       .as(OWNER, academyId)
       .invite.create({ role: "student" });
@@ -172,14 +217,14 @@ describe("joining a gym", () => {
     expect(again.alreadyMember).toBe(true);
     const rows = await h.pg.query(
       `SELECT id FROM "member" WHERE organization_id = $1 AND user_id = $2`,
-      [academyId, STUDENT],
+      [organizationId, STUDENT],
     );
     expect(rows.rows).toHaveLength(1);
   });
 
   it("refuses a token that was never minted", async () => {
     const h = await base();
-    await h.as(OWNER, null).academy.create({ name: "Alma" });
+    await startGym(h, OWNER);
     expect(
       await rejectionCode(
         h
@@ -191,9 +236,7 @@ describe("joining a gym", () => {
 
   it("refuses a rotated token, and accepts the one that replaced it", async () => {
     const h = await base();
-    const { academyId } = await h
-      .as(OWNER, null)
-      .academy.create({ name: "Alma" });
+    const { academyId } = await startGym(h, OWNER);
     const first = await h
       .as(OWNER, academyId)
       .invite.create({ role: "student" });
@@ -216,9 +259,7 @@ describe("joining a gym", () => {
 describe("joining by the six-digit code", () => {
   it("lands a student pending as a student", async () => {
     const h = await base();
-    const { academyId } = await h
-      .as(OWNER, null)
-      .academy.create({ name: "Alma" });
+    const { academyId } = await startGym(h, OWNER);
     const code = await codeOf(h, academyId);
 
     const joined = await h.as(STUDENT, null).membership.joinByCode({
@@ -235,7 +276,7 @@ describe("joining by the six-digit code", () => {
 
   it("refuses a code no gym has", async () => {
     const h = await base();
-    await h.as(OWNER, null).academy.create({ name: "Alma" });
+    await startGym(h, OWNER);
     expect(
       await rejectionCode(
         h
@@ -249,23 +290,19 @@ describe("joining by the six-digit code", () => {
 describe("switching the active academy", () => {
   it("switches to a gym the caller belongs to", async () => {
     const h = await base();
-    const { academyId } = await h
-      .as(OWNER, null)
-      .academy.create({ name: "Alma" });
+    const { organizationId, academyId } = await startGym(h, OWNER);
     const code = await codeOf(h, academyId);
     await h.as(STUDENT, null).membership.joinByCode({ code, ...PERSON });
 
     await expect(
       h.as(STUDENT, null).academy.setActive({ academyId }),
     ).resolves.toEqual({ ok: true });
-    expect(h.activeOrgOf(STUDENT)).toBe(academyId);
+    expect(h.activeOrgOf(STUDENT)).toBe(organizationId);
   });
 
   it("refuses a gym the caller does not belong to", async () => {
     const h = await base();
-    const { academyId } = await h
-      .as(OWNER, null)
-      .academy.create({ name: "Alma" });
+    const { academyId } = await startGym(h, OWNER);
 
     expect(
       await rejectionCode(

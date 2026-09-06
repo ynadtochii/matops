@@ -11,7 +11,7 @@ import {
 } from "@matops/validators";
 
 import { nameByUser, requireMember, rosterOf } from "../members";
-import { enrolledProcedure, staffProcedure } from "../trpc";
+import { bjjEnrolledProcedure, bjjStaffProcedure } from "../trpc";
 
 /**
  * Member rank / belts (slice G.2/G.3, spec O4/S7; ADR 41). Rank is a JUDGMENT the
@@ -29,7 +29,7 @@ export const rankRouter = {
    * One member's current ranks + promotion history (spec O4). Staff-only. The
    * history is newest-first with the promoting staff member's name resolved.
    */
-  forMember: staffProcedure
+  forMember: bjjStaffProcedure
     .input(MemberActionSchema)
     .query(async ({ ctx, input }) => {
       await requireMember(ctx, input.memberId);
@@ -73,7 +73,7 @@ export const rankRouter = {
    * rank actually changed (`isRankChange`) — both writes in the one RLS
    * transaction `ctx.db` already is.
    */
-  set: staffProcedure
+  set: bjjStaffProcedure
     .input(SetMemberRankSchema)
     .mutation(async ({ ctx, input }) => {
       await requireMember(ctx, input.memberId);
@@ -141,7 +141,7 @@ export const rankRouter = {
     }),
 
   /** Clear a member's rank in one discipline (spec O4 — a correction). */
-  clear: staffProcedure
+  clear: bjjStaffProcedure
     .input(ClearMemberRankSchema)
     .mutation(async ({ ctx, input }) => {
       await requireMember(ctx, input.memberId);
@@ -163,7 +163,7 @@ export const rankRouter = {
    * read-only). Only the gym sets rank — this is a read. Empty until a coach
    * sets it.
    */
-  mine: enrolledProcedure.query(async ({ ctx }) => {
+  mine: bjjEnrolledProcedure.query(async ({ ctx }) => {
     const memberId = await getMemberIdForUser(
       ctx.session.user.id,
       ctx.academyId,

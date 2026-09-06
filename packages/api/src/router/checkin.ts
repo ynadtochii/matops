@@ -11,7 +11,7 @@ import {
 } from "@matops/domain";
 import { CheckInSchema } from "@matops/validators";
 
-import { claimSeat, requireClassFacts } from "../classes";
+import { claimSeat, requireClassFacts, SESSION_FULL } from "../classes";
 import { enrolledProcedure } from "../trpc";
 
 /**
@@ -124,7 +124,14 @@ export const checkinRouter = {
         });
 
       if (willBook && tier === "confirmed") {
-        await claimSeat(ctx.db, input.classId);
+        // A full session is full at the door too: staff standing there does not
+        // conjure a place, and the room only holds so many (ADR 126). The throw
+        // rolls the participation row above back with it. A `soft` class never
+        // refuses, so a BJJ walk-in is unchanged.
+        const took = await claimSeat(ctx.db, input.classId);
+        if (!took) {
+          throw new TRPCError({ code: "CONFLICT", message: SESSION_FULL });
+        }
       }
 
       return { ok: true as const, tier, booked: willBook };

@@ -22,6 +22,7 @@ import {
   canPromoteLead,
   canSubmitDropIn,
   CODE_JOIN_ROLE,
+  isBjjAcademy,
   normalizePhone,
   PROMOTE_REFUSAL_REASON,
   visitorClassChoices,
@@ -98,6 +99,21 @@ const nextBookingAt = sql<Date | null>`(
  * connection via `@matops/db` helpers, each pinned to the validated academy id.
  * Owner reads (`list`) go through the RLS-scoped `ctx.db`.
  */
+/**
+ * The wall poster is a BJJ thing (ADR 126). A general space has no visitor path
+ * in this release, so it answers 404 rather than half-supporting one: a visitor
+ * row carries no membership, and a strict room letting in somebody nothing
+ * counts is exactly the over-booking capacity exists to stop.
+ */
+function requireVisitorBranch<T extends { type: string }>(
+  academy: T | null,
+): T {
+  if (!academy || !isBjjAcademy(academy.type)) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Gym not found" });
+  }
+  return academy;
+}
+
 export const dropInRouter = {
   /**
    * The public drop-in page header, plus the classes to offer. 404 if the id is
@@ -108,10 +124,9 @@ export const dropInRouter = {
     .use(rateLimited(30, 60_000))
     .input(AcademyPublicSchema)
     .query(async ({ ctx, input }) => {
-      const academy = await getAcademyPublic(input.academyId, ctx.baseDb);
-      if (!academy) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Gym not found" });
-      }
+      const academy = requireVisitorBranch(
+        await getAcademyPublic(input.academyId, ctx.baseDb),
+      );
       const choices = await visitorChoices(
         input.academyId,
         ctx.baseDb,
@@ -150,10 +165,7 @@ export const dropInRouter = {
     .use(rateLimited(5, 10 * 60_000))
     .input(DropInSchema)
     .mutation(async ({ ctx, input }) => {
-      const academy = await getAcademyPublic(input.academyId, ctx.baseDb);
-      if (!academy) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Gym not found" });
-      }
+      requireVisitorBranch(await getAcademyPublic(input.academyId, ctx.baseDb));
       const gate = canSubmitDropIn(input);
       if (!gate.ok) {
         throw new TRPCError({

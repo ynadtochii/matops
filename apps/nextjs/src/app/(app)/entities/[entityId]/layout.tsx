@@ -19,7 +19,7 @@ export default async function EntityLayout({
   setRequestEntity(entityId);
 
   return (
-    <Suspense fallback={<PageLoader label="Opening your academy" />}>
+    <Suspense fallback={<PageLoader label="Opening your branch" />}>
       <EntityShell entityId={entityId}>{children}</EntityShell>
     </Suspense>
   );

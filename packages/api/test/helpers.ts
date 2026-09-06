@@ -161,7 +161,7 @@ function lit(value: string): string {
 
 export interface MemberSpec {
   userId: string;
-  role: "owner" | "instructor" | "student" | "member";
+  role: "owner" | "manager" | "instructor" | "student" | "member";
   status: "pending" | "active" | "suspended" | "removed" | "archived";
   name?: string;
   invitedRole?: string;

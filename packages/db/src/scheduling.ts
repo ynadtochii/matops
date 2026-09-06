@@ -1,5 +1,11 @@
 import { sql } from "drizzle-orm";
-import { index, pgEnum, pgTable, uniqueIndex } from "drizzle-orm/pg-core";
+import {
+  check,
+  index,
+  pgEnum,
+  pgTable,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 
 import { entity } from "./entity-schema";
 
@@ -82,8 +88,10 @@ export const classTemplate = pgTable(
       .text()
       .notNull()
       .references(() => entity.id),
-    instructorId: t.text().notNull(), // → user.id
+    // Nullable since ADR 126: a general space runs sessions nobody teaches.
+    instructorId: t.text(), // → user.id
     title: t.text().notNull(),
+    description: t.text(),
     discipline: discipline(), // nullable optional tag
     curriculumTrackId: t.uuid(), // null = the academy's default track
     daysOfWeek: t.integer().array().notNull(), // 0=Sun … 6=Sat
@@ -91,6 +99,12 @@ export const classTemplate = pgTable(
     durationMinutes: t.integer().notNull(),
     timeZone: t.text().notNull(), // IANA; default copied from the academy
     capacity: t.integer().notNull(),
+    /**
+     * `soft` lets the count pass capacity (the BJJ rule, spec §4); `strict`
+     * refuses the booking. Existing rows default to soft so no academy's
+     * behaviour changes under them (ADR 126).
+     */
+    capacityPolicy: t.text().notNull().default("soft"),
     // Copied onto each class at materialization, not joined: a one-off class has
     // no template and can still be published, and an owner can unpublish a
     // single date without touching the recurring template (ADR 115).
@@ -112,6 +126,11 @@ export const classTemplate = pgTable(
     index("ct_sweep_stale")
       .on(table.status, table.generatedUntil)
       .where(sql`deleted_at IS NULL`),
+    check("ct_description_bounded", sql`char_length(description) <= 500`),
+    check(
+      "ct_capacity_policy_supported",
+      sql`capacity_policy in ('soft','strict')`,
+    ),
   ],
 );
 
@@ -132,12 +151,14 @@ export const classInstance = pgTable(
       .notNull()
       .references(() => entity.id),
     templateId: t.uuid().references(() => classTemplate.id), // null = one-off
-    instructorId: t.text().notNull(),
+    instructorId: t.text(),
     title: t.text().notNull(), // copied from template; per-instance overridable
+    description: t.text(),
     discipline: discipline(),
     startsAt: t.timestamp({ withTimezone: true }).notNull(), // resolved UTC instant
     durationMinutes: t.integer().notNull(),
     capacity: t.integer().notNull(),
+    capacityPolicy: t.text().notNull().default("soft"),
     bookingCount: t.integer().notNull().default(0),
     publicBookable: t.boolean().notNull().default(false),
     status: classStatus().notNull().default("scheduled"),
@@ -166,6 +187,11 @@ export const classInstance = pgTable(
     index("cl_reminder_due")
       .on(table.startsAt)
       .where(sql`reminder_sent_at IS NULL AND deleted_at IS NULL`),
+    check("cl_description_bounded", sql`char_length(description) <= 500`),
+    check(
+      "cl_capacity_policy_supported",
+      sql`capacity_policy in ('soft','strict')`,
+    ),
   ],
 );
 

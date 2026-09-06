@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto";
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod/v4";
@@ -8,10 +7,9 @@ import {
   getAcademyCode,
   getAcademySettings,
   getPublicApiSettings,
+  hasLegacyDuesAt,
   listMembershipsForUser,
   listPublicClasses,
-  organizationsMissingEntity,
-  provisionOrganization,
   rotatePublicApiKey,
   setPublicApiEnabled,
   setPublicApiOrigins,
@@ -28,7 +26,6 @@ import {
   isWebLensMembership,
   matchesDeleteAcademyPhrase,
   PUBLIC_RANGE_DEFAULT_DAYS,
-  slugify,
 } from "@matops/domain";
 import {
   AcademyCodeSchema,
@@ -45,7 +42,6 @@ import {
   ownerIdentityProcedure,
   ownerProcedure,
   protectedProcedure,
-  refreshSessionCookie,
   staffIdentityProcedure,
 } from "../trpc";
 
@@ -76,27 +72,13 @@ export const academyRouter = {
    * (the web-lens switcher) on purpose, so a returning student is not re-asked
    * for a code; it drops `removed`/`suspended` memberships, where the user has no
    * standing to land on.
+   *
+   * An empty list is not a broken gym (ADR 128). An owner who has made a gym
+   * and not yet made its first branch belongs to no branch, and the landing
+   * rule sends them to `/overview` to make one.
    */
   memberships: protectedProcedure.query(async ({ ctx }) => {
-    let all = await listMembershipsForUser(ctx.session.user.id, ctx.baseDb);
-    if (all.length === 0) {
-      // The only route back for an owner whose provisioning died half way:
-      // "Start a gym" would make them a SECOND organization, and nothing else
-      // in the app can write the rows that are missing (ADR 124).
-      const stranded = await organizationsMissingEntity(
-        ctx.session.user.id,
-        ctx.baseDb,
-      );
-      for (const organizationId of stranded) {
-        await provisionOrganization(
-          { organizationId, ownerUserId: ctx.session.user.id },
-          ctx.baseDb,
-        );
-      }
-      if (stranded.length > 0) {
-        all = await listMembershipsForUser(ctx.session.user.id, ctx.baseDb);
-      }
-    }
+    const all = await listMembershipsForUser(ctx.session.user.id, ctx.baseDb);
     return all.filter(canEnroll).map((a) => ({
       academyId: a.academyId,
       organizationId: a.organizationId,
@@ -146,6 +128,14 @@ export const academyRouter = {
       country: academy.country,
       address: academy.address,
       mapUrl: academy.mapUrl,
+      // Which gate this branch runs on, so a screen never offers a setting the
+      // server no longer consults (ADR 126).
+      membershipEnforced: academy.membershipEnforcedAt !== null,
+      // Does this branch have a legacy dues history at all? A branch opened
+      // after ADR 128 is born on memberships and never had plans or dues, so
+      // switching it off must not reveal an empty Payments screen for a product
+      // it never ran. Only a branch that predates the cutover has these rows.
+      hasLegacyDues: await hasLegacyDuesAt(academyId, ctx.baseDb),
       curriculumForStudents: academy.curriculumForStudents,
       code: await getAcademyCode(academyId, ctx.baseDb),
     };
@@ -314,38 +304,6 @@ export const academyRouter = {
     .input(AcademyCodeSchema)
     .query(async ({ ctx, input }) => {
       return findAcademyByCode(input.code, ctx.baseDb);
-    }),
-
-  /**
-   * "Start a gym" (spec 1.1, docs/issues/20). Creates the organization; Better
-   * Auth adds the creator as `owner` and the afterCreateOrganization hook flips
-   * that membership to `active` — so the creator is a working owner at once. The
-   * new academy also becomes the active one.
-   */
-  create: protectedProcedure
-    .input(CreateAcademySchema)
-    .mutation(async ({ ctx, input }) => {
-      // Unique slug: readable stem + short random suffix (Better Auth requires it).
-      const slug = `${slugify(input.name)}-${randomBytes(3).toString("hex")}`;
-      const org = await ctx.authApi.createOrganization({
-        body: { name: input.name, slug },
-        headers: ctx.headers,
-      });
-      if (!org) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Could not create the academy",
-        });
-      }
-      // Belt to the hook's braces (ADR 124). `afterCreateOrganization` already
-      // ran the same provisioner; running it again creates nothing and repairs
-      // an organization whose setup died half way.
-      const { entityId } = await provisionOrganization(
-        { organizationId: org.id, ownerUserId: ctx.session.user.id },
-        ctx.baseDb,
-      );
-      await refreshSessionCookie(ctx);
-      return { academyId: org.id, organizationId: org.id, entityId };
     }),
 
   /**

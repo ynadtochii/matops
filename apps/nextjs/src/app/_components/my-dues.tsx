@@ -12,6 +12,7 @@ import { toast } from "@matops/ui/toast";
 import { dateFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { useEntity } from "./entity";
+import { MembershipNotice } from "./membership-notice";
 import { PageHeader } from "./page-header";
 import { cardClass, DUES_TONE, ENTER, Eyebrow, Section } from "./primitives";
 import { SkeletonDuesBody } from "./skeletons";
@@ -20,11 +21,11 @@ import { EmptyState, ErrorState, SuspendedState } from "./states";
 export function MyDues() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const { status } = useEntity();
+  const { status, membershipEnforced } = useEntity();
 
   const dues = useQuery({
     ...trpc.payments.myDues.queryOptions(),
-    enabled: status === "active",
+    enabled: status === "active" && !membershipEnforced,
   });
 
   const claim = useMutation(
@@ -38,11 +39,25 @@ export function MyDues() {
   );
 
   const header = (
-    <PageHeader
-      title="Membership dues"
-      subtitle="What you owe, and how to pay it."
-    />
+    <>
+      <PageHeader
+        title={membershipEnforced ? "Membership" : "Membership dues"}
+        subtitle="What you owe, and how to pay it."
+      />
+      <MembershipNotice />
+    </>
   );
+
+  // Where shared memberships decide, the branch's own dues line is not what
+  // anybody owes, and the notice above is the whole screen (ADR 126, ADR 127).
+  if (membershipEnforced) {
+    return (
+      <>
+        {header}
+        <MembershipSettled />
+      </>
+    );
+  }
 
   if (status === "suspended") {
     return (
@@ -286,5 +301,27 @@ function ChoosePlan() {
         ))}
       </div>
     </Section>
+  );
+}
+
+/** Shown at an activated branch when every month is settled, so the screen is
+ * never blank: the notice above says nothing when there is nothing owed. */
+function MembershipSettled() {
+  const trpc = useTRPC();
+  const standing = useQuery(trpc.accessPlan.mine.queryOptions());
+  const memberships = standing.data?.memberships ?? [];
+  if (standing.isPending || memberships.some((m) => m.warning)) return null;
+
+  if (memberships.length === 0) {
+    return (
+      <EmptyState title="No membership covers you here yet.">
+        Ask your gym to put you on one.
+      </EmptyState>
+    );
+  }
+  return (
+    <EmptyState title="You are all paid up.">
+      Your gym will tell you here when the next month is due.
+    </EmptyState>
   );
 }

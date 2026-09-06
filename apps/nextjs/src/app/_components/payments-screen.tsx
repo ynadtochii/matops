@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
@@ -21,7 +22,6 @@ import { useTRPC } from "~/trpc/react";
 import { useEntity } from "./entity";
 import { MyDues } from "./my-dues";
 import { PageHeader } from "./page-header";
-import { PaymentRequisites } from "./payment-requisites";
 import { cardClass, Section, Tabs, TAP } from "./primitives";
 import { SkeletonRows, SkeletonSection } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
@@ -31,23 +31,29 @@ type Member = RouterOutputs["membership"]["members"][number];
 
 export function PaymentsScreen() {
   const academy = useEntity();
-  return isOwner(academy) ? <OwnerPayments /> : <MyDues />;
+  if (!isOwner(academy)) return <MyDues />;
+  return <OwnerPayments />;
 }
 
 /** The owner Payments screen (spec O7, ADR 40) — manual bank-transfer dues. */
 function OwnerPayments() {
   const trpc = useTRPC();
   const claims = useQuery(trpc.payments.claims.queryOptions());
-  const [tab, setTab] = useState<"claims" | "dues" | "plans" | "bank">(
-    "claims",
-  );
+  const [tab, setTab] = useState<"claims" | "dues" | "plans">("claims");
 
   return (
     <>
       <PageHeader
         title="Payments"
-        subtitle="Membership dues by bank transfer — confirm what students paid, set plans, due dates, and your bank details."
+        subtitle="Membership dues by bank transfer: confirm what students paid, and set plans and due dates."
       />
+      <p className="text-muted-foreground mb-6 text-sm">
+        Your bank details live in{" "}
+        <Link href="/settings" className="underline">
+          Settings
+        </Link>
+        , for the whole gym.
+      </p>
       <Tabs
         label="Payments view"
         value={tab}
@@ -56,7 +62,6 @@ function OwnerPayments() {
           { id: "claims", label: "To confirm", count: claims.data?.length },
           { id: "dues", label: "Member dues" },
           { id: "plans", label: "Plans" },
-          { id: "bank", label: "Bank details" },
         ]}
         className="mb-6"
       />
@@ -65,10 +70,8 @@ function OwnerPayments() {
           <ClaimsToConfirm />
         ) : tab === "dues" ? (
           <MemberDues />
-        ) : tab === "plans" ? (
-          <Plans />
         ) : (
-          <PaymentRequisites />
+          <Plans />
         )}
       </div>
     </>

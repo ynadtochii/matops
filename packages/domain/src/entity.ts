@@ -8,7 +8,7 @@ import { isOwner, isStaff } from "./access";
  * check constraint on the table. Adding a type needs a migration to widen the
  * constraint, so the two cannot drift without someone noticing.
  */
-export const ENTITY_TYPES = ["bjj_academy"] as const;
+export const ENTITY_TYPES = ["bjj_academy", "general_space"] as const;
 
 export type EntityType = (typeof ENTITY_TYPES)[number];
 
@@ -16,9 +16,14 @@ export function isSupportedEntityType(value: string): value is EntityType {
   return (ENTITY_TYPES as readonly string[]).includes(value);
 }
 
-/** True for the one type that gets the BJJ screens: schedule, roster, dues. */
+/** True for the type that gets the BJJ screens: belts, curriculum, referrals. */
 export function isBjjAcademy(type: string): boolean {
   return type === "bjj_academy";
+}
+
+/** True for a gym, a sauna, or any other room an organization books people into. */
+export function isGeneralSpace(type: string): boolean {
+  return type === "general_space";
 }
 
 /**
@@ -76,32 +81,89 @@ export function pathWithinEntity(pathname: string): string {
  * `entity.list` refuses anyone who is not an organization member and lists only
  * the entities the caller may open (ADR 124).
  *
+ * `types` narrows a screen to the kinds of place that have it. A general space
+ * runs a schedule, a roster and its own settings, but referrals are a BJJ
+ * programme, so the rule names the one type that gets them (ADR 126).
+ *
  * This is convenience, not security. The tRPC tier is the real guard
  * (`packages/api/src/trpc.ts`); this only decides what a person is offered.
  */
-const ROUTE_ACCESS: { prefix: string; allowed: (m: Membership) => boolean }[] =
-  [
-    { prefix: "/members", allowed: isStaff },
-    { prefix: "/referrals", allowed: isOwner },
-    { prefix: "/settings", allowed: isOwner },
-    { prefix: "/schedule", allowed: isStaff },
-    { prefix: "/coaches", allowed: isStaff },
-    { prefix: "/attendance", allowed: isStaff },
-  ];
+const ROUTE_ACCESS: {
+  prefix: string;
+  allowed: (m: Membership) => boolean;
+  types?: readonly EntityType[];
+}[] = [
+  { prefix: "/members", allowed: isStaff },
+  { prefix: "/referrals", allowed: isOwner, types: ["bjj_academy"] },
+  { prefix: "/settings", allowed: isOwner },
+  { prefix: "/schedule", allowed: isStaff },
+  { prefix: "/coaches", allowed: isStaff },
+  { prefix: "/attendance", allowed: isStaff },
+];
 
 /**
  * May this membership open this path? Takes a full path or an entity-relative
- * one. Every screen under an entity is a BJJ screen, so a place of another type
- * gets none of them: that is what keeps the nav honest when a second type lands.
+ * one. A type nobody implemented gets nothing, so a place this build does not
+ * understand can never be browsed by guessing a URL.
  */
 export function canVisit(
   pathname: string,
   m: Membership & { type?: string },
 ): boolean {
-  if (m.type !== undefined && !isBjjAcademy(m.type)) return false;
+  if (m.type !== undefined && !isSupportedEntityType(m.type)) return false;
   const path = pathWithinEntity(pathname);
   const rule = ROUTE_ACCESS.find(
     (r) => path === r.prefix || path.startsWith(`${r.prefix}/`),
   );
-  return rule ? rule.allowed(m) : true;
+  if (!rule) return true;
+  if (rule.types && m.type !== undefined && !rule.types.includes(m.type))
+    return false;
+  return rule.allowed(m);
+}
+
+export interface BranchTie {
+  academyId: string;
+  organizationId: string;
+  name: string;
+}
+
+export type PostLoginTarget<T extends BranchTie = BranchTie> =
+  | { kind: "join" }
+  | { kind: "openGym"; organizationId: string; name: string }
+  | { kind: "openBranch"; academyId: string; name: string }
+  | { kind: "pick"; gyms: T[] };
+
+/**
+ * Where a session that names no gym should land (ADR 49, amended by ADR 128).
+ *
+ * The rule that keeps being got wrong is the empty one. A person with no branch
+ * tie is not necessarily a student looking for a gym: an owner who has made a
+ * gym and not yet its first branch holds no `entity_membership` either, and
+ * sending them to the join-by-code form is a dead end. So an owned gym is
+ * checked before the join screen, never after.
+ *
+ * One tie per gym is what counts, not one per branch, because somebody who
+ * trains at two mats of one gym is not being asked to choose between gyms.
+ */
+export function postLoginTarget<T extends BranchTie>(
+  ties: readonly T[],
+  ownedGyms: readonly { organizationId: string; name: string }[],
+): PostLoginTarget<T> {
+  const gyms = new Map<string, T>();
+  for (const t of ties) {
+    if (!gyms.has(t.organizationId)) gyms.set(t.organizationId, t);
+  }
+
+  if (gyms.size === 0) {
+    const own = ownedGyms[0];
+    return own
+      ? { kind: "openGym", organizationId: own.organizationId, name: own.name }
+      : { kind: "join" };
+  }
+
+  const only = gyms.size === 1 ? [...gyms.values()][0] : undefined;
+  if (only) {
+    return { kind: "openBranch", academyId: only.academyId, name: only.name };
+  }
+  return { kind: "pick", gyms: [...gyms.values()] };
 }

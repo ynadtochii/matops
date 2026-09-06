@@ -2,7 +2,12 @@ import { ScrollView, View } from "react-native";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 
-import { canBook, capacityDisplay, notBookableMessage } from "@matops/domain";
+import {
+  canBook,
+  capacityDisplay,
+  isBjjAcademy,
+  notBookableMessage,
+} from "@matops/domain";
 
 import { useBookClass, useCancelBooking } from "~/components/book-control";
 import { ClassDetailSkeleton } from "~/components/skeletons";
@@ -82,7 +87,13 @@ export default function ClassDetail() {
   // Same key as WhoIsIn, which renders below the `q.isPending` gate and so
   // would not start fetching until the class itself lands.
   useQuery(trpc.class.attendees.queryOptions({ id }));
-  const theme = useQuery(trpc.curriculum.forClass.queryOptions({ id }));
+  const current = useQuery(trpc.academy.current.queryOptions());
+  const theme = useQuery(
+    trpc.curriculum.forClass.queryOptions(
+      { id },
+      { enabled: isBjjAcademy(current.data?.type ?? "") },
+    ),
+  );
 
   const { onBook, isPending: booking, error: bookError } = useBookClass();
   const { onCancel, isPending: cancelling } = useCancelBooking();
@@ -165,6 +176,7 @@ export default function ClassDetail() {
           <UIStack gap={6}>
             <Heading>{c.title}</Heading>
             {c.discipline ? <Eyebrow>{c.discipline}</Eyebrow> : null}
+            {c.description ? <Txt size={15}>{c.description}</Txt> : null}
           </UIStack>
 
           {cancelled && (
@@ -181,7 +193,9 @@ export default function ClassDetail() {
                 {` · ${c.durationMinutes} min`}
               </Txt>
             </Field>
-            <Field label="Instructor" value={c.instructorName ?? "—"} />
+            {/* "Nobody" rather than a dash: a general space runs sessions
+                that nobody teaches, and the web says the same word. */}
+            <Field label="Instructor" value={c.instructorName ?? "Nobody"} />
             {theme.data?.themes.length ? (
               <Field label="This week">
                 {theme.data.themes.map((on) => (

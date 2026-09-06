@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import type { EntitySummary } from "../src/dashboard";
-import {
-  combineEntitySummaries,
-  entitiesNeedingAttention,
-} from "../src/dashboard";
+import { combineEntitySummaries } from "../src/dashboard";
+import { branchRows } from "../src/organization-metrics";
 
 function summary(patch: Partial<EntitySummary> = {}): EntitySummary {
   return {
@@ -77,22 +75,55 @@ describe("organization totals", () => {
   });
 });
 
-describe("where the work is", () => {
-  it("lists only the mats with something waiting, busiest first", () => {
+describe("the branch rows", () => {
+  it("puts the mats with something waiting first, busiest first", () => {
     const quiet = summary({ entityId: "a", name: "Quiet" });
     const some = summary({ entityId: "b", name: "Some", newLeads: 1 });
     const busy = summary({ entityId: "c", name: "Busy", pendingMembers: 5 });
-    expect(
-      entitiesNeedingAttention([quiet, some, busy]).map((e) => e.entityId),
-    ).toEqual(["c", "b"]);
+    expect(branchRows([quiet, some, busy]).map((r) => r.entityId)).toEqual([
+      "c",
+      "b",
+      "a",
+    ]);
   });
 
   it("breaks a tie by name so the order never jumps", () => {
     const north = summary({ entityId: "a", name: "North", openClaims: 2 });
     const east = summary({ entityId: "b", name: "East", openClaims: 2 });
-    expect(entitiesNeedingAttention([north, east]).map((e) => e.name)).toEqual([
+    expect(branchRows([north, east]).map((r) => r.name)).toEqual([
       "East",
       "North",
+    ]);
+  });
+
+  it("joins each branch to its own enrolments, visits and places", () => {
+    const rows = branchRows(
+      [
+        summary({ entityId: "a", name: "North" }),
+        summary({ entityId: "b", name: "South" }),
+      ],
+      {
+        enrolmentsByBranch: [{ entityId: "a", entityName: "North", count: 15 }],
+        attendanceByBranch: [
+          { entityId: "a", entityName: "North", count: 550 },
+        ],
+        sessionUse: [
+          { entityId: "a", entityName: "North", reserved: 660, places: 1846 },
+        ],
+      },
+    );
+    expect(rows.map((r) => [r.name, r.enrolments, r.visits, r.places])).toEqual(
+      [
+        ["North", 15, 550, 1846],
+        ["South", 0, 0, 0],
+      ],
+    );
+  });
+
+  it("reads zero for every figure when the metrics have not arrived", () => {
+    const [row] = branchRows([summary({ entityId: "a", newLeads: 2 })]);
+    expect([row?.enrolments, row?.visits, row?.places, row?.waiting]).toEqual([
+      0, 0, 0, 2,
     ]);
   });
 });

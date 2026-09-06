@@ -13,12 +13,18 @@ import {
 import {
   computeOccurrences,
   DAY_MS,
+  firstClash,
   MATERIALIZATION_HORIZON_DAYS,
   staleClassIds,
 } from "@matops/domain";
 
 import type { DbExec } from "./client";
 import type { TenantTx } from "./tenant";
+import {
+  isGeneralBranch,
+  lockBranchSchedule,
+  overlappingSessions,
+} from "./schedule-guard";
 import {
   classInstance,
   classParticipation,
@@ -41,6 +47,22 @@ import {
  * Idempotent: `UNIQUE(template_id, starts_at)` + `onConflictDoNothing` make
  * re-runs safe; `generated_until` is the resume cursor.
  */
+
+/**
+ * A session was asked for while the room was already taken (ADR 126).
+ *
+ * Thrown rather than skipped so an API write rolls its whole transaction back
+ * and the person gets told. The cron sweep catches it per template, because one
+ * clashing branch must not stop every other gym's calendar from being filled.
+ */
+export class ScheduleOverlapError extends Error {
+  readonly startsAt: Date;
+  constructor(startsAt: Date) {
+    super("Another session already has the room at that time");
+    this.name = "ScheduleOverlapError";
+    this.startsAt = startsAt;
+  }
+}
 
 /** A drizzle handle — the base `db` OR a per-request tenant transaction. */
 type Executor = DbExec | TenantTx;
@@ -92,6 +114,23 @@ export async function materializeTemplate(
     to,
   );
 
+  // One bookable room per general branch (ADR 126). The lock is taken BEFORE
+  // the read, so two requests generating into the same minute queue instead of
+  // both seeing a free slot. A BJJ academy takes no lock and no check: two mats
+  // running at once is normal there.
+  if (await isGeneralBranch(exec, template.academyId)) {
+    await lockBranchSchedule(exec, template.academyId);
+    const proposed = occurrences.map((startsAt) => ({
+      startsAt,
+      durationMinutes: template.durationMinutes,
+    }));
+    const clash = firstClash(
+      proposed,
+      await overlappingSessions(exec, template.academyId, proposed),
+    );
+    if (clash) throw new ScheduleOverlapError(clash.proposed.startsAt);
+  }
+
   let inserted = 0;
   if (occurrences.length > 0) {
     const values = occurrences.map((startsAt) => ({
@@ -99,10 +138,12 @@ export async function materializeTemplate(
       templateId: template.id,
       instructorId: template.instructorId,
       title: template.title,
+      description: template.description,
       discipline: template.discipline,
       startsAt,
       durationMinutes: template.durationMinutes,
       capacity: template.capacity,
+      capacityPolicy: template.capacityPolicy,
       publicBookable: template.publicBookable,
     }));
     const insert = exec.insert(classInstance).values(values);
@@ -117,9 +158,11 @@ export async function materializeTemplate(
               status: "scheduled",
               instructorId: template.instructorId,
               title: template.title,
+              description: template.description,
               discipline: template.discipline,
               durationMinutes: template.durationMinutes,
               capacity: template.capacity,
+              capacityPolicy: template.capacityPolicy,
               publicBookable: template.publicBookable,
             },
           })
@@ -210,10 +253,17 @@ export async function runMaterializationSweep({
     if (Date.now() - startedAt > softBudgetMs) {
       return { processed, created, hasMore: true };
     }
-    created += await materializeTemplate(exec, template, {
-      now,
-      horizonDays,
-    });
+    try {
+      created += await materializeTemplate(exec, template, {
+        now,
+        horizonDays,
+      });
+    } catch (error) {
+      // One general branch whose timetable has grown a clash must not stop the
+      // sweep filling every other gym's horizon. It is left behind, and the
+      // owner meets the refusal next time they save that template.
+      if (!(error instanceof ScheduleOverlapError)) throw error;
+    }
     processed += 1;
   }
 

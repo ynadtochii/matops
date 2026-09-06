@@ -67,6 +67,12 @@ export async function claimDueDuesReminders(
   // an ACTIVE one is eligible. It sits in the CLAIM, not in the resolve below
   // — claiming a non-active row would stamp its period and then drop it, so a
   // student restored later that month would silently never be reminded.
+  //
+  // The entity join is the gate, for exactly the same reason (ADR 127). A
+  // branch on shared memberships owes nothing here: its members are warned by
+  // the membership sweep instead, and the two must never both write. Filtering
+  // it in the resolve below would stamp the period and then drop the row, so a
+  // branch switched back later that month would go quiet.
   const claimed = await exec.execute<{ id: string }>(sql`
     UPDATE "member_dues" AS md
     SET "dues_reminder_period" = to_char(md."next_due_at" AT TIME ZONE 'UTC', 'YYYY-MM'),
@@ -74,6 +80,9 @@ export async function claimDueDuesReminders(
     WHERE md."id" IN (
       SELECT md2."id" FROM "member_dues" md2
       JOIN "entity_membership" em ON em."id" = md2."member_id" AND em."status" = 'active'
+      JOIN "entity" e ON e."id" = md2."academy_id"
+                     AND e."deleted_at" IS NULL
+                     AND e."membership_enforced_at" IS NULL
       WHERE (md2."dues_reminder_period" IS DISTINCT FROM
              to_char(md2."next_due_at" AT TIME ZONE 'UTC', 'YYYY-MM'))
         AND md2."next_due_at" <= ${windowEnd}

@@ -276,6 +276,17 @@ Ask owners these questions before showing a plan table:
 Do not ask only whether a price sounds fair. Ask for a paid commitment, deposit,
 or signed pilot conversion date when the product is ready.
 
+## What the product records now (v7.6)
+
+The offers on this page are **described in the product** and none of them is
+charged by it. The signed-out page explains Academy and says Facility is not on
+sale until the multi-branch part works. `organization` carries the commercial
+state, the offer, the date free use ends, the agreed price with its currency, the
+billing contact and the account status, and a gym reads its own in Settings.
+There is no card on file and no checkout: an agreement is recorded by a hand-run
+script, and money arrives by transfer. Use is measured by `product_event` and read
+with `pnpm -F @matops/db report` (see [pilot-plan.md](pilot-plan.md)).
+
 ## Metrics
 
 Track these before adding more plans:

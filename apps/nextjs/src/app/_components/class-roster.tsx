@@ -9,6 +9,7 @@ import {
   attendanceCounts,
   bulkMarkTargets,
   canMarkAttendance,
+  isBjjAcademy,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { Button } from "@matops/ui/button";
@@ -142,6 +143,7 @@ function RowTag({ children }: { children: ReactNode }) {
 export function ClassRoster({ cls }: { cls: ClassRow }) {
   const trpc = useTRPC();
   const academy = useEntity();
+  const bjj = isBjjAcademy(academy.type);
   const queryClient = useQueryClient();
   const invalidateFor = useInvalidate();
   const classId = cls.id;
@@ -170,7 +172,7 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
   // second later and shoves the whole dialog down. Same query options, so React
   // Query serves ClassTheme from cache — one request, one layout swap.
   const theme = useQuery(
-    trpc.curriculum.forClass.queryOptions({ id: classId }),
+    trpc.curriculum.forClass.queryOptions({ id: classId }, { enabled: bjj }),
   );
 
   // The week read carries `markedCount`, which the O1 dashboard turns into its
@@ -311,13 +313,20 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-3">
-        <ClassTheme classId={classId} />
-        <CoachSelect
-          classId={classId}
-          startsAt={cls.startsAt}
-          instructorId={cls.instructorId}
-          instructorName={cls.instructorName}
-        />
+        {bjj && (
+          <>
+            <ClassTheme classId={classId} />
+            <CoachSelect
+              classId={classId}
+              startsAt={cls.startsAt}
+              instructorId={cls.instructorId ?? ""}
+              instructorName={cls.instructorName}
+            />
+          </>
+        )}
+        {cls.description && (
+          <p className="text-muted-foreground text-sm">{cls.description}</p>
+        )}
       </div>
 
       <div className="flex flex-col gap-2">

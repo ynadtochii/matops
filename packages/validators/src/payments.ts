@@ -1,6 +1,13 @@
 import { z } from "zod/v4";
 
-import { blockText, HttpUrlSchema, IdSchema, lineText } from "./fields";
+import {
+  blockText,
+  CurrencySchema,
+  HttpUrlSchema,
+  IdSchema,
+  lineText,
+  PriceMinorSchema,
+} from "./fields";
 
 // ─── Manual-transfer payments (v1.3, docs/issues/40) ─────────────────────────
 
@@ -15,13 +22,8 @@ export type BillingCycleInput = z.infer<typeof BillingCycleSchema>;
  */
 export const CreateMembershipPlanSchema = z.object({
   name: lineText(1, 80),
-  priceMinor: z.number().int().min(0).max(100_000_000),
-  currency: z
-    .string()
-    .trim()
-    .length(3)
-    .regex(/^[A-Za-z]{3}$/, "Use a 3-letter currency code")
-    .transform((c) => c.toUpperCase()),
+  priceMinor: PriceMinorSchema,
+  currency: CurrencySchema,
   cycle: BillingCycleSchema.default("monthly"),
 });
 export type CreateMembershipPlanInput = z.infer<

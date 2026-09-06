@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   AddMemberNoteSchema,
+  CreateClassTemplateSchema,
   CreatePaymentClaimSchema,
   DropInSchema,
   EmailSchema,
@@ -290,5 +291,71 @@ describe("UpdateClassSchema time zone", () => {
         timeZone: "Europe/Kyiv",
       }).success,
     ).toBe(true);
+  });
+});
+
+describe("session description and instructor", () => {
+  const base = {
+    id: "11111111-1111-4111-8111-111111111111",
+    title: "Open gym",
+    durationMinutes: 60,
+    capacity: 20,
+  };
+
+  it("says nobody teaches it out loud, and refuses silence", () => {
+    expect(
+      UpdateClassSchema.safeParse({ ...base, instructorId: null }).success,
+    ).toBe(true);
+    expect(UpdateClassSchema.safeParse(base).success).toBe(false);
+  });
+
+  it("cleans a description the way other multi-line fields are cleaned", () => {
+    const parsed = ok(
+      UpdateClassSchema.safeParse({
+        ...base,
+        instructorId: null,
+        description: `Bring a towel.\r\n\n\n\nMats${ZWSP} open at 7  `,
+      }),
+    );
+    expect(parsed.description).toBe("Bring a towel.\n\nMats open at 7");
+  });
+
+  it("stops at the cap the column also holds", () => {
+    const template = {
+      title: "Open gym",
+      daysOfWeek: [1],
+      startsAtMinutes: 600,
+      durationMinutes: 60,
+      timeZone: "Europe/Kyiv",
+      capacity: 20,
+    };
+    expect(
+      CreateClassTemplateSchema.safeParse({
+        ...template,
+        description: "x".repeat(500),
+      }).success,
+    ).toBe(true);
+    expect(
+      CreateClassTemplateSchema.safeParse({
+        ...template,
+        description: "x".repeat(501),
+      }).success,
+    ).toBe(false);
+  });
+
+  it("keeps an absent description absent and an empty one nothing", () => {
+    expect(
+      ok(UpdateClassSchema.safeParse({ ...base, instructorId: null }))
+        .description,
+    ).toBeUndefined();
+    expect(
+      ok(
+        UpdateClassSchema.safeParse({
+          ...base,
+          instructorId: null,
+          description: "   ",
+        }),
+      ).description,
+    ).toBeNull();
   });
 });

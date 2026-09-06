@@ -23,6 +23,7 @@ export async function getAcademyPublic(
 ): Promise<{
   academyId: string;
   name: string;
+  type: string;
   timeZone: string | null;
   country: string | null;
 } | null> {
@@ -30,6 +31,7 @@ export async function getAcademyPublic(
     .select({
       academyId: entity.id,
       name: entity.name,
+      type: entity.type,
       timeZone: entity.timeZone,
       country: entity.country,
     })

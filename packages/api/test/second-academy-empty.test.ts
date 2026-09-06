@@ -1,7 +1,16 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { eq } from "@matops/db";
+import { organization } from "@matops/db/schema";
+
 import type { Harness } from "./helpers";
-import { harness, memberId, seedAcademies, seedClasses } from "./helpers";
+import {
+  harness,
+  memberId,
+  rejectionCode,
+  seedAcademies,
+  seedClasses,
+} from "./helpers";
 
 const ORG = "acad_second_empty";
 const OWNER = "u_second_owner";
@@ -63,10 +72,6 @@ describe("a second academy starts empty", () => {
       planId: plan.id,
       nextDueAt: "2026-08-31",
     });
-    await first().payments.updateRequisites({
-      bankDetails: "IBAN PT50 0000 0000 0000 0000 0",
-    });
-
     const made = await h
       .as(OWNER, ORG)
       .entity.create({ name: "Second Mat", type: "bjj_academy" });
@@ -94,10 +99,9 @@ describe("a second academy starts empty", () => {
     expect(await second().template.list()).toEqual([]);
   });
 
-  it("carries no plans, dues or bank details", async () => {
+  it("carries no plans and no dues", async () => {
     expect(await second().payments.plans()).toEqual([]);
     expect(await second().payments.claims()).toEqual([]);
-    expect((await second().payments.getRequisites()).bankDetails).toBeFalsy();
   });
 
   it("gets its own join code", async () => {
@@ -116,5 +120,57 @@ describe("a second academy starts empty", () => {
     expect((await first().class.week(WEEK)).map((c) => c.id)).toContain(CLASS);
     expect(await first().template.list()).toHaveLength(1);
     expect(await first().payments.plans()).toHaveLength(1);
+  });
+});
+
+describe("opening a general branch", () => {
+  let h: Harness;
+
+  beforeAll(async () => {
+    h = await harness();
+    await seedAcademies(h.pg, [
+      {
+        id: ORG,
+        code: "700091",
+        members: [{ userId: OWNER, role: "owner", status: "active" }],
+      },
+    ]);
+  });
+
+  afterAll(() => h.close());
+
+  it("refuses one while the flag is off", async () => {
+    expect(
+      await rejectionCode(
+        h.as(OWNER, ORG).entity.create({
+          name: "The Gym",
+          type: "general_space",
+        }),
+      ),
+    ).toBe("FORBIDDEN");
+  });
+
+  it("still opens a second mat while the flag is off", async () => {
+    const made = await h
+      .as(OWNER, ORG)
+      .entity.create({ name: "Second Mat", type: "bjj_academy" });
+    expect(made.created).toContain("academy_profile");
+  });
+
+  it("opens one once the flag is on, with no profile or track", async () => {
+    await h.exec
+      .update(organization)
+      .set({ generalBranchesEnabled: true })
+      .where(eq(organization.id, ORG));
+
+    const made = await h
+      .as(OWNER, ORG)
+      .entity.create({ name: "The Gym", type: "general_space" });
+    expect(made.created.sort()).toEqual(["entity", "entity_membership"]);
+
+    const headers = new Headers();
+    headers.set("x-matops-entity", made.entityId);
+    const current = await h.as(OWNER, ORG, headers).entity.current();
+    expect([current.name, current.type]).toEqual(["The Gym", "general_space"]);
   });
 });

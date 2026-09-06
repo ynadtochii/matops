@@ -9,6 +9,7 @@ import {
   disciplineLabel,
   formatMoney,
   formatRank,
+  isBjjAcademy,
   PAYMENT_STATUS_LABEL,
 } from "@matops/domain";
 import { UpdateProfileSchema } from "@matops/validators";
@@ -30,6 +31,7 @@ import {
   Heading,
   Loading,
   Mono,
+  Muted,
   Screen,
   Stack,
   StatusPill,
@@ -162,6 +164,84 @@ const STATUS_TONE: Record<PaymentStatus, "success" | "warning" | "error"> = {
  * status, the gym's requisites with a fixed reference code to copy, and an
  * "I paid" button that raises a claim the owner confirms. No card on file.
  */
+/**
+ * What the person owes on their shared memberships, and by when (ADR 126).
+ *
+ * Silent when every month is settled. The wording is `membershipWarning` from
+ * the domain, the same sentence the web shows, so the two clients cannot drift
+ * about the same situation. One notice per membership, never one per covered
+ * branch.
+ */
+function MembershipNotice() {
+  const t = useTheme();
+  const standing = useQuery(trpc.accessPlan.mine.queryOptions());
+  const claim = useMutation(
+    trpc.accessPlan.claimMonth.mutationOptions({
+      onSuccess: () => void standing.refetch(),
+    }),
+  );
+  const warned = (standing.data?.memberships ?? []).filter((m) => m.warning);
+  const bankDetails = standing.data?.bankDetails ?? "";
+  if (warned.length === 0) return null;
+
+  return (
+    <Stack gap={16}>
+      {warned.map((m) => (
+        <Stack key={m.assignmentId} gap={8}>
+          <Banner tone={m.warning?.verdict === "blocked" ? "info" : "warning"}>
+            <Txt size={14} style={{ color: t.foreground }}>
+              {m.warning?.headline}
+            </Txt>
+            <Txt size={13} tone="muted">
+              {m.warning?.detail}
+            </Txt>
+            {m.amount ? (
+              <Txt size={14} style={{ color: t.foreground }}>
+                {formatMoney(m.amount.priceMinor, m.amount.currency)}
+              </Txt>
+            ) : null}
+          </Banner>
+          {bankDetails ? (
+            <Stack gap={12}>
+              <CopyField label="Bank details" value={bankDetails} />
+              <CopyField
+                label="Reference (add to your transfer)"
+                value={m.reference}
+                data
+              />
+              {m.claimedAt ? (
+                <Txt size={13} tone="muted">
+                  Payment submitted — waiting for your gym to confirm.
+                </Txt>
+              ) : (
+                <Button
+                  label={claim.isPending ? "Submitting…" : "I paid"}
+                  loading={claim.isPending}
+                  onPress={() =>
+                    confirm({
+                      title: "Mark this as paid?",
+                      message:
+                        "This tells your gym you sent the transfer. They'll confirm it once the money arrives.",
+                      confirmLabel: "I paid",
+                      destructive: false,
+                      onConfirm: () =>
+                        claim.mutate({ assignmentId: m.assignmentId }),
+                    })
+                  }
+                />
+              )}
+            </Stack>
+          ) : (
+            <Txt size={13} tone="muted">
+              Ask your gym for their bank details to pay.
+            </Txt>
+          )}
+        </Stack>
+      ))}
+    </Stack>
+  );
+}
+
 function MembershipDues() {
   const [error, setError] = useState<string | null>(null);
   const dues = useQuery(trpc.payments.myDues.queryOptions());
@@ -506,13 +586,20 @@ export default function Profile() {
   // different gym also needs `setActive` to move it.
   const setActive = useMutation(
     trpc.academy.setActive.mutationOptions({
+      // The cache was cleared when the branch was picked; this refetches for
+      // the organization the session has now moved to.
       onSuccess: () => queryClient.invalidateQueries(),
     }),
   );
   const pick = (academy: { academyId: string; organizationId: string }) => {
     setActiveEntity(academy.academyId);
+    // REMOVE rather than invalidate: every cached answer belonged to the branch
+    // they just left, and invalidating leaves it on screen until the refetch
+    // lands, so the gym's schedule shows the mat's classes for a moment. A
+    // general branch makes that worse, since the two lists look nothing alike
+    // (ADR 126).
+    queryClient.removeQueries();
     if (academy.organizationId === session?.session.activeOrganizationId) {
-      void queryClient.invalidateQueries();
       return;
     }
     setActive.mutate({ academyId: academy.academyId });
@@ -544,6 +631,12 @@ export default function Profile() {
   // server rejects the read while a join is still pending. Hide the section
   // rather than showing an error where nothing is wrong yet.
   const approved = current.data?.status === "active";
+  // Belts belong to a mat. A general branch has no rank, and `rank.mine` is
+  // refused there by the server, so the section goes rather than erroring.
+  const bjj = isBjjAcademy(current.data?.type ?? "");
+  // Which gate this branch runs on, so no screen offers a setting the server
+  // stopped reading (ADR 126, ADR 127).
+  const enforced = current.data?.membershipEnforced ?? false;
 
   return (
     <Screen
@@ -575,7 +668,7 @@ export default function Profile() {
           }
         />
 
-        <Field label="Current academy">
+        <Field label="Current branch">
           <Txt size={16}>{current.data?.name ?? "—"}</Txt>
           {current.data?.address ? (
             <AcademyAddress
@@ -591,18 +684,23 @@ export default function Profile() {
           </Banner>
         ) : (
           <>
-            <Stack gap={8}>
-              <Eyebrow>My rank</Eyebrow>
-              <MyRanks />
-            </Stack>
+            {bjj && (
+              <Stack gap={8}>
+                <Eyebrow>My rank</Eyebrow>
+                <MyRanks />
+              </Stack>
+            )}
 
             {approved && (
               <View
                 style={{ gap: 8 }}
                 onLayout={(e) => (duesY.current = e.nativeEvent.layout.y)}
               >
-                <Eyebrow>Membership dues</Eyebrow>
-                <MembershipDues />
+                <Eyebrow>{enforced ? "Membership" : "Membership dues"}</Eyebrow>
+                <MembershipNotice />
+                {/* Where shared memberships decide, the branch's own dues line
+                    is not what anybody owes (ADR 126, ADR 127). */}
+                {!enforced && <MembershipDues />}
               </View>
             )}
           </>
@@ -610,7 +708,7 @@ export default function Profile() {
 
         {list.length >= 2 && (
           <Stack gap={8}>
-            <Eyebrow>Switch academy</Eyebrow>
+            <Eyebrow>Switch branch</Eyebrow>
             {list.map((a) => {
               const isActive = a.academyId === activeId;
               return (
@@ -650,6 +748,19 @@ export default function Profile() {
             })}
           </Stack>
         )}
+
+        <Stack gap={8}>
+          <Eyebrow>Another branch</Eyebrow>
+          <Muted>
+            Train somewhere else too? Ask them for their 6-digit ID and join it
+            here. Switching between the places you already train at is above.
+          </Muted>
+          <Button
+            label="Join another branch"
+            variant="outline"
+            onPress={() => router.push("/onboarding?another=1")}
+          />
+        </Stack>
       </ScrollView>
     </Screen>
   );

@@ -24,10 +24,10 @@ export async function academyContext(
     .select({
       timeZone: entity.timeZone,
       country: entity.country,
-      curriculumForStudents: academyProfile.curriculumForStudents,
+      curriculumForStudents: sql<boolean>`coalesce(${academyProfile.curriculumForStudents}, false)`,
     })
     .from(entity)
-    .innerJoin(academyProfile, eq(academyProfile.entityId, entity.id))
+    .leftJoin(academyProfile, eq(academyProfile.entityId, entity.id))
     .where(eq(entity.id, ctx.academyId))
     .limit(1);
   const curriculumForStudents = org?.curriculumForStudents ?? false;

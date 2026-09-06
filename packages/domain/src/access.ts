@@ -37,6 +37,30 @@ export function isOwner(m: Membership): boolean {
   return isActiveMember(m) && m.role === "owner";
 }
 
+/**
+ * Active manager of the GYM (spec FP7, ADR 128).
+ *
+ * A manager runs the day to day: the gym's people, plans, payments, staff and
+ * reports, assigning memberships, confirming claims, announcing, and finishing
+ * setup. They are not an owner, and the difference is the destructive half:
+ * deleting the gym, making or removing an owner, the commercial account, and
+ * switching a branch onto shared memberships all stay with owners.
+ */
+export function isManager(m: Membership): boolean {
+  return isActiveMember(m) && m.role === "manager";
+}
+
+/**
+ * May this person run the gym's daily work?
+ *
+ * The one predicate every organization-level read and ordinary write asks, so
+ * adding a role later changes one line rather than forty call sites. Owner-only
+ * actions keep asking `isOwner` instead, which is what makes them owner-only.
+ */
+export function runsOrganization(m: Membership): boolean {
+  return isOwner(m) || isManager(m);
+}
+
 /** Suspended — access revoked by an owner; kept for history, not active. */
 export function isSuspended(m: Pick<Membership, "status">): boolean {
   return m.status === "suspended";

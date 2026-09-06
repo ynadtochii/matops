@@ -4,6 +4,8 @@ import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import type { RouterOutputs } from "@matops/api";
+import { postLoginTarget } from "@matops/domain";
 import { Button } from "@matops/ui/button";
 import { Logo } from "@matops/ui/logo";
 import { Spinner } from "@matops/ui/spinner";
@@ -14,13 +16,7 @@ import { JoinByCode } from "./join-by-code";
 import { PageLoader } from "./mat-loader";
 import { ErrorState } from "./states";
 
-interface Membership {
-  academyId: string;
-  organizationId: string;
-  name: string;
-  role: string;
-  status: string;
-}
+type BranchChoice = RouterOutputs["academy"]["memberships"][number];
 
 /**
  * Better Auth writes `activeOrganizationId` when a gym is created or joined, and
@@ -31,16 +27,22 @@ interface Membership {
 export function AcademyGate() {
   const trpc = useTRPC();
   const memberships = useQuery(trpc.academy.memberships.queryOptions());
+  // An owner whose gym has no branch belongs to no branch, so the list above is
+  // empty for them and the join screen would be the wrong answer (ADR 128).
+  const owned = useQuery({
+    ...trpc.organization.mine.queryOptions(),
+    enabled: memberships.data?.length === 0,
+  });
 
   if (memberships.isPending) {
-    return <PageLoader label="Finding your academy" />;
+    return <PageLoader label="Finding your gym" />;
   }
 
   if (memberships.isError) {
     return (
       <div className="mx-auto w-full max-w-md p-8">
         <ErrorState
-          label="your academies"
+          label="your gym"
           onRetry={() => void memberships.refetch()}
         />
       </div>
@@ -48,28 +50,68 @@ export function AcademyGate() {
   }
 
   const list = memberships.data;
+  if (list.length === 0 && owned.isPending) {
+    return <PageLoader label="Finding your gym" />;
+  }
 
-  if (list.length === 0) {
+  const target = postLoginTarget(list, owned.data ?? []);
+
+  if (target.kind === "openGym") {
     return (
-      <div className="flex min-h-screen items-center justify-center p-6">
-        <JoinByCode />
-      </div>
+      <OpenGym organizationId={target.organizationId} name={target.name} />
     );
   }
-
-  const gyms = new Map<string, Membership>();
-  for (const m of list) {
-    if (!gyms.has(m.organizationId)) gyms.set(m.organizationId, m);
+  if (target.kind === "openBranch") {
+    return <OpenActive academyId={target.academyId} name={target.name} />;
   }
-  const only = gyms.size === 1 ? [...gyms.values()][0] : undefined;
-
-  if (only) {
-    return <OpenActive academyId={only.academyId} name={only.name} />;
-  }
-
   return (
     <div className="flex min-h-screen items-center justify-center p-6">
-      <PickAcademy academies={[...gyms.values()]} />
+      {target.kind === "pick" ? (
+        <PickAcademy academies={target.gyms} />
+      ) : (
+        <JoinByCode />
+      )}
+    </div>
+  );
+}
+
+function OpenGym({
+  organizationId,
+  name,
+}: {
+  organizationId: string;
+  name: string;
+}) {
+  const trpc = useTRPC();
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const started = useRef(false);
+
+  const setActive = useMutation(
+    trpc.organization.setActive.mutationOptions({
+      onSuccess: async () => {
+        await queryClient.invalidateQueries();
+        router.replace("/overview");
+        router.refresh();
+      },
+      onError: () => toast.error("Could not open your gym"),
+    }),
+  );
+
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    setActive.mutate({ organizationId });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [organizationId]);
+
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4">
+      <Logo size={30} />
+      <div className="flex items-center gap-2">
+        <Spinner size="sm" />
+        <span className="text-muted-foreground text-sm">Opening {name}…</span>
+      </div>
     </div>
   );
 }
@@ -86,7 +128,7 @@ function OpenActive({ academyId, name }: { academyId: string; name: string }) {
         await queryClient.invalidateQueries();
         router.refresh();
       },
-      onError: () => toast.error("Could not open your academy"),
+      onError: () => toast.error("Could not open your branch"),
     }),
   );
 
@@ -108,7 +150,7 @@ function OpenActive({ academyId, name }: { academyId: string; name: string }) {
   );
 }
 
-function PickAcademy({ academies }: { academies: Membership[] }) {
+function PickAcademy({ academies }: { academies: BranchChoice[] }) {
   const trpc = useTRPC();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -119,7 +161,7 @@ function PickAcademy({ academies }: { academies: Membership[] }) {
         await queryClient.invalidateQueries();
         router.refresh();
       },
-      onError: () => toast.error("Could not open the academy"),
+      onError: () => toast.error("Could not open the branch"),
     }),
   );
 

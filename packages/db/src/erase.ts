@@ -1,8 +1,9 @@
-import { and, eq, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 
 import type { DbExec } from "./client";
 import type { TenantTx } from "./tenant";
 import {
+  accessAssignment,
   classInstance,
   classParticipation,
   entityMembership,
@@ -12,6 +13,7 @@ import {
   memberRank,
   memberReferral,
   memberReferralAudit,
+  membershipMonth,
   notification,
   paymentClaim,
   rankPromotion,
@@ -224,6 +226,56 @@ export async function deleteEntityMembership(
         eq(entityMembership.userId, userId),
       ),
     );
+}
+
+/**
+ * Drop this person's shared memberships across the whole organization.
+ *
+ * DELIBERATELY not part of {@link eraseMemberData}, which runs at ONE entity.
+ * An assignment is held once for the organization and can cover a mat and a
+ * gym at the same time, so erasing someone from the mat must leave it standing
+ * (ADR 126). It goes only when their last entity membership has gone, beside
+ * `deleteMemberRow`, because at that point there is no branch left for it to
+ * cover. Runs on the base connection: the row is organization-scoped and an
+ * entity transaction is the wrong scope to reach it from.
+ */
+export async function deleteOrganizationAssignments(
+  exec: DbExec,
+  organizationId: string,
+  userId: string,
+): Promise<number> {
+  // The months hang off the assignment with a foreign key, so they go first or
+  // the delete below is refused. `membership_month_audit` deliberately has no
+  // such key and is NOT deleted: who marked which month paid outlives the
+  // membership it was about.
+  await exec.delete(membershipMonth).where(
+    and(
+      eq(membershipMonth.organizationId, organizationId),
+      inArray(
+        membershipMonth.assignmentId,
+        exec
+          .select({ id: accessAssignment.id })
+          .from(accessAssignment)
+          .where(
+            and(
+              eq(accessAssignment.organizationId, organizationId),
+              eq(accessAssignment.userId, userId),
+            ),
+          ),
+      ),
+    ),
+  );
+
+  const gone = await exec
+    .delete(accessAssignment)
+    .where(
+      and(
+        eq(accessAssignment.organizationId, organizationId),
+        eq(accessAssignment.userId, userId),
+      ),
+    )
+    .returning({ id: accessAssignment.id });
+  return gone.length;
 }
 
 export async function deleteMemberRow(

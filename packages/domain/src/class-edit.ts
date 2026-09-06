@@ -4,7 +4,27 @@
  * propagate and whom to notify; the actual writes/notifications happen there.
  */
 
+import { isBjjAcademy } from "./entity";
 import { normalizeDaysOfWeek } from "./schedule";
+
+/**
+ * Who is credited for a session the caller just created, when they named nobody.
+ *
+ * A BJJ class always has a coach, so silence means the staff member who saved
+ * it: that is how one tap on "Add class" produces a class with a name on it. A
+ * general space runs sessions nobody teaches, so silence there means nobody,
+ * and the sauna does not end up credited to whoever opened the form (ADR 126).
+ *
+ * An id the caller DID send always wins, whatever the type.
+ */
+export function instructorForNewSession(
+  entityType: string,
+  sent: string | null | undefined,
+  actingUserId: string,
+): string | null {
+  if (sent != null) return sent;
+  return isBjjAcademy(entityType) ? actingUserId : null;
+}
 
 export interface TemplateRecurrence {
   daysOfWeek: number[];
@@ -39,8 +59,9 @@ export function templateTimingChanged(
 
 export interface TemplateContent {
   title: string;
+  description: string | null;
   discipline: string | null;
-  instructorId: string;
+  instructorId: string | null;
   durationMinutes: number;
   capacity: number;
   publicBookable: boolean;
@@ -70,6 +91,7 @@ export function templateContentChanged(
 ): boolean {
   return (
     before.title !== after.title ||
+    before.description !== after.description ||
     before.discipline !== after.discipline ||
     before.instructorId !== after.instructorId ||
     before.durationMinutes !== after.durationMinutes ||
@@ -89,7 +111,8 @@ export function templateEditStrategy(
 export interface ClassNotifiable {
   /** UTC start instant. */
   startsAt: Date;
-  instructorId: string;
+  /** Null at a general space, where a session need not be taught (ADR 126). */
+  instructorId: string | null;
 }
 
 export interface ClassChange {

@@ -147,6 +147,21 @@ export const MapUrlSchema = HttpUrlSchema.refine((v) => {
   return host === "google.com" && url.pathname.startsWith("/maps");
 }, "Paste a link from Google Maps, Apple Maps, OpenStreetMap, or Waze");
 
+/**
+ * Money, spelled once (the rule ADR 119 set for phones and emails). An amount is
+ * an integer in the currency's MINOR unit, never a float, beside a 3-letter
+ * ISO-4217 code upper-cased at the boundary. Two products ask for a price now,
+ * the legacy branch plan and the shared membership plan, and they must not
+ * disagree about what a valid one looks like.
+ */
+export const PriceMinorSchema = z.number().int().min(0).max(100_000_000);
+export const CurrencySchema = z
+  .string()
+  .trim()
+  .length(3)
+  .regex(/^[A-Za-z]{3}$/, "Use a 3-letter currency code")
+  .transform((c) => c.toUpperCase());
+
 /** An opaque Better Auth id (user, member, organization, invite). Bounded only. */
 export const IdSchema = z.string().trim().min(1).max(64);
 
@@ -164,7 +179,13 @@ export const personFields = {
   phone: PhoneSchema,
 } as const;
 
-/** Owner onboarding — "Start a gym" (spec 1.1 / O6). */
+/**
+ * A name, for a gym or a branch: "Start a gym" (spec FP1), the gym rename, and
+ * the branch rename all ask for the same thing and hold it to the same bounds.
+ *
+ * The name is a label rather than an identity: it is not unique, because a gym
+ * IS identified by its id and a branch by its six-digit public code (ADR 124).
+ */
 export const CreateAcademySchema = z.object({
   name: lineText(2, 80),
 });
@@ -173,8 +194,23 @@ export type CreateAcademyInput = z.infer<typeof CreateAcademySchema>;
 export const CreateEntitySchema = z.object({
   name: lineText(2, 80),
   type: z.enum(ENTITY_TYPES),
+  /** Copy this branch's schedule and staff into the new one (ADR 128). */
+  copyFromEntityId: IdSchema.optional(),
 });
 export type CreateEntityInput = z.infer<typeof CreateEntitySchema>;
+
+/** One branch of the caller's own gym, named from an organization screen. */
+export const EntityIdSchema = z.object({ entityId: IdSchema });
+export type EntityIdInput = z.infer<typeof EntityIdSchema>;
+
+/** Move one branch between the two payment gates (ADR 127). */
+export const SetMembershipEnforcedSchema = z.object({
+  entityId: IdSchema,
+  enforced: z.boolean(),
+});
+export type SetMembershipEnforcedInput = z.infer<
+  typeof SetMembershipEnforcedSchema
+>;
 
 export const UpdateAcademySettingsSchema = z.object({
   timeZone: lineText(1, 64)

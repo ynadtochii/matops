@@ -17,7 +17,7 @@ export function OrganizationBoundary({ children }: { children: ReactNode }) {
   const trpc = useTRPC();
   const mine = useQuery(trpc.entity.list.queryOptions());
 
-  if (mine.isPending) return <PageLoader label="Opening your academy" />;
+  if (mine.isPending) return <PageLoader label="Opening your branch" />;
 
   if (mine.isError) {
     return (

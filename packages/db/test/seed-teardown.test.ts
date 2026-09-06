@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { SeedExec } from "../src/seed/registry";
 import * as schema from "../src/schema";
+import { SEED_ACADEMY } from "../src/seed/registry";
 import { seedAll } from "../src/seed/run";
 import { removeAll, seedStatus } from "../src/seed/teardown";
 import { freshDb } from "./helpers";
@@ -57,9 +58,13 @@ describe("seed roundtrip — up then down", () => {
 
   it("seeds the demo academy with data", async () => {
     const status = await seedStatus(exec);
-    expect(status.every((s) => s.present)).toBe(true);
-    expect(status.every((s) => s.members > 0)).toBe(true);
-    expect(status.every((s) => s.classes > 0)).toBe(true);
+    // About the DEMO academy specifically. `seedStatus` also lists the pilot
+    // gym, which `seed pilot` builds and `seedAll` deliberately does not, so
+    // "every seed academy is present" is not the question this asks.
+    const demo = status.find((s) => s.academyId === SEED_ACADEMY.id);
+    expect(demo?.present).toBe(true);
+    expect(demo?.members).toBeGreaterThan(0);
+    expect(demo?.classes).toBeGreaterThan(0);
     // Fake seed users were created.
     expect(await countLike("user", "id", "seed_%")).toBeGreaterThan(0);
   });

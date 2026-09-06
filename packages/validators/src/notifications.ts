@@ -1,6 +1,6 @@
 import { z } from "zod/v4";
 
-import { blockText, lineText } from "./fields";
+import { blockText, IdSchema, lineText } from "./fields";
 
 // ─── Notification center (v3.7, ADR 77) ─────────────────────────────────────
 
@@ -15,3 +15,17 @@ export const AnnounceSchema = z.object({
   audience: z.enum(["all", "students", "staff"]),
 });
 export type AnnounceInput = z.infer<typeof AnnounceSchema>;
+
+/**
+ * Which branches an organization-level post reaches. Leaving `entityIds` out
+ * means every branch, so the default is the one an owner means most often.
+ */
+export const BranchSelectionSchema = z.object({
+  entityIds: z.array(IdSchema).max(50).optional(),
+});
+export type BranchSelectionInput = z.infer<typeof BranchSelectionSchema>;
+
+export const AnnounceAllSchema = AnnounceSchema.extend(
+  BranchSelectionSchema.shape,
+);
+export type AnnounceAllInput = z.infer<typeof AnnounceAllSchema>;

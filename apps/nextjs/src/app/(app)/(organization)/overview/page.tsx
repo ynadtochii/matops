@@ -6,15 +6,15 @@ import { HydrateClient, myEntities, prefetch, trpc } from "~/trpc/server";
 
 export default function OverviewPage() {
   return (
-    <Suspense fallback={<PageLoader label="Opening your academies" />}>
+    <Suspense fallback={<PageLoader label="Opening your gym" />}>
       <OverviewData />
     </Suspense>
   );
 }
 
 async function OverviewData() {
-  const { canAdd } = await myEntities();
-  if (canAdd) prefetch(trpc.stats.organization.queryOptions());
+  const { canRunOrganization } = await myEntities();
+  if (canRunOrganization) prefetch(trpc.stats.organization.queryOptions());
 
   return (
     <HydrateClient>

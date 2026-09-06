@@ -150,14 +150,3 @@ export function combineEntitySummaries(
     entities: [...rows],
   };
 }
-
-/** The mats with something waiting on the owner, busiest first. */
-export function entitiesNeedingAttention(
-  rows: readonly EntitySummary[],
-): EntitySummary[] {
-  const waiting = (r: EntitySummary) =>
-    r.pendingMembers + r.newLeads + r.openClaims;
-  return rows
-    .filter((r) => waiting(r) > 0)
-    .sort((a, b) => waiting(b) - waiting(a) || a.name.localeCompare(b.name));
-}

@@ -24,9 +24,11 @@ import { db } from "@matops/db/client";
 import {
   canEnroll,
   isActiveMember,
+  isBjjAcademy,
   isOwner,
   isStaff,
   isSuspended,
+  runsOrganization,
 } from "@matops/domain";
 
 import { clientIp, take } from "./rate-limit";
@@ -453,6 +455,27 @@ export const organizationOwnerProcedure = organizationMemberProcedure.use(
 );
 
 /**
+ * Somebody who RUNS the gym: an owner, or a manager (spec FP7, ADR 128).
+ *
+ * The tier for the gym's daily work, reading its people, plans, payments,
+ * staff and reports, and the ordinary writes that go with them. Owner-only
+ * actions keep `organizationOwnerProcedure`, and that difference is the whole
+ * permission model: it is spelled in the tier, not in a check somebody has to
+ * remember at the top of a resolver.
+ */
+export const organizationManagerProcedure = organizationMemberProcedure.use(
+  ({ ctx, next }) => {
+    if (!runsOrganization(ctx.orgMembership)) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Owners and managers only",
+      });
+    }
+    return next();
+  },
+);
+
+/**
  * The tenant tiers. Every one of them runs at ONE entity, the one the request
  * named in `x-matops-entity`, inside `withScope({ organizationId, entityId })`.
  * So `ctx.db` is the scoped transaction and Postgres filters every query to
@@ -489,6 +512,28 @@ export const staffProcedure = memberProcedure.use(({ ctx, next }) => {
 export const ownerProcedure = memberProcedure.use(({ ctx, next }) => {
   if (!isOwner(ctx.membership)) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Owner only" });
+  }
+  return next();
+});
+
+/**
+ * The BJJ-only tiers. Belts, promotions and the curriculum belong to a mat, so
+ * a general space is refused them by the server, not by a hidden nav item
+ * (ADR 126). The check runs after the entity is resolved, so it names the place
+ * the request asked for and never the one a session happened to hold.
+ */
+const BJJ_ONLY = "Not a BJJ academy";
+
+export const bjjEnrolledProcedure = enrolledProcedure.use(({ ctx, next }) => {
+  if (!isBjjAcademy(ctx.entity.type)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: BJJ_ONLY });
+  }
+  return next();
+});
+
+export const bjjStaffProcedure = staffProcedure.use(({ ctx, next }) => {
+  if (!isBjjAcademy(ctx.entity.type)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: BJJ_ONLY });
   }
   return next();
 });
@@ -541,6 +586,26 @@ export const organizationOwnerIdentityProcedure = protectedProcedure.use(
       await resolveOrganization(ctx);
     if (!isActiveMember(orgMembership) || !isOwner(orgMembership)) {
       throw new TRPCError({ code: "FORBIDDEN", message: "Owner only" });
+    }
+    return next({
+      ctx: { organizationId, orgMembership, session: { ...ctx.session, user } },
+    });
+  },
+);
+
+/**
+ * The same owner-or-manager rule, with NO ambient transaction, for the reads
+ * that open one entity scope each (ADR 92, ADR 124).
+ */
+export const organizationManagerIdentityProcedure = protectedProcedure.use(
+  async ({ ctx, next }) => {
+    const { organizationId, orgMembership, user } =
+      await resolveOrganization(ctx);
+    if (!runsOrganization(orgMembership)) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Owners and managers only",
+      });
     }
     return next({
       ctx: { organizationId, orgMembership, session: { ...ctx.session, user } },

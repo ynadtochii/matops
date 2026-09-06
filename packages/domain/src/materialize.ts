@@ -24,7 +24,7 @@ export interface RecurrenceSpec {
 }
 
 /** The calendar date (Y/M/D) seen in `timeZone` at a given UTC instant. */
-function localDateParts(
+export function localDateParts(
   instant: Date,
   timeZone: string,
 ): { year: number; month: number; day: number } {
@@ -38,6 +38,13 @@ function localDateParts(
   const get = (type: string) =>
     Number(parts.find((p) => p.type === type)?.value);
   return { year: get("year"), month: get("month"), day: get("day") };
+}
+
+/** The local calendar date in `timeZone`, as "YYYY-MM-DD". */
+export function localDateISO(instant: Date, timeZone: string): string {
+  const { year, month, day } = localDateParts(instant, timeZone);
+  const pad = (n: number, w = 2) => String(n).padStart(w, "0");
+  return `${pad(year, 4)}-${pad(month)}-${pad(day)}`;
 }
 
 /**

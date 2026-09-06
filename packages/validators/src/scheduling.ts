@@ -2,7 +2,7 @@ import { z } from "zod/v4";
 
 import { isValidTimeZone } from "@matops/domain";
 
-import { IdSchema, lineText } from "./fields";
+import { blockText, IdSchema, lineText } from "./fields";
 
 // ─── Scheduling (Phase 2) ────────────────────────────────────────────────────
 
@@ -19,13 +19,26 @@ const TimeZoneSchema = z
   .refine(isValidTimeZone, "Unknown time zone");
 
 /**
+ * What a session is about, in the owner's own words. Bounded at 500 characters,
+ * the same cap the column's check constraint holds. An empty box means the
+ * session has no description, so it is stored as nothing rather than as "".
+ * Leaving the field out entirely leaves an existing description alone.
+ */
+const SessionDescription = blockText(0, 500)
+  .nullish()
+  .transform((v) => (v === "" ? null : v));
+
+/**
  * Recurring class template (spec O3, docs/issues/08). Days are 0=Sun…6=Sat; the
  * start time is LOCAL minutes-from-midnight in `timeZone` (the DST-aware UTC
  * conversion happens later in @matops/domain). `instructorId` is optional on
- * write — the router defaults it to the acting staff member.
+ * write — at a BJJ academy the router defaults it to the acting staff member,
+ * and a general space leaves it unset (ADR 126). `description` is bounded at
+ * 500 characters, the same cap the column's check constraint holds.
  */
 export const CreateClassTemplateSchema = z.object({
   title: lineText(1, 80),
+  description: SessionDescription,
   discipline: DisciplineSchema.nullish(),
   curriculumTrackId: IdSchema.nullish(),
   instructorId: IdSchema.optional(),
@@ -68,6 +81,7 @@ export const TemplateIdSchema = z.object({ id: z.uuid() });
  */
 export const CreateClassSchema = z.object({
   title: lineText(1, 80),
+  description: SessionDescription,
   discipline: DisciplineSchema.nullish(),
   instructorId: IdSchema.optional(),
   date: z.iso.date(), // "YYYY-MM-DD"
@@ -89,8 +103,12 @@ export const UpdateClassSchema = z
   .object({
     id: z.uuid(),
     title: lineText(1, 80),
+    description: SessionDescription,
     discipline: DisciplineSchema.nullish(),
-    instructorId: IdSchema,
+    // Nullable, not optional: a general space runs sessions nobody teaches, so
+    // the caller says "nobody" out loud rather than by leaving the field out
+    // and having the resolver guess (ADR 126).
+    instructorId: IdSchema.nullable(),
     durationMinutes: z.number().int().min(5).max(600),
     capacity: z.number().int().min(0).max(1000),
     publicBookable: z.boolean().default(false),
