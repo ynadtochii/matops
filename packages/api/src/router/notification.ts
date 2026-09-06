@@ -1,15 +1,25 @@
 import type { TRPCRouterRecord } from "@trpc/server";
 
+import type { DbExec } from "@matops/db";
 import type { AnnouncementAudience } from "@matops/domain";
-import { and, desc, eq, isNull, sql } from "@matops/db";
+import { and, desc, eq, isNull, sql, withScope } from "@matops/db";
 import { notification } from "@matops/db/schema";
-import { announcementRecipients } from "@matops/domain";
-import { AnnounceSchema } from "@matops/validators";
+import { announcementFanOut, announcementRecipients } from "@matops/domain";
+import {
+  AnnounceAllSchema,
+  AnnounceSchema,
+  BranchSelectionSchema,
+} from "@matops/validators";
 
 import type { MemberScope } from "../members";
 import { rosterOf } from "../members";
-import { notifyAnnouncement } from "../notify";
-import { memberProcedure, staffProcedure } from "../trpc";
+import { notifyAnnouncement, notifyAnnouncementAcross } from "../notify";
+import { readOrganizationEntities } from "../organization-read";
+import {
+  memberProcedure,
+  organizationManagerIdentityProcedure,
+  staffProcedure,
+} from "../trpc";
 
 /** The user ids one audience resolves to, using the pure domain rule. */
 async function announcementTargets(
@@ -18,6 +28,35 @@ async function announcementTargets(
 ): Promise<string[]> {
   const roster = await rosterOf(ctx);
   return announcementRecipients(roster, audience);
+}
+
+/**
+ * The recipients of one audience at each chosen branch, one scoped read per
+ * branch (ADR 124). The branch list comes from the server's own read, so an
+ * entity id the caller made up simply matches nothing.
+ */
+async function recipientsPerBranch(
+  ctx: { organizationId: string; baseDb: DbExec },
+  input: { audience: AnnouncementAudience; entityIds?: string[] },
+): Promise<{ entityId: string; userIds: string[] }[]> {
+  const branches = await readOrganizationEntities(
+    ctx.organizationId,
+    ctx.baseDb,
+  );
+  const chosen = input.entityIds
+    ? branches.filter((b) => input.entityIds?.includes(b.id))
+    : branches;
+
+  const perEntity: { entityId: string; userIds: string[] }[] = [];
+  for (const branch of chosen) {
+    const userIds = await withScope(
+      { organizationId: ctx.organizationId, entityId: branch.id },
+      (db) => announcementTargets({ academyId: branch.id, db }, input.audience),
+      ctx.baseDb,
+    );
+    perEntity.push({ entityId: branch.id, userIds });
+  }
+  return perEntity;
 }
 
 const FEED_LIMIT = 50;
@@ -113,5 +152,56 @@ export const notificationRouter = {
         ),
       );
       return { ok: true as const, sent: recipients.length };
+    }),
+
+  /**
+   * Post to several branches at once (ADR 127). Owner only, where the
+   * per-branch `announce` is staff: an instructor runs one mat, and posting to
+   * every branch is not that job.
+   *
+   * Every branch is read in its OWN scope, one transaction each, exactly as the
+   * organization dashboard reads are. No organization-wide query over the
+   * tenant tables, and an entity id that is not this gym's is dropped rather
+   * than honoured, because the list comes from the server's own read.
+   */
+  announceAll: organizationManagerIdentityProcedure
+    .input(AnnounceAllSchema)
+    .mutation(async ({ ctx, input }) => {
+      const perEntity = await recipientsPerBranch(ctx, {
+        audience: input.audience,
+        entityIds: input.entityIds,
+      });
+      const { rows, push } = announcementFanOut(perEntity);
+      if (rows.length === 0) return { ok: true as const, rows: 0, pushed: 0 };
+
+      await notifyAnnouncementAcross(
+        {
+          rows,
+          push,
+          title: input.title,
+          body: input.body,
+          sentBy: ctx.session.user.name,
+        },
+        ctx.baseDb,
+      );
+      return { ok: true as const, rows: rows.length, pushed: push.length };
+    }),
+
+  /**
+   * How many PEOPLE each audience reaches across the chosen branches, counted
+   * once each. The button labels itself with this, so nobody posts blind.
+   */
+  audienceCountsAll: organizationManagerIdentityProcedure
+    .input(BranchSelectionSchema.optional())
+    .query(async ({ ctx, input }) => {
+      const counts = { all: 0, students: 0, staff: 0 };
+      for (const audience of ["all", "students", "staff"] as const) {
+        const perEntity = await recipientsPerBranch(ctx, {
+          audience,
+          entityIds: input?.entityIds,
+        });
+        counts[audience] = announcementFanOut(perEntity).push.length;
+      }
+      return counts;
     }),
 } satisfies TRPCRouterRecord;

@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 
-import { bookingAccessMessage, isActiveMember, isStaff } from "@matops/domain";
+import { isActiveMember, isStaff } from "@matops/domain";
 import { toast } from "@matops/ui/toast";
 
 import { useInvalidate } from "~/trpc/invalidate";
@@ -21,13 +21,16 @@ export function useBooking() {
   const invalidateFor = useInvalidate();
   const academy = useEntity();
 
-  const myDues = useQuery({
-    ...trpc.payments.myDues.queryOptions(),
+  // One question, one answer, whichever gate this branch runs on. The server
+  // builds the sentence through the same `bookingGate` the booking mutation
+  // uses, so the screen and the write cannot disagree, and the app shows the
+  // identical words (ADR 126). Cancel is never gated: somebody whose month ran
+  // out must still be able to give their place back.
+  const gate = useQuery({
+    ...trpc.booking.access.queryOptions(),
     enabled: !isStaff(academy) && isActiveMember(academy),
   });
-  const access = myDues.data?.access ?? null;
-  const lockedMessage =
-    access?.state === "locked" ? bookingAccessMessage(access) : null;
+  const lockedMessage = gate.data?.locked ? gate.data.message : null;
 
   const invalidate = () => invalidateFor("booking");
   const onError = (err: { message: string }) =>

@@ -1,7 +1,6 @@
 import { randomInt } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
 
-import type { DbExec } from "./client";
 import type { DbReader } from "./tenant";
 import { entity } from "./entity-schema";
 
@@ -23,7 +22,7 @@ const CODE_MAX = 999999;
  * codes; the unique index is the final backstop if two creates race. Uses crypto
  * `randomInt` for an even, non-guessable distribution.
  */
-export async function generateAcademyCode(exec: DbExec): Promise<string> {
+export async function generateAcademyCode(exec: DbReader): Promise<string> {
   for (let attempt = 0; attempt < 50; attempt++) {
     const code = String(randomInt(CODE_MIN, CODE_MAX + 1));
     const taken = await exec

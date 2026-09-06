@@ -193,8 +193,15 @@ are broken promises.
 
 **The primary number:** *weekly active academies*, meaning an academy with at
 least one booking or attendance mark in the last seven days. Same number named in
-[revenue-collection.md](revenue-collection.md). One SQL query against Neon, kept
-in a three-row spreadsheet.
+[revenue-collection.md](revenue-collection.md).
+
+**v7.6 built this, so it is no longer a spreadsheet.** `pnpm -F @matops/db report`
+prints the weekly count from the `product_event` table, along with the funnel
+(median days to a first schedule and a first student booking, setup completion,
+second branch, two-branch weekly use, week-two booking) and the counter-signal
+below. It counts only a student's own booking or an attendance mark, so an owner
+booking their own training never shows as student use. The events carry no name,
+email, phone number or amount.
 
 **Per gym, weekly:**
 
@@ -206,7 +213,9 @@ in a three-row spreadsheet.
 | Days the owner opened the dashboard **without you asking** | The one that actually matters |
 
 **The counter-signal:** the owner is active but no students are. That means matops
-became more admin work for one person, which is the opposite of the product.
+became more admin work for one person, which is the opposite of the product. The
+report names the weeks this happened, per gym, from `staff_action` events with no
+student event beside them.
 
 ### Kill or continue, at the end of week 4
 

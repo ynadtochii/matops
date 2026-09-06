@@ -14,6 +14,14 @@ const SCOPE_GUC: Record<string, string> = {
   entity: "app.organization_id",
   entity_membership: "app.organization_id",
   academy_profile: "app.academy_id",
+  // One membership can cover a mat and a gym at once, so the four access tables
+  // belong to the organization and none of them carries an academy_id (ADR 126).
+  access_plan: "app.organization_id",
+  access_plan_entity: "app.organization_id",
+  access_assignment: "app.organization_id",
+  membership_policy: "app.organization_id",
+  membership_month: "app.organization_id",
+  membership_month_audit: "app.organization_id",
 };
 
 const ENTITY_GUC = "app.academy_id";

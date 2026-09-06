@@ -1,6 +1,6 @@
 "use client";
 
-import { isOwner } from "@matops/domain";
+import { runsBranch } from "@matops/domain";
 
 import { useEntity } from "./entity";
 import { InviteLinkCard } from "./invite-link-card";
@@ -15,7 +15,7 @@ export function Invites() {
   // `invite.list` and `invite.create` stay owner-only, and /members is a staff
   // route now (ADR 75), so the section hides itself rather than 403 a coach.
   const academy = useEntity();
-  if (!isOwner(academy)) return null;
+  if (!runsBranch(academy)) return null;
   return (
     <section className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">

@@ -6,6 +6,7 @@ import { Logo, Mark } from "@matops/ui/logo";
 
 import { getSession } from "~/auth/server";
 import { PageLoader } from "../_components/mat-loader";
+import { Offers } from "../_components/offers";
 import { Eyebrow } from "../_components/primitives";
 import { SignIn } from "../_components/sign-in";
 
@@ -54,6 +55,9 @@ async function SignInGate() {
               <Eyebrow key={a}>{a}</Eyebrow>
             ))}
           </div>
+          <div className="mt-10 max-w-sm">
+            <Offers />
+          </div>
         </div>
 
         <Eyebrow className="relative">Owner &amp; instructor console</Eyebrow>
@@ -76,6 +80,10 @@ async function SignInGate() {
             </p>
           </div>
           <SignIn callbackURL="/" />
+
+          <div className="mt-8 lg:hidden">
+            <Offers />
+          </div>
 
           {/* Owners start here. A rare, deliberate action, so it is its own link
               off the sign-in form — not offered to everyone after login (ADR 49). */}

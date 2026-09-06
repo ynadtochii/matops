@@ -9,10 +9,10 @@ import {
   disciplineLabel,
   formatMoney,
   formatRank,
-  isOwner,
   PAYMENT_STATUS_LABEL,
   RANK_SYSTEMS,
   rankDisciplines,
+  runsBranch,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
@@ -26,7 +26,7 @@ import { toast } from "@matops/ui/toast";
 import type { Member, MemberHistory } from "./members";
 import { dateFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
-import { useEntity } from "./entity";
+import { useEntity, useOrganization } from "./entity";
 import {
   cardClass,
   DriftBadge,
@@ -45,6 +45,14 @@ import { EmptyState, ErrorState } from "./states";
  */
 
 type Dues = NonNullable<Member["dues"]>;
+
+/** The short tag on a member whose access is not clear, in the roster's words. */
+const MEMBERSHIP_TAG: Record<string, string> = {
+  expired: "month unpaid",
+  "not-covered": "no membership",
+  "pending-approval": "awaiting approval",
+  suspended: "suspended",
+};
 
 export function MemberRow({
   m,
@@ -75,12 +83,29 @@ export function MemberRow({
             booking locked
           </span>
         )}
+        {m.membership && m.membership.verdict !== "ok" && (
+          <span className="text-error ml-2 text-xs font-medium uppercase">
+            {MEMBERSHIP_TAG[m.membership.verdict]}
+          </span>
+        )}
       </span>
       <span className="text-muted-foreground text-sm">
         {label} · {m.email}
         {m.phone ? ` · ${m.phone}` : ""}
         {m.visitCount > 0 ? ` · attended ${m.visitCount}×` : ""}
       </span>
+      {/* Why they are on THIS branch's roster. Somebody whose plan covers the
+          gym is a member of the gym, not a visitor (ADR 126). */}
+      {m.membership?.covered && (
+        <span className="text-muted-foreground text-sm">
+          Covered by {m.membership.planNames.join(", ")}
+        </span>
+      )}
+      {m.membership && !m.membership.covered && (
+        <span className="text-muted-foreground text-sm">
+          Joined this branch, no membership covers it
+        </span>
+      )}
     </>
   );
   return (
@@ -122,9 +147,12 @@ export function MemberRow({
  */
 export function MemberDetail({ m }: { m: Member }) {
   const trpc = useTRPC();
-  const [tab, setTab] = useState<"overview" | "attendance" | "rank" | "notes">(
-    "overview",
-  );
+  // Memberships belong to the owner group, so only an owner sees the tab. A
+  // coach reading eligibility for their own branch is a different screen.
+  const owner = runsBranch(useEntity());
+  const [tab, setTab] = useState<
+    "overview" | "attendance" | "rank" | "notes" | "membership"
+  >("overview");
   const detail = useQuery(
     trpc.membership.memberHistory.queryOptions({ memberId: m.memberId }),
   );
@@ -141,6 +169,9 @@ export function MemberDetail({ m }: { m: Member }) {
           { id: "attendance", label: "Attendance" },
           { id: "rank", label: "Rank" },
           { id: "notes", label: "Notes" },
+          ...(owner
+            ? [{ id: "membership" as const, label: "Membership" }]
+            : []),
         ]}
       />
 
@@ -149,6 +180,8 @@ export function MemberDetail({ m }: { m: Member }) {
           <RankTab memberId={m.memberId} />
         ) : tab === "notes" ? (
           <NotesTab memberId={m.memberId} />
+        ) : tab === "membership" ? (
+          <MembershipTab userId={m.userId} name={m.name} />
         ) : detail.isPending ? (
           <SkeletonLines n={5} />
         ) : detail.isError ? (
@@ -161,6 +194,237 @@ export function MemberDetail({ m }: { m: Member }) {
         ) : (
           <AttendanceHistory history={detail.data.history} />
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Membership tab (ADR 126). What this person's shared memberships cover, and
+ * how to give them another.
+ *
+ * The assignment is held once for the whole organization, so what is shown here
+ * is the same record an owner would see standing in any other branch. Assigning
+ * from here records THIS branch as where it happened, which is bookkeeping and
+ * never a limit on what the plan covers.
+ */
+function MembershipTab({ userId, name }: { userId: string; name: string }) {
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  const { entities } = useOrganization();
+  const here = useEntity().academyId;
+  const [picked, setPicked] = useState("");
+  const [outcome, setOutcome] = useState<{
+    enrolled: string[];
+    needsDecision: { entityId: string; status: string }[];
+  } | null>(null);
+
+  const held = useQuery(trpc.accessPlan.forUser.queryOptions({ userId }));
+  const plans = useQuery(trpc.accessPlan.list.queryOptions());
+  const nameOf = (id: string) =>
+    entities.find((e) => e.id === id)?.name ?? "a closed branch";
+
+  const assign = useMutation(
+    trpc.accessPlan.assign.mutationOptions({
+      onSuccess: async (made) => {
+        await queryClient.invalidateQueries(
+          trpc.accessPlan.forUser.pathFilter(),
+        );
+        setPicked("");
+        setOutcome({
+          enrolled: made.enrolled,
+          needsDecision: made.needsDecision,
+        });
+        toast.success(
+          made.created
+            ? "Membership added"
+            : made.restored
+              ? "Membership restored"
+              : `${name} already has that one`,
+        );
+      },
+      onError: (e) => toast.error(e.message || "Could not assign that"),
+    }),
+  );
+
+  const end = useMutation(
+    trpc.accessPlan.cancel.mutationOptions({
+      onSuccess: () =>
+        queryClient.invalidateQueries(trpc.accessPlan.forUser.pathFilter()),
+      onError: (e) => toast.error(e.message),
+    }),
+  );
+  const pause = useMutation(
+    trpc.accessPlan.suspend.mutationOptions({
+      onSuccess: () =>
+        queryClient.invalidateQueries(trpc.accessPlan.forUser.pathFilter()),
+      onError: (e) => toast.error(e.message),
+    }),
+  );
+  const mark = useMutation(
+    trpc.accessPlan.markMonth.mutationOptions({
+      onSuccess: () =>
+        queryClient.invalidateQueries(trpc.accessPlan.forUser.pathFilter()),
+      onError: (e) => toast.error(e.message || "Could not record that"),
+    }),
+  );
+
+  if (held.isPending) return <SkeletonRows rows={2} />;
+  if (held.isError) {
+    return (
+      <ErrorState
+        label="their memberships"
+        onRetry={() => void held.refetch()}
+      />
+    );
+  }
+
+  const offerable = (plans.data ?? []).filter(
+    (p) => !p.archived && !held.data.some((h) => h.planId === p.id),
+  );
+  const busy =
+    assign.isPending || pause.isPending || end.isPending || mark.isPending;
+
+  return (
+    <div className="flex flex-col gap-4">
+      {held.data.length === 0 ? (
+        <EmptyState title={`${name} holds no membership yet.`}>
+          Give them one below. It covers every branch the plan names.
+        </EmptyState>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {held.data.map((h) => (
+            <li key={h.id} className={`${cardClass()} flex flex-wrap gap-3`}>
+              <div className="flex min-w-0 flex-1 flex-col gap-1">
+                <span className="font-medium">
+                  {h.planName}
+                  {h.status !== "active" && (
+                    <span className="text-muted-foreground ml-2 text-xs uppercase">
+                      {h.status}
+                    </span>
+                  )}
+                </span>
+                <span className="text-muted-foreground text-sm">
+                  {h.entityIds.length === 0
+                    ? "Covers no branch"
+                    : h.entityIds.map(nameOf).join(" · ")}
+                </span>
+                <span className="text-muted-foreground text-xs">
+                  From {h.startMonth}
+                  {h.assigningEntityId
+                    ? ` · added at ${nameOf(h.assigningEntityId)}`
+                    : ""}
+                </span>
+                {h.status === "active" && h.month && (
+                  <span className="text-muted-foreground text-xs">
+                    {h.monthLabel}
+                    {h.amount
+                      ? ` · ${formatMoney(h.amount.priceMinor, h.amount.currency)}`
+                      : ""}{" "}
+                    · {h.paid ? "paid" : "not paid yet"}
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap items-start justify-end gap-2">
+                {h.status === "active" && h.month && (
+                  <Button
+                    size="sm"
+                    variant={h.paid ? "outline" : "primary"}
+                    disabled={busy}
+                    onClick={() => {
+                      if (h.month) {
+                        mark.mutate({
+                          assignmentId: h.id,
+                          month: h.month,
+                          paid: !h.paid,
+                        });
+                      }
+                    }}
+                  >
+                    {h.paid ? "Undo paid" : "Mark paid"}
+                  </Button>
+                )}
+                {h.status === "active" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => pause.mutate({ id: h.id })}
+                  >
+                    Pause
+                  </Button>
+                )}
+                {h.status !== "cancelled" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => end.mutate({ id: h.id })}
+                  >
+                    End
+                  </Button>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {outcome && (
+        <div className="flex flex-col gap-1 text-sm">
+          {outcome.enrolled.length > 0 && (
+            <p>Added them at {outcome.enrolled.map(nameOf).join(", ")}.</p>
+          )}
+          {outcome.needsDecision.map((d) => (
+            <p key={d.entityId} className="text-brand-strong">
+              Their membership at {nameOf(d.entityId)} is {d.status}. Nothing
+              here changed it, so decide about that branch on its own.
+            </p>
+          ))}
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="flex min-w-48 flex-1 flex-col gap-1.5">
+          <label
+            htmlFor={`assign-${userId}`}
+            className="text-muted-foreground font-mono text-[10px] tracking-wide uppercase"
+          >
+            Give a membership
+          </label>
+          <Select
+            id={`assign-${userId}`}
+            value={picked}
+            disabled={busy || offerable.length === 0}
+            onChange={(e) => setPicked(e.target.value)}
+          >
+            <option value="">
+              {offerable.length === 0
+                ? "No other plan to give"
+                : "Pick a plan…"}
+            </option>
+            {offerable.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.priceMinor !== null && p.currency
+                  ? `${p.name} · ${formatMoney(p.priceMinor, p.currency)} a month`
+                  : `${p.name} · no price yet`}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <Button
+          size="sm"
+          disabled={busy || picked === ""}
+          onClick={() =>
+            assign.mutate({
+              userId,
+              planId: picked,
+              assigningEntityId: here,
+            })
+          }
+        >
+          {assign.isPending ? "Adding…" : "Add"}
+        </Button>
       </div>
     </div>
   );
@@ -564,7 +828,7 @@ function RoleControl({ m }: { m: Member }) {
     }),
   );
 
-  if (!isOwner(academy) || m.role === "owner" || m.status !== "active") {
+  if (!runsBranch(academy) || m.role === "owner" || m.status !== "active") {
     return <Detail term="Role" value={m.role} />;
   }
 

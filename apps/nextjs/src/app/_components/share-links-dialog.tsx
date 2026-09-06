@@ -5,7 +5,7 @@ import { useState } from "react";
 import dynamic from "next/dynamic";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { isOwner as isOwnerOf } from "@matops/domain";
+import { branchWords, runsBranch, shareActions } from "@matops/domain";
 import { Button } from "@matops/ui/button";
 import { CopyButton } from "@matops/ui/copy-button";
 import {
@@ -26,20 +26,29 @@ import { ErrorState } from "./states";
 
 const QrPoster = dynamic(() => import("./qr-poster").then((m) => m.QrPoster));
 
+const BOOKING_HINT =
+  "For someone who has never trained here. They pick a class and book it, with no account.";
+
 function absolute(path: string): string {
   if (typeof window === "undefined") return path;
   return `${window.location.origin}${path}`;
 }
 
 /**
- * The two links staff are asked for when someone messages the gym: "can I try a
+ * The links staff are asked for when someone messages the gym: "can I try a
  * class?" and "how do I sign up?". Reachable from the shell on every screen, so
- * answering is two taps rather than a walk into Settings, and both links sit
- * next to each other so nobody sends the wrong one. Staff, not owner-only.
+ * answering is two taps rather than a walk into Settings, and the links sit next
+ * to each other so nobody sends the wrong one. Staff, not owner-only.
  *
  * It copies the links rather than moving them: Settings keeps the public
- * booking setup and Members keeps the invite card, which are where an owner
+ * booking setup and the Roster keeps the invite card, which are where an owner
  * configures them. This is the place you reach with someone waiting for a reply.
+ *
+ * **Which links exist depends on the branch type (spec FP9).** Trial booking and
+ * the drop-in poster are BJJ promises: they hand a stranger a class to book and
+ * a visitor a lead record, and neither is a thing a weight room does. A general
+ * space shows the join link alone and never asks the server for public booking
+ * settings it has no screen to change.
  */
 export function ShareLinksDialog({ trigger }: { trigger: ReactNode }) {
   return (
@@ -56,51 +65,30 @@ export function ShareLinksDialog({ trigger }: { trigger: ReactNode }) {
   );
 }
 
+/**
+ * Every card loads on its own. Staff answering a message need whichever link
+ * works, and one failing query used to blank the dialog and hide the two that
+ * were fine.
+ */
 function ShareLinksBody() {
-  const trpc = useTRPC();
   const academy = useEntity();
-  const isOwner = isOwnerOf(academy);
-  const links = useQuery(trpc.academy.shareLinks.queryOptions());
-  const invites = useQuery(trpc.invite.list.queryOptions());
-
-  if (links.isPending || invites.isPending) return <SkeletonRows rows={2} />;
-  if (links.isError || invites.isError) {
-    return (
-      <ErrorState
-        label="your links"
-        onRetry={() => {
-          void links.refetch();
-          void invites.refetch();
-        }}
-      />
-    );
-  }
-
-  const invite = invites.data.find((i) => i.role === "student");
+  const isOwner = runsBranch(academy);
+  const actions = shareActions(academy.type);
 
   return (
     <div className="flex flex-col gap-3">
-      <BookingRow settings={links.data} isOwner={isOwner} />
-      <CheckInRow />
-      <JoinRow token={invite?.token ?? null} isOwner={isOwner} />
+      {actions.includes("booking") && <BookingRow isOwner={isOwner} />}
+      {actions.includes("checkin") && <CheckInRow />}
+      {actions.includes("join") && <JoinRow isOwner={isOwner} />}
     </div>
   );
 }
 
-function BookingRow({
-  settings,
-  isOwner,
-}: {
-  settings: {
-    bookingEnabled: boolean;
-    publicCode: string;
-    hasSharedClass: boolean;
-  };
-  isOwner: boolean;
-}) {
+function BookingRow({ isOwner }: { isOwner: boolean }) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const academyName = useEntity().name;
+  const links = useQuery(trpc.academy.shareLinks.queryOptions());
 
   const turnOn = useMutation(
     trpc.academy.setPublicApi.mutationOptions({
@@ -115,12 +103,30 @@ function BookingRow({
     }),
   );
 
+  if (links.isPending) {
+    return (
+      <LinkCard title="Book a trial" hint={BOOKING_HINT}>
+        <SkeletonRows rows={1} />
+      </LinkCard>
+    );
+  }
+
+  if (links.isError) {
+    return (
+      <LinkCard title="Book a trial" hint={BOOKING_HINT}>
+        <ErrorState
+          label="the booking link"
+          onRetry={() => void links.refetch()}
+        />
+      </LinkCard>
+    );
+  }
+
+  const settings = links.data;
+
   if (!settings.bookingEnabled) {
     return (
-      <LinkCard
-        title="Book a trial"
-        hint="For someone who has never trained here. They pick a class and book it, with no account."
-      >
+      <LinkCard title="Book a trial" hint={BOOKING_HINT}>
         <p className="text-muted-foreground text-sm">
           Public booking is off, so this link does not work yet.
           {!isOwner && " Ask the owner to turn it on in Settings."}
@@ -141,10 +147,7 @@ function BookingRow({
   }
 
   return (
-    <LinkCard
-      title="Book a trial"
-      hint="For someone who has never trained here. They pick a class and book it, with no account."
-    >
+    <LinkCard title="Book a trial" hint={BOOKING_HINT}>
       <LinkActions
         url={absolute(`/book/${settings.publicCode}`)}
         shareTitle={`Book a class at ${academyName}`}
@@ -183,16 +186,13 @@ function CheckInRow() {
   );
 }
 
-function JoinRow({
-  token,
-  isOwner,
-}: {
-  token: string | null;
-  isOwner: boolean;
-}) {
+function JoinRow({ isOwner }: { isOwner: boolean }) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const academyName = useEntity().name;
+  const { name: academyName, type } = useEntity();
+  const words = branchWords(type);
+  const invites = useQuery(trpc.invite.list.queryOptions());
+  const token = invites.data?.find((i) => i.role === "student")?.token ?? null;
 
   const create = useMutation(
     trpc.invite.create.mutationOptions({
@@ -202,16 +202,35 @@ function JoinRow({
     }),
   );
 
+  const hint =
+    "For someone who has decided to sign up. They land pending until an owner approves them.";
+
+  if (invites.isPending) {
+    return (
+      <LinkCard title={`Join the ${words.branch}`} hint={hint}>
+        <SkeletonRows rows={1} />
+      </LinkCard>
+    );
+  }
+
+  if (invites.isError) {
+    return (
+      <LinkCard title={`Join the ${words.branch}`} hint={hint}>
+        <ErrorState
+          label="the join link"
+          onRetry={() => void invites.refetch()}
+        />
+      </LinkCard>
+    );
+  }
+
   return (
-    <LinkCard
-      title="Join the academy"
-      hint="For someone who has decided to sign up. They land pending until an owner approves them."
-    >
+    <LinkCard title={`Join the ${words.branch}`} hint={hint}>
       {token ? (
         <LinkActions
           url={absolute(`/join/${token}`)}
           shareTitle={`Join ${academyName}`}
-          shareText="Here's your link to join our academy:"
+          shareText={`Here's your link to join our ${words.branch}:`}
           qrTitle={academyName}
           qrCaption="Scan to join"
           qrCodeLabel={`Join QR code for ${academyName}`}

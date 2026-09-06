@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 
-import { isOwner, isStaff } from "@matops/domain";
+import { isStaff, runsBranch } from "@matops/domain";
 
 import type { EntityPageProps } from "~/trpc/server";
 import { MembersScreen } from "~/app/_components/members-screen";
@@ -18,7 +18,7 @@ async function MembersData() {
 
   if (academy && isStaff(academy)) {
     prefetch(trpc.membership.members.queryOptions());
-    if (isOwner(academy)) {
+    if (runsBranch(academy)) {
       prefetch(trpc.dropIn.list.queryOptions());
       prefetch(trpc.membership.archived.queryOptions());
     }

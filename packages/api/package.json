@@ -18,6 +18,10 @@
     "./notify": {
       "types": "./src/notify.ts",
       "default": "./src/notify.ts"
+    },
+    "./membership-sweep": {
+      "types": "./src/membership-sweep.ts",
+      "default": "./src/membership-sweep.ts"
     }
   },
   "license": "MIT",

@@ -32,3 +32,6 @@ export * from "./public-api";
 export * from "./curriculum";
 // Idempotent organization setup (entity, profile, owner membership, track).
 export * from "./provision";
+export * from "./schedule-guard";
+export * from "./product-event";
+export * from "./product-report";

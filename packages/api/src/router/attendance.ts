@@ -1,8 +1,17 @@
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
-import type { TenantTx } from "@matops/db";
-import { and, createDropIn, eq, inArray, ne } from "@matops/db";
+import type { DbExec, TenantTx } from "@matops/db";
+import {
+  and,
+  createDropIn,
+  eq,
+  eventRole,
+  inArray,
+  ne,
+  recordActivity,
+  recordMilestone,
+} from "@matops/db";
 import {
   classParticipation,
   dropIn,
@@ -23,7 +32,7 @@ import {
   MarkVisitorSchema,
 } from "@matops/validators";
 
-import { requireClassFacts } from "../classes";
+import { claimSeatIfStrict, requireClassFacts, SESSION_FULL } from "../classes";
 import { requireMembership, rosterOf } from "../members";
 import { staffIdentityProcedure, staffProcedure } from "../trpc";
 
@@ -109,6 +118,7 @@ export const attendanceRouter = {
           message: "This person hasn't booked — add them as a walk-in instead",
         });
       }
+      if (present) recordAttendance(ctx);
       return { ok: true as const };
     }),
 
@@ -147,6 +157,7 @@ export const attendanceRouter = {
             inArray(classParticipation.studentId, targets),
           ),
         );
+      recordAttendance(ctx);
       return { marked: targets.length };
     }),
 
@@ -168,6 +179,38 @@ export const attendanceRouter = {
         "That person is not a member of this academy",
       );
       const now = new Date();
+      // Admitting somebody at the desk takes a place in a STRICT room, the same
+      // as booking one, unless they already hold one. Two rules meet here and
+      // both are kept: marking an existing booking present must not claim a
+      // second place, and at a BJJ academy a walk-in has never moved the count
+      // at all, which `booking-count.test.ts` holds (ADR 126).
+      const [held] = await ctx.db
+        .select({
+          status: classParticipation.bookingStatus,
+          tier: classParticipation.bookingTier,
+        })
+        .from(classParticipation)
+        .where(
+          and(
+            eq(classParticipation.classId, input.classId),
+            eq(classParticipation.studentId, input.studentId),
+          ),
+        );
+      // A row only protects a place when it actually holds one. A cancelled
+      // booking gave its place back and a provisional one never took a place,
+      // so admitting either at the desk claims one like anybody else.
+      const holdsSeat =
+        held !== undefined &&
+        held.status !== "cancelled" &&
+        held.tier === "confirmed";
+      let claimed = false;
+      if (!holdsSeat) {
+        const seat = await claimSeatIfStrict(ctx.db, input.classId);
+        if (!seat.took) {
+          throw new TRPCError({ code: "CONFLICT", message: SESSION_FULL });
+        }
+        claimed = seat.strict;
+      }
       await ctx.db
         .insert(classParticipation)
         .values({
@@ -181,13 +224,26 @@ export const attendanceRouter = {
           markedBy: ctx.session.user.id,
         })
         .onConflictDoUpdate({
-          // If they DID book, keep booking_status — just mark them present.
+          // If they DID book, keep booking_status — just mark them present. A
+          // place this admission just claimed is written onto the row, or the
+          // next admission of the same person would take a second one.
           target: [classParticipation.classId, classParticipation.studentId],
-          set: {
-            attendanceStatus: "present",
-            attendedAt: now,
-            markedBy: ctx.session.user.id,
-          },
+          set: claimed
+            ? {
+                bookingStatus:
+                  held?.status === "cancelled"
+                    ? "none"
+                    : (held?.status ?? "none"),
+                bookingTier: "confirmed",
+                attendanceStatus: "present",
+                attendedAt: now,
+                markedBy: ctx.session.user.id,
+              }
+            : {
+                attendanceStatus: "present",
+                attendedAt: now,
+                markedBy: ctx.session.user.id,
+              },
         });
       return { ok: true as const };
     }),
@@ -254,6 +310,24 @@ export const attendanceRouter = {
       return { ok: true as const };
     }),
 } satisfies TRPCRouterRecord;
+
+function recordAttendance(ctx: {
+  organizationId: string;
+  entityId: string;
+  membership: { role: string };
+  afterCommit: (task: (exec: DbExec) => Promise<void>) => void;
+}) {
+  ctx.afterCommit(async (exec) => {
+    const event = {
+      organizationId: ctx.organizationId,
+      entityId: ctx.entityId,
+      actorRole: eventRole(ctx.membership.role),
+    };
+    await recordMilestone({ ...event, name: "first_attendance" }, exec);
+    await recordActivity({ ...event, name: "student_attendance" }, exec);
+    await recordActivity({ ...event, name: "staff_action" }, exec);
+  });
+}
 
 /** Load the class and assert it is inside the attendance backfill window (O5). */
 async function assertMarkable(db: TenantTx, classId: string) {

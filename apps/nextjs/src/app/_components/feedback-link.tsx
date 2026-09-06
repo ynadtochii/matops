@@ -2,18 +2,24 @@
 
 import { usePathname } from "next/navigation";
 
-import { useEntity } from "./entity";
+import { useEntityMaybe } from "./entity";
 
 const FEEDBACK_EMAIL = "yevhenii.tech@gmail.com";
 
 /** Report a bug from where it happened, with the context prefilled. */
 export function FeedbackLink({ className }: { className?: string }) {
-  const { name, academyId, role } = useEntity();
+  // Null on the organization screens, which name no branch.
+  const entity = useEntityMaybe();
   const pathname = usePathname();
 
-  const subject = encodeURIComponent(`MatOps feedback: ${name}`);
+  const subject = encodeURIComponent(
+    `MatOps feedback: ${entity?.name ?? "the gym"}`,
+  );
+  const where = entity
+    ? `Academy: ${entity.name} (${entity.academyId})\nRole: ${entity.role}\n`
+    : "";
   const body = encodeURIComponent(
-    `What happened?\n\n\nWhat did you expect?\n\n\n---\nAcademy: ${name} (${academyId})\nRole: ${role}\nScreen: ${pathname}\n`,
+    `What happened?\n\n\nWhat did you expect?\n\n\n---\n${where}Screen: ${pathname}\n`,
   );
 
   return (

@@ -2,6 +2,95 @@
 
 # matops — Roadmap (live plan + scope matrix)
 
+**Built: the manager runs every branch, and a plan change waits for the 1st (v7.7)**
+
+Status: **built, not clicked through and the suites not run here**. Static gates green (`pnpm typecheck` 17/17, `pnpm lint` 15/15). **Tests were run** (2026-09-06, twice): the workspace suite is **green, 1611 tests across 130 files**. It had 25 failures on the baseline `b237f03`; this release fixed every one and introduced none. Migration `0065` is **applied to dev** (64 rows against 64 journal entries, checked 2026-09-06) and verified live: `end_month` nullable, the lifetime unique index replaced by the partial one on `(plan_id, user_id, start_month)`, `access_assignment_change` with its checks, six foreign keys and partial unique index, RLS on with all four `matops_app` grants, and all 15 existing assignments still open-ended. Product rules: MB1-MB8 in [spec.md](/Users/kuna/projects/matops/docs/spec.md). Decisions: [ADR 129](/Users/kuna/projects/matops/docs/issues/129-the-manager-runs-every-branch.md). Plan: [PLAN.md](/Users/kuna/projects/matops/PLAN.md).
+
+| Slice                                              | DB   | API  | Web  | Mob  | Shared | Infra |
+| -------------------------------------------------- | ---- | ---- | ---- | ---- | ------ | ----- |
+| Manager capabilities at every branch               | n/a  | done | done | n/a  | done   | n/a   |
+| Coverage as one workflow                           | n/a  | done | done | n/a  | n/a    | n/a   |
+| Next-month plan replacement                        | done | done | done | done | done   | n/a   |
+| Bookings needing review, never cancelled           | n/a  | done | done | n/a  | done   | n/a   |
+| Gym and branch navigation together                 | n/a  | done | done | n/a  | done   | n/a   |
+| People, Staff and person tasks in one screen       | n/a  | done | done | n/a  | done   | n/a   |
+| Daily work first on the overview and in setup      | n/a  | done | done | n/a  | done   | n/a   |
+| The mobile branch picker beside the schedule       | n/a  | n/a  | n/a  | done | n/a    | n/a   |
+
+- [x] Write ADR 129 and carry it into the spec, the map, the changelog and this file.
+- [x] Build the eight slices and hand the focused test commands over.
+- [x] Run the focused suites listed in [PLAN.md](/Users/kuna/projects/matops/PLAN.md), and the whole workspace suite. Green, twice.
+- [x] Apply `0065` to dev, then check the applied count against `_journal.json`.
+- [ ] Walk the manual acceptance list: zero-branch setup, single-branch owner, multi-branch manager, branch instructor and student, plus the outstanding Expo device checklist. These stay human work.
+
+A manager is no longer stopped at the organization: they run every live branch without a membership there, and the four destructive actions stay with owners. Membership coverage and plan changes become single workflows, and losing coverage stops meaning a cancelled booking.
+
+**Built: finishing the organization pivot (v7.6)**
+
+Status: **built, not clicked through and the suites not run here**. Static gates green (`pnpm typecheck` 17/17, `pnpm lint` 15/15). Migrations `0060` to `0064` are **applied to dev** (63 rows against 63 journal entries, checked 2026-09-04); two hand-run fills are outstanding, `2026-09-04-general-branches-backfill.sql` and `2026-09-04-paid-commitment.sql`. Product rules: FP1-FP10 in [spec.md](/Users/kuna/projects/matops/docs/spec.md). Decisions: [ADR 128](/Users/kuna/projects/matops/docs/issues/128-registration-creates-the-organization-only.md). Plan: [PLAN.md](/Users/kuna/projects/matops/PLAN.md). Loop state, one item per run: [EPIC.md](/Users/kuna/projects/matops/EPIC.md). Migrations start at `0060`; `0059` is reserved for the delayed `payment_settings.bank_details` drop and is not reused.
+
+| Slice                                              | DB   | API  | Web  | Mob  | Shared | Infra |
+| -------------------------------------------------- | ---- | ---- | ---- | ---- | ------ | ----- |
+| Organization-only creation                         | done | done | done | n/a  | n/a    | n/a   |
+| The zero-branch organization shell                 | n/a  | done | done | n/a  | n/a    | n/a   |
+| First-branch creation and branch capabilities      | done | done | done | n/a  | n/a    | n/a   |
+| The guided setup journey                           | n/a  | done | done | n/a  | done   | n/a   |
+| Membership prices and price history                | done | done | done | done | done   | n/a   |
+| Organization people and bulk migration             | n/a  | done | done | n/a  | done   | n/a   |
+| Organization manager permissions                   | n/a  | done | done | n/a  | done   | n/a   |
+| Legacy dues out of normal use                      | n/a  | done | done | n/a  | n/a    | n/a   |
+| Type-aware branch surfaces                         | n/a  | done | done | done | done   | n/a   |
+| Product entry, commercial state and measurement    | done | done | done | n/a  | done   | done  |
+
+- [x] Write ADR 128 and carry it into the spec, the architecture doc, the map and this file.
+- [x] Build the ten slices, one epic item per run, and hand the focused test commands over.
+- [x] Apply `0060` and the migrations after it to dev in order, then check the applied count against `_journal.json`. Note that the file set skips `0051`, so a contiguous-run check reports a migration that never existed.
+- [x] Run the focused suites listed in [EPIC.md](/Users/kuna/projects/matops/EPIC.md)'s log. Run with the whole workspace suite in v7.7, which fixed the 25 failures v7.5 and v7.6 left behind.
+- [ ] Run the two hand-run fills under `packages/db/scripts`.
+- [ ] Walk the manual acceptance list: the BJJ-only journey, organization-only registration, BJJ plus a general space, denied actions per role, and the outstanding Expo device checklist. These stay human work.
+
+Registration stops creating a mat, so an organization with no branch becomes a normal state rather than a failed write. Every new branch runs the shared membership gate from creation; legacy branch dues survive only to migrate and roll back the branches that predate the cutover.
+
+**Built: the owner level (v7.5)**
+
+Status: **built**. Static gates green (`pnpm typecheck` 17/17, `pnpm lint` 15/15), suites green (**1441 tests across 118 files**: domain 658, api 565, db 179, validators 36, notifications 3), and migrations `0057` and `0058` applied to **dev** with the bank-details fill run there and a second run writing nothing. Two things are open: nobody has walked the pilot gym, and `0059` drops `payment_settings.bank_details` one deploy after this reaches production. Product rules: OD1-OD7 in [spec.md](/Users/kuna/projects/matops/docs/spec.md). Decisions: [ADR 127](/Users/kuna/projects/matops/docs/issues/127-the-owner-level.md). Run file with one checkbox per run: [owner-dashboard-plan.md](/Users/kuna/projects/matops/docs/owner-dashboard-plan.md). Files, signatures, UI copy and named test cases: [owner-dashboard-detailed-plan.md](/Users/kuna/projects/matops/docs/owner-dashboard-detailed-plan.md). Migrations `0057` and `0058` add one column each; `0059` drops `payment_settings.bank_details` one deploy later. No feature flag: every slice is additive until the branch Payments screen retires, and that touches only branches an owner has switched on.
+
+| Slice                                      | DB   | API  | Web  | Mob  | Shared | Infra |
+| ------------------------------------------ | ---- | ---- | ---- | ---- | ------ | ----- |
+| Organization shell                         | n/a  | n/a  | done | n/a  | n/a    | n/a   |
+| One bank account and organization Settings | done | done | done | done | n/a    | n/a   |
+| The claim                                  | done | done | done | done | done   | n/a   |
+| Activation and branch Payments retired     | n/a  | done | done | done | n/a    | done  |
+| Staff across branches                      | n/a  | done | done | n/a  | done   | n/a   |
+| Announce to every branch                   | n/a  | done | done | n/a  | done   | n/a   |
+
+- [x] Settle the decisions with the owner: curriculum stays per branch, one bank account per organization, branch Payments retires at activation, activation becomes a procedure, logo upload and organization delete are out.
+- [x] Write ADR 127 and the detailed plan.
+- [x] Build slices 1 to 6 and hand the test commands over.
+- [x] Apply `0057` and `0058` to dev, run the suites, flip these cells and the spec block to as-built.
+- [ ] Walk the pilot organization on dev, then drop `payment_settings.bank_details` in a later deploy (`0059`).
+
+**Built: general branches and shared memberships (v7.4)**
+
+Status: **built and behind a flag**. `organization.general_branches_enabled` is off everywhere except the pilot, so no existing gym can open a general branch until somebody turns it on. **v7.6 changes that**: migration `0060` makes the column default true and the existing live organizations are filled by hand, because the membership and booking path this flag was waiting on is built (ADR 128). Migrations `0049`-`0056` are applied to **dev**, not production. Product rules: GB1-GB9 in [spec.md](/Users/kuna/projects/matops/docs/spec.md). Decisions: [ADR 126](/Users/kuna/projects/matops/docs/issues/126-a-branch-is-not-always-a-mat.md). Scope, the delivery record with a log entry per step, the acceptance coverage map and the two known gaps: [implementation plan](/Users/kuna/projects/matops/docs/general-branches-memberships-plan.md). One step is still open: the manual acceptance walkthrough (6.3) needs a person.
+
+| Slice                                                          | DB   | API  | Web  | Mob  | Shared | Infra |
+| -------------------------------------------------------------- | ---- | ---- | ---- | ---- | ------ | ----- |
+| General entity creation and shared schedule                    | done | done | done | done | done   | n/a   |
+| Organization plan catalog and entity member-profile assignment | done | done | done | n/a  | done   | n/a   |
+| Manual monthly status, grace, warnings, and cancellation sweep | done | done | done | done | done   | done  |
+| Membership eligibility and general-space booking               | done | done | done | done | done   | n/a   |
+| Owner member directory and business overview                   | n/a  | done | done | done | done   | n/a   |
+| Access backfill, compatibility, and pilot checks               | done | n/a  | n/a  | n/a  | n/a    | done  |
+
+- [x] Document organization-level creation, member-profile assignment, entity member lists, and owner reporting.
+- [x] Confirm mid-month enrollment: seven days to pay from joining, then the first-of-month cycle.
+- [x] Resolve timezone and non-payment cancellation details; record an implementation ADR. The calendar zone is the organization's, on `membership_policy`; grace covers unpaid renewal only; ADR 126.
+- [x] Implement the slices. Every numbered step in the plan is ticked but 6.3.
+- [ ] Verify the plan's acceptance checks. 25 of 36 lines have an automated test and one was checked live on dev; eight need a person, and one of those cannot be automated here at all, since two concurrent requests for the last place need a two-connection Postgres and the harness runs single-connection PGlite.
+
+Manual paid/unpaid tracking is included. Payment processing and automatic collection remain excluded. Review legacy payment-gate compatibility before activating existing branches. Organization people totals must deduplicate members across entities.
+
 > **How to use.** Build **top to bottom**. Each slice is vertical (DB → API → client) and ends shippable.
 > Flip cells as you go: **`—`** not needed · **`todo`** · **`wip`** · **`done`**. Every flip to `done` must pass the [Definition of Done](delivery.md#4-definition-of-done-the-anti-drift-gate).
 > Surfaces: **DB · API · Web · Mob · Sh(ared) · Inf(ra)**. Spec IDs trace up to [spec.md](spec.md); tickets to [map.md](map.md).
@@ -62,7 +151,7 @@ One row per slice. This is the single answer to _"what's left, on which surface?
 | 1.5   | Members (approve/remove/suspend, promote co-owner)                     | done | done | done | —    | —    | —     |
 | 1.6   | Multi-academy switcher                                                 | —    | done | done | done | —    | —     |
 | 1.7   | Numeric academy code join (mobile v1)                                  | done | done | done | done | done | —     |
-| 1.8   | Social login — Google (web; mobile deferred)                           | —    | done | done | —    | done | wip   |
+| 1.8   | Social login — Google (web; mobile deferred)                           | —    | done | done | —    | done | done  |
 | **2** | **Scheduling core**                                                    |      |      |      |      |      |       |
 | 2.1   | Class templates CRUD (recurring)                                       | done | done | done | —    | done | —     |
 | 2.2   | Materialization (lazy on save + heal on read; **no cron** — ADR 46/75) | done | done | —    | —    | —    | —     |

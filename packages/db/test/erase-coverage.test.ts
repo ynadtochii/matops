@@ -27,6 +27,10 @@ const NOT_MEMBER_DATA: Record<string, string> = {
     "The place's own settings: its booking switch, its API key, its curriculum visibility. Not member data (ADR 124).",
   tenant_probe:
     "The seed:health probe row. Not member data and not reachable by a member.",
+  access_plan_entity:
+    "Which branches one of the gym's membership plans covers. It is the plan's own shape, not anybody's membership of it (ADR 126).",
+  product_event:
+    "A count of what happened, naming the gym, the branch and a role. It holds no user id and no personal field, so a member has nothing in it to erase (ADR 128).",
 };
 
 const ERASE_SOURCE = fileURLToPath(new URL("../src/erase.ts", import.meta.url));

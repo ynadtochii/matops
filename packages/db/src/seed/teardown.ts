@@ -13,6 +13,10 @@ import type { SeedExec } from "./registry";
 import {
   academyInvite,
   academyProfile,
+  accessAssignment,
+  accessAssignmentChange,
+  accessPlan,
+  accessPlanEntity,
   account,
   classInstance,
   classParticipation,
@@ -30,7 +34,10 @@ import {
   memberRank,
   memberReferral,
   memberReferralAudit,
+  membershipMonth,
+  membershipMonthAudit,
   membershipPlan,
+  membershipPolicy,
   organization,
   paymentClaim,
   paymentSettings,
@@ -132,6 +139,43 @@ export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
   );
   await del("curriculum_track", () =>
     exec.delete(curriculumTrack).where(inArray(curriculumTrack.academyId, ids)),
+  );
+
+  // Shared memberships, scoped by the seed org id (ADR 126). Children first:
+  // the months and the audit hang off an assignment, and `access_plan_entity`
+  // holds a composite key to `entity`, so all of it goes before the entity does.
+  await del("membership_month_audit", () =>
+    exec
+      .delete(membershipMonthAudit)
+      .where(inArray(membershipMonthAudit.organizationId, orgIds)),
+  );
+  await del("membership_month", () =>
+    exec
+      .delete(membershipMonth)
+      .where(inArray(membershipMonth.organizationId, orgIds)),
+  );
+  await del("access_assignment_change", () =>
+    exec
+      .delete(accessAssignmentChange)
+      .where(inArray(accessAssignmentChange.organizationId, orgIds)),
+  );
+  await del("access_assignment", () =>
+    exec
+      .delete(accessAssignment)
+      .where(inArray(accessAssignment.organizationId, orgIds)),
+  );
+  await del("access_plan_entity", () =>
+    exec
+      .delete(accessPlanEntity)
+      .where(inArray(accessPlanEntity.organizationId, orgIds)),
+  );
+  await del("membership_policy", () =>
+    exec
+      .delete(membershipPolicy)
+      .where(inArray(membershipPolicy.organizationId, orgIds)),
+  );
+  await del("access_plan", () =>
+    exec.delete(accessPlan).where(inArray(accessPlan.organizationId, orgIds)),
   );
 
   // Entity foundation rows, scoped by the seed org id (ADR 124). Membership and

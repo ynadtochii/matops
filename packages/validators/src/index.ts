@@ -1,4 +1,5 @@
 export * from "./fields";
+export * from "./access-plan";
 export * from "./scheduling";
 export * from "./booking";
 export * from "./checkin";

@@ -11,7 +11,8 @@ import {
 } from "@matops/domain";
 import { CheckInSchema } from "@matops/validators";
 
-import { claimSeat, requireClassFacts } from "../classes";
+import { claimSeat, requireClassFacts, SESSION_FULL } from "../classes";
+import { bookingGate } from "../payments-gate";
 import { enrolledProcedure } from "../trpc";
 
 /**
@@ -81,6 +82,24 @@ export const checkinRouter = {
       const me = ctx.session.user.id;
       const now = new Date();
 
+      // The door runs the same gate as the booking screen (ADR 126). Without
+      // it a QR scan is a way round it: check-in books as well as marks
+      // present, so an unpaid or uncovered member would let themselves in.
+      if (tier === "confirmed" || ctx.entity.membershipEnforcedAt) {
+        const gate = await bookingGate(ctx.db, {
+          entity: ctx.entity,
+          membership: ctx.membership,
+          userId: me,
+          sessionAt: cls.startsAt,
+        });
+        if (gate.locked) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: gate.message ?? "Booking is locked for you.",
+          });
+        }
+      }
+
       // Read the caller's current row (if any) to know whether this check-in is a
       // NEW booking transition — that decides the confirmed-count increment. A
       // single user tapping once; a rare double-tap self-race is corrected by the
@@ -124,7 +143,14 @@ export const checkinRouter = {
         });
 
       if (willBook && tier === "confirmed") {
-        await claimSeat(ctx.db, input.classId);
+        // A full session is full at the door too: staff standing there does not
+        // conjure a place, and the room only holds so many (ADR 126). The throw
+        // rolls the participation row above back with it. A `soft` class never
+        // refuses, so a BJJ walk-in is unchanged.
+        const took = await claimSeat(ctx.db, input.classId);
+        if (!took) {
+          throw new TRPCError({ code: "CONFLICT", message: SESSION_FULL });
+        }
       }
 
       return { ok: true as const, tier, booked: willBook };

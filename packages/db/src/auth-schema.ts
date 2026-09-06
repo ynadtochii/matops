@@ -1,7 +1,9 @@
 import { relations } from "drizzle-orm";
 import {
   boolean,
+  date,
   index,
+  integer,
   pgTable,
   text,
   timestamp,
@@ -90,6 +92,15 @@ export const organization = pgTable("organization", {
   createdAt: timestamp("created_at").notNull(),
   metadata: text("metadata"),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  generalBranchesEnabled: boolean("general_branches_enabled")
+    .notNull()
+    .default(true),
+  offer: text("offer").notNull().default("pilot"),
+  pilotEndsOn: date("pilot_ends_on"),
+  agreedPriceMinor: integer("agreed_price_minor"),
+  agreedPriceCurrency: text("agreed_price_currency"),
+  billingContact: text("billing_contact"),
+  accountStatus: text("account_status").notNull().default("active"),
 });
 
 export const member = pgTable(

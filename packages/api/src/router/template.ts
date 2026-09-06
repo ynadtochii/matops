@@ -1,19 +1,34 @@
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
+import type { SQL, TenantTx } from "@matops/db";
 import {
   and,
   desc,
   eq,
+  eventRole,
   getTableColumns,
   gt,
   isNull,
+  lockBranchSchedule,
   materializeTemplate,
+  overlappingSessions,
   planRebuild,
   rebuildSchedule,
+  recordActivity,
+  recordMilestone,
+  ScheduleOverlapError,
 } from "@matops/db";
 import { classInstance, classTemplate, user } from "@matops/db/schema";
-import { normalizeDaysOfWeek, templateEditStrategy } from "@matops/domain";
+import {
+  capacityPolicyFor,
+  firstClash,
+  instructorForNewSession,
+  isBjjAcademy,
+  isGeneralSpace,
+  normalizeDaysOfWeek,
+  templateEditStrategy,
+} from "@matops/domain";
 import {
   CreateClassTemplateSchema,
   TemplateIdSchema,
@@ -22,8 +37,8 @@ import {
 } from "@matops/validators";
 
 import { requireInstructor } from "../members";
-import { TEMPLATE_NOT_FOUND } from "../messages";
-import { ownerProcedure, staffProcedure } from "../trpc";
+import { ROOM_TAKEN, TEMPLATE_NOT_FOUND } from "../messages";
+import { branchManagerProcedure, staffProcedure } from "../trpc";
 
 /**
  * Recurring class templates (spec O3, docs/issues/08, 16). Staff-only CRUD.
@@ -34,6 +49,68 @@ import { ownerProcedure, staffProcedure } from "../trpc";
  * academy_id. Slice 2.2 wires lazy materialization into create/update; here the
  * rows just persist.
  */
+/**
+ * Refuse an in-place edit that would make the template's own sessions collide
+ * with something else in the room.
+ *
+ * `materializeTemplate` guards the timing edit, which regenerates. A content
+ * edit writes over the existing rows instead, and a longer duration is a
+ * content edit that still reaches into the next session's slot, so it needs the
+ * same check on the rows it is about to change (ADR 126). A BJJ academy runs
+ * two mats at once and is not asked.
+ */
+async function assertRoomFreeAfterEdit(
+  ctx: { db: TenantTx; academyId: string; entity: { type: string } },
+  durationMinutes: number,
+  affected: SQL | undefined,
+): Promise<void> {
+  if (!isGeneralSpace(ctx.entity.type)) return;
+  await lockBranchSchedule(ctx.db, ctx.academyId);
+  const proposed = (
+    await ctx.db
+      .select({ id: classInstance.id, startsAt: classInstance.startsAt })
+      .from(classInstance)
+      .where(affected)
+  ).map((c) => ({ id: c.id, startsAt: c.startsAt, durationMinutes }));
+  if (proposed.length === 0) return;
+  const clash = firstClash(
+    proposed,
+    await overlappingSessions(ctx.db, ctx.academyId, proposed),
+  );
+  if (clash) throw new TRPCError({ code: "CONFLICT", message: ROOM_TAKEN });
+}
+
+/**
+ * Fill a template's classes, turning a room clash into a sentence.
+ *
+ * The throw rolls the whole request back, template row included, so a save that
+ * cannot produce its sessions never leaves a half-made template behind.
+ */
+async function fillOrRefuse(
+  ...args: Parameters<typeof materializeTemplate>
+): Promise<number> {
+  try {
+    return await materializeTemplate(...args);
+  } catch (error) {
+    if (error instanceof ScheduleOverlapError) {
+      throw new TRPCError({ code: "CONFLICT", message: error.message });
+    }
+    throw error;
+  }
+}
+
+/**
+ * The track this template teaches from. A general space has no curriculum at
+ * all, so it gets none whatever the client sends (ADR 126); at a BJJ academy a
+ * missing id means the academy's default track.
+ */
+function trackFor(
+  type: string,
+  sent: string | null | undefined,
+): string | null {
+  return isBjjAcademy(type) ? (sent ?? null) : null;
+}
+
 export const templateRouter = {
   /** All live templates for the active academy, newest first. */
   list: staffProcedure.query(({ ctx }) => {
@@ -48,22 +125,32 @@ export const templateRouter = {
       .orderBy(desc(classTemplate.createdAt));
   }),
 
-  /** Create a recurring template. `instructorId` defaults to the acting staff member. */
+  /**
+   * Create a recurring template. At a BJJ academy `instructorId` defaults to the
+   * acting staff member; a general space leaves it unset (ADR 126).
+   */
   create: staffProcedure
     .input(CreateClassTemplateSchema)
     .mutation(async ({ ctx, input }) => {
-      const instructorId = input.instructorId ?? ctx.session.user.id;
-      if (instructorId !== ctx.session.user.id) {
+      const instructorId = instructorForNewSession(
+        ctx.entity.type,
+        input.instructorId,
+        ctx.session.user.id,
+      );
+      if (instructorId !== null && instructorId !== ctx.session.user.id) {
         await requireInstructor(ctx, instructorId);
       }
+      const trackId = trackFor(ctx.entity.type, input.curriculumTrackId);
       const [row] = await ctx.db
         .insert(classTemplate)
         .values({
           academyId: ctx.academyId,
           instructorId,
           title: input.title,
+          description: input.description,
           discipline: input.discipline ?? null,
-          curriculumTrackId: input.curriculumTrackId ?? null,
+          curriculumTrackId: trackId,
+          capacityPolicy: capacityPolicyFor(ctx.entity.type),
           daysOfWeek: normalizeDaysOfWeek(input.daysOfWeek),
           startsAtMinutes: input.startsAtMinutes,
           durationMinutes: input.durationMinutes,
@@ -74,7 +161,16 @@ export const templateRouter = {
         .returning();
       // Lazy materialization (docs/issues/16): fill the near-term classes in the
       // same request/tx (RLS-scoped to this academy) so they appear immediately.
-      if (row) await materializeTemplate(ctx.db, row);
+      if (row) await fillOrRefuse(ctx.db, row);
+      ctx.afterCommit(async (exec) => {
+        const event = {
+          organizationId: ctx.organizationId,
+          entityId: ctx.entityId,
+          actorRole: eventRole(ctx.membership.role),
+        };
+        await recordMilestone({ ...event, name: "first_schedule" }, exec);
+        await recordActivity({ ...event, name: "staff_action" }, exec);
+      });
       return row;
     }),
 
@@ -103,10 +199,16 @@ export const templateRouter = {
         });
       }
 
-      const instructorId = input.instructorId ?? prev.instructorId;
-      if (instructorId !== prev.instructorId) {
+      // `null` is an answer: "nobody teaches this". Only a MISSING field falls
+      // back to the coach the template already had.
+      const instructorId =
+        input.instructorId === undefined
+          ? prev.instructorId
+          : input.instructorId;
+      if (instructorId !== null && instructorId !== prev.instructorId) {
         await requireInstructor(ctx, instructorId);
       }
+      const trackId = trackFor(ctx.entity.type, input.curriculumTrackId);
 
       const [row] = await ctx.db
         .update(classTemplate)
@@ -115,8 +217,10 @@ export const templateRouter = {
           // sends nothing must not hand the template to whoever opened the form.
           instructorId,
           title: input.title,
+          description: input.description,
           discipline: input.discipline ?? null,
-          curriculumTrackId: input.curriculumTrackId ?? null,
+          curriculumTrackId: trackId,
+          capacityPolicy: capacityPolicyFor(ctx.entity.type),
           daysOfWeek: normalizeDaysOfWeek(input.daysOfWeek),
           startsAtMinutes: input.startsAtMinutes,
           durationMinutes: input.durationMinutes,
@@ -152,16 +256,24 @@ export const templateRouter = {
           .update(classInstance)
           .set({ status: "cancelled" })
           .where(futureScheduled);
-        await materializeTemplate(
+        await fillOrRefuse(
           ctx.db,
           { ...row, generatedUntil: null },
           { now, reviveCancelled: true },
         );
       } else if (strategy === "update-in-place") {
+        if (row.durationMinutes !== prev.durationMinutes) {
+          await assertRoomFreeAfterEdit(
+            ctx,
+            row.durationMinutes,
+            futureScheduled,
+          );
+        }
         await ctx.db
           .update(classInstance)
           .set({
             title: row.title,
+            description: row.description,
             discipline: row.discipline,
             instructorId: row.instructorId,
             durationMinutes: row.durationMinutes,
@@ -191,7 +303,7 @@ export const templateRouter = {
         });
       }
       // Resuming fills the horizon at once so classes reappear immediately (O2).
-      if (row.status === "active") await materializeTemplate(ctx.db, row);
+      if (row.status === "active") await fillOrRefuse(ctx.db, row);
       return row;
     }),
 
@@ -236,7 +348,7 @@ export const templateRouter = {
    * What a rebuild would remove, so the confirm dialog can name the damage
    * before the owner commits to it. Reads only.
    */
-  rebuildPreview: ownerProcedure.query(async ({ ctx }) => {
+  rebuildPreview: branchManagerProcedure.query(async ({ ctx }) => {
     const { ids, bookings } = await planRebuild(ctx.db);
     return { toDelete: ids.length, bookingsAffected: bookings };
   }),
@@ -247,5 +359,7 @@ export const templateRouter = {
    * everyone's calendar. Past classes and their attendance are never touched,
    * and a one-off the owner entered by hand survives.
    */
-  rebuild: ownerProcedure.mutation(({ ctx }) => rebuildSchedule(ctx.db)),
+  rebuild: branchManagerProcedure.mutation(({ ctx }) =>
+    rebuildSchedule(ctx.db),
+  ),
 } satisfies TRPCRouterRecord;

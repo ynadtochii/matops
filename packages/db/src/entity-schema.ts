@@ -48,6 +48,12 @@ export const entity = pgTable(
     mapUrl: t.text(),
     publicCode: t.text().notNull().unique(),
     status: t.text().notNull().default("active"),
+    /**
+     * When shared memberships started deciding access here (ADR 126). Null
+     * means the LEGACY branch dues gate still decides, so an existing academy
+     * is never locked by a deploy. The two gates never both apply.
+     */
+    membershipEnforcedAt: t.timestamp({ withTimezone: true }),
     createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: t
       .timestamp({ withTimezone: true })
@@ -63,7 +69,10 @@ export const entity = pgTable(
       .on(table.organizationId)
       .where(sql`is_default and deleted_at is null`),
     index("entity_by_org").on(table.organizationId),
-    check("entity_type_supported", sql`type in ('bjj_academy')`),
+    check(
+      "entity_type_supported",
+      sql`type in ('bjj_academy','general_space')`,
+    ),
   ],
 );
 

@@ -1,4 +1,5 @@
 import { academyRouter } from "./router/academy";
+import { accessPlanRouter } from "./router/accessPlan";
 import { accountRouter } from "./router/account";
 import { attendanceRouter } from "./router/attendance";
 import { authRouter } from "./router/auth";
@@ -12,6 +13,7 @@ import { inviteRouter } from "./router/invite";
 import { membershipRouter } from "./router/membership";
 import { noteRouter } from "./router/note";
 import { notificationRouter } from "./router/notification";
+import { organizationRouter } from "./router/organization";
 import { paymentsRouter } from "./router/payments";
 import { pushTokenRouter } from "./router/pushToken";
 import { rankRouter } from "./router/rank";
@@ -25,6 +27,8 @@ export const appRouter = createTRPCRouter({
   auth: authRouter,
   academy: academyRouter,
   entity: entityRouter,
+  organization: organizationRouter,
+  accessPlan: accessPlanRouter,
   account: accountRouter,
   invite: inviteRouter,
   membership: membershipRouter,

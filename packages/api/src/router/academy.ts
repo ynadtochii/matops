@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto";
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod/v4";
@@ -8,10 +7,9 @@ import {
   getAcademyCode,
   getAcademySettings,
   getPublicApiSettings,
+  hasLegacyDuesAt,
   listMembershipsForUser,
   listPublicClasses,
-  organizationsMissingEntity,
-  provisionOrganization,
   rotatePublicApiKey,
   setPublicApiEnabled,
   setPublicApiOrigins,
@@ -28,7 +26,6 @@ import {
   isWebLensMembership,
   matchesDeleteAcademyPhrase,
   PUBLIC_RANGE_DEFAULT_DAYS,
-  slugify,
 } from "@matops/domain";
 import {
   AcademyCodeSchema,
@@ -42,10 +39,10 @@ import {
 
 import { academyContext } from "../academy-tz";
 import {
+  branchManagerIdentityProcedure,
+  branchManagerProcedure,
   ownerIdentityProcedure,
-  ownerProcedure,
   protectedProcedure,
-  refreshSessionCookie,
   staffIdentityProcedure,
 } from "../trpc";
 
@@ -76,27 +73,13 @@ export const academyRouter = {
    * (the web-lens switcher) on purpose, so a returning student is not re-asked
    * for a code; it drops `removed`/`suspended` memberships, where the user has no
    * standing to land on.
+   *
+   * An empty list is not a broken gym (ADR 128). An owner who has made a gym
+   * and not yet made its first branch belongs to no branch, and the landing
+   * rule sends them to `/overview` to make one.
    */
   memberships: protectedProcedure.query(async ({ ctx }) => {
-    let all = await listMembershipsForUser(ctx.session.user.id, ctx.baseDb);
-    if (all.length === 0) {
-      // The only route back for an owner whose provisioning died half way:
-      // "Start a gym" would make them a SECOND organization, and nothing else
-      // in the app can write the rows that are missing (ADR 124).
-      const stranded = await organizationsMissingEntity(
-        ctx.session.user.id,
-        ctx.baseDb,
-      );
-      for (const organizationId of stranded) {
-        await provisionOrganization(
-          { organizationId, ownerUserId: ctx.session.user.id },
-          ctx.baseDb,
-        );
-      }
-      if (stranded.length > 0) {
-        all = await listMembershipsForUser(ctx.session.user.id, ctx.baseDb);
-      }
-    }
+    const all = await listMembershipsForUser(ctx.session.user.id, ctx.baseDb);
     return all.filter(canEnroll).map((a) => ({
       academyId: a.academyId,
       organizationId: a.organizationId,
@@ -146,12 +129,20 @@ export const academyRouter = {
       country: academy.country,
       address: academy.address,
       mapUrl: academy.mapUrl,
+      // Which gate this branch runs on, so a screen never offers a setting the
+      // server no longer consults (ADR 126).
+      membershipEnforced: academy.membershipEnforcedAt !== null,
+      // Does this branch have a legacy dues history at all? A branch opened
+      // after ADR 128 is born on memberships and never had plans or dues, so
+      // switching it off must not reveal an empty Payments screen for a product
+      // it never ran. Only a branch that predates the cutover has these rows.
+      hasLegacyDues: await hasLegacyDuesAt(academyId, ctx.baseDb),
       curriculumForStudents: academy.curriculumForStudents,
       code: await getAcademyCode(academyId, ctx.baseDb),
     };
   }),
 
-  settings: ownerProcedure.query(async ({ ctx }) => {
+  settings: branchManagerProcedure.query(async ({ ctx }) => {
     const { timeZone, country } = await academyContext(ctx);
     const zones = await ctx.db
       .selectDistinct({ timeZone: classTemplate.timeZone })
@@ -166,7 +157,7 @@ export const academyRouter = {
     };
   }),
 
-  updateSettings: ownerIdentityProcedure
+  updateSettings: branchManagerIdentityProcedure
     .input(UpdateAcademySettingsSchema)
     .mutation(async ({ ctx, input }) => {
       if (input.timeZone !== undefined && !isValidTimeZone(input.timeZone)) {
@@ -223,7 +214,7 @@ export const academyRouter = {
    * The public booking surface (spec O6, ADR 115): the master switch, the
    * publishable key and the optional origin allowlist. Owner-only.
    */
-  publicApi: ownerIdentityProcedure.query(async ({ ctx }) => {
+  publicApi: branchManagerIdentityProcedure.query(async ({ ctx }) => {
     const settings = await ctx.withScope((db) =>
       getPublicApiSettings(ctx.academyId, db),
     );
@@ -238,7 +229,7 @@ export const academyRouter = {
    * switching off keeps it, because a gym that pauses for a week should not have
    * to re-paste a key into its website afterwards.
    */
-  setPublicApi: ownerIdentityProcedure
+  setPublicApi: branchManagerIdentityProcedure
     .input(PublicBookingEnabledSchema)
     .mutation(async ({ ctx, input }) => {
       const settings = await ctx.withScope((db) =>
@@ -254,16 +245,18 @@ export const academyRouter = {
     }),
 
   /** Rotate the key: the old one stops working the moment this commits. */
-  rotatePublicApiKey: ownerIdentityProcedure.mutation(async ({ ctx }) => {
-    return {
-      apiKey: await ctx.withScope((db) =>
-        rotatePublicApiKey(ctx.academyId, db),
-      ),
-    };
-  }),
+  rotatePublicApiKey: branchManagerIdentityProcedure.mutation(
+    async ({ ctx }) => {
+      return {
+        apiKey: await ctx.withScope((db) =>
+          rotatePublicApiKey(ctx.academyId, db),
+        ),
+      };
+    },
+  ),
 
   /** The websites allowed to call the API from a browser. Empty means any. */
-  setPublicApiOrigins: ownerIdentityProcedure
+  setPublicApiOrigins: branchManagerIdentityProcedure
     .input(PublicApiOriginsSchema)
     .mutation(async ({ ctx, input }) => {
       await ctx.withScope((db) =>
@@ -317,45 +310,13 @@ export const academyRouter = {
     }),
 
   /**
-   * "Start a gym" (spec 1.1, docs/issues/20). Creates the organization; Better
-   * Auth adds the creator as `owner` and the afterCreateOrganization hook flips
-   * that membership to `active` — so the creator is a working owner at once. The
-   * new academy also becomes the active one.
-   */
-  create: protectedProcedure
-    .input(CreateAcademySchema)
-    .mutation(async ({ ctx, input }) => {
-      // Unique slug: readable stem + short random suffix (Better Auth requires it).
-      const slug = `${slugify(input.name)}-${randomBytes(3).toString("hex")}`;
-      const org = await ctx.authApi.createOrganization({
-        body: { name: input.name, slug },
-        headers: ctx.headers,
-      });
-      if (!org) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Could not create the academy",
-        });
-      }
-      // Belt to the hook's braces (ADR 124). `afterCreateOrganization` already
-      // ran the same provisioner; running it again creates nothing and repairs
-      // an organization whose setup died half way.
-      const { entityId } = await provisionOrganization(
-        { organizationId: org.id, ownerUserId: ctx.session.user.id },
-        ctx.baseDb,
-      );
-      await refreshSessionCookie(ctx);
-      return { academyId: org.id, organizationId: org.id, entityId };
-    }),
-
-  /**
    * Rename the academy (owner only). The **name is a mutable label** — not
    * unique-constrained, because identity is the immutable `public_code` (the
    * Academy code) and the entity id. It writes `entity.name`, not the
    * organization's: a gym with two mats renames one of them, and the name every
    * screen shows is the entity's (ADR 124). The code is never touched.
    */
-  rename: ownerIdentityProcedure
+  rename: branchManagerIdentityProcedure
     .input(CreateAcademySchema)
     .mutation(async ({ ctx, input }) => {
       await ctx.withScope((db) =>

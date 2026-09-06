@@ -49,6 +49,15 @@ export function useEntity(): Entity {
 }
 
 /**
+ * The entity, or null above the branches (ADR 127). For the few pieces of
+ * chrome the organization shell draws too: they render either side of the
+ * boundary and must not care which side they are on.
+ */
+export function useEntityMaybe(): Entity | null {
+  return useContext(EntityContext);
+}
+
+/**
  * A link to another screen of the academy you are in. Screens name the path
  * they mean, `/schedule`, and never the entity, so nothing has to thread the id
  * through the tree.

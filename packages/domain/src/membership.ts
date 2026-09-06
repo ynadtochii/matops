@@ -3,7 +3,7 @@
  * the transitions live in one tested place (docs/issues/14, 20; spec O4, §4).
  */
 import type { Membership } from "./access";
-import { isOwner } from "./access";
+import { isOwner, runsBranch } from "./access";
 
 /** A member row as the membership rules see it. */
 export interface MemberRow extends Membership {
@@ -59,7 +59,7 @@ export function canDecideSeat(
   actor: Membership,
   m: { status: string; invitedRole?: string | null },
 ): boolean {
-  return !isPendingCoach(m) || isOwner(actor);
+  return !isPendingCoach(m) || runsBranch(actor);
 }
 
 // --- Never ownerless (spec §4) -----------------------------------------------

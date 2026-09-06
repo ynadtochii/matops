@@ -2,8 +2,8 @@ import { Suspense } from "react";
 
 import {
   dashboardWeekWindow,
-  isOwner,
   isStaff,
+  runsBranch,
   studentWeekWindow,
 } from "@matops/domain";
 
@@ -25,7 +25,7 @@ async function DashboardData() {
     prefetch(trpc.class.week.queryOptions(dashboardWeekWindow(new Date())));
     prefetch(trpc.membership.members.queryOptions());
     prefetch(trpc.stats.dashboard.queryOptions());
-    if (isOwner(academy)) {
+    if (runsBranch(academy)) {
       prefetch(trpc.dropIn.list.queryOptions());
       prefetch(trpc.payments.claims.queryOptions());
     }

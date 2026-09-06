@@ -412,6 +412,46 @@ describe("dues reminder sweep", () => {
     expect(await inbox(h.pg, "dues_reminder")).toEqual([]);
   });
 
+  it("never reminds a member at a branch on shared memberships", async () => {
+    const h = await base();
+    await seedDues(h.pg, [{ userId: "u_ana", academyId: A, dueInDays: 1 }]);
+    await h.pg.exec(
+      `UPDATE "entity" SET membership_enforced_at = now() WHERE id = '${A}'`,
+    );
+
+    const r = recorder();
+    const run = await sweepDuesReminders(h.exec, {
+      now: new Date(),
+      send: r.send,
+    });
+
+    expect(run.processed).toBe(0);
+    expect(await inbox(h.pg, "dues_reminder")).toEqual([]);
+  });
+
+  it("leaves the period unstamped there, so switching back still reminds them", async () => {
+    const h = await base();
+    await seedDues(h.pg, [{ userId: "u_ana", academyId: A, dueInDays: 1 }]);
+    await h.pg.exec(
+      `UPDATE "entity" SET membership_enforced_at = now() WHERE id = '${A}'`,
+    );
+    await sweepDuesReminders(h.exec, {
+      now: new Date(),
+      send: recorder().send,
+    });
+
+    await h.pg.exec(
+      `UPDATE "entity" SET membership_enforced_at = NULL WHERE id = '${A}'`,
+    );
+    const r = recorder();
+    const run = await sweepDuesReminders(h.exec, {
+      now: new Date(),
+      send: r.send,
+    });
+
+    expect(run.processed).toBe(1);
+  });
+
   it("tells an overdue member apart from one who is merely due soon", async () => {
     const h = await base();
     await seedDues(h.pg, [

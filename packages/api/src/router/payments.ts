@@ -27,10 +27,10 @@ import {
   SetMemberDuesSchema,
   UpdateBookingGateSchema,
   UpdateMembershipPlanSchema,
-  UpdatePaymentRequisitesSchema,
 } from "@matops/validators";
 
 import { nameByMember, requireMember, rosterOf } from "../members";
+import { membershipBankDetails } from "../membership-status";
 import { CLAIM_HANDLED, PLAN_NOT_FOUND } from "../messages";
 import { loadBookingAccess } from "../payments-gate";
 import {
@@ -39,7 +39,7 @@ import {
   readPaymentSettings,
 } from "../payments-read";
 import { isUniqueViolation } from "../pg-error";
-import { memberProcedure, ownerProcedure } from "../trpc";
+import { branchManagerProcedure, memberProcedure } from "../trpc";
 
 /** Parse a "YYYY-MM-DD" due date to a UTC-midnight instant. */
 function parseDueDate(date: string): Date {
@@ -59,11 +59,33 @@ function parseDueDate(date: string): Date {
 // problem. Paginate the day the queue is meant to be that long.
 const CLAIMS_LIMIT = 500;
 
+/**
+ * Refuse a legacy dues write at a branch that has moved onto memberships
+ * (ADR 128, spec FP5).
+ *
+ * Hiding the Payments screen is presentation; this is the rule. A migrated
+ * branch keeps its old plans, dues and claims so the history stays readable,
+ * but nothing may edit them: a plan price changed there decides nothing, and a
+ * dues row written there would be a second answer to a question the membership
+ * gate already answers.
+ */
+function refuseIfMigrated(ctx: {
+  entity: { membershipEnforcedAt: Date | null };
+}): void {
+  if (ctx.entity.membershipEnforcedAt) {
+    throw new TRPCError({
+      code: "CONFLICT",
+      message:
+        "This branch runs on the gym's memberships. Its old dues are history now.",
+    });
+  }
+}
+
 export const paymentsRouter = {
   // ─── Owner: plans ──────────────────────────────────────────────────────────
 
   /** The academy's membership plans (price list), newest first. Owner-only. */
-  plans: ownerProcedure.query(({ ctx }) =>
+  plans: branchManagerProcedure.query(({ ctx }) =>
     ctx.db
       .select({
         id: membershipPlan.id,
@@ -78,9 +100,10 @@ export const paymentsRouter = {
   ),
 
   /** Create a membership plan (spec O7). */
-  createPlan: ownerProcedure
+  createPlan: branchManagerProcedure
     .input(CreateMembershipPlanSchema)
     .mutation(async ({ ctx, input }) => {
+      refuseIfMigrated(ctx);
       const [row] = await ctx.db
         .insert(membershipPlan)
         .values({
@@ -101,9 +124,10 @@ export const paymentsRouter = {
     }),
 
   /** Edit a plan in place — members on it pick up the new name/price. */
-  updatePlan: ownerProcedure
+  updatePlan: branchManagerProcedure
     .input(UpdateMembershipPlanSchema)
     .mutation(async ({ ctx, input }) => {
+      refuseIfMigrated(ctx);
       const rows = await ctx.db
         .update(membershipPlan)
         .set({
@@ -126,9 +150,10 @@ export const paymentsRouter = {
     }),
 
   /** Soft-delete a plan (keeps claim history valid). */
-  deletePlan: ownerProcedure
+  deletePlan: branchManagerProcedure
     .input(PlanIdSchema)
     .mutation(async ({ ctx, input }) => {
+      refuseIfMigrated(ctx);
       await ctx.db
         .update(membershipPlan)
         .set({ deletedAt: new Date() })
@@ -144,9 +169,10 @@ export const paymentsRouter = {
    * caller's academy (the `member` table has no RLS) before touching the
    * RLS-scoped `member_dues`.
    */
-  setMemberDues: ownerProcedure
+  setMemberDues: branchManagerProcedure
     .input(SetMemberDuesSchema)
     .mutation(async ({ ctx, input }) => {
+      refuseIfMigrated(ctx);
       await requireMember(ctx, input.memberId);
       if (input.planId === null) {
         await ctx.db
@@ -192,19 +218,24 @@ export const paymentsRouter = {
 
   // ─── Owner: requisites (bank details) ───────────────────────────────────────
 
-  /** The academy's bank details for the requisites card (spec S9/O6). Owner-only. */
-  getRequisites: ownerProcedure.query(async ({ ctx }) => {
+  /**
+   * The branch's booking rule (spec O6, ADR 82). Owner-only.
+   *
+   * No bank details any more: the account belongs to the organization and is
+   * edited on its Settings screen (ADR 127).
+   */
+  getRequisites: branchManagerProcedure.query(async ({ ctx }) => {
     const row = await readPaymentSettings(ctx.db);
     return {
-      bankDetails: row.bankDetails,
       graceDays: row.graceDays,
       enforced: !!row.enforcedAt,
     };
   }),
 
-  updateBookingGate: ownerProcedure
+  updateBookingGate: branchManagerProcedure
     .input(UpdateBookingGateSchema)
     .mutation(async ({ ctx, input }) => {
+      refuseIfMigrated(ctx);
       const current = await readPaymentSettings(ctx.db);
       const enforcedAt = input.enforced
         ? (current.enforcedAt ?? new Date())
@@ -223,24 +254,10 @@ export const paymentsRouter = {
       return { ok: true as const };
     }),
 
-  /** Set the academy's bank details (spec O6). */
-  updateRequisites: ownerProcedure
-    .input(UpdatePaymentRequisitesSchema)
-    .mutation(async ({ ctx, input }) => {
-      await ctx.db
-        .insert(paymentSettings)
-        .values({ academyId: ctx.academyId, bankDetails: input.bankDetails })
-        .onConflictDoUpdate({
-          target: paymentSettings.academyId,
-          set: { bankDetails: input.bankDetails },
-        });
-      return { ok: true as const };
-    }),
-
   // ─── Owner: claims to confirm ───────────────────────────────────────────────
 
   /** Pending "I paid" claims awaiting confirmation (spec O7). Owner-only. */
-  claims: ownerProcedure.query(async ({ ctx }) => {
+  claims: branchManagerProcedure.query(async ({ ctx }) => {
     const rows = await ctx.db
       .select({
         id: paymentClaim.id,
@@ -273,9 +290,10 @@ export const paymentsRouter = {
    * date forward one cycle. Both writes run in the one RLS transaction `ctx.db`
    * already is, so a failure rolls back atomically.
    */
-  confirm: ownerProcedure
+  confirm: branchManagerProcedure
     .input(ClaimIdSchema)
     .mutation(async ({ ctx, input }) => {
+      refuseIfMigrated(ctx);
       const claim = (
         await ctx.db
           .select({
@@ -315,9 +333,10 @@ export const paymentsRouter = {
     }),
 
   /** Reject a claim (spec O7) — dismiss it without rolling the due date. */
-  reject: ownerProcedure
+  reject: branchManagerProcedure
     .input(ClaimIdSchema)
     .mutation(async ({ ctx, input }) => {
+      refuseIfMigrated(ctx);
       const claim = (
         await ctx.db
           .select({ status: paymentClaim.status })
@@ -364,6 +383,7 @@ export const paymentsRouter = {
   choosePlan: memberProcedure
     .input(ChoosePlanSchema)
     .mutation(async ({ ctx, input }) => {
+      refuseIfMigrated(ctx);
       const plan = (
         await ctx.db
           .select({ id: membershipPlan.id })
@@ -423,9 +443,10 @@ export const paymentsRouter = {
     const reference = memberId
       ? paymentReference(ctx.session.user.name, memberId)
       : "";
-    const settings = await readPaymentSettings(ctx.db);
+    // The account is the ORGANIZATION's, even on this legacy path: a gym half
+    // way through the switch must not be able to print two of them (ADR 127).
     const requisites = {
-      bankDetails: settings.bankDetails,
+      bankDetails: await membershipBankDetails(ctx.db),
       reference,
     };
 
@@ -433,15 +454,18 @@ export const paymentsRouter = {
       ? await readDuesWithPlan(ctx.db, memberId)
       : undefined;
 
-    const access = await loadBookingAccess(ctx.db, ctx.membership);
-    if (!duesRow || !memberId) {
+    const access = await loadBookingAccess(ctx.db, ctx.membership, ctx.entity);
+    // Never two gates on one screen (ADR 126): where the shared membership
+    // decides, the branch's own dues line is not what anyone owes.
+    if (!duesRow || !memberId || ctx.entity.membershipEnforcedAt) {
       return {
         dues: null,
         requisites,
         openClaim: null,
         canPay: false,
         access,
-        canChoosePlan: ctx.membership.role === "student",
+        canChoosePlan:
+          ctx.membership.role === "student" && !ctx.entity.membershipEnforcedAt,
       };
     }
 
@@ -473,6 +497,7 @@ export const paymentsRouter = {
   claim: memberProcedure
     .input(CreatePaymentClaimSchema)
     .mutation(async ({ ctx, input }) => {
+      refuseIfMigrated(ctx);
       const memberId = await getMemberIdForUser(
         ctx.session.user.id,
         ctx.academyId,

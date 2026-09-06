@@ -13,8 +13,8 @@ import type { CoachWindowKey } from "@matops/domain";
 import {
   DAY_LABELS,
   formatMatTime,
-  isOwner as isOwnerOf,
   isPendingCoach,
+  runsBranch,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
@@ -399,7 +399,7 @@ export function CoachesScreen() {
   const [openId, setOpenId] = useState<string | null>(null);
 
   const me = useEntity();
-  const isOwner = isOwnerOf(me);
+  const isOwner = runsBranch(me);
   const roster = useQuery({
     ...trpc.stats.coaches.queryOptions({ window }),
     enabled: isOwner,

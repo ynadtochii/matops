@@ -12,26 +12,25 @@ import { toast } from "@matops/ui/toast";
 import { useTRPC } from "~/trpc/react";
 
 /**
- * "Start a gym" (spec 1.1). Its own deliberate step now (ADR 49) — reached from
- * the "Start a gym" link on the landing page, not shown to everyone after login.
- * Creating an academy makes you its active owner at once (the
- * afterCreateOrganization hook activates the creator), so on success we send the
- * new owner straight to the console.
+ * "Start a gym" (spec FP1). Its own deliberate step (ADR 49), reached from the
+ * "Start a gym" link on the landing page, not shown to everyone after login.
+ * It creates the gym and no branch (ADR 128): the owner is its active owner at
+ * once and picks the first branch afterwards.
  */
-export function CreateAcademy() {
+export function CreateGym() {
   const trpc = useTRPC();
   const router = useRouter();
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
 
   const create = useMutation(
-    trpc.academy.create.mutationOptions({
+    trpc.organization.create.mutationOptions({
       onSuccess: async () => {
         await queryClient.invalidateQueries();
-        router.replace("/");
+        router.replace("/overview");
         router.refresh();
       },
-      onError: () => toast.error("Could not create the academy"),
+      onError: () => toast.error("Could not create the gym"),
     }),
   );
 
@@ -40,8 +39,8 @@ export function CreateAcademy() {
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold tracking-tight">Start a gym</h1>
         <p className="text-muted-foreground text-sm">
-          Create your academy — you&apos;ll be its owner right away, no approval
-          needed.
+          Name your gym. You are its owner right away, no approval needed. You
+          add your first branch next.
         </p>
       </div>
       <form
@@ -52,19 +51,19 @@ export function CreateAcademy() {
         }}
       >
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="academy-name">Academy name</Label>
+          <Label htmlFor="gym-name">Gym name</Label>
           <Input
-            id="academy-name"
+            id="gym-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Gracie Barra HQ"
+            placeholder="Gracie Barra"
             minLength={2}
             maxLength={80}
             required
           />
         </div>
         <Button type="submit" size="lg" disabled={create.isPending}>
-          {create.isPending ? "Creating…" : "Create academy"}
+          {create.isPending ? "Creating…" : "Create gym"}
         </Button>
       </form>
     </div>

@@ -82,12 +82,62 @@ describe("who may open which screen", () => {
     }
   });
 
-  it("shows no BJJ screen for a place of another type", () => {
-    expect(
-      canVisit("/entities/acad_a/schedule", { ...owner, type: "sauna" }),
-    ).toBe(false);
-    expect(
-      canVisit("/entities/acad_a/schedule", { ...owner, type: "bjj_academy" }),
-    ).toBe(true);
+  it("shows nothing at all for a type this build does not know", () => {
+    for (const path of ["/", "/schedule", "/members", "/payments"]) {
+      expect([path, canVisit(path, { ...owner, type: "sauna" })]).toEqual([
+        path,
+        false,
+      ]);
+    }
+  });
+
+  it("runs a general space on the same screens minus the BJJ ones", () => {
+    const gym = { ...owner, type: "general_space" };
+    for (const path of ["/", "/schedule", "/members", "/attendance"]) {
+      expect([path, canVisit(path, gym)]).toEqual([path, true]);
+    }
+    expect(canVisit("/entities/acad_a/settings", gym)).toBe(true);
+    expect(canVisit("/entities/acad_a/referrals", gym)).toBe(false);
+  });
+
+  it("keeps referrals for a BJJ academy", () => {
+    const mat = { ...owner, type: "bjj_academy" };
+    expect(canVisit("/entities/acad_a/schedule", mat)).toBe(true);
+    expect(canVisit("/entities/acad_a/referrals", mat)).toBe(true);
+  });
+
+  it("keeps the role check on a general space", () => {
+    const gymCoach = { ...coach, type: "general_space" };
+    expect(canVisit("/settings", gymCoach)).toBe(false);
+    expect(canVisit("/schedule", gymCoach)).toBe(true);
+    expect(canVisit("/members", { ...student, type: "general_space" })).toBe(
+      false,
+    );
+  });
+});
+
+describe("a gym manager at a branch", () => {
+  const manager = { role: "manager", status: "active" };
+
+  it("is offered the branch screens an owner is", () => {
+    for (const path of [
+      "/",
+      "/schedule",
+      "/members",
+      "/attendance",
+      "/coaches",
+      "/settings",
+    ]) {
+      expect([path, canVisit(path, manager)]).toEqual([path, true]);
+    }
+  });
+
+  it("keeps the BJJ narrowing", () => {
+    expect(canVisit("/referrals", { ...manager, type: "general_space" })).toBe(
+      false,
+    );
+    expect(canVisit("/referrals", { ...manager, type: "bjj_academy" })).toBe(
+      true,
+    );
   });
 });

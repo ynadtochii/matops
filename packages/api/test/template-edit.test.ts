@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
+import { createEntity } from "@matops/db";
+
 import type { Harness } from "./helpers";
 import { harness, seedAcademies } from "./helpers";
 
@@ -120,5 +122,98 @@ describe("template timing edit with live bookings", () => {
       .as(COACH, ACAD)
       .template.update({ ...base, id: template.id, title: "No-gi" });
     expect(updated.instructorId).toBe(OWNER);
+  });
+});
+
+describe("editing a general space template", () => {
+  const ORG = "acad_tpl_gym";
+  const BOSS = "u_tpl_gym_owner";
+  let h: Harness;
+  let gym: string;
+
+  function at(entityId: string): Headers {
+    const headers = new Headers();
+    headers.set("x-matops-entity", entityId);
+    return headers;
+  }
+  const staff = () => h.as(BOSS, ORG, at(gym));
+
+  beforeAll(async () => {
+    h = await harness();
+    await seedAcademies(h.pg, [
+      {
+        id: ORG,
+        code: "700031",
+        members: [{ userId: BOSS, role: "owner", status: "active" }],
+      },
+    ]);
+    const made = await createEntity(
+      {
+        organizationId: ORG,
+        type: "general_space",
+        name: "The Gym",
+        ownerUserId: BOSS,
+      },
+      h.exec,
+    );
+    gym = made.entityId;
+  });
+
+  afterAll(() => h.close());
+
+  beforeEach(async () => {
+    await h.pg.exec(`DELETE FROM "class"; DELETE FROM "class_template";`);
+  });
+
+  it("does not hand the session to whoever saved the edit", async () => {
+    const template = await staff().template.create(base);
+    if (!template) throw new Error("expected a template");
+    expect(template.instructorId).toBeNull();
+
+    const updated = await staff().template.update({
+      ...base,
+      id: template.id,
+      title: "Open gym",
+    });
+    expect(updated.instructorId).toBeNull();
+  });
+
+  it("pushes a new description onto the classes it already made", async () => {
+    const template = await staff().template.create({
+      ...base,
+      description: "Bring a towel.",
+    });
+    if (!template) throw new Error("expected a template");
+
+    await staff().template.update({
+      ...base,
+      id: template.id,
+      description: "Bring a towel and a lock.",
+    });
+
+    const res = await h.pg.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM "class"
+        WHERE description = 'Bring a towel and a lock.' AND status = 'scheduled'`,
+    );
+    expect(res.rows[0]?.n).toBeGreaterThan(0);
+  });
+
+  it("clears a description the owner emptied", async () => {
+    const template = await staff().template.create({
+      ...base,
+      description: "Bring a towel.",
+    });
+    if (!template) throw new Error("expected a template");
+
+    await staff().template.update({
+      ...base,
+      id: template.id,
+      description: "",
+    });
+
+    const res = await h.pg.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM "class" WHERE description IS NOT NULL`,
+    );
+    expect(res.rows[0]?.n).toBe(0);
   });
 });

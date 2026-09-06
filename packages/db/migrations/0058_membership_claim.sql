@@ -1,0 +1,11 @@
+-- A member says they paid (ADR 127). The flag is the whole record: no amount,
+-- because the tracker records that somebody said they paid, not money.
+--
+-- This is the second reason an UNPAID month has a row at all, beside
+-- `reminded_at`: `paid` false and no row still mean the same thing to every
+-- rule, so writing one to record a claim changes nothing about whether they owe.
+--
+-- No policy and no grant: `membership_month` already carries
+-- `membership_month_isolation` on `app.organization_id` and all four
+-- `matops_app` grants from `0053`, and a new column inherits them.
+ALTER TABLE "membership_month" ADD COLUMN "claimed_at" timestamp with time zone;

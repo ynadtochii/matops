@@ -12,12 +12,14 @@ export const Health = pgTable("_health", (t) => ({
   checkedAt: t.timestamp({ withTimezone: true }).defaultNow().notNull(),
 }));
 
+export * from "./access-schema";
 export * from "./auth-schema";
 export * from "./curriculum-schema";
 export * from "./entity-schema";
 export * from "./invite-schema";
 export * from "./notification-schema";
 export * from "./payments-schema";
+export * from "./product-event-schema";
 export * from "./push-token-schema";
 export * from "./rank-notes-schema";
 export * from "./referrals-schema";

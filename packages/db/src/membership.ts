@@ -164,6 +164,12 @@ export interface ScopedEntity {
   organizationId: string;
   type: string;
   name: string;
+  /**
+   * Set once shared memberships decide access here. Null keeps the LEGACY
+   * branch dues gate, and the two never both apply (ADR 126). Carried on the
+   * request's own entity read so no gate has to fetch it again.
+   */
+  membershipEnforcedAt: Date | null;
 }
 
 /**
@@ -186,6 +192,7 @@ export async function getEntityInOrganization(
       organizationId: entity.organizationId,
       type: entity.type,
       name: entity.name,
+      membershipEnforcedAt: entity.membershipEnforcedAt,
     })
     .from(entity)
     .where(
@@ -198,6 +205,34 @@ export async function getEntityInOrganization(
     )
     .limit(1);
   return rows[0] ?? null;
+}
+
+/**
+ * The gyms this person RUNS, as an owner or a manager, whether or not any of
+ * them has a branch yet (ADR 128, widened by ADR 129).
+ *
+ * `listMembershipsForUser` cannot answer this: it joins `member` to `entity`,
+ * so an owner whose gym has no branch reads as belonging to nothing, and the
+ * post-login gate would offer them the student join-by-code screen (ADR 128).
+ */
+export async function listOwnedOrganizations(
+  userId: string,
+  exec: DbReader,
+): Promise<{ organizationId: string; name: string }[]> {
+  return exec
+    .select({ organizationId: organization.id, name: organization.name })
+    .from(member)
+    .innerJoin(organization, eq(organization.id, member.organizationId))
+    .where(
+      and(
+        eq(member.userId, userId),
+        // Managers run the gym too, so they land on it and may make it active
+        // (ADR 129). The destructive half is still refused by the owner tiers.
+        inArray(member.role, ["owner", "manager"]),
+        isNull(organization.deletedAt),
+      ),
+    )
+    .orderBy(member.createdAt);
 }
 
 /**
@@ -214,6 +249,7 @@ export async function listEntitiesOf(
       organizationId: entity.organizationId,
       type: entity.type,
       name: entity.name,
+      membershipEnforcedAt: entity.membershipEnforcedAt,
     })
     .from(entity)
     .where(
@@ -247,6 +283,7 @@ export async function listEntitiesForUser(
       organizationId: entity.organizationId,
       type: entity.type,
       name: entity.name,
+      membershipEnforcedAt: entity.membershipEnforcedAt,
     })
     .from(entity)
     .innerJoin(
@@ -303,6 +340,8 @@ export interface UserAcademy {
   address: string | null;
   mapUrl: string | null;
   curriculumForStudents: boolean;
+  /** Set once shared memberships decide access here (ADR 126). */
+  membershipEnforcedAt: Date | null;
   role: string;
   status: string;
   invitedRole: string | null;
@@ -339,14 +378,15 @@ export async function listMembershipsForUser(
     country: entity.country,
     address: entity.address,
     mapUrl: entity.mapUrl,
-    curriculumForStudents: academyProfile.curriculumForStudents,
+    curriculumForStudents: sql<boolean>`coalesce(${academyProfile.curriculumForStudents}, false)`,
+    membershipEnforcedAt: entity.membershipEnforcedAt,
   };
 
   const owned = await exec
     .select({ ...entityCols, joinedAt: member.createdAt })
     .from(member)
     .innerJoin(entity, eq(entity.organizationId, member.organizationId))
-    .innerJoin(academyProfile, eq(academyProfile.entityId, entity.id))
+    .leftJoin(academyProfile, eq(academyProfile.entityId, entity.id))
     .innerJoin(organization, eq(organization.id, entity.organizationId))
     .where(
       and(
@@ -369,7 +409,7 @@ export async function listMembershipsForUser(
     })
     .from(entityMembership)
     .innerJoin(entity, eq(entity.id, entityMembership.entityId))
-    .innerJoin(academyProfile, eq(academyProfile.entityId, entity.id))
+    .leftJoin(academyProfile, eq(academyProfile.entityId, entity.id))
     .innerJoin(organization, eq(organization.id, entity.organizationId))
     .where(
       and(

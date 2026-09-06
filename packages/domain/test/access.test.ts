@@ -5,10 +5,13 @@ import {
   canEnroll,
   isActiveMember,
   isArchived,
+  isManager,
   isOnRoster,
   isOwner,
   isStaff,
   isSuspended,
+  runsBranch,
+  runsOrganization,
 } from "../src/access";
 
 const m = (role: string, status: string): Membership => ({ role, status });
@@ -80,5 +83,53 @@ describe("access predicates", () => {
       expect(isSuspended(m(role, "pending"))).toBe(false);
       expect(isSuspended(m(role, "removed"))).toBe(false);
     }
+  });
+});
+
+describe("the gym manager", () => {
+  it("runs the gym, like an owner does", () => {
+    expect(runsOrganization({ role: "manager", status: "active" })).toBe(true);
+    expect(runsOrganization({ role: "owner", status: "active" })).toBe(true);
+  });
+
+  it("is not an owner, which is what keeps the destructive half away", () => {
+    expect(isOwner({ role: "manager", status: "active" })).toBe(false);
+  });
+
+  it("runs nothing until their membership is active", () => {
+    expect(isManager({ role: "manager", status: "pending" })).toBe(false);
+    expect(runsOrganization({ role: "manager", status: "suspended" })).toBe(
+      false,
+    );
+  });
+
+  it("leaves instructors and students where they were", () => {
+    for (const role of ["instructor", "student"]) {
+      expect([role, runsOrganization({ role, status: "active" })]).toEqual([
+        role,
+        false,
+      ]);
+    }
+  });
+});
+
+describe("running one branch", () => {
+  it("takes an owner or a manager", () => {
+    expect(runsBranch({ role: "owner", status: "active" })).toBe(true);
+    expect(runsBranch({ role: "manager", status: "active" })).toBe(true);
+  });
+
+  it("leaves the coach and the student out", () => {
+    for (const role of ["instructor", "student"]) {
+      expect([role, runsBranch({ role, status: "active" })]).toEqual([
+        role,
+        false,
+      ]);
+    }
+  });
+
+  it("counts a manager as staff, so the register opens", () => {
+    expect(isStaff({ role: "manager", status: "active" })).toBe(true);
+    expect(isStaff({ role: "manager", status: "pending" })).toBe(false);
   });
 });

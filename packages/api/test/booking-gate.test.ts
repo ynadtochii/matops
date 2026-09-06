@@ -1,5 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
+import { eq } from "@matops/db";
+import { entity } from "@matops/db/schema";
+
 import type { Harness } from "./helpers";
 import {
   harness,
@@ -264,5 +267,112 @@ describe("membership booking gate", () => {
       .payments.updateBookingGate({ enforced: false, graceDays: 10 });
     req = await h.as(OWNER, ACAD).payments.getRequisites();
     expect(req.enforced).toBe(false);
+  });
+});
+
+describe("one gate decides, never two", () => {
+  const ORG = "acad_one_gate";
+  const BOSS = "u_one_gate_owner";
+  const SAM = "u_one_gate_sam";
+  const SESSION = "00000000-0000-4000-8000-0000000b0001";
+  let h: Harness;
+
+  const owner = () => h.as(BOSS, ORG);
+  const sam = () => h.as(SAM, ORG);
+
+  beforeAll(async () => {
+    h = await harness();
+    await seedAcademies(h.pg, [
+      {
+        id: ORG,
+        code: "700089",
+        members: [
+          { userId: BOSS, role: "owner", status: "active" },
+          { userId: SAM, role: "student", status: "active" },
+        ],
+      },
+    ]);
+    await seedClasses(h.pg, [
+      { id: SESSION, academyId: ORG, instructorId: BOSS, startsInMinutes: 600 },
+    ]);
+    // Turn the LEGACY dues gate on AND leave Sam genuinely overdue, so the
+    // legacy path really would lock him if it were consulted. Enforcement alone
+    // is not enough: with no dues row the gate answers `no_plan`, not `locked`,
+    // until the grace from joining runs out.
+    await owner().payments.updateBookingGate({
+      enforced: true,
+      graceDays: 0,
+    });
+    const plan = await owner().payments.createPlan({
+      name: "Unlimited",
+      priceMinor: 5000,
+      currency: "EUR",
+      cycle: "monthly",
+    });
+    await owner().payments.setMemberDues({
+      memberId: memberId(ORG, SAM),
+      planId: plan.id,
+      nextDueAt: "2026-01-01",
+    });
+  });
+
+  afterAll(() => h.close());
+
+  const activate = (on: boolean) =>
+    h.exec
+      .update(entity)
+      .set({ membershipEnforcedAt: on ? new Date() : null })
+      .where(eq(entity.id, ORG));
+
+  it("locks on the legacy dues gate while the branch is not activated", async () => {
+    await activate(false);
+    expect(await rejectionCode(sam().booking.book({ classId: SESSION }))).toBe(
+      "PRECONDITION_FAILED",
+    );
+  });
+
+  it("still shows the legacy dues line while the branch is not activated", async () => {
+    await activate(false);
+    expect((await sam().payments.myDues()).dues).not.toBeNull();
+  });
+
+  it("stops consulting the legacy gate once the branch is activated", async () => {
+    await activate(true);
+    // Now the membership gate decides, and Sam holds no membership at all, so
+    // he is still refused — but for the OTHER reason, which is the point.
+    expect(await rejectionCode(sam().booking.book({ classId: SESSION }))).toBe(
+      "PRECONDITION_FAILED",
+    );
+    // And the legacy dues display stops claiming a lock nobody can clear.
+    expect((await sam().payments.myDues()).access.state).toBe("ok");
+  });
+
+  it("shows no legacy dues line at an activated branch", async () => {
+    await activate(true);
+    const mine = await sam().payments.myDues();
+    expect([mine.dues, mine.canChoosePlan, mine.canPay]).toEqual([
+      null,
+      false,
+      false,
+    ]);
+  });
+
+  it("lets a covered member book at an activated branch", async () => {
+    const plan = await owner().accessPlan.create({
+      name: "Mat only",
+      entityIds: [ORG],
+    });
+    await owner().accessPlan.assign({ userId: SAM, planId: plan.id });
+
+    const booked = await sam().booking.book({ classId: SESSION });
+    expect(booked.ok).toBe(true);
+  });
+
+  it("goes back to the legacy gate if the branch is deactivated", async () => {
+    await sam().booking.cancel({ classId: SESSION });
+    await activate(false);
+    expect(await rejectionCode(sam().booking.book({ classId: SESSION }))).toBe(
+      "PRECONDITION_FAILED",
+    );
   });
 });

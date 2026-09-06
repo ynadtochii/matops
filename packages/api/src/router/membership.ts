@@ -8,6 +8,7 @@ import {
   createPendingMembership,
   deleteEntityMembership,
   deleteMemberRow,
+  deleteOrganizationAssignments,
   deleteUserRow,
   desc,
   eq,
@@ -19,6 +20,7 @@ import {
   hasSiblingEntityMemberships,
   inArray,
   linkLeadOnJoin,
+  recordMilestone,
   resolveInviteToken,
   setMemberRoleIfNotLastOwner,
   setMemberRoleStatus,
@@ -45,6 +47,7 @@ import {
   isOwner,
   isSuspended,
   paymentStatus,
+  runsBranch,
   trainingStats,
 } from "@matops/domain";
 import {
@@ -58,11 +61,13 @@ import type { createTRPCContext } from "../trpc";
 import { academyTimeZone } from "../academy-tz";
 import { releaseSeats } from "../classes";
 import { activateMember, requireMember, rosterOf, staffOf } from "../members";
+import { loadRosterStanding } from "../membership-access";
 import { LAST_OWNER } from "../messages";
 import { readAllDuesWithPlan, readPaymentSettings } from "../payments-read";
 import {
+  branchManagerIdentityProcedure,
+  branchManagerProcedure,
   ownerIdentityProcedure,
-  ownerProcedure,
   protectedProcedure,
   refreshSessionCookie,
   staffIdentityProcedure,
@@ -113,6 +118,17 @@ async function joinPending(
     ctx.baseDb,
   );
   await linkLeadOnJoin(input.academyId, input.phone, userId, ctx.baseDb);
+  if (input.invitedRole === "student" && !result.alreadyMember) {
+    await recordMilestone(
+      {
+        organizationId: input.organizationId,
+        entityId: input.academyId,
+        name: "first_student",
+        actorRole: "student",
+      },
+      ctx.baseDb,
+    );
+  }
   // Follow the person to the gym they just joined. Only skipping when the
   // session already names THIS organization: a student who joins a second gym
   // would otherwise keep the first one active, and every request naming their
@@ -310,10 +326,25 @@ export const membershipRouter = {
     );
 
     const now = new Date();
-    // Money is the owner's business, not the coach's: an instructor runs the
-    // desk (approve, rank) and gets the same roster without the dues figures.
-    const seesDues = isOwner(ctx.membership);
-    const gate = seesDues ? await readPaymentSettings(ctx.db) : null;
+    // Where each person stands on their shared memberships, in three queries
+    // for the whole roster rather than three each (ADR 126).
+    const standing = ctx.entity.membershipEnforcedAt
+      ? await loadRosterStanding(ctx.db, {
+          entityId: ctx.academyId,
+          people: rows.map((r) => ({ userId: r.userId, status: r.status })),
+          now,
+        })
+      : null;
+    // Money is the owner group's business, not the coach's: an instructor runs
+    // the desk (approve, rank) and gets the same roster without the dues
+    // figures.
+    const seesDues = runsBranch(ctx.membership);
+    // Never two gates on one screen (ADR 126): at an activated branch the
+    // shared membership decides, so the legacy dues state is not consulted.
+    const gate =
+      seesDues && !ctx.entity.membershipEnforcedAt
+        ? await readPaymentSettings(ctx.db)
+        : null;
     const openClaimMembers = new Set(
       gate?.enforcedAt
         ? (
@@ -339,9 +370,22 @@ export const membershipRouter = {
               now,
             )
           : null;
+      const membership = standing?.get(r.userId) ?? null;
       return {
         access,
+        // Why they are on this roster and where they stand. Null at a branch
+        // still on the legacy gate, so nothing shows a half-answer there.
+        membership: membership
+          ? {
+              verdict: membership.verdict,
+              covered: membership.covered,
+              planNames: membership.planNames,
+            }
+          : null,
         memberId: r.memberId,
+        // A shared membership keys on the person, not on their standing at one
+        // branch, so the member profile needs the user id to read it (ADR 126).
+        userId: r.userId,
         name: r.name,
         email: r.email,
         phone: r.phone,
@@ -374,7 +418,7 @@ export const membershipRouter = {
    * or to erase them, not to browse. Declined applicants (`removed`) are NOT
    * here: they were never members.
    */
-  archived: ownerProcedure.query(async ({ ctx }) => {
+  archived: branchManagerProcedure.query(async ({ ctx }) => {
     const rows = await rosterOf(ctx);
     return rows.filter(isArchived).map((r) => ({
       memberId: r.memberId,
@@ -468,7 +512,7 @@ export const membershipRouter = {
    * every row they own is kept and `restore` brings them back whole. Never
    * ownerless. Reversible; `purge` is the irreversible one.
    */
-  archive: ownerIdentityProcedure
+  archive: branchManagerIdentityProcedure
     .input(MemberActionSchema)
     .mutation(async ({ ctx, input }) => {
       const m = await requireMember(identityScope(ctx), input.memberId);
@@ -551,6 +595,13 @@ export const membershipRouter = {
       );
       const foundedOrganization = orgMembership?.role === "owner";
       if (!stillHere && !foundedOrganization) {
+        // No branch of this organization is left for a shared membership to
+        // cover, so it goes with the organization row (ADR 126).
+        report.access_assignment = await deleteOrganizationAssignments(
+          ctx.baseDb,
+          ctx.organizationId,
+          m.userId,
+        );
         await deleteMemberRow(ctx.baseDb, ctx.organizationId, m.userId);
       }
       const elsewhere =
@@ -564,7 +615,7 @@ export const membershipRouter = {
     }),
 
   /** Suspend a member → access revoked but reversible. Never ownerless. */
-  suspend: ownerIdentityProcedure
+  suspend: branchManagerIdentityProcedure
     .input(MemberActionSchema)
     .mutation(async ({ ctx, input }) => {
       await requireMember(identityScope(ctx), input.memberId);
@@ -586,7 +637,7 @@ export const membershipRouter = {
    * Seats cancelled by the archive do NOT come back — those classes may since
    * have filled or passed.
    */
-  restore: ownerIdentityProcedure
+  restore: branchManagerIdentityProcedure
     .input(MemberActionSchema)
     .mutation(async ({ ctx, input }) => {
       const m = await requireMember(identityScope(ctx), input.memberId);
@@ -625,10 +676,15 @@ export const membershipRouter = {
    * never-ownerless check: the last active owner can't be stepped down (promote
    * a co-owner first, §4).
    */
-  setRole: ownerIdentityProcedure
+  setRole: branchManagerIdentityProcedure
     .input(MemberActionSchema.extend({ role: InviteRoleSchema }))
     .mutation(async ({ ctx, input }) => {
-      await requireMember(identityScope(ctx), input.memberId);
+      const target = await requireMember(identityScope(ctx), input.memberId);
+      // Stepping an owner down is removing an owner, which stays with owners
+      // (ADR 129). Assigning an instructor is ordinary work.
+      if (target.role === "owner" && !isOwner(ctx.membership)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Owner only" });
+      }
       await rejectIfLastOwner(
         setMemberRoleIfNotLastOwner(
           ctx.academyId,
@@ -656,7 +712,7 @@ export const membershipRouter = {
    * 63). A lean read for the Coaches staff list; no dues/visit joins (that's the
    * member list's job). Carries emails, so owner-only.
    */
-  staff: ownerProcedure.query(async ({ ctx }) => {
+  staff: branchManagerProcedure.query(async ({ ctx }) => {
     const rows = await staffOf(ctx);
     return rows.map((r) => ({
       memberId: r.memberId,

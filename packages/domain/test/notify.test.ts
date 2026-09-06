@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   ANNOUNCEMENT_AUDIENCES,
+  announcementFanOut,
   announcementRecipients,
   buildAnnouncementMessage,
   buildApprovalMessage,
@@ -142,5 +143,36 @@ describe("buildAnnouncementMessage", () => {
       title: "No class Friday",
       body: "The mats are being replaced.",
     });
+  });
+});
+
+describe("announcementFanOut", () => {
+  it("gives one person at two branches two rows and one push", () => {
+    const { rows, push } = announcementFanOut([
+      { entityId: "e_mat", userIds: ["u_alex", "u_sam"] },
+      { entityId: "e_gym", userIds: ["u_alex"] },
+    ]);
+    expect(rows).toHaveLength(3);
+    expect(push.sort()).toEqual(["u_alex", "u_sam"]);
+  });
+
+  it("gives one person at one branch one row and one push", () => {
+    const { rows, push } = announcementFanOut([
+      { entityId: "e_mat", userIds: ["u_alex"] },
+    ]);
+    expect(rows).toEqual([{ entityId: "e_mat", userId: "u_alex" }]);
+    expect(push).toEqual(["u_alex"]);
+  });
+
+  it("counts nobody twice when a branch lists them twice", () => {
+    const { rows, push } = announcementFanOut([
+      { entityId: "e_mat", userIds: ["u_alex", "u_alex"] },
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(push).toEqual(["u_alex"]);
+  });
+
+  it("returns nothing for no branches", () => {
+    expect(announcementFanOut([])).toEqual({ rows: [], push: [] });
   });
 });

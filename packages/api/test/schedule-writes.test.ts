@@ -1,5 +1,7 @@
 import type { PGlite } from "@electric-sql/pglite";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+
+import { createEntity } from "@matops/db";
 
 import type { Harness } from "./helpers";
 import {
@@ -259,5 +261,228 @@ describe("class.cancel", () => {
       "FORBIDDEN",
     );
     expect(await statusOf(h.pg, FUTURE)).toBe("scheduled");
+  });
+});
+
+describe("one bookable room per general branch", () => {
+  const ORG = "acad_room";
+  const BOSS = "u_room_owner";
+  let h: Harness;
+  let gym: string;
+
+  const at = (entityId: string) => {
+    const headers = new Headers();
+    headers.set("x-matops-entity", entityId);
+    return h.as(BOSS, ORG, headers);
+  };
+
+  const session = {
+    title: "Open gym",
+    date: "2026-09-15",
+    durationMinutes: 60,
+    timeZone: "UTC",
+    capacity: 20,
+  };
+
+  beforeAll(async () => {
+    h = await harness();
+    await seedAcademies(h.pg, [
+      {
+        id: ORG,
+        code: "700084",
+        members: [{ userId: BOSS, role: "owner", status: "active" }],
+      },
+    ]);
+    const made = await createEntity(
+      {
+        organizationId: ORG,
+        type: "general_space",
+        name: "The Gym",
+        ownerUserId: BOSS,
+      },
+      h.exec,
+    );
+    gym = made.entityId;
+  });
+
+  afterAll(() => h.close());
+
+  it("takes the first session", async () => {
+    const row = await at(gym).class.create({
+      ...session,
+      startsAtMinutes: 600,
+    });
+    expect(row?.id).toBeTruthy();
+  });
+
+  it("refuses a second session over the same hour", async () => {
+    expect(
+      await rejectionCode(
+        at(gym).class.create({ ...session, startsAtMinutes: 630 }),
+      ),
+    ).toBe("CONFLICT");
+  });
+
+  it("lets a back-to-back session through", async () => {
+    const row = await at(gym).class.create({
+      ...session,
+      startsAtMinutes: 660,
+    });
+    expect(row?.id).toBeTruthy();
+  });
+
+  it("lets a BJJ academy run two mats at once", async () => {
+    const first = await at(ORG).class.create({
+      ...session,
+      startsAtMinutes: 600,
+    });
+    const second = await at(ORG).class.create({
+      ...session,
+      startsAtMinutes: 615,
+    });
+    expect([first?.id, second?.id].every(Boolean)).toBe(true);
+  });
+
+  it("never trips a session over its own old row when rescheduling", async () => {
+    const row = await at(gym).class.create({
+      ...session,
+      date: "2026-09-16",
+      startsAtMinutes: 600,
+    });
+    if (!row) throw new Error("expected a class");
+    const moved = await at(gym).class.update({
+      id: row.id,
+      title: "Open gym",
+      instructorId: null,
+      durationMinutes: 60,
+      capacity: 20,
+      date: "2026-09-16",
+      startsAtMinutes: 605,
+      timeZone: "UTC",
+    });
+    expect(moved.id).toBe(row.id);
+  });
+
+  it("refuses a reschedule onto another session", async () => {
+    const row = await at(gym).class.create({
+      ...session,
+      date: "2026-09-17",
+      startsAtMinutes: 600,
+    });
+    await at(gym).class.create({
+      ...session,
+      date: "2026-09-17",
+      startsAtMinutes: 720,
+    });
+    if (!row) throw new Error("expected a class");
+
+    expect(
+      await rejectionCode(
+        at(gym).class.update({
+          id: row.id,
+          title: "Open gym",
+          instructorId: null,
+          durationMinutes: 60,
+          capacity: 20,
+          date: "2026-09-17",
+          startsAtMinutes: 730,
+          timeZone: "UTC",
+        }),
+      ),
+    ).toBe("CONFLICT");
+  });
+
+  it("frees the room again once a session is cancelled", async () => {
+    const row = await at(gym).class.create({
+      ...session,
+      date: "2026-09-18",
+      startsAtMinutes: 600,
+    });
+    if (!row) throw new Error("expected a class");
+    await at(gym).class.cancel({ id: row.id });
+
+    const again = await at(gym).class.create({
+      ...session,
+      date: "2026-09-18",
+      startsAtMinutes: 600,
+    });
+    expect(again?.id).toBeTruthy();
+  });
+
+  it("keeps an explicit Nobody on a template edit", async () => {
+    const made = await at(gym).template.create({
+      title: "Nobody teaches this",
+      daysOfWeek: [3],
+      startsAtMinutes: 480,
+      durationMinutes: 60,
+      timeZone: "UTC",
+      capacity: 20,
+      instructorId: BOSS,
+    });
+    if (!made) throw new Error("expected a template");
+    expect(made.instructorId).toBe(BOSS);
+
+    const cleared = await at(gym).template.update({
+      id: made.id,
+      title: "Nobody teaches this",
+      daysOfWeek: [3],
+      startsAtMinutes: 480,
+      durationMinutes: 60,
+      timeZone: "UTC",
+      capacity: 20,
+      instructorId: null,
+    });
+    expect(cleared.instructorId).toBeNull();
+  });
+
+  it("refuses a longer duration that would run into the next session", async () => {
+    const early = await at(gym).template.create({
+      title: "Early",
+      daysOfWeek: [1],
+      startsAtMinutes: 480,
+      durationMinutes: 60,
+      timeZone: "UTC",
+      capacity: 20,
+    });
+    if (!early) throw new Error("expected a template");
+    await at(gym).template.create({
+      title: "After it",
+      daysOfWeek: [1],
+      startsAtMinutes: 540,
+      durationMinutes: 60,
+      timeZone: "UTC",
+      capacity: 20,
+    });
+
+    // 08:00 to 09:30 runs into the 09:00 session. A duration change is applied
+    // in place rather than regenerated, so it needs its own room check.
+    expect(
+      await rejectionCode(
+        at(gym).template.update({
+          id: early.id,
+          title: "Early",
+          daysOfWeek: [1],
+          startsAtMinutes: 480,
+          durationMinutes: 90,
+          timeZone: "UTC",
+          capacity: 20,
+        }),
+      ),
+    ).toBe("CONFLICT");
+  });
+
+  it("refuses a recurring template that would clash with itself", async () => {
+    expect(
+      await rejectionCode(
+        at(gym).template.create({
+          title: "Every day",
+          daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+          startsAtMinutes: 600,
+          durationMinutes: 600,
+          timeZone: "UTC",
+          capacity: 20,
+        }),
+      ),
+    ).toBe("CONFLICT");
   });
 });

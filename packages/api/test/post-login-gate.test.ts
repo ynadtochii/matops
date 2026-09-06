@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { postLoginTarget } from "@matops/domain";
+
 import type { Harness } from "./helpers";
 import { harness, rejectionCode } from "./helpers";
 
@@ -60,7 +62,7 @@ describe("a session that names no gym", () => {
   });
 });
 
-describe("an owner whose gym never got its academy", () => {
+describe("an owner whose gym has no branch yet", () => {
   let h: Harness;
 
   beforeAll(async () => {
@@ -79,13 +81,24 @@ describe("an owner whose gym never got its academy", () => {
 
   afterAll(() => h.close());
 
-  it("repairs it at the gate instead of sending them to start a second one", async () => {
-    const mine = await h.as(OWNER, null).academy.memberships();
-    expect(mine.map((m) => m.academyId)).toEqual([ORG]);
-    expect(mine[0]?.role).toBe("owner");
+  // A zero-branch gym is a normal onboarding state now, so nothing repairs it
+  // behind the owner's back: `organizationsMissingEntity` and the repair loop
+  // went with ADR 128. The gate reads the gyms they RUN instead.
+  it("belongs to no branch, because there is none", async () => {
+    expect(await h.as(OWNER, null).academy.memberships()).toEqual([]);
   });
 
-  it("does not repair a gym on behalf of someone who does not own it", async () => {
+  it("is still offered its own gym, which is what stops the dead end", async () => {
+    const mine = await h.as(OWNER, null).organization.mine();
+    expect(mine.map((o) => o.organizationId)).toEqual([ORG]);
+    expect(postLoginTarget([], mine)).toMatchObject({
+      kind: "openGym",
+      organizationId: ORG,
+    });
+  });
+
+  it("offers nothing to somebody who does not run that gym", async () => {
     expect(await h.as(STUDENT, null).academy.memberships()).toEqual([]);
+    expect(await h.as(STUDENT, null).organization.mine()).toEqual([]);
   });
 });

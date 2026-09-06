@@ -22,6 +22,7 @@ import {
   canPromoteLead,
   canSubmitDropIn,
   CODE_JOIN_ROLE,
+  isBjjAcademy,
   normalizePhone,
   PROMOTE_REFUSAL_REASON,
   visitorClassChoices,
@@ -39,8 +40,8 @@ import {
 
 import { activateMember, requireMembership } from "../members";
 import {
-  ownerIdentityProcedure,
-  ownerProcedure,
+  branchManagerIdentityProcedure,
+  branchManagerProcedure,
   publicProcedure,
   rateLimited,
 } from "../trpc";
@@ -98,6 +99,21 @@ const nextBookingAt = sql<Date | null>`(
  * connection via `@matops/db` helpers, each pinned to the validated academy id.
  * Owner reads (`list`) go through the RLS-scoped `ctx.db`.
  */
+/**
+ * The wall poster is a BJJ thing (ADR 126). A general space has no visitor path
+ * in this release, so it answers 404 rather than half-supporting one: a visitor
+ * row carries no membership, and a strict room letting in somebody nothing
+ * counts is exactly the over-booking capacity exists to stop.
+ */
+function requireVisitorBranch<T extends { type: string }>(
+  academy: T | null,
+): T {
+  if (!academy || !isBjjAcademy(academy.type)) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Gym not found" });
+  }
+  return academy;
+}
+
 export const dropInRouter = {
   /**
    * The public drop-in page header, plus the classes to offer. 404 if the id is
@@ -108,10 +124,9 @@ export const dropInRouter = {
     .use(rateLimited(30, 60_000))
     .input(AcademyPublicSchema)
     .query(async ({ ctx, input }) => {
-      const academy = await getAcademyPublic(input.academyId, ctx.baseDb);
-      if (!academy) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Gym not found" });
-      }
+      const academy = requireVisitorBranch(
+        await getAcademyPublic(input.academyId, ctx.baseDb),
+      );
       const choices = await visitorChoices(
         input.academyId,
         ctx.baseDb,
@@ -150,10 +165,7 @@ export const dropInRouter = {
     .use(rateLimited(5, 10 * 60_000))
     .input(DropInSchema)
     .mutation(async ({ ctx, input }) => {
-      const academy = await getAcademyPublic(input.academyId, ctx.baseDb);
-      if (!academy) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Gym not found" });
-      }
+      requireVisitorBranch(await getAcademyPublic(input.academyId, ctx.baseDb));
       const gate = canSubmitDropIn(input);
       if (!gate.ok) {
         throw new TRPCError({
@@ -219,7 +231,7 @@ export const dropInRouter = {
    * Stage is stored; activity is derived from `drop_in_visit` on every read, so
    * the two can never disagree.
    */
-  list: ownerProcedure.query(({ ctx }) => {
+  list: branchManagerProcedure.query(({ ctx }) => {
     return ctx.db
       .select({
         id: dropIn.id,
@@ -248,7 +260,7 @@ export const dropInRouter = {
    * `invited` and `joined` are refused here: they follow from an action, and
    * the validator already narrows the input to the three that do not.
    */
-  setStage: ownerProcedure
+  setStage: branchManagerProcedure
     .input(SetLeadStageSchema)
     .mutation(async ({ ctx, input }) => {
       const [row] = await ctx.db
@@ -271,7 +283,7 @@ export const dropInRouter = {
    * lead who already joined is left alone, so a stray tap cannot undo a real
    * conversion.
    */
-  markInvited: ownerProcedure
+  markInvited: branchManagerProcedure
     .input(LeadIdSchema)
     .mutation(async ({ ctx, input }) => {
       const [row] = await ctx.db
@@ -288,7 +300,7 @@ export const dropInRouter = {
    * none, and rows captured before the wall-QR form required one may have none
    * either, so an owner given an address by voice needs a way to store it.
    */
-  setEmail: ownerProcedure
+  setEmail: branchManagerProcedure
     .input(SetLeadEmailSchema)
     .mutation(async ({ ctx, input }) => {
       const [row] = await ctx.db
@@ -318,7 +330,7 @@ export const dropInRouter = {
    * Writes `user` and `member` on the base connection (both are outside the RLS
    * seam, ADR 66), and the lead itself through a scoped transaction.
    */
-  promote: ownerIdentityProcedure
+  promote: branchManagerIdentityProcedure
     .input(PromoteLeadSchema)
     .mutation(async ({ ctx, input }) => {
       const lead = await ctx.withScope(async (db) => {
@@ -412,7 +424,7 @@ export const dropInRouter = {
    * two forms differs and the automatic match at self-join could not fire. A
    * link to a member, never a free-text flag.
    */
-  markJoined: ownerProcedure
+  markJoined: branchManagerProcedure
     .input(LinkLeadSchema)
     .mutation(async ({ ctx, input }) => {
       await requireMembership(

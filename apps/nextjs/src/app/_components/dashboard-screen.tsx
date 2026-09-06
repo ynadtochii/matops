@@ -16,12 +16,13 @@ import {
   disciplineTone,
   formatMoney,
   groupMoneyByCurrency,
+  isBjjAcademy,
   isFirstRun,
-  isOwner as isOwnerOf,
   isStaff as isStaffOf,
   leadQueues,
   needsAttendance,
   rosterSummary,
+  runsBranch,
   startOfDay,
   upcomingClassCount,
 } from "@matops/domain";
@@ -106,8 +107,9 @@ export function DashboardScreen() {
   const c = useEntity();
   const [detailId, setDetailId] = useState<string | null>(null);
 
-  const isOwner = isOwnerOf(c);
+  const isOwner = runsBranch(c);
   const isStaff = isStaffOf(c);
+  const bjj = isBjjAcademy(c.type);
 
   const { today, tomorrow } = useMemo(() => {
     const at = new Date();
@@ -267,12 +269,20 @@ export function DashboardScreen() {
         ) : (
           <Panel className={RESOLVE} cols={Math.max(queue.length, 1)}>
             {firstRun ? (
-              <PanelNotice title="Your academy is empty. Three steps to open it.">
+              <PanelNotice
+                title={
+                  bjj
+                    ? "Your academy is empty. Three steps to open it."
+                    : "This space is empty. Two steps to open it."
+                }
+              >
                 <Link
                   href={href("/schedule")}
                   className="text-brand-strong font-medium"
                 >
-                  1. Add your weekly classes
+                  {bjj
+                    ? "1. Add your weekly classes"
+                    : "1. Add your weekly sessions"}
                 </Link>
                 {" · "}
                 <Link
@@ -281,13 +291,20 @@ export function DashboardScreen() {
                 >
                   2. Share your join link
                 </Link>
-                {" · "}
-                <Link
-                  href={href("/members?tab=leads")}
-                  className="text-brand-strong font-medium"
-                >
-                  3. Print the QR poster
-                </Link>
+                {/* The visitor poster is a BJJ path: a general space has no
+                    drop-in form and no public booking (ADR 126), so offering
+                    one would be a step that leads nowhere. */}
+                {bjj && (
+                  <>
+                    {" · "}
+                    <Link
+                      href={href("/members?tab=leads")}
+                      className="text-brand-strong font-medium"
+                    >
+                      3. Print the QR poster
+                    </Link>
+                  </>
+                )}
               </PanelNotice>
             ) : queue.length === 0 ? (
               <PanelNotice title="All clear.">

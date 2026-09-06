@@ -1,28 +1,20 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
-import type { AnnouncementAudience } from "@matops/domain";
 import {
-  ANNOUNCEMENT_AUDIENCE_LABEL,
-  ANNOUNCEMENT_AUDIENCES,
   groupByDay,
   isStaff as isStaffOf,
   notificationKindLabel,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
-import { Button } from "@matops/ui/button";
-import { Input } from "@matops/ui/input";
-import { Label } from "@matops/ui/label";
-import { Textarea } from "@matops/ui/textarea";
-import { toast } from "@matops/ui/toast";
-import { AnnounceSchema } from "@matops/validators";
 
 import { dayLongFmt, time24Fmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
+import { AnnounceForm } from "./announce-form";
 import { useEntity, useEntityHref } from "./entity";
 import { PageHeader } from "./page-header";
 import { cardClass, Section } from "./primitives";
@@ -70,7 +62,7 @@ export function NotificationsScreen() {
         subtitle={`Everything ${academy.name} has sent you.`}
       />
 
-      {isStaff && <ComposeAnnouncement />}
+      {isStaff && <AnnounceForm scope="branch" />}
 
       {feed.isPending ? (
         <SkeletonFeed />
@@ -149,106 +141,5 @@ function FeedRow({ item }: { item: FeedItem }) {
     >
       {body}
     </Link>
-  );
-}
-
-const EMPTY_DRAFT = {
-  title: "",
-  body: "",
-  audience: "all" as AnnouncementAudience,
-};
-
-/** Staff only: write gym news and send it to one audience (spec O12). */
-function ComposeAnnouncement() {
-  const trpc = useTRPC();
-  const queryClient = useQueryClient();
-  const [draft, setDraft] = useState(EMPTY_DRAFT);
-
-  const counts = useQuery(trpc.notification.audienceCounts.queryOptions());
-  const announce = useMutation(
-    trpc.notification.announce.mutationOptions({
-      onSuccess: (res) => {
-        setDraft(EMPTY_DRAFT);
-        toast.success(
-          res.sent === 0
-            ? "Nobody to send to yet"
-            : `Posted to ${res.sent} ${res.sent === 1 ? "person" : "people"}`,
-        );
-        void queryClient.invalidateQueries({
-          queryKey: trpc.notification.list.queryKey(),
-        });
-      },
-      onError: (err) => toast.error(err.message || "Could not post"),
-    }),
-  );
-
-  const reach = counts.data?.[draft.audience];
-  const valid = AnnounceSchema.safeParse(draft).success;
-
-  return (
-    <form
-      className={`${cardClass()} flex flex-col gap-4`}
-      onSubmit={(e) => {
-        e.preventDefault();
-        announce.mutate(draft);
-      }}
-    >
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="announce-title">Post an update</Label>
-        <Input
-          id="announce-title"
-          value={draft.title}
-          maxLength={80}
-          placeholder="No class Friday"
-          onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-        />
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="announce-body">Message</Label>
-        <Textarea
-          id="announce-body"
-          value={draft.body}
-          maxLength={1000}
-          rows={3}
-          placeholder="The mats are being replaced. Normal schedule from Monday."
-          onChange={(e) => setDraft({ ...draft, body: e.target.value })}
-        />
-      </div>
-
-      <fieldset className="flex flex-wrap items-center gap-2">
-        <legend className="sr-only">Send to</legend>
-        {ANNOUNCEMENT_AUDIENCES.map((a) => (
-          <button
-            key={a}
-            type="button"
-            aria-pressed={draft.audience === a}
-            onClick={() => setDraft({ ...draft, audience: a })}
-            className={`min-h-11 rounded-md border px-3 py-1.5 text-sm transition-colors sm:min-h-0 ${
-              draft.audience === a
-                ? "border-brand bg-brand-wash text-brand-strong font-medium"
-                : "border-border text-muted-foreground hover:bg-muted"
-            }`}
-          >
-            {ANNOUNCEMENT_AUDIENCE_LABEL[a]}
-            {counts.data && (
-              <span className="ml-1.5 font-mono text-[10px] tabular-nums">
-                {counts.data[a]}
-              </span>
-            )}
-          </button>
-        ))}
-      </fieldset>
-
-      <div className="flex flex-wrap items-center justify-end gap-3">
-        <Button type="submit" size="sm" disabled={!valid || announce.isPending}>
-          {announce.isPending
-            ? "Posting…"
-            : reach == null
-              ? "Post"
-              : `Post to ${reach}`}
-        </Button>
-      </div>
-    </form>
   );
 }

@@ -1,10 +1,9 @@
 import type { ReactNode } from "react";
 import { View } from "react-native";
-import { useQuery } from "@tanstack/react-query";
 
+import { BranchName } from "~/components/branch-switch";
 import { NotificationBell } from "~/components/notification-bell";
-import { Mark, Txt, useTheme } from "~/components/ui";
-import { trpc } from "~/utils/api";
+import { Mark, useTheme } from "~/components/ui";
 
 /**
  * The tab-screen top bar, the twin of the web shell's mobile header (ADR 73):
@@ -12,10 +11,12 @@ import { trpc } from "~/utils/api";
  * surface with a hairline under it, so it reads as chrome and the screen title
  * below it reads as the page. Sign out and appearance are not here as they are
  * on the web: on the phone they live in Settings (S12).
+ *
+ * The branch name is the switcher (ADR 129): comparing two schedules is done
+ * from the schedule, not from Profile.
  */
 export function AppHeader({ right }: { right?: ReactNode }) {
   const t = useTheme();
-  const current = useQuery(trpc.academy.current.queryOptions());
   return (
     <View
       style={{
@@ -31,9 +32,7 @@ export function AppHeader({ right }: { right?: ReactNode }) {
     >
       <Mark size={22} />
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Txt size={14} weight={500} numberOfLines={1}>
-          {current.data?.name ?? "MatOps"}
-        </Txt>
+        <BranchName />
       </View>
       <NotificationBell />
       {right}

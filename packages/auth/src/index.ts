@@ -4,7 +4,6 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { magicLink, oAuthProxy, organization } from "better-auth/plugins";
 
-import { provisionOrganization } from "@matops/db";
 import { db } from "@matops/db/client";
 import { sendEmail } from "@matops/notifications";
 
@@ -92,22 +91,11 @@ export function initAuth<
       organization({
         ac,
         roles,
-        // The academy creator becomes an owner of the ORGANIZATION
-        // (docs/issues/20). The hook below gives them the default academy and an
-        // active owner membership of it, so onboarding is seamless — the creator
-        // is a working owner with no approval step.
+        // The gym creator becomes an owner of the ORGANIZATION
+        // (docs/issues/20), and that is all registration writes. Creating a gym
+        // no longer creates a branch: the owner picks the first one's type and
+        // name from `/overview`, and `entity.create` provisions it (ADR 128).
         creatorRole: "owner",
-        organizationHooks: {
-          // The shareable 6-digit code lives on the ENTITY now (ADR 124), so
-          // the provisioner mints it with the default academy rather than the
-          // organization carrying one.
-          afterCreateOrganization: async ({ member, organization }) => {
-            await provisionOrganization(
-              { organizationId: organization.id, ownerUserId: member.userId },
-              db,
-            );
-          },
-        },
       }),
       magicLink({
         sendMagicLink: async ({ email, token, url }) => {

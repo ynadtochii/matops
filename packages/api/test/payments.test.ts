@@ -128,7 +128,6 @@ describe("payments confirm loop", () => {
   it("a gym with no settings row reads the shared defaults", async () => {
     await h.pg.exec(`DELETE FROM "payment_settings";`);
     expect(await h.as(OWNER, ACAD).payments.getRequisites()).toEqual({
-      bankDetails: "",
       graceDays: DEFAULT_GRACE_DAYS,
       enforced: false,
     });

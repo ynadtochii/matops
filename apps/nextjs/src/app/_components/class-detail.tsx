@@ -3,7 +3,12 @@
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 
-import { canBook, capacityDisplay, notBookableMessage } from "@matops/domain";
+import {
+  canBook,
+  capacityDisplay,
+  isBjjAcademy,
+  notBookableMessage,
+} from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
@@ -11,7 +16,7 @@ import { Button } from "@matops/ui/button";
 import { dayLongFmt, timeFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { ClassTheme } from "./class-theme";
-import { useEntityHref } from "./entity";
+import { useEntity, useEntityHref } from "./entity";
 import { PageHeader } from "./page-header";
 import { cardClass, ENTER, Eyebrow, Section } from "./primitives";
 import { ClassDetailSkeleton, SkeletonCard } from "./skeletons";
@@ -21,6 +26,7 @@ import { useMinuteClock } from "./use-clock";
 
 export function ClassDetail({ classId }: { classId: string }) {
   const href = useEntityHref();
+  const bjj = isBjjAcademy(useEntity().type);
   const trpc = useTRPC();
   const { book, cancel, busy, lockedMessage } = useBooking();
   const now = useMinuteClock();
@@ -127,7 +133,7 @@ export function ClassDetail({ classId }: { classId: string }) {
           </div>
         )}
 
-        <ClassTheme classId={classId} />
+        {bjj && <ClassTheme classId={classId} />}
 
         <Section label="Details" className={cn(ENTER, "delay-100")}>
           <dl className={cn(cardClass(), "grid gap-4 sm:grid-cols-2")}>
@@ -135,14 +141,19 @@ export function ClassDetail({ classId }: { classId: string }) {
               term="Time"
               value={`${timeFmt.format(start)} · ${c.durationMinutes} min`}
             />
-            <Detail term="Discipline" value={c.discipline ?? "—"} />
-            <Detail term="Instructor" value={c.instructorName ?? "—"} />
+            {bjj && <Detail term="Discipline" value={c.discipline ?? "—"} />}
+            <Detail term="Instructor" value={c.instructorName ?? "Nobody"} />
             <Detail
               term="Spots"
               value={cap.label}
               note={cap.isOver ? "may be busy" : undefined}
               alert={cap.isOver}
             />
+            {c.description && (
+              <div className="sm:col-span-2">
+                <Detail term="About" value={c.description} />
+              </div>
+            )}
           </dl>
         </Section>
 

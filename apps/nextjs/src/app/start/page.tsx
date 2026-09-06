@@ -2,18 +2,18 @@ import { Suspense } from "react";
 
 import { Logo, Mark } from "@matops/ui/logo";
 
-import { CreateAcademy } from "~/app/_components/create-academy";
+import { CreateGym } from "~/app/_components/create-gym";
 import { MatLoader } from "~/app/_components/mat-loader";
 import { SignIn } from "~/app/_components/sign-in";
 import { getSession } from "~/auth/server";
 import { Eyebrow } from "../_components/primitives";
 
 /**
- * "Start a gym" (spec 1.1, ADR 49). The deliberate create-academy entry, reached
- * from the landing page — creating a gym is a rare action, so it is NOT the
- * default post-login screen. Creating needs a signed-in user: if the visitor is
- * signed out we show sign-in here (returning to `/start` after auth); once signed
- * in they get the create form, and creating drops them straight into the console.
+ * "Start a gym" (spec FP1, ADR 49). The deliberate gym-creation entry, reached
+ * from the landing page. Creating a gym is a rare action, so it is NOT the
+ * default post-login screen. It needs a signed-in user: a signed-out visitor
+ * gets sign-in here (returning to `/start` after auth), and creating drops the
+ * new owner on `/overview`, where they add the first branch (ADR 128).
  */
 export default function StartPage() {
   return (
@@ -30,11 +30,12 @@ export default function StartPage() {
 
         <div className="relative max-w-md">
           <h1 className="text-4xl font-semibold tracking-tight text-balance">
-            Open your academy in a minute.
+            Open your gym in a minute.
           </h1>
           <p className="text-muted-foreground mt-4 max-w-sm text-[15px] leading-relaxed">
-            Name your gym and you&apos;re its owner right away — then invite
-            your instructors and students and start taking attendance.
+            Name your gym and you&apos;re its owner right away. Add your first
+            branch, invite your instructors and students, and start taking
+            attendance.
           </p>
         </div>
 
@@ -48,7 +49,7 @@ export default function StartPage() {
         </div>
 
         <div className="flex w-full max-w-sm flex-col gap-6">
-          <Suspense fallback={<MatLoader label="Opening your academy" />}>
+          <Suspense fallback={<MatLoader label="Opening your gym" />}>
             <StartForm />
           </Suspense>
         </div>
@@ -59,13 +60,13 @@ export default function StartPage() {
 
 async function StartForm() {
   const session = await getSession();
-  if (session) return <CreateAcademy />;
+  if (session) return <CreateGym />;
   return (
     <>
       <div>
         <h2 className="text-2xl font-semibold tracking-tight">Start a gym</h2>
         <p className="text-muted-foreground mt-1 text-sm">
-          Sign in first — then name your academy.
+          Sign in first, then name your gym.
         </p>
       </div>
       <SignIn callbackURL="/start" />

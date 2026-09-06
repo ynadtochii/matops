@@ -109,6 +109,7 @@ export type NotificationKind =
   | "class_changed"
   | "class_reminder"
   | "dues_reminder"
+  | "membership_due"
   | "membership_approved"
   | "announcement";
 
@@ -118,6 +119,7 @@ const NOTIFICATION_KIND_LABEL: Record<NotificationKind, string> = {
   class_changed: "Class updated",
   class_reminder: "Class reminder",
   dues_reminder: "Membership dues",
+  membership_due: "Membership dues",
   membership_approved: "Membership",
   announcement: "Gym news",
 };
@@ -183,4 +185,24 @@ export function buildAnnouncementMessage(input: {
   body: string;
 }): PushMessage {
   return { title: input.title, body: input.body };
+}
+
+/**
+ * One announcement, several branches (ADR 127).
+ *
+ * A person at two branches gets an inbox row at EACH, because the feed is per
+ * branch and a message they cannot find where they are looking is a message
+ * they did not get. They get ONE push, because a phone buzzing twice for one
+ * announcement is the gym shouting.
+ */
+export function announcementFanOut(
+  perEntity: { entityId: string; userIds: string[] }[],
+): { rows: { entityId: string; userId: string }[]; push: string[] } {
+  const rows = perEntity.flatMap((e) =>
+    [...new Set(e.userIds)].map((userId) => ({
+      entityId: e.entityId,
+      userId,
+    })),
+  );
+  return { rows, push: [...new Set(rows.map((r) => r.userId))] };
 }

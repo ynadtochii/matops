@@ -8,7 +8,8 @@ import {
   DAY_LABELS,
   describeRecurrence,
   formatStartMinutes,
-  isOwner,
+  isBjjAcademy,
+  runsBranch,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
@@ -18,6 +19,7 @@ import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
 import { Select } from "@matops/ui/select";
 import { Spinner } from "@matops/ui/spinner";
+import { Textarea } from "@matops/ui/textarea";
 import { toast } from "@matops/ui/toast";
 
 import { optimistic, rollback } from "~/lib/optimistic";
@@ -50,6 +52,7 @@ const timeToMinutes = (t: string) => {
 interface FormState {
   title: string;
   instructorId: string;
+  description: string;
   discipline: Discipline | "";
   curriculumTrackId: string;
   daysOfWeek: number[];
@@ -62,6 +65,7 @@ interface FormState {
 
 const emptyForm = (instructorId: string, timeZone: string): FormState => ({
   title: "",
+  description: "",
   instructorId,
   discipline: "",
   curriculumTrackId: "",
@@ -75,7 +79,8 @@ const emptyForm = (instructorId: string, timeZone: string): FormState => ({
 
 const formFromTemplate = (t: Template): FormState => ({
   title: t.title,
-  instructorId: t.instructorId,
+  description: t.description ?? "",
+  instructorId: t.instructorId ?? "",
   discipline: t.discipline ?? "",
   curriculumTrackId: t.curriculumTrackId ?? "",
   daysOfWeek: t.daysOfWeek,
@@ -102,13 +107,16 @@ export function Templates({
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const list = useQuery(trpc.template.list.queryOptions());
-  const board = useQuery(trpc.curriculum.board.queryOptions({}));
+  const bjj = isBjjAcademy(useEntity().type);
+  const board = useQuery(
+    trpc.curriculum.board.queryOptions({}, { enabled: bjj }),
+  );
   const me = useEntity();
 
   const [form, setForm] = useState<FormState | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const academyTz = me.timeZone ?? browserTz();
-  const owner = isOwner(me);
+  const owner = runsBranch(me);
 
   const invalidate = () =>
     queryClient.invalidateQueries(trpc.template.list.pathFilter());
@@ -177,7 +185,11 @@ export function Templates({
     }
     const payload = {
       title: shown.title.trim(),
-      instructorId: shown.instructorId || undefined,
+      description: shown.description,
+      // A general space offers "Nobody" as a real choice, so an empty pick is
+      // null and clears the coach. A BJJ form has no such option: empty there
+      // means "leave it as it is", which the server reads from a missing field.
+      instructorId: shown.instructorId || (bjj ? undefined : null),
       discipline: shown.discipline === "" ? null : shown.discipline,
       curriculumTrackId:
         shown.curriculumTrackId === "" ? null : shown.curriculumTrackId,
@@ -248,6 +260,11 @@ export function Templates({
                   {t.durationMinutes}min · cap {t.capacity}
                   {t.instructorName && ` · ${t.instructorName}`}
                 </span>
+                {t.description && (
+                  <span className="text-muted-foreground mt-1 text-sm">
+                    {t.description}
+                  </span>
+                )}
               </div>
               <div className="flex flex-wrap justify-end gap-2">
                 <Button
@@ -430,30 +447,46 @@ export function Templates({
                     <InstructorOptions
                       value={shown.instructorId}
                       fallbackLabel={editingTemplate?.instructorName ?? "You"}
+                      noneLabel={bjj ? undefined : "Nobody"}
                     />
                   </Select>
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="tpl-discipline">Discipline</Label>
-                  <Select
-                    id="tpl-discipline"
-                    value={shown.discipline}
+                <div className="flex flex-col gap-1.5 sm:col-span-2">
+                  <Label htmlFor="tpl-description">Description</Label>
+                  <Textarea
+                    id="tpl-description"
+                    rows={3}
+                    maxLength={500}
+                    value={shown.description}
+                    placeholder="What happens in this session. Optional."
                     onChange={(e) =>
-                      setForm({
-                        ...shown,
-                        discipline: e.target.value as Discipline | "",
-                      })
+                      setForm({ ...shown, description: e.target.value })
                     }
-                  >
-                    <option value="">None</option>
-                    {DISCIPLINES.map((d) => (
-                      <option key={d} value={d}>
-                        {d.toUpperCase()}
-                      </option>
-                    ))}
-                  </Select>
+                  />
                 </div>
-                {tracks.length > 1 && (
+                {bjj && (
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="tpl-discipline">Discipline</Label>
+                    <Select
+                      id="tpl-discipline"
+                      value={shown.discipline}
+                      onChange={(e) =>
+                        setForm({
+                          ...shown,
+                          discipline: e.target.value as Discipline | "",
+                        })
+                      }
+                    >
+                      <option value="">None</option>
+                      {DISCIPLINES.map((d) => (
+                        <option key={d} value={d}>
+                          {d.toUpperCase()}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                )}
+                {bjj && tracks.length > 1 && (
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="tpl-track">Curriculum</Label>
                     <Select

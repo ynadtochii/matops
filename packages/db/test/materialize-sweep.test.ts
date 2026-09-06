@@ -99,6 +99,53 @@ describe("materialization sweep", () => {
     expect(await classCount()).toBe(0);
   });
 
+  it("copies the description onto every occurrence it makes", async () => {
+    await pg.exec(
+      `INSERT INTO "class_template"
+         (academy_id, instructor_id, title, description, days_of_week,
+          starts_at_minutes, duration_minutes, time_zone, capacity, status)
+       VALUES ('acad_a', 'user_1', 'Open gym', 'Bring a towel.',
+               '{0,1,2,3,4,5,6}', 600, 60, 'UTC', 20, 'active')`,
+    );
+
+    await runMaterializationSweep({ exec: exec() });
+
+    const rows = await pg.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM "class" WHERE description = 'Bring a towel.'`,
+    );
+    expect(single(rows).n).toBe(await classCount());
+  });
+
+  it("makes a session nobody teaches", async () => {
+    await pg.exec(
+      `INSERT INTO "class_template"
+         (academy_id, instructor_id, title, days_of_week, starts_at_minutes,
+          duration_minutes, time_zone, capacity, status)
+       VALUES ('acad_a', NULL, 'Sauna', '{0,1,2,3,4,5,6}', 600, 60, 'UTC', 20,
+               'active')`,
+    );
+
+    const res = await runMaterializationSweep({ exec: exec() });
+
+    expect(res.created).toBeGreaterThan(0);
+    const rows = await pg.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM "class" WHERE instructor_id IS NULL`,
+    );
+    expect(single(rows).n).toBe(res.created);
+  });
+
+  it("refuses a description past the column's cap", async () => {
+    await expect(
+      pg.exec(
+        `INSERT INTO "class_template"
+           (academy_id, instructor_id, title, description, days_of_week,
+            starts_at_minutes, duration_minutes, time_zone, capacity, status)
+         VALUES ('acad_a', 'user_1', 'Open gym', repeat('x', 501),
+                 '{1}', 600, 60, 'UTC', 20, 'active')`,
+      ),
+    ).rejects.toThrow(/ct_description_bounded/);
+  });
+
   it("reports hasMore when the row limit stops it, so the next tick resumes", async () => {
     await pg.exec(
       `INSERT INTO "class_template" ${COLS} VALUES

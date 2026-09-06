@@ -411,3 +411,219 @@ describe("adding an entity", () => {
     expect(after).toEqual(before);
   });
 });
+
+describe("the BJJ-only tiers", () => {
+  let h: Harness;
+  let gym: string;
+
+  beforeAll(async () => {
+    h = await harness();
+    await seedAcademies(h.pg, [
+      {
+        id: ORG_A,
+        code: "100001",
+        members: [{ userId: OWNER, role: "owner", status: "active" }],
+      },
+    ]);
+    await provisionOrganization(
+      { organizationId: ORG_A, ownerUserId: OWNER },
+      h.exec,
+    );
+    const made = await createEntity(
+      {
+        organizationId: ORG_A,
+        type: "general_space",
+        name: "The Gym",
+        ownerUserId: OWNER,
+      },
+      h.exec,
+    );
+    gym = made.entityId;
+  });
+
+  afterAll(() => h.close());
+
+  it("refuses belts at a general space", async () => {
+    expect(
+      await rejectionCode(h.as(OWNER, ORG_A, withEntity(gym)).rank.mine()),
+    ).toBe("FORBIDDEN");
+  });
+
+  it("refuses the curriculum at a general space", async () => {
+    expect(
+      await rejectionCode(
+        h.as(OWNER, ORG_A, withEntity(gym)).curriculum.board(),
+      ),
+    ).toBe("FORBIDDEN");
+    expect(
+      await rejectionCode(
+        h.as(OWNER, ORG_A, withEntity(gym)).curriculum.createTrack({
+          name: "Fundamentals",
+        }),
+      ),
+    ).toBe("FORBIDDEN");
+  });
+
+  it("refuses on the entity the header names, not the one the session holds", async () => {
+    await expect(
+      h.as(OWNER, ORG_A, withEntity(ORG_A)).rank.mine(),
+    ).resolves.toBeDefined();
+  });
+
+  it("still runs both at the BJJ academy", async () => {
+    const board = await h
+      .as(OWNER, ORG_A, withEntity(ORG_A))
+      .curriculum.board();
+    expect(board.tracks.length).toBeGreaterThan(0);
+  });
+});
+
+describe("switching a branch onto memberships", () => {
+  const BOSS = "u_switch_owner";
+  const HAND = "u_switch_coach";
+  const SAM = "u_switch_sam";
+  const NOBODY = "u_switch_stranger";
+  const ORG_S = "org_switch";
+  const ORG_T = "org_switch_other";
+  let h: Harness;
+  let second: string;
+
+  const owner = () => h.as(BOSS, ORG_S);
+
+  beforeAll(async () => {
+    h = await harness();
+    await seedAcademies(h.pg, [
+      {
+        id: ORG_S,
+        code: "100011",
+        members: [
+          { userId: BOSS, role: "owner", status: "active" },
+          { userId: HAND, role: "instructor", status: "active" },
+          { userId: SAM, role: "student", status: "active" },
+        ],
+      },
+      {
+        id: ORG_T,
+        code: "100012",
+        members: [{ userId: NOBODY, role: "owner", status: "active" }],
+      },
+    ]);
+    const made = await createEntity(
+      {
+        organizationId: ORG_S,
+        type: "bjj_academy",
+        name: "Second Mat",
+        ownerUserId: BOSS,
+      },
+      h.exec,
+    );
+    second = made.entityId;
+  });
+
+  afterAll(() => h.close());
+
+  it("refuses a coach and a student", async () => {
+    for (const user of [HAND, SAM]) {
+      expect([
+        user,
+        await rejectionCode(
+          h.as(user, ORG_S).entity.setMembershipEnforced({
+            entityId: ORG_S,
+            enforced: true,
+          }),
+        ),
+      ]).toEqual([user, "FORBIDDEN"]);
+    }
+  });
+
+  it("refuses an entity of another organization", async () => {
+    expect(
+      await rejectionCode(
+        owner().entity.activationPreview({ entityId: ORG_T }),
+      ),
+    ).toBe("FORBIDDEN");
+    expect(
+      await rejectionCode(
+        owner().entity.setMembershipEnforced({
+          entityId: ORG_T,
+          enforced: true,
+        }),
+      ),
+    ).toBe("FORBIDDEN");
+  });
+
+  it("gives an entity that does not exist the same answer as a foreign one", async () => {
+    expect(
+      await rejectionCode(
+        owner().entity.activationPreview({ entityId: "no_such_branch" }),
+      ),
+    ).toBe("FORBIDDEN");
+  });
+
+  it("names the active members no membership covers", async () => {
+    const preview = await owner().entity.activationPreview({
+      entityId: ORG_S,
+    });
+    expect(preview.enforced).toBe(false);
+    expect(preview.activeMembers).toBe(3);
+    expect(preview.uncovered.map((m) => m.userId).sort()).toEqual(
+      [BOSS, HAND, SAM].sort(),
+    );
+  });
+
+  it("counts nobody once a plan covers the branch", async () => {
+    const plan = await owner().accessPlan.create({
+      name: "Everything",
+      entityIds: [ORG_S],
+    });
+    for (const userId of [BOSS, HAND, SAM]) {
+      await owner().accessPlan.assign({ userId, planId: plan.id });
+    }
+    const preview = await owner().entity.activationPreview({
+      entityId: ORG_S,
+    });
+    expect(preview.uncovered).toEqual([]);
+  });
+
+  it("reads one branch at a time", async () => {
+    const preview = await owner().entity.activationPreview({
+      entityId: second,
+    });
+    expect([preview.entityId, preview.activeMembers]).toEqual([second, 1]);
+  });
+
+  it("keeps the first timestamp when switched on twice", async () => {
+    await owner().entity.setMembershipEnforced({
+      entityId: ORG_S,
+      enforced: true,
+    });
+    const stamped = await h.pg.query<{ at: string }>(
+      `SELECT membership_enforced_at AS at FROM "entity" WHERE id = '${ORG_S}'`,
+    );
+    await owner().entity.setMembershipEnforced({
+      entityId: ORG_S,
+      enforced: true,
+    });
+    const again = await h.pg.query<{ at: string }>(
+      `SELECT membership_enforced_at AS at FROM "entity" WHERE id = '${ORG_S}'`,
+    );
+    expect(again.rows[0]?.at).toEqual(stamped.rows[0]?.at);
+  });
+
+  it("tells the branch screens which gate it runs on", async () => {
+    expect((await owner().academy.current())?.membershipEnforced).toBe(true);
+    const preview = await owner().entity.activationPreview({
+      entityId: ORG_S,
+    });
+    expect(preview.enforced).toBe(true);
+  });
+
+  it("hands the branch back to the legacy gate when switched off", async () => {
+    const off = await owner().entity.setMembershipEnforced({
+      entityId: ORG_S,
+      enforced: false,
+    });
+    expect(off.enforced).toBe(false);
+    expect((await owner().academy.current())?.membershipEnforced).toBe(false);
+  });
+});

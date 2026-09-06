@@ -15,6 +15,11 @@
  *
  *   status [code]  show the demo academy (and, with a code, that academy's fakes).
  *
+ * The general-branches pilot (ADR 126) — one organization running a BJJ academy,
+ * a gym and a sauna, with the three example plans:
+ *   pilot   build it, attached to YOUR real user as its owner. Idempotent.
+ *           Removed by `down` like the rest of the seed.
+ *
  * The email (arg or SEED_EMAIL) is only needed by up/reset. Sign in once at
  * http://localhost:3004 first so your `user` row exists.
  */
@@ -28,11 +33,12 @@ import {
   fillAcademy,
   findAcademyByPublicCode,
 } from "./augment";
+import { seedPilot } from "./pilot";
 import { assertSeedableTarget, resolveOwnerEmail } from "./registry";
 import { seedAll } from "./run";
 import { removeAll, seedStatus } from "./teardown";
 
-type Command = "up" | "down" | "reset" | "status" | "fill" | "clear";
+type Command = "up" | "down" | "reset" | "status" | "fill" | "clear" | "pilot";
 
 function parseArgs(argv: string[]): {
   command: Command;
@@ -40,7 +46,15 @@ function parseArgs(argv: string[]): {
   code?: string;
 } {
   const rest = argv.slice(2);
-  const known: Command[] = ["up", "down", "reset", "status", "fill", "clear"];
+  const known: Command[] = [
+    "up",
+    "down",
+    "reset",
+    "status",
+    "fill",
+    "clear",
+    "pilot",
+  ];
   const command = (
     known.includes(rest[0] as Command) ? rest[0] : "up"
   ) as Command;
@@ -91,6 +105,25 @@ async function main(): Promise<void> {
   const { command, email, code } = parseArgs(process.argv);
   assertSeedableTarget();
   const exec = db;
+
+  if (command === "pilot") {
+    const address = resolveOwnerEmail(email);
+    const owner = await resolveRealUser(address);
+    if (!owner) {
+      throw new Error(
+        `No user with email ${address}. Sign in once at http://localhost:3004 first.`,
+      );
+    }
+    const report = await seedPilot(exec, owner.id);
+    console.log(`[seed] pilot gym ready for ${address}:`);
+    for (const b of report.branches) {
+      console.log(`  branch  ${b.name}  (${b.type})  ${b.id}`);
+    }
+    for (const p of report.plans) {
+      console.log(`  plan    ${p.name}  covers ${p.covers.length}`);
+    }
+    return;
+  }
 
   // --- Fill / clear a REAL academy (the recommended mode) -------------------
   if (command === "fill") {

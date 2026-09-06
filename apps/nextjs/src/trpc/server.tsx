@@ -88,7 +88,10 @@ export async function myEntities() {
   return (
     queryClient.getQueryData(options.queryKey) ?? {
       organizationId: "",
-      canAdd: false,
+      canCreateBranches: false,
+      canCreateGeneralBranches: false,
+      canRunOrganization: false,
+      role: "member",
       entities: [],
     }
   );

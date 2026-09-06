@@ -1,6 +1,6 @@
 import type { Membership } from "./access";
 import type { LocalDate } from "./local-date";
-import { isOwner, isStaff } from "./access";
+import { isStaff, runsBranch } from "./access";
 import { DAY_MS, localDate } from "./local-date";
 import { instantFromLocalDate } from "./materialize";
 
@@ -408,7 +408,7 @@ export function canReassignCoach(
 ): boolean {
   if (!isStaff(membership)) return false;
   if (classStartsAt.getTime() > now.getTime()) return true;
-  return isOwner(membership);
+  return runsBranch(membership);
 }
 
 /**
@@ -420,5 +420,5 @@ export function canReadCoachFigures(
   instructorId: string,
   callerId: string,
 ): boolean {
-  return instructorId === callerId || isOwner(membership);
+  return instructorId === callerId || runsBranch(membership);
 }

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Alert, Pressable } from "react-native";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
-import { bookingAccessMessage, capacityDisplay } from "@matops/domain";
+import { capacityDisplay } from "@matops/domain";
 
 import { useToast } from "~/components/toast";
 import { confirm, Txt, useTheme } from "~/components/ui";
@@ -41,10 +41,14 @@ export function useBookClass(
 
   const current = useQuery(trpc.academy.current.queryOptions());
   const approved = current.data?.status === "active";
-  const dues = useQuery(
-    trpc.payments.myDues.queryOptions(undefined, { enabled: approved }),
+  // One question, one answer, whichever gate this branch runs on. The server
+  // builds the sentence through the same `bookingGate` the booking mutation
+  // uses, so the app and the web show the identical words for the identical
+  // situation (ADR 126). Cancel is never gated: somebody whose month ran out
+  // must still be able to give their place back.
+  const gate = useQuery(
+    trpc.booking.access.queryOptions(undefined, { enabled: approved }),
   );
-  const access = dues.data?.access;
 
   const book = useMutation(
     trpc.booking.book.mutationOptions({
@@ -81,9 +85,8 @@ export function useBookClass(
   /** Book `c`, asking to confirm first when it is at/over capacity. */
   const onBook = (c: BookableClass) => {
     setError(null);
-    if (access?.state === "locked") {
-      const message =
-        bookingAccessMessage(access) ?? "Booking is locked for you.";
+    if (gate.data?.locked) {
+      const message = gate.data.message ?? "Booking is locked for you.";
       setError(message);
       if (opts?.toastError) toast.show(message);
       return;

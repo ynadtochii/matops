@@ -10,8 +10,9 @@ const base = {
   startsAtMinutes: 1140,
   timeZone: "Europe/Lisbon",
   title: "Gi Fundamentals",
+  description: null as string | null,
   discipline: "bjj" as string | null,
-  instructorId: "usr_1",
+  instructorId: "usr_1" as string | null,
   durationMinutes: 60,
   capacity: 20,
   publicBookable: false,
@@ -80,6 +81,7 @@ describe("templateContentChanged", () => {
   it("sees every field the in-place update writes", () => {
     const fields = [
       { title: "Nogi" },
+      { description: "Bring a towel." },
       { discipline: null },
       { instructorId: "usr_2" },
       { durationMinutes: 90 },

@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 
-import { isOwner } from "@matops/domain";
+import { runsBranch } from "@matops/domain";
 
 import type { EntityPageProps } from "~/trpc/server";
 import { SettingsScreen } from "~/app/_components/settings-screen";
@@ -16,7 +16,7 @@ import {
 async function SettingsData() {
   const academy = await currentAcademy();
 
-  if (academy && isOwner(academy)) {
+  if (academy && runsBranch(academy)) {
     prefetch(trpc.academy.settings.queryOptions());
     prefetch(trpc.payments.getRequisites.queryOptions());
   }
