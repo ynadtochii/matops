@@ -16,7 +16,7 @@ import {
 } from "@matops/validators";
 
 import {
-  ownerIdentityProcedure,
+  branchManagerIdentityProcedure,
   publicProcedure,
   rateLimited,
   staffIdentityProcedure,
@@ -34,7 +34,7 @@ export const inviteRouter = {
   ),
 
   /** Ensure a live link exists for a role (create-on-demand). Owner-only. */
-  create: ownerIdentityProcedure
+  create: branchManagerIdentityProcedure
     .input(z.object({ role: InviteRoleSchema }))
     .mutation(({ ctx, input }) =>
       getOrCreateInvite(
@@ -48,7 +48,7 @@ export const inviteRouter = {
     ),
 
   /** Rotate a role's link: the old token stops working, a new one is minted. */
-  rotate: ownerIdentityProcedure
+  rotate: branchManagerIdentityProcedure
     .input(z.object({ role: InviteRoleSchema }))
     .mutation(({ ctx, input }) =>
       rotateInvite(
@@ -62,7 +62,7 @@ export const inviteRouter = {
     ),
 
   /** Revoke a specific link (kills it without minting a replacement). */
-  revoke: ownerIdentityProcedure
+  revoke: branchManagerIdentityProcedure
     .input(z.object({ inviteId: IdSchema }))
     .mutation(async ({ ctx, input }) => {
       await revokeInvite(ctx.academyId, input.inviteId, ctx.baseDb);

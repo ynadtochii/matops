@@ -12,7 +12,7 @@ import { toast } from "@matops/ui/toast";
 import { dateFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { useEntity } from "./entity";
-import { MembershipNotice } from "./membership-notice";
+import { MembershipChangeNotice, MembershipNotice } from "./membership-notice";
 import { PageHeader } from "./page-header";
 import { cardClass, DUES_TONE, ENTER, Eyebrow, Section } from "./primitives";
 import { SkeletonDuesBody } from "./skeletons";
@@ -45,6 +45,7 @@ export function MyDues() {
         subtitle="What you owe, and how to pay it."
       />
       <MembershipNotice />
+      <MembershipChangeNotice />
     </>
   );
 

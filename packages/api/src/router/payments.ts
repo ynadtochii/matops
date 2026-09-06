@@ -39,7 +39,7 @@ import {
   readPaymentSettings,
 } from "../payments-read";
 import { isUniqueViolation } from "../pg-error";
-import { memberProcedure, ownerProcedure } from "../trpc";
+import { branchManagerProcedure, memberProcedure } from "../trpc";
 
 /** Parse a "YYYY-MM-DD" due date to a UTC-midnight instant. */
 function parseDueDate(date: string): Date {
@@ -85,7 +85,7 @@ export const paymentsRouter = {
   // ─── Owner: plans ──────────────────────────────────────────────────────────
 
   /** The academy's membership plans (price list), newest first. Owner-only. */
-  plans: ownerProcedure.query(({ ctx }) =>
+  plans: branchManagerProcedure.query(({ ctx }) =>
     ctx.db
       .select({
         id: membershipPlan.id,
@@ -100,7 +100,7 @@ export const paymentsRouter = {
   ),
 
   /** Create a membership plan (spec O7). */
-  createPlan: ownerProcedure
+  createPlan: branchManagerProcedure
     .input(CreateMembershipPlanSchema)
     .mutation(async ({ ctx, input }) => {
       refuseIfMigrated(ctx);
@@ -124,7 +124,7 @@ export const paymentsRouter = {
     }),
 
   /** Edit a plan in place — members on it pick up the new name/price. */
-  updatePlan: ownerProcedure
+  updatePlan: branchManagerProcedure
     .input(UpdateMembershipPlanSchema)
     .mutation(async ({ ctx, input }) => {
       refuseIfMigrated(ctx);
@@ -150,7 +150,7 @@ export const paymentsRouter = {
     }),
 
   /** Soft-delete a plan (keeps claim history valid). */
-  deletePlan: ownerProcedure
+  deletePlan: branchManagerProcedure
     .input(PlanIdSchema)
     .mutation(async ({ ctx, input }) => {
       refuseIfMigrated(ctx);
@@ -169,7 +169,7 @@ export const paymentsRouter = {
    * caller's academy (the `member` table has no RLS) before touching the
    * RLS-scoped `member_dues`.
    */
-  setMemberDues: ownerProcedure
+  setMemberDues: branchManagerProcedure
     .input(SetMemberDuesSchema)
     .mutation(async ({ ctx, input }) => {
       refuseIfMigrated(ctx);
@@ -224,7 +224,7 @@ export const paymentsRouter = {
    * No bank details any more: the account belongs to the organization and is
    * edited on its Settings screen (ADR 127).
    */
-  getRequisites: ownerProcedure.query(async ({ ctx }) => {
+  getRequisites: branchManagerProcedure.query(async ({ ctx }) => {
     const row = await readPaymentSettings(ctx.db);
     return {
       graceDays: row.graceDays,
@@ -232,7 +232,7 @@ export const paymentsRouter = {
     };
   }),
 
-  updateBookingGate: ownerProcedure
+  updateBookingGate: branchManagerProcedure
     .input(UpdateBookingGateSchema)
     .mutation(async ({ ctx, input }) => {
       refuseIfMigrated(ctx);
@@ -257,7 +257,7 @@ export const paymentsRouter = {
   // ─── Owner: claims to confirm ───────────────────────────────────────────────
 
   /** Pending "I paid" claims awaiting confirmation (spec O7). Owner-only. */
-  claims: ownerProcedure.query(async ({ ctx }) => {
+  claims: branchManagerProcedure.query(async ({ ctx }) => {
     const rows = await ctx.db
       .select({
         id: paymentClaim.id,
@@ -290,7 +290,7 @@ export const paymentsRouter = {
    * date forward one cycle. Both writes run in the one RLS transaction `ctx.db`
    * already is, so a failure rolls back atomically.
    */
-  confirm: ownerProcedure
+  confirm: branchManagerProcedure
     .input(ClaimIdSchema)
     .mutation(async ({ ctx, input }) => {
       refuseIfMigrated(ctx);
@@ -333,7 +333,7 @@ export const paymentsRouter = {
     }),
 
   /** Reject a claim (spec O7) — dismiss it without rolling the due date. */
-  reject: ownerProcedure
+  reject: branchManagerProcedure
     .input(ClaimIdSchema)
     .mutation(async ({ ctx, input }) => {
       refuseIfMigrated(ctx);

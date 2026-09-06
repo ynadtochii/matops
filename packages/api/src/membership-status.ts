@@ -1,6 +1,6 @@
-import type { TenantTx } from "@matops/db";
+import type { SQL, TenantTx } from "@matops/db";
 import type { MembershipWarning, Money } from "@matops/domain";
-import { and, eq, isNull } from "@matops/db";
+import { and, eq, gt, isNull, lte, or, sql } from "@matops/db";
 import {
   accessAssignment,
   accessPlan,
@@ -11,6 +11,7 @@ import {
   membershipPolicy,
 } from "@matops/db/schema";
 import {
+  appliesInMonth,
   membershipWarning,
   monthOf,
   monthVerdict,
@@ -18,6 +19,27 @@ import {
   priceForMonth,
   resolveAcademyTimeZone,
 } from "@matops/domain";
+
+/**
+ * The SQL half of {@link appliesInMonth} for a count that has no month in hand
+ * (ADR 129): the assignment has started and has not ended today.
+ *
+ * `start_month` and `end_month` are first-of-month dates, so comparing them
+ * against `current_date` answers the month question without a second lookup.
+ * A reader that already knows the month it is judging should filter in
+ * TypeScript with `appliesInMonth` instead, which is exact about the zone.
+ */
+export function assignmentAppliesNow() {
+  return assignmentAppliesInMonth(sql`current_date`);
+}
+
+/** The same rule against a month the caller has already resolved. */
+export function assignmentAppliesInMonth(month: string | SQL) {
+  return and(
+    lte(accessAssignment.startMonth, month),
+    or(isNull(accessAssignment.endMonth), gt(accessAssignment.endMonth, month)),
+  );
+}
 
 /** The column default, for the read that runs before a policy row exists. */
 const DEFAULT_MEMBERSHIP_GRACE_DAYS = 7;
@@ -109,6 +131,7 @@ export async function membershipStanding(
       id: accessAssignment.id,
       status: accessAssignment.status,
       startMonth: accessAssignment.startMonth,
+      endMonth: accessAssignment.endMonth,
       createdAt: accessAssignment.createdAt,
       planId: accessAssignment.planId,
       planName: accessPlan.name,
@@ -117,6 +140,11 @@ export async function membershipStanding(
     .innerJoin(accessPlan, eq(accessPlan.id, accessAssignment.planId))
     .where(eq(accessAssignment.userId, userId));
   if (rows.length === 0) return [];
+  // Only the memberships whose period covers this month (ADR 129). A successor
+  // that starts next month owes nothing yet, and the one it replaces still owes
+  // this month.
+  const applicable = rows.filter((r) => appliesInMonth(r, month));
+  if (applicable.length === 0) return [];
 
   const coverage = await db
     .select({
@@ -145,7 +173,7 @@ export async function membershipStanding(
     })
     .from(accessPlanPrice);
 
-  return rows.map((r) => {
+  return applicable.map((r) => {
     const held = months.find((m) => m.assignmentId === r.id);
     const paid = held?.paid ?? false;
     const shared = {

@@ -70,8 +70,10 @@ describe("legacy dues after a branch has moved", () => {
 
   it("says the branch has a dues history, and a new branch does not", async () => {
     expect((await owner().academy.current())?.hasLegacyDues).toBe(true);
+    const headers = new Headers();
+    headers.set("x-matops-entity", newBranch);
     expect(
-      (await h.as(OWNER, newBranch).academy.current())?.hasLegacyDues,
+      (await h.as(OWNER, OLD, headers).academy.current())?.hasLegacyDues,
     ).toBe(false);
   });
 

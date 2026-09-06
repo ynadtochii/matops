@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 
-import { isOwner } from "@matops/domain";
+import { runsBranch } from "@matops/domain";
 
 import type { EntityPageProps } from "~/trpc/server";
 import { PaymentsScreen } from "~/app/_components/payments-screen";
@@ -16,7 +16,7 @@ import {
 async function PaymentsData() {
   const academy = await currentAcademy();
 
-  if (academy && isOwner(academy)) {
+  if (academy && runsBranch(academy)) {
     prefetch(trpc.payments.claims.queryOptions());
     prefetch(trpc.payments.plans.queryOptions());
     prefetch(trpc.membership.members.queryOptions());

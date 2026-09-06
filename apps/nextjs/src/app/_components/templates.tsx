@@ -9,7 +9,7 @@ import {
   describeRecurrence,
   formatStartMinutes,
   isBjjAcademy,
-  isOwner,
+  runsBranch,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
@@ -116,7 +116,7 @@ export function Templates({
   const [form, setForm] = useState<FormState | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const academyTz = me.timeZone ?? browserTz();
-  const owner = isOwner(me);
+  const owner = runsBranch(me);
 
   const invalidate = () =>
     queryClient.invalidateQueries(trpc.template.list.pathFilter());

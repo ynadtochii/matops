@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 
-import { isOwner, isStaff } from "@matops/domain";
+import { isStaff, runsBranch } from "@matops/domain";
 
 import type { EntityPageProps } from "~/trpc/server";
 import { CoachesScreen } from "~/app/_components/coaches-screen";
@@ -19,7 +19,7 @@ async function CoachesData() {
   if (academy && isStaff(academy)) {
     prefetch(trpc.membership.members.queryOptions());
     prefetch(trpc.stats.coaches.queryOptions({ window: "this_month" }));
-    if (isOwner(academy)) {
+    if (runsBranch(academy)) {
       prefetch(trpc.membership.staff.queryOptions());
       prefetch(trpc.invite.list.queryOptions());
     }

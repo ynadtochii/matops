@@ -11,7 +11,6 @@ import { useTRPC } from "~/trpc/react";
 import { useOrganization } from "./entity";
 import { EntitySelector } from "./entity-selector";
 import {
-  CoachesIcon,
   DashboardIcon,
   MembersIcon,
   PaymentsIcon,
@@ -62,7 +61,7 @@ export function OrganizationShell({
   const items: NavItem[] = [
     {
       path: "/overview",
-      label: "Overview",
+      label: "Gym overview",
       icon: <DashboardIcon />,
       show: true,
     },
@@ -71,6 +70,10 @@ export function OrganizationShell({
       label: "People",
       icon: <MembersIcon />,
       show: running,
+      // Coach requests waiting anywhere. They live on the Staff TAB of this
+      // screen now, so the count belongs to People and is not shown twice
+      // (ADR 129).
+      badge: pendingCoachCount(directory.data?.rows ?? []),
     },
     {
       path: "/memberships",
@@ -80,15 +83,8 @@ export function OrganizationShell({
       badge: claims.data?.length ?? 0,
     },
     {
-      path: "/staff",
-      label: "Staff",
-      icon: <CoachesIcon />,
-      show: running,
-      badge: pendingCoachCount(directory.data?.rows ?? []),
-    },
-    {
       path: "/settings",
-      label: "Settings",
+      label: "Gym settings",
       icon: <SettingsIcon />,
       show: owner,
     },

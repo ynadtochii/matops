@@ -4,6 +4,7 @@ import type { DbExec } from "./client";
 import type { TenantTx } from "./tenant";
 import {
   accessAssignment,
+  accessAssignmentChange,
   classInstance,
   classParticipation,
   entityMembership,
@@ -265,6 +266,18 @@ export async function deleteOrganizationAssignments(
       ),
     ),
   );
+
+  // The scheduled plan changes point at two assignments each, so they go
+  // first. The record of a change is only meaningful while the memberships it
+  // moved between still exist (ADR 129).
+  await exec
+    .delete(accessAssignmentChange)
+    .where(
+      and(
+        eq(accessAssignmentChange.organizationId, organizationId),
+        eq(accessAssignmentChange.userId, userId),
+      ),
+    );
 
   const gone = await exec
     .delete(accessAssignment)

@@ -92,12 +92,24 @@ describe("the event writer", () => {
   });
 
   it("keeps the same milestone at two branches apart", async () => {
+    // A SECOND branch of the same gym. `academy_B` is another gym's branch, and
+    // the composite key `(organization_id, entity_id)` refuses it, which is the
+    // point of that key: the same milestone at two branches is two rows only
+    // when both branches are this gym's.
+    const second = `${A}_second`;
+    await pg.query(
+      `INSERT INTO "entity" (id, organization_id, type, name, slug, is_default, public_code)
+         VALUES ($1, $2, 'bjj_academy', $1, $1, false, '990099')
+         ON CONFLICT (id) DO NOTHING`,
+      [second, A],
+    );
+
     await recordMilestone(
       { organizationId: A, entityId: A, name: "branch_activated" },
       db,
     );
     await recordMilestone(
-      { organizationId: A, entityId: B, name: "branch_activated" },
+      { organizationId: A, entityId: second, name: "branch_activated" },
       db,
     );
     const rows = await db

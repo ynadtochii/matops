@@ -64,8 +64,11 @@ async function seedClaim(
 describe("stats.dashboard", () => {
   it("counts marked attendance into the gym insights", async () => {
     const h = await base();
+    // A couple of hours ago, not yesterday: weeks are Sunday-aligned, so a
+    // class 24 hours old falls into LAST week whenever the suite runs on a
+    // Sunday, and this assertion is about the count and not the calendar.
     await seedClasses(h.pg, [
-      { id: RECENT, academyId: A, instructorId: COACH, startsInMinutes: -1440 },
+      { id: RECENT, academyId: A, instructorId: COACH, startsInMinutes: -120 },
     ]);
     await seedParticipations(h.pg, [
       {

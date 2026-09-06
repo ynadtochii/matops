@@ -115,3 +115,29 @@ describe("who may open which screen", () => {
     );
   });
 });
+
+describe("a gym manager at a branch", () => {
+  const manager = { role: "manager", status: "active" };
+
+  it("is offered the branch screens an owner is", () => {
+    for (const path of [
+      "/",
+      "/schedule",
+      "/members",
+      "/attendance",
+      "/coaches",
+      "/settings",
+    ]) {
+      expect([path, canVisit(path, manager)]).toEqual([path, true]);
+    }
+  });
+
+  it("keeps the BJJ narrowing", () => {
+    expect(canVisit("/referrals", { ...manager, type: "general_space" })).toBe(
+      false,
+    );
+    expect(canVisit("/referrals", { ...manager, type: "bjj_academy" })).toBe(
+      true,
+    );
+  });
+});

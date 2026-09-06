@@ -25,9 +25,11 @@ import {
   canEnroll,
   isActiveMember,
   isBjjAcademy,
+  isManager,
   isOwner,
   isStaff,
   isSuspended,
+  runsBranch,
   runsOrganization,
 } from "@matops/domain";
 
@@ -290,8 +292,8 @@ export interface EntityMembershipContext {
  * same answer as one that does not exist, so this cannot enumerate other
  * people's gyms.
  *
- * An active organization owner reaches every entity of the organization. Anyone
- * else needs a live `entity_membership`.
+ * An active organization owner or manager reaches every entity of the
+ * organization (ADR 129). Anyone else needs a live `entity_membership`.
  */
 async function resolveEntity<U extends { id: string }>(ctx: {
   session?: {
@@ -327,33 +329,45 @@ async function resolveEntity<U extends { id: string }>(ctx: {
     entityId,
     ctx.baseDb,
   );
-  const ownsOrganization =
-    isActiveMember(orgMembership) && isOwner(orgMembership);
+  // What running the gym is worth at a branch (ADR 129). An owner reads
+  // "owner"; a manager reads "manager" and never "owner", because the four
+  // protected actions are told apart by exactly that word.
+  const organizationRole = isOwner(orgMembership)
+    ? "owner"
+    : isManager(orgMembership)
+      ? "manager"
+      : null;
 
-  if (!entityMembership && !ownsOrganization) {
+  if (!entityMembership && !organizationRole) {
     throw new TRPCError({
       code: "FORBIDDEN",
       message: "You cannot use this entity",
     });
   }
 
-  // Organization ownership wins (ADR 124 §2, amended by the v7.2 review): an
-  // active owner reaches every entity, including one where a co-owner archived
-  // or suspended their entity membership, which they would otherwise have no
-  // way to undo. `memberId` is null when there is no entity membership at all,
-  // because every dues, rank, note and referral row keys on `entity_membership.id`
-  // and the Better Auth member id is a different id space.
+  // Running the organization wins (ADR 124 §2, amended by the v7.2 review and
+  // by ADR 129): it reaches every entity, including one where a co-owner
+  // archived or suspended the entity membership, which they would otherwise
+  // have no way to undo. A branch owner stays an owner even when the caller
+  // only manages the organization. `memberId` is null when there is no entity
+  // membership at all, because every dues, rank, note and referral row keys on
+  // `entity_membership.id` and the Better Auth member id is a different id
+  // space — so a manager with no row here cannot book as a student, and this
+  // never enrols them as one.
   const membership: EntityMembershipContext = entityMembership
     ? {
         memberId: entityMembership.id,
         joinedAt: entityMembership.joinedAt ?? entityMembership.createdAt,
-        role: ownsOrganization ? "owner" : entityMembership.role,
-        status: ownsOrganization ? "active" : entityMembership.status,
+        role:
+          entityMembership.role === "owner"
+            ? "owner"
+            : (organizationRole ?? entityMembership.role),
+        status: organizationRole ? "active" : entityMembership.status,
       }
     : {
         memberId: null,
         joinedAt: orgMembership.joinedAt,
-        role: "owner",
+        role: organizationRole ?? "student",
         status: "active",
       };
 
@@ -508,10 +522,32 @@ export const staffProcedure = memberProcedure.use(({ ctx, next }) => {
   return next();
 });
 
-/** Owner — active owner: academy settings, invites, members. */
+/**
+ * Owner — active owner of this branch. Four actions only (ADR 129): making or
+ * removing an owner, permanent erase, deleting the branch, and the commercial
+ * account. Everything else an owner does at a branch is
+ * {@link branchManagerProcedure}, which a gym's manager also reaches.
+ */
 export const ownerProcedure = memberProcedure.use(({ ctx, next }) => {
   if (!isOwner(ctx.membership)) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Owner only" });
+  }
+  return next();
+});
+
+/**
+ * Runs this branch: an active owner, or a manager of the gym (ADR 129).
+ *
+ * The branch tier for the ordinary work — local members and their approvals,
+ * leads, plans, dues, claims, instructor assignment and ordinary branch
+ * settings. Spelled in the tier so a resolver never has to remember it.
+ */
+export const branchManagerProcedure = memberProcedure.use(({ ctx, next }) => {
+  if (!runsBranch(ctx.membership)) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Owners and managers only",
+    });
   }
   return next();
 });
@@ -615,3 +651,7 @@ export const organizationManagerIdentityProcedure = protectedProcedure.use(
 
 export const staffIdentityProcedure = identityProcedure(isStaff, "Staff only");
 export const ownerIdentityProcedure = identityProcedure(isOwner, "Owner only");
+export const branchManagerIdentityProcedure = identityProcedure(
+  runsBranch,
+  "Owners and managers only",
+);

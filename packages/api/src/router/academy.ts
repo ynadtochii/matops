@@ -39,8 +39,9 @@ import {
 
 import { academyContext } from "../academy-tz";
 import {
+  branchManagerIdentityProcedure,
+  branchManagerProcedure,
   ownerIdentityProcedure,
-  ownerProcedure,
   protectedProcedure,
   staffIdentityProcedure,
 } from "../trpc";
@@ -141,7 +142,7 @@ export const academyRouter = {
     };
   }),
 
-  settings: ownerProcedure.query(async ({ ctx }) => {
+  settings: branchManagerProcedure.query(async ({ ctx }) => {
     const { timeZone, country } = await academyContext(ctx);
     const zones = await ctx.db
       .selectDistinct({ timeZone: classTemplate.timeZone })
@@ -156,7 +157,7 @@ export const academyRouter = {
     };
   }),
 
-  updateSettings: ownerIdentityProcedure
+  updateSettings: branchManagerIdentityProcedure
     .input(UpdateAcademySettingsSchema)
     .mutation(async ({ ctx, input }) => {
       if (input.timeZone !== undefined && !isValidTimeZone(input.timeZone)) {
@@ -213,7 +214,7 @@ export const academyRouter = {
    * The public booking surface (spec O6, ADR 115): the master switch, the
    * publishable key and the optional origin allowlist. Owner-only.
    */
-  publicApi: ownerIdentityProcedure.query(async ({ ctx }) => {
+  publicApi: branchManagerIdentityProcedure.query(async ({ ctx }) => {
     const settings = await ctx.withScope((db) =>
       getPublicApiSettings(ctx.academyId, db),
     );
@@ -228,7 +229,7 @@ export const academyRouter = {
    * switching off keeps it, because a gym that pauses for a week should not have
    * to re-paste a key into its website afterwards.
    */
-  setPublicApi: ownerIdentityProcedure
+  setPublicApi: branchManagerIdentityProcedure
     .input(PublicBookingEnabledSchema)
     .mutation(async ({ ctx, input }) => {
       const settings = await ctx.withScope((db) =>
@@ -244,16 +245,18 @@ export const academyRouter = {
     }),
 
   /** Rotate the key: the old one stops working the moment this commits. */
-  rotatePublicApiKey: ownerIdentityProcedure.mutation(async ({ ctx }) => {
-    return {
-      apiKey: await ctx.withScope((db) =>
-        rotatePublicApiKey(ctx.academyId, db),
-      ),
-    };
-  }),
+  rotatePublicApiKey: branchManagerIdentityProcedure.mutation(
+    async ({ ctx }) => {
+      return {
+        apiKey: await ctx.withScope((db) =>
+          rotatePublicApiKey(ctx.academyId, db),
+        ),
+      };
+    },
+  ),
 
   /** The websites allowed to call the API from a browser. Empty means any. */
-  setPublicApiOrigins: ownerIdentityProcedure
+  setPublicApiOrigins: branchManagerIdentityProcedure
     .input(PublicApiOriginsSchema)
     .mutation(async ({ ctx, input }) => {
       await ctx.withScope((db) =>
@@ -313,7 +316,7 @@ export const academyRouter = {
    * organization's: a gym with two mats renames one of them, and the name every
    * screen shows is the entity's (ADR 124). The code is never touched.
    */
-  rename: ownerIdentityProcedure
+  rename: branchManagerIdentityProcedure
     .input(CreateAcademySchema)
     .mutation(async ({ ctx, input }) => {
       await ctx.withScope((db) =>

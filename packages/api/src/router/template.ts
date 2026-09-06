@@ -32,7 +32,7 @@ import {
 
 import { requireInstructor } from "../members";
 import { TEMPLATE_NOT_FOUND } from "../messages";
-import { ownerProcedure, staffProcedure } from "../trpc";
+import { branchManagerProcedure, staffProcedure } from "../trpc";
 
 /**
  * Recurring class templates (spec O3, docs/issues/08, 16). Staff-only CRUD.
@@ -309,7 +309,7 @@ export const templateRouter = {
    * What a rebuild would remove, so the confirm dialog can name the damage
    * before the owner commits to it. Reads only.
    */
-  rebuildPreview: ownerProcedure.query(async ({ ctx }) => {
+  rebuildPreview: branchManagerProcedure.query(async ({ ctx }) => {
     const { ids, bookings } = await planRebuild(ctx.db);
     return { toDelete: ids.length, bookingsAffected: bookings };
   }),
@@ -320,5 +320,7 @@ export const templateRouter = {
    * everyone's calendar. Past classes and their attendance are never touched,
    * and a one-off the owner entered by hand survives.
    */
-  rebuild: ownerProcedure.mutation(({ ctx }) => rebuildSchedule(ctx.db)),
+  rebuild: branchManagerProcedure.mutation(({ ctx }) =>
+    rebuildSchedule(ctx.db),
+  ),
 } satisfies TRPCRouterRecord;

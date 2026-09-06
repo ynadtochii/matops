@@ -44,10 +44,18 @@ export const RenameAccessPlanSchema = z.object({
 });
 export type RenameAccessPlanInput = z.infer<typeof RenameAccessPlanSchema>;
 
-/** The exact branches the plan covers after this call. Not a patch. */
+/**
+ * The exact branches the plan covers after this call. Not a patch.
+ *
+ * `version` is what the preview said the coverage was (ADR 129). Send it back
+ * with the save and a list computed against a coverage somebody else has since
+ * moved is refused rather than applied. Leave it out and the save is
+ * unconditional, which is what the tests and the first save do.
+ */
 export const SetAccessPlanCoverageSchema = z.object({
   id: z.uuid(),
   entityIds: EntityIdsSchema,
+  version: z.iso.datetime().nullish(),
 });
 export type SetAccessPlanCoverageInput = z.infer<
   typeof SetAccessPlanCoverageSchema
@@ -95,6 +103,30 @@ export const LegacyPlanMembersSchema = z.object({
 export type LegacyPlanMembersInput = z.infer<typeof LegacyPlanMembersSchema>;
 
 export const AssignmentIdSchema = z.object({ id: z.uuid() });
+
+/**
+ * Move one membership onto another plan from the first of next month
+ * (ADR 129). The month is NOT an input: the server computes it from the gym's
+ * own membership calendar, so a clock on a laptop cannot move a boundary.
+ */
+export const PlanChangeSchema = z.object({
+  assignmentId: z.uuid(),
+  targetPlanId: z.uuid(),
+});
+export type PlanChangeInput = z.infer<typeof PlanChangeSchema>;
+
+export const CancelPlanChangeSchema = z.object({ changeId: z.uuid() });
+
+/**
+ * The bookings that need a look after a coverage or plan change (ADR 129).
+ * Bounded rather than paged by cursor: the list is work to clear, and a gym
+ * with more than a screenful has a bigger problem than pagination.
+ */
+export const BookingReviewSchema = z.object({
+  userId: IdSchema.nullish(),
+  limit: z.number().int().min(1).max(200).default(50),
+});
+export type BookingReviewInput = z.infer<typeof BookingReviewSchema>;
 
 export const MemberAssignmentsSchema = z.object({ userId: IdSchema });
 

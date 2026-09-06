@@ -2,14 +2,17 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   entityHref,
   formatMoney,
+  isPendingCoach,
   matchesDirectoryFilter,
   matchPeopleByEmail,
   parseEmailList,
+  staffRows,
 } from "@matops/domain";
 import { Button } from "@matops/ui/button";
 import { Input } from "@matops/ui/input";
@@ -20,7 +23,7 @@ import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
 import { useOrganization } from "./entity";
-import { cardClass, ENTER, Eyebrow } from "./primitives";
+import { cardClass, ENTER, Eyebrow, Tabs } from "./primitives";
 import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 
@@ -35,11 +38,20 @@ import { EmptyState, ErrorState } from "./states";
  * Branch counts here are ENROLMENTS, not people. One person training at two
  * branches is one row with two badges, which is exactly the number a head count
  * needs and the number a per-branch total gets wrong.
+ *
+ * Staff is a TAB rather than a screen of its own (ADR 129): the same rows,
+ * filtered by `staffRows`, so the two lists cannot disagree about who somebody
+ * is. The tab is in the URL, so `/people?tab=staff` is linkable and the old
+ * `/staff` redirects onto it.
  */
 export function PeopleScreen() {
   const trpc = useTRPC();
   const { canRunOrganization } = useOrganization();
   const directory = useQuery(trpc.stats.organizationMembers.queryOptions());
+  const tabParam = useSearchParams().get("tab");
+  const [tab, setTab] = useState<PeopleTab>(
+    tabParam === "staff" ? "staff" : "people",
+  );
   const [search, setSearch] = useState("");
   const [entityId, setEntityId] = useState("");
   const [planName, setPlanName] = useState("");
@@ -55,7 +67,7 @@ export function PeopleScreen() {
   );
   const shown = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    return rows
+    return (tab === "staff" ? staffRows(rows) : rows)
       .filter((r) =>
         matchesDirectoryFilter(r, {
           entityId: entityId || undefined,
@@ -69,12 +81,12 @@ export function PeopleScreen() {
           r.name.toLowerCase().includes(needle) ||
           r.email.toLowerCase().includes(needle),
       );
-  }, [rows, search, entityId, planName, status]);
+  }, [rows, tab, search, entityId, planName, status]);
 
   if (!canRunOrganization) {
     return (
       <div>
-        <EmptyState title="Only an owner sees everybody in the gym.">
+        <EmptyState title="Only the people who run this gym see everybody in it.">
           The people who train at your branch are on its Roster.
         </EmptyState>
       </div>
@@ -92,6 +104,16 @@ export function PeopleScreen() {
           </p>
         </div>
       </div>
+
+      <Tabs
+        label="People or staff"
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          { id: "people", label: "People", count: rows.length },
+          { id: "staff", label: "Staff", count: staffRows(rows).length },
+        ]}
+      />
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="flex min-w-48 flex-1 flex-col gap-1.5">
@@ -206,7 +228,10 @@ export function PeopleScreen() {
                       size="sm"
                       variant="outline"
                     >
-                      <Link href={entityHref(b.entityId, "/members")}>
+                      {/* Straight to this person at that branch, on the tab
+                          their standing belongs to, so nobody searches twice
+                          (ADR 129). */}
+                      <Link href={branchHref(b, tab)}>
                         {b.entityName}
                         {b.status !== "active" ? ` · ${b.status}` : ""}
                         {b.verdict && b.verdict !== "ok" ? " ·  ⚠" : ""}
@@ -233,6 +258,38 @@ export function PeopleScreen() {
         {shown.length === 1 ? "1 person" : `${shown.length} people`}
       </Eyebrow>
     </div>
+  );
+}
+
+type PeopleTab = "people" | "staff";
+
+/**
+ * Where a branch badge goes: that person at that branch, on the tab their
+ * standing belongs to. A coach seat is decided on Coaches, an archived member
+ * is on the Archived tab, and everybody else is on Members (ADR 129).
+ */
+function branchHref(
+  b: {
+    entityId: string;
+    memberId: string;
+    status: string;
+    role: string;
+    invitedRole: string | null;
+  },
+  tab: PeopleTab,
+): string {
+  if (tab === "staff" || isPendingCoach(b)) {
+    return entityHref(b.entityId, "/coaches");
+  }
+  const branchTab =
+    b.status === "pending"
+      ? "requests"
+      : b.status === "archived"
+        ? "archived"
+        : "members";
+  return entityHref(
+    b.entityId,
+    `/members?tab=${branchTab}&member=${encodeURIComponent(b.memberId)}`,
   );
 }
 

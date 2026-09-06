@@ -14,6 +14,8 @@ import { isPendingCoach } from "./membership";
 export interface DirectoryEntry {
   entityId: string;
   entityName: string;
+  /** `entity_membership.id`, which is what a branch screen's `?member=` names. */
+  memberId: string;
   userId: string;
   name: string;
   email: string;
@@ -33,6 +35,7 @@ export interface DirectoryEntry {
 export interface DirectoryBranch {
   entityId: string;
   entityName: string;
+  memberId: string;
   status: string;
   role: string;
   invitedRole: string | null;
@@ -76,6 +79,7 @@ export function combineDirectory(entries: DirectoryEntry[]): DirectoryRow[] {
     held.branches.push({
       entityId: e.entityId,
       entityName: e.entityName,
+      memberId: e.memberId,
       status: e.status,
       role: e.role,
       invitedRole: e.invitedRole,

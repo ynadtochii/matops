@@ -3,9 +3,12 @@ import { describe, expect, it } from "vitest";
 import type { AssignmentCoverage } from "../src/access-plan";
 import {
   affectedByCoverageChange,
+  appliesInMonth,
   canEditPlan,
+  changeIsPending,
   coverageChange,
   coveredEntities,
+  periodsOverlap,
 } from "../src/access-plan";
 
 const MAT = "e_mat";
@@ -167,5 +170,46 @@ describe("affectedByCoverageChange", () => {
       ],
     );
     expect(rows.map((r) => r.assignmentId)).toEqual(["a1"]);
+  });
+});
+
+describe("assignment periods", () => {
+  const open = { startMonth: "2026-09-01", endMonth: null };
+  const ended = { startMonth: "2026-09-01", endMonth: "2026-11-01" };
+
+  it("starts in its own month and never before it", () => {
+    expect(appliesInMonth(open, "2026-08-01")).toBe(false);
+    expect(appliesInMonth(open, "2026-09-01")).toBe(true);
+    expect(appliesInMonth(open, "2030-01-01")).toBe(true);
+  });
+
+  it("treats the end as the first month it no longer applies", () => {
+    expect(appliesInMonth(ended, "2026-10-01")).toBe(true);
+    expect(appliesInMonth(ended, "2026-11-01")).toBe(false);
+  });
+
+  it("lets one period start exactly where the other ends", () => {
+    const successor = { startMonth: "2026-11-01", endMonth: null };
+    expect(periodsOverlap(ended, successor)).toBe(false);
+    expect(appliesInMonth(ended, "2026-11-01")).toBe(false);
+    expect(appliesInMonth(successor, "2026-11-01")).toBe(true);
+  });
+
+  it("refuses two periods that share a month", () => {
+    expect(
+      periodsOverlap(open, { startMonth: "2027-01-01", endMonth: null }),
+    ).toBe(true);
+    expect(
+      periodsOverlap(ended, { startMonth: "2026-10-01", endMonth: null }),
+    ).toBe(true);
+  });
+
+  it("reads pending off the calendar, not off a flag", () => {
+    const change = { effectiveMonth: "2026-10-01", cancelledAt: null };
+    expect(changeIsPending(change, "2026-09-01")).toBe(true);
+    expect(changeIsPending(change, "2026-10-01")).toBe(false);
+    expect(
+      changeIsPending({ ...change, cancelledAt: new Date() }, "2026-09-01"),
+    ).toBe(false);
   });
 });

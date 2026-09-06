@@ -6,7 +6,12 @@ import { useQuery } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
 import type { BranchRow } from "@matops/domain";
-import { branchRows, entityHref, formatMoney } from "@matops/domain";
+import {
+  branchRows,
+  entityHref,
+  formatMoney,
+  isPendingCoach,
+} from "@matops/domain";
 import { Button } from "@matops/ui/button";
 
 import { useTRPC } from "~/trpc/react";
@@ -99,6 +104,7 @@ export function OverviewScreen() {
 
       {canRunOrganization && posting && <AnnounceForm scope="organization" />}
 
+      {canRunOrganization && <NeedsAttention />}
       {canRunOrganization && <SetupChecklist compact />}
       {canRunOrganization && <BranchLaunchHealth />}
 
@@ -114,6 +120,91 @@ export function OverviewScreen() {
         </ul>
       )}
     </div>
+  );
+}
+
+/**
+ * What needs doing today, above the figures (ADR 129).
+ *
+ * Every line is a link to the exact person, queue or booking, because a count
+ * an owner cannot click is a reminder rather than a piece of work. It reads the
+ * queries the other screens already make, so nothing here is a second version
+ * of the truth and a broken section leaves the rest usable.
+ */
+function NeedsAttention() {
+  const trpc = useTRPC();
+  const claims = useQuery(trpc.accessPlan.claims.queryOptions());
+  const directory = useQuery(trpc.stats.organizationMembers.queryOptions());
+  const uncovered = useQuery(trpc.accessPlan.uncovered.queryOptions());
+  const review = useQuery(
+    trpc.accessPlan.bookingsToReview.queryOptions({ limit: 50 }),
+  );
+
+  const rows = directory.data?.rows ?? [];
+  const waitingStudents = rows.flatMap((r) =>
+    r.branches
+      .filter((b) => b.status === "pending" && !isPendingCoach(b))
+      .map((b) => ({ row: r, branch: b })),
+  );
+  const waitingCoaches = rows.flatMap((r) =>
+    r.branches.filter(isPendingCoach).map((b) => ({ row: r, branch: b })),
+  );
+
+  const items: { key: string; label: string; href: string }[] = [
+    ...(claims.data ?? []).map((c) => ({
+      key: `claim-${c.assignmentId}`,
+      label: `${c.name} says they paid ${c.planName}`,
+      href: `/people/${c.userId}`,
+    })),
+    ...waitingStudents.map(({ row, branch }) => ({
+      key: `student-${branch.entityId}-${row.userId}`,
+      label: `${row.name} wants to join ${branch.entityName}`,
+      href: `/people/${row.userId}`,
+    })),
+    ...waitingCoaches.map(({ row, branch }) => ({
+      key: `coach-${branch.entityId}-${row.userId}`,
+      label: `${row.name} is waiting on a coach seat at ${branch.entityName}`,
+      href: entityHref(branch.entityId, "/coaches"),
+    })),
+    ...(uncovered.data?.groups ?? []).flatMap((g) =>
+      g.people.map((p) => ({
+        key: `uncovered-${g.entityId}-${p.userId}`,
+        label: `${p.name} trains at ${g.entityName} with no membership`,
+        href: `/people/${p.userId}`,
+      })),
+    ),
+    ...(review.data?.items ?? []).map((b) => ({
+      key: `booking-${b.participationId}`,
+      label: `${b.name} is booked into ${b.title} at ${b.entityName} without access`,
+      href: entityHref(b.entityId, `/class/${b.classId}`),
+    })),
+  ];
+
+  if (items.length === 0) return null;
+
+  return (
+    <Section label="Needs attention" meta={`${items.length} waiting`}>
+      <ul className="flex flex-col gap-2">
+        {items.slice(0, 12).map((i) => (
+          <li key={i.key}>
+            <Link
+              href={i.href}
+              className={`${cardClass({ interactive: true })} flex items-center justify-between gap-3`}
+            >
+              <span className="min-w-0 flex-1 truncate text-sm">{i.label}</span>
+              <span className="text-muted-foreground shrink-0 text-xs">
+                Open
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+      {items.length > 12 && (
+        <p className="text-muted-foreground text-sm">
+          {items.length - 12} more, on the screens they belong to.
+        </p>
+      )}
+    </Section>
   );
 }
 
@@ -186,7 +277,9 @@ function OrganizationReads({
       <div className="flex flex-col gap-1">
         <Eyebrow>The last 30 days</Eyebrow>
         <p className="text-muted-foreground text-sm">
-          People are counted once, however many branches they train at.
+          People are counted once, however many branches they train at. Branch
+          enrolments are counted per branch and sit on each branch card. Paid is
+          what somebody ticked, not money the gym counted.
         </p>
       </div>
       <div className="grid grid-cols-2 gap-5 sm:grid-cols-4">
@@ -200,7 +293,7 @@ function OrganizationReads({
         {paid.map((p) => (
           <span key={p.currency}>
             {" · "}
-            {formatMoney(p.amountMinor, p.currency)} paid this month
+            {formatMoney(p.amountMinor, p.currency)} ticked as paid this month
           </span>
         ))}
       </p>

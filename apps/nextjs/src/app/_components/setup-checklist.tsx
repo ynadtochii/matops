@@ -45,15 +45,35 @@ const Tick = () => (
   </svg>
 );
 
+/** Which branch issue a branch-level setup step is really about (ADR 129). */
+const ISSUE_FOR: Partial<Record<SetupKey, BranchIssue>> = {
+  schedule: "schedule",
+  staff: "staff",
+  ready: "covered",
+};
+
 /**
- * Where each item is finished. A branch-level screen is linked at the FIRST
- * branch, which is the only one during setup and the sensible guess after: the
- * point is to open the right kind of screen, not to audit which branch is
- * behind. `branch` has no link because its action is the button beside it.
+ * Where each item is finished, at the branch that is actually behind (ADR 129).
+ *
+ * The first branch used to be the guess, which sent an owner with three mats to
+ * the one that was already done. The health list names the branch each issue
+ * belongs to, so the link opens that one and falls back to the first branch
+ * only when nothing is flagged. `branch` has no link because its action is the
+ * button beside it.
  */
-function hrefFor(key: SetupKey, firstBranchId: string | undefined) {
-  const at = (path: string) =>
-    firstBranchId ? entityHref(firstBranchId, path) : undefined;
+function hrefFor(
+  key: SetupKey,
+  firstBranchId: string | undefined,
+  behind: { id: string; issues: BranchIssue[] }[],
+) {
+  const issue = ISSUE_FOR[key];
+  const flagged = issue
+    ? behind.find((b) => b.issues.includes(issue))?.id
+    : undefined;
+  const at = (path: string) => {
+    const id = flagged ?? firstBranchId;
+    return id ? entityHref(id, path) : undefined;
+  };
   switch (key) {
     case "gym":
     case "bank":
@@ -88,8 +108,9 @@ export function SetupChecklist({ compact = false }: { compact?: boolean }) {
   // sits on still works, so it steps aside rather than shouting.
   if (setup.isError) return null;
 
-  const { items, progress } = setup.data;
+  const { items, progress, branches } = setup.data;
   const firstBranchId = entities[0]?.id;
+  const behind = branches.filter((b) => b.issues.length > 0);
   // Finished setup is not a thing to keep looking at. The card goes for good
   // once every item is done, and comes back on its own if one stops being true.
   if (progress.complete) return null;
@@ -111,6 +132,7 @@ export function SetupChecklist({ compact = false }: { compact?: boolean }) {
               <ItemLabel
                 item={next}
                 firstBranchId={firstBranchId}
+                behind={behind}
                 className="text-brand-strong font-medium"
               />
             </>
@@ -146,6 +168,7 @@ export function SetupChecklist({ compact = false }: { compact?: boolean }) {
             <ItemLabel
               item={item}
               firstBranchId={firstBranchId}
+              behind={behind}
               className={`text-sm ${
                 item.done
                   ? "text-muted-foreground line-through"
@@ -169,14 +192,18 @@ export function SetupChecklist({ compact = false }: { compact?: boolean }) {
 function ItemLabel({
   item,
   firstBranchId,
+  behind,
   className,
 }: {
   item: { key: SetupKey; done: boolean; blocked: boolean };
   firstBranchId: string | undefined;
+  behind: { id: string; issues: BranchIssue[] }[];
   className?: string;
 }) {
   const href =
-    item.done || item.blocked ? undefined : hrefFor(item.key, firstBranchId);
+    item.done || item.blocked
+      ? undefined
+      : hrefFor(item.key, firstBranchId, behind);
   if (!href) return <span className={className}>{LABELS[item.key]}</span>;
   return (
     <Link href={href} className={`${className ?? ""} hover:underline`}>
@@ -187,7 +214,7 @@ function ItemLabel({
 
 const ISSUES: Record<BranchIssue, string> = {
   schedule: "nothing on the schedule",
-  staff: "no instructor",
+  staff: "nobody runs it",
   membership: "no plan covers it",
   covered: "members nothing covers",
   public: "public booking on, no class shared",

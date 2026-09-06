@@ -11,6 +11,7 @@ import {
   membershipPolicy,
 } from "@matops/db/schema";
 import {
+  appliesInMonth,
   membershipWarning,
   monthOf,
   monthVerdict,
@@ -65,24 +66,35 @@ export async function runMembershipCancellationSweep(
   exec: DbExec,
   { now = new Date(), limit = 500 }: CancellationSweepOptions = {},
 ): Promise<CancellationSweepResult> {
-  const live = await exec
+  const all = await exec
     .select({
       id: accessAssignment.id,
       organizationId: accessAssignment.organizationId,
       userId: accessAssignment.userId,
       planId: accessAssignment.planId,
       startMonth: accessAssignment.startMonth,
+      endMonth: accessAssignment.endMonth,
       createdAt: accessAssignment.createdAt,
     })
     .from(accessAssignment)
     .innerJoin(accessPlan, eq(accessPlan.id, accessAssignment.planId))
     .where(eq(accessAssignment.status, "active"))
     .limit(limit);
-  if (live.length === 0) return { checked: 0, blocked: 0, cancelled: 0 };
+  if (all.length === 0) return { checked: 0, blocked: 0, cancelled: 0 };
 
   const calendars = await loadCalendars(exec, [
-    ...new Set(live.map((a) => a.organizationId)),
+    ...new Set(all.map((a) => a.organizationId)),
   ]);
+  // An assignment outside its period is not a reason to cancel anything, and
+  // it does not protect anything either (ADR 129). A membership that ended, or
+  // a successor that has not started, is simply not in this month's picture.
+  const live = all.filter((a) => {
+    const calendar = calendars.get(a.organizationId);
+    return calendar
+      ? appliesInMonth(a, monthOf(now, calendar.timeZone))
+      : false;
+  });
+  if (live.length === 0) return { checked: 0, blocked: 0, cancelled: 0 };
   const coverage = await exec
     .select({
       planId: accessPlanEntity.planId,
@@ -337,6 +349,7 @@ export async function runMembershipReminderSweep(
       planName: accessPlan.name,
       assigningEntityId: accessAssignment.assigningEntityId,
       startMonth: accessAssignment.startMonth,
+      endMonth: accessAssignment.endMonth,
       createdAt: accessAssignment.createdAt,
     })
     .from(accessAssignment)
@@ -375,6 +388,8 @@ export async function runMembershipReminderSweep(
     const calendar = calendars.get(assignment.organizationId);
     if (!calendar) continue;
     const month = monthOf(now, calendar.timeZone);
+    // Nothing is owed on a month the membership does not cover (ADR 129).
+    if (!appliesInMonth(assignment, month)) continue;
     const held = months.find(
       (m) => m.assignmentId === assignment.id && m.month === month,
     );

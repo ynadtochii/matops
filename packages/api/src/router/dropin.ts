@@ -40,8 +40,8 @@ import {
 
 import { activateMember, requireMembership } from "../members";
 import {
-  ownerIdentityProcedure,
-  ownerProcedure,
+  branchManagerIdentityProcedure,
+  branchManagerProcedure,
   publicProcedure,
   rateLimited,
 } from "../trpc";
@@ -231,7 +231,7 @@ export const dropInRouter = {
    * Stage is stored; activity is derived from `drop_in_visit` on every read, so
    * the two can never disagree.
    */
-  list: ownerProcedure.query(({ ctx }) => {
+  list: branchManagerProcedure.query(({ ctx }) => {
     return ctx.db
       .select({
         id: dropIn.id,
@@ -260,7 +260,7 @@ export const dropInRouter = {
    * `invited` and `joined` are refused here: they follow from an action, and
    * the validator already narrows the input to the three that do not.
    */
-  setStage: ownerProcedure
+  setStage: branchManagerProcedure
     .input(SetLeadStageSchema)
     .mutation(async ({ ctx, input }) => {
       const [row] = await ctx.db
@@ -283,7 +283,7 @@ export const dropInRouter = {
    * lead who already joined is left alone, so a stray tap cannot undo a real
    * conversion.
    */
-  markInvited: ownerProcedure
+  markInvited: branchManagerProcedure
     .input(LeadIdSchema)
     .mutation(async ({ ctx, input }) => {
       const [row] = await ctx.db
@@ -300,7 +300,7 @@ export const dropInRouter = {
    * none, and rows captured before the wall-QR form required one may have none
    * either, so an owner given an address by voice needs a way to store it.
    */
-  setEmail: ownerProcedure
+  setEmail: branchManagerProcedure
     .input(SetLeadEmailSchema)
     .mutation(async ({ ctx, input }) => {
       const [row] = await ctx.db
@@ -330,7 +330,7 @@ export const dropInRouter = {
    * Writes `user` and `member` on the base connection (both are outside the RLS
    * seam, ADR 66), and the lead itself through a scoped transaction.
    */
-  promote: ownerIdentityProcedure
+  promote: branchManagerIdentityProcedure
     .input(PromoteLeadSchema)
     .mutation(async ({ ctx, input }) => {
       const lead = await ctx.withScope(async (db) => {
@@ -424,7 +424,7 @@ export const dropInRouter = {
    * two forms differs and the automatic match at self-join could not fire. A
    * link to a member, never a free-text flag.
    */
-  markJoined: ownerProcedure
+  markJoined: branchManagerProcedure
     .input(LinkLeadSchema)
     .mutation(async ({ ctx, input }) => {
       await requireMembership(

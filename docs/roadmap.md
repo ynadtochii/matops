@@ -2,6 +2,29 @@
 
 # matops — Roadmap (live plan + scope matrix)
 
+**Built: the manager runs every branch, and a plan change waits for the 1st (v7.7)**
+
+Status: **built, not clicked through and the suites not run here**. Static gates green (`pnpm typecheck` 17/17, `pnpm lint` 15/15). **Tests were run** (2026-09-06, twice): the workspace suite is **green, 1611 tests across 130 files**. It had 25 failures on the baseline `b237f03`; this release fixed every one and introduced none. Migration `0065` is **applied to dev** (64 rows against 64 journal entries, checked 2026-09-06) and verified live: `end_month` nullable, the lifetime unique index replaced by the partial one on `(plan_id, user_id, start_month)`, `access_assignment_change` with its checks, six foreign keys and partial unique index, RLS on with all four `matops_app` grants, and all 15 existing assignments still open-ended. Product rules: MB1-MB8 in [spec.md](/Users/kuna/projects/matops/docs/spec.md). Decisions: [ADR 129](/Users/kuna/projects/matops/docs/issues/129-the-manager-runs-every-branch.md). Plan: [PLAN.md](/Users/kuna/projects/matops/PLAN.md).
+
+| Slice                                              | DB   | API  | Web  | Mob  | Shared | Infra |
+| -------------------------------------------------- | ---- | ---- | ---- | ---- | ------ | ----- |
+| Manager capabilities at every branch               | n/a  | done | done | n/a  | done   | n/a   |
+| Coverage as one workflow                           | n/a  | done | done | n/a  | n/a    | n/a   |
+| Next-month plan replacement                        | done | done | done | done | done   | n/a   |
+| Bookings needing review, never cancelled           | n/a  | done | done | n/a  | done   | n/a   |
+| Gym and branch navigation together                 | n/a  | done | done | n/a  | done   | n/a   |
+| People, Staff and person tasks in one screen       | n/a  | done | done | n/a  | done   | n/a   |
+| Daily work first on the overview and in setup      | n/a  | done | done | n/a  | done   | n/a   |
+| The mobile branch picker beside the schedule       | n/a  | n/a  | n/a  | done | n/a    | n/a   |
+
+- [x] Write ADR 129 and carry it into the spec, the map, the changelog and this file.
+- [x] Build the eight slices and hand the focused test commands over.
+- [x] Run the focused suites listed in [PLAN.md](/Users/kuna/projects/matops/PLAN.md), and the whole workspace suite. Green, twice.
+- [x] Apply `0065` to dev, then check the applied count against `_journal.json`.
+- [ ] Walk the manual acceptance list: zero-branch setup, single-branch owner, multi-branch manager, branch instructor and student, plus the outstanding Expo device checklist. These stay human work.
+
+A manager is no longer stopped at the organization: they run every live branch without a membership there, and the four destructive actions stay with owners. Membership coverage and plan changes become single workflows, and losing coverage stops meaning a cancelled booking.
+
 **Built: finishing the organization pivot (v7.6)**
 
 Status: **built, not clicked through and the suites not run here**. Static gates green (`pnpm typecheck` 17/17, `pnpm lint` 15/15). Migrations `0060` to `0064` are **applied to dev** (63 rows against 63 journal entries, checked 2026-09-04); two hand-run fills are outstanding, `2026-09-04-general-branches-backfill.sql` and `2026-09-04-paid-commitment.sql`. Product rules: FP1-FP10 in [spec.md](/Users/kuna/projects/matops/docs/spec.md). Decisions: [ADR 128](/Users/kuna/projects/matops/docs/issues/128-registration-creates-the-organization-only.md). Plan: [PLAN.md](/Users/kuna/projects/matops/PLAN.md). Loop state, one item per run: [EPIC.md](/Users/kuna/projects/matops/EPIC.md). Migrations start at `0060`; `0059` is reserved for the delayed `payment_settings.bank_details` drop and is not reused.
@@ -22,7 +45,7 @@ Status: **built, not clicked through and the suites not run here**. Static gates
 - [x] Write ADR 128 and carry it into the spec, the architecture doc, the map and this file.
 - [x] Build the ten slices, one epic item per run, and hand the focused test commands over.
 - [x] Apply `0060` and the migrations after it to dev in order, then check the applied count against `_journal.json`. Note that the file set skips `0051`, so a contiguous-run check reports a migration that never existed.
-- [ ] Run the focused suites listed in [EPIC.md](/Users/kuna/projects/matops/EPIC.md)'s log. They are written and have not been run.
+- [x] Run the focused suites listed in [EPIC.md](/Users/kuna/projects/matops/EPIC.md)'s log. Run with the whole workspace suite in v7.7, which fixed the 25 failures v7.5 and v7.6 left behind.
 - [ ] Run the two hand-run fills under `packages/db/scripts`.
 - [ ] Walk the manual acceptance list: the BJJ-only journey, organization-only registration, BJJ plus a general space, denied actions per role, and the outstanding Expo device checklist. These stay human work.
 

@@ -8,6 +8,7 @@ import {
   and,
   count,
   eq,
+  inArray,
   isNull,
   listOwnedOrganizations,
   recordMilestone,
@@ -36,6 +37,7 @@ import { CreateAcademySchema, IdSchema } from "@matops/validators";
 
 import { rosterOf } from "../members";
 import { loadRosterStanding } from "../membership-access";
+import { assignmentAppliesNow } from "../membership-status";
 import { readOrganizationEntities } from "../organization-read";
 import {
   organizationManagerIdentityProcedure,
@@ -112,7 +114,7 @@ export const organizationRouter = {
       if (!owned.some((o) => o.organizationId === input.organizationId)) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "You do not own that gym",
+          message: "You do not run that gym",
         });
       }
       await ctx.authApi.setActiveOrganization({
@@ -155,7 +157,9 @@ export const organizationRouter = {
         const [assignments] = await tx
           .select({ n: count() })
           .from(accessAssignment)
-          .where(eq(accessAssignment.status, "active"));
+          .where(
+            and(eq(accessAssignment.status, "active"), assignmentAppliesNow()),
+          );
         return {
           name: org?.name ?? "",
           bankDetails: (policy?.bankDetails ?? "").trim().length > 0,
@@ -170,8 +174,24 @@ export const organizationRouter = {
     let branchesLocated = 0;
     let branchesScheduled = 0;
     let instructors = 0;
-    let invites = 0;
     let uncoveredMembers = 0;
+    // `academy_invite` carries no `matops_app` grants at all (ADR 60), so this
+    // read has to happen on the base connection: asking for it inside the
+    // tenant transaction is a flat "permission denied", which took the whole
+    // setup list down for any gym that had a branch.
+    const [links] = await ctx.baseDb
+      .select({ n: count() })
+      .from(academyInvite)
+      .where(
+        and(
+          inArray(
+            academyInvite.academyId,
+            branches.map((b) => b.id),
+          ),
+          isNull(academyInvite.revokedAt),
+        ),
+      );
+    const invites = links?.n ?? 0;
     const health: { id: string; name: string; issues: BranchIssue[] }[] = [];
     for (const branch of branches) {
       await withScope(
@@ -209,11 +229,18 @@ export const organizationRouter = {
             );
           instructors += staff?.n ?? 0;
 
-          const [links] = await tx
+          // Who actually runs the mat, which includes an owner who teaches
+          // their own classes (ADR 129). The count above is the gym-level
+          // "bring an instructor in" step and is a different question.
+          const [running] = await tx
             .select({ n: count() })
-            .from(academyInvite)
-            .where(isNull(academyInvite.revokedAt));
-          invites += links?.n ?? 0;
+            .from(entityMembership)
+            .where(
+              and(
+                inArray(entityMembership.role, ["owner", "instructor"]),
+                eq(entityMembership.status, "active"),
+              ),
+            );
 
           // Only a branch that RUNS on memberships can have an uncovered
           // member: at one still on branch dues the question has no meaning,
@@ -263,7 +290,7 @@ export const organizationRouter = {
             name: branch.name,
             issues: branchLaunchIssues({
               scheduled: (templates?.n ?? 0) > 0,
-              staffed: (staff?.n ?? 0) > 0,
+              staffed: (running?.n ?? 0) > 0,
               enforced: branch.membershipEnforcedAt !== null,
               uncovered,
               planCovers: (covering?.n ?? 0) > 0,

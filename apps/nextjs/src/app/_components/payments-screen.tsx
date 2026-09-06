@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
-import { formatMoney, isOwner } from "@matops/domain";
+import { formatMoney, runsBranch } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
@@ -31,7 +31,7 @@ type Member = RouterOutputs["membership"]["members"][number];
 
 export function PaymentsScreen() {
   const academy = useEntity();
-  if (!isOwner(academy)) return <MyDues />;
+  if (!runsBranch(academy)) return <MyDues />;
   return <OwnerPayments />;
 }
 

@@ -1,246 +1,270 @@
 # Goal
 
-Finish the organization and branch pivot as a coherent product. Registration creates an organization only. The owner lands in the organization shell and creates the first branch there. The release also completes setup, shared memberships, permissions, product language, measurement, and pilot rollout.
+Make organization and branch work clear and complete for owners, managers, coaches, and students. Keep the current data boundaries. Fix permissions, membership workflows, navigation, and task completion across web and mobile.
 
-## Context
+## Status and baseline
 
-MatOps now supports one organization with BJJ and general-space branches. Shared people, memberships, payment status, staff, and reporting exist. The current creation path still provisions a default BJJ branch inside the Better Auth organization hook. A later repair path also treats an organization without a branch as broken.
+Product decisions approved on 2026-09-06. This is the technical implementation plan. No application changes are part of this planning task.
 
-The product still has several post-pivot gaps. General-space creation can be shown when the server will reject it. Sharing assumes a BJJ academy. Shared membership plans have no price. Membership migration is one person at a time. New setup still teaches the old single-academy model. Organization work is restricted to owners. The latest owner and general-branch flows still need manual acceptance.
+Baseline: PR #6, `dev` into `main`, commit `b237f03`. GitHub access confirmed that the reviewed local commit matches the PR.
 
-Production has no customer data. Prefer a hard product cutover for new organizations. Keep rollback only where the pilot already depends on it.
+The previous PLAN.md described the v7.4-v7.6 organization pivot. Its final status said built but not fully verified, although its checkboxes remained unchecked. Preserve that work as the baseline, not a new implementation queue. The detailed record remains in [EPIC.md](/Users/kuna/projects/matops/EPIC.md), [owner-dashboard-plan.md](/Users/kuna/projects/matops/docs/owner-dashboard-plan.md), and [general-branches-memberships-plan.md](/Users/kuna/projects/matops/docs/general-branches-memberships-plan.md).
+
+Already present in the reviewed code:
+
+- Organization-only registration and a valid zero-branch setup state.
+- Typed BJJ and general-space branches, with shared memberships on new branches.
+- Organization People, person profiles, Memberships, Staff, Settings, and overview metrics.
+- Plan prices and effective-month price history, payment claims, bulk assignment, and coverage repair.
+- Organization manager permissions, setup checks, shared product language, and product measurement.
+
+Outstanding baseline verification remains open: manual web journeys, role checks, Expo device checks, and user-run tests. Earlier records say migrations 0060-0064 were applied to dev. Recheck live migration state before release; this plan does not certify it. The earlier general-branch backfill, any paid-commitment record, and the delayed bank-details drop also need status checks. Do not rerun them from an old checkbox. Do not assume production is empty.
 
 ## Decisions
 
-- Registration creates the Better Auth organization and owner membership only. It creates no `entity`, `entity_membership`, `academy_profile`, public code, or curriculum track.
-- The owner lands on `/overview` inside the organization shell after creating the organization.
-- An organization with zero branches is valid. It is an onboarding state, not a provisioning failure.
-- The zero-branch overview shows one primary action: `Create your first branch`.
-- The owner chooses the first branch type and name. Do not assume the first branch is BJJ.
-- The first live branch becomes `is_default = true`. Preserve the current compatibility rule by giving the first branch the organization id when safe.
-- First-branch creation is atomic and serialized on the organization row. Two requests cannot create two default branches.
-- `canCreateBranches` is derived from an active organization owner role. It defaults to true for the creator.
-- `general_branches_enabled` remains the entitlement for creating `general_space`. Its database default becomes true. Existing live organizations are backfilled to true because the product now supports both branch types.
-- `entity.list` returns separate `canCreateBranches` and `canCreateGeneralBranches` capabilities. The client never offers an action the server will reject.
-- New branches use shared memberships from creation. Legacy branch dues remain only for existing pilot migration and rollback, then become read-only and are removed.
-- Shared membership plans gain a monthly price and currency. Price changes need an effective month. Historical months keep the amount that applied to them.
-- Organization managers can run normal organization operations without receiving destructive owner rights.
-- The organization directory gains a person detail view. It owns shared membership work. Branch screens continue to own local role, rank, attendance, and suspension work.
-- The next release adds no new branch types, automatic payment collection, waitlists, private hire, resource inventory, shared curriculum, or cross-branch referrals.
-- Web remains the pilot surface until the full mobile device checklist passes.
+1. The organization owns shared people, plans, payment records, and business settings. Branches own schedules, attendance, local admission, and local records.
+2. An active organization manager can run daily work at every branch without a separate branch membership. Never represent that manager as an owner.
+3. Owners retain ownership changes, commercial account changes, branch creation/deletion, permanent erasure, and legacy membership activation. Managers can manage schedules, attendance, local members, instructor assignments, and ordinary branch settings. Instructors remain restricted to assigned branches.
+4. Changing a person's plan replaces one selected membership from the first day of next month, in the organization's membership time zone. The old plan stays valid until then. No immediate replacement, proration, refunds, or transfer of paid status.
+5. Other memberships remain independent. Reject a replacement whose target plan already covers the same period; show the existing membership instead.
+6. Ending membership or removing plan coverage keeps existing bookings. Show affected bookings before confirmation and in a review list afterward. Keeping a booking does not restore eligibility for new bookings.
+7. This decision does not change existing overdue-payment, branch archive, class cancellation, or capacity rules. The overdue sweep must not cancel a booking solely because a plan ended or its coverage changed.
+8. Staff becomes a tab inside People. The organization person profile handles branch assignments and approvals. Branch role, rank, attendance, notes, and suspension records keep their current owners.
+9. Keep gym management links visible inside branch workflows. Keep the selected branch visible, and preserve the current task when switching to a compatible branch.
+10. Add plan coverage and enroll eligible existing holders through one confirmed workflow. Preserve pending, suspended, archived, and removed branch states. Show named exceptions and retry only unfinished work.
+11. Keep one branch level. Improve its explanation; do not add locations, rooms, resources, or new branch types in this release. Programs remain within branches.
+12. No tests run during agent sessions unless the user explicitly asks. Write focused tests, run lint/typecheck, and hand the user exact test commands.
 
-## Success Criteria
+## Technical boundaries
 
-- A new owner creates an organization and reaches a useful zero-branch organization shell.
-- The owner can create either supported branch type without hidden flags or terminal errors.
-- The first branch is the only default branch and receives all rows required by its type.
-- A new branch never starts on the legacy dues model.
-- The owner can finish first setup without a terminal or founder intervention.
-- A member sees the amount, currency, payment details, reference, status, and deadline for a shared membership.
-- An owner can migrate or assign several members, clear every uncovered member, preview affected bookings, and activate a branch.
-- A manager can handle delegated organization work but cannot perform owner-only destructive actions.
-- General-space screens show only supported actions and use branch or session language.
-- The team can measure organization activation and retained student use without a manual spreadsheet.
-- The complete BJJ-only and multi-branch journeys pass manual web checks. Mobile stays out of the promise until device checks pass.
+- Keep entity IDs in web URLs and `x-matops-entity`. Do not move branch selection into shared session state.
+- Keep database row-level security, which limits each query to its allowed organization or branch. Cross-branch reads use the existing scoped-read pattern.
+- Reuse domain predicates, membership access resolution, notification delivery, and shared shell components. No new state or UI library is needed.
+- Keep current URLs where possible. Redirect `/staff` to `/people?tab=staff`. Do not introduce a second person database.
+- Keep legacy dues migration controls out of normal new-branch workflows. Do not remove legacy tables or run the reserved bank-details drop as part of this UI work.
+- Follow [delivery.md](/Users/kuna/projects/matops/docs/delivery.md). Record changed behavior in the spec and supersede old decisions with a new ADR, a decision record, rather than rewriting history.
 
-## Implementation Steps
+## Implementation steps
 
-### 0. Lock the revised product contract
+### 0. Record contracts and map affected callers
 
-- [ ] Add a new ADR that supersedes the automatic-default-branch parts of ADR 124 and the pilot-only general-branch flag rule in ADR 126.
-- [ ] Update `docs/spec.md` with the organization-only registration state, first-branch creation, shared-membership defaults, pricing rules, manager permissions, and setup journey.
-- [ ] Update `docs/architecture.md` with the valid zero-entity organization state and the first-branch transaction.
-- [ ] Update `docs/roadmap.md` so completed v7.4 cells no longer say todo. Add this plan as the active post-pivot release.
-- [ ] Record the migration order around the reserved later drop of `payment_settings.bank_details`. Do not reuse migration `0059` for another change.
+Dependencies: none.
 
-### 1. Split organization creation from branch provisioning
+- [x] Add the next available ADR under `/Users/kuna/projects/matops/docs/issues`. Supersede the separate coverage repair action, organization Staff navigation, and manager branch-access rules.
+- [x] Update [spec.md](/Users/kuna/projects/matops/docs/spec.md) and [roadmap.md](/Users/kuna/projects/matops/docs/roadmap.md) with this release's behavior and per-slice status. Preserve earlier verification gaps.
+- [x] Inventory all authorization tiers, `isOwner`/`isStaff` checks, assignment queries, coverage readers, reminders, and cancellation sweeps across all file types. Include API, web, Expo, scripts, and tests.
+- [x] Create a capability matrix for owner, organization manager, branch instructor, student, pending member, and unrelated user. Classify each operation explicitly before changing guards.
+- [ ] Record baseline manual scenarios and current API results for denied actions, future bookings, and historical payment amounts.
 
-- [ ] Remove `provisionOrganization` from the Better Auth `afterCreateOrganization` hook in `packages/auth/src/index.ts`.
-- [ ] Change `academy.create` into an organization creation procedure, or add a focused `organization.create` procedure and retire the old entry point in `packages/api/src/router/academy.ts`.
-- [ ] Return `organizationId` only. Refresh the active-organization session cookie and route the owner to `/overview`.
-- [ ] Remove the post-login repair that calls `organizationsMissingEntity` and creates a BJJ branch automatically.
-- [ ] Remove `organizationsMissingEntity`. A live organization with no entity is valid.
-- [ ] Keep organization-level defaults lazy where current readers already support them. Create required organization settings during registration only if a screen cannot work without them.
-- [ ] Rename the web form and copy from academy creation to gym creation in `create-academy.tsx` and `start/page.tsx`.
-- [ ] Update the root app landing rule. An owner with an active organization and zero branches goes to `/overview`, not `JoinByCode`.
+Acceptance: every changed operation has a named capability and an identified reader/writer. No broad role replacement or unchecked assignment reader remains in the inventory.
 
-### 2. Make the organization shell work with zero branches
+### 1. Give managers consistent branch capabilities
 
-- [ ] Change `overview-screen.tsx` so an owner with zero branches sees an organization setup state, not the student code-join screen.
-- [ ] Show `Create your first branch` as the primary action. Keep join-by-code for signed-in people with no owned organization and no branch membership.
-- [ ] Keep Overview, Settings, and Profile usable with zero branches. Hide or disable Members, Memberships, and Staff only where their empty states would not help setup.
-- [ ] Make organization queries return valid zero totals when there are no entities.
-- [ ] Remove loading and error copy that calls a zero-branch organization an academy.
+Dependencies: 0.
 
-### 3. Rebuild branch creation around the first branch
+Files: [access.ts](/Users/kuna/projects/matops/packages/domain/src/access.ts), [entity.ts](/Users/kuna/projects/matops/packages/domain/src/entity.ts), [trpc.ts](/Users/kuna/projects/matops/packages/api/src/trpc.ts), [entity router](/Users/kuna/projects/matops/packages/api/src/router/entity.ts), and affected membership, invite, schedule, settings, and attendance routers.
 
-- [ ] Extend `entity.list` to return `canCreateBranches` and `canCreateGeneralBranches`.
-- [ ] Change `organization.general_branches_enabled` to default true. Add an explicit migration that backfills existing live organizations to true.
-- [ ] Hide the general-space option when `canCreateGeneralBranches` is false. Explain the entitlement if a future plan turns it off.
-- [ ] Change `createEntity` in `packages/db/src/provision.ts` to detect the first live entity inside one transaction.
-- [ ] Lock the organization row before choosing the first branch. Set `isDefault` only when no live branch exists.
-- [ ] Give the first branch the organization id when it does not conflict. Later branches keep random ids.
-- [ ] Provision `entity_membership` for the creator. Provision `academy_profile` and the default curriculum track only for BJJ.
-- [ ] Set `membership_enforced_at` on every new branch, including BJJ. New branches use shared memberships immediately.
-- [ ] Make retries idempotent. A partial first-branch failure must repair the same branch and never create a second default.
-- [ ] Add optional `Copy from another branch` for schedule templates and staff. Do not copy bookings, attendance, ranks, notes, referrals, or payment history.
+- [x] Extend the resolved request context with effective operational capabilities. An active organization manager can enter every live branch in that organization.
+- [x] Preserve the person's branch membership and training status separately. Management access must not enroll the manager as a student or make them an instructor choice automatically.
+- [x] Allow operational actions without a local member ID where the action acts on another person or the branch. Keep personal training actions on their existing membership requirements.
+- [x] Add a focused branch-management procedure tier where needed. Keep owner-only checks for protected actions, including direct API calls and Better Auth endpoints.
+- [x] Derive navigation and action visibility from the same capability rules. Remove owner-only copy from actions managers can use.
+- [x] Ensure removing or suspending organization manager access takes effect on the next request. Preserve any separate branch access they still hold.
 
-### 4. Add a guided organization setup journey
+Acceptance: a manager with no branch row can run the schedule and member workflow. They cannot create an owner, erase a person, delete a branch, or change the commercial account. Access to another organization always fails.
 
-- [ ] Add an organization setup checklist with server-derived completion states.
-- [ ] Cover gym name, first branch, branch location and time zone, schedule, staff, bank details, membership plan, member assignment, access readiness, and first invite.
-- [ ] Show the checklist on the zero-branch overview and keep a compact progress card until setup is complete.
-- [ ] Adapt the branch dashboard checklist by type. BJJ can mention classes, curriculum, and visitor links. General space uses sessions and supported member links.
-- [ ] Add branch launch health to the organization overview: missing schedule, missing staff, no covered members, no public BJJ classes, and unfinished membership setup.
-- [ ] Make each item link directly to the screen where the owner can finish it.
+### 2. Make plan coverage updates one complete workflow
 
-### 5. Complete shared membership economics
+Dependencies: 0-1.
 
-- [ ] Add monthly price and ISO currency to `access_plan` in `packages/db/src/access-schema.ts`.
-- [ ] Add an effective-month price history record, or an equivalent immutable monthly snapshot. A later plan edit must not rewrite old months.
-- [ ] Update validators and `accessPlan` procedures for plan creation and price changes.
-- [ ] Show price and currency on plan cards, assignment dialogs, member notices, payment claims, payment history, and the owner month board.
-- [ ] Store or resolve the amount that applied to each membership month. Keep paid status separate from confirmed revenue.
-- [ ] Define price-change behavior: existing assignments use the new price from the selected future month. No proration in this release.
-- [ ] Keep bank transfer and `I paid`. Do not add a payment provider.
+Files: [accessPlan router](/Users/kuna/projects/matops/packages/api/src/router/accessPlan.ts), [access-plan domain](/Users/kuna/projects/matops/packages/domain/src/access-plan.ts), [validators](/Users/kuna/projects/matops/packages/validators/src/access-plan.ts), [memberships screen](/Users/kuna/projects/matops/apps/nextjs/src/app/_components/memberships-screen.tsx).
 
-### 6. Build organization-level member and migration work
+- [x] Combine coverage preview, confirmation, coverage save, and eligible holder enrollment. Reuse the existing assignment/reconcile helpers.
+- [ ] Include people gaining or losing access, local-state exceptions, and affected booked sessions. Evaluate alternative valid memberships before classifying access as lost.
+- [x] Return the current coverage version with previews. Lock and recheck it during confirmation. Refuse stale edits with a refreshed preview instead of applying an outdated list.
+- [ ] Keep each branch write scoped. Use bounded batches with stable progress for larger groups. Return named failures and incomplete counts; never present partial enrollment as complete.
+- [x] Refresh membership displays and branch availability after success. Replace the normal `Re-check coverage` button with retry controls only when unfinished work exists.
+- [x] Keep retries safe after refresh or request failure. Recompute missing enrollment from current state; never duplicate memberships or restore restricted states.
 
-- [ ] Add an organization person route and detail screen from `people-screen.tsx`.
-- [ ] Show branch roles, local status, shared assignments, covered branches, current standing, payment history, and open claims.
-- [ ] Let authorized organization users create, change, suspend, and cancel shared assignments there.
-- [ ] Keep local role, approval, rank, notes, attendance, and branch suspension on the branch member screen.
-- [ ] Add bulk assignment from selected people, CSV input, or an existing branch plan.
-- [ ] Add an uncovered-members work queue grouped by branch.
-- [ ] Add a repeatable reconciliation job for large coverage changes. Fail with clear context if any member cannot be updated.
-- [ ] Extend activation preview with future bookings that would be cancelled.
-- [ ] Add an activation readiness result with blocking counts for uncovered people, missing prices, missing bank details, and incomplete reconciliation.
-- [ ] Keep the final activation action explicit and reversible during the pilot.
+Acceptance: adding sauna coverage is one user workflow. Existing eligible holders gain branch access without a second setup action. Exceptions remain visible until resolved.
 
-### 7. Add organization manager permissions
+### 3. Add next-month plan replacement
 
-- [ ] Define an organization `manager` role or explicit capability set in the Better Auth access-control model.
-- [ ] Let managers view organization people, plans, payments, staff, and reports.
-- [ ] Let managers assign memberships, confirm claims, post announcements, and handle setup.
-- [ ] Keep organization deletion, owner promotion or removal, commercial subscription ownership, and access-policy activation owner-only.
-- [ ] Show the effective role in the organization shell and hide actions the role cannot run.
-- [ ] Keep API checks as the authority. Navigation rules are only presentation.
+Dependencies: 0 and the shared coverage/enrollment helpers from 2.
 
-### 8. Remove the dual dues model from normal use
+Files: [access schema](/Users/kuna/projects/matops/packages/db/src/access-schema.ts), [accessPlan router](/Users/kuna/projects/matops/packages/api/src/router/accessPlan.ts), [membership access reader](/Users/kuna/projects/matops/packages/api/src/membership-access.ts), [membership status](/Users/kuna/projects/matops/packages/api/src/membership-status.ts), [membership sweep](/Users/kuna/projects/matops/packages/api/src/membership-sweep.ts), and [person screen](/Users/kuna/projects/matops/apps/nextjs/src/app/_components/organization-person-screen.tsx).
 
-- [ ] Keep legacy branch dues visible only on branches that existed before the cutover and have not migrated.
-- [ ] Move legacy migration into one guided flow instead of a permanent Settings switch.
-- [ ] After successful pilot migration, make legacy plan and dues editing read-only.
-- [ ] Apply the reserved migration that drops `payment_settings.bank_details` only after the old production build can no longer read it.
-- [ ] Plan a later removal of legacy `membership_plan`, `member_dues`, and `payment_claim` only after data retention and export rules are settled.
-- [ ] Remove dead automatic-provisioning helpers, stale academy creation contracts, and duplicate dues UI within this change area.
+- [x] Use date-bounded assignment records: existing `startMonth` and nullable exclusive `endMonth`. Never change an old assignment's plan ID to implement replacement.
+- [x] Allow separate historical periods for the same user and plan. Replace the current lifetime unique constraint with a partial unique index on `(planId, userId, startMonth)` for non-cancelled rows. Serialize assignment changes on the organization member record and reject overlapping live periods for the same plan.
+- [x] Add an assignment-change history table: source, target, effective month, previous source end month, actor/time, and cancellation actor/time. Derive pending/applied from the calendar. Include schema exports and explicit erase handling.
+- [x] Add same-organization foreign keys, same-person validation, month-boundary checks, indexes, and row-level security coverage. Keep existing rows open-ended without a data rewrite. Use a new structure-only migration after the current journal head.
+- [x] Add one pure function that decides whether an assignment applies in a requested month. Use it in every access, payment, claims, metrics, reminder, roster, and sweep reader identified in step 0.
+- [x] Add `previewChange`, `scheduleChange`, and `cancelScheduledChange` procedures. Compute next month on the server from the membership calendar. Lock source and target decisions in one transaction.
+- [x] Scheduling ends the source at next month and creates the successor starting then. Preserve the current month's amount, paid flag, claims, and audit rows. The successor starts with no copied payment record.
+- [x] Prepare missing branch enrollment using the approved coverage workflow. Enrollment must not grant paid-plan access before the successor starts. Existing local restrictions remain.
+- [x] Before the change starts, let staff cancel it atomically: cancel the never-started successor and restore only the source end date set by that change. Preserve the record of the cancelled change. Reject conflicting later edits. After the boundary, offer a new next-month replacement instead of undoing history.
+- [x] Reject archived target plans and overlapping target memberships with a useful link. Refuse target-plan archiving while a pending replacement depends on it. Link to the affected changes. Historical assignments remain immutable; ordinary assignment must create a new period when an earlier one ended.
+- [x] If staff pause or end the source before its scheduled replacement, show the pending change and require its cancellation in that same action. Do not silently allow a successor to restore access.
+- [x] Show current plan, next plan, effective date, next-month amount, and affected branches on web and Expo membership surfaces. Keep `Add membership` for an additional independent plan.
+- [x] Enforce dates at read time, including both booking time and session time. A delayed or failed cron job must not extend the old plan or activate the new plan early. Audit the existing `now` and `atSession` checks without weakening payment gates.
 
-### 9. Make every branch surface type-aware
+Acceptance: exactly the intended plan applies on either side of the month boundary. Old receipts and claims are unchanged. Duplicate submissions create one scheduled change. Returning to a previously held plan preserves its earlier history.
 
-- [ ] Define shared product terms: Gym for organization, Branch for every entity, Academy or mat for BJJ, Space for general space, Session for the shared schedule item.
-- [ ] Add small type-aware copy helpers for common headings, empty states, loading labels, and share actions.
-- [ ] Update organization navigation to use People. Update branch navigation to use Roster where that avoids two different Members destinations.
-- [ ] Split `share-links-dialog.tsx` actions by branch type. General spaces must never request BJJ public-booking settings.
-- [ ] Load each share action independently so one unavailable capability cannot hide valid links.
-- [ ] Add a signed-in `Join another branch` path on web and mobile. Keep switching separate from joining.
-- [ ] Keep public general-space visitor booking out until pilot evidence shows it is needed.
+### 4. Show bookings needing review without cancelling them
 
-### 10. Add product entry, commercial state, and measurement
+Dependencies: 2-3.
 
-- [ ] Update the public entry page to explain the BJJ-first Academy offer and the qualified multi-branch Facility offer.
-- [ ] Add organization commercial fields for offer, pilot end date, agreed price, billing contact, and account status.
-- [ ] Show the pilot or trial end date in organization Settings. Keep collection manual until willingness to pay is proven.
-- [ ] Add first-party product events for organization creation, first branch, first schedule, first student, first booking, first attendance, first plan, first assignment, second branch, branch activation, and paid commitment.
-- [ ] Add a weekly retained-use report. Do not depend on a hand-maintained spreadsheet.
-- [ ] Use weekly active organizations as the main metric. Require a real student booking or attendance event.
-- [ ] Track time to first schedule, time to first student booking, setup completion, second-branch activation, two-branch weekly use, and week-two student booking.
-- [ ] Track the counter-metric: owner activity with no student activity.
-- [ ] Keep Facility sales-led until at least two customers make a dated paid commitment.
+Files: [membership access reader](/Users/kuna/projects/matops/packages/api/src/membership-access.ts), [accessPlan router](/Users/kuna/projects/matops/packages/api/src/router/accessPlan.ts), [stats router](/Users/kuna/projects/matops/packages/api/src/router/stats.ts), [membership sweep](/Users/kuna/projects/matops/packages/api/src/membership-sweep.ts), and organization overview/person screens.
 
-### 11. Verify and release
+- [x] Add a scoped, paginated read for future booked sessions whose branch is no longer covered at session time. Include scheduled coverage loss, branch restrictions, and a clear reason without conflating them with unpaid months.
+- [x] Reuse the same rule for mutation previews and the ongoing review list. Include member, branch, session date, and a direct destination to inspect the booking.
+- [x] Derive review items from current bookings and access. Do not add a duplicate booking status or a permanent task table just to show this list.
+- [x] Keep reservations, capacity, and attendance history unchanged when coverage changes or an assignment ends. No cancellation notification is sent for a booking that remains booked.
+- [x] Existing staff cancellation remains available through the existing class workflow. Restored coverage or a manually cancelled booking removes the corresponding review item by derivation.
+- [x] Update the overdue sweep to respect assignment periods. Preserve its existing unpaid-month behavior, but prevent expired source assignments from cancelling bookings kept under this decision.
 
-- [ ] Write or update focused unit, API, database, and component tests for every changed contract.
-- [ ] Run affected package lint and typecheck after each implementation slice.
-- [ ] Do not run tests during agent sessions. Hand the exact focused commands to the user after each slice.
-- [ ] Apply new migrations to dev in order and verify the migration journal count.
-- [ ] Walk the complete single-BJJ journey on web.
-- [ ] Walk the complete organization-only registration and first-branch journey on web.
-- [ ] Walk BJJ plus general-space creation, setup, shared membership, booking, attendance, payment claim, manager access, and branch switching.
-- [ ] Verify denied actions with a manager, instructor, student, and unrelated organization member.
-- [ ] Complete the outstanding Expo device checklist before calling mobile supported for this release.
-- [ ] Run one BJJ plus general-space design partner for four weeks. Require both branches to record real booking or attendance activity.
-- [ ] Ask for a dated Facility payment commitment before adding more general-space features.
-- [ ] Update `docs/spec.md`, `docs/architecture.md`, `docs/roadmap.md`, `docs/map.md`, `CHANGELOG.md`, `docs/pilot-plan.md`, and `docs/business-model.md` with the as-built result.
+Acceptance: coverage loss changes zero booking rows. Affected reservations remain visible until the access issue resolves, staff cancels them, or the session passes.
 
-## Test Plan
+### 5. Keep gym and branch navigation available together
 
-Write tests for these cases during implementation. Do not run them in an agent session.
+Dependencies: 1.
 
-- Organization creation writes no entity rows and returns an active owner organization.
-- An organization with no branches loads Overview and Settings with valid empty data.
-- The first concurrent branch creation produces one default branch and one owner entity membership.
-- Retrying partial first-branch provisioning creates no duplicates.
-- BJJ and general-space first branches receive only their required rows.
-- A new BJJ branch starts on shared memberships.
-- Branch capabilities match owner role and the general-branch entitlement.
-- Shared plan price changes apply from the selected month and do not alter prior months.
-- Bulk assignment is idempotent and preserves suspended branch memberships.
-- Activation readiness and the final gate use the same coverage rule.
-- Activation preview names uncovered people and affected future bookings.
-- Manager permissions allow daily work and reject owner-only actions.
-- General-space sharing makes no BJJ-only request.
-- Product events fire once for idempotent retries.
+Files: [shell frame](/Users/kuna/projects/matops/apps/nextjs/src/app/_components/shell-frame.tsx), [organization shell](/Users/kuna/projects/matops/apps/nextjs/src/app/_components/organization-shell.tsx), [app shell](/Users/kuna/projects/matops/apps/nextjs/src/app/_components/app-shell.tsx), [selector](/Users/kuna/projects/matops/apps/nextjs/src/app/_components/entity-selector.tsx), and [route rules](/Users/kuna/projects/matops/packages/domain/src/entity.ts).
 
-Suggested commands for the user after implementation:
+- [x] Extend the existing frame to render grouped navigation. Owners/managers see `Gym management` and the current branch's work. Students and branch instructors see only their allowed tools.
+- [x] Label settings `Gym settings` and `Branch settings`. Rename the selector's organization destination `Gym overview`; it must not imply a filter on the current screen.
+- [x] With one branch, show its name without a redundant branch picker. Keep gym management reachable. Put `Add branch` in gym management for owners.
+- [x] Preserve compatible route and schedule-date filters when switching branches. Clear branch-owned person, class, and session IDs. Unsupported destinations fall back to the destination branch's home.
+- [x] Keep old deep links, browser back/forward, and two independent branch tabs working. Organization queries must not inherit the previous entity header.
+- [x] Define narrow-screen navigation using the existing drawer/More pattern. Do not put every grouped link into the bottom tab bar. Verify focus order and current-page labels.
+- [ ] Owners/managers entering the app without a deep link land on the actionable gym overview. Coaches land on their branch's current schedule; students keep the schedule landing. Preserve explicit incoming destinations.
+
+Acceptance: an owner can reach shared payments from a branch without discovering a second hidden menu. Switching schedules preserves the date but never shows the previous branch's classes.
+
+### 6. Consolidate People, Staff, and person tasks
+
+Dependencies: 1, 3, 5.
+
+Files: [people screen](/Users/kuna/projects/matops/apps/nextjs/src/app/_components/people-screen.tsx), [staff screen](/Users/kuna/projects/matops/apps/nextjs/src/app/_components/staff-screen.tsx), [person screen](/Users/kuna/projects/matops/apps/nextjs/src/app/_components/organization-person-screen.tsx), [members](/Users/kuna/projects/matops/apps/nextjs/src/app/_components/members.tsx), [directory domain](/Users/kuna/projects/matops/packages/domain/src/member-directory.ts), and membership/invite routers.
+
+- [x] Add URL-backed `People` and `Staff` tabs. Reuse the directory query and `staffRows` grouping. Move pending coach counts into the Staff tab and gym action list without double counting.
+- [x] Redirect `/staff` to `/people?tab=staff`. Remove its separate navigation item after the redirect works.
+- [x] Add branch member IDs to authorized directory results. Link `Open at this branch` to the existing `?member=` destination with the correct tab for active, pending, or archived records. Handle links to unavailable records clearly.
+- [x] Show payment standing and local admission together per person: covered plan, paid/unpaid/claim pending, local approval or restriction, and next scheduled change. Keep one source for the access explanation.
+- [x] Add staff branch assignment and per-branch approval actions to the person profile. Reuse branch membership rules through organization-authorized procedures with explicit target branch checks.
+- [x] Limit this workflow to ordinary staff roles. Owner and organization manager role grants remain protected. Never promote someone through a plan assignment.
+- [ ] Use existing invitation links for people without accounts. Offer selected-branch invite links for staff to copy; do not add unsolicited email delivery.
+- [x] Keep branch-local editing available. Remove copy that sends users elsewhere for an action already present on the person screen.
+
+Acceptance: an owner assigns an existing coach to two branches from one profile. A pending request stays a per-branch decision. Opening a student at a branch does not require another search.
+
+### 7. Prioritize daily work and finish setup guidance
+
+Dependencies: 4-6.
+
+Files: [overview](/Users/kuna/projects/matops/apps/nextjs/src/app/_components/overview-screen.tsx), [memberships](/Users/kuna/projects/matops/apps/nextjs/src/app/_components/memberships-screen.tsx), [setup checklist](/Users/kuna/projects/matops/apps/nextjs/src/app/_components/setup-checklist.tsx), [setup rules](/Users/kuna/projects/matops/packages/domain/src/organization-setup.ts), and organization/stats routers.
+
+- [x] Put `Needs attention` above organization metrics: payment claims, student requests, staff requests, uncovered members, and bookings needing review. Each item links to the exact person, filtered queue, or booking.
+- [x] Reuse existing queries first. Add one bounded aggregate reader only where existing data cannot supply the action. Keep partial errors visible and successful sections usable.
+- [x] Order Memberships around payment work: claims, access problems, current-month board, then plan configuration. Preserve plan creation for the empty state.
+- [x] Show paid status as recorded confirmation, not verified bank revenue. Keep people counts distinct from branch enrollment counts.
+- [x] Link each setup problem to the affected branch and relevant task, replacing the current first-branch guess and generic dashboard link.
+- [x] Make readiness reflect branch type and actual operations. A solo owner teaching classes or a supported instructorless general session must not produce a false missing-coach warning.
+- [x] Correct branch creation, person empty states, and owner-only wording. Use the existing branch-word helper. Explain that branches can be separate academies or independently bookable spaces; do not imply separate dues.
+
+Acceptance: the overview answers what needs action today. Setup links open the unfinished task at the correct branch. Empty, loading, and failed states remain understandable.
+
+### 8. Move mobile branch switching beside the schedule
+
+Dependencies: 3 and shared navigation/access contracts from 5.
+
+Files: [app header](/Users/kuna/projects/matops/apps/expo/src/components/app-header.tsx), [profile](/Users/kuna/projects/matops/apps/expo/src/app/(tabs)/profile.tsx), [schedule](/Users/kuna/projects/matops/apps/expo/src/app/(tabs)/schedule.tsx), and [entity store](/Users/kuna/projects/matops/apps/expo/src/utils/entity-store.ts).
+
+- [x] Extract the existing branch selection behavior into one shared mobile action. Make the schedule/header branch name open the picker when there is a choice.
+- [x] Preserve same-organization local selection and cross-organization session switching. Commit the new selection only after required session changes succeed; recover visibly on failure.
+- [x] Cancel obsolete requests and prevent cached data from the prior branch appearing under the new heading. Handle rapid switches, reload, expired sessions, and revoked access.
+- [x] Keep `Join another branch` separate. Remove the duplicate primary switcher from Profile once the new entry point is discoverable; retain account-level organization controls where needed.
+- [ ] Show scheduled plan changes and the same access reasons as web. Test BJJ and general-space labels, long names, focus, and screen-reader labels on a device.
+
+Acceptance: students can compare branch schedules without leaving the schedule. A failed switch keeps the previous branch consistent. A one-branch student sees no useless picker.
+
+### 9. Cleanup, verification, measurement, and release
+
+Dependencies: all prior steps.
+
+- [x] Remove obsolete Staff navigation and duplicate switcher code. Keep redirects and retry support. Remove only unused code inside the changed areas.
+- [x] Write focused domain, API, database, and validator tests listed below. Do not add a new test framework for layout-only changes.
+- [x] Run affected lint/typecheck after each slice. Run workspace lint/typecheck at completion. Do not claim tests passed until the user or CI supplies results.
+- [ ] Walk zero-branch setup, single-branch owner, multi-branch manager, branch instructor, and student flows. Verify responsive web and real-device Expo behavior.
+- [ ] Measure task completion without help, time to confirm payment, time to resolve coverage, and wrong-branch actions during walkthroughs. Use a manual scorecard first; retain existing weekly-use reporting.
+- [ ] Validate larger hierarchy ideas with operators who run multiple locations and spaces. Record the outcome as deferred discovery, not an unfinished schema change in this release.
+- [x] Update spec, architecture, roadmap, ADR index, changelog, and this plan. Keep pilot/device checks open until performed. Do not mark an implementation checkbox complete from documentation alone.
+
+Acceptance: every approved recommendation maps to a finished slice or an explicit deferred item. No source comments narrate edits; test files contain no comments.
+
+## Verification matrix
+
+| Area | Cases to write or inspect |
+| --- | --- |
+| Permissions | Manager without branch row; revoked manager; separate student status; assigned instructor; foreign organization; protected owner actions |
+| Coverage | Stale preview; duplicate submit; partial failure/retry; suspended and pending records; overlapping plans; closed branch |
+| Plan replacement | Month boundary in gym time zone; cron absent; current and future session checks; duplicate requests; historical target plan; target overlap; cancel pending change; pause/end source; archived target |
+| Payments | No copied paid flags/claims; immutable old amounts; new month uses target price; no reminders for ended/not-started assignments |
+| Bookings | Coverage removal and membership end retain reservations and capacity; review list resolves; existing overdue and archive behavior still works |
+| Navigation | Zero/one/many branches; deep links; browser back; two tabs; incompatible branch type; member query changes after mount |
+| Staff | Same person across branches; per-branch approvals; no role escalation; old `/staff` URL |
+| Mobile | Same/cross organization; failed or rapid switch; stale requests; revoked branch; device accessibility |
+
+Extend existing tests where possible. New date-period rules belong in a focused domain test. New database constraints need row-level security and period tests. Use the existing test file patterns, without running them during implementation sessions.
+
+Commands to run during implementation:
 
 ```bash
-pnpm typecheck
-pnpm lint
-pnpm -F @matops/domain test
-pnpm -F @matops/db test
-pnpm -F @matops/api test
-pnpm -F @matops/validators test
-pnpm -F @matops/notifications test
+pnpm --dir /Users/kuna/projects/matops lint
+pnpm --dir /Users/kuna/projects/matops typecheck
 ```
 
-Use focused file filters where each package supports them before running full package suites.
+Focused commands for the user after implementation. The new files are
+`packages/api/test/manager-branch-access.test.ts`,
+`packages/api/test/membership-plan-change.test.ts` and
+`packages/api/test/booking-review.test.ts`; the rest were extended.
 
-## Rollout
+```bash
+pnpm --dir /Users/kuna/projects/matops -F @matops/domain test test/access.test.ts test/entity-routes.test.ts test/access-plan.test.ts test/member-directory.test.ts test/membership-access.test.ts test/membership-month.test.ts test/organization-setup.test.ts test/post-login-target.test.ts
+pnpm --dir /Users/kuna/projects/matops -F @matops/api test test/manager-permissions.test.ts test/manager-branch-access.test.ts test/entity-authorization.test.ts test/access-plan.test.ts test/membership-plan-change.test.ts test/booking-review.test.ts test/membership-assignment.test.ts test/membership-access-reader.test.ts test/membership-cancellation-sweep.test.ts
+pnpm --dir /Users/kuna/projects/matops -F @matops/db test test/membership-access-rls.test.ts test/erase-coverage.test.ts test/rls-coverage.test.ts
+pnpm --dir /Users/kuna/projects/matops -F @matops/validators test test/plan-pricing.test.ts
+```
 
-1. Ship documentation and contract changes first.
-2. Ship organization-only creation and the zero-branch shell together. Do not deploy one without the other.
-3. Ship first-branch creation, capability responses, and the default-true general-branch flag together.
-4. Ship plan prices and historical amount rules before migrating real members.
-5. Ship bulk migration and activation readiness before moving any existing BJJ branch.
-6. Keep legacy dues available only as pilot rollback.
-7. Complete web acceptance on dev, then deploy.
-8. Apply the delayed bank-details drop only after the old build is gone.
-9. Run the four-week mixed-facility pilot.
-10. Turn Facility into a public offer only after paid commitment evidence.
+Do not run full suites by default.
 
-## Risks
+## Rollout and rollback
 
-- Removing automatic provisioning makes zero-branch organizations normal. Every landing and repair path must stop treating them as corrupted.
-- The first branch currently inherits the organization id. Losing that rule can break old QR, seed, and default-branch assumptions.
-- Two concurrent first-branch requests can race unless the organization row is locked.
-- Price edits can rewrite history unless amounts use an effective month or monthly snapshot.
-- Bulk coverage changes can leave partial membership state unless reconciliation is repeatable.
-- A permanent legacy dues path will keep two product models alive and raise support cost.
-- Manager access can expose sibling branch data if any procedure relies only on navigation hiding.
-- Product analytics can collect personal data. Events should use organization, branch, role, and state identifiers without names, phone numbers, email addresses, or payment details.
+1. Refresh the PR base and dev environment state. Confirm the outstanding baseline checks and migration journal before changing data.
+2. Deliver authorization and coverage fixes as complete slices. Navigation may proceed alongside scheduled membership work after capability contracts are stable.
+3. Deploy period-aware readers before exposing scheduled replacements. The schema change is additive first; relax the old lifetime unique constraint only with all writers protected against overlap.
+4. Ensure web, Expo readers, reports, and sweeps all understand periods before enabling the replacement action. No worker is required for a date boundary.
+5. Do not roll back to a reader that ignores periods after scheduled assignments exist. Keep compatible readers and hide the new action if rollback is needed.
+6. Verify dev with the role and journey matrix. Production deployment is a later task; this planning request does not authorize a merge or deployment.
+7. Preserve the separate delayed legacy bank-details drop and data-retention work. Do not bundle destructive migrations into this release.
+8. Keep mobile support claims tied to completed device checks. Pilot pricing commitments and location hierarchy discovery remain separate from technical completion.
 
-## Current Step
+## Deferred scope
 
-**Built and unverified, 2026-09-04.** All eleven steps are done, one epic item per run; the record of what changed and why is [EPIC.md](EPIC.md)'s log. Static gates are green (`pnpm typecheck` 17/17, `pnpm lint` 15/15) and migrations `0060` to `0064` are applied to the **dev** branch, 63 rows against 63 journal entries.
+- A third location/room hierarchy level, all-branches student calendar, resource inventory, and new branch types.
+- Immediate plan replacement, partial-month charges/refunds, automatic payment collection, and credit transfer.
+- Automatic cancellation caused by membership ending or coverage removal.
+- Legacy table deletion, shared curriculum, cross-branch referrals, and general-space public visitor booking.
 
-Three things are outstanding, all of them human work:
+## Open questions
 
-- **The suites are written and were not run.** The focused commands are in EPIC.md's log; `pnpm test` is the finish.
-- **Nobody has clicked through it.** The manual acceptance list is in EPIC.md's log: registration with no branch, the BJJ-only journey, a mat plus a general space, denied actions per role, money and measurement, and the Expo checklist that has been outstanding since v1.8.
-- **Two hand-run fills.** `packages/db/scripts/2026-09-04-general-branches-backfill.sql` and, only when a gym actually commits, `2026-09-04-paid-commitment.sql`.
+None for the approved product scope. Technical preflight checks in step 0 are implementation work, not requests for another product decision.
 
-Nothing is committed. The whole release sits in the working tree on `dev`, and merging `dev` into `main` is the production deploy.
+## Current step
 
-## Open Questions
+Steps 0 to 9 are built. `pnpm typecheck` is 17/17 and `pnpm lint` is 15/15 at the workspace root. **The suites were run at the user's request** (2026-09-06, twice): `pnpm test` is **green, 1611 tests across 130 files**. It had 25 failures on the baseline commit `b237f03`; this release fixed every one and introduced none. Migration `0065` is **applied to dev** (64 of 64 against `_journal.json`) and verified live: the period columns and indexes, the change table with its RLS policy and grants, and no existing assignment rewritten.
 
-- None. The plan uses the decisions above. Change them before implementation if the intended commercial or permission model differs.
+Left open, and why:
+
+- The baseline manual scenarios, the role and journey walkthroughs, the Expo device checks, the task-completion measurement and the location-hierarchy discovery are human work.
+- Two small pieces of the approved scope are deliberately not built and are named in the unticked boxes above: bounded batches for coverage runs (the loop reports named failures and an incomplete flag, so nothing is presented as complete, but it does not page), and the coach landing on their branch's schedule rather than its dashboard. The coverage preview also shows gains and losses without the affected bookings; the plan-change preview does show them, through the same `bookingsToReview` reader.

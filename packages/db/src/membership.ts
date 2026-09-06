@@ -208,7 +208,8 @@ export async function getEntityInOrganization(
 }
 
 /**
- * The gyms this person owns, whether or not any of them has a branch yet.
+ * The gyms this person RUNS, as an owner or a manager, whether or not any of
+ * them has a branch yet (ADR 128, widened by ADR 129).
  *
  * `listMembershipsForUser` cannot answer this: it joins `member` to `entity`,
  * so an owner whose gym has no branch reads as belonging to nothing, and the
@@ -225,7 +226,9 @@ export async function listOwnedOrganizations(
     .where(
       and(
         eq(member.userId, userId),
-        eq(member.role, "owner"),
+        // Managers run the gym too, so they land on it and may make it active
+        // (ADR 129). The destructive half is still refused by the owner tiers.
+        inArray(member.role, ["owner", "manager"]),
         isNull(organization.deletedAt),
       ),
     )

@@ -28,7 +28,7 @@ import type { MemberRecord, MemberScope } from "../members";
 import { academyTimeZone } from "../academy-tz";
 import { nameByMember, nameByUser, requireMember, rosterOf } from "../members";
 import { isUniqueViolation } from "../pg-error";
-import { ownerProcedure } from "../trpc";
+import { branchManagerProcedure } from "../trpc";
 
 function referralMember(member: MemberRecord) {
   return {
@@ -85,7 +85,7 @@ export const referralRouter = {
    * student. The screen groups and totals the students itself, so this returns
    * the rows and nothing pre-aggregated (ADR 60 deleted the unread half).
    */
-  dashboard: ownerProcedure.query(async ({ ctx }) => {
+  dashboard: branchManagerProcedure.query(async ({ ctx }) => {
     const members = await rosterOf(ctx);
     const referrals = await ctx.db.select().from(memberReferral);
     const confirmedClaims = await ctx.db
@@ -169,7 +169,7 @@ export const referralRouter = {
   }),
 
   /** Permanent one-time initial assignment. */
-  assign: ownerProcedure
+  assign: branchManagerProcedure
     .input(AssignReferralSchema)
     .mutation(async ({ ctx, input }) => {
       await requireReferralPair(
@@ -222,7 +222,7 @@ export const referralRouter = {
     }),
 
   /** Owner-only replacement or clearing, atomically appended to the audit. */
-  correct: ownerProcedure
+  correct: branchManagerProcedure
     .input(CorrectReferralSchema)
     .mutation(async ({ ctx, input }) => {
       const student = await requireMember(ctx, input.studentMemberId);
@@ -278,7 +278,7 @@ export const referralRouter = {
     }),
 
   /** Owner-only attribution audit history for one student. */
-  history: ownerProcedure
+  history: branchManagerProcedure
     .input(ReferralHistorySchema)
     .query(async ({ ctx, input }) => {
       const student = await requireMember(ctx, input.studentMemberId);

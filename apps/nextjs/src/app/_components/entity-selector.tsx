@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import type { CreateEntityInput } from "@matops/validators";
-import { entityHref } from "@matops/domain";
+import { entityHref, switchEntityHref } from "@matops/domain";
 import { Button } from "@matops/ui/button";
 import {
   Dialog,
@@ -60,10 +60,19 @@ const Plus = () => (
 );
 
 /**
- * The place picker (ADR 124). Switching is a link, not a mutation: the URL is
- * what names the branch now, so the browser back button and a second tab both
- * behave. The organization overview sits at the top because an owner needs a
- * way out of one mat that does not mean choosing another.
+ * The place picker (ADR 124, reshaped by ADR 129). Switching is a link, not a
+ * mutation: the URL is what names the branch now, so the browser back button
+ * and a second tab both behave.
+ *
+ * It carries the screen across where the destination has one, and the date with
+ * it, so switching from Monday at one mat lands on Monday at the other. Person,
+ * class and session ids stay behind, because they belong to the branch you
+ * left.
+ *
+ * `Gym overview` is a place to go rather than a filter on the screen you are
+ * reading, which is what "All branches" sounded like. With one branch there is
+ * no picker at all: the name is the whole answer, and gym management is in the
+ * sidebar (ADR 129).
  *
  * It says "branch" rather than "academy" because an organization can also run a
  * general space, and a gym is not a mat (ADR 126).
@@ -77,10 +86,11 @@ export function EntitySelector({
   activeId?: string;
 }) {
   const [adding, setAdding] = useState(false);
+  const pathname = usePathname();
+  const search = useSearchParams().toString();
   const { entities, canCreateBranches } = organization;
   const active = activeId ? entities.find((e) => e.id === activeId) : undefined;
-  const alone =
-    activeId !== undefined && entities.length < 2 && !canCreateBranches;
+  const alone = activeId !== undefined && entities.length < 2;
 
   if (alone) {
     return (
@@ -95,7 +105,7 @@ export function EntitySelector({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="sm" className="max-w-full">
-            <span className="truncate">{active?.name ?? "All branches"}</span>
+            <span className="truncate">{active?.name ?? "Gym overview"}</span>
             <ChevronDown />
           </Button>
         </DropdownMenuTrigger>
@@ -105,7 +115,7 @@ export function EntitySelector({
               href="/overview"
               aria-current={activeId === undefined ? "true" : undefined}
             >
-              <span className="flex-1">All branches</span>
+              <span className="flex-1">Gym overview</span>
               {activeId === undefined && <Check />}
             </Link>
           </DropdownMenuItem>
@@ -115,7 +125,16 @@ export function EntitySelector({
             return (
               <DropdownMenuItem key={e.id} asChild>
                 <Link
-                  href={entityHref(e.id)}
+                  href={
+                    activeId === undefined
+                      ? entityHref(e.id)
+                      : switchEntityHref(pathname, search, {
+                          id: e.id,
+                          type: e.type,
+                          role: e.role,
+                          status: e.status,
+                        })
+                  }
                   aria-current={current ? "true" : undefined}
                 >
                   <span className="flex-1 truncate">{e.name}</span>
@@ -135,7 +154,7 @@ export function EntitySelector({
           )}
         </DropdownMenuContent>
       </DropdownMenu>
-      <AddEntityDialog
+      <AddBranchDialog
         open={adding}
         onOpenChange={setAdding}
         canCreateGeneralBranches={organization.canCreateGeneralBranches}
@@ -164,7 +183,7 @@ export function AddBranchButton({
         <Plus />
         {label}
       </Button>
-      <AddEntityDialog
+      <AddBranchDialog
         open={adding}
         onOpenChange={setAdding}
         canCreateGeneralBranches={organization.canCreateGeneralBranches}
@@ -174,7 +193,7 @@ export function AddBranchButton({
   );
 }
 
-function AddEntityDialog({
+export function AddBranchDialog({
   open,
   onOpenChange,
   canCreateGeneralBranches,

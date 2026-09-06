@@ -1,6 +1,6 @@
 "use client";
 
-import { isBjjAcademy } from "@matops/domain";
+import { isBjjAcademy, isOwner } from "@matops/domain";
 
 import { AcademyDangerZone } from "./academy-danger-zone";
 import { AcademyIdentity } from "./academy-identity";
@@ -15,8 +15,9 @@ import { PublicBooking } from "./public-booking";
  * its code, set the time zone and address, set the booking rule (ADR 82),
  * delete it (ADR 68). Everything that belongs to a job lives with that job now:
  * staff and the instructor link on Coaches, the student link and the check-in
- * poster on Members, bank details on Payments. Owner-only (guarded by the nav +
- * server procedures).
+ * poster on Members, bank details on Payments. Owners and managers (guarded by
+ * the nav + server procedures); deleting the branch stays with owners
+ * (ADR 129).
  *
  * Two blocks are conditional (ADR 126). Public booking is a BJJ thing: a general
  * space has no visitor path in this release, and its settings live on the
@@ -48,7 +49,7 @@ export function SettingsScreen() {
           <BookingGate />
         )}
         {bjj && <PublicBooking academyName={academy.name} />}
-        <AcademyDangerZone name={academy.name} />
+        {isOwner(academy) && <AcademyDangerZone name={academy.name} />}
       </div>
     </>
   );

@@ -27,9 +27,17 @@ export function isActiveMember(m: Pick<Membership, "status">): boolean {
   return m.status === "active";
 }
 
-/** Active owner or instructor — may run the schedule and take attendance. */
+/**
+ * Active owner, manager or instructor — may run the schedule and take
+ * attendance. `manager` is here because a gym's manager reaches every branch
+ * (ADR 129); they hold no `entity_membership` of their own, so the standing is
+ * synthesized per request from their organization role.
+ */
 export function isStaff(m: Membership): boolean {
-  return isActiveMember(m) && (m.role === "owner" || m.role === "instructor");
+  return (
+    isActiveMember(m) &&
+    (m.role === "owner" || m.role === "manager" || m.role === "instructor")
+  );
 }
 
 /** Active owner — academy settings, invites, members. */
@@ -60,6 +68,17 @@ export function isManager(m: Membership): boolean {
 export function runsOrganization(m: Membership): boolean {
   return isOwner(m) || isManager(m);
 }
+
+/**
+ * May this person run this BRANCH's daily work (ADR 129)?
+ *
+ * The branch twin of {@link runsOrganization}: the schedule, attendance, local
+ * members and their approvals, instructor assignments, leads, plans, dues,
+ * claims and ordinary branch settings. Four actions stay on `isOwner` instead,
+ * and that difference is the permission model: making or removing an owner,
+ * permanent erase, deleting the branch, and the commercial account.
+ */
+export const runsBranch = runsOrganization;
 
 /** Suspended — access revoked by an owner; kept for history, not active. */
 export function isSuspended(m: Pick<Membership, "status">): boolean {

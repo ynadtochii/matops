@@ -101,9 +101,9 @@ describe("tenant seam", () => {
     ).rejects.toThrow(/Staff only/);
   });
 
-  it("blocks an instructor from owner procedures", async () => {
+  it("blocks an instructor from the branch's management procedures", async () => {
     await expect(h.as(INSTRUCTOR_A, A).membership.staff()).rejects.toThrow(
-      /Owner only/,
+      /Owners and managers only/,
     );
     await expect(
       h.as(INSTRUCTOR_A, A).attendance.list({ id: CLASS_A }),
@@ -112,7 +112,7 @@ describe("tenant seam", () => {
 
   it("refuses the referral ledger to an instructor", async () => {
     await expect(h.as(INSTRUCTOR_A, A).referral.dashboard()).rejects.toThrow(
-      /Owner only/,
+      /Owners and managers only/,
     );
     await expect(h.as(OWNER_A, A).referral.dashboard()).resolves.toBeTruthy();
   });

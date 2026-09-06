@@ -93,6 +93,7 @@ export function setupProgress(items: readonly SetupItem[]): {
 
 export interface BranchHealthFacts {
   scheduled: boolean;
+  /** Somebody active runs this branch: an owner who teaches counts. */
   staffed: boolean;
   /** The branch runs on shared memberships rather than legacy branch dues. */
   enforced: boolean;
@@ -119,7 +120,10 @@ export type BranchIssue =
 export function branchLaunchIssues(facts: BranchHealthFacts): BranchIssue[] {
   const issues: BranchIssue[] = [];
   if (!facts.scheduled) issues.push("schedule");
-  if (!facts.staffed) issues.push("staff");
+  // A general space runs sessions without a coach, and a solo owner who
+  // teaches their own classes IS the coach. Only a mat with nobody running it
+  // is a warning (ADR 129).
+  if (facts.bjj && !facts.staffed) issues.push("staff");
   if (facts.enforced && !facts.planCovers) issues.push("membership");
   if (facts.enforced && facts.uncovered > 0) issues.push("covered");
   if (facts.bjj && facts.publicBookingEnabled && facts.publicClasses === 0) {

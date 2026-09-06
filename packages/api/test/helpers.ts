@@ -120,7 +120,16 @@ export async function harness(academies?: AcademySpec[]): Promise<Harness> {
     headers,
     session: {
       user: { id: userId, name: `User ${userId}` },
-      session: { activeOrganizationId: academyId },
+      // Better Auth keeps `activeOrganizationId` on the SESSION ROW and writes
+      // it when a gym is created or made active; the fake auth api above
+      // records exactly that in `activeOrg`. Reading it back here is what lets
+      // a test call `organization.create` and then use the gym it just made,
+      // the way a real request does after the cookie is re-signed. An explicit
+      // id still wins, and a user nothing has activated for still names no gym,
+      // so the gate tests keep their refusals.
+      session: {
+        activeOrganizationId: academyId ?? activeOrg.get(userId) ?? null,
+      },
     } as unknown as Ctx["session"],
     requestedEntityId: headers.get("x-matops-entity") ?? undefined,
     baseDb: exec,

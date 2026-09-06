@@ -10,6 +10,7 @@ import {
   isPendingCoach,
   membersCsv,
   membersCsvFilename,
+  runsBranch,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
@@ -57,7 +58,7 @@ function MemberActions({
   onSuspend?: () => Promise<void>;
   onRestore?: () => void;
   onArchive?: () => Promise<void>;
-  onPurge: () => Promise<void>;
+  onPurge?: () => Promise<void>;
 }) {
   const [dialog, setDialog] = useState<MemberDialog | null>(null);
   const close = (open: boolean) => {
@@ -94,16 +95,20 @@ function MemberActions({
               Archive
             </DropdownMenuItem>
           )}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            className="text-error focus:bg-error/10 focus:text-error flex-col items-start gap-0.5 py-2"
-            onSelect={() => setDialog("purge")}
-          >
-            Delete permanently
-            <span className="text-error/60 font-mono text-[10px] tracking-wide uppercase">
-              Erases every record
-            </span>
-          </DropdownMenuItem>
+          {onPurge && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-error focus:bg-error/10 focus:text-error flex-col items-start gap-0.5 py-2"
+                onSelect={() => setDialog("purge")}
+              >
+                Delete permanently
+                <span className="text-error/60 font-mono text-[10px] tracking-wide uppercase">
+                  Erases every record
+                </span>
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 
@@ -129,32 +134,34 @@ function MemberActions({
           onConfirm={onArchive}
         />
       )}
-      <ConfirmDialog
-        open={dialog === "purge"}
-        onOpenChange={close}
-        title={`Permanently delete ${name}?`}
-        description={
-          <>
-            This erases everything your gym holds about this person: their
-            attendance record, rank and promotion history, coach notes, payment
-            history and bookings. It cannot be undone, and there is no backup to
-            restore from.
-            <br />
-            <br />
-            If they ever come back they start from nothing, with no history. Any
-            students they referred lose that credit. Their sign-in is deleted
-            too unless they belong to another gym on MatOps.
-            <br />
-            <br />
-            To keep their record and just end their membership, close this and
-            use <strong>Archive</strong> instead.
-          </>
-        }
-        confirmLabel="Delete everything"
-        confirmPhrase={name}
-        variant="destructive"
-        onConfirm={onPurge}
-      />
+      {onPurge && (
+        <ConfirmDialog
+          open={dialog === "purge"}
+          onOpenChange={close}
+          title={`Permanently delete ${name}?`}
+          description={
+            <>
+              This erases everything your gym holds about this person: their
+              attendance record, rank and promotion history, coach notes,
+              payment history and bookings. It cannot be undone, and there is no
+              backup to restore from.
+              <br />
+              <br />
+              If they ever come back they start from nothing, with no history.
+              Any students they referred lose that credit. Their sign-in is
+              deleted too unless they belong to another gym on MatOps.
+              <br />
+              <br />
+              To keep their record and just end their membership, close this and
+              use <strong>Archive</strong> instead.
+            </>
+          }
+          confirmLabel="Delete everything"
+          confirmPhrase={name}
+          variant="destructive"
+          onConfirm={onPurge}
+        />
+      )}
     </>
   );
 }
@@ -170,7 +177,10 @@ export function Members() {
   const queryClient = useQueryClient();
   const memberList = useQuery(trpc.membership.members.queryOptions());
   const academy = useEntity();
-  const owner = isOwner(academy);
+  const owner = runsBranch(academy);
+  // Permanent erase stays with owners (ADR 129); everything else on this row
+  // is ordinary branch work.
+  const canErase = isOwner(academy);
   const archivedList = useQuery({
     ...trpc.membership.archived.queryOptions(),
     enabled: owner,
@@ -482,9 +492,15 @@ export function Members() {
                           onArchive={async () => {
                             await archive.mutateAsync({ memberId: m.memberId });
                           }}
-                          onPurge={async () => {
-                            await purge.mutateAsync({ memberId: m.memberId });
-                          }}
+                          onPurge={
+                            canErase
+                              ? async () => {
+                                  await purge.mutateAsync({
+                                    memberId: m.memberId,
+                                  });
+                                }
+                              : undefined
+                          }
                         />
                       )}
                     </MemberRow>
@@ -526,9 +542,13 @@ export function Members() {
                     name={m.name}
                     busy={rowBusy(m.memberId)}
                     onRestore={() => restore.mutate({ memberId: m.memberId })}
-                    onPurge={async () => {
-                      await purge.mutateAsync({ memberId: m.memberId });
-                    }}
+                    onPurge={
+                      canErase
+                        ? async () => {
+                            await purge.mutateAsync({ memberId: m.memberId });
+                          }
+                        : undefined
+                    }
                   />
                 </div>
               ))

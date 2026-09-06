@@ -135,6 +135,13 @@ describe("opening a general branch", () => {
         members: [{ userId: OWNER, role: "owner", status: "active" }],
       },
     ]);
+    // The entitlement defaults ON since migration `0060` (ADR 128), so a gym
+    // that is NOT entitled has to be made one deliberately. That is the state
+    // the refusal below is about.
+    await h.exec
+      .update(organization)
+      .set({ generalBranchesEnabled: false })
+      .where(eq(organization.id, ORG));
   });
 
   afterAll(() => h.close());

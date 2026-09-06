@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -10,16 +11,16 @@ import {
   canVisit,
   entityHref,
   isActiveMember,
-  isOwner as isOwnerOf,
   isPendingCoach,
   isStaff as isStaffOf,
   pathWithinEntity,
+  runsBranch,
 } from "@matops/domain";
 
 import type { NavItem } from "./shell-frame";
 import { useTRPC } from "~/trpc/react";
 import { EntityProvider, useEntity, useOrganization } from "./entity";
-import { EntitySelector } from "./entity-selector";
+import { AddBranchDialog, EntitySelector } from "./entity-selector";
 import { PageLoader } from "./mat-loader";
 import { ShareLinksDialog } from "./share-links-dialog";
 import {
@@ -39,6 +40,22 @@ import {
 import { ErrorState, NoAccessState } from "./states";
 
 const NARROW_ROUTES = ["/class", "/profile"];
+
+const GYM_GROUP = "Gym management";
+
+const PlusIcon = () => (
+  <svg
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={1.5}
+    strokeLinecap="round"
+    className="size-[18px] shrink-0"
+    aria-hidden
+  >
+    <path d="M8 3.5v9M3.5 8h9" />
+  </svg>
+);
 
 function contentWidth(pathname: string, isStaff: boolean): string {
   if (pathname.startsWith("/schedule")) return "max-w-[1600px]";
@@ -124,10 +141,11 @@ function ShellChrome({
   const trpc = useTRPC();
   const academy = useEntity();
   const organization = useOrganization();
+  const [addingBranch, setAddingBranch] = useState(false);
   const href = (path: string) => entityHref(entityId, path);
   const within = pathWithinEntity(pathname);
   const { academyId: activeId, role, status } = academy;
-  const isOwner = isOwnerOf(academy);
+  const isOwner = runsBranch(academy);
   const isStaff = isStaffOf(academy);
   const isPending = status === "pending";
   // Staff badges: student requests sit on the Roster, coach requests on Coaches —
@@ -228,7 +246,7 @@ function ShellChrome({
     },
     {
       path: "/settings",
-      label: "Settings",
+      label: "Branch settings",
       icon: <SettingsIcon />,
       show: canVisit("/settings", academy),
     },
@@ -249,6 +267,24 @@ function ShellChrome({
     .filter((i) => i.show)
     .map((i) => ({ ...i, href: href(i.path) }));
 
+  // The gym's own screens, beside the branch rather than behind a second menu
+  // (ADR 129). Same paths the organization shell draws, so a link is a link
+  // and nothing here sends `x-matops-entity`.
+  const gymItems: NavItem[] = [
+    { path: "/overview", label: "Gym overview", icon: <DashboardIcon /> },
+    { path: "/people", label: "People", icon: <MembersIcon /> },
+    { path: "/memberships", label: "Memberships", icon: <PaymentsIcon /> },
+    { path: "/settings", label: "Gym settings", icon: <SettingsIcon /> },
+  ].map((i) => ({
+    ...i,
+    show: organization.canRunOrganization,
+    group: GYM_GROUP,
+    href: i.path,
+    // Namespaced so `isCurrent`, which reads the path within the branch, can
+    // never light up "Gym settings" because you are on the branch's own.
+    path: `gym:${i.path}`,
+  }));
+
   const isCurrent = (path: string) =>
     path === "/" ? within === "/" : within.startsWith(path);
 
@@ -256,7 +292,25 @@ function ShellChrome({
 
   return (
     <ShellFrame
-      items={items}
+      items={[
+        ...items,
+        ...gymItems.filter((i) => i.show),
+        // The selector hides itself at a gym with one branch, so this is the
+        // only way an owner opens a second one (ADR 129).
+        ...(organization.canCreateBranches
+          ? [
+              {
+                path: "gym:add-branch",
+                href: "#add-branch",
+                label: "Add branch",
+                icon: <PlusIcon />,
+                show: true,
+                group: GYM_GROUP,
+                onSelect: () => setAddingBranch(true),
+              },
+            ]
+          : []),
+      ]}
       isCurrent={isCurrent}
       homeHref={href("/")}
       profileHref={href("/profile")}
@@ -346,6 +400,12 @@ function ShellChrome({
       }
     >
       {canVisit(within, academy) ? children : <NoAccessState />}
+      <AddBranchDialog
+        open={addingBranch}
+        onOpenChange={setAddingBranch}
+        canCreateGeneralBranches={organization.canCreateGeneralBranches}
+        branches={organization.entities}
+      />
     </ShellFrame>
   );
 }

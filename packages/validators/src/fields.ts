@@ -243,6 +243,26 @@ export const InviteRoleSchema = z.enum(["student", "instructor"]);
 export type InviteRole = z.infer<typeof InviteRoleSchema>;
 
 /**
+ * Put somebody on one branch, or change what they are there, from the gym's
+ * person profile (ADR 129). ORDINARY roles only: owner grants stay on the
+ * branch's own Coaches page, so nothing here can mint an owner.
+ */
+export const SetBranchRoleSchema = z.object({
+  entityId: IdSchema,
+  userId: IdSchema,
+  role: InviteRoleSchema,
+});
+export type SetBranchRoleInput = z.infer<typeof SetBranchRoleSchema>;
+
+/** Approve or decline one person's place at one branch (ADR 129). */
+export const BranchDecisionSchema = z.object({
+  entityId: IdSchema,
+  userId: IdSchema,
+  decision: z.enum(["approve", "decline"]),
+});
+export type BranchDecisionInput = z.infer<typeof BranchDecisionSchema>;
+
+/**
  * Student/instructor self-join via an invite link (spec S1/S2, docs/issues/26).
  * Email is not collected here — it is already required + verified by the
  * magic-link sign-in that precedes joining. Minimal fields only.

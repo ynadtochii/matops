@@ -14,6 +14,7 @@ import {
   academyInvite,
   academyProfile,
   accessAssignment,
+  accessAssignmentChange,
   accessPlan,
   accessPlanEntity,
   account,
@@ -152,6 +153,11 @@ export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
     exec
       .delete(membershipMonth)
       .where(inArray(membershipMonth.organizationId, orgIds)),
+  );
+  await del("access_assignment_change", () =>
+    exec
+      .delete(accessAssignmentChange)
+      .where(inArray(accessAssignmentChange.organizationId, orgIds)),
   );
   await del("access_assignment", () =>
     exec

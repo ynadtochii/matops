@@ -22,6 +22,14 @@ export interface NavItem {
   icon: ReactNode;
   show: boolean;
   badge?: number;
+  /**
+   * The heading this item sits under in the sidebar, and the drawer on a
+   * phone. Items with no group come first and carry no heading, which is what
+   * the branch's own work is (ADR 129).
+   */
+  group?: string;
+  /** Runs an action instead of navigating: "Add branch" in gym management. */
+  onSelect?: () => void;
 }
 
 const iconClass = "size-[18px] shrink-0";
@@ -241,10 +249,15 @@ export function ShellFrame({
 
   // A phone gives a tab about 50px. An owner has seven of them, which shreds
   // every label, so past the cap the tail moves into one "More" menu and its
-  // badges roll up onto that tab.
-  const overflows = tabItems.length > MAX_TABS;
-  const barItems = overflows ? tabItems.slice(0, MAX_TABS - 1) : tabItems;
-  const moreItems = overflows ? tabItems.slice(MAX_TABS - 1) : [];
+  // badges roll up onto that tab. A grouped item never competes for a slot:
+  // gym management is a menu on a phone, not five more tabs (ADR 129).
+  const own = tabItems.filter((i) => !i.group);
+  const grouped = tabItems.filter((i) => i.group);
+  const overflows = own.length + grouped.length > MAX_TABS;
+  const barItems = overflows ? own.slice(0, MAX_TABS - 1) : own;
+  const moreItems = overflows
+    ? [...own.slice(MAX_TABS - 1), ...grouped]
+    : grouped;
   const moreBadge = moreItems.reduce((n, i) => n + (i.badge ?? 0), 0);
   const moreActive = moreItems.some((i) => isCurrent(i.path));
 
@@ -262,9 +275,21 @@ export function ShellFrame({
         <div className="mb-3 px-1">{selector}</div>
 
         {items.length > 1 && (
-          <nav aria-label="Primary" className="flex flex-col gap-0.5">
-            {items.map((i) => (
-              <NavLink key={i.href} item={i} active={isCurrent(i.path)} />
+          <nav
+            aria-label="Primary"
+            className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto"
+          >
+            {groupsOf(items).map(({ group, members }) => (
+              <div key={group ?? ""} className="flex flex-col gap-0.5">
+                {group && (
+                  <p className="text-muted-foreground mt-3 px-2.5 pb-1 font-mono text-[10px] tracking-wide uppercase">
+                    {group}
+                  </p>
+                )}
+                {members.map((i) => (
+                  <NavLink key={i.href} item={i} active={isCurrent(i.path)} />
+                ))}
+              </div>
             ))}
           </nav>
         )}
@@ -362,25 +387,34 @@ export function ShellFrame({
                 sideOffset={8}
                 className="mr-2 min-w-44"
               >
-                {moreItems.map((i) => (
-                  <DropdownMenuItem key={i.href} asChild>
-                    <Link
-                      href={i.href}
-                      aria-current={isCurrent(i.path) ? "page" : undefined}
-                      className={
-                        isCurrent(i.path) ? "text-brand-strong font-medium" : ""
-                      }
-                    >
+                {moreItems.map((i) =>
+                  i.onSelect ? (
+                    <DropdownMenuItem key={i.href} onSelect={i.onSelect}>
                       {i.icon}
                       <span className="flex-1">{i.label}</span>
-                      {!!i.badge && i.badge > 0 && (
-                        <span className="bg-brand text-brand-foreground rounded-full px-1.5 font-mono text-[10px]">
-                          {i.badge}
-                        </span>
-                      )}
-                    </Link>
-                  </DropdownMenuItem>
-                ))}
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem key={i.href} asChild>
+                      <Link
+                        href={i.href}
+                        aria-current={isCurrent(i.path) ? "page" : undefined}
+                        className={
+                          isCurrent(i.path)
+                            ? "text-brand-strong font-medium"
+                            : ""
+                        }
+                      >
+                        {i.icon}
+                        <span className="flex-1">{i.label}</span>
+                        {!!i.badge && i.badge > 0 && (
+                          <span className="bg-brand text-brand-foreground rounded-full px-1.5 font-mono text-[10px]">
+                            {i.badge}
+                          </span>
+                        )}
+                      </Link>
+                    </DropdownMenuItem>
+                  ),
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           )}
@@ -388,6 +422,17 @@ export function ShellFrame({
       )}
     </div>
   );
+}
+
+/** Ungrouped items first, then each group in the order it first appears. */
+function groupsOf(items: NavItem[]): { group?: string; members: NavItem[] }[] {
+  const out: { group?: string; members: NavItem[] }[] = [];
+  for (const item of items) {
+    const held = out.find((g) => g.group === item.group);
+    if (held) held.members.push(item);
+    else out.push({ group: item.group, members: [item] });
+  }
+  return out.sort((a, b) => (a.group ? 1 : 0) - (b.group ? 1 : 0));
 }
 
 const tabClass = (active: boolean) =>
@@ -409,16 +454,8 @@ function TabFace({ icon, badge }: { icon: ReactNode; badge?: number }) {
 }
 
 function NavLink({ item, active }: { item: NavItem; active: boolean }) {
-  return (
-    <Link
-      href={item.href}
-      aria-current={active ? "page" : undefined}
-      className={`relative flex items-center gap-3 rounded-md px-2.5 py-2 text-sm transition-colors ${
-        active
-          ? "bg-brand-wash text-brand-strong font-medium"
-          : "text-muted-foreground hover:text-foreground hover:bg-muted"
-      }`}
-    >
+  const face = (
+    <>
       {active && (
         <span className="bg-brand absolute top-1.5 bottom-1.5 -left-3 w-0.5 rounded-full" />
       )}
@@ -429,6 +466,29 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
           {item.badge}
         </span>
       )}
+    </>
+  );
+  const className = `relative flex items-center gap-3 rounded-md px-2.5 py-2 text-sm transition-colors ${
+    active
+      ? "bg-brand-wash text-brand-strong font-medium"
+      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+  }`;
+
+  if (item.onSelect) {
+    return (
+      <button type="button" onClick={item.onSelect} className={className}>
+        {face}
+      </button>
+    );
+  }
+
+  return (
+    <Link
+      href={item.href}
+      aria-current={active ? "page" : undefined}
+      className={className}
+    >
+      {face}
     </Link>
   );
 }

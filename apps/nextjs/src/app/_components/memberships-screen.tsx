@@ -18,7 +18,7 @@ import { CreateAccessPlanSchema } from "@matops/validators";
 import { dateFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { useOrganization } from "./entity";
-import { cardClass, ENTER, Eyebrow } from "./primitives";
+import { cardClass, ENTER, Eyebrow, Section } from "./primitives";
 import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 
@@ -47,7 +47,7 @@ export function MembershipsScreen() {
   if (!canRunOrganization) {
     return (
       <div>
-        <EmptyState title="Only an owner can shape the membership plans.">
+        <EmptyState title="Only the people who run this gym can shape its membership plans.">
           Ask whoever runs the gym.
         </EmptyState>
       </div>
@@ -69,6 +69,13 @@ export function MembershipsScreen() {
         </Button>
       </div>
 
+      {/* Payment work first, plan configuration last (ADR 129): the money
+          waiting for an answer is what somebody opens this screen to do, and
+          the price list is what they change a few times a year. */}
+      <ClaimsWaiting />
+      <UncoveredQueue />
+      <MonthBoard nameOf={nameOf} />
+
       {plans.isPending ? (
         <SkeletonRows rows={3} />
       ) : plans.isError ? (
@@ -82,19 +89,20 @@ export function MembershipsScreen() {
           sauna.
         </EmptyState>
       ) : (
-        <ul className="flex flex-col gap-2">
-          {plans.data.map((p) => (
-            <li key={p.id}>
-              <PlanCard plan={p} nameOf={nameOf} onEdit={() => setEditing(p)} />
-            </li>
-          ))}
-        </ul>
+        <Section label="Plans" meta={`${plans.data.length} on sale`}>
+          <ul className="flex flex-col gap-2">
+            {plans.data.map((p) => (
+              <li key={p.id}>
+                <PlanCard
+                  plan={p}
+                  nameOf={nameOf}
+                  onEdit={() => setEditing(p)}
+                />
+              </li>
+            ))}
+          </ul>
+        </Section>
       )}
-
-      <ClaimsWaiting />
-
-      <UncoveredQueue />
-      <MonthBoard nameOf={nameOf} />
 
       <p className="text-muted-foreground text-sm">
         Grace, the deadline time zone and your bank details live in{" "}
@@ -369,7 +377,9 @@ function PlanCard({
         </span>
       </div>
       <div className="flex flex-wrap items-start justify-end gap-2">
-        {!plan.archived && <Reconcile planId={plan.id} />}
+        {!plan.archived && plan.gaps.missing > 0 && (
+          <Reconcile planId={plan.id} missing={plan.gaps.missing} />
+        )}
         {!plan.archived && (
           <Button size="sm" variant="outline" onClick={onEdit}>
             Branches
@@ -527,9 +537,10 @@ function NewPlanDialog({
  * Change which branches a plan covers, showing who it reaches first.
  *
  * The preview is the same call the mutation makes, so what the owner reads is
- * what will happen. Adding a branch never enrols anybody by itself: it is the
- * assignment that creates the branch memberships, which is why "gains" reads as
- * work waiting rather than as work done.
+ * what will happen. Adding a branch enrols the plan's live holders there in the
+ * same save (ADR 129), so "gains" is work the save does rather than work left
+ * behind. A branch row that is suspended, archived or removed is never touched,
+ * and comes back as a decision for a person to make.
  */
 function CoverageDialog({
   plan,
@@ -556,8 +567,9 @@ function CoverageDialog({
 
   const save = useMutation(
     trpc.accessPlan.setCoverage.mutationOptions({
-      onSuccess: async () => {
-        await queryClient.invalidateQueries(trpc.accessPlan.list.pathFilter());
+      onSuccess: async (result) => {
+        await queryClient.invalidateQueries();
+        toast.success(coverageResultMessage(result));
         onOpenChange(false);
       },
       onError: (e) => toast.error(e.message || "Could not save that"),
@@ -587,7 +599,13 @@ function CoverageDialog({
             </Button>
             <Button
               disabled={!changed || save.isPending}
-              onClick={() => save.mutate({ id: plan.id, entityIds: picked })}
+              onClick={() =>
+                save.mutate({
+                  id: plan.id,
+                  entityIds: picked,
+                  version: preview.data?.version,
+                })
+              }
             >
               {save.isPending ? "Saving…" : "Save branches"}
             </Button>
@@ -596,6 +614,28 @@ function CoverageDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+/**
+ * What a coverage save actually did, in one line. Enrolment is part of the same
+ * call now, so the owner is told whether it finished rather than being sent to
+ * press a second button (ADR 129).
+ */
+function coverageResultMessage(
+  result: RouterOutputs["accessPlan"]["setCoverage"],
+): string {
+  const enrolled = result.enrolled.length;
+  const stuck = result.failed.length + result.needsDecision.length;
+  if (enrolled === 0 && stuck === 0) return "Branches saved";
+  const done =
+    enrolled === 0
+      ? "Branches saved"
+      : enrolled === 1
+        ? "Branches saved. 1 member enrolled"
+        : `Branches saved. ${enrolled} members enrolled`;
+  return stuck === 0
+    ? done
+    : `${done}. ${stuck} still need a decision on the Memberships list`;
 }
 
 function AffectedNotice({
@@ -638,8 +678,8 @@ function AffectedNotice({
             ? "1 member gains"
             : `${gaining.length} members gain`}{" "}
           {[...new Set(gaining.flatMap((a) => a.gains))].map(nameOf).join(", ")}
-          . They still need a branch membership there, which assigning the plan
-          creates.
+          . Saving enrols them there; anyone whose place at that branch is
+          paused or archived is left alone and listed for you to settle.
         </p>
       )}
       {losing.length > 0 && (
@@ -745,17 +785,17 @@ function UncoveredQueue() {
 }
 
 /**
- * Close the gap a coverage change leaves behind (spec FP8).
+ * Finish coverage work a save could not (spec FP8, ADR 129).
  *
- * Assignment enrols somebody at the branches a plan covered **then**. Add a mat
- * to the plan afterwards and every existing holder has no membership there.
- * This re-checks them all and enrols what is missing.
+ * Adding a branch to a plan now enrols its holders in the same call, so this is
+ * a retry rather than a step. It appears only while `gaps.missing` says
+ * somebody on the plan still has no membership at a branch it covers.
  *
  * Safe to press again: the run reads the state each time and writes only what
  * is absent, so a second press does nothing and a press after a failure
  * finishes the job.
  */
-function Reconcile({ planId }: { planId: string }) {
+function Reconcile({ planId, missing }: { planId: string; missing: number }) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
 
@@ -764,7 +804,6 @@ function Reconcile({ planId }: { planId: string }) {
       onSuccess: async (result) => {
         await queryClient.invalidateQueries();
         if (result.failed.length > 0) {
-          // Named, because an owner cannot chase a count.
           toast.error(
             `Could not update ${result.failed
               .map((f) => f.name)
@@ -772,21 +811,13 @@ function Reconcile({ planId }: { planId: string }) {
           );
           return;
         }
-        if (result.enrolled.length === 0) {
-          toast.success(
-            result.checked === 0
-              ? "Nobody holds this plan yet"
-              : "Everybody on this plan is already enrolled",
-          );
-          return;
-        }
         toast.success(
           result.enrolled.length === 1
-            ? `1 person enrolled at a branch they were missing`
+            ? "1 person enrolled at a branch they were missing"
             : `${result.enrolled.length} people enrolled at branches they were missing`,
         );
       },
-      onError: (e) => toast.error(e.message || "Could not re-check them"),
+      onError: (e) => toast.error(e.message || "Could not finish it"),
     }),
   );
 
@@ -797,7 +828,11 @@ function Reconcile({ planId }: { planId: string }) {
       disabled={run.isPending}
       onClick={() => run.mutate({ id: planId })}
     >
-      {run.isPending ? "Checking…" : "Re-check coverage"}
+      {run.isPending
+        ? "Finishing…"
+        : missing === 1
+          ? "Finish 1 enrolment"
+          : `Finish ${missing} enrolments`}
     </Button>
   );
 }

@@ -55,9 +55,9 @@ describe("postLoginTarget", () => {
     });
   });
 
-  it("ignores an owned gym once a branch tie exists", () => {
+  it("sends somebody who runs a gym to it, branch tie or not", () => {
     expect(
       postLoginTarget([mat], [{ organizationId: "org_a", name: "Alma" }]),
-    ).toMatchObject({ kind: "openBranch" });
+    ).toMatchObject({ kind: "openGym", organizationId: "org_a" });
   });
 });

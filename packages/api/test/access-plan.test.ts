@@ -296,7 +296,9 @@ describe("what a plan costs, and what it cost", () => {
     // The member is on the plan already: the change reaches them from the month
     // it names, and this month still says what they were asked for.
     const board = await owner().accessPlan.monthBoard();
-    const row = board.rows.find((r) => r.userId === MEMBER);
+    const row = board.rows.find(
+      (r) => r.userId === MEMBER && r.planName === "Rising",
+    );
     expect(row?.amount).toEqual({ priceMinor: 5000, currency: "EUR" });
 
     // The plan itself carries what it costs from now on.
@@ -395,7 +397,7 @@ describe("moving several people at once", () => {
     expect(rows.rows[0]?.n).toBe("2");
   });
 
-  it("reconciles a coverage change that assignment could not have known about", async () => {
+  it("enrols the plan's holders at a branch the same save added", async () => {
     const later = await createEntity(
       {
         organizationId: BULK,
@@ -405,22 +407,51 @@ describe("moving several people at once", () => {
       },
       h.exec,
     );
-    await owner().accessPlan.setCoverage({
+    const saved = await owner().accessPlan.setCoverage({
       id: planId,
       entityIds: [BULK, gym, later.entityId],
     });
-
-    const first = await owner().accessPlan.reconcile({ id: planId });
-    expect(first.checked).toBe(2);
-    expect(first.enrolled.map((e) => e.userId).sort()).toEqual(
+    expect(saved.checked).toBe(2);
+    expect(saved.enrolled.map((e) => e.userId).sort()).toEqual(
       [ANA, BEA].sort(),
     );
-    expect(first.failed).toEqual([]);
+    expect([saved.failed, saved.incomplete]).toEqual([[], false]);
 
-    // Repeatable: the second run has nothing left to do.
-    const second = await owner().accessPlan.reconcile({ id: planId });
-    expect(second.enrolled).toEqual([]);
-    expect(second.checked).toBe(2);
+    // The retry is repeatable and has nothing left to do.
+    const again = await owner().accessPlan.reconcile({ id: planId });
+    expect(again.enrolled).toEqual([]);
+    expect(again.checked).toBe(2);
+  });
+
+  it("leaves no gap for the retry button to show", async () => {
+    const listed = await owner().accessPlan.list();
+    expect(listed.find((p) => p.id === planId)?.gaps).toEqual({
+      missing: 0,
+      needsDecision: 0,
+    });
+  });
+
+  it("refuses a save computed against a coverage that has since moved", async () => {
+    const held = (await owner().accessPlan.get({ id: planId })).entityIds;
+    const seen = await owner().accessPlan.coveragePreview({
+      id: planId,
+      entityIds: [BULK],
+    });
+    // Somebody else saves. The list is the one already there, so this moves the
+    // version without moving the coverage the tests after this one read.
+    await owner().accessPlan.setCoverage({ id: planId, entityIds: held });
+    expect(
+      await rejectionCode(
+        owner().accessPlan.setCoverage({
+          id: planId,
+          entityIds: [BULK],
+          version: seen.version,
+        }),
+      ),
+    ).toBe("CONFLICT");
+    expect((await owner().accessPlan.get({ id: planId })).entityIds).toEqual(
+      held,
+    );
   });
 
   it("reports nobody uncovered once a branch runs on memberships", async () => {

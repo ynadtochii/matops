@@ -41,7 +41,6 @@ import {
 } from "~/components/ui";
 import { trpc } from "~/utils/api";
 import { authClient } from "~/utils/auth";
-import { setActiveEntity } from "~/utils/entity-store";
 
 /**
  * Editable personal details (spec S7, slice B.3). Name + phone are editable;
@@ -237,6 +236,34 @@ function MembershipNotice() {
             </Txt>
           )}
         </Stack>
+      ))}
+    </Stack>
+  );
+}
+
+/**
+ * The plan waiting for the 1st (ADR 129), in the same words the web uses.
+ * Not a warning: this month is unaffected and there is nothing to pay early.
+ */
+function MembershipChangeNotice() {
+  const standing = useQuery(trpc.accessPlan.mine.queryOptions());
+  const changing = (standing.data?.memberships ?? []).filter((m) => m.next);
+  if (changing.length === 0) return null;
+
+  return (
+    <Stack gap={8}>
+      {changing.map((m) => (
+        <Card key={m.assignmentId} variant="outline" style={{ gap: 4 }}>
+          <Eyebrow>Your plan changes</Eyebrow>
+          <Txt size={13} tone="muted">
+            {m.planName} runs to the end of this month. {m.next?.planName}{" "}
+            starts on 1 {m.next?.effectiveMonthLabel}
+            {m.next?.amount
+              ? ` at ${formatMoney(m.next.amount.priceMinor, m.next.amount.currency)} a month`
+              : ""}
+            .
+          </Txt>
+        </Card>
       ))}
     </Stack>
   );
@@ -565,45 +592,19 @@ function AcademyAddress({
 
 /**
  * Profile / account (spec S7) — identity (name/phone/email), rank, membership
- * dues, and the multi-academy switcher (2+ gyms only). Appearance, notifications,
+ * dues, and joining another branch. Switching between branches is the branch
+ * name in the header (ADR 129). Appearance, notifications,
  * and sign out moved to Settings (S12, v1.8 slice 5), reached via the header gear.
  * The overdue strip (S11) can deep-link here with `?focus=dues` to land on the
  * pay section. This is the mobile student lens (docs/issues/18).
  */
 export default function Profile() {
-  const t = useTheme();
   const router = useRouter();
-  const queryClient = useQueryClient();
   const { focus } = useLocalSearchParams<{ focus?: string }>();
   const { data: session, refetch: refetchSession } = authClient.useSession();
   const current = useQuery(trpc.academy.current.queryOptions());
-  const academies = useQuery(trpc.academy.listMineStudent.queryOptions());
 
   const refreshControl = useRefreshControl();
-
-  // Picking a mat is a local write, not a mutation: the header names it from
-  // now on (ADR 124). The session still holds the ORGANIZATION, so a mat of a
-  // different gym also needs `setActive` to move it.
-  const setActive = useMutation(
-    trpc.academy.setActive.mutationOptions({
-      // The cache was cleared when the branch was picked; this refetches for
-      // the organization the session has now moved to.
-      onSuccess: () => queryClient.invalidateQueries(),
-    }),
-  );
-  const pick = (academy: { academyId: string; organizationId: string }) => {
-    setActiveEntity(academy.academyId);
-    // REMOVE rather than invalidate: every cached answer belonged to the branch
-    // they just left, and invalidating leaves it on screen until the refetch
-    // lands, so the gym's schedule shows the mat's classes for a moment. A
-    // general branch makes that worse, since the two lists look nothing alike
-    // (ADR 126).
-    queryClient.removeQueries();
-    if (academy.organizationId === session?.session.activeOrganizationId) {
-      return;
-    }
-    setActive.mutate({ academyId: academy.academyId });
-  };
 
   // Best-effort scroll to the dues section when arriving from the overdue strip.
   const scrollRef = useRef<ScrollView>(null);
@@ -621,8 +622,6 @@ export default function Profile() {
   const user = session.user;
   const phone =
     typeof user.phone === "string" && user.phone.length > 0 ? user.phone : "";
-  const list = academies.data ?? [];
-  const activeId = current.data?.academyId;
   // Suspended → the enrolled rank + dues reads are rejected by the server. Hide
   // those sections behind a calm banner, but keep Profile itself (sign out /
   // switch academy stay reachable). §4.
@@ -698,6 +697,7 @@ export default function Profile() {
               >
                 <Eyebrow>{enforced ? "Membership" : "Membership dues"}</Eyebrow>
                 <MembershipNotice />
+                <MembershipChangeNotice />
                 {/* Where shared memberships decide, the branch's own dues line
                     is not what anybody owes (ADR 126, ADR 127). */}
                 {!enforced && <MembershipDues />}
@@ -706,54 +706,12 @@ export default function Profile() {
           </>
         )}
 
-        {list.length >= 2 && (
-          <Stack gap={8}>
-            <Eyebrow>Switch branch</Eyebrow>
-            {list.map((a) => {
-              const isActive = a.academyId === activeId;
-              return (
-                <Pressable
-                  key={a.academyId}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Switch to ${a.name}`}
-                  accessibilityState={{
-                    selected: isActive,
-                    disabled: isActive || setActive.isPending,
-                  }}
-                  disabled={isActive || setActive.isPending}
-                  onPress={() => pick(a)}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    borderRadius: 3,
-                    padding: 16,
-                    backgroundColor: isActive ? t.brand : t.muted,
-                  }}
-                >
-                  <Txt
-                    size={16}
-                    weight={isActive ? 500 : 400}
-                    color={isActive ? t.brandForeground : t.foreground}
-                  >
-                    {a.name}
-                  </Txt>
-                  {isActive && (
-                    <Txt size={16} color={t.brandForeground}>
-                      ✓
-                    </Txt>
-                  )}
-                </Pressable>
-              );
-            })}
-          </Stack>
-        )}
-
         <Stack gap={8}>
           <Eyebrow>Another branch</Eyebrow>
           <Muted>
             Train somewhere else too? Ask them for their 6-digit ID and join it
-            here. Switching between the places you already train at is above.
+            here. Switching between the places you already train at is the
+            branch name at the top of the screen.
           </Muted>
           <Button
             label="Join another branch"

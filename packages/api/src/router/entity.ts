@@ -1,7 +1,7 @@
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
-import type { DbExec, ScopedEntity } from "@matops/db";
+import type { DbExec, ScopedEntity, TenantTx } from "@matops/db";
 import {
   and,
   count,
@@ -26,6 +26,8 @@ import {
   classInstance,
   classParticipation,
   entity,
+  entityMembership,
+  member,
   membershipPolicy,
   organization,
 } from "@matops/db/schema";
@@ -33,16 +35,20 @@ import {
   isActiveMember,
   isGeneralSpace,
   isOwner,
+  isStaff,
   runsOrganization,
 } from "@matops/domain";
 import {
+  BranchDecisionSchema,
   CreateEntitySchema,
   EntityIdSchema,
+  SetBranchRoleSchema,
   SetMembershipEnforcedSchema,
 } from "@matops/validators";
 
 import { rosterOf } from "../members";
 import { loadRosterStanding } from "../membership-access";
+import { assignmentAppliesNow } from "../membership-status";
 import {
   enrolledProcedure,
   organizationManagerIdentityProcedure,
@@ -69,6 +75,73 @@ async function requireOwnEntity(
     throw new TRPCError({ code: "FORBIDDEN", message: NOT_YOURS });
   }
   return found;
+}
+
+/**
+ * Each branch with what this caller is AT IT (ADR 129).
+ *
+ * The selector needs it to carry a screen across a switch: the roster travels
+ * for a coach and not for a student, and the destination decides, not the
+ * branch being left. Somebody who runs the gym reads their gym role at every
+ * branch, which is what the request context synthesizes anyway.
+ */
+async function standingAt(
+  ctx: {
+    db: TenantTx;
+    session: { user: { id: string } };
+    orgMembership: { role: string };
+  },
+  rows: ScopedEntity[],
+  runsOrganization: boolean,
+): Promise<
+  { id: string; name: string; type: string; role: string; status: string }[]
+> {
+  const held = runsOrganization
+    ? []
+    : await ctx.db
+        .select({
+          entityId: entityMembership.entityId,
+          role: entityMembership.role,
+          status: entityMembership.status,
+        })
+        .from(entityMembership)
+        .where(eq(entityMembership.userId, ctx.session.user.id));
+
+  return rows.map((e) => {
+    const mine = held.find((m) => m.entityId === e.id);
+    return {
+      id: e.id,
+      name: e.name,
+      type: e.type,
+      role: runsOrganization
+        ? ctx.orgMembership.role
+        : (mine?.role ?? "student"),
+      status: runsOrganization ? "active" : (mine?.status ?? "pending"),
+    };
+  });
+}
+
+/** Refuse somebody who is not part of this gym at all. */
+async function requireOrganizationMember(
+  ctx: { organizationId: string; baseDb: DbExec },
+  userId: string,
+): Promise<void> {
+  const rows = await ctx.baseDb
+    .select({ id: member.id })
+    .from(member)
+    .where(
+      and(
+        eq(member.organizationId, ctx.organizationId),
+        eq(member.userId, userId),
+      ),
+    )
+    .limit(1);
+  if (rows.length === 0) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "That person is not part of this gym",
+    });
+  }
 }
 
 export const entityRouter = {
@@ -114,9 +187,117 @@ export const entityRouter = {
       // is entitled to them, so a client with only "may I add a branch" would
       // offer a type the server is about to reject (ADR 128).
       canCreateGeneralBranches: owns && (org?.generalBranches ?? false),
-      entities: rows.map((e) => ({ id: e.id, name: e.name, type: e.type })),
+      entities: await standingAt(ctx, rows, runs),
     };
   }),
+
+  /**
+   * Put somebody on a branch, or change what they are there, from the gym's
+   * person profile (ADR 129).
+   *
+   * Organization-tier with an explicit branch check, so it never widens a
+   * scope: the branch is verified to belong to this gym before anything is
+   * read, and the write runs inside that branch's own transaction.
+   *
+   * ORDINARY roles only. `student` and `instructor` are the whole list, so a
+   * plan assignment or a staff edit can never mint an owner; making one stays
+   * on `membership.promote`, which is owner-only (ADR 129).
+   */
+  setBranchRole: organizationManagerIdentityProcedure
+    .input(SetBranchRoleSchema)
+    .mutation(async ({ ctx, input }) => {
+      const branch = await requireOwnEntity(ctx, input.entityId);
+      await requireOrganizationMember(ctx, input.userId);
+
+      await withScope(
+        { organizationId: ctx.organizationId, entityId: branch.id },
+        async (db) => {
+          const [held] = await db
+            .select({
+              id: entityMembership.id,
+              role: entityMembership.role,
+            })
+            .from(entityMembership)
+            .where(eq(entityMembership.userId, input.userId));
+          // Stepping an owner down is removing an owner, which is not this
+          // screen's job whoever is looking at it.
+          if (held?.role === "owner") {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: "Owner roles are changed on that branch's Coaches page.",
+            });
+          }
+          if (held) {
+            await db
+              .update(entityMembership)
+              .set({ role: input.role, status: "active", joinedAt: new Date() })
+              .where(eq(entityMembership.id, held.id));
+            return;
+          }
+          await db.insert(entityMembership).values({
+            organizationId: ctx.organizationId,
+            entityId: branch.id,
+            userId: input.userId,
+            role: input.role,
+            status: "active",
+            joinedAt: new Date(),
+          });
+        },
+        ctx.baseDb,
+      );
+      return { ok: true as const };
+    }),
+
+  /**
+   * Approve or decline one person's place at one branch, from the gym's person
+   * profile. A request stays a PER-BRANCH decision: approving at the mat says
+   * nothing about the gym floor (ADR 129).
+   */
+  decideAtBranch: organizationManagerIdentityProcedure
+    .input(BranchDecisionSchema)
+    .mutation(async ({ ctx, input }) => {
+      const branch = await requireOwnEntity(ctx, input.entityId);
+      await withScope(
+        { organizationId: ctx.organizationId, entityId: branch.id },
+        async (db) => {
+          const [held] = await db
+            .select({
+              id: entityMembership.id,
+              role: entityMembership.role,
+              status: entityMembership.status,
+              invitedRole: entityMembership.invitedRole,
+            })
+            .from(entityMembership)
+            .where(eq(entityMembership.userId, input.userId));
+          if (!held) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "They do not belong to that branch",
+            });
+          }
+          if (held.role === "owner") {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: "Owners are not decided here.",
+            });
+          }
+          await db
+            .update(entityMembership)
+            .set(
+              input.decision === "approve"
+                ? {
+                    status: "active",
+                    role: held.invitedRole ?? held.role,
+                    joinedAt: new Date(),
+                  }
+                : { status: "removed" },
+            )
+            .where(eq(entityMembership.id, held.id));
+        },
+        ctx.baseDb,
+      );
+      return { ok: true as const };
+    }),
 
   /** The entity this request named, once the tier has authorized it. */
   current: enrolledProcedure.query(({ ctx }) => ({
@@ -231,13 +412,19 @@ export const entityRouter = {
             })),
             now: new Date(),
           });
-          const uncovered = active
-            .filter((m) => !standing.get(m.userId)?.covered)
-            .map((m) => ({
-              userId: m.userId,
-              name: m.name,
-              role: m.role,
-            }));
+          const notCovered = active.filter(
+            (m) => !standing.get(m.userId)?.covered,
+          );
+          const uncovered = notCovered.map((m) => ({
+            userId: m.userId,
+            name: m.name,
+            role: m.role,
+          }));
+          // Staff run the branch rather than buying access to it, so an owner
+          // or a coach holding no plan is not a reason to refuse activation.
+          // They stay on the list above, which is what the switch would take
+          // away, because staff book classes too.
+          const blocking = notCovered.filter((m) => !isStaff(m)).length;
 
           // What switching the gate on would actually take away. ADR 126 §8
           // recorded this as promised and not built: the preview named the
@@ -306,6 +493,7 @@ export const entityRouter = {
                       covering.map((c) => c.planId),
                     ),
                     eq(accessAssignment.status, "active"),
+                    assignmentAppliesNow(),
                   ),
                 )
             : [];
@@ -320,7 +508,7 @@ export const entityRouter = {
           const legacy = await hasLegacyDuesAt(branch.id, db);
 
           const readiness = {
-            uncoveredPeople: uncovered.length,
+            uncoveredPeople: blocking,
             unpricedPlans: covering.filter((c) => c.priceMinor === null).length,
             bankDetails: (policy?.bankDetails ?? "").trim().length > 0,
             pendingEnrolment,

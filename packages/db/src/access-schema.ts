@@ -180,6 +180,13 @@ export const accessAssignment = pgTable(
     /** Where the owner assigned it. Never a limit on what the plan covers. */
     assigningEntityId: t.text(),
     startMonth: t.date().notNull(),
+    /**
+     * The first month this assignment no longer applies. Exclusive, and null
+     * for one that runs on (ADR 129). A plan change writes it on the old row
+     * and starts the new one at the same month, so exactly one of the two
+     * applies on either side of the boundary.
+     */
+    endMonth: t.date(),
     status: t.text().notNull().default("active"),
     assignedBy: t.text().references(() => user.id),
     createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -190,12 +197,13 @@ export const accessAssignment = pgTable(
       .$onUpdateFn(() => new Date()),
   }),
   (table) => [
-    // One shared assignment per person per plan. Assigning the same plan again
-    // from another branch has to find this row, not make a second one.
-    uniqueIndex("access_assignment_one_per_plan_user").on(
-      table.planId,
-      table.userId,
-    ),
+    // Two periods of one plan cannot start in the same month. The lifetime
+    // rule went with ADR 129: somebody who leaves a plan and comes back later
+    // holds two periods, and rewriting the first would erase what they paid.
+    // Overlap between live periods is refused by the writer, under a lock.
+    uniqueIndex("access_assignment_one_per_plan_user_start")
+      .on(table.planId, table.userId, table.startMonth)
+      .where(sql`status <> 'cancelled'`),
     uniqueIndex("access_assignment_org_id").on(table.organizationId, table.id),
     index("access_assignment_by_user").on(table.userId),
     index("access_assignment_by_org_status").on(
@@ -216,9 +224,85 @@ export const accessAssignment = pgTable(
       "access_assignment_status_supported",
       sql`status in ('active','suspended','cancelled')`,
     ),
+    index("access_assignment_by_user_period").on(
+      table.userId,
+      table.startMonth,
+    ),
     check(
       "access_assignment_start_is_a_month",
       sql`date_trunc('month', start_month) = start_month`,
+    ),
+    check(
+      "access_assignment_end_is_a_month",
+      sql`end_month is null or date_trunc('month', end_month) = end_month`,
+    ),
+    check(
+      "access_assignment_period_ordered",
+      sql`end_month is null or end_month > start_month`,
+    ),
+  ],
+);
+
+/**
+ * One decision to change somebody's plan at the month boundary (ADR 129).
+ *
+ * Pending and applied are read off the calendar against `effectiveMonth` and
+ * never stored, so a job that does not run cannot leave a change half made.
+ * `previousSourceEndMonth` is what the source carried before this change wrote
+ * an end on it, and is the only thing a cancellation restores.
+ *
+ * The row survives its own cancellation: the record that somebody scheduled a
+ * change and then took it back is worth keeping.
+ */
+export const accessAssignmentChange = pgTable(
+  "access_assignment_change",
+  (t) => ({
+    id: t.uuid().notNull().primaryKey().defaultRandom(),
+    organizationId: t
+      .text()
+      .notNull()
+      .references(() => organization.id),
+    userId: t
+      .text()
+      .notNull()
+      .references(() => user.id),
+    sourceAssignmentId: t.uuid().notNull(),
+    targetAssignmentId: t.uuid().notNull(),
+    /** The month the target starts and the source stops. */
+    effectiveMonth: t.date().notNull(),
+    previousSourceEndMonth: t.date(),
+    scheduledBy: t.text().references(() => user.id),
+    createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
+    cancelledBy: t.text().references(() => user.id),
+    cancelledAt: t.timestamp({ withTimezone: true }),
+  }),
+  (table) => [
+    foreignKey({
+      name: "access_assignment_change_source_same_org",
+      columns: [table.organizationId, table.sourceAssignmentId],
+      foreignColumns: [accessAssignment.organizationId, accessAssignment.id],
+    }),
+    foreignKey({
+      name: "access_assignment_change_target_same_org",
+      columns: [table.organizationId, table.targetAssignmentId],
+      foreignColumns: [accessAssignment.organizationId, accessAssignment.id],
+    }),
+    // One live change per source, so a double submit is one scheduled change.
+    uniqueIndex("access_assignment_change_one_live_per_source")
+      .on(table.sourceAssignmentId)
+      .where(sql`cancelled_at is null`),
+    index("access_assignment_change_by_org_month").on(
+      table.organizationId,
+      table.effectiveMonth,
+    ),
+    index("access_assignment_change_by_user").on(table.userId),
+    check(
+      "access_assignment_change_is_a_month",
+      sql`date_trunc('month', effective_month) = effective_month`,
+    ),
+    check(
+      "access_assignment_change_two_rows",
+      sql`source_assignment_id <> target_assignment_id`,
     ),
   ],
 );

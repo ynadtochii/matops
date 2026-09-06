@@ -12,6 +12,7 @@ const entry = (
   over: Partial<DirectoryEntry> & { entityId: string; userId: string },
 ): DirectoryEntry => ({
   entityName: over.entityId === "e_gym" ? "The Gym" : "The Mat",
+  memberId: `mem_${over.entityId}_${over.userId}`,
   name: "Alex",
   email: "alex@test.local",
   status: "active",

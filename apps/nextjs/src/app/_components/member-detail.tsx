@@ -9,10 +9,10 @@ import {
   disciplineLabel,
   formatMoney,
   formatRank,
-  isOwner,
   PAYMENT_STATUS_LABEL,
   RANK_SYSTEMS,
   rankDisciplines,
+  runsBranch,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
@@ -149,7 +149,7 @@ export function MemberDetail({ m }: { m: Member }) {
   const trpc = useTRPC();
   // Memberships belong to the owner group, so only an owner sees the tab. A
   // coach reading eligibility for their own branch is a different screen.
-  const owner = isOwner(useEntity());
+  const owner = runsBranch(useEntity());
   const [tab, setTab] = useState<
     "overview" | "attendance" | "rank" | "notes" | "membership"
   >("overview");
@@ -828,7 +828,7 @@ function RoleControl({ m }: { m: Member }) {
     }),
   );
 
-  if (!isOwner(academy) || m.role === "owner" || m.status !== "active") {
+  if (!runsBranch(academy) || m.role === "owner" || m.status !== "active") {
     return <Detail term="Role" value={m.role} />;
   }
 

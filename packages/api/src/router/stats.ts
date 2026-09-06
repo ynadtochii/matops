@@ -31,6 +31,7 @@ import {
   paymentClaim,
 } from "@matops/db/schema";
 import {
+  appliesInMonth,
   canReadCoachFigures,
   classifyDrift,
   COACH_WINDOWS,
@@ -44,13 +45,13 @@ import {
   gymInsights,
   isActiveMember,
   isOnRoster,
-  isOwner,
   isStaff,
   monthBucket,
   monthOf,
   monthVerdict,
   newMemberCounts,
   organizationMetrics,
+  runsBranch,
   trainingStats,
 } from "@matops/domain";
 import {
@@ -67,9 +68,9 @@ import { loadRosterStanding } from "../membership-access";
 import { membershipCalendar } from "../membership-status";
 import { readOrganizationEntities } from "../organization-read";
 import {
+  branchManagerProcedure,
   enrolledProcedure,
   organizationManagerIdentityProcedure,
-  ownerProcedure,
   staffProcedure,
 } from "../trpc";
 
@@ -272,6 +273,7 @@ async function readPaymentTally(
         .select({
           id: accessAssignment.id,
           startMonth: accessAssignment.startMonth,
+          endMonth: accessAssignment.endMonth,
           createdAt: accessAssignment.createdAt,
         })
         .from(accessAssignment)
@@ -288,7 +290,7 @@ async function readPaymentTally(
         .from(membershipMonth)
         .where(eq(membershipMonth.month, month));
 
-      for (const a of held) {
+      for (const a of held.filter((r) => appliesInMonth(r, month))) {
         const paid = months.find((m) => m.assignmentId === a.id)?.paid ?? false;
         const verdict = monthVerdict({
           month,
@@ -356,6 +358,7 @@ async function readEntityDirectory(
         return {
           entityId: entity.id,
           entityName: entity.name,
+          memberId: m.memberId,
           userId: m.userId,
           name: m.name,
           email: m.email,
@@ -606,7 +609,7 @@ export const statsRouter = {
   dashboard: staffProcedure.query(async ({ ctx }) => {
     const now = new Date();
     const timeZone = await academyTimeZone(ctx);
-    const owner = isOwner(ctx.membership);
+    const owner = runsBranch(ctx.membership);
     const members = owner ? await rosterOf(ctx) : null;
 
     return {
@@ -740,7 +743,7 @@ export const statsRouter = {
    * Rows come back name-ordered, with any coach who has left the roster last —
    * dropping their classes would make the per-coach figures stop adding up.
    */
-  coaches: ownerProcedure
+  coaches: branchManagerProcedure
     .input(CoachStatsSchema)
     .query(async ({ ctx, input }) => {
       const { now, range, classes, marks, instructorIds, nameByUser } =

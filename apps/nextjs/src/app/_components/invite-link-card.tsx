@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { isOwner as isOwnerOf } from "@matops/domain";
+import { runsBranch } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
@@ -54,7 +54,7 @@ export function InviteLinkCard({
   const invites = useQuery(trpc.invite.list.queryOptions());
   const academy = useEntity();
   const academyName = academy.name;
-  const isOwner = isOwnerOf(academy);
+  const isOwner = runsBranch(academy);
 
   // Offer the OS share sheet (ADR 42) only where it exists.
   const shareable = useCanShare();

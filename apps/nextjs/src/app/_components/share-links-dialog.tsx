@@ -5,11 +5,7 @@ import { useState } from "react";
 import dynamic from "next/dynamic";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import {
-  branchWords,
-  isOwner as isOwnerOf,
-  shareActions,
-} from "@matops/domain";
+import { branchWords, runsBranch, shareActions } from "@matops/domain";
 import { Button } from "@matops/ui/button";
 import { CopyButton } from "@matops/ui/copy-button";
 import {
@@ -76,7 +72,7 @@ export function ShareLinksDialog({ trigger }: { trigger: ReactNode }) {
  */
 function ShareLinksBody() {
   const academy = useEntity();
-  const isOwner = isOwnerOf(academy);
+  const isOwner = runsBranch(academy);
   const actions = shareActions(academy.type);
 
   return (

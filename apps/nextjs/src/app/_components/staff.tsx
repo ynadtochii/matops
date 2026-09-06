@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
+import { isOwner } from "@matops/domain";
 import { cn } from "@matops/ui";
 import {
   AlertDialog,
@@ -24,6 +25,7 @@ import {
 import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
+import { useEntity } from "./entity";
 import { InviteLinkCard } from "./invite-link-card";
 import { cardClass, MoreIcon, SectionHeading } from "./primitives";
 import { SkeletonRows } from "./skeletons";
@@ -70,11 +72,13 @@ const COPY: Record<
 function StaffRow({
   m,
   ownerCount,
+  owner,
   busy,
   onConfirm,
 }: {
   m: StaffMember;
   ownerCount: number;
+  owner: boolean;
   busy: boolean;
   onConfirm: (action: Action, memberId: string) => Promise<void>;
 }) {
@@ -107,32 +111,34 @@ function StaffRow({
       <span className="text-muted-foreground rounded-full border px-2 py-0.5 text-xs">
         {roleName(m.role)}
       </span>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={busy}
-            aria-label={`Manage ${m.name}`}
-          >
-            <MoreIcon />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          {m.role === "instructor" ? (
-            <DropdownMenuItem onSelect={() => setAction("promote")}>
-              Make co-owner
-            </DropdownMenuItem>
-          ) : (
-            <DropdownMenuItem
-              disabled={isOnlyOwner}
-              onSelect={() => setAction("demote")}
+      {owner && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={busy}
+              aria-label={`Manage ${m.name}`}
             >
-              Step down to instructor
-            </DropdownMenuItem>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
+              <MoreIcon />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {m.role === "instructor" ? (
+              <DropdownMenuItem onSelect={() => setAction("promote")}>
+                Make co-owner
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem
+                disabled={isOnlyOwner}
+                onSelect={() => setAction("demote")}
+              >
+                Step down to instructor
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
 
       <AlertDialog
         open={action !== null}
@@ -173,11 +179,13 @@ function StaffRow({
  * instructors. Add an instructor by sharing the instructor invite link. Owner
  * changes are rare, so they hide behind a per-person "⋯" menu (no loud button):
  * make a co-owner, or step an owner back down — never leaving the gym ownerless.
+ * That menu is owners only; a manager reads the list without it (ADR 129).
  */
 export function Staff() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const staff = useQuery(trpc.membership.staff.queryOptions());
+  const owner = isOwner(useEntity());
 
   const invalidate = () =>
     queryClient.invalidateQueries(trpc.membership.staff.pathFilter());
@@ -241,6 +249,7 @@ export function Staff() {
               key={m.memberId}
               m={m}
               ownerCount={ownerCount}
+              owner={owner}
               busy={busy}
               onConfirm={onConfirm}
             />

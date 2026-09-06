@@ -18,11 +18,11 @@ import {
   groupMoneyByCurrency,
   isBjjAcademy,
   isFirstRun,
-  isOwner as isOwnerOf,
   isStaff as isStaffOf,
   leadQueues,
   needsAttendance,
   rosterSummary,
+  runsBranch,
   startOfDay,
   upcomingClassCount,
 } from "@matops/domain";
@@ -107,7 +107,7 @@ export function DashboardScreen() {
   const c = useEntity();
   const [detailId, setDetailId] = useState<string | null>(null);
 
-  const isOwner = isOwnerOf(c);
+  const isOwner = runsBranch(c);
   const isStaff = isStaffOf(c);
   const bjj = isBjjAcademy(c.type);
 

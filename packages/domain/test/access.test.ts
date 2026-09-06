@@ -10,6 +10,7 @@ import {
   isOwner,
   isStaff,
   isSuspended,
+  runsBranch,
   runsOrganization,
 } from "../src/access";
 
@@ -109,5 +110,26 @@ describe("the gym manager", () => {
         false,
       ]);
     }
+  });
+});
+
+describe("running one branch", () => {
+  it("takes an owner or a manager", () => {
+    expect(runsBranch({ role: "owner", status: "active" })).toBe(true);
+    expect(runsBranch({ role: "manager", status: "active" })).toBe(true);
+  });
+
+  it("leaves the coach and the student out", () => {
+    for (const role of ["instructor", "student"]) {
+      expect([role, runsBranch({ role, status: "active" })]).toEqual([
+        role,
+        false,
+      ]);
+    }
+  });
+
+  it("counts a manager as staff, so the register opens", () => {
+    expect(isStaff({ role: "manager", status: "active" })).toBe(true);
+    expect(isStaff({ role: "manager", status: "pending" })).toBe(false);
   });
 });

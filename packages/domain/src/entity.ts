@@ -1,5 +1,5 @@
 import type { Membership } from "./access";
-import { isOwner, isStaff } from "./access";
+import { isStaff, runsBranch } from "./access";
 
 /**
  * What kinds of place an organization may run (ADR 124).
@@ -75,6 +75,8 @@ export function pathWithinEntity(pathname: string): string {
  * `/training` and `/class/<id>` all branch by role inside the screen instead
  * (ADR 73). `/members` is staff so the head coach can approve and rank; the
  * owner-only blocks inside it branch on `isOwner` in the screen (ADR 75).
+ * `runsBranch` is owner-or-manager, so a gym's manager is offered the same
+ * screens they are allowed to use (ADR 129).
  *
  * `/overview` and the top-level `/profile` are NOT here. They belong to the
  * organization, not to a place, and are gated by the procedure they read:
@@ -94,8 +96,8 @@ const ROUTE_ACCESS: {
   types?: readonly EntityType[];
 }[] = [
   { prefix: "/members", allowed: isStaff },
-  { prefix: "/referrals", allowed: isOwner, types: ["bjj_academy"] },
-  { prefix: "/settings", allowed: isOwner },
+  { prefix: "/referrals", allowed: runsBranch, types: ["bjj_academy"] },
+  { prefix: "/settings", allowed: runsBranch },
   { prefix: "/schedule", allowed: isStaff },
   { prefix: "/coaches", allowed: isStaff },
   { prefix: "/attendance", allowed: isStaff },
@@ -134,36 +136,91 @@ export type PostLoginTarget<T extends BranchTie = BranchTie> =
   | { kind: "pick"; gyms: T[] };
 
 /**
- * Where a session that names no gym should land (ADR 49, amended by ADR 128).
+ * Where a session that names no gym should land (ADR 49, amended by ADR 128
+ * and ADR 129).
  *
- * The rule that keeps being got wrong is the empty one. A person with no branch
- * tie is not necessarily a student looking for a gym: an owner who has made a
- * gym and not yet its first branch holds no `entity_membership` either, and
- * sending them to the join-by-code form is a dead end. So an owned gym is
- * checked before the join screen, never after.
+ * Somebody who RUNS a gym lands on its overview, whether or not they also
+ * train at one of its branches: the overview is the actionable screen for the
+ * job they came to do, and the branch is one link away. That also fixes the
+ * case ADR 128 found, where an owner with no branch yet held no
+ * `entity_membership` and was offered the student join-by-code form.
  *
- * One tie per gym is what counts, not one per branch, because somebody who
- * trains at two mats of one gym is not being asked to choose between gyms.
+ * Everybody else lands on their branch. One tie per gym is what counts, not
+ * one per branch, because somebody who trains at two mats of one gym is not
+ * being asked to choose between gyms.
  */
 export function postLoginTarget<T extends BranchTie>(
   ties: readonly T[],
-  ownedGyms: readonly { organizationId: string; name: string }[],
+  runsGyms: readonly { organizationId: string; name: string }[],
 ): PostLoginTarget<T> {
+  const runs = runsGyms[0];
+  if (runs) {
+    return {
+      kind: "openGym",
+      organizationId: runs.organizationId,
+      name: runs.name,
+    };
+  }
+
   const gyms = new Map<string, T>();
   for (const t of ties) {
     if (!gyms.has(t.organizationId)) gyms.set(t.organizationId, t);
   }
-
-  if (gyms.size === 0) {
-    const own = ownedGyms[0];
-    return own
-      ? { kind: "openGym", organizationId: own.organizationId, name: own.name }
-      : { kind: "join" };
-  }
+  if (gyms.size === 0) return { kind: "join" };
 
   const only = gyms.size === 1 ? [...gyms.values()][0] : undefined;
   if (only) {
     return { kind: "openBranch", academyId: only.academyId, name: only.name };
   }
   return { kind: "pick", gyms: [...gyms.values()] };
+}
+
+/**
+ * Query parameters that survive a branch switch (ADR 129).
+ *
+ * A date is a date wherever you are standing, so the week you were reading
+ * follows you. A person, a class and a session belong to the branch you are
+ * leaving, so their ids do not: showing branch A's member id under branch B's
+ * name is the interface lying about which mat you are on.
+ */
+const PORTABLE_PARAMS = new Set([
+  "date",
+  "from",
+  "to",
+  "week",
+  "tab",
+  "filter",
+]);
+
+/** Routes whose id lives inside the path, so the path itself cannot travel. */
+const BRANCH_OWNED_PREFIXES = ["/class", "/attendance"];
+
+/**
+ * The same screen at another branch, or that branch's home when it has no such
+ * screen (ADR 129).
+ *
+ * `membership` is the caller's standing AT THE DESTINATION, which is what
+ * decides whether the destination even offers the screen. A general space has
+ * no referrals, a student has no roster, and either case falls back to the home
+ * page rather than to a refusal.
+ */
+export function switchEntityHref(
+  pathname: string,
+  search: string,
+  target: { id: string } & Membership & { type?: string },
+): string {
+  const within = pathWithinEntity(pathname);
+  const portable =
+    !BRANCH_OWNED_PREFIXES.some(
+      (p) => within === p || within.startsWith(`${p}/`),
+    ) && canVisit(within, target);
+  const path = portable ? within : "/";
+  if (path === "/") return entityHref(target.id);
+
+  const query = search
+    .replace(/^\?/, "")
+    .split("&")
+    .filter((pair) => PORTABLE_PARAMS.has(pair.split("=")[0] ?? ""))
+    .join("&");
+  return `${entityHref(target.id, path)}${query ? `?${query}` : ""}`;
 }

@@ -13,6 +13,56 @@
 
 export type AssignmentStatus = "active" | "suspended" | "cancelled";
 
+/** A calendar month written as its first day: "2026-09-01". */
+export type AssignmentMonth = string;
+
+/** The period one assignment covers: from `startMonth`, up to but not including `endMonth`. */
+export interface AssignmentPeriod {
+  startMonth: AssignmentMonth;
+  /** The first month it no longer applies. Null means it runs on. */
+  endMonth: AssignmentMonth | null;
+}
+
+/**
+ * Does this assignment apply in this month (ADR 129)?
+ *
+ * The one rule behind every access, payment, claims, metrics, reminder, roster
+ * and sweep reader, so a plan change cannot mean one thing to the booking gate
+ * and another to the dues board.
+ *
+ * Months are "YYYY-MM-01" strings, which compare correctly as text, so no date
+ * parsing and no time zone enter here. The end is EXCLUSIVE: an assignment
+ * ending in October is the September member's, and October belongs to whatever
+ * replaced it.
+ */
+export function appliesInMonth(
+  a: AssignmentPeriod,
+  month: AssignmentMonth,
+): boolean {
+  if (month < a.startMonth) return false;
+  return a.endMonth === null || month < a.endMonth;
+}
+
+/** Do two periods of the same plan overlap? Refused, so one plan is one answer. */
+export function periodsOverlap(
+  a: AssignmentPeriod,
+  b: AssignmentPeriod,
+): boolean {
+  const aEnds = a.endMonth ?? null;
+  const bEnds = b.endMonth ?? null;
+  const aBeforeB = aEnds !== null && aEnds <= b.startMonth;
+  const bBeforeA = bEnds !== null && bEnds <= a.startMonth;
+  return !aBeforeB && !bBeforeA;
+}
+
+/** Has a scheduled change already taken effect in the month being read? */
+export function changeIsPending(
+  change: { effectiveMonth: AssignmentMonth; cancelledAt: Date | null },
+  currentMonth: AssignmentMonth,
+): boolean {
+  return change.cancelledAt === null && currentMonth < change.effectiveMonth;
+}
+
 export interface Plan {
   id: string;
   archived: boolean;
