@@ -109,6 +109,19 @@ describe("payDeadline for a mid-month join", () => {
     expect(septemberDue.getTime()).toBeLessThan(octoberDue.getTime());
   });
 
+  it("gives a plan change written in September October's own deadline", () => {
+    // The successor assignment is created on 6 September and starts in
+    // October, so the day it was written is not a mid-month join.
+    expect(
+      payDeadline({
+        month: "2026-10-01",
+        startMonth: "2026-10-01",
+        joinedOn: "2026-09-06",
+        policy: LISBON,
+      }).toISOString(),
+    ).toBe("2026-10-07T23:00:00.000Z");
+  });
+
   it("keeps midnight across a daylight-saving change", () => {
     // Lisbon leaves summer time on 25 October 2026. Joining on the 22nd, the
     // window ends on the 29th at local midnight, which is 00:00Z once the

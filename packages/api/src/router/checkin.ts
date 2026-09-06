@@ -12,6 +12,7 @@ import {
 import { CheckInSchema } from "@matops/validators";
 
 import { claimSeat, requireClassFacts, SESSION_FULL } from "../classes";
+import { bookingGate } from "../payments-gate";
 import { enrolledProcedure } from "../trpc";
 
 /**
@@ -80,6 +81,24 @@ export const checkinRouter = {
       const tier = bookingTier(ctx.membership);
       const me = ctx.session.user.id;
       const now = new Date();
+
+      // The door runs the same gate as the booking screen (ADR 126). Without
+      // it a QR scan is a way round it: check-in books as well as marks
+      // present, so an unpaid or uncovered member would let themselves in.
+      if (tier === "confirmed" || ctx.entity.membershipEnforcedAt) {
+        const gate = await bookingGate(ctx.db, {
+          entity: ctx.entity,
+          membership: ctx.membership,
+          userId: me,
+          sessionAt: cls.startsAt,
+        });
+        if (gate.locked) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: gate.message ?? "Booking is locked for you.",
+          });
+        }
+      }
 
       // Read the caller's current row (if any) to know whether this check-in is a
       // NEW booking transition — that decides the confirmed-count increment. A

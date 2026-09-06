@@ -262,6 +262,12 @@ export async function loadRosterStanding(
   return answer;
 }
 
+/** Bookings read per pass while looking for ones that need a review. */
+const REVIEW_SCAN_PAGE = 200;
+
+/** The most bookings one call reads, so a full schedule cannot stall a request. */
+const MAX_REVIEW_SCAN = 2000;
+
 /** One booked session whose branch will not admit the member when it starts. */
 export interface BookingToReview {
   participationId: string;
@@ -299,87 +305,110 @@ export async function bookingsNeedingReview(
     limit: number;
   },
 ): Promise<BookingToReview[]> {
-  const booked = await db
-    .select({
-      participationId: classParticipation.id,
-      classId: classParticipation.classId,
-      userId: classParticipation.studentId,
-      name: user.name,
-      title: classInstance.title,
-      startsAt: classInstance.startsAt,
-    })
-    .from(classParticipation)
-    .innerJoin(classInstance, eq(classInstance.id, classParticipation.classId))
-    .innerJoin(user, eq(user.id, classParticipation.studentId))
-    .where(
-      and(
-        eq(classParticipation.bookingStatus, "booked"),
-        gt(classInstance.startsAt, input.now),
-        isNull(classInstance.deletedAt),
-        input.userId
-          ? eq(classParticipation.studentId, input.userId)
-          : undefined,
-      ),
-    )
-    .orderBy(asc(classInstance.startsAt))
-    .limit(input.limit);
-  if (booked.length === 0) return [];
-
-  const userIds = [...new Set(booked.map((b) => b.userId))];
   const calendar = await membershipCalendar(db);
-  const held = await db
-    .select({
-      id: accessAssignment.id,
-      userId: accessAssignment.userId,
-      status: accessAssignment.status,
-      planId: accessAssignment.planId,
-      startMonth: accessAssignment.startMonth,
-      endMonth: accessAssignment.endMonth,
-    })
-    .from(accessAssignment)
-    .where(inArray(accessAssignment.userId, userIds));
   const coverage = await db
     .select({
       planId: accessPlanEntity.planId,
       entityId: accessPlanEntity.entityId,
     })
     .from(accessPlanEntity);
-  const standing = await db
-    .select({
-      userId: entityMembership.userId,
-      status: entityMembership.status,
-    })
-    .from(entityMembership)
-    .where(inArray(entityMembership.userId, userIds));
 
   const items: BookingToReview[] = [];
-  for (const b of booked) {
-    const month = monthOf(b.startsAt, calendar.timeZone);
-    // The session's own month decides, not today's: a booking three weeks out
-    // is judged against the membership that will be running then.
-    const covers = held.some(
-      (a) =>
-        a.userId === b.userId &&
-        a.status === "active" &&
-        appliesInMonth(a, month) &&
-        coverage.some(
-          (c) => c.planId === a.planId && c.entityId === input.entityId,
+  // The limit counts ITEMS, not bookings read. Cutting the query at it would
+  // hide an uncovered session sitting behind fifty covered ones, and report
+  // nothing more to find, so the scan keeps reading pages until it has enough.
+  for (
+    let offset = 0;
+    offset < MAX_REVIEW_SCAN && items.length < input.limit;
+    offset += REVIEW_SCAN_PAGE
+  ) {
+    const booked = await db
+      .select({
+        participationId: classParticipation.id,
+        classId: classParticipation.classId,
+        userId: classParticipation.studentId,
+        name: user.name,
+        title: classInstance.title,
+        startsAt: classInstance.startsAt,
+      })
+      .from(classParticipation)
+      .innerJoin(
+        classInstance,
+        eq(classInstance.id, classParticipation.classId),
+      )
+      .innerJoin(user, eq(user.id, classParticipation.studentId))
+      .where(
+        and(
+          eq(classParticipation.bookingStatus, "booked"),
+          gt(classInstance.startsAt, input.now),
+          isNull(classInstance.deletedAt),
+          input.userId
+            ? eq(classParticipation.studentId, input.userId)
+            : undefined,
         ),
-    );
-    const local = standing.find((m) => m.userId === b.userId)?.status;
-    const blocked =
-      local !== undefined && local !== "active" && local !== "pending";
-    if (!blocked && covers) continue;
-    items.push({
-      participationId: b.participationId,
-      classId: b.classId,
-      entityId: input.entityId,
-      title: b.title,
-      startsAt: b.startsAt,
-      userId: b.userId,
-      name: b.name,
-      reason: blocked ? "suspended" : "not-covered",
-    });
+      )
+      .orderBy(asc(classInstance.startsAt), asc(classParticipation.id))
+      .limit(REVIEW_SCAN_PAGE)
+      .offset(offset);
+    if (booked.length === 0) break;
+
+    const userIds = [...new Set(booked.map((b) => b.userId))];
+    const held = await db
+      .select({
+        id: accessAssignment.id,
+        userId: accessAssignment.userId,
+        status: accessAssignment.status,
+        planId: accessAssignment.planId,
+        startMonth: accessAssignment.startMonth,
+        endMonth: accessAssignment.endMonth,
+      })
+      .from(accessAssignment)
+      .where(inArray(accessAssignment.userId, userIds));
+    // This branch's own memberships. Someone active here and suspended at the
+    // gym across town must not be read as suspended here (ADR 129).
+    const standing = await db
+      .select({
+        userId: entityMembership.userId,
+        status: entityMembership.status,
+      })
+      .from(entityMembership)
+      .where(
+        and(
+          eq(entityMembership.entityId, input.entityId),
+          inArray(entityMembership.userId, userIds),
+        ),
+      );
+
+    for (const b of booked) {
+      const month = monthOf(b.startsAt, calendar.timeZone);
+      // The session's own month decides, not today's: a booking three weeks out
+      // is judged against the membership that will be running then.
+      const covers = held.some(
+        (a) =>
+          a.userId === b.userId &&
+          a.status === "active" &&
+          appliesInMonth(a, month) &&
+          coverage.some(
+            (c) => c.planId === a.planId && c.entityId === input.entityId,
+          ),
+      );
+      const local = standing.find((m) => m.userId === b.userId)?.status;
+      const blocked =
+        local !== undefined && local !== "active" && local !== "pending";
+      if (!blocked && covers) continue;
+      items.push({
+        participationId: b.participationId,
+        classId: b.classId,
+        entityId: input.entityId,
+        title: b.title,
+        startsAt: b.startsAt,
+        userId: b.userId,
+        name: b.name,
+        reason: blocked ? "suspended" : "not-covered",
+      });
+      if (items.length >= input.limit) break;
+    }
+    if (booked.length < REVIEW_SCAN_PAGE) break;
   }
   return items;
 }

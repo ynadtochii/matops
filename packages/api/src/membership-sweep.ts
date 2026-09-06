@@ -1,5 +1,5 @@
 import type { DbExec } from "@matops/db/client";
-import { and, eq, gt, inArray, isNull, sql } from "@matops/db";
+import { and, asc, eq, gt, inArray, isNull, sql } from "@matops/db";
 import {
   accessAssignment,
   accessPlan,
@@ -28,6 +28,8 @@ export interface CancellationSweepOptions {
   now?: Date;
   /** Most assignments to look at in one run. Keeps a tick bounded. */
   limit?: number;
+  /** Start after this assignment id. Assignments are read in id order. */
+  after?: string;
 }
 
 export interface CancellationSweepResult {
@@ -37,11 +39,29 @@ export interface CancellationSweepResult {
   blocked: number;
   /** Future bookings cancelled. */
   cancelled: number;
+  /** Pass back as `after` to read the next page, or null when there is none. */
+  nextCursor: string | null;
 }
 
 interface Calendar {
   graceDays: number;
   timeZone: string;
+}
+
+interface HeldAssignment {
+  id: string;
+  organizationId: string;
+  userId: string;
+  planId: string;
+  startMonth: string;
+  endMonth: string | null;
+  createdAt: Date;
+}
+
+interface PaidRow {
+  assignmentId: string;
+  month: string;
+  paid: boolean;
 }
 
 /**
@@ -60,11 +80,16 @@ interface Calendar {
  *    `booked`, and only the rows it actually changed decrement a count, so a
  *    retry finds nothing to change and moves nothing.
  *  - **Another valid membership protects its classes.** A branch the person
- *    still reaches through a second active, unblocked membership is left alone.
+ *    still reaches through a second active, unblocked membership is left alone,
+ *    and every membership they hold is read for that, not only the ones in this
+ *    page.
+ *  - **A legacy branch is not this gate's business.** A branch with no
+ *    `membership_enforced_at` still runs on per-branch dues, so an unpaid
+ *    shared membership takes nothing away there.
  */
 export async function runMembershipCancellationSweep(
   exec: DbExec,
-  { now = new Date(), limit = 500 }: CancellationSweepOptions = {},
+  { now = new Date(), limit = 500, after }: CancellationSweepOptions = {},
 ): Promise<CancellationSweepResult> {
   const all = await exec
     .select({
@@ -78,9 +103,20 @@ export async function runMembershipCancellationSweep(
     })
     .from(accessAssignment)
     .innerJoin(accessPlan, eq(accessPlan.id, accessAssignment.planId))
-    .where(eq(accessAssignment.status, "active"))
+    .where(
+      after
+        ? and(
+            eq(accessAssignment.status, "active"),
+            gt(accessAssignment.id, after),
+          )
+        : eq(accessAssignment.status, "active"),
+    )
+    .orderBy(asc(accessAssignment.id))
     .limit(limit);
-  if (all.length === 0) return { checked: 0, blocked: 0, cancelled: 0 };
+  const nextCursor =
+    all.length === limit ? (all[all.length - 1]?.id ?? null) : null;
+  const nothing = { checked: 0, blocked: 0, cancelled: 0, nextCursor };
+  if (all.length === 0) return nothing;
 
   const calendars = await loadCalendars(exec, [
     ...new Set(all.map((a) => a.organizationId)),
@@ -94,7 +130,7 @@ export async function runMembershipCancellationSweep(
       ? appliesInMonth(a, monthOf(now, calendar.timeZone))
       : false;
   });
-  if (live.length === 0) return { checked: 0, blocked: 0, cancelled: 0 };
+  if (live.length === 0) return nothing;
   const coverage = await exec
     .select({
       planId: accessPlanEntity.planId,
@@ -103,6 +139,28 @@ export async function runMembershipCancellationSweep(
     .from(accessPlanEntity);
   const entitiesOf = (planId: string) =>
     coverage.filter((c) => c.planId === planId).map((c) => c.entityId);
+
+  // Only branches that have activated the membership gate. A branch still on
+  // per-branch dues decides for itself, so an unpaid shared membership must not
+  // reach into it (ADR 126).
+  const enforced = new Set(
+    (
+      await exec
+        .select({
+          id: entity.id,
+          membershipEnforcedAt: entity.membershipEnforcedAt,
+        })
+        .from(entity)
+        .where(
+          inArray(
+            entity.id,
+            coverage.map((c) => c.entityId),
+          ),
+        )
+    )
+      .filter((e) => e.membershipEnforcedAt !== null)
+      .map((e) => e.id),
+  );
 
   const paidRows = await exec
     .select({
@@ -118,7 +176,7 @@ export async function runMembershipCancellationSweep(
       ),
     );
 
-  const isBlocked = (a: (typeof live)[number]): boolean => {
+  const isBlocked = (a: HeldAssignment): boolean => {
     const calendar = calendars.get(a.organizationId);
     if (!calendar) return false;
     const month = monthOf(now, calendar.timeZone);
@@ -138,12 +196,31 @@ export async function runMembershipCancellationSweep(
   };
 
   const blocked = live.filter(isBlocked);
+  // Every membership these people hold, not only the ones this page read. A
+  // paid alternative sitting past the limit protects their classes just as much
+  // as one inside it, and cancelling because we did not look would take away
+  // classes they are entitled to.
+  const held =
+    blocked.length === 0 ? [] : await loadAllHeld(exec, blocked, now);
+  for (const row of held) {
+    paidRows.push(...row.months);
+    calendars.set(row.assignment.organizationId, row.calendar);
+  }
+  const protectors = held
+    .map((h) => h.assignment)
+    .filter((a) =>
+      appliesInMonth(
+        a,
+        monthOf(now, calendars.get(a.organizationId)?.timeZone ?? "UTC"),
+      ),
+    );
+
   let cancelled = 0;
   for (const assignment of blocked) {
     // What this membership covered, minus everything the person still reaches
     // through another membership that is active and not itself blocked.
     const stillCovered = new Set(
-      live
+      protectors
         .filter(
           (o) =>
             o.userId === assignment.userId &&
@@ -153,7 +230,7 @@ export async function runMembershipCancellationSweep(
         .flatMap((o) => entitiesOf(o.planId)),
     );
     const losing = entitiesOf(assignment.planId).filter(
-      (id) => !stillCovered.has(id),
+      (id) => enforced.has(id) && !stillCovered.has(id),
     );
     if (losing.length === 0) continue;
 
@@ -169,7 +246,83 @@ export async function runMembershipCancellationSweep(
     });
   }
 
-  return { checked: live.length, blocked: blocked.length, cancelled };
+  return {
+    checked: live.length,
+    blocked: blocked.length,
+    cancelled,
+    nextCursor,
+  };
+}
+
+/**
+ * Every active membership the blocked people hold, with the months and
+ * calendars needed to judge them. Read separately from the page so a protecting
+ * membership is never missed because it sorted after the limit.
+ */
+async function loadAllHeld(
+  exec: DbExec,
+  blocked: { userId: string }[],
+  now: Date,
+): Promise<
+  {
+    assignment: HeldAssignment;
+    calendar: Calendar;
+    months: PaidRow[];
+  }[]
+> {
+  const rows = await exec
+    .select({
+      id: accessAssignment.id,
+      organizationId: accessAssignment.organizationId,
+      userId: accessAssignment.userId,
+      planId: accessAssignment.planId,
+      startMonth: accessAssignment.startMonth,
+      endMonth: accessAssignment.endMonth,
+      createdAt: accessAssignment.createdAt,
+    })
+    .from(accessAssignment)
+    .innerJoin(accessPlan, eq(accessPlan.id, accessAssignment.planId))
+    .where(
+      and(
+        eq(accessAssignment.status, "active"),
+        inArray(accessAssignment.userId, [
+          ...new Set(blocked.map((b) => b.userId)),
+        ]),
+      ),
+    );
+  if (rows.length === 0) return [];
+
+  const calendars = await loadCalendars(exec, [
+    ...new Set(rows.map((a) => a.organizationId)),
+  ]);
+  const months = await exec
+    .select({
+      assignmentId: membershipMonth.assignmentId,
+      month: membershipMonth.month,
+      paid: membershipMonth.paid,
+    })
+    .from(membershipMonth)
+    .where(
+      inArray(
+        membershipMonth.assignmentId,
+        rows.map((a) => a.id),
+      ),
+    );
+
+  return rows.flatMap((assignment) => {
+    const calendar = calendars.get(assignment.organizationId);
+    if (!calendar) return [];
+    const month = monthOf(now, calendar.timeZone);
+    return [
+      {
+        assignment,
+        calendar,
+        months: months.filter(
+          (m) => m.assignmentId === assignment.id && m.month === month,
+        ),
+      },
+    ];
+  });
 }
 
 /** Each organization's grace and zone, falling back the way the readers do. */

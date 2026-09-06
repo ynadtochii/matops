@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { and, createEntity, eq } from "@matops/db";
-import { classInstance, classParticipation } from "@matops/db/schema";
+import { classInstance, classParticipation, entity } from "@matops/db/schema";
 
 import type { Harness } from "./helpers";
 import {
@@ -88,6 +88,13 @@ describe("the membership cancellation sweep", () => {
         entityIds: [ORG, gym],
       })
     ).id;
+
+    // The mat runs on memberships too. A branch with no `membership_enforced_at`
+    // is still on the old per-branch dues gate, and the sweep leaves those alone.
+    await h.exec
+      .update(entity)
+      .set({ membershipEnforcedAt: new Date("2026-01-01T00:00:00Z") })
+      .where(eq(entity.id, ORG));
 
     const future = 60 * 24 * 40; // well past LATE_SEPTEMBER, still "future"
     await seedClasses(h.pg, [
@@ -224,6 +231,50 @@ describe("the membership cancellation sweep", () => {
       now: LATE_SEPTEMBER,
     });
     expect(result.cancelled).toBe(0);
+  });
+
+  it("leaves a branch still on the old dues gate alone", async () => {
+    const legacy = (
+      await createEntity(
+        {
+          organizationId: ORG,
+          type: "general_space",
+          name: "The old room",
+          ownerUserId: BOSS,
+        },
+        h.exec,
+      )
+    ).entityId;
+    await h.exec
+      .update(entity)
+      .set({ membershipEnforcedAt: null })
+      .where(eq(entity.id, legacy));
+    const legacyClass = "cccccccc-0000-4000-8000-000000000004";
+    await seedClasses(h.pg, [
+      {
+        id: legacyClass,
+        academyId: legacy,
+        instructorId: BOSS,
+        startsInMinutes: 60 * 24 * 40,
+      },
+    ]);
+    const oldRoom = (
+      await owner().accessPlan.create({
+        name: "Old room",
+        entityIds: [legacy],
+      })
+    ).id;
+    await owner().accessPlan.assign({ userId: ALEX, planId: oldRoom });
+    await h.exec.insert(classParticipation).values({
+      academyId: legacy,
+      classId: legacyClass,
+      studentId: ALEX,
+      bookingStatus: "booked",
+      bookingTier: "confirmed",
+    });
+
+    await runMembershipCancellationSweep(h.exec, { now: LATE_SEPTEMBER });
+    expect(await bookingStatus(legacyClass, ALEX)).toBe("booked");
   });
 });
 

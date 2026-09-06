@@ -90,6 +90,10 @@ export interface DeadlineInput {
  * fine: it is a deadline for September's payment, not a claim on October, which
  * gets its own month record and its own deadline on the 1st.
  *
+ * A day outside the month being charged is not a mid-month join: a plan change
+ * made on 6 September writes October's assignment that same day, and October is
+ * still due on the 1st.
+ *
  * Days are added on the CALENDAR and converted to an instant afterwards, so a
  * daylight-saving change inside the window moves the wall clock, not the
  * boundary: the deadline is midnight wherever the clocks end up.
@@ -98,7 +102,7 @@ export function payDeadline(input: DeadlineInput): Date {
   const { month, startMonth, joinedOn, policy } = input;
   const midMonthJoin =
     isJoinMonth(month, startMonth) &&
-    joinedOn != null &&
+    joinedOn?.slice(0, 7) === month.slice(0, 7) &&
     !joinedOn.endsWith("-01");
   const from = midMonthJoin ? joinedOn : month;
   const days = midMonthJoin ? JOIN_GRACE_DAYS : policy.graceDays;

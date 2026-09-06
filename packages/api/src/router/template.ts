@@ -1,6 +1,7 @@
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
+import type { SQL, TenantTx } from "@matops/db";
 import {
   and,
   desc,
@@ -9,7 +10,9 @@ import {
   getTableColumns,
   gt,
   isNull,
+  lockBranchSchedule,
   materializeTemplate,
+  overlappingSessions,
   planRebuild,
   rebuildSchedule,
   recordActivity,
@@ -18,8 +21,11 @@ import {
 } from "@matops/db";
 import { classInstance, classTemplate, user } from "@matops/db/schema";
 import {
+  capacityPolicyFor,
+  firstClash,
   instructorForNewSession,
   isBjjAcademy,
+  isGeneralSpace,
   normalizeDaysOfWeek,
   templateEditStrategy,
 } from "@matops/domain";
@@ -31,7 +37,7 @@ import {
 } from "@matops/validators";
 
 import { requireInstructor } from "../members";
-import { TEMPLATE_NOT_FOUND } from "../messages";
+import { ROOM_TAKEN, TEMPLATE_NOT_FOUND } from "../messages";
 import { branchManagerProcedure, staffProcedure } from "../trpc";
 
 /**
@@ -43,6 +49,37 @@ import { branchManagerProcedure, staffProcedure } from "../trpc";
  * academy_id. Slice 2.2 wires lazy materialization into create/update; here the
  * rows just persist.
  */
+/**
+ * Refuse an in-place edit that would make the template's own sessions collide
+ * with something else in the room.
+ *
+ * `materializeTemplate` guards the timing edit, which regenerates. A content
+ * edit writes over the existing rows instead, and a longer duration is a
+ * content edit that still reaches into the next session's slot, so it needs the
+ * same check on the rows it is about to change (ADR 126). A BJJ academy runs
+ * two mats at once and is not asked.
+ */
+async function assertRoomFreeAfterEdit(
+  ctx: { db: TenantTx; academyId: string; entity: { type: string } },
+  durationMinutes: number,
+  affected: SQL | undefined,
+): Promise<void> {
+  if (!isGeneralSpace(ctx.entity.type)) return;
+  await lockBranchSchedule(ctx.db, ctx.academyId);
+  const proposed = (
+    await ctx.db
+      .select({ id: classInstance.id, startsAt: classInstance.startsAt })
+      .from(classInstance)
+      .where(affected)
+  ).map((c) => ({ id: c.id, startsAt: c.startsAt, durationMinutes }));
+  if (proposed.length === 0) return;
+  const clash = firstClash(
+    proposed,
+    await overlappingSessions(ctx.db, ctx.academyId, proposed),
+  );
+  if (clash) throw new TRPCError({ code: "CONFLICT", message: ROOM_TAKEN });
+}
+
 /**
  * Fill a template's classes, turning a room clash into a sentence.
  *
@@ -67,16 +104,6 @@ async function fillOrRefuse(
  * all, so it gets none whatever the client sends (ADR 126); at a BJJ academy a
  * missing id means the academy's default track.
  */
-/**
- * How a new session treats its capacity. A general space has ONE room, so a
- * full session is full; a BJJ mat has always let the count run over and shown
- * it red (spec §4), and changing that under an existing academy is not this
- * release's business (ADR 126).
- */
-function capacityPolicyFor(type: string): "soft" | "strict" {
-  return isBjjAcademy(type) ? "soft" : "strict";
-}
-
 function trackFor(
   type: string,
   sent: string | null | undefined,
@@ -172,7 +199,12 @@ export const templateRouter = {
         });
       }
 
-      const instructorId = input.instructorId ?? prev.instructorId;
+      // `null` is an answer: "nobody teaches this". Only a MISSING field falls
+      // back to the coach the template already had.
+      const instructorId =
+        input.instructorId === undefined
+          ? prev.instructorId
+          : input.instructorId;
       if (instructorId !== null && instructorId !== prev.instructorId) {
         await requireInstructor(ctx, instructorId);
       }
@@ -230,6 +262,13 @@ export const templateRouter = {
           { now, reviveCancelled: true },
         );
       } else if (strategy === "update-in-place") {
+        if (row.durationMinutes !== prev.durationMinutes) {
+          await assertRoomFreeAfterEdit(
+            ctx,
+            row.durationMinutes,
+            futureScheduled,
+          );
+        }
         await ctx.db
           .update(classInstance)
           .set({

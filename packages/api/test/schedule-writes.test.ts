@@ -409,6 +409,68 @@ describe("one bookable room per general branch", () => {
     expect(again?.id).toBeTruthy();
   });
 
+  it("keeps an explicit Nobody on a template edit", async () => {
+    const made = await at(gym).template.create({
+      title: "Nobody teaches this",
+      daysOfWeek: [3],
+      startsAtMinutes: 480,
+      durationMinutes: 60,
+      timeZone: "UTC",
+      capacity: 20,
+      instructorId: BOSS,
+    });
+    if (!made) throw new Error("expected a template");
+    expect(made.instructorId).toBe(BOSS);
+
+    const cleared = await at(gym).template.update({
+      id: made.id,
+      title: "Nobody teaches this",
+      daysOfWeek: [3],
+      startsAtMinutes: 480,
+      durationMinutes: 60,
+      timeZone: "UTC",
+      capacity: 20,
+      instructorId: null,
+    });
+    expect(cleared.instructorId).toBeNull();
+  });
+
+  it("refuses a longer duration that would run into the next session", async () => {
+    const early = await at(gym).template.create({
+      title: "Early",
+      daysOfWeek: [1],
+      startsAtMinutes: 480,
+      durationMinutes: 60,
+      timeZone: "UTC",
+      capacity: 20,
+    });
+    if (!early) throw new Error("expected a template");
+    await at(gym).template.create({
+      title: "After it",
+      daysOfWeek: [1],
+      startsAtMinutes: 540,
+      durationMinutes: 60,
+      timeZone: "UTC",
+      capacity: 20,
+    });
+
+    // 08:00 to 09:30 runs into the 09:00 session. A duration change is applied
+    // in place rather than regenerated, so it needs its own room check.
+    expect(
+      await rejectionCode(
+        at(gym).template.update({
+          id: early.id,
+          title: "Early",
+          daysOfWeek: [1],
+          startsAtMinutes: 480,
+          durationMinutes: 90,
+          timeZone: "UTC",
+          capacity: 20,
+        }),
+      ),
+    ).toBe("CONFLICT");
+  });
+
   it("refuses a recurring template that would clash with itself", async () => {
     expect(
       await rejectionCode(

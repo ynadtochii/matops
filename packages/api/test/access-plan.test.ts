@@ -251,6 +251,25 @@ describe("what a plan costs, and what it cost", () => {
     }
   });
 
+  it("takes a first price from this month on a plan made without one", async () => {
+    const made = await owner().accessPlan.create({
+      name: "Priced later",
+      entityIds: [PRICED],
+    });
+    const board = await owner().accessPlan.monthBoard();
+    await owner().accessPlan.setPrice({
+      id: made.id,
+      priceMinor: 3500,
+      currency: "EUR",
+      effectiveMonth: board.month,
+    });
+
+    const listed = (await owner().accessPlan.list()).find(
+      (p) => p.id === made.id,
+    );
+    expect([listed?.priceMinor, listed?.currency]).toEqual([3500, "EUR"]);
+  });
+
   it("puts the month's amount on the member's own standing", async () => {
     const made = await owner().accessPlan.create({
       name: "Standing",

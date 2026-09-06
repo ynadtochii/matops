@@ -186,7 +186,10 @@ export function Templates({
     const payload = {
       title: shown.title.trim(),
       description: shown.description,
-      instructorId: shown.instructorId || undefined,
+      // A general space offers "Nobody" as a real choice, so an empty pick is
+      // null and clears the coach. A BJJ form has no such option: empty there
+      // means "leave it as it is", which the server reads from a missing field.
+      instructorId: shown.instructorId || (bjj ? undefined : null),
       discipline: shown.discipline === "" ? null : shown.discipline,
       curriculumTrackId:
         shown.curriculumTrackId === "" ? null : shown.curriculumTrackId,

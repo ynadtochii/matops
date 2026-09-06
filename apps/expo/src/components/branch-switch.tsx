@@ -27,10 +27,12 @@ interface Branch {
  * succeeds leaves the app naming a place the session cannot open. On failure
  * nothing has changed and the member is told.
  *
- * The cache is REMOVED rather than invalidated, because every cached answer
+ * The cache is RESET rather than invalidated, because every cached answer
  * belonged to the branch being left: invalidating leaves it on screen until the
  * refetch lands, so the gym's schedule shows the mat's classes for a moment
- * (ADR 126).
+ * (ADR 126). Reset also refetches what is mounted, which removing does not: a
+ * removed query leaves its observer holding the last branch's data with nothing
+ * to make it ask again.
  */
 export function useBranchSwitch() {
   const queryClient = useQueryClient();
@@ -50,7 +52,7 @@ export function useBranchSwitch() {
         await setActive.mutateAsync({ academyId: branch.academyId });
       }
       setActiveEntity(branch.academyId);
-      queryClient.removeQueries();
+      await queryClient.resetQueries();
     } catch (error) {
       toast.show(
         error instanceof Error

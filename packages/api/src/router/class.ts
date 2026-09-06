@@ -27,6 +27,7 @@ import {
 } from "@matops/db/schema";
 import {
   canReassignCoach,
+  capacityPolicyFor,
   classChange,
   findOverlap,
   instantFromLocalDate,
@@ -47,7 +48,7 @@ import type { TimeZoneCtx } from "../academy-tz";
 import { academyTimeZone } from "../academy-tz";
 import { liveClass } from "../classes";
 import { requireInstructor } from "../members";
-import { CLASS_NOT_FOUND } from "../messages";
+import { CLASS_NOT_FOUND, ROOM_TAKEN } from "../messages";
 import { notifyClassCancelled, notifyClassChanged } from "../notify";
 import { enrolledProcedure, staffProcedure } from "../trpc";
 
@@ -124,8 +125,6 @@ async function notifyBooked(
     ),
   );
 }
-
-const ROOM_TAKEN = "Another session already has the room at that time";
 
 /**
  * One bookable room per general branch (ADR 126). Takes the branch lock and
@@ -343,9 +342,7 @@ export const classRouter = {
           startsAt,
           durationMinutes: input.durationMinutes,
           capacity: input.capacity,
-          // A general space has one room, so a full session is full. A BJJ mat
-          // keeps the soft cap it has always had (spec §4, ADR 126).
-          capacityPolicy: isGeneralSpace(ctx.entity.type) ? "strict" : "soft",
+          capacityPolicy: capacityPolicyFor(ctx.entity.type),
           publicBookable: input.publicBookable,
         })
         .returning();

@@ -30,6 +30,8 @@ import { env } from "~/env";
  */
 export const maxDuration = 60;
 
+const MAX_PAGES = 20;
+
 export async function GET(req: NextRequest) {
   const verdict = cronVerdict({
     authorization: req.headers.get("authorization"),
@@ -41,6 +43,19 @@ export async function GET(req: NextRequest) {
   }
 
   const reminded = await runMembershipReminderSweep(db);
-  const cancelled = await runMembershipCancellationSweep(db);
+
+  // Page through, so a gym past one batch is not skipped for ever. Capped so
+  // one call still ends: a leftover cursor means run it again.
+  const cancelled = { checked: 0, blocked: 0, cancelled: 0 };
+  let after: string | undefined;
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const run = await runMembershipCancellationSweep(db, { after });
+    cancelled.checked += run.checked;
+    cancelled.blocked += run.blocked;
+    cancelled.cancelled += run.cancelled;
+    if (!run.nextCursor) break;
+    after = run.nextCursor;
+  }
+
   return Response.json({ ok: true, reminded, cancelled });
 }

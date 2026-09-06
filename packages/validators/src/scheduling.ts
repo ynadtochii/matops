@@ -41,7 +41,9 @@ export const CreateClassTemplateSchema = z.object({
   description: SessionDescription,
   discipline: DisciplineSchema.nullish(),
   curriculumTrackId: IdSchema.nullish(),
-  instructorId: IdSchema.optional(),
+  // Nullable as well as optional: null is "nobody", which a general space
+  // says out loud, while a missing field on edit leaves the coach alone.
+  instructorId: IdSchema.nullish(),
   daysOfWeek: z
     .array(z.number().int().min(0).max(6))
     .min(1, "Pick at least one day")

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 
-import { isBjjAcademy, slugify } from "@matops/domain";
+import { capacityPolicyFor, isBjjAcademy, slugify } from "@matops/domain";
 
 import type { DbExec } from "./client";
 import type { DbReader, DbWriter } from "./tenant";
@@ -228,13 +228,20 @@ export async function provisionOrganization(
  * so the caller materializes them into the new branch's own classes, and the
  * BJJ-only fields are dropped rather than pointed at the source's rows, since a
  * curriculum track belongs to one branch and a public booking flag is a
- * decision about this branch's own link.
+ * decision about this branch's own link. The capacity rule comes from the
+ * DESTINATION's type for the same reason: a BJJ mat's soft cap copied into a
+ * one-room space would take bookings past what the room holds.
  *
  * Students are not staff and are not copied. A person joins a branch, and
  * moving one silently would give them a place they never asked for.
  */
 async function copyBranchSetup(
-  input: { fromEntityId: string; toEntityId: string; organizationId: string },
+  input: {
+    fromEntityId: string;
+    toEntityId: string;
+    toType: string;
+    organizationId: string;
+  },
   exec: DbWriter,
 ): Promise<string[]> {
   const created: string[] = [];
@@ -264,7 +271,7 @@ async function copyBranchSetup(
         durationMinutes: t.durationMinutes,
         timeZone: t.timeZone,
         capacity: t.capacity,
-        capacityPolicy: t.capacityPolicy,
+        capacityPolicy: capacityPolicyFor(input.toType),
         publicBookable: false,
       })),
     );
@@ -413,6 +420,7 @@ export async function createEntity(
           {
             fromEntityId: input.copyFromEntityId,
             toEntityId: entityId,
+            toType: input.type,
             organizationId: input.organizationId,
           },
           tx,

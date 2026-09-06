@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { createEntity, eq } from "@matops/db";
-import { classInstance } from "@matops/db/schema";
+import { classInstance, classParticipation } from "@matops/db/schema";
 
 import type { Harness } from "./helpers";
 import { harness, rejectionCode, seedAcademies, seedClasses } from "./helpers";
@@ -291,6 +291,95 @@ describe("one place, one booking", () => {
         WHERE class_id = '${session}' AND student_id = '${CHRIS}'`,
     );
     expect(rows.rows[0]?.status).toBe("cancelled");
+  });
+
+  it("never gates staff on a membership, at either door", async () => {
+    // The owner holds no plan covering the gym, and runs the place rather than
+    // buying access to it. The same rule the legacy dues gate has always had.
+    const seen = await at(gym, BOSS).booking.access();
+    expect([seen.locked, seen.message]).toEqual([false, null]);
+
+    const soon = await at(gym, BOSS).class.create({
+      title: "Staff booking",
+      date: inDays(3),
+      startsAtMinutes: 600,
+      durationMinutes: 60,
+      timeZone: "UTC",
+      capacity: 5,
+    });
+    if (!soon) throw new Error("expected a session");
+    await expect(
+      at(gym, BOSS).booking.book({ classId: soon.id }),
+    ).resolves.toBeDefined();
+  });
+
+  it("refuses a QR check-in the booking gate would refuse", async () => {
+    // Chris lost his membership in the test above. The door runs the same gate
+    // as the booking screen, so scanning is not a way round it (ADR 126).
+    // The earlier live session is cancelled first: one room, one session, and
+    // a cancelled one gives the room back.
+    await h.exec
+      .update(classInstance)
+      .set({ status: "cancelled" })
+      .where(eq(classInstance.title, "On now"));
+    const live = await at(gym, BOSS).class.create({
+      title: "Door check",
+      date: inDays(0),
+      startsAtMinutes: new Date().getUTCHours() * 60,
+      durationMinutes: 60,
+      timeZone: "UTC",
+      capacity: 10,
+    });
+    if (!live) throw new Error("expected a session");
+
+    expect(
+      await rejectionCode(at(gym, CHRIS).checkin.checkIn({ classId: live.id })),
+    ).toBe("PRECONDITION_FAILED");
+    expect(await countOf(live.id)).toBe(0);
+  });
+
+  it("claims a place for a walk-in whose booking was cancelled", async () => {
+    const past = await at(gym, BOSS).class.create({
+      title: "Yesterday, evening",
+      date: inDays(-1),
+      startsAtMinutes: 19 * 60,
+      durationMinutes: 60,
+      timeZone: "UTC",
+      capacity: 1,
+    });
+    if (!past) throw new Error("expected a session");
+
+    // A cancelled booking gave its place back, so the row protects nothing.
+    await h.exec.insert(classParticipation).values({
+      academyId: gym,
+      classId: past.id,
+      studentId: ALEX,
+      bookingStatus: "cancelled",
+      bookingTier: "confirmed",
+    });
+    expect(await countOf(past.id)).toBe(0);
+
+    await at(gym, BOSS).attendance.addWalkIn({
+      classId: past.id,
+      studentId: ALEX,
+    });
+    expect(await countOf(past.id)).toBe(1);
+
+    // The room is full again, and marking the same person twice takes no
+    // second place.
+    expect(
+      await rejectionCode(
+        at(gym, BOSS).attendance.addWalkIn({
+          classId: past.id,
+          studentId: BEA,
+        }),
+      ),
+    ).toBe("CONFLICT");
+    await at(gym, BOSS).attendance.addWalkIn({
+      classId: past.id,
+      studentId: ALEX,
+    });
+    expect(await countOf(past.id)).toBe(1);
   });
 
   it("says why each person is on the roster, and never calls them a visitor", async () => {

@@ -1,7 +1,8 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { createEntity, provisionOrganization } from "@matops/db";
+import { createEntity, eq, provisionOrganization } from "@matops/db";
+import { entityMembership } from "@matops/db/schema";
 
 import type { Harness } from "./helpers";
 import { harness, memberId, rejectionCode, seedAcademies } from "./helpers";
@@ -132,6 +133,27 @@ describe("a gym manager at a branch", () => {
         role: "instructor",
       }),
     ).resolves.toBeDefined();
+  });
+
+  it("adds somebody at one branch without touching their role at another", async () => {
+    // STUDENT is an instructor at GYM after the test above. Putting them on
+    // the second mat as a student must write a row THERE, not overwrite the
+    // one they hold at GYM: the two branches are separate decisions (ADR 129).
+    await at(MANAGER, GYM).entity.setBranchRole({
+      entityId: second,
+      userId: STUDENT,
+      role: "student",
+    });
+
+    const rows = await h.exec
+      .select({
+        entityId: entityMembership.entityId,
+        role: entityMembership.role,
+      })
+      .from(entityMembership)
+      .where(eq(entityMembership.userId, STUDENT));
+    const roleAt = (id: string) => rows.find((r) => r.entityId === id)?.role;
+    expect([roleAt(GYM), roleAt(second)]).toEqual(["instructor", "student"]);
   });
 
   it("reaches nothing in another gym", async () => {

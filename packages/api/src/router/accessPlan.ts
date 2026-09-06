@@ -136,8 +136,16 @@ function coverageVersion(plan: Pick<PlanRow, "updatedAt">): string {
  * so "not mine" and "not there" are the same answer, which is what we want: a
  * missing plan and another gym's plan must be indistinguishable.
  */
-async function loadPlan(db: TenantTx, id: string): Promise<PlanRow> {
-  const [row] = await db.select().from(accessPlan).where(eq(accessPlan.id, id));
+async function loadPlan(
+  db: TenantTx,
+  id: string,
+  { lock = false }: { lock?: boolean } = {},
+): Promise<PlanRow> {
+  const query = db.select().from(accessPlan).where(eq(accessPlan.id, id));
+  // `lock` holds the row for the rest of the transaction, so two coverage
+  // edits queue instead of both reading the same version and both passing the
+  // check. The loser then reads the winner's `updated_at` and is refused.
+  const [row] = lock ? await query.for("update") : await query;
   if (!row) throw new TRPCError({ code: "NOT_FOUND", message: PLAN_NOT_FOUND });
   return row;
 }
@@ -189,9 +197,13 @@ async function assignOne(
   const plan = await loadPlan(ctx.db, input.planId);
   await requireOrganizationMember(ctx.db, ctx.organizationId, input.userId);
 
+  // The gym's own calendar decides which month "now" is. Just after midnight
+  // on 1 October in Lisbon, UTC is still September, and an assignment starting
+  // in a month that is already over carries a deadline that has passed.
+  const { month } = await currentMonthOf(ctx.db);
   const startMonth = input.startMonth
-    ? startMonthOf(new Date(input.startMonth))
-    : startMonthOf(new Date());
+    ? `${input.startMonth.slice(0, 7)}-01`
+    : month;
 
   const periods = await lockAssignmentsOf(ctx.db, input.userId);
   // The membership they hold on this plan over the month being assigned,
@@ -400,8 +412,12 @@ async function coverageElsewhere(
 }
 
 /** Archived is frozen, not merely hidden: no rename, no coverage change. */
-async function requireEditable(db: TenantTx, id: string): Promise<PlanRow> {
-  const plan = await loadPlan(db, id);
+async function requireEditable(
+  db: TenantTx,
+  id: string,
+  opts?: { lock?: boolean },
+): Promise<PlanRow> {
+  const plan = await loadPlan(db, id, opts);
   if (!canEditPlan({ id: plan.id, archived: plan.archivedAt !== null })) {
     throw new TRPCError({ code: "CONFLICT", message: PLAN_FROZEN });
   }
@@ -444,7 +460,10 @@ async function requireOwnEntities(
  * plan's, because it has to know what else still covers a person before it
  * calls a branch a loss.
  */
-async function assignmentCoverage(db: TenantTx): Promise<AssignmentCoverage[]> {
+async function assignmentCoverage(
+  db: TenantTx,
+  month: string,
+): Promise<AssignmentCoverage[]> {
   const rows = await db
     .select({
       id: accessAssignment.id,
@@ -457,7 +476,10 @@ async function assignmentCoverage(db: TenantTx): Promise<AssignmentCoverage[]> {
     .leftJoin(
       accessPlanEntity,
       eq(accessPlanEntity.planId, accessAssignment.planId),
-    );
+    )
+    // An ended period still reads `active`, so status alone would let a
+    // membership nobody holds any more hide a real loss of coverage (ADR 129).
+    .where(assignmentAppliesInMonth(month));
 
   const byAssignment = new Map<string, AssignmentCoverage>();
   for (const r of rows) {
@@ -476,13 +498,12 @@ async function assignmentCoverage(db: TenantTx): Promise<AssignmentCoverage[]> {
 
 /** What a coverage edit would do, without doing it. */
 async function preview(db: TenantTx, planId: string, next: string[]) {
-  return affectedByCoverageChange(planId, next, await assignmentCoverage(db));
-}
-
-/** The first day of the month an assignment starts in, as a date string. */
-function startMonthOf(date: Date): string {
-  const iso = date.toISOString();
-  return `${iso.slice(0, 7)}-01`;
+  const { month } = await currentMonthOf(db);
+  return affectedByCoverageChange(
+    planId,
+    next,
+    await assignmentCoverage(db, month),
+  );
 }
 
 /**
@@ -609,6 +630,7 @@ async function reconcilePlanHolders(
   planId: string,
   entityIds: string[],
 ): Promise<PlanReconciliation> {
+  const { month } = await currentMonthOf(db);
   const holders = await db
     .select({ userId: accessAssignment.userId, name: user.name })
     .from(accessAssignment)
@@ -617,6 +639,9 @@ async function reconcilePlanHolders(
       and(
         eq(accessAssignment.planId, planId),
         eq(accessAssignment.status, "active"),
+        // A membership that has ended enrols nobody: adding a branch to an old
+        // plan must not put its former holders back on a mat (ADR 129).
+        assignmentAppliesInMonth(month),
       ),
     );
 
@@ -670,6 +695,7 @@ const EMPTY_RECONCILIATION: PlanReconciliation = {
 async function coverageGaps(
   db: TenantTx,
 ): Promise<Map<string, { missing: number; needsDecision: number }>> {
+  const { month } = await currentMonthOf(db);
   const rows = await db
     .select({
       planId: accessAssignment.planId,
@@ -688,7 +714,12 @@ async function coverageGaps(
         eq(entityMembership.entityId, accessPlanEntity.entityId),
       ),
     )
-    .where(eq(accessAssignment.status, "active"));
+    .where(
+      and(
+        eq(accessAssignment.status, "active"),
+        assignmentAppliesInMonth(month),
+      ),
+    );
 
   const byPlan = new Map<string, { missing: number; needsDecision: number }>();
   for (const r of rows) {
@@ -845,17 +876,7 @@ export const accessPlanRouter = {
     .input(SetAccessPlanPriceSchema)
     .mutation(async ({ ctx, input }) => {
       const calendar = await membershipCalendar(ctx.db);
-      if (
-        !canPriceFrom(
-          input.effectiveMonth,
-          monthOf(new Date(), calendar.timeZone),
-        )
-      ) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "A price change starts from a month that has not begun yet",
-        });
-      }
+      const month = monthOf(new Date(), calendar.timeZone);
 
       const [plan] = await ctx.db
         .select({ id: accessPlan.id })
@@ -863,6 +884,26 @@ export const accessPlanRouter = {
         .where(eq(accessPlan.id, input.id));
       if (!plan) {
         throw new TRPCError({ code: "NOT_FOUND", message: "No such plan" });
+      }
+
+      // A plan that has never carried a price may take its FIRST one from this
+      // month, for the reason `create` gives: nobody has been asked for an
+      // amount on it, so there is no past to protect. Every later change starts
+      // from a month that has not begun.
+      const [priced] = await ctx.db
+        .select({ id: accessPlanPrice.id })
+        .from(accessPlanPrice)
+        .where(eq(accessPlanPrice.planId, input.id))
+        .limit(1);
+      const first = priced === undefined;
+      if (
+        !canPriceFrom(input.effectiveMonth, month) &&
+        !(first && input.effectiveMonth === month)
+      ) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "A price change starts from a month that has not begun yet",
+        });
       }
 
       await ctx.db
@@ -934,7 +975,7 @@ export const accessPlanRouter = {
   setCoverage: organizationManagerProcedure
     .input(SetAccessPlanCoverageSchema)
     .mutation(async ({ ctx, input }) => {
-      const plan = await requireEditable(ctx.db, input.id);
+      const plan = await requireEditable(ctx.db, input.id, { lock: true });
       await requireOwnEntities(ctx.db, input.entityIds);
       if (input.version && input.version !== coverageVersion(plan)) {
         throw new TRPCError({ code: "CONFLICT", message: COVERAGE_MOVED });

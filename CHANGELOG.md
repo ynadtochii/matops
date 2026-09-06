@@ -2,6 +2,27 @@
 
 One line per shipped slice (see `docs/delivery.md` §4). Newest first.
 
+## v7.7a — the PR #6 review fixes
+
+Static gates green (`pnpm typecheck` 17/17, `pnpm lint` 15/15) and **`pnpm test` green: 1620 tests across 130 files**, nine of them new here. Migration `0066` is **applied to dev** and verified live: all six actor foreign keys read `ON DELETE SET NULL`, and `drizzle.__drizzle_migrations` holds 65 rows for 65 journal entries. Fixes the seventeen findings in `docs/reviews/pr-6-review-findings.md`.
+
+- **A branch write stays at that branch.** `setBranchRole` and `decideAtBranch` selected the membership by user id alone, and `entity_membership` is isolated by organization, not by branch, so adding somebody at one mat could change their role at another. Both queries now name the branch.
+- **The door runs the same gate as the booking screen.** QR check-in books as well as marks present and never called the membership gate, so an unpaid or uncovered member could let themselves in with a scan. It now runs `bookingGate` exactly as `booking.book` does.
+- **A month is judged by the month, not the day it was written.** A plan change made on 6 September writes October's assignment that day, and readers passed that day as the join date, so October's deadline landed on 13 September and the member started October blocked. The join-day window now applies only when the day belongs to the month being charged.
+- **A copied schedule takes the destination's capacity rule.** Copying a mat's timetable into a one-room space kept `soft`, so its sessions took bookings past what the room holds. One shared `capacityPolicyFor` decides from the branch type, and the three writers that set the policy call it.
+- **The cancellation sweep leaves legacy branches alone**, reads every membership a blocked person holds rather than the ones that fell in its page, and pages with a cursor so a gym past the limit is not skipped for ever.
+- **A longer session is checked for the room.** A duration change is applied in place instead of regenerated, so it went round the overlap guard and could run into the next session. It now validates the occurrences it is about to change.
+- **A walk-in with a cancelled booking takes a place.** Any existing participation row skipped the capacity check, including one whose seat had been given back, so the desk could put somebody into a full room without moving the count.
+- **A coverage edit is serialized.** The plan row is locked before its version is read, so two edits queue rather than both passing the check and producing a branch list neither asked for.
+- **An ended membership covers nobody.** Coverage previews, reconciliation and the plan gaps count read status alone, and an ended period still reads `active`, so a membership nobody holds could hide a real loss of coverage or re-enrol a former holder.
+- **The booking review scans until it has its answer**, rather than cutting the query at the limit and reporting nothing more to find, and it reads each person's standing **at the branch being asked about**.
+- **A plan can be priced later.** Creation offers "price it later" and nothing called `setPrice`, so the price could never be set. The plan card has the control, and a plan that has never carried a price may take its first one from this month.
+- **"Nobody" is an answer on a template.** Selecting it sent nothing, and the update fell back to the coach already there, so the choice never saved. `null` clears the coach and a missing field still leaves it alone.
+- **A default assignment month is the gym's month**, read in its calendar zone rather than UTC.
+- **Erasing a person is not blocked by other people's records.** Migration `0066` moves six nullable actor references to `ON DELETE SET NULL`, so purging a former manager forgets who did the thing rather than failing the final delete.
+- **Staff are never gated on a membership, at either door.** The legacy dues gate has always exempted them; the membership gate did not, so activating memberships locked a gym's own coaches out of the class they teach. `bookingGate` now exempts active staff, which covers booking, QR check-in and the sentence the screens show. The branch still decides: `isStaff` needs an active branch membership, so somebody suspended or not yet approved is refused whatever their role.
+- **The phone resets its cache on a branch switch.** `removeQueries` left mounted screens showing the last branch's data with nothing to make them ask again.
+
 ## v7.7 — the manager runs every branch, and a plan change waits for the 1st
 
 Built, static gates green. Migration `0065` is **applied to dev** and verified live. **`pnpm test` is green again: 1611 tests across 130 files.** The suite had 25 failures on the baseline `b237f03`; this release fixed all of them. ADR [129](docs/issues/129-the-manager-runs-every-branch.md), spec MB1-MB8.

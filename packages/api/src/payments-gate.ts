@@ -7,6 +7,7 @@ import {
   accessReason,
   bookingAccess,
   bookingAccessMessage,
+  isStaff,
 } from "@matops/domain";
 
 import { loadMembershipAccess } from "./membership-access";
@@ -101,6 +102,13 @@ export interface BookingGate {
  * Takes the class's start so an activated branch can answer for the session as
  * well as for now: booking three weeks ahead on a membership that runs out next
  * Tuesday is refused at the point of booking rather than discovered at the door.
+ *
+ * ACTIVE STAFF are never gated, under either gate, which is the rule the legacy
+ * path has always followed in `loadBookingAccess`. A coach or an owner runs the
+ * place rather than buying access to it, and a gym that had just activated
+ * memberships would otherwise lock its own staff out of the class they teach.
+ * `isStaff` requires an ACTIVE branch membership, so the branch still decides:
+ * somebody suspended or not yet approved is refused whatever their role says.
  */
 export async function bookingGate(
   db: TenantTx,
@@ -117,6 +125,7 @@ export async function bookingGate(
   },
 ): Promise<BookingGate> {
   if (input.entity.membershipEnforcedAt) {
+    if (isStaff(input.membership)) return { locked: false, message: null };
     const seen = await loadMembershipAccess(db, {
       userId: input.userId,
       entityId: input.entity.id,

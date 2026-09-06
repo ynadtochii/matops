@@ -87,33 +87,21 @@ export const SESSION_FULL = "That session is full";
  * A strict room is different, because there the count IS the room, so admitting
  * a body has to take a place or the limit means nothing.
  *
- * So a soft class returns true having changed nothing, and a strict one behaves
- * exactly like {@link claimSeat}.
+ * So a soft class changes nothing and reports `strict: false`, and a strict one
+ * behaves exactly like {@link claimSeat}. The caller needs both answers: only a
+ * strict room actually put a place on the row, and only then does that row have
+ * to record it.
  */
 export async function claimSeatIfStrict(
   db: TenantTx,
   classId: string,
-): Promise<boolean> {
-  const claimed = await db
-    .update(classInstance)
-    .set({ bookingCount: sql`${classInstance.bookingCount} + 1` })
-    .where(
-      and(
-        eq(classInstance.id, classId),
-        eq(classInstance.capacityPolicy, "strict"),
-        lt(classInstance.bookingCount, classInstance.capacity),
-      ),
-    )
-    .returning({ id: classInstance.id });
-  if (claimed.length > 0) return true;
-
-  // Nothing was taken. Either the room has no limit, which is fine, or it has
-  // one and is full, which is not.
+): Promise<{ strict: boolean; took: boolean }> {
   const [row] = await db
     .select({ policy: classInstance.capacityPolicy })
     .from(classInstance)
     .where(eq(classInstance.id, classId));
-  return row?.policy !== "strict";
+  if (row?.policy !== "strict") return { strict: false, took: true };
+  return { strict: true, took: await claimSeat(db, classId) };
 }
 
 export async function releaseSeats(

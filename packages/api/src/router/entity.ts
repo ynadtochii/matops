@@ -218,7 +218,12 @@ export const entityRouter = {
               role: entityMembership.role,
             })
             .from(entityMembership)
-            .where(eq(entityMembership.userId, input.userId));
+            .where(
+              and(
+                eq(entityMembership.entityId, branch.id),
+                eq(entityMembership.userId, input.userId),
+              ),
+            );
           // Stepping an owner down is removing an owner, which is not this
           // screen's job whoever is looking at it.
           if (held?.role === "owner") {
@@ -268,7 +273,12 @@ export const entityRouter = {
               invitedRole: entityMembership.invitedRole,
             })
             .from(entityMembership)
-            .where(eq(entityMembership.userId, input.userId));
+            .where(
+              and(
+                eq(entityMembership.entityId, branch.id),
+                eq(entityMembership.userId, input.userId),
+              ),
+            );
           if (!held) {
             throw new TRPCError({
               code: "NOT_FOUND",

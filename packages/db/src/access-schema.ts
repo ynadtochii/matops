@@ -97,7 +97,7 @@ export const accessPlanPrice = pgTable(
     effectiveMonth: t.date().notNull(),
     priceMinor: t.integer().notNull(),
     currency: t.text().notNull(),
-    recordedBy: t.text().references(() => user.id),
+    recordedBy: t.text().references(() => user.id, { onDelete: "set null" }),
     createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
   }),
   (table) => [
@@ -188,7 +188,7 @@ export const accessAssignment = pgTable(
      */
     endMonth: t.date(),
     status: t.text().notNull().default("active"),
-    assignedBy: t.text().references(() => user.id),
+    assignedBy: t.text().references(() => user.id, { onDelete: "set null" }),
     createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: t
       .timestamp({ withTimezone: true })
@@ -271,9 +271,9 @@ export const accessAssignmentChange = pgTable(
     /** The month the target starts and the source stops. */
     effectiveMonth: t.date().notNull(),
     previousSourceEndMonth: t.date(),
-    scheduledBy: t.text().references(() => user.id),
+    scheduledBy: t.text().references(() => user.id, { onDelete: "set null" }),
     createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
-    cancelledBy: t.text().references(() => user.id),
+    cancelledBy: t.text().references(() => user.id, { onDelete: "set null" }),
     cancelledAt: t.timestamp({ withTimezone: true }),
   }),
   (table) => [
@@ -371,7 +371,7 @@ export const membershipMonth = pgTable(
     /** The first day of the month, in the organization's calendar zone. */
     month: t.date().notNull(),
     paid: t.boolean().notNull().default(false),
-    recordedBy: t.text().references(() => user.id),
+    recordedBy: t.text().references(() => user.id, { onDelete: "set null" }),
     recordedAt: t.timestamp({ withTimezone: true }),
     /**
      * When this member was last warned that the month is unpaid. The claim the
@@ -441,7 +441,7 @@ export const membershipMonthAudit = pgTable(
     /** Null when nothing was recorded for that month before. */
     wasPaid: t.boolean(),
     paid: t.boolean().notNull(),
-    actorId: t.text().references(() => user.id),
+    actorId: t.text().references(() => user.id, { onDelete: "set null" }),
     createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
   }),
   (table) => [

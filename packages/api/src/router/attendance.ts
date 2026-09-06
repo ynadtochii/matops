@@ -185,7 +185,10 @@ export const attendanceRouter = {
       // second place, and at a BJJ academy a walk-in has never moved the count
       // at all, which `booking-count.test.ts` holds (ADR 126).
       const [held] = await ctx.db
-        .select({ status: classParticipation.bookingStatus })
+        .select({
+          status: classParticipation.bookingStatus,
+          tier: classParticipation.bookingTier,
+        })
         .from(classParticipation)
         .where(
           and(
@@ -193,11 +196,20 @@ export const attendanceRouter = {
             eq(classParticipation.studentId, input.studentId),
           ),
         );
-      if (!held) {
-        const took = await claimSeatIfStrict(ctx.db, input.classId);
-        if (!took) {
+      // A row only protects a place when it actually holds one. A cancelled
+      // booking gave its place back and a provisional one never took a place,
+      // so admitting either at the desk claims one like anybody else.
+      const holdsSeat =
+        held !== undefined &&
+        held.status !== "cancelled" &&
+        held.tier === "confirmed";
+      let claimed = false;
+      if (!holdsSeat) {
+        const seat = await claimSeatIfStrict(ctx.db, input.classId);
+        if (!seat.took) {
           throw new TRPCError({ code: "CONFLICT", message: SESSION_FULL });
         }
+        claimed = seat.strict;
       }
       await ctx.db
         .insert(classParticipation)
@@ -212,13 +224,26 @@ export const attendanceRouter = {
           markedBy: ctx.session.user.id,
         })
         .onConflictDoUpdate({
-          // If they DID book, keep booking_status — just mark them present.
+          // If they DID book, keep booking_status — just mark them present. A
+          // place this admission just claimed is written onto the row, or the
+          // next admission of the same person would take a second one.
           target: [classParticipation.classId, classParticipation.studentId],
-          set: {
-            attendanceStatus: "present",
-            attendedAt: now,
-            markedBy: ctx.session.user.id,
-          },
+          set: claimed
+            ? {
+                bookingStatus:
+                  held?.status === "cancelled"
+                    ? "none"
+                    : (held?.status ?? "none"),
+                bookingTier: "confirmed",
+                attendanceStatus: "present",
+                attendedAt: now,
+                markedBy: ctx.session.user.id,
+              }
+            : {
+                attendanceStatus: "present",
+                attendedAt: now,
+                markedBy: ctx.session.user.id,
+              },
         });
       return { ok: true as const };
     }),

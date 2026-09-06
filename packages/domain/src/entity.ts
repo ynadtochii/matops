@@ -27,6 +27,19 @@ export function isGeneralSpace(type: string): boolean {
 }
 
 /**
+ * How a session at this kind of place treats its capacity. A general space has
+ * ONE room, so a full session is full; a BJJ mat has always let the count run
+ * over and shown it red (spec §4), and changing that under an existing academy
+ * is not this release's business (ADR 126).
+ *
+ * It hangs off the TYPE and never off the row it was copied from: a BJJ
+ * schedule copied into a general space is a general space's schedule.
+ */
+export function capacityPolicyFor(type: string): "soft" | "strict" {
+  return isBjjAcademy(type) ? "soft" : "strict";
+}
+
+/**
  * Where an entity's screens live. The prefix is a locked part of the pivot:
  * a URL that names its academy is what makes two browser tabs, a reload and a
  * shared link all land in the same place (ADR 124).

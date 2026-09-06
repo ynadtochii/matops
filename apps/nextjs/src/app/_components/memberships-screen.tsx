@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
-import { formatMoney } from "@matops/domain";
+import { formatMoney, formatMonth, nextMonth } from "@matops/domain";
 import { Button } from "@matops/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@matops/ui/dialog";
 import { FieldError } from "@matops/ui/field";
@@ -13,7 +13,10 @@ import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
 import { Textarea } from "@matops/ui/textarea";
 import { toast } from "@matops/ui/toast";
-import { CreateAccessPlanSchema } from "@matops/validators";
+import {
+  CreateAccessPlanSchema,
+  SetAccessPlanPriceSchema,
+} from "@matops/validators";
 
 import { dateFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
@@ -349,9 +352,11 @@ function PlanCard({
       onError: (e) => toast.error(e.message),
     }),
   );
+  const [pricing, setPricing] = useState(false);
 
   return (
     <div className={`${cardClass()} ${ENTER} flex flex-wrap gap-3`}>
+      <PriceDialog plan={plan} open={pricing} onOpenChange={setPricing} />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="font-medium">
           {plan.name}
@@ -381,6 +386,11 @@ function PlanCard({
           <Reconcile planId={plan.id} missing={plan.gaps.missing} />
         )}
         {!plan.archived && (
+          <Button size="sm" variant="outline" onClick={() => setPricing(true)}>
+            {plan.priceMinor === null ? "Set price" : "Price"}
+          </Button>
+        )}
+        {!plan.archived && (
           <Button size="sm" variant="outline" onClick={onEdit}>
             Branches
           </Button>
@@ -397,6 +407,119 @@ function PlanCard({
         </Button>
       </div>
     </div>
+  );
+}
+
+/**
+ * Price a plan that has one, or one made with "price it later" (ADR 127).
+ *
+ * A change starts from a month nobody has been billed for, so the default is
+ * next month and the server refuses anything earlier. The one exception is a
+ * plan that has never had a price: its first one may start this month, because
+ * no member has been asked for an amount on it yet.
+ */
+function PriceDialog({
+  plan,
+  open,
+  onOpenChange,
+}: {
+  plan: Plan;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  const board = useQuery(trpc.accessPlan.monthBoard.queryOptions());
+  const unpriced = plan.priceMinor === null;
+  const earliest = board.data
+    ? unpriced
+      ? board.data.month
+      : nextMonth(board.data.month)
+    : null;
+
+  const [amount, setAmount] = useState(
+    plan.priceMinor === null ? "" : (plan.priceMinor / 100).toFixed(2),
+  );
+  const [currency, setCurrency] = useState(plan.currency ?? "EUR");
+  const [error, setError] = useState<string | null>(null);
+
+  const save = useMutation(
+    trpc.accessPlan.setPrice.mutationOptions({
+      onSuccess: async () => {
+        await queryClient.invalidateQueries(trpc.accessPlan.list.pathFilter());
+        setError(null);
+        onOpenChange(false);
+        toast.success("Price saved");
+      },
+      onError: (e) => toast.error(e.message || "Could not save that price"),
+    }),
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogTitle>{plan.name}</DialogTitle>
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!earliest) return;
+            const parsed = SetAccessPlanPriceSchema.safeParse({
+              id: plan.id,
+              priceMinor: Math.round(parseFloat(amount.trim()) * 100),
+              currency,
+              effectiveMonth: earliest,
+            });
+            if (!parsed.success) {
+              setError("Give the price as a number, like 45 or 45.50.");
+              return;
+            }
+            setError(null);
+            save.mutate(parsed.data);
+          }}
+        >
+          <p className="text-muted-foreground text-sm">
+            {earliest
+              ? `Applies from ${formatMonth(earliest, board.data?.timeZone ?? "UTC")}. Earlier months keep the amount members were already asked for.`
+              : "Reading your gym's calendar…"}
+          </p>
+          <div className="flex gap-2">
+            <div className="flex flex-1 flex-col gap-2">
+              <Label htmlFor={`price-${plan.id}`}>A month</Label>
+              <Input
+                id={`price-${plan.id}`}
+                inputMode="decimal"
+                value={amount}
+                placeholder="45"
+                onChange={(e) => setAmount(e.target.value)}
+              />
+            </div>
+            <div className="flex w-28 flex-col gap-2">
+              <Label htmlFor={`currency-${plan.id}`}>Currency</Label>
+              <Input
+                id={`currency-${plan.id}`}
+                maxLength={3}
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value.toUpperCase())}
+              />
+            </div>
+          </div>
+          {error && <FieldError>{error}</FieldError>}
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={save.isPending || !earliest}>
+              {save.isPending ? "Saving…" : "Save price"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
