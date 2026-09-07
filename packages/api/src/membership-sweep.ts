@@ -58,6 +58,7 @@ interface HeldAssignment {
   id: string;
   organizationId: string;
   userId: string;
+  personId: string | null;
   accountUserId: string | null;
   planId: string;
   startMonth: string;
@@ -100,6 +101,7 @@ export async function runMembershipCancellationSweep(
       id: accessAssignment.id,
       organizationId: accessAssignment.organizationId,
       userId: sql<string>`coalesce(${accessAssignment.personId}::text, ${accessAssignment.userId})`,
+      personId: accessAssignment.personId,
       accountUserId: accessAssignment.userId,
       planId: accessAssignment.planId,
       startMonth: accessAssignment.startMonth,
@@ -250,7 +252,7 @@ export async function runMembershipCancellationSweep(
     cancelled += await cancelFutureBookings(exec, {
       assignmentId: assignment.id,
       organizationId: assignment.organizationId,
-      userId: assignment.userId,
+      userId: assignment.personId,
       accountUserId: assignment.accountUserId,
       entityIds: losing,
       month: monthOf(
@@ -290,6 +292,7 @@ async function loadAllHeld(
       id: accessAssignment.id,
       organizationId: accessAssignment.organizationId,
       userId: sql<string>`coalesce(${accessAssignment.personId}::text, ${accessAssignment.userId})`,
+      personId: accessAssignment.personId,
       accountUserId: accessAssignment.userId,
       planId: accessAssignment.planId,
       startMonth: accessAssignment.startMonth,
@@ -399,7 +402,7 @@ async function cancelFutureBookings(
   input: {
     assignmentId: string;
     organizationId: string;
-    userId: string;
+    userId: string | null;
     accountUserId: string | null;
     entityIds: string[];
     month: string;
@@ -427,7 +430,9 @@ async function cancelFutureBookings(
         and(
           eq(entityMembership.organizationId, input.organizationId),
           or(
-            eq(entityMembership.personId, input.userId),
+            input.userId
+              ? eq(entityMembership.personId, input.userId)
+              : undefined,
             input.accountUserId
               ? and(
                   isNull(entityMembership.personId),
@@ -479,7 +484,9 @@ async function cancelFutureBookings(
       .where(
         and(
           or(
-            eq(classParticipation.personId, input.userId),
+            input.userId
+              ? eq(classParticipation.personId, input.userId)
+              : undefined,
             input.accountUserId
               ? and(
                   isNull(classParticipation.personId),

@@ -82,13 +82,6 @@ export const checkinRouter = {
           message: gate.message ?? "Booking is locked for you.",
         });
       }
-      if (!ctx.membership.personId) {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: "Your account is not linked to a person record.",
-        });
-      }
-
       // Read the caller's current row (if any) to know whether this check-in is a
       // NEW booking transition — that decides the confirmed-count increment. A
       // single user tapping once; a rare double-tap self-race is corrected by the
@@ -100,7 +93,9 @@ export const checkinRouter = {
           and(
             eq(classParticipation.classId, input.classId),
             or(
-              eq(classParticipation.personId, ctx.membership.personId),
+              ctx.membership.personId
+                ? eq(classParticipation.personId, ctx.membership.personId)
+                : undefined,
               and(
                 isNull(classParticipation.personId),
                 eq(classParticipation.studentId, me),
@@ -115,7 +110,9 @@ export const checkinRouter = {
         .values({
           academyId: ctx.academyId,
           classId: input.classId,
-          personOrganizationId: ctx.organizationId,
+          personOrganizationId: ctx.membership.personId
+            ? ctx.organizationId
+            : null,
           personId: ctx.membership.personId,
           studentId: me,
           bookingStatus: "booked",
@@ -125,8 +122,12 @@ export const checkinRouter = {
           cancelledAt: null,
         })
         .onConflictDoUpdate({
-          target: [classParticipation.classId, classParticipation.personId],
-          targetWhere: sql`person_id is not null`,
+          target: ctx.membership.personId
+            ? [classParticipation.classId, classParticipation.personId]
+            : [classParticipation.classId, classParticipation.studentId],
+          targetWhere: ctx.membership.personId
+            ? sql`person_id is not null`
+            : undefined,
           // Always mark present; only (re)book when they weren't already booked
           // (a cancelled row flips back; a walk-in `none` / active `booked` stays).
           set: willBook

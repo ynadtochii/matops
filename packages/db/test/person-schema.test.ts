@@ -57,16 +57,16 @@ describe("person schema", () => {
     );
     expect(Object.fromEntries(columns)).toEqual({
       "access_assignment.person_id": "YES",
-      "access_assignment.user_id": "NO",
+      "access_assignment.user_id": "YES",
       "access_assignment_change.person_id": "YES",
-      "access_assignment_change.user_id": "NO",
+      "access_assignment_change.user_id": "YES",
       "class_participation.person_id": "YES",
       "class_participation.person_organization_id": "YES",
-      "class_participation.student_id": "NO",
+      "class_participation.student_id": "YES",
       "entity_membership.person_id": "YES",
       "entity_membership.user_id": "YES",
       "membership_purchase.person_id": "YES",
-      "membership_purchase.user_id": "NO",
+      "membership_purchase.user_id": "YES",
     });
   });
 

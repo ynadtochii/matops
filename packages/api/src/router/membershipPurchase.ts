@@ -299,7 +299,9 @@ export const membershipPurchaseRouter = {
       .from(membershipPurchase)
       .where(
         or(
-          eq(membershipPurchase.personId, ctx.membership.personId ?? ""),
+          ctx.membership.personId
+            ? eq(membershipPurchase.personId, ctx.membership.personId)
+            : undefined,
           and(
             isNull(membershipPurchase.personId),
             eq(membershipPurchase.userId, ctx.session.user.id),
@@ -314,9 +316,6 @@ export const membershipPurchaseRouter = {
     .input(SelectMembershipPurchaseSchema)
     .mutation(async ({ ctx, input }) => {
       await lockPerson(ctx.db, ctx.session.user.id, ctx.organizationId);
-      if (!ctx.membership.personId) {
-        conflict("Your account is not linked to a person record.");
-      }
       const month = await currentMonth(ctx.db);
       const startMonth = input.start === "next" ? nextMonth(month) : month;
       const existing = await ctx.db
@@ -325,7 +324,9 @@ export const membershipPurchaseRouter = {
         .where(
           and(
             or(
-              eq(membershipPurchase.personId, ctx.membership.personId),
+              ctx.membership.personId
+                ? eq(membershipPurchase.personId, ctx.membership.personId)
+                : undefined,
               and(
                 isNull(membershipPurchase.personId),
                 eq(membershipPurchase.userId, ctx.session.user.id),
@@ -470,9 +471,8 @@ export const membershipPurchaseRouter = {
           code: "NOT_FOUND",
           message: "This membership request is no longer available.",
         });
-      if (!identity.personId || !identity.accountUserId) {
-        conflict("This membership request needs a linked person and account.");
-      }
+      if (!identity.accountUserId)
+        conflict("This membership request needs a linked account.");
       await lockPerson(ctx.db, identity.accountUserId, ctx.organizationId);
       const row = await purchase(ctx.db, input.id);
       if (row.status === "confirmed" || row.status === "resolution") return row;
@@ -559,14 +559,21 @@ export const membershipPurchaseRouter = {
           })),
         )
         .onConflictDoNothing({
-          target: [entityMembership.entityId, entityMembership.personId],
+          target: identity.personId
+            ? [entityMembership.entityId, entityMembership.personId]
+            : [entityMembership.entityId, entityMembership.userId],
         });
       const enrolled = await ctx.db
         .select({ status: entityMembership.status })
         .from(entityMembership)
         .where(
           and(
-            eq(entityMembership.personId, identity.personId),
+            identity.personId
+              ? eq(entityMembership.personId, identity.personId)
+              : and(
+                  isNull(entityMembership.personId),
+                  eq(entityMembership.userId, identity.accountUserId),
+                ),
             inArray(entityMembership.entityId, row.entityIds),
           ),
         )

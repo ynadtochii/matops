@@ -114,7 +114,7 @@ export async function loadMembershipAccess(
   db: TenantTx,
   input: AccessQuery,
 ): Promise<MembershipAccess> {
-  const personId = input.personId ?? input.userId ?? "";
+  const personId = input.personId;
   const accountUserId = input.accountUserId ?? input.userId ?? null;
   const staff = accountUserId
     ? await loadStaffAccess(db, {
@@ -147,7 +147,7 @@ export async function loadMembershipAccess(
     .from(accessAssignment)
     .where(
       or(
-        eq(accessAssignment.personId, personId),
+        personId ? eq(accessAssignment.personId, personId) : undefined,
         accountUserId ? eq(accessAssignment.userId, accountUserId) : undefined,
       ),
     );
@@ -445,6 +445,7 @@ export async function bookingsNeedingReview(
       .select({
         participationId: classParticipation.id,
         classId: classParticipation.classId,
+        personId: classParticipation.personId,
         userId: sql<string>`coalesce(${classParticipation.personId}::text, ${classParticipation.studentId})`,
         accountUserId: sql<
           string | null
@@ -479,7 +480,9 @@ export async function bookingsNeedingReview(
       .offset(offset);
     if (booked.length === 0) break;
 
-    const personIds = [...new Set(booked.map((b) => b.userId))];
+    const personIds = [
+      ...new Set(booked.flatMap((b) => (b.personId ? [b.personId] : []))),
+    ];
     const accountUserIds = [
       ...new Set(
         booked.flatMap((b) => (b.accountUserId ? [b.accountUserId] : [])),

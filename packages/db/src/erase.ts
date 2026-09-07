@@ -1,10 +1,11 @@
-import { and, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
 
 import type { DbExec } from "./client";
 import type { TenantTx } from "./tenant";
 import {
   accessAssignment,
   accessAssignmentChange,
+  attendanceCorrection,
   classInstance,
   classParticipation,
   entityMembership,
@@ -66,6 +67,26 @@ export async function eraseMemberData(
   ) => {
     report[label] = (await run()).rowCount ?? 0;
   };
+
+  const linkedPeople = await exec
+    .select({ id: person.id })
+    .from(person)
+    .where(eq(person.accountUserId, userId));
+  const subjectIds = [userId, ...linkedPeople.map((row) => row.id)];
+
+  await del("attendance_correction", () =>
+    exec
+      .delete(attendanceCorrection)
+      .where(
+        and(
+          eq(attendanceCorrection.academyId, academyId),
+          or(
+            eq(attendanceCorrection.actorId, userId),
+            inArray(attendanceCorrection.subjectId, subjectIds),
+          ),
+        ),
+      ),
+  );
 
   await del("class_participation", () =>
     exec

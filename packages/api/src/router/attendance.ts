@@ -258,8 +258,12 @@ export const attendanceRouter = {
       if (!subject) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Person not found" });
       }
+      const subjectPersonId =
+        subject.personId === subject.accountUserId ? null : subject.personId;
       const subjectWhere = or(
-        eq(classParticipation.personId, subject.personId),
+        subjectPersonId
+          ? eq(classParticipation.personId, subjectPersonId)
+          : undefined,
         subject.accountUserId
           ? and(
               isNull(classParticipation.personId),
@@ -400,6 +404,8 @@ export const attendanceRouter = {
           message: "That person does not have active access to this academy",
         });
       }
+      const subjectPersonId =
+        subject.personId === subject.accountUserId ? null : subject.personId;
       const now = new Date();
       // Admitting somebody at the desk takes a place in a STRICT room, the same
       // as booking one, unless they already hold one. Two rules meet here and
@@ -417,7 +423,9 @@ export const attendanceRouter = {
           and(
             eq(classParticipation.classId, input.classId),
             or(
-              eq(classParticipation.personId, subject.personId),
+              subjectPersonId
+                ? eq(classParticipation.personId, subjectPersonId)
+                : undefined,
               subject.accountUserId
                 ? and(
                     isNull(classParticipation.personId),
@@ -447,8 +455,8 @@ export const attendanceRouter = {
         .values({
           academyId: ctx.academyId,
           classId: input.classId,
-          personOrganizationId: ctx.organizationId,
-          personId: subject.personId,
+          personOrganizationId: subjectPersonId ? ctx.organizationId : null,
+          personId: subjectPersonId,
           studentId: subject.accountUserId,
           bookingStatus: "none",
           bookingTier: "confirmed",
@@ -460,8 +468,10 @@ export const attendanceRouter = {
           // If they DID book, keep booking_status — just mark them present. A
           // place this admission just claimed is written onto the row, or the
           // next admission of the same person would take a second one.
-          target: [classParticipation.classId, classParticipation.personId],
-          targetWhere: sql`person_id is not null`,
+          target: subjectPersonId
+            ? [classParticipation.classId, classParticipation.personId]
+            : [classParticipation.classId, classParticipation.studentId],
+          targetWhere: subjectPersonId ? sql`person_id is not null` : undefined,
           set: claimed
             ? {
                 bookingStatus:

@@ -46,7 +46,7 @@ export async function bookingGate(
     return { locked: false, message: null };
   }
   const seen = await loadMembershipAccess(db, {
-    personId: input.membership.personId ?? input.accountUserId ?? "",
+    personId: input.membership.personId ?? undefined,
     accountUserId: input.accountUserId,
     entityId: input.entity.id,
     membership: { status: input.membership.status },

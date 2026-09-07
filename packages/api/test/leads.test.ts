@@ -211,7 +211,11 @@ describe("a lead becomes a member on a phone match at self-join", () => {
  * change that could break that by accident, so it is a written rule with a test.
  */
 describe("no statistics query joins the visits table", () => {
-  const READERS = ["router/attendance.ts", "router/class.ts"];
+  const READERS = [
+    "attendance-review.ts",
+    "router/attendance.ts",
+    "router/class.ts",
+  ];
 
   it("is read by the roster and the class screen, and nowhere else", async () => {
     const srcDir = fileURLToPath(new URL("../src", import.meta.url));

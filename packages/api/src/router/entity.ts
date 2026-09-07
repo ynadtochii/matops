@@ -133,18 +133,30 @@ async function requireOrganizationPerson(
     .where(
       and(
         eq(person.organizationId, ctx.organizationId),
-        or(eq(person.id, personId), eq(person.accountUserId, personId)),
+        or(
+          eq(sql`${person.id}::text`, personId),
+          eq(person.accountUserId, personId),
+        ),
         isNull(person.archivedAt),
       ),
     )
     .limit(1);
-  if (!row) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "That person is not part of this gym",
-    });
-  }
-  return row;
+  if (row) return row;
+  const [account] = await ctx.baseDb
+    .select({ userId: member.userId })
+    .from(member)
+    .where(
+      and(
+        eq(member.organizationId, ctx.organizationId),
+        eq(member.userId, personId),
+      ),
+    )
+    .limit(1);
+  if (account) return { id: null, accountUserId: account.userId };
+  throw new TRPCError({
+    code: "NOT_FOUND",
+    message: "That person is not part of this gym",
+  });
 }
 
 export const entityRouter = {
@@ -250,7 +262,9 @@ export const entityRouter = {
               and(
                 eq(entityMembership.entityId, branch.id),
                 or(
-                  eq(entityMembership.personId, subject.id),
+                  subject.id
+                    ? eq(entityMembership.personId, subject.id)
+                    : undefined,
                   subject.accountUserId
                     ? and(
                         isNull(entityMembership.personId),
@@ -315,7 +329,9 @@ export const entityRouter = {
               and(
                 eq(entityMembership.entityId, branch.id),
                 or(
-                  eq(entityMembership.personId, subject.id),
+                  subject.id
+                    ? eq(entityMembership.personId, subject.id)
+                    : undefined,
                   subject.accountUserId
                     ? and(
                         isNull(entityMembership.personId),

@@ -294,7 +294,7 @@ export async function assignOne(
  */
 async function lockAssignmentsOf(
   db: TenantTx,
-  personId: string,
+  personId: string | null,
   accountUserIdOrOrganizationId: string | null,
   organizationIdInput?: string,
 ) {
@@ -304,7 +304,7 @@ async function lockAssignmentsOf(
     ? accountUserIdOrOrganizationId
     : personId;
   await db.execute(
-    sql`select pg_advisory_xact_lock(hashtext(${organizationId}), hashtext(${personId}))`,
+    sql`select pg_advisory_xact_lock(hashtext(${organizationId}), hashtext(${personId ?? accountUserId ?? ""}))`,
   );
   return db
     .select({
@@ -318,7 +318,7 @@ async function lockAssignmentsOf(
     .from(accessAssignment)
     .where(
       or(
-        eq(accessAssignment.personId, personId),
+        personId ? eq(accessAssignment.personId, personId) : undefined,
         accountUserId
           ? and(
               isNull(accessAssignment.personId),
@@ -362,7 +362,7 @@ function requireNoOverlap(
 async function pendingChanges(
   db: TenantTx,
   currentMonth: string,
-  subject?: { personId: string; accountUserId: string | null },
+  subject?: { personId: string | null; accountUserId: string | null },
 ) {
   const rows = await db
     .select({
@@ -379,7 +379,9 @@ async function pendingChanges(
         ? and(
             isNull(accessAssignmentChange.cancelledAt),
             or(
-              eq(accessAssignmentChange.personId, subject.personId),
+              subject.personId
+                ? eq(accessAssignmentChange.personId, subject.personId)
+                : undefined,
               subject.accountUserId
                 ? and(
                     isNull(accessAssignmentChange.personId),
@@ -410,6 +412,7 @@ async function loadAssignment(db: TenantTx, id: string) {
     .select({
       id: accessAssignment.id,
       userId: sql<string>`coalesce(${accessAssignment.personId}::text, ${accessAssignment.userId})`,
+      personId: accessAssignment.personId,
       accountUserId: accessAssignment.userId,
       planId: accessAssignment.planId,
       status: accessAssignment.status,
@@ -580,21 +583,33 @@ async function requireOrganizationPerson(
     .where(
       and(
         eq(person.organizationId, organizationId),
-        or(eq(person.id, personId), eq(person.accountUserId, personId)),
+        or(
+          eq(sql`${person.id}::text`, personId),
+          eq(person.accountUserId, personId),
+        ),
         isNull(person.archivedAt),
       ),
     )
     .limit(1);
-  if (!row) {
-    throw new TRPCError({ code: "NOT_FOUND", message: NOT_A_MEMBER });
-  }
-  return row;
+  if (row) return row;
+  const [account] = await db
+    .select({ accountUserId: member.userId })
+    .from(member)
+    .where(
+      and(
+        eq(member.organizationId, organizationId),
+        eq(member.userId, personId),
+      ),
+    )
+    .limit(1);
+  if (account) return { id: null, accountUserId: account.accountUserId };
+  throw new TRPCError({ code: "NOT_FOUND", message: NOT_A_MEMBER });
 }
 
 async function requireStudentCoverage(
   db: TenantTx,
   organizationId: string,
-  personId: string,
+  personId: string | null,
   accountUserId: string | null,
   entityIds: string[],
 ): Promise<void> {
@@ -621,7 +636,7 @@ async function requireStudentCoverage(
       and(
         eq(entityMembership.organizationId, organizationId),
         or(
-          eq(entityMembership.personId, personId),
+          personId ? eq(entityMembership.personId, personId) : undefined,
           accountUserId
             ? and(
                 isNull(entityMembership.personId),
@@ -669,7 +684,7 @@ export interface Reconciliation {
 async function enrolInCoveredBranches(
   db: TenantTx,
   organizationId: string,
-  personId: string,
+  personId: string | null,
   accountUserId: string | null,
   entityIds: string[],
 ): Promise<Reconciliation> {
@@ -684,7 +699,7 @@ async function enrolInCoveredBranches(
     .where(
       and(
         or(
-          eq(entityMembership.personId, personId),
+          personId ? eq(entityMembership.personId, personId) : undefined,
           accountUserId
             ? and(
                 isNull(entityMembership.personId),
@@ -771,6 +786,7 @@ async function reconcilePlanHolders(
   const holders = await db
     .select({
       userId: sql<string>`coalesce(${accessAssignment.personId}::text, ${accessAssignment.userId})`,
+      personId: accessAssignment.personId,
       accountUserId: accessAssignment.userId,
       name: sql<string>`coalesce(${person.name}, ${user.name})`,
     })
@@ -799,7 +815,7 @@ async function reconcilePlanHolders(
       const one = await enrolInCoveredBranches(
         db,
         organizationId,
-        holder.userId,
+        holder.personId,
         holder.accountUserId,
         entityIds,
       );
@@ -1543,7 +1559,8 @@ export const accessPlanRouter = {
       const source = await loadAssignment(ctx.db, input.assignmentId);
       const periods = await lockAssignmentsOf(
         ctx.db,
-        source.userId,
+        source.personId,
+        source.accountUserId,
         ctx.organizationId,
       );
       if (source.status !== "active") {
@@ -1566,7 +1583,7 @@ export const accessPlanRouter = {
       await requireStudentCoverage(
         ctx.db,
         ctx.organizationId,
-        source.userId,
+        source.personId,
         source.accountUserId,
         await coverageOf(ctx.db, target.id),
       );
@@ -1576,7 +1593,7 @@ export const accessPlanRouter = {
       if (
         (
           await pendingChanges(ctx.db, month, {
-            personId: source.userId,
+            personId: source.personId,
             accountUserId: source.accountUserId,
           })
         ).some((c) => c.sourceAssignmentId === source.id)
@@ -1597,7 +1614,7 @@ export const accessPlanRouter = {
         .insert(accessAssignment)
         .values({
           organizationId: ctx.organizationId,
-          personId: source.userId,
+          personId: source.personId,
           userId: source.accountUserId,
           planId: target.id,
           assigningEntityId: source.assigningEntityId,
@@ -1616,7 +1633,7 @@ export const accessPlanRouter = {
         .insert(accessAssignmentChange)
         .values({
           organizationId: ctx.organizationId,
-          personId: source.userId,
+          personId: source.personId,
           userId: source.accountUserId,
           sourceAssignmentId: source.id,
           targetAssignmentId: successor.id,
@@ -1632,7 +1649,7 @@ export const accessPlanRouter = {
       const enrolment = await enrolInCoveredBranches(
         ctx.db,
         ctx.organizationId,
-        source.userId,
+        source.personId,
         source.accountUserId,
         await coverageOf(ctx.db, target.id),
       );
@@ -1668,13 +1685,12 @@ export const accessPlanRouter = {
           message: CHANGE_NOT_FOUND,
         });
       }
-      const changePersonId = change.personId ?? change.userId;
-      if (!changePersonId) {
+      if (!change.personId && !change.userId) {
         throw new TRPCError({ code: "NOT_FOUND", message: CHANGE_NOT_FOUND });
       }
       await lockAssignmentsOf(
         ctx.db,
-        changePersonId,
+        change.personId,
         change.userId,
         ctx.organizationId,
       );
@@ -1725,7 +1741,7 @@ export const accessPlanRouter = {
         .innerJoin(accessPlan, eq(accessPlan.id, accessAssignment.planId))
         .where(
           or(
-            eq(accessAssignment.personId, subject.id),
+            subject.id ? eq(accessAssignment.personId, subject.id) : undefined,
             subject.accountUserId
               ? and(
                   isNull(accessAssignment.personId),
@@ -2152,7 +2168,7 @@ export const accessPlanRouter = {
       const standing = await membershipStanding(
         ctx.db,
         {
-          personId: ctx.membership.personId ?? ctx.session.user.id,
+          personId: ctx.membership.personId,
           accountUserId: ctx.session.user.id,
         },
         new Date(),
@@ -2269,7 +2285,7 @@ export const accessPlanRouter = {
     const memberships = await membershipStanding(
       ctx.db,
       {
-        personId: ctx.membership.personId ?? ctx.session.user.id,
+        personId: ctx.membership.personId,
         accountUserId: ctx.session.user.id,
       },
       new Date(),
@@ -2278,7 +2294,7 @@ export const accessPlanRouter = {
     // A change waiting for the 1st is the member's business too: they should
     // read what they will be on and what it costs before it happens (ADR 129).
     const waiting = await pendingChanges(ctx.db, month, {
-      personId: ctx.membership.personId ?? ctx.session.user.id,
+      personId: ctx.membership.personId,
       accountUserId: ctx.session.user.id,
     });
     const successors = waiting.length

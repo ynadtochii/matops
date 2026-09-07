@@ -70,7 +70,9 @@ export const bookingRouter = {
       .where(
         and(
           or(
-            eq(classParticipation.personId, ctx.membership.personId ?? ""),
+            ctx.membership.personId
+              ? eq(classParticipation.personId, ctx.membership.personId)
+              : undefined,
             and(
               isNull(classParticipation.personId),
               eq(classParticipation.studentId, ctx.session.user.id),
@@ -119,13 +121,6 @@ export const bookingRouter = {
           message: gate.message ?? "Booking is locked for you.",
         });
       }
-      if (!ctx.membership.personId) {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: "Your account is not linked to a person record.",
-        });
-      }
-
       // 3. Transition the participation to booked, only if not already booked
       //    (idempotent). A returned row ⇒ a real transition (new insert OR
       //    cancelled → booked); no row ⇒ already booked, leave the count alone.
@@ -134,7 +129,9 @@ export const bookingRouter = {
         .values({
           academyId: ctx.academyId,
           classId: input.classId,
-          personOrganizationId: ctx.organizationId,
+          personOrganizationId: ctx.membership.personId
+            ? ctx.organizationId
+            : null,
           personId: ctx.membership.personId,
           studentId: ctx.session.user.id,
           bookingStatus: "booked",
@@ -142,8 +139,12 @@ export const bookingRouter = {
           cancelledAt: null,
         })
         .onConflictDoUpdate({
-          target: [classParticipation.classId, classParticipation.personId],
-          targetWhere: sql`person_id is not null`,
+          target: ctx.membership.personId
+            ? [classParticipation.classId, classParticipation.personId]
+            : [classParticipation.classId, classParticipation.studentId],
+          targetWhere: ctx.membership.personId
+            ? sql`person_id is not null`
+            : undefined,
           set: {
             bookingStatus: "booked",
             bookingTier: tier,
@@ -195,7 +196,9 @@ export const bookingRouter = {
           and(
             eq(classParticipation.classId, input.classId),
             or(
-              eq(classParticipation.personId, ctx.membership.personId ?? ""),
+              ctx.membership.personId
+                ? eq(classParticipation.personId, ctx.membership.personId)
+                : undefined,
               and(
                 isNull(classParticipation.personId),
                 eq(classParticipation.studentId, ctx.session.user.id),

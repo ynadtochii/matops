@@ -137,14 +137,18 @@ export const CancelPlanChangeSchema = z.object({ changeId: z.uuid() });
  */
 export const BookingReviewSchema = z
   .union([
-    z.object({
-      personId: IdSchema.nullish(),
-      limit: z.number().int().min(1).max(200).default(50),
-    }),
-    z.object({
-      userId: IdSchema.nullish(),
-      limit: z.number().int().min(1).max(200).default(50),
-    }),
+    z
+      .object({
+        personId: IdSchema.nullish(),
+        limit: z.number().int().min(1).max(200).default(50),
+      })
+      .strict(),
+    z
+      .object({
+        userId: IdSchema.nullish(),
+        limit: z.number().int().min(1).max(200).default(50),
+      })
+      .strict(),
   ])
   .transform((input) => ({
     personId:

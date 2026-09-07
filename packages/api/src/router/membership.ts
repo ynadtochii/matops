@@ -32,7 +32,7 @@ import {
   sql,
   updateUserProfile,
 } from "@matops/db";
-import { classInstance, classParticipation } from "@matops/db/schema";
+import { classInstance, classParticipation, entity } from "@matops/db/schema";
 import {
   approveMembership,
   canApprove,
@@ -180,7 +180,7 @@ async function rejectIfLastOwner(
  */
 async function releaseUpcomingSeats(
   ctx: { db: TenantTx; academyId: string },
-  input: { personId: string; accountUserId: string | null },
+  input: { personId: string | null; accountUserId: string | null },
 ): Promise<number> {
   const now = new Date();
   const cancelled = await ctx.db
@@ -189,7 +189,9 @@ async function releaseUpcomingSeats(
     .where(
       and(
         or(
-          eq(classParticipation.personId, input.personId),
+          input.personId
+            ? eq(classParticipation.personId, input.personId)
+            : undefined,
           input.accountUserId
             ? and(
                 isNull(classParticipation.personId),
@@ -355,6 +357,10 @@ export const membershipRouter = {
       const visitByUser = new Map(visits.map((v) => [v.studentId, v.count]));
 
       const now = new Date();
+      const [academy] = await ctx.db
+        .select({ membershipEnforcedAt: entity.membershipEnforcedAt })
+        .from(entity)
+        .where(eq(entity.id, ctx.academyId));
       const standing = await loadRosterStanding(ctx.db, {
         entityId: ctx.academyId,
         people: rows.map((r) => ({
@@ -367,14 +373,15 @@ export const membershipRouter = {
       return rows.filter(isOnRoster).map((r) => {
         const membership = standing.get(r.userId) ?? null;
         return {
-          membership: membership
-            ? {
-                verdict: membership.verdict,
-                accessSource: membership.accessSource,
-                covered: membership.covered,
-                planNames: membership.planNames,
-              }
-            : null,
+          membership:
+            academy?.membershipEnforcedAt && membership
+              ? {
+                  verdict: membership.verdict,
+                  accessSource: membership.accessSource,
+                  covered: membership.covered,
+                  planNames: membership.planNames,
+                }
+              : null,
           memberId: r.memberId,
           personId: r.personId,
           // A shared membership keys on the person, not on their standing at one
@@ -525,7 +532,10 @@ export const membershipRouter = {
       const freed = await ctx.withScope((db) =>
         releaseUpcomingSeats(
           { db, academyId: ctx.academyId },
-          { personId: m.personId, accountUserId: m.accountUserId },
+          {
+            personId: m.personId === m.accountUserId ? null : m.personId,
+            accountUserId: m.accountUserId,
+          },
         ),
       );
       return { ok: true as const, seatsFreed: freed };

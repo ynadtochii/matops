@@ -205,19 +205,21 @@ describe("person management", () => {
       }),
     );
     const classId = "f101bc33-8bd7-4e73-8d5f-fde5fd320193";
+    const startsAt = new Date(Date.now() + 60 * 60 * 1000);
+    const endsAt = new Date(startsAt.getTime() + 60 * 60 * 1000);
     await h.exec.insert(classInstance).values({
       id: classId,
       academyId: GYM,
       title: "Guardian booking",
-      startsAt: new Date("2026-10-15T18:00:00Z"),
+      startsAt,
       durationMinutes: 60,
       capacity: 20,
     });
     const schedule = await h.as(GUARDIAN, GYM).person.schedule({
       entityId: GYM,
       personId: created.personId,
-      from: "2026-10-15T00:00:00Z",
-      to: "2026-10-16T00:00:00Z",
+      from: startsAt.toISOString(),
+      to: endsAt.toISOString(),
     });
     expect(schedule).toContainEqual(
       expect.objectContaining({ id: classId, myBooking: null }),

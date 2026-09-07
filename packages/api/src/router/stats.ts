@@ -719,7 +719,9 @@ export const statsRouter = {
       .where(
         and(
           or(
-            eq(classParticipation.personId, ctx.membership.personId ?? ""),
+            ctx.membership.personId
+              ? eq(classParticipation.personId, ctx.membership.personId)
+              : undefined,
             and(
               isNull(classParticipation.personId),
               eq(classParticipation.studentId, ctx.session.user.id),

@@ -122,7 +122,7 @@ export async function membershipBankDetails(db: TenantTx): Promise<string> {
  */
 export async function membershipStanding(
   db: TenantTx,
-  subject: { personId: string; accountUserId: string | null },
+  subject: { personId: string | null; accountUserId: string | null },
   now: Date,
 ): Promise<MembershipStanding[]> {
   const calendar = await membershipCalendar(db);
@@ -142,7 +142,9 @@ export async function membershipStanding(
     .innerJoin(accessPlan, eq(accessPlan.id, accessAssignment.planId))
     .where(
       or(
-        eq(accessAssignment.personId, subject.personId),
+        subject.personId
+          ? eq(accessAssignment.personId, subject.personId)
+          : undefined,
         subject.accountUserId
           ? and(
               isNull(accessAssignment.personId),

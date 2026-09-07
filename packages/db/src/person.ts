@@ -75,7 +75,13 @@ export async function getOrganizationPerson(
     .select()
     .from(person)
     .where(
-      and(eq(person.organizationId, organizationId), eq(person.id, personId)),
+      and(
+        eq(person.organizationId, organizationId),
+        or(
+          eq(sql`${person.id}::text`, personId),
+          eq(person.accountUserId, personId),
+        ),
+      ),
     )
     .limit(1);
   return row ?? null;
