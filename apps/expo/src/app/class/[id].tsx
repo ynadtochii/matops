@@ -9,6 +9,7 @@ import {
   notBookableMessage,
 } from "@matops/domain";
 
+import type { BookingSubject } from "~/components/book-control";
 import { useBookClass, useCancelBooking } from "~/components/book-control";
 import { ClassDetailSkeleton } from "~/components/skeletons";
 import {
@@ -82,21 +83,62 @@ function WhoIsIn({
  */
 export default function ClassDetail() {
   const t = useTheme();
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const q = useQuery(trpc.class.get.queryOptions({ id }, { retry: false }));
+  const { id, personId, entityId, from, to } = useLocalSearchParams<{
+    id: string;
+    personId?: string;
+    entityId?: string;
+    from?: string;
+    to?: string;
+  }>();
+  const subject: BookingSubject | undefined =
+    personId && entityId ? { personId, entityId } : undefined;
+  const ownClass = useQuery(
+    trpc.class.get.queryOptions({ id }, { retry: false, enabled: !subject }),
+  );
+  const subjectSchedule = useQuery(
+    trpc.person.schedule.queryOptions(
+      {
+        entityId: entityId ?? "",
+        personId: personId ?? "00000000-0000-0000-0000-000000000000",
+        from: from ?? new Date(0).toISOString(),
+        to: to ?? new Date(0).toISOString(),
+      },
+      { retry: false, enabled: Boolean(subject && from && to) },
+    ),
+  );
+  const managedClass = subjectSchedule.data?.find((row) => row.id === id);
+  const q = subject
+    ? {
+        data: managedClass,
+        isPending: subjectSchedule.isPending,
+        isError:
+          subjectSchedule.isError ||
+          (!subjectSchedule.isPending && !managedClass),
+        refetch: subjectSchedule.refetch,
+      }
+    : ownClass;
   // Same key as WhoIsIn, which renders below the `q.isPending` gate and so
   // would not start fetching until the class itself lands.
-  useQuery(trpc.class.attendees.queryOptions({ id }));
+  useQuery(trpc.class.attendees.queryOptions({ id }, { enabled: !subject }));
   const current = useQuery(trpc.academy.current.queryOptions());
   const theme = useQuery(
     trpc.curriculum.forClass.queryOptions(
       { id },
-      { enabled: isBjjAcademy(current.data?.type ?? "") },
+      {
+        enabled:
+          !subject &&
+          current.data?.curriculumEnabled === true &&
+          isBjjAcademy(current.data.type),
+      },
     ),
   );
 
-  const { onBook, isPending: booking, error: bookError } = useBookClass();
-  const { onCancel, isPending: cancelling } = useCancelBooking();
+  const {
+    onBook,
+    isPending: booking,
+    error: bookError,
+  } = useBookClass(undefined, { subject });
+  const { onCancel, isPending: cancelling } = useCancelBooking(subject);
   const busy = booking || cancelling;
 
   if (q.isPending) {
@@ -108,7 +150,7 @@ export default function ClassDetail() {
     );
   }
 
-  if (q.isError) {
+  if (q.isError || !q.data) {
     return (
       <Screen center>
         <Stack.Screen options={{ title: "Class" }} />
@@ -220,7 +262,7 @@ export default function ClassDetail() {
                 {over ? " · may be busy" : ""}
               </Mono>
             </Field>
-            <WhoIsIn classId={c.id} viewerBooked={booked} />
+            {!subject && <WhoIsIn classId={c.id} viewerBooked={booked} />}
           </UIStack>
 
           {bookError && (

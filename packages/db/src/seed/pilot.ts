@@ -64,6 +64,8 @@ export async function seedPilot(
       // A general branch cannot be opened without this, so the pilot turns it
       // on for ITSELF and for nobody else (step 1.6).
       generalBranchesEnabled: true,
+      curriculumEnabled: true,
+      referralsEnabled: true,
     })
     .onConflictDoNothing();
 
@@ -73,9 +75,6 @@ export async function seedPilot(
     { organizationId: PILOT_ORG_ID, ownerUserId },
     exec,
   );
-  // `provisionOrganization` builds a PRE-cutover academy, on branch dues. The
-  // pilot is about shared memberships, so the mat runs the same gate its gym
-  // and sauna do.
   await exec
     .update(entity)
     .set({

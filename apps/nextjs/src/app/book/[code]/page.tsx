@@ -20,24 +20,38 @@ import { BookingPage } from "./booking-page";
  */
 export default function BookPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ code: string }>;
+  searchParams: Promise<{ booking?: string }>;
 }) {
   return (
     <main className="container flex min-h-screen flex-col items-center gap-8 py-12">
       <Logo size={26} />
       <Suspense fallback={<MatLoader label="Opening the schedule" />}>
-        <Resolve params={params} />
+        <Resolve params={params} searchParams={searchParams} />
       </Suspense>
     </main>
   );
 }
 
-async function Resolve({ params }: { params: Promise<{ code: string }> }) {
+async function Resolve({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ code: string }>;
+  searchParams: Promise<{ booking?: string }>;
+}) {
   const { code } = await params;
+  const { booking } = await searchParams;
   const academy = /^\d{6}$/.test(code)
     ? await findPublicAcademyByCode(code, db)
     : null;
   if (!academy) notFound();
-  return <BookingPage apiKey={academy.apiKey} />;
+  return (
+    <BookingPage
+      apiKey={academy.apiKey}
+      initialToken={typeof booking === "string" ? booking : null}
+    />
+  );
 }

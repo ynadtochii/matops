@@ -3,11 +3,11 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod/v4";
 
 import {
+  eq,
   findAcademyByCode,
   getAcademyCode,
   getAcademySettings,
   getPublicApiSettings,
-  hasLegacyDuesAt,
   listMembershipsForUser,
   listPublicClasses,
   rotatePublicApiKey,
@@ -16,7 +16,7 @@ import {
   softDeleteAcademy,
   updateAcademySettings,
 } from "@matops/db";
-import { classTemplate } from "@matops/db/schema";
+import { classTemplate, organization } from "@matops/db/schema";
 import {
   canEnroll,
   DAY_MS,
@@ -116,6 +116,14 @@ export const academyRouter = {
         canEnroll(a),
     );
     if (!academy) return null;
+    const [modules] = await ctx.baseDb
+      .select({
+        curriculumEnabled: organization.curriculumEnabled,
+        referralsEnabled: organization.referralsEnabled,
+      })
+      .from(organization)
+      .where(eq(organization.id, activeOrganizationId))
+      .limit(1);
     return {
       academyId: academy.academyId,
       organizationId: academy.organizationId,
@@ -132,12 +140,9 @@ export const academyRouter = {
       // Which gate this branch runs on, so a screen never offers a setting the
       // server no longer consults (ADR 126).
       membershipEnforced: academy.membershipEnforcedAt !== null,
-      // Does this branch have a legacy dues history at all? A branch opened
-      // after ADR 128 is born on memberships and never had plans or dues, so
-      // switching it off must not reveal an empty Payments screen for a product
-      // it never ran. Only a branch that predates the cutover has these rows.
-      hasLegacyDues: await hasLegacyDuesAt(academyId, ctx.baseDb),
       curriculumForStudents: academy.curriculumForStudents,
+      curriculumEnabled: modules?.curriculumEnabled ?? false,
+      referralsEnabled: modules?.referralsEnabled ?? false,
       code: await getAcademyCode(academyId, ctx.baseDb),
     };
   }),

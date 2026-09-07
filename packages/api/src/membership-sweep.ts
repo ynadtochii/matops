@@ -1,5 +1,5 @@
 import type { DbExec } from "@matops/db/client";
-import { and, asc, eq, gt, inArray, isNull, sql } from "@matops/db";
+import { and, asc, eq, gt, inArray, isNull, or, sql } from "@matops/db";
 import {
   accessAssignment,
   accessPlan,
@@ -58,6 +58,7 @@ interface HeldAssignment {
   id: string;
   organizationId: string;
   userId: string;
+  accountUserId: string | null;
   planId: string;
   startMonth: string;
   endMonth: string | null;
@@ -89,9 +90,6 @@ interface PaidRow {
  *    still reaches through a second active, unblocked membership is left alone,
  *    and every membership they hold is read for that, not only the ones in this
  *    page.
- *  - **A legacy branch is not this gate's business.** A branch with no
- *    `membership_enforced_at` still runs on per-branch dues, so an unpaid
- *    shared membership takes nothing away there.
  */
 export async function runMembershipCancellationSweep(
   exec: DbExec,
@@ -101,7 +99,8 @@ export async function runMembershipCancellationSweep(
     .select({
       id: accessAssignment.id,
       organizationId: accessAssignment.organizationId,
-      userId: accessAssignment.userId,
+      userId: sql<string>`coalesce(${accessAssignment.personId}::text, ${accessAssignment.userId})`,
+      accountUserId: accessAssignment.userId,
       planId: accessAssignment.planId,
       startMonth: accessAssignment.startMonth,
       endMonth: accessAssignment.endMonth,
@@ -146,9 +145,6 @@ export async function runMembershipCancellationSweep(
   const entitiesOf = (planId: string) =>
     coverage.filter((c) => c.planId === planId).map((c) => c.entityId);
 
-  // Only branches that have activated the membership gate. A branch still on
-  // per-branch dues decides for itself, so an unpaid shared membership must not
-  // reach into it (ADR 126).
   const enforced = new Set(
     (
       await exec
@@ -255,6 +251,7 @@ export async function runMembershipCancellationSweep(
       assignmentId: assignment.id,
       organizationId: assignment.organizationId,
       userId: assignment.userId,
+      accountUserId: assignment.accountUserId,
       entityIds: losing,
       month: monthOf(
         now,
@@ -292,7 +289,8 @@ async function loadAllHeld(
     .select({
       id: accessAssignment.id,
       organizationId: accessAssignment.organizationId,
-      userId: accessAssignment.userId,
+      userId: sql<string>`coalesce(${accessAssignment.personId}::text, ${accessAssignment.userId})`,
+      accountUserId: accessAssignment.userId,
       planId: accessAssignment.planId,
       startMonth: accessAssignment.startMonth,
       endMonth: accessAssignment.endMonth,
@@ -303,9 +301,10 @@ async function loadAllHeld(
     .where(
       and(
         eq(accessAssignment.status, "active"),
-        inArray(accessAssignment.userId, [
-          ...new Set(blocked.map((b) => b.userId)),
-        ]),
+        inArray(
+          sql<string>`coalesce(${accessAssignment.personId}::text, ${accessAssignment.userId})`,
+          [...new Set(blocked.map((b) => b.userId))],
+        ),
       ),
     );
   if (rows.length === 0) return [];
@@ -401,30 +400,41 @@ async function cancelFutureBookings(
     assignmentId: string;
     organizationId: string;
     userId: string;
+    accountUserId: string | null;
     entityIds: string[];
     month: string;
     now: Date;
   },
 ): Promise<number> {
   return exec.transaction(async (tx) => {
-    await tx
-      .select({ id: member.id })
-      .from(member)
-      .where(
-        and(
-          eq(member.organizationId, input.organizationId),
-          eq(member.userId, input.userId),
-        ),
-      )
-      .orderBy(asc(member.id))
-      .for("share");
+    if (input.accountUserId) {
+      await tx
+        .select({ id: member.id })
+        .from(member)
+        .where(
+          and(
+            eq(member.organizationId, input.organizationId),
+            eq(member.userId, input.accountUserId),
+          ),
+        )
+        .orderBy(asc(member.id))
+        .for("share");
+    }
     await tx
       .select({ id: entityMembership.id })
       .from(entityMembership)
       .where(
         and(
           eq(entityMembership.organizationId, input.organizationId),
-          eq(entityMembership.userId, input.userId),
+          or(
+            eq(entityMembership.personId, input.userId),
+            input.accountUserId
+              ? and(
+                  isNull(entityMembership.personId),
+                  eq(entityMembership.userId, input.accountUserId),
+                )
+              : undefined,
+          ),
           inArray(entityMembership.entityId, input.entityIds),
         ),
       )
@@ -444,12 +454,14 @@ async function cancelFutureBookings(
     // Paid while this run was thinking. Leave everything alone.
     if (locked[0]?.paid === true) return 0;
 
-    const staff = await loadStaffAccess(tx, {
-      entityIds: input.entityIds,
-      userIds: [input.userId],
-    });
+    const staff = input.accountUserId
+      ? await loadStaffAccess(tx, {
+          entityIds: input.entityIds,
+          userIds: [input.accountUserId],
+        })
+      : new Map<string, Set<string>>();
     const losing = input.entityIds.filter(
-      (id) => !staff.get(id)?.has(input.userId),
+      (id) => !input.accountUserId || !staff.get(id)?.has(input.accountUserId),
     );
     if (losing.length === 0) return 0;
 
@@ -466,7 +478,15 @@ async function cancelFutureBookings(
       )
       .where(
         and(
-          eq(classParticipation.studentId, input.userId),
+          or(
+            eq(classParticipation.personId, input.userId),
+            input.accountUserId
+              ? and(
+                  isNull(classParticipation.personId),
+                  eq(classParticipation.studentId, input.accountUserId),
+                )
+              : undefined,
+          ),
           eq(classParticipation.bookingStatus, "booked"),
           inArray(classParticipation.academyId, losing),
           gt(classInstance.startsAt, input.now),
@@ -517,6 +537,7 @@ export interface ReminderSweepResult {
   checked: number;
   /** Members told this run. */
   sent: number;
+  nextCursor: string | null;
 }
 
 /**
@@ -542,6 +563,7 @@ export async function runMembershipReminderSweep(
   {
     now = new Date(),
     limit = 500,
+    after,
     send,
   }: CancellationSweepOptions & { send?: PushSender } = {},
 ): Promise<ReminderSweepResult> {
@@ -549,7 +571,8 @@ export async function runMembershipReminderSweep(
     .select({
       id: accessAssignment.id,
       organizationId: accessAssignment.organizationId,
-      userId: accessAssignment.userId,
+      userId: sql<string>`coalesce(${accessAssignment.personId}::text, ${accessAssignment.userId})`,
+      accountUserId: accessAssignment.userId,
       planId: accessAssignment.planId,
       planName: accessPlan.name,
       assigningEntityId: accessAssignment.assigningEntityId,
@@ -559,9 +582,19 @@ export async function runMembershipReminderSweep(
     })
     .from(accessAssignment)
     .innerJoin(accessPlan, eq(accessPlan.id, accessAssignment.planId))
-    .where(eq(accessAssignment.status, "active"))
+    .where(
+      after
+        ? and(
+            eq(accessAssignment.status, "active"),
+            gt(accessAssignment.id, after),
+          )
+        : eq(accessAssignment.status, "active"),
+    )
+    .orderBy(asc(accessAssignment.id))
     .limit(limit);
-  if (live.length === 0) return { checked: 0, sent: 0 };
+  const nextCursor =
+    live.length === limit ? (live[live.length - 1]?.id ?? null) : null;
+  if (live.length === 0) return { checked: 0, sent: 0, nextCursor };
 
   const calendars = await loadCalendars(exec, [
     ...new Set(live.map((a) => a.organizationId)),
@@ -622,7 +655,7 @@ export async function runMembershipReminderSweep(
     }
     due.push({ assignment, month });
   }
-  if (due.length === 0) return { checked: live.length, sent: 0 };
+  if (due.length === 0) return { checked: live.length, sent: 0, nextCursor };
 
   // Claim first. The upsert only stamps a row whose `reminded_at` is still
   // null, so a concurrent run claims nothing and sends nothing.
@@ -645,7 +678,8 @@ export async function runMembershipReminderSweep(
       .returning({ id: membershipMonth.id });
     if (stamped.length > 0) claimed.push(item);
   }
-  if (claimed.length === 0) return { checked: live.length, sent: 0 };
+  if (claimed.length === 0)
+    return { checked: live.length, sent: 0, nextCursor };
 
   await notifyMembershipDue(
     claimed.flatMap(({ assignment, month }) => {
@@ -669,11 +703,11 @@ export async function runMembershipReminderSweep(
         planName: assignment.planName,
         timeZone: calendar.timeZone,
       });
-      if (!warning) return [];
+      if (!warning || !assignment.accountUserId) return [];
       return [
         {
           academyId,
-          userId: assignment.userId,
+          userId: assignment.accountUserId,
           headline: warning.headline,
           detail: warning.detail,
         },
@@ -683,5 +717,5 @@ export async function runMembershipReminderSweep(
     send,
   );
 
-  return { checked: live.length, sent: claimed.length };
+  return { checked: live.length, sent: claimed.length, nextCursor };
 }

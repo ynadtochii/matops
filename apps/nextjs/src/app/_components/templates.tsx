@@ -112,11 +112,14 @@ export function Templates({
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const list = useQuery(trpc.template.list.queryOptions());
-  const bjj = isBjjAcademy(useEntity().type);
-  const board = useQuery(
-    trpc.curriculum.board.queryOptions({}, { enabled: bjj }),
-  );
   const me = useEntity();
+  const bjj = isBjjAcademy(me.type);
+  const board = useQuery(
+    trpc.curriculum.board.queryOptions(
+      {},
+      { enabled: bjj && me.curriculumEnabled },
+    ),
+  );
 
   const [form, setForm] = useState<FormState | null>(null);
   const [daysError, setDaysError] = useState(false);

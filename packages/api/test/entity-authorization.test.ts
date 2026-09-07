@@ -2,7 +2,7 @@ import type { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { and, createEntity, eq, provisionOrganization } from "@matops/db";
-import { entityMembership } from "@matops/db/schema";
+import { entityMembership, organization } from "@matops/db/schema";
 
 import type { Harness } from "./helpers";
 import { harness, rejectionCode, seedAcademies } from "./helpers";
@@ -476,6 +476,29 @@ describe("the BJJ-only tiers", () => {
       .curriculum.board();
     expect(board.tracks.length).toBeGreaterThan(0);
   });
+
+  it("refuses optional modules until the gym turns them on", async () => {
+    await h.exec
+      .update(organization)
+      .set({ curriculumEnabled: false, referralsEnabled: false })
+      .where(eq(organization.id, ORG_A));
+    try {
+      const api = h.as(OWNER, ORG_A, withEntity(ORG_A));
+      expect(await rejectionCode(api.curriculum.board())).toBe("FORBIDDEN");
+      expect(await rejectionCode(api.referral.dashboard())).toBe("FORBIDDEN");
+      await h.as(OWNER, ORG_A).organization.setModules({
+        curriculumEnabled: true,
+        referralsEnabled: true,
+      });
+      await expect(api.curriculum.board()).resolves.toBeDefined();
+      await expect(api.referral.dashboard()).resolves.toBeDefined();
+    } finally {
+      await h.exec
+        .update(organization)
+        .set({ curriculumEnabled: true, referralsEnabled: true })
+        .where(eq(organization.id, ORG_A));
+    }
+  });
 });
 
 describe("switching a branch onto memberships", () => {
@@ -614,7 +637,7 @@ describe("switching a branch onto memberships", () => {
     expect(preview.enforced).toBe(true);
   });
 
-  it("hands the branch back to the legacy gate when switched off", async () => {
+  it("stops payment enforcement when switched off", async () => {
     const off = await owner().entity.setMembershipEnforced({
       entityId: ORG_S,
       enforced: false,

@@ -190,7 +190,6 @@ export function Members() {
   // A member id from `?member=` (the dashboard "who's drifting" widget links
   // here) opens that member's detail on first render.
   const searchParams = useSearchParams();
-  const overdueParam = searchParams.get("filter") === "overdue";
   const stageParam = searchParams.get("stage");
   const memberParam = searchParams.get("member");
   const [openId, setOpenId] = useState<string | null>(memberParam);
@@ -201,7 +200,7 @@ export function Members() {
   const [tab, setTab] = useState<MemberTab>(
     isMemberTab(tabParam)
       ? tabParam
-      : memberParam !== null || overdueParam
+      : memberParam !== null
         ? "members"
         : "requests",
   );
@@ -210,14 +209,15 @@ export function Members() {
   const shownTab: MemberTab =
     (tab === "leads" || tab === "archived") && !owner ? "requests" : tab;
 
-  // "Overdue" filter chip on the Members list (spec O7, ADR 40).
-  const [overdueOnly, setOverdueOnly] = useState(overdueParam);
   const [query, setQuery] = useState("");
   const needle = query.trim().toLowerCase();
 
   const invalidate = async () => {
     await queryClient.invalidateQueries(trpc.membership.members.pathFilter());
     await queryClient.invalidateQueries(trpc.membership.archived.pathFilter());
+    await queryClient.invalidateQueries(
+      trpc.stats.navigationSummary.pathFilter(),
+    );
   };
 
   const onError = (err: { message: string }) =>
@@ -293,14 +293,10 @@ export function Members() {
   );
   const active = members.filter((m) => m.status !== "pending");
   const archived = archivedList.data ?? [];
-  const overdueCount = active.filter(
-    (m) => m.dues?.status === "overdue",
-  ).length;
   const shownActive = active.filter(
     (m) =>
-      (!overdueOnly || m.dues?.status === "overdue") &&
-      (needle === "" ||
-        `${m.name} ${m.email} ${m.phone ?? ""}`.toLowerCase().includes(needle)),
+      needle === "" ||
+      `${m.name} ${m.email} ${m.phone ?? ""}`.toLowerCase().includes(needle),
   );
   // Pending state is scoped to the member being acted on, so approving one
   // person doesn't grey out every other row's buttons.
@@ -414,26 +410,11 @@ export function Members() {
             {!listState && active.length > 0 && (
               <div className="flex items-center justify-between gap-3">
                 <Eyebrow>
-                  {overdueOnly || needle
+                  {needle
                     ? `${shownActive.length} of ${active.length} people`
                     : `${active.length} ${active.length === 1 ? "person" : "people"}`}
                 </Eyebrow>
                 <div className="flex items-center gap-2">
-                  {active.some((m) => m.dues) && (
-                    <button
-                      type="button"
-                      onClick={() => setOverdueOnly((v) => !v)}
-                      aria-pressed={overdueOnly}
-                      className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                        overdueOnly
-                          ? "border-error/40 bg-error/10 text-error"
-                          : "border-border text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      Overdue{overdueCount > 0 ? ` (${overdueCount})` : ""}
-                      {overdueOnly ? " \u00d7" : ""}
-                    </button>
-                  )}
                   {owner && (
                     <Button
                       size="sm"
@@ -454,15 +435,9 @@ export function Members() {
                   people in.
                 </EmptyState>
               ) : shownActive.length === 0 ? (
-                needle ? (
-                  <EmptyState title="No one matches that search.">
-                    Try part of a name, email or phone number.
-                  </EmptyState>
-                ) : (
-                  <EmptyState title="No overdue members.">
-                    Everyone&apos;s dues are up to date.
-                  </EmptyState>
-                )
+                <EmptyState title="No one matches that search.">
+                  Try part of a name, email or phone number.
+                </EmptyState>
               ) : (
                 shownActive.map((m) => (
                   <div key={m.memberId} className="flex flex-col">

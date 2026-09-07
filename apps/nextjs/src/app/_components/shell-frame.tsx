@@ -21,11 +21,17 @@ export interface NavItem {
   label: string;
   icon: ReactNode;
   show: boolean;
-  badge?: number;
+  badge?: NavBadge;
   group?: string;
   /** Runs an action instead of navigating: "Add branch" in gym management. */
   onSelect?: () => void;
 }
+
+export type NavBadge =
+  | { state: "ready"; count: number }
+  | { state: "loading" }
+  | { state: "error" }
+  | { state: "unavailable" };
 
 const iconClass = "size-[18px] shrink-0";
 
@@ -253,7 +259,7 @@ export function ShellFrame({
   const moreItems = overflows
     ? [...own.slice(MAX_TABS - 1), ...grouped]
     : grouped;
-  const moreBadge = moreItems.reduce((n, i) => n + (i.badge ?? 0), 0);
+  const moreBadge = combineBadges(moreItems.map((i) => i.badge));
   const moreActive = moreItems.some((i) => isCurrent(i.path));
   const hasGroups = items.some((i) => i.group);
 
@@ -403,11 +409,7 @@ export function ShellFrame({
                       >
                         {i.icon}
                         <span className="flex-1">{i.label}</span>
-                        {!!i.badge && i.badge > 0 && (
-                          <span className="bg-brand text-brand-foreground rounded-full px-1.5 font-mono text-[10px]">
-                            {i.badge}
-                          </span>
-                        )}
+                        <BadgeFace badge={i.badge} />
                       </Link>
                     </DropdownMenuItem>
                   ),
@@ -436,15 +438,63 @@ const tabClass = (active: boolean) =>
     active ? "text-brand-strong" : "text-muted-foreground"
   }`;
 
-function TabFace({ icon, badge }: { icon: ReactNode; badge?: number }) {
+function combineBadges(badges: (NavBadge | undefined)[]): NavBadge {
+  const visible = badges.filter(
+    (badge): badge is NavBadge =>
+      badge !== undefined && badge.state !== "unavailable",
+  );
+  if (visible.some((badge) => badge.state === "error")) {
+    return { state: "error" };
+  }
+  if (visible.some((badge) => badge.state === "loading")) {
+    return { state: "loading" };
+  }
+  return {
+    state: "ready",
+    count: visible.reduce(
+      (total, badge) => total + (badge.state === "ready" ? badge.count : 0),
+      0,
+    ),
+  };
+}
+
+function BadgeFace({ badge }: { badge?: NavBadge }) {
+  if (!badge || badge.state === "unavailable") return null;
+  if (badge.state === "loading") {
+    return (
+      <span
+        aria-label="Count loading"
+        className="bg-muted text-muted-foreground rounded-full px-1.5 font-mono text-[10px]"
+      >
+        …
+      </span>
+    );
+  }
+  if (badge.state === "error") {
+    return (
+      <span
+        aria-label="Count unavailable"
+        className="bg-error/10 text-error rounded-full px-1.5 font-mono text-[10px]"
+      >
+        !
+      </span>
+    );
+  }
+  if (badge.count === 0) return null;
+  return (
+    <span className="bg-brand text-brand-foreground rounded-full px-1.5 font-mono text-[10px]">
+      {badge.count > 9 ? "9+" : badge.count}
+    </span>
+  );
+}
+
+function TabFace({ icon, badge }: { icon: ReactNode; badge?: NavBadge }) {
   return (
     <span className="relative">
       {icon}
-      {!!badge && badge > 0 && (
-        <span className="bg-brand text-brand-foreground absolute -top-1.5 -right-2 flex min-w-4 items-center justify-center rounded-full px-1 py-px font-mono text-[10px] leading-none tabular-nums">
-          {badge > 9 ? "9+" : badge}
-        </span>
-      )}
+      <span className="absolute -top-1.5 -right-2">
+        <BadgeFace badge={badge} />
+      </span>
     </span>
   );
 }
@@ -457,11 +507,7 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
       )}
       {item.icon}
       <span className="flex-1">{item.label}</span>
-      {!!item.badge && item.badge > 0 && (
-        <span className="bg-brand text-brand-foreground rounded-full px-1.5 font-mono text-[10px]">
-          {item.badge}
-        </span>
-      )}
+      <BadgeFace badge={item.badge} />
     </>
   );
   const className = `relative flex items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm transition-colors ${

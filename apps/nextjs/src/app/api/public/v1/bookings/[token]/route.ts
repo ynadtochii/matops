@@ -1,4 +1,8 @@
-import { handleCancel, handleOptions } from "@matops/api/public";
+import {
+  handleBookingStatus,
+  handleCancel,
+  handleOptions,
+} from "@matops/api/public";
 import { db } from "@matops/db/client";
 
 /**
@@ -11,6 +15,14 @@ export async function DELETE(
 ) {
   const { token } = await params;
   return handleCancel(req, token, db);
+}
+
+export async function GET(
+  req: Request,
+  { params }: { params: Promise<{ token: string }> },
+) {
+  const { token } = await params;
+  return handleBookingStatus(req, token, db);
 }
 
 export function OPTIONS(req: Request) {

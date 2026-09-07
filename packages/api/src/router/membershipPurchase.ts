@@ -2,7 +2,7 @@ import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
 import type { DbExec, TenantTx } from "@matops/db";
-import { and, asc, desc, eq, inArray, isNull, sql } from "@matops/db";
+import { and, asc, desc, eq, inArray, isNull, or, sql } from "@matops/db";
 import {
   accessAssignment,
   accessPlan,
@@ -14,6 +14,7 @@ import {
   membershipMonth,
   membershipMonthAudit,
   membershipPurchase,
+  person,
   user,
 } from "@matops/db/schema";
 import {
@@ -43,11 +44,13 @@ function notifyReview(
   ctx: { afterCommit: (task: (exec: DbExec) => Promise<void>) => void },
   row: Purchase,
 ) {
+  if (!row.userId) return row;
+  const accountUserId = row.userId;
   ctx.afterCommit((exec) =>
     notifyMembershipPurchase(
       {
         academyId: row.entityId,
-        userId: row.userId,
+        userId: accountUserId,
         title:
           row.status === "confirmed"
             ? "Membership approved"
@@ -147,7 +150,6 @@ async function quote(
       name: entity.name,
       status: entity.status,
       deletedAt: entity.deletedAt,
-      enforcedAt: entity.membershipEnforcedAt,
     })
     .from(accessPlanEntity)
     .innerJoin(entity, eq(accessPlanEntity.entityId, entity.id))
@@ -165,10 +167,7 @@ async function quote(
       : !price
         ? "The gym has not set a price for this month."
         : !branches.length ||
-            branches.some(
-              (b) =>
-                b.deletedAt !== null || b.status !== "active" || !b.enforcedAt,
-            )
+            branches.some((b) => b.deletedAt !== null || b.status !== "active")
           ? "The gym needs to finish setting up the included branches."
           : null;
   const entityIds = branches.map((b) => b.id);
@@ -298,7 +297,15 @@ export const membershipPurchaseRouter = {
     purchases: await ctx.db
       .select()
       .from(membershipPurchase)
-      .where(eq(membershipPurchase.userId, ctx.session.user.id))
+      .where(
+        or(
+          eq(membershipPurchase.personId, ctx.membership.personId ?? ""),
+          and(
+            isNull(membershipPurchase.personId),
+            eq(membershipPurchase.userId, ctx.session.user.id),
+          ),
+        ),
+      )
       .orderBy(desc(membershipPurchase.createdAt)),
     bankDetails: await membershipBankDetails(ctx.db),
     currentMonth: await currentMonth(ctx.db),
@@ -307,6 +314,9 @@ export const membershipPurchaseRouter = {
     .input(SelectMembershipPurchaseSchema)
     .mutation(async ({ ctx, input }) => {
       await lockPerson(ctx.db, ctx.session.user.id, ctx.organizationId);
+      if (!ctx.membership.personId) {
+        conflict("Your account is not linked to a person record.");
+      }
       const month = await currentMonth(ctx.db);
       const startMonth = input.start === "next" ? nextMonth(month) : month;
       const existing = await ctx.db
@@ -314,7 +324,13 @@ export const membershipPurchaseRouter = {
         .from(membershipPurchase)
         .where(
           and(
-            eq(membershipPurchase.userId, ctx.session.user.id),
+            or(
+              eq(membershipPurchase.personId, ctx.membership.personId),
+              and(
+                isNull(membershipPurchase.personId),
+                eq(membershipPurchase.userId, ctx.session.user.id),
+              ),
+            ),
             inArray(membershipPurchase.status, unresolved),
           ),
         )
@@ -358,6 +374,7 @@ export const membershipPurchaseRouter = {
         .values({
           id,
           organizationId: ctx.organizationId,
+          personId: ctx.membership.personId,
           userId: ctx.session.user.id,
           entityId: ctx.entityId,
           planId: selected.id,
@@ -407,11 +424,15 @@ export const membershipPurchaseRouter = {
     const rows = await ctx.db
       .select({
         purchase: membershipPurchase,
-        studentName: user.name,
-        studentEmail: user.email,
+        personId: sql<string>`coalesce(${membershipPurchase.personId}::text, ${person.id}::text, ${membershipPurchase.userId})`,
+        studentName: sql<string>`coalesce(${person.name}, ${user.name})`,
+        studentEmail: sql<
+          string | null
+        >`coalesce(${person.email}, ${user.email})`,
       })
       .from(membershipPurchase)
-      .innerJoin(user, eq(membershipPurchase.userId, user.id))
+      .leftJoin(person, eq(membershipPurchase.personId, person.id))
+      .leftJoin(user, eq(membershipPurchase.userId, user.id))
       .where(
         inArray(membershipPurchase.status, [
           "claimed",
@@ -429,15 +450,30 @@ export const membershipPurchaseRouter = {
     .input(MembershipPurchaseIdSchema)
     .mutation(async ({ ctx, input }) => {
       const [identity] = await ctx.db
-        .select({ userId: membershipPurchase.userId })
+        .select({
+          personId: sql<
+            string | null
+          >`coalesce(${membershipPurchase.personId}::text, ${person.id}::text)`,
+          accountUserId: membershipPurchase.userId,
+        })
         .from(membershipPurchase)
+        .leftJoin(
+          person,
+          and(
+            eq(person.organizationId, membershipPurchase.organizationId),
+            eq(person.accountUserId, membershipPurchase.userId),
+          ),
+        )
         .where(eq(membershipPurchase.id, input.id));
       if (!identity)
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "This membership request is no longer available.",
         });
-      await lockPerson(ctx.db, identity.userId, ctx.organizationId);
+      if (!identity.personId || !identity.accountUserId) {
+        conflict("This membership request needs a linked person and account.");
+      }
+      await lockPerson(ctx.db, identity.accountUserId, ctx.organizationId);
       const row = await purchase(ctx.db, input.id);
       if (row.status === "confirmed" || row.status === "resolution") return row;
       if (
@@ -457,7 +493,7 @@ export const membershipPurchaseRouter = {
         unavailableReason: selected.unavailableReason,
         restriction: await restrictions(
           ctx.db,
-          row.userId,
+          identity.accountUserId,
           row.entityId,
           row.entityIds,
           row.startMonth,
@@ -481,7 +517,8 @@ export const membershipPurchaseRouter = {
         .insert(accessAssignment)
         .values({
           organizationId: ctx.organizationId,
-          userId: row.userId,
+          personId: identity.personId,
+          userId: identity.accountUserId,
           planId: row.planId,
           assigningEntityId: row.entityId,
           startMonth: row.startMonth,
@@ -514,21 +551,22 @@ export const membershipPurchaseRouter = {
           row.entityIds.map((entityId) => ({
             organizationId: ctx.organizationId,
             entityId,
-            userId: row.userId,
+            personId: identity.personId,
+            userId: identity.accountUserId,
             role: "student",
             status: "active",
             joinedAt: new Date(),
           })),
         )
         .onConflictDoNothing({
-          target: [entityMembership.entityId, entityMembership.userId],
+          target: [entityMembership.entityId, entityMembership.personId],
         });
       const enrolled = await ctx.db
         .select({ status: entityMembership.status })
         .from(entityMembership)
         .where(
           and(
-            eq(entityMembership.userId, row.userId),
+            eq(entityMembership.personId, identity.personId),
             inArray(entityMembership.entityId, row.entityIds),
           ),
         )
@@ -620,14 +658,10 @@ export const membershipPurchaseRouter = {
           !coverage.length ||
           coverage.some(
             ({ branch }) =>
-              branch.deletedAt !== null ||
-              branch.status !== "active" ||
-              !branch.membershipEnforcedAt,
+              branch.deletedAt !== null || branch.status !== "active",
           )
         )
-          conflict(
-            "Every included branch must be active and use shared memberships before publishing.",
-          );
+          conflict("Every included branch must be active before publishing.");
         if (
           plan.priceMinor > 0 &&
           !(await membershipBankDetails(ctx.db)).trim()

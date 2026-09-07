@@ -9,10 +9,10 @@ import {
   desc,
   eq,
   eventRole,
-  getEntityInOrganization,
   inArray,
   isNotNull,
   isNull,
+  or,
   recordActivity,
   recordMilestone,
   sql,
@@ -27,11 +27,10 @@ import {
   entity,
   entityMembership,
   member,
-  memberDues,
   membershipMonth,
   membershipMonthAudit,
-  membershipPlan,
   membershipPolicy,
+  person,
   user,
 } from "@matops/db/schema";
 import {
@@ -64,7 +63,6 @@ import {
   CancelPlanChangeSchema,
   ClaimMembershipMonthSchema,
   CreateAccessPlanSchema,
-  LegacyPlanMembersSchema,
   MarkMembershipMonthSchema,
   MemberAssignmentsSchema,
   MembershipMonthsSchema,
@@ -117,11 +115,6 @@ const TARGET_ARCHIVED_DEPENDENCY =
 const COVERAGE_MOVED =
   "Somebody changed this plan's branches while you were looking. Check the list again and save.";
 
-/**
- * The column's own default, repeated here for the read that runs before any
- * row exists. `payments.ts` exports a `DEFAULT_GRACE_DAYS` for the LEGACY
- * branch dues gate, which is a different gate and must not be borrowed.
- */
 const DEFAULT_MEMBERSHIP_GRACE_DAYS = 7;
 
 type PlanRow = typeof accessPlan.$inferSelect;
@@ -185,7 +178,7 @@ function recordFirstAssignment(ctx: {
   });
 }
 
-async function assignOne(
+export async function assignOne(
   ctx: {
     db: TenantTx;
     organizationId: string;
@@ -199,7 +192,11 @@ async function assignOne(
   },
 ) {
   const plan = await loadPlan(ctx.db, input.planId);
-  await requireOrganizationMember(ctx.db, ctx.organizationId, input.userId);
+  const subject = await requireOrganizationPerson(
+    ctx.db,
+    ctx.organizationId,
+    input.userId,
+  );
 
   // The gym's own calendar decides which month "now" is. Just after midnight
   // on 1 October in Lisbon, UTC is still September, and an assignment starting
@@ -211,7 +208,8 @@ async function assignOne(
 
   const periods = await lockAssignmentsOf(
     ctx.db,
-    input.userId,
+    subject.id,
+    subject.accountUserId,
     ctx.organizationId,
   );
   // The membership they hold on this plan over the month being assigned,
@@ -234,7 +232,8 @@ async function assignOne(
     await requireStudentCoverage(
       ctx.db,
       ctx.organizationId,
-      input.userId,
+      subject.id,
+      subject.accountUserId,
       entityIds,
     );
   }
@@ -257,7 +256,8 @@ async function assignOne(
       .insert(accessAssignment)
       .values({
         organizationId: ctx.organizationId,
-        userId: input.userId,
+        personId: subject.id,
+        userId: subject.accountUserId,
         planId: plan.id,
         assigningEntityId: input.assigningEntityId ?? null,
         startMonth,
@@ -277,7 +277,8 @@ async function assignOne(
   const reconciliation = await enrolInCoveredBranches(
     ctx.db,
     ctx.organizationId,
-    input.userId,
+    subject.id,
+    subject.accountUserId,
     entityIds,
   );
   return { id: assignmentId, created, restored, ...reconciliation };
@@ -293,11 +294,17 @@ async function assignOne(
  */
 async function lockAssignmentsOf(
   db: TenantTx,
-  userId: string,
-  organizationId: string,
+  personId: string,
+  accountUserIdOrOrganizationId: string | null,
+  organizationIdInput?: string,
 ) {
+  const organizationId =
+    organizationIdInput ?? accountUserIdOrOrganizationId ?? "";
+  const accountUserId = organizationIdInput
+    ? accountUserIdOrOrganizationId
+    : personId;
   await db.execute(
-    sql`select pg_advisory_xact_lock(hashtext(${organizationId}), hashtext(${userId}))`,
+    sql`select pg_advisory_xact_lock(hashtext(${organizationId}), hashtext(${personId}))`,
   );
   return db
     .select({
@@ -309,7 +316,17 @@ async function lockAssignmentsOf(
       assigningEntityId: accessAssignment.assigningEntityId,
     })
     .from(accessAssignment)
-    .where(eq(accessAssignment.userId, userId))
+    .where(
+      or(
+        eq(accessAssignment.personId, personId),
+        accountUserId
+          ? and(
+              isNull(accessAssignment.personId),
+              eq(accessAssignment.userId, accountUserId),
+            )
+          : undefined,
+      ),
+    )
     .for("update");
 }
 
@@ -345,12 +362,12 @@ function requireNoOverlap(
 async function pendingChanges(
   db: TenantTx,
   currentMonth: string,
-  userId?: string,
+  subject?: { personId: string; accountUserId: string | null },
 ) {
   const rows = await db
     .select({
       id: accessAssignmentChange.id,
-      userId: accessAssignmentChange.userId,
+      userId: sql<string>`coalesce(${accessAssignmentChange.personId}::text, ${accessAssignmentChange.userId})`,
       sourceAssignmentId: accessAssignmentChange.sourceAssignmentId,
       targetAssignmentId: accessAssignmentChange.targetAssignmentId,
       effectiveMonth: accessAssignmentChange.effectiveMonth,
@@ -358,10 +375,18 @@ async function pendingChanges(
     })
     .from(accessAssignmentChange)
     .where(
-      userId
+      subject
         ? and(
             isNull(accessAssignmentChange.cancelledAt),
-            eq(accessAssignmentChange.userId, userId),
+            or(
+              eq(accessAssignmentChange.personId, subject.personId),
+              subject.accountUserId
+                ? and(
+                    isNull(accessAssignmentChange.personId),
+                    eq(accessAssignmentChange.userId, subject.accountUserId),
+                  )
+                : undefined,
+            ),
           )
         : isNull(accessAssignmentChange.cancelledAt),
     );
@@ -384,7 +409,8 @@ async function loadAssignment(db: TenantTx, id: string) {
   const [row] = await db
     .select({
       id: accessAssignment.id,
-      userId: accessAssignment.userId,
+      userId: sql<string>`coalesce(${accessAssignment.personId}::text, ${accessAssignment.userId})`,
+      accountUserId: accessAssignment.userId,
       planId: accessAssignment.planId,
       status: accessAssignment.status,
       startMonth: accessAssignment.startMonth,
@@ -492,7 +518,8 @@ async function assignmentCoverage(
   const rows = await db
     .select({
       id: accessAssignment.id,
-      userId: accessAssignment.userId,
+      userId: sql<string>`coalesce(${accessAssignment.personId}::text, ${accessAssignment.userId})`,
+      accountUserId: accessAssignment.userId,
       planId: accessAssignment.planId,
       status: accessAssignment.status,
       entityId: accessPlanEntity.entityId,
@@ -542,40 +569,46 @@ async function preview(db: TenantTx, planId: string, next: string[]) {
     .filter((a) => a.gains.length > 0 || a.loses.length > 0);
 }
 
-/**
- * Make sure the person can actually be given a membership here: they must
- * already belong to the organization. `member` carries no RLS, so this filters
- * by organization itself, unlike every other read in this file.
- */
-async function requireOrganizationMember(
+async function requireOrganizationPerson(
   db: TenantTx,
   organizationId: string,
-  userId: string,
-): Promise<void> {
-  const rows = await db
-    .select({ id: member.id })
-    .from(member)
+  personId: string,
+) {
+  const [row] = await db
+    .select({ id: person.id, accountUserId: person.accountUserId })
+    .from(person)
     .where(
-      and(eq(member.organizationId, organizationId), eq(member.userId, userId)),
+      and(
+        eq(person.organizationId, organizationId),
+        or(eq(person.id, personId), eq(person.accountUserId, personId)),
+        isNull(person.archivedAt),
+      ),
     )
     .limit(1);
-  if (rows.length === 0) {
+  if (!row) {
     throw new TRPCError({ code: "NOT_FOUND", message: NOT_A_MEMBER });
   }
+  return row;
 }
 
 async function requireStudentCoverage(
   db: TenantTx,
   organizationId: string,
-  userId: string,
+  personId: string,
+  accountUserId: string | null,
   entityIds: string[],
 ): Promise<void> {
-  const [organizationMember] = await db
-    .select({ role: member.role })
-    .from(member)
-    .where(
-      and(eq(member.organizationId, organizationId), eq(member.userId, userId)),
-    );
+  const [organizationMember] = accountUserId
+    ? await db
+        .select({ role: member.role })
+        .from(member)
+        .where(
+          and(
+            eq(member.organizationId, organizationId),
+            eq(member.userId, accountUserId),
+          ),
+        )
+    : [];
   const branches = await db
     .select({
       entityId: entityMembership.entityId,
@@ -587,7 +620,15 @@ async function requireStudentCoverage(
     .where(
       and(
         eq(entityMembership.organizationId, organizationId),
-        eq(entityMembership.userId, userId),
+        or(
+          eq(entityMembership.personId, personId),
+          accountUserId
+            ? and(
+                isNull(entityMembership.personId),
+                eq(entityMembership.userId, accountUserId),
+              )
+            : undefined,
+        ),
       ),
     )
     .for("update");
@@ -628,7 +669,8 @@ export interface Reconciliation {
 async function enrolInCoveredBranches(
   db: TenantTx,
   organizationId: string,
-  userId: string,
+  personId: string,
+  accountUserId: string | null,
   entityIds: string[],
 ): Promise<Reconciliation> {
   if (entityIds.length === 0) return { enrolled: [], needsDecision: [] };
@@ -641,18 +683,27 @@ async function enrolInCoveredBranches(
     .from(entityMembership)
     .where(
       and(
-        eq(entityMembership.userId, userId),
+        or(
+          eq(entityMembership.personId, personId),
+          accountUserId
+            ? and(
+                isNull(entityMembership.personId),
+                eq(entityMembership.userId, accountUserId),
+              )
+            : undefined,
+        ),
         inArray(entityMembership.entityId, entityIds),
       ),
     );
   const byEntity = new Map(held.map((h) => [h.entityId, h.status]));
 
-  const staffAccess = await loadStaffAccess(db, {
-    entityIds,
-    userIds: [userId],
-  });
+  const staffAccess = accountUserId
+    ? await loadStaffAccess(db, { entityIds, userIds: [accountUserId] })
+    : new Map<string, Set<string>>();
   const missing = entityIds.filter(
-    (id) => !byEntity.has(id) && !staffAccess.get(id)?.has(userId),
+    (id) =>
+      !byEntity.has(id) &&
+      (!accountUserId || !staffAccess.get(id)?.has(accountUserId)),
   );
   if (missing.length > 0) {
     await db
@@ -661,7 +712,8 @@ async function enrolInCoveredBranches(
         missing.map((entityId) => ({
           organizationId,
           entityId,
-          userId,
+          personId,
+          userId: accountUserId,
           role: "student",
           status: "active",
           joinedAt: new Date(),
@@ -717,9 +769,14 @@ async function reconcilePlanHolders(
 ): Promise<PlanReconciliation> {
   const { month } = await currentMonthOf(db);
   const holders = await db
-    .select({ userId: accessAssignment.userId, name: user.name })
+    .select({
+      userId: sql<string>`coalesce(${accessAssignment.personId}::text, ${accessAssignment.userId})`,
+      accountUserId: accessAssignment.userId,
+      name: sql<string>`coalesce(${person.name}, ${user.name})`,
+    })
     .from(accessAssignment)
-    .innerJoin(user, eq(user.id, accessAssignment.userId))
+    .leftJoin(person, eq(person.id, accessAssignment.personId))
+    .leftJoin(user, eq(user.id, accessAssignment.userId))
     .where(
       and(
         eq(accessAssignment.planId, planId),
@@ -743,6 +800,7 @@ async function reconcilePlanHolders(
         db,
         organizationId,
         holder.userId,
+        holder.accountUserId,
         entityIds,
       );
       if (one.enrolled.length > 0) {
@@ -795,7 +853,14 @@ async function coverageGaps(
     .leftJoin(
       entityMembership,
       and(
-        eq(entityMembership.userId, accessAssignment.userId),
+        or(
+          eq(entityMembership.personId, accessAssignment.personId),
+          and(
+            isNull(accessAssignment.personId),
+            isNull(entityMembership.personId),
+            eq(entityMembership.userId, accessAssignment.userId),
+          ),
+        ),
         eq(entityMembership.entityId, accessPlanEntity.entityId),
       ),
     )
@@ -1293,7 +1358,7 @@ export const accessPlanRouter = {
             bookingsNeedingReview(db, {
               entityId: branch.id,
               now,
-              userId: input.userId ?? undefined,
+              personId: input.personId ?? undefined,
               limit: input.limit - items.length,
             }),
           ctx.baseDb,
@@ -1316,11 +1381,6 @@ export const accessPlanRouter = {
    * Everybody a membership should cover and does not, branch by branch
    * (ADR 128, spec FP8).
    *
-   * This is the work queue behind activation: a branch cannot be switched onto
-   * memberships while active members hold nothing, so an owner needs the names
-   * rather than a count. Only branches that already RUN on memberships are
-   * asked, because at one still on branch dues the question has no meaning.
-   *
    * Coverage comes from `loadRosterStanding`, the same rule the booking gate
    * and the activation preview run, so this queue and the gate cannot disagree
    * about who is covered.
@@ -1334,17 +1394,13 @@ export const accessPlanRouter = {
     const groups: {
       entityId: string;
       entityName: string;
-      people: { userId: string; name: string }[];
+      people: { personId: string; userId: string; name: string }[];
     }[] = [];
 
     for (const branch of branches) {
-      if (!branch.membershipEnforcedAt) continue;
       const people = await withScope(
         { organizationId: ctx.organizationId, entityId: branch.id },
         async (db) => {
-          // Staff are not counted. An owner or a coach runs the mat rather
-          // than buying access to it, and listing them here made the queue
-          // permanently non-empty and activation permanently "not ready".
           const active = (
             await studentRosterOf({ academyId: branch.id, db })
           ).filter((m) => m.status === "active");
@@ -1360,7 +1416,11 @@ export const accessPlanRouter = {
           });
           return active
             .filter((m) => !standing.get(m.userId)?.covered)
-            .map((m) => ({ userId: m.userId, name: m.name }));
+            .map((m) => ({
+              personId: m.personId,
+              userId: m.userId,
+              name: m.name,
+            }));
         },
         ctx.baseDb,
       );
@@ -1379,65 +1439,6 @@ export const accessPlanRouter = {
       total: groups.reduce((n, g) => n + g.people.length, 0),
     };
   }),
-
-  /**
-   * Who is on one branch's LEGACY dues plan (ADR 128, spec FP8).
-   *
-   * The migration question in the owner's own words: "everybody who was on the
-   * old Adults plan at the mat should go onto the new one." Reading it is the
-   * only way to answer that without them ticking forty boxes from memory.
-   *
-   * Entity-scoped on purpose: `member_dues` and `membership_plan` are branch
-   * tables, so this opens ONE branch's scope rather than widening anything, and
-   * refuses a branch outside the caller's gym before it opens.
-   */
-  legacyPlanMembers: organizationManagerIdentityProcedure
-    .input(LegacyPlanMembersSchema)
-    .query(async ({ ctx, input }) => {
-      const branch = await getEntityInOrganization(
-        input.entityId,
-        ctx.organizationId,
-        ctx.baseDb,
-      );
-      if (!branch) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Not your branch" });
-      }
-
-      return withScope(
-        { organizationId: ctx.organizationId, entityId: branch.id },
-        async (db) => {
-          const plans = await db
-            .select({
-              id: membershipPlan.id,
-              name: membershipPlan.name,
-              priceMinor: membershipPlan.priceMinor,
-              currency: membershipPlan.currency,
-            })
-            .from(membershipPlan)
-            .where(isNull(membershipPlan.deletedAt));
-
-          const rows = await db
-            .select({
-              userId: entityMembership.userId,
-              planId: memberDues.planId,
-            })
-            .from(memberDues)
-            .innerJoin(
-              entityMembership,
-              eq(entityMembership.id, memberDues.memberId),
-            )
-            .where(eq(entityMembership.status, "active"));
-
-          return {
-            plans,
-            members: input.planId
-              ? rows.filter((r) => r.planId === input.planId)
-              : rows,
-          };
-        },
-        ctx.baseDb,
-      );
-    }),
 
   /**
    * Pause one membership. It stops covering every branch it covered at once,
@@ -1566,15 +1567,19 @@ export const accessPlanRouter = {
         ctx.db,
         ctx.organizationId,
         source.userId,
+        source.accountUserId,
         await coverageOf(ctx.db, target.id),
       );
       if (target.archivedAt !== null) {
         throw new TRPCError({ code: "CONFLICT", message: PLAN_CLOSED });
       }
       if (
-        (await pendingChanges(ctx.db, month, source.userId)).some(
-          (c) => c.sourceAssignmentId === source.id,
-        )
+        (
+          await pendingChanges(ctx.db, month, {
+            personId: source.userId,
+            accountUserId: source.accountUserId,
+          })
+        ).some((c) => c.sourceAssignmentId === source.id)
       ) {
         throw new TRPCError({ code: "CONFLICT", message: CHANGE_PENDING });
       }
@@ -1592,7 +1597,8 @@ export const accessPlanRouter = {
         .insert(accessAssignment)
         .values({
           organizationId: ctx.organizationId,
-          userId: source.userId,
+          personId: source.userId,
+          userId: source.accountUserId,
           planId: target.id,
           assigningEntityId: source.assigningEntityId,
           startMonth: next,
@@ -1610,7 +1616,8 @@ export const accessPlanRouter = {
         .insert(accessAssignmentChange)
         .values({
           organizationId: ctx.organizationId,
-          userId: source.userId,
+          personId: source.userId,
+          userId: source.accountUserId,
           sourceAssignmentId: source.id,
           targetAssignmentId: successor.id,
           effectiveMonth: next,
@@ -1626,6 +1633,7 @@ export const accessPlanRouter = {
         ctx.db,
         ctx.organizationId,
         source.userId,
+        source.accountUserId,
         await coverageOf(ctx.db, target.id),
       );
 
@@ -1660,7 +1668,16 @@ export const accessPlanRouter = {
           message: CHANGE_NOT_FOUND,
         });
       }
-      await lockAssignmentsOf(ctx.db, change.userId, ctx.organizationId);
+      const changePersonId = change.personId ?? change.userId;
+      if (!changePersonId) {
+        throw new TRPCError({ code: "NOT_FOUND", message: CHANGE_NOT_FOUND });
+      }
+      await lockAssignmentsOf(
+        ctx.db,
+        changePersonId,
+        change.userId,
+        ctx.organizationId,
+      );
       if (!changeIsPending(change, month)) {
         throw new TRPCError({
           code: "CONFLICT",
@@ -1688,6 +1705,11 @@ export const accessPlanRouter = {
   forUser: organizationManagerProcedure
     .input(MemberAssignmentsSchema)
     .query(async ({ ctx, input }) => {
+      const subject = await requireOrganizationPerson(
+        ctx.db,
+        ctx.organizationId,
+        input.userId,
+      );
       const rows = await ctx.db
         .select({
           id: accessAssignment.id,
@@ -1701,7 +1723,17 @@ export const accessPlanRouter = {
         })
         .from(accessAssignment)
         .innerJoin(accessPlan, eq(accessPlan.id, accessAssignment.planId))
-        .where(eq(accessAssignment.userId, input.userId))
+        .where(
+          or(
+            eq(accessAssignment.personId, subject.id),
+            subject.accountUserId
+              ? and(
+                  isNull(accessAssignment.personId),
+                  eq(accessAssignment.userId, subject.accountUserId),
+                )
+              : undefined,
+          ),
+        )
         .orderBy(asc(accessPlan.name));
 
       const coverage = await ctx.db
@@ -1715,10 +1747,13 @@ export const accessPlanRouter = {
       const month = monthOf(new Date(), calendar.timeZone);
       const standing = await membershipStanding(
         ctx.db,
-        input.userId,
+        { personId: subject.id, accountUserId: subject.accountUserId },
         new Date(),
       );
-      const waiting = await pendingChanges(ctx.db, month, input.userId);
+      const waiting = await pendingChanges(ctx.db, month, {
+        personId: subject.id,
+        accountUserId: subject.accountUserId,
+      });
       const planNameOf = new Map(rows.map((r) => [r.id, r.planName]));
 
       return rows.map((r) => {
@@ -1858,9 +1893,9 @@ export const accessPlanRouter = {
     const held = await ctx.db
       .select({
         id: accessAssignment.id,
-        userId: accessAssignment.userId,
-        name: user.name,
-        email: user.email,
+        userId: sql<string>`coalesce(${accessAssignment.personId}::text, ${accessAssignment.userId})`,
+        name: sql<string>`coalesce(${person.name}, ${user.name})`,
+        email: sql<string | null>`coalesce(${person.email}, ${user.email})`,
         planId: accessAssignment.planId,
         planName: accessPlan.name,
         startMonth: accessAssignment.startMonth,
@@ -1869,7 +1904,14 @@ export const accessPlanRouter = {
       })
       .from(accessAssignment)
       .innerJoin(accessPlan, eq(accessPlan.id, accessAssignment.planId))
-      .innerJoin(user, eq(user.id, accessAssignment.userId))
+      .leftJoin(person, eq(person.id, accessAssignment.personId))
+      .leftJoin(
+        user,
+        eq(
+          user.id,
+          sql`coalesce(${person.accountUserId}, ${accessAssignment.userId})`,
+        ),
+      )
       .where(
         and(
           eq(accessAssignment.status, "active"),
@@ -1878,7 +1920,7 @@ export const accessPlanRouter = {
           assignmentAppliesInMonth(month),
         ),
       )
-      .orderBy(asc(user.name));
+      .orderBy(asc(sql`coalesce(${person.name}, ${user.name})`));
 
     const coverage = held.length
       ? await ctx.db
@@ -2109,7 +2151,10 @@ export const accessPlanRouter = {
       const month = monthOf(new Date(), calendar.timeZone);
       const standing = await membershipStanding(
         ctx.db,
-        ctx.session.user.id,
+        {
+          personId: ctx.membership.personId ?? ctx.session.user.id,
+          accountUserId: ctx.session.user.id,
+        },
         new Date(),
       );
       const current = standing.find(
@@ -2164,9 +2209,10 @@ export const accessPlanRouter = {
         assignmentId: membershipMonth.assignmentId,
         month: membershipMonth.month,
         claimedAt: membershipMonth.claimedAt,
-        userId: accessAssignment.userId,
-        name: user.name,
-        email: user.email,
+        personId: sql<string>`coalesce(${accessAssignment.personId}::text, ${accessAssignment.userId})`,
+        userId: sql<string>`coalesce(${accessAssignment.personId}::text, ${accessAssignment.userId})`,
+        name: sql<string>`coalesce(${person.name}, ${user.name})`,
+        email: sql<string>`coalesce(${person.email}, ${user.email})`,
         planName: accessPlan.name,
       })
       .from(membershipMonth)
@@ -2175,7 +2221,8 @@ export const accessPlanRouter = {
         eq(accessAssignment.id, membershipMonth.assignmentId),
       )
       .innerJoin(accessPlan, eq(accessPlan.id, accessAssignment.planId))
-      .innerJoin(user, eq(user.id, accessAssignment.userId))
+      .leftJoin(person, eq(person.id, accessAssignment.personId))
+      .leftJoin(user, eq(user.id, accessAssignment.userId))
       .where(
         and(
           isNotNull(membershipMonth.claimedAt),
@@ -2221,13 +2268,19 @@ export const accessPlanRouter = {
   mine: enrolledProcedure.query(async ({ ctx }) => {
     const memberships = await membershipStanding(
       ctx.db,
-      ctx.session.user.id,
+      {
+        personId: ctx.membership.personId ?? ctx.session.user.id,
+        accountUserId: ctx.session.user.id,
+      },
       new Date(),
     );
     const { month, timeZone } = await currentMonthOf(ctx.db);
     // A change waiting for the 1st is the member's business too: they should
     // read what they will be on and what it costs before it happens (ADR 129).
-    const waiting = await pendingChanges(ctx.db, month, ctx.session.user.id);
+    const waiting = await pendingChanges(ctx.db, month, {
+      personId: ctx.membership.personId ?? ctx.session.user.id,
+      accountUserId: ctx.session.user.id,
+    });
     const successors = waiting.length
       ? await ctx.db
           .select({

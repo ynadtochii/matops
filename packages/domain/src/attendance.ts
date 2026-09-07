@@ -25,6 +25,25 @@ export interface MarkableClass {
   deletedAt: Date | null;
 }
 
+export type AttendanceWriteAccess = "allowed" | "reason-required" | "closed";
+
+export function attendanceWriteAccess(
+  c: MarkableClass,
+  now: Date,
+  mayCorrectHistory: boolean,
+): AttendanceWriteAccess {
+  if (c.deletedAt || c.status === "cancelled") return "closed";
+  const delta = c.startsAt.getTime() - now.getTime();
+  if (delta > DAY_MS) return "closed";
+  if (
+    now.getTime() - c.startsAt.getTime() <=
+    ATTENDANCE_BACKFILL_DAYS * DAY_MS
+  ) {
+    return "allowed";
+  }
+  return mayCorrectHistory ? "reason-required" : "closed";
+}
+
 /**
  * Can staff mark attendance on this class right now? Allowed for a live,
  * non-deleted class from **today back to the 14-day backfill window** (spec O5).
@@ -33,17 +52,7 @@ export interface MarkableClass {
  * out is not "today / recent past". Cancelled/deleted classes are never markable.
  */
 export function canMarkAttendance(c: MarkableClass, now: Date): boolean {
-  if (c.deletedAt) return false;
-  if (c.status === "cancelled") return false;
-  const delta = c.startsAt.getTime() - now.getTime();
-  if (delta > DAY_MS) return false; // too far in the future
-  if (
-    now.getTime() - c.startsAt.getTime() >
-    ATTENDANCE_BACKFILL_DAYS * DAY_MS
-  ) {
-    return false; // older than the backfill window
-  }
-  return true;
+  return attendanceWriteAccess(c, now, false) === "allowed";
 }
 
 /** How far back the dashboard hunts for classes nobody ever marked. */

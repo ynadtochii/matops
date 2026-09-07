@@ -182,19 +182,24 @@ describe("referral reporting state transitions", () => {
 
   it("moves retroactive currency totals on correction and keeps a cleared audit", async () => {
     await pg.exec(`
-      INSERT INTO membership_plan
-        (id, academy_id, name, price_minor, currency)
+      INSERT INTO access_plan
+        (id, organization_id, name, price_minor, currency)
       VALUES
         ('11111111-1111-1111-1111-111111111111', 'academy_A', 'USD plan', 5000, 'USD'),
         ('22222222-2222-2222-2222-222222222222', 'academy_A', 'EUR plan', 3000, 'EUR');
-      INSERT INTO payment_claim
-        (academy_id, member_id, plan_id, amount_minor, currency, period,
-         status, confirmed_by, confirmed_at)
+      INSERT INTO membership_purchase
+        (organization_id, user_id, entity_id, plan_id, plan_name, price_minor,
+         currency, start_month, entity_ids, branch_names, version, reference,
+         status, confirmed_at)
       VALUES
-        ('academy_A', 'student_1', '11111111-1111-1111-1111-111111111111',
-         5000, 'USD', '2026-07', 'confirmed', 'owner', '2026-07-02T12:00:00Z'),
-        ('academy_A', 'student_1', '22222222-2222-2222-2222-222222222222',
-         3000, 'EUR', '2026-06', 'confirmed', 'owner', '2026-06-02T12:00:00Z');
+        ('academy_A', 'u_academy_A_student_1', 'academy_A',
+         '11111111-1111-1111-1111-111111111111', 'USD plan', 5000, 'USD',
+         '2026-07-01', ARRAY['academy_A'], ARRAY['academy_A'], 'test',
+         'ref-usd', 'confirmed', '2026-07-02T12:00:00Z'),
+        ('academy_A', 'u_academy_A_student_1', 'academy_A',
+         '22222222-2222-2222-2222-222222222222', 'EUR plan', 3000, 'EUR',
+         '2026-06-01', ARRAY['academy_A'], ARRAY['academy_A'], 'test',
+         'ref-eur', 'confirmed', '2026-06-02T12:00:00Z');
       INSERT INTO member_referral
         (academy_id, student_member_id, referrer_member_id, assigned_by)
       VALUES ('academy_A', 'student_1', 'referrer_old', 'owner');
@@ -209,15 +214,17 @@ describe("referral reporting state transitions", () => {
         currency: string;
         amount: number;
       }>(`
-        SELECT mr.referrer_member_id AS referrer, pc.currency,
-               sum(pc.amount_minor)::int AS amount
+        SELECT mr.referrer_member_id AS referrer, mp.currency,
+               sum(mp.price_minor)::int AS amount
         FROM member_referral mr
-        JOIN payment_claim pc ON pc.academy_id = mr.academy_id
-          AND pc.member_id = mr.student_member_id
-        WHERE mr.academy_id = 'academy_A' AND pc.status = 'confirmed'
+        JOIN entity_membership em ON em.id = mr.student_member_id
+          AND em.entity_id = mr.academy_id
+        JOIN membership_purchase mp ON mp.organization_id = em.organization_id
+          AND mp.user_id = em.user_id AND mp.entity_id = mr.academy_id
+        WHERE mr.academy_id = 'academy_A' AND mp.status = 'confirmed'
           AND mr.referrer_member_id IS NOT NULL
-        GROUP BY mr.referrer_member_id, pc.currency
-        ORDER BY pc.currency
+        GROUP BY mr.referrer_member_id, mp.currency
+        ORDER BY mp.currency
       `);
 
     expect((await revenue()).rows).toEqual([

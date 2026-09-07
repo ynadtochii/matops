@@ -95,8 +95,6 @@ describe("the membership cancellation sweep", () => {
       })
     ).id;
 
-    // The mat runs on memberships too. A branch with no `membership_enforced_at`
-    // is still on the old per-branch dues gate, and the sweep leaves those alone.
     await h.exec
       .update(entity)
       .set({ membershipEnforcedAt: new Date("2026-01-01T00:00:00Z") })
@@ -239,7 +237,7 @@ describe("the membership cancellation sweep", () => {
     expect(result.cancelled).toBe(0);
   });
 
-  it("leaves a branch still on the old dues gate alone", async () => {
+  it("leaves a branch with payment enforcement off alone", async () => {
     const legacy = (
       await createEntity(
         {
@@ -514,6 +512,55 @@ describe("staff access during overdue cancellation", () => {
       });
       expect(second.cancelled).toBe(0);
       expect((await read()).every((row) => row.status === "booked")).toBe(true);
+    } finally {
+      await h.close();
+    }
+  });
+});
+
+describe("membership reminder paging", () => {
+  it("continues after a full assignment page", async () => {
+    const h = await harness();
+    const org = "reminder_pages";
+    const ownerId = "reminder_pages_owner";
+    const students = ["reminder_page_a", "reminder_page_b", "reminder_page_c"];
+    try {
+      await seedAcademies(h.pg, [
+        {
+          id: org,
+          code: "700099",
+          members: [
+            { userId: ownerId, role: "owner", status: "active" },
+            ...students.map((userId) => ({
+              userId,
+              role: "student" as const,
+              status: "active" as const,
+            })),
+          ],
+        },
+      ]);
+      const owner = h.as(ownerId, org);
+      const plan = await owner.accessPlan.create({
+        name: "Paged plan",
+        entityIds: [org],
+      });
+      for (const userId of students) {
+        await owner.accessPlan.assign({ userId, planId: plan.id });
+      }
+
+      let checked = 0;
+      let after: string | undefined;
+      do {
+        const page = await runMembershipReminderSweep(h.exec, {
+          after,
+          limit: 1,
+          now: new Date("2026-09-03T09:00:00Z"),
+        });
+        checked += page.checked;
+        after = page.nextCursor ?? undefined;
+      } while (after);
+
+      expect(checked).toBe(students.length);
     } finally {
       await h.close();
     }

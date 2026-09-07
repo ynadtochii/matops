@@ -49,6 +49,12 @@ beforeAll(async () => {
     { classId: TO_CANCEL, academyId: ACAD, studentId: STUDENT },
     { classId: TO_MOVE, academyId: ACAD, studentId: STUDENT },
   ]);
+  await h.pg.exec(`
+    INSERT INTO "drop_in" (id, academy_id, first_name, last_name, phone, email, consent)
+    VALUES ('bbbbbbbb-0000-4000-8000-000000000401', '${ACAD}', 'Ana', 'Silva', '+351912345678', 'visitor@example.com', true);
+    INSERT INTO "drop_in_visit" (academy_id, drop_in_id, class_id, booking_status)
+    VALUES ('${ACAD}', 'bbbbbbbb-0000-4000-8000-000000000401', '${TO_CANCEL}', 'booked');
+  `);
 });
 
 afterAll(() => h.close());
@@ -57,6 +63,13 @@ describe("the booked students hear about a class", () => {
   it("tells them when it is cancelled", async () => {
     await h.as(OWNER, ACAD).class.cancel({ id: TO_CANCEL });
     expect(await kindsFor(STUDENT)).toContain("class_cancelled");
+    const recipients = await h.pg.query<{ recipient_address: string }>(
+      `SELECT recipient_address FROM "notification_outbox" ORDER BY recipient_address`,
+    );
+    expect(recipients.rows.map((row) => row.recipient_address)).toEqual([
+      `${STUDENT}@test.local`,
+      "visitor@example.com",
+    ]);
   });
 
   it("tells them when it moves", async () => {

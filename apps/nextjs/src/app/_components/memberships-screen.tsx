@@ -11,6 +11,7 @@ import {
   formatMoney,
   formatMonth,
   nextMonth,
+  organizationHref,
 } from "@matops/domain";
 import { Button } from "@matops/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@matops/ui/dialog";
@@ -47,7 +48,9 @@ type Affected = RouterOutputs["accessPlan"]["coveragePreview"]["affected"];
 export function MembershipsScreen() {
   const { entities, canRunOrganization, role } = useOrganization();
   const trpc = useTRPC();
-  const tabParam = useSearchParams().get("tab");
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const branchId = searchParams.get("branch") ?? undefined;
   const tab =
     tabParam === "access" || tabParam === "plans" ? tabParam : "payments";
   const plans = useQuery({
@@ -161,7 +164,10 @@ export function MembershipsScreen() {
           {role === "owner" && (
             <p className="text-muted-foreground border-border border-t pt-4 text-sm">
               Manage payment deadlines, time zone, and bank details in{" "}
-              <Link href="/settings" className="underline underline-offset-4">
+              <Link
+                href={organizationHref("/settings", branchId)}
+                className="underline underline-offset-4"
+              >
                 Organization settings
               </Link>
               .
@@ -195,6 +201,9 @@ function ClaimsWaiting() {
 
   const invalidate = async () => {
     await queryClient.invalidateQueries(trpc.accessPlan.pathFilter());
+    await queryClient.invalidateQueries(
+      trpc.stats.navigationSummary.pathFilter(),
+    );
   };
   const onError = (e: { message: string }) =>
     toast.error(e.message || "Could not do that");
@@ -327,6 +336,9 @@ function MonthBoard({ nameOf }: { nameOf: (id: string) => string }) {
     trpc.accessPlan.markMonth.mutationOptions({
       onSuccess: async () => {
         await queryClient.invalidateQueries(trpc.accessPlan.pathFilter());
+        await queryClient.invalidateQueries(
+          trpc.stats.navigationSummary.pathFilter(),
+        );
       },
       onError: (e) => toast.error(e.message || "Could not record that"),
     }),
@@ -455,7 +467,7 @@ function BookingAccessQueue() {
             >
               <div className="flex min-w-0 flex-col gap-1">
                 <Link
-                  href={`/people/${booking.userId}`}
+                  href={`/people/${booking.personId}`}
                   className="w-fit text-sm font-medium underline underline-offset-4"
                 >
                   {booking.name}
@@ -1090,10 +1102,10 @@ function UncoveredQueue() {
             <span className="text-sm font-medium">{g.entityName}</span>
             <span className="text-muted-foreground text-sm">
               {g.people.map((p, i) => (
-                <span key={p.userId}>
+                <span key={p.personId}>
                   {i > 0 && ", "}
                   <Link
-                    href={`/people/${p.userId}`}
+                    href={`/people/${p.personId}`}
                     className="hover:underline"
                   >
                     {p.name}

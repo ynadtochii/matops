@@ -1,9 +1,10 @@
-import { and, asc, eq, gt, isNull, lte } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, lte, sql } from "drizzle-orm";
 
 import { REMINDER_LEAD_MINUTES } from "@matops/domain";
 
 import type { DbExec } from "./client";
 import { entity } from "./entity-schema";
+import { person } from "./person-schema";
 import { classInstance, classParticipation, classTemplate } from "./scheduling";
 
 /**
@@ -103,15 +104,25 @@ export async function claimDueReminderClasses(
     if (!won) continue;
 
     const booked = await exec
-      .select({ studentId: classParticipation.studentId })
+      .select({
+        studentId: sql<
+          string | null
+        >`coalesce(${person.accountUserId}, ${classParticipation.studentId})`,
+      })
       .from(classParticipation)
+      .leftJoin(person, eq(person.id, classParticipation.personId))
       .where(
         and(
           eq(classParticipation.classId, c.classId),
           eq(classParticipation.bookingStatus, "booked"),
         ),
       );
-    claimed.push({ ...c, studentIds: booked.map((b) => b.studentId) });
+    claimed.push({
+      ...c,
+      studentIds: booked.flatMap((row) =>
+        row.studentId ? [row.studentId] : [],
+      ),
+    });
   }
   return claimed;
 }

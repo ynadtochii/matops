@@ -67,6 +67,23 @@ export function entityHref(entityId: string, path = "/"): string {
   return path === "/" ? base : `${base}${path}`;
 }
 
+export function organizationHref(path: string, branchId?: string): string {
+  if (!branchId) return path;
+  const hashIndex = path.indexOf("#");
+  const beforeHash = hashIndex < 0 ? path : path.slice(0, hashIndex);
+  const hash = hashIndex < 0 ? "" : path.slice(hashIndex);
+  const queryIndex = beforeHash.indexOf("?");
+  const pathname =
+    queryIndex < 0 ? beforeHash : beforeHash.slice(0, queryIndex);
+  const query = queryIndex < 0 ? "" : beforeHash.slice(queryIndex + 1);
+  const params = query
+    .split("&")
+    .filter(Boolean)
+    .filter((param) => param.split("=", 1)[0] !== "branch");
+  params.push(`branch=${encodeURIComponent(branchId)}`);
+  return `${pathname}?${params.join("&")}${hash}`;
+}
+
 /**
  * The part of the URL the route table reads: `/entities/a/members` is
  * `/members`, and the entity's own home page is `/`. A path outside the prefix
@@ -123,13 +140,18 @@ const ROUTE_ACCESS: {
  */
 export function canVisit(
   pathname: string,
-  m: Membership & { type?: string },
+  m: Membership & { type?: string; referralsEnabled?: boolean },
 ): boolean {
   if (m.type !== undefined && !isSupportedEntityType(m.type)) return false;
   const path = pathWithinEntity(pathname);
   const rule = ROUTE_ACCESS.find(
     (r) => path === r.prefix || path.startsWith(`${r.prefix}/`),
   );
+  if (
+    (path === "/referrals" || path.startsWith("/referrals/")) &&
+    m.referralsEnabled === false
+  )
+    return false;
   if (!rule) return true;
   if (rule.types && m.type !== undefined && !rule.types.includes(m.type))
     return false;
@@ -220,7 +242,10 @@ const BRANCH_OWNED_PREFIXES = ["/class", "/attendance"];
 export function switchEntityHref(
   pathname: string,
   search: string,
-  target: { id: string } & Membership & { type?: string },
+  target: { id: string } & Membership & {
+      type?: string;
+      referralsEnabled?: boolean;
+    },
 ): string {
   const within = pathWithinEntity(pathname);
   const portable =

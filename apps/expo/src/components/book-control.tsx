@@ -24,6 +24,11 @@ export interface BookableClass {
   startsAt: string | Date;
 }
 
+export interface BookingSubject {
+  entityId: string;
+  personId: string;
+}
+
 /**
  * Shared booking action (v1.8 slice 1): call `booking.book`, and when the class
  * looks full ask "Book anyway?" first — soft capacity, never blocked.
@@ -33,7 +38,7 @@ export interface BookableClass {
  */
 export function useBookClass(
   onBooked?: () => void,
-  opts?: { toastError?: boolean },
+  opts?: { toastError?: boolean; subject?: BookingSubject },
 ) {
   const invalidateFor = useInvalidate();
   const toast = useToast();
@@ -47,7 +52,9 @@ export function useBookClass(
   // situation (ADR 126). Cancel is never gated: somebody whose month ran out
   // must still be able to give their place back.
   const gate = useQuery(
-    trpc.booking.access.queryOptions(undefined, { enabled: approved }),
+    trpc.booking.access.queryOptions(undefined, {
+      enabled: approved && !opts?.subject,
+    }),
   );
 
   const book = useMutation(
@@ -66,26 +73,42 @@ export function useBookClass(
       },
     }),
   );
+  const bookForPerson = useMutation(
+    trpc.person.bookClass.mutationOptions({
+      onSuccess: async () => {
+        setError(null);
+        await invalidateFor("booking");
+        onBooked?.();
+      },
+      onError: (err) => {
+        const message = err.message || "Could not book";
+        setError(message);
+        if (opts?.toastError) toast.show(message);
+      },
+    }),
+  );
 
   /** Send the booking; a per-call success toast names the class (slice 6). */
   const doBook = (c: BookableClass) => {
     const start = new Date(c.startsAt);
     const label = `Booked — ${dayFmt.format(start)} · ${timeFmt.format(start)}`;
-    book.mutate(
-      { classId: c.id },
-      {
-        onSuccess: () => {
-          toast.show(label);
-          void scheduleClassReminder(c);
-        },
+    const options = {
+      onSuccess: () => {
+        toast.show(label);
+        void scheduleClassReminder(c);
       },
-    );
+    };
+    if (opts?.subject) {
+      bookForPerson.mutate({ ...opts.subject, classId: c.id }, options);
+    } else {
+      book.mutate({ classId: c.id }, options);
+    }
   };
 
   /** Book `c`, asking to confirm first when it is at/over capacity. */
   const onBook = (c: BookableClass) => {
     setError(null);
-    if (gate.data?.locked) {
+    if (!opts?.subject && gate.data?.locked) {
       const message = gate.data.message ?? "Booking is locked for you.";
       setError(message);
       if (opts?.toastError) toast.show(message);
@@ -102,19 +125,33 @@ export function useBookClass(
     }
   };
 
-  return { onBook, isPending: book.isPending, error };
+  return {
+    onBook,
+    isPending: book.isPending || bookForPerson.isPending,
+    error,
+  };
 }
 
 /**
  * Shared cancel action: confirm, then drop the local reminder and refresh every
  * list that shows the class.
  */
-export function useCancelBooking() {
+export function useCancelBooking(subject?: BookingSubject) {
   const invalidateFor = useInvalidate();
   const toast = useToast();
 
   const cancel = useMutation(
     trpc.booking.cancel.mutationOptions({
+      onSuccess: async (_data, variables) => {
+        toast.show("Booking cancelled");
+        void cancelClassReminder(variables.classId);
+        await invalidateFor("booking");
+      },
+      onError: (err) => toast.show(err.message || "Could not cancel"),
+    }),
+  );
+  const cancelForPerson = useMutation(
+    trpc.person.cancelBooking.mutationOptions({
       onSuccess: async (_data, variables) => {
         toast.show("Booking cancelled");
         void cancelClassReminder(variables.classId);
@@ -131,13 +168,20 @@ export function useCancelBooking() {
         "You'll lose your spot. If the class is full, you may not get it back.",
       confirmLabel: "Cancel booking",
       cancelLabel: "Keep it",
-      onConfirm: () => cancel.mutate({ classId }),
+      onConfirm: () =>
+        subject
+          ? cancelForPerson.mutate({ ...subject, classId })
+          : cancel.mutate({ classId }),
     });
 
   return {
     onCancel,
-    isPending: cancel.isPending,
-    pendingClassId: cancel.isPending ? cancel.variables.classId : null,
+    isPending: cancel.isPending || cancelForPerson.isPending,
+    pendingClassId: cancel.isPending
+      ? cancel.variables.classId
+      : cancelForPerson.isPending
+        ? cancelForPerson.variables.classId
+        : null,
   };
 }
 
@@ -147,9 +191,18 @@ export function useCancelBooking() {
  * to book. Renders nothing extra for booked / cancelled / past rows; the caller
  * decides when to show it.
  */
-export function BookButton({ c }: { c: BookableClass }) {
+export function BookButton({
+  c,
+  subject,
+}: {
+  c: BookableClass;
+  subject?: BookingSubject;
+}) {
   const t = useTheme();
-  const { onBook, isPending } = useBookClass(undefined, { toastError: true });
+  const { onBook, isPending } = useBookClass(undefined, {
+    toastError: true,
+    subject,
+  });
   return (
     <Pressable
       accessibilityRole="button"
@@ -180,9 +233,15 @@ export function BookButton({ c }: { c: BookableClass }) {
  * The compact **Cancel** pill for a booked schedule row — the twin of
  * `BookButton`, so a student drops a class without opening the detail.
  */
-export function CancelButton({ classId }: { classId: string }) {
+export function CancelButton({
+  classId,
+  subject,
+}: {
+  classId: string;
+  subject?: BookingSubject;
+}) {
   const t = useTheme();
-  const { onCancel, isPending } = useCancelBooking();
+  const { onCancel, isPending } = useCancelBooking(subject);
   return (
     <Pressable
       accessibilityRole="button"

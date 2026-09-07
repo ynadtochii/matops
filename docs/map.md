@@ -2,6 +2,7 @@
 
 # Map: matops — MVP rebuild (product spec + architecture)
 
+- [134: First academy release](/Users/kuna/projects/matops/docs/issues/134-first-academy-release.md): account-independent students, shared memberships only, one shell, accountable attendance corrections, durable notifications, scheduled work, data transfer, and optional modules. Release checks remain.
 - [133: Explicit attendance review](/Users/kuna/projects/matops/docs/issues/133-explicit-attendance-review.md): all past classes, explicit completion, and review after roster changes. Implementation in progress.
 - [132: Staff roster isolation](/Users/kuna/projects/matops/docs/issues/132-staff-roster-isolation.md): staff access, student-only Members, and preserved billing history.
 

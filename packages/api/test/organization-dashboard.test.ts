@@ -5,7 +5,7 @@ import { createEntity } from "@matops/db";
 import { entityMembership } from "@matops/db/schema";
 
 import type { Harness } from "./helpers";
-import { harness, memberId, rejectionCode, seedClasses } from "./helpers";
+import { harness, rejectionCode, seedClasses } from "./helpers";
 
 const ORG_A = "org_a";
 const ORG_B = "org_b";
@@ -101,17 +101,22 @@ describe("the organization dashboard", () => {
     ]);
 
     await pg.exec(`
-      INSERT INTO "membership_plan" (id, academy_id, name, price_minor, currency)
-        VALUES ('${PLAN}', '${north}', 'Unlimited', 8000, 'EUR');
-      INSERT INTO "payment_claim"
-        (academy_id, member_id, plan_id, amount_minor, currency, period, status)
-        VALUES ('${north}', '${memberId(ORG_A, NOMAD)}', '${PLAN}',
-                8000, 'EUR', '2026-09', 'pending');
-      INSERT INTO "payment_claim"
-        (academy_id, member_id, plan_id, amount_minor, currency, period,
-         status, confirmed_by, confirmed_at)
-        VALUES ('${north}', '${memberId(ORG_A, COACH)}', '${PLAN}',
-                8000, 'EUR', '2026-08', 'confirmed', '${OWNER}', now());
+      INSERT INTO "access_plan" (id, organization_id, name, price_minor, currency)
+        VALUES ('${PLAN}', '${ORG_A}', 'Unlimited', 8000, 'EUR');
+      INSERT INTO "membership_purchase"
+        (organization_id, user_id, entity_id, plan_id, plan_name, price_minor,
+         currency, start_month, entity_ids, branch_names, version, reference,
+         status)
+        VALUES ('${ORG_A}', '${NOMAD}', '${north}', '${PLAN}', 'Unlimited',
+                8000, 'EUR', '2026-09-01', ARRAY['${north}'], ARRAY['North'],
+                'test', gen_random_uuid()::text, 'claimed');
+      INSERT INTO "membership_purchase"
+        (organization_id, user_id, entity_id, plan_id, plan_name, price_minor,
+         currency, start_month, entity_ids, branch_names, version, reference,
+         status, confirmed_at, reviewed_by, reviewed_at)
+        VALUES ('${ORG_A}', '${COACH}', '${north}', '${PLAN}', 'Unlimited',
+                8000, 'EUR', '2026-08-01', ARRAY['${north}'], ARRAY['North'],
+                'test', gen_random_uuid()::text, 'confirmed', now(), '${OWNER}', now());
       INSERT INTO "drop_in"
         (academy_id, first_name, last_name, phone, consent, stage)
         VALUES ('${south}', 'Dana', 'Reis', '+351900000001', true, 'new');

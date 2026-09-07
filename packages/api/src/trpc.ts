@@ -11,16 +11,18 @@ import superjson from "superjson";
 import { z, ZodError } from "zod/v4";
 
 import type { Auth } from "@matops/auth";
-import type { TenantTx } from "@matops/db";
+import type { DbReader, TenantTx } from "@matops/db";
 import type { DbExec } from "@matops/db/client";
 import type { Membership } from "@matops/domain";
 import {
+  eq,
   getEntityInOrganization,
   getEntityMembership,
   getMembership,
   withScope,
 } from "@matops/db";
 import { db } from "@matops/db/client";
+import { organization } from "@matops/db/schema";
 import {
   canEnroll,
   isActiveMember,
@@ -274,6 +276,7 @@ async function resolveOrganization<U extends { id: string }>(ctx: {
 
 /** The caller's standing at the entity this request named. */
 export interface EntityMembershipContext {
+  personId: string | null;
   role: string;
   status: string;
   joinedAt: Date;
@@ -357,6 +360,7 @@ async function resolveEntity<U extends { id: string }>(ctx: {
   const membership: EntityMembershipContext = entityMembership
     ? {
         memberId: entityMembership.id,
+        personId: entityMembership.personId,
         joinedAt: entityMembership.joinedAt ?? entityMembership.createdAt,
         role:
           entityMembership.role === "owner"
@@ -366,6 +370,7 @@ async function resolveEntity<U extends { id: string }>(ctx: {
       }
     : {
         memberId: null,
+        personId: null,
         joinedAt: orgMembership.joinedAt,
         role: organizationRole ?? "student",
         status: "active",
@@ -571,6 +576,49 @@ export const bjjStaffProcedure = staffProcedure.use(({ ctx, next }) => {
   return next();
 });
 
+const MODULE_DISABLED = "This module is not enabled for this gym";
+
+export async function requireOrganizationModule(
+  database: DbReader,
+  organizationId: string,
+  module: "curriculum" | "referrals",
+) {
+  const [row] = await database
+    .select({
+      enabled:
+        module === "curriculum"
+          ? organization.curriculumEnabled
+          : organization.referralsEnabled,
+    })
+    .from(organization)
+    .where(eq(organization.id, organizationId))
+    .limit(1);
+  if (!row?.enabled) {
+    throw new TRPCError({ code: "FORBIDDEN", message: MODULE_DISABLED });
+  }
+}
+
+export const curriculumEnrolledProcedure = bjjEnrolledProcedure.use(
+  async ({ ctx, next }) => {
+    await requireOrganizationModule(ctx.db, ctx.organizationId, "curriculum");
+    return next();
+  },
+);
+
+export const curriculumStaffProcedure = bjjStaffProcedure.use(
+  async ({ ctx, next }) => {
+    await requireOrganizationModule(ctx.db, ctx.organizationId, "curriculum");
+    return next();
+  },
+);
+
+export const referralsBranchManagerProcedure = branchManagerProcedure.use(
+  async ({ ctx, next }) => {
+    await requireOrganizationModule(ctx.db, ctx.organizationId, "referrals");
+    return next();
+  },
+);
+
 /**
  * Identity procedures: same authorization as the tenant tiers, but NO ambient
  * transaction. They exist for the writes that touch `organization` or `member`
@@ -642,6 +690,21 @@ export const organizationManagerIdentityProcedure = protectedProcedure.use(
     }
     return next({
       ctx: { organizationId, orgMembership, session: { ...ctx.session, user } },
+    });
+  },
+);
+
+export const organizationMemberIdentityProcedure = protectedProcedure.use(
+  async ({ ctx, next }) => {
+    const { organizationId, orgMembership, user } =
+      await resolveOrganization(ctx);
+    return next({
+      ctx: {
+        organizationId,
+        orgMembership,
+        baseDb: ctx.baseDb,
+        session: { ...ctx.session, user },
+      },
     });
   },
 );

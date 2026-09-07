@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 
 import { cronVerdict } from "@matops/api/cron-auth";
+import { runRecordedJob } from "@matops/api/job-run";
 import {
   runMembershipCancellationSweep,
   runMembershipReminderSweep,
@@ -17,12 +18,6 @@ import { env } from "~/env";
  *   - CANCEL the future bookings of the ones already past it.
  * Warning runs first, so somebody who crosses the deadline between the two has
  * been told before their classes go.
- *
- * NOT SCHEDULED, deliberately, and for the same reason `/api/cron/materialize`
- * is not (ADR 46, 79): booking and admission already enforce the deadline
- * themselves, so a late run costs nobody a wrongly kept place, only a stale
- * booking sitting in a list. Call it by hand:
- *   curl -H "Authorization: Bearer $CRON_SECRET" .../api/cron/memberships
  *
  * Safe to run again. The sweep re-reads the payment inside the transaction that
  * cancels, and only rows still `booked` are changed, so a retry finds nothing
@@ -41,21 +36,49 @@ export async function GET(req: NextRequest) {
   if (!verdict.ok) {
     return new Response(verdict.message, { status: verdict.status });
   }
+  const initialAfter = req.nextUrl.searchParams.get("after") ?? undefined;
 
-  const reminded = await runMembershipReminderSweep(db);
+  const result = await runRecordedJob(
+    db,
+    "membership_sweep",
+    async () => {
+      const reminded = { checked: 0, sent: 0 };
+      let reminderAfter = initialAfter;
+      for (let page = 0; page < MAX_PAGES; page++) {
+        const run = await runMembershipReminderSweep(db, {
+          after: reminderAfter,
+        });
+        reminded.checked += run.checked;
+        reminded.sent += run.sent;
+        reminderAfter = run.nextCursor ?? undefined;
+        if (!reminderAfter) break;
+      }
 
-  // Page through, so a gym past one batch is not skipped for ever. Capped so
-  // one call still ends: a leftover cursor means run it again.
-  const cancelled = { checked: 0, blocked: 0, cancelled: 0 };
-  let after: string | undefined;
-  for (let page = 0; page < MAX_PAGES; page++) {
-    const run = await runMembershipCancellationSweep(db, { after });
-    cancelled.checked += run.checked;
-    cancelled.blocked += run.blocked;
-    cancelled.cancelled += run.cancelled;
-    if (!run.nextCursor) break;
-    after = run.nextCursor;
-  }
+      const cancelled = { checked: 0, blocked: 0, cancelled: 0 };
+      let cancellationAfter = initialAfter;
+      for (let page = 0; page < MAX_PAGES; page++) {
+        const run = await runMembershipCancellationSweep(db, {
+          after: cancellationAfter,
+        });
+        cancelled.checked += run.checked;
+        cancelled.blocked += run.blocked;
+        cancelled.cancelled += run.cancelled;
+        cancellationAfter = run.nextCursor ?? undefined;
+        if (!cancellationAfter) break;
+      }
 
-  return Response.json({ ok: true, reminded, cancelled });
+      return {
+        reminded,
+        cancelled,
+        hasMore: Boolean(reminderAfter ?? cancellationAfter),
+        nextCursor: reminderAfter ?? cancellationAfter ?? null,
+      };
+    },
+    {
+      succeeded: (run) => !run.hasMore,
+      failureMessage: () => "Membership sweep has more work",
+    },
+  );
+
+  return Response.json({ ok: true, ...result });
 }

@@ -9,26 +9,23 @@ export default async function OrganizationPersonPage({
 }: {
   params: Promise<{ userId: string }>;
 }) {
-  const { userId } = await params;
+  const { userId: personId } = await params;
   return (
     <Suspense fallback={<PageLoader label="Opening this person" />}>
-      <PersonData userId={userId} />
+      <PersonData personId={personId} />
     </Suspense>
   );
 }
 
-async function PersonData({ userId }: { userId: string }) {
+async function PersonData({ personId }: { personId: string }) {
   const { canRunOrganization } = await myEntities();
   if (canRunOrganization) {
-    // The same read the directory draws, so arriving from the list is a cache
-    // hit and arriving by link still works.
-    prefetch(trpc.stats.organizationMembers.queryOptions());
-    prefetch(trpc.accessPlan.forUser.queryOptions({ userId }));
+    prefetch(trpc.person.get.queryOptions({ personId, includeArchived: true }));
   }
 
   return (
     <HydrateClient>
-      <OrganizationPersonScreen userId={userId} />
+      <OrganizationPersonScreen personId={personId} />
     </HydrateClient>
   );
 }

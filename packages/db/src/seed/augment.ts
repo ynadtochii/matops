@@ -16,12 +16,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, isNull, like } from "drizzle-orm";
 
-import {
-  monthOf,
-  paymentPeriod,
-  priceForMonth,
-  resolveAcademyTimeZone,
-} from "@matops/domain";
+import { monthOf, priceForMonth, resolveAcademyTimeZone } from "@matops/domain";
 
 import type { SeedExec } from "./registry";
 import { recomputeBookingCounts } from "../erase";
@@ -36,18 +31,15 @@ import {
   entity,
   entityMembership,
   member,
-  memberDues,
   memberNote,
   memberRank,
   memberReferral,
   memberReferralAudit,
   membershipMonth,
   membershipMonthAudit,
-  membershipPlan,
   membershipPolicy,
   membershipPurchase,
   notification,
-  paymentClaim,
   rankPromotion,
   user,
 } from "../schema";
@@ -308,136 +300,19 @@ export async function fillAcademy(
   // 2a. Memberships, if this branch runs the shared gate (ADR 126-129). Without
   //     them every fake reads as a person with no membership, which is the one
   //     state a filled academy should NOT be full of.
-  const [branch] = await exec
-    .select({
-      enforcedAt: entity.membershipEnforcedAt,
-    })
-    .from(entity)
-    .where(eq(entity.id, academyId))
-    .limit(1);
-  const gated = Boolean(branch?.enforcedAt);
-  if (gated) {
-    Object.assign(
-      report,
-      await fillMemberships(exec, {
-        academyId,
-        organizationId,
-        staffId,
-        now,
-        holders: students.filter(
-          (s) => s.status === "active" || s.status === "suspended",
-        ),
-      }),
-    );
-  }
-
-  // 2b. Dues on the academy's EXISTING plans (skip if the owner has none yet).
-  const plans = await exec
-    .select({
-      id: membershipPlan.id,
-      priceMinor: membershipPlan.priceMinor,
-      currency: membershipPlan.currency,
-    })
-    .from(membershipPlan)
-    .where(
-      and(
-        eq(membershipPlan.academyId, academyId),
-        isNull(membershipPlan.deletedAt),
+  Object.assign(
+    report,
+    await fillMemberships(exec, {
+      academyId,
+      organizationId,
+      staffId,
+      now,
+      holders: students.filter(
+        (student) =>
+          student.status === "active" || student.status === "suspended",
       ),
-    );
-  const primary = plans[0];
-  if (primary && !gated) {
-    const dueOffsets = [2, 22, -6, 40, -20]; // paid / due-soon / overdue mix
-    const duesTargets = students.filter(
-      (s) => s.status === "active" || s.status === "suspended",
-    );
-    await exec
-      .insert(memberDues)
-      .values(
-        duesTargets.map((s, i) => ({
-          id: randomUUID(),
-          academyId,
-          memberId: s.memberId,
-          planId: (plans[i % plans.length] ?? primary).id,
-          nextDueAt: new Date(
-            now.getTime() + (dueOffsets[i % dueOffsets.length] ?? 0) * DAY_MS,
-          ),
-        })),
-      )
-      .onConflictDoNothing();
-    report.member_dues = duesTargets.length;
-
-    // The open and rejected claims belong to the LEGACY dues screen, which is
-    // the only place that can answer them.
-    if (active[0]) {
-      await exec.insert(paymentClaim).values({
-        id: randomUUID(),
-        academyId,
-        memberId: active[0].memberId,
-        planId: primary.id,
-        amountMinor: primary.priceMinor,
-        currency: primary.currency,
-        period: paymentPeriod(now),
-        status: "pending",
-      });
-      let rejectedCount = 0;
-      if (active[1]) {
-        await exec.insert(paymentClaim).values({
-          id: randomUUID(),
-          academyId,
-          memberId: active[1].memberId,
-          planId: primary.id,
-          amountMinor: primary.priceMinor,
-          currency: primary.currency,
-          period: paymentPeriod(new Date(now.getTime() - 32 * DAY_MS)),
-          status: "rejected",
-          claimedAt: new Date(now.getTime() - 30 * DAY_MS),
-        });
-        rejectedCount = 1;
-      }
-      report.payment_claim = 1 + rejectedCount;
-    }
-  }
-
-  // Confirmed claim history, on either gate: the referrals ledger (O9) reads
-  // revenue off `payment_claim` and off nothing else.
-  if (primary) {
-    const confirmed = active.slice(0, 8).flatMap((student, index) => {
-      const plan = plans[index % plans.length] ?? primary;
-      return [
-        {
-          id: randomUUID(),
-          academyId,
-          memberId: student.memberId,
-          planId: plan.id,
-          amountMinor: plan.priceMinor,
-          currency: plan.currency,
-          period: paymentPeriod(now),
-          status: "confirmed" as const,
-          confirmedBy: staffId,
-          confirmedAt: now,
-          claimedAt: new Date(now.getTime() - DAY_MS),
-        },
-        {
-          id: randomUUID(),
-          academyId,
-          memberId: student.memberId,
-          planId: plan.id,
-          amountMinor: plan.priceMinor,
-          currency: plan.currency,
-          period: paymentPeriod(new Date(now.getTime() - 45 * DAY_MS)),
-          status: "confirmed" as const,
-          confirmedBy: staffId,
-          confirmedAt: new Date(now.getTime() - 45 * DAY_MS),
-          claimedAt: new Date(now.getTime() - 46 * DAY_MS),
-        },
-      ];
-    });
-    if (confirmed.length > 0) {
-      await exec.insert(paymentClaim).values(confirmed);
-      report.payment_claim = (report.payment_claim ?? 0) + confirmed.length;
-    }
-  }
+    }),
+  );
 
   // Multiple referrers + unassigned examples. All referral rows target fakes,
   // which keeps `clear` surgical even though the actor is the real owner.
@@ -868,16 +743,6 @@ export async function clearAcademy(
       ),
   );
   // Their dues / claims / rank / promotions / notes (member_id is a seed member).
-  await del("payment_claim", () =>
-    exec
-      .delete(paymentClaim)
-      .where(
-        and(
-          eq(paymentClaim.academyId, academyId),
-          like(paymentClaim.memberId, seedLike),
-        ),
-      ),
-  );
   await del("member_referral_audit", () =>
     exec
       .delete(memberReferralAudit)
@@ -895,16 +760,6 @@ export async function clearAcademy(
         and(
           eq(memberReferral.academyId, academyId),
           like(memberReferral.studentMemberId, seedLike),
-        ),
-      ),
-  );
-  await del("member_dues", () =>
-    exec
-      .delete(memberDues)
-      .where(
-        and(
-          eq(memberDues.academyId, academyId),
-          like(memberDues.memberId, seedLike),
         ),
       ),
   );

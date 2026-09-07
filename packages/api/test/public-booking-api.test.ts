@@ -4,6 +4,7 @@ import type { Harness } from "./helpers";
 import {
   handleAcademy,
   handleBooking,
+  handleBookingStatus,
   handleCancel,
   handleClasses,
 } from "../src/public";
@@ -293,6 +294,46 @@ describe("POST /bookings", () => {
       `SELECT count(*)::int AS n FROM "drop_in_visit"`,
     );
     expect(visits.rows[0]?.n).toBe(1);
+    const deliveries = await h.pg.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM "notification_outbox"`,
+    );
+    expect(deliveries.rows[0]?.n).toBe(1);
+  });
+
+  it("returns current class state through the booking token", async () => {
+    const h = await base();
+    const booked = await json(
+      await handleBooking(post({ classId: SHARED, ...VISITOR }), h.exec),
+    );
+    await h.pg.exec(
+      `UPDATE "class" SET starts_at = starts_at + interval '1 hour' WHERE id = '${SHARED}'`,
+    );
+    const res = await handleBookingStatus(
+      get("/bookings"),
+      booked.cancelToken as unknown as string,
+      h.exec,
+    );
+    expect(res.status).toBe(200);
+    expect(await json(res)).toMatchObject({
+      bookingStatus: "booked",
+      class: { id: SHARED, status: "scheduled", changed: true },
+    });
+  });
+
+  it("expires old booking tokens", async () => {
+    const h = await base();
+    const booked = await json(
+      await handleBooking(post({ classId: SHARED, ...VISITOR }), h.exec),
+    );
+    await h.pg.exec(
+      `UPDATE "drop_in_visit" SET cancel_token_expires_at = now() - interval '1 second'`,
+    );
+    const res = await handleBookingStatus(
+      get("/bookings"),
+      booked.cancelToken as unknown as string,
+      h.exec,
+    );
+    expect(res.status).toBe(404);
   });
 
   it("books a full class, and says nothing about how full it is", async () => {

@@ -18,7 +18,6 @@ async function SettingsData() {
 
   if (academy && runsBranch(academy)) {
     prefetch(trpc.academy.settings.queryOptions());
-    prefetch(trpc.payments.getRequisites.queryOptions());
   }
 
   return (

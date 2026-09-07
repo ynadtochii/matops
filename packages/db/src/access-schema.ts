@@ -9,6 +9,7 @@ import {
 
 import { organization, user } from "./auth-schema";
 import { entity } from "./entity-schema";
+import { person } from "./person-schema";
 
 /**
  * Membership plans and who holds them (ADR 126).
@@ -173,10 +174,8 @@ export const accessAssignment = pgTable(
       .text()
       .notNull()
       .references(() => organization.id),
-    userId: t
-      .text()
-      .notNull()
-      .references(() => user.id),
+    userId: t.text().references(() => user.id),
+    personId: t.uuid(),
     planId: t.uuid().notNull(),
     /** Where the owner assigned it. Never a limit on what the plan covers. */
     assigningEntityId: t.text(),
@@ -205,8 +204,12 @@ export const accessAssignment = pgTable(
     uniqueIndex("access_assignment_one_per_plan_user_start")
       .on(table.planId, table.userId, table.startMonth)
       .where(sql`status <> 'cancelled'`),
+    uniqueIndex("access_assignment_one_per_plan_person_start")
+      .on(table.planId, table.personId, table.startMonth)
+      .where(sql`person_id is not null and status <> 'cancelled'`),
     uniqueIndex("access_assignment_org_id").on(table.organizationId, table.id),
     index("access_assignment_by_user").on(table.userId),
+    index("access_assignment_by_person").on(table.personId),
     index("access_assignment_by_org_status").on(
       table.organizationId,
       table.status,
@@ -221,12 +224,25 @@ export const accessAssignment = pgTable(
       columns: [table.organizationId, table.assigningEntityId],
       foreignColumns: [entity.organizationId, entity.id],
     }),
+    foreignKey({
+      name: "access_assignment_person_same_org",
+      columns: [table.organizationId, table.personId],
+      foreignColumns: [person.organizationId, person.id],
+    }),
     check(
       "access_assignment_status_supported",
       sql`status in ('active','suspended','cancelled')`,
     ),
+    check(
+      "access_assignment_has_subject",
+      sql`user_id is not null or person_id is not null`,
+    ),
     index("access_assignment_by_user_period").on(
       table.userId,
+      table.startMonth,
+    ),
+    index("access_assignment_by_person_period").on(
+      table.personId,
       table.startMonth,
     ),
     check(
@@ -263,10 +279,8 @@ export const accessAssignmentChange = pgTable(
       .text()
       .notNull()
       .references(() => organization.id),
-    userId: t
-      .text()
-      .notNull()
-      .references(() => user.id),
+    userId: t.text().references(() => user.id),
+    personId: t.uuid(),
     sourceAssignmentId: t.uuid().notNull(),
     targetAssignmentId: t.uuid().notNull(),
     /** The month the target starts and the source stops. */
@@ -288,6 +302,11 @@ export const accessAssignmentChange = pgTable(
       columns: [table.organizationId, table.targetAssignmentId],
       foreignColumns: [accessAssignment.organizationId, accessAssignment.id],
     }),
+    foreignKey({
+      name: "access_assignment_change_person_same_org",
+      columns: [table.organizationId, table.personId],
+      foreignColumns: [person.organizationId, person.id],
+    }),
     // One live change per source, so a double submit is one scheduled change.
     uniqueIndex("access_assignment_change_one_live_per_source")
       .on(table.sourceAssignmentId)
@@ -297,6 +316,7 @@ export const accessAssignmentChange = pgTable(
       table.effectiveMonth,
     ),
     index("access_assignment_change_by_user").on(table.userId),
+    index("access_assignment_change_by_person").on(table.personId),
     check(
       "access_assignment_change_is_a_month",
       sql`date_trunc('month', effective_month) = effective_month`,
@@ -304,6 +324,10 @@ export const accessAssignmentChange = pgTable(
     check(
       "access_assignment_change_two_rows",
       sql`source_assignment_id <> target_assignment_id`,
+    ),
+    check(
+      "access_assignment_change_has_subject",
+      sql`user_id is not null or person_id is not null`,
     ),
   ],
 );
@@ -331,12 +355,6 @@ export const membershipPolicy = pgTable(
      * opens the setting still gets sane months.
      */
     calendarTimeZone: t.text(),
-    /**
-     * Where members send the money. One account for the organization (ADR 127):
-     * a membership covering a mat and a gym is paid once, so two accounts would
-     * be two answers to one question. Read by the shared standing and by the
-     * legacy branch dues alike; `payment_settings.bank_details` is dead.
-     */
     bankDetails: t.text().notNull().default(""),
     createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: t
@@ -490,10 +508,8 @@ export const membershipPurchase = pgTable(
       .text()
       .notNull()
       .references(() => organization.id),
-    userId: t
-      .text()
-      .notNull()
-      .references(() => user.id),
+    userId: t.text().references(() => user.id),
+    personId: t.uuid(),
     entityId: t.text().notNull(),
     planId: t.uuid().notNull(),
     planName: t.text().notNull(),
@@ -529,14 +545,27 @@ export const membershipPurchase = pgTable(
       columns: [table.organizationId, table.assignmentId],
       foreignColumns: [accessAssignment.organizationId, accessAssignment.id],
     }),
+    foreignKey({
+      name: "membership_purchase_person_same_org",
+      columns: [table.organizationId, table.personId],
+      foreignColumns: [person.organizationId, person.id],
+    }),
     uniqueIndex("membership_purchase_one_unresolved")
       .on(table.organizationId, table.userId)
-      .where(sql`status in ('pending','claimed','rejected','resolution')`),
+      .where(
+        sql`status in ('pending','claimed','rejected','resolution') and version not like 'legacy-dues-v1:%'`,
+      ),
+    uniqueIndex("membership_purchase_one_unresolved_person")
+      .on(table.organizationId, table.personId)
+      .where(
+        sql`person_id is not null and status in ('pending','claimed','rejected','resolution') and version not like 'legacy-dues-v1:%'`,
+      ),
     uniqueIndex("membership_purchase_reference").on(table.reference),
     index("membership_purchase_by_org_status").on(
       table.organizationId,
       table.status,
     ),
+    index("membership_purchase_by_person").on(table.personId),
     check(
       "membership_purchase_status_supported",
       sql`status in ('pending','claimed','confirmed','rejected','cancelled','resolution')`,
@@ -548,6 +577,10 @@ export const membershipPurchase = pgTable(
     check(
       "membership_purchase_is_a_month",
       sql`date_trunc('month', start_month) = start_month`,
+    ),
+    check(
+      "membership_purchase_has_subject",
+      sql`user_id is not null or person_id is not null`,
     ),
   ],
 );

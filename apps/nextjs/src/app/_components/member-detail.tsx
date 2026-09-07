@@ -10,7 +10,6 @@ import {
   formatMoney,
   formatRank,
   isStaffRole,
-  PAYMENT_STATUS_LABEL,
   RANK_SYSTEMS,
   rankDisciplines,
   runsBranch,
@@ -28,14 +27,7 @@ import type { Member, MemberHistory } from "./members";
 import { dateFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { useEntity, useOrganization } from "./entity";
-import {
-  cardClass,
-  DriftBadge,
-  DUES_TONE,
-  RESOLVE,
-  Stat,
-  TAP,
-} from "./primitives";
+import { cardClass, DriftBadge, RESOLVE, Stat, TAP } from "./primitives";
 import { SkeletonLines, SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 import { Tabs } from "./tabs";
@@ -45,8 +37,6 @@ import { Tabs } from "./tabs";
  * Notes and Attendance. Split out of `members.tsx`, which keeps the list and
  * its three tabs.
  */
-
-type Dues = NonNullable<Member["dues"]>;
 
 /** The short tag on a member whose access is not clear, in the roster's words. */
 const MEMBERSHIP_TAG: Record<string, string> = {
@@ -77,12 +67,6 @@ export function MemberRow({
         {m.status === "suspended" && (
           <span className="text-muted-foreground ml-2 text-xs uppercase">
             suspended
-          </span>
-        )}
-        {m.dues && <DuesDot dues={m.dues} />}
-        {m.access?.state === "locked" && (
-          <span className="text-error ml-2 text-xs font-medium uppercase">
-            booking locked
           </span>
         )}
         {!isStaffRole(m) && m.membership && m.membership.verdict !== "ok" && (
@@ -196,7 +180,7 @@ export function MemberDetail({ m }: { m: Member }) {
         ) : tab === "notes" ? (
           <NotesTab memberId={m.memberId} />
         ) : tab === "membership" ? (
-          <MembershipTab userId={m.userId} name={m.name} />
+          <MembershipTab personId={m.personId} name={m.name} />
         ) : detail.isPending ? (
           <SkeletonLines n={5} />
         ) : detail.isError ? (
@@ -223,7 +207,7 @@ export function MemberDetail({ m }: { m: Member }) {
  * from here records THIS branch as where it happened, which is bookkeeping and
  * never a limit on what the plan covers.
  */
-function MembershipTab({ userId, name }: { userId: string; name: string }) {
+function MembershipTab({ personId, name }: { personId: string; name: string }) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const { entities } = useOrganization();
@@ -234,7 +218,7 @@ function MembershipTab({ userId, name }: { userId: string; name: string }) {
     needsDecision: { entityId: string; status: string }[];
   } | null>(null);
 
-  const held = useQuery(trpc.accessPlan.forUser.queryOptions({ userId }));
+  const held = useQuery(trpc.accessPlan.forUser.queryOptions({ personId }));
   const plans = useQuery(trpc.accessPlan.list.queryOptions());
   const nameOf = (id: string) =>
     entities.find((e) => e.id === id)?.name ?? "a closed branch";
@@ -402,13 +386,13 @@ function MembershipTab({ userId, name }: { userId: string; name: string }) {
       <div className="flex flex-wrap items-end gap-2">
         <div className="flex min-w-48 flex-1 flex-col gap-1.5">
           <label
-            htmlFor={`assign-${userId}`}
+            htmlFor={`assign-${personId}`}
             className="text-muted-foreground font-mono text-[10px] tracking-wide uppercase"
           >
             Give a membership
           </label>
           <Select
-            id={`assign-${userId}`}
+            id={`assign-${personId}`}
             value={picked}
             disabled={busy || offerable.length === 0}
             onChange={(e) => setPicked(e.target.value)}
@@ -432,7 +416,7 @@ function MembershipTab({ userId, name }: { userId: string; name: string }) {
           disabled={busy || picked === ""}
           onClick={() =>
             assign.mutate({
-              userId,
+              personId,
               planId: picked,
               assigningEntityId: here,
             })
@@ -791,29 +775,15 @@ function Overview({ m, data }: { m: Member; data: MemberHistory }) {
 
       <dl className="text-sm">
         <RoleControl m={m} />
-        <Detail term="Email" value={m.email} copy={m.email} />
+        <Detail
+          term="Email"
+          value={m.email ?? "No email"}
+          copy={m.email ?? undefined}
+        />
         {m.phone ? (
           <Detail term="Phone" value={m.phone} copy={m.phone} />
         ) : null}
         {favorite ? <Detail term="Favorite" value={favorite} /> : null}
-        {m.dues ? (
-          <>
-            <Detail
-              term="Plan"
-              value={`${m.dues.planName} · ${formatMoney(m.dues.priceMinor, m.dues.currency)}`}
-            />
-            <Detail
-              term="Next due"
-              value={`${dateFmt.format(new Date(m.dues.nextDueAt))} · ${PAYMENT_STATUS_LABEL[m.dues.status]}`}
-            />
-            {m.dues.lastConfirmedAt ? (
-              <Detail
-                term="Last payment"
-                value={dateFmt.format(new Date(m.dues.lastConfirmedAt))}
-              />
-            ) : null}
-          </>
-        ) : null}
         <Detail term="Joined" value={dateFmt.format(new Date(m.joinedAt))} />
       </dl>
     </div>
@@ -939,19 +909,3 @@ function AttendanceHistory({ history }: { history: MemberHistory["history"] }) {
 }
 
 /** A small payment-status dot + label next to a member's name (spec O7). */
-function DuesDot({ dues }: { dues: Dues }) {
-  return (
-    <span
-      className="ml-2 inline-flex items-center gap-1 align-middle text-xs font-normal"
-      title={`${PAYMENT_STATUS_LABEL[dues.status]} · ${formatMoney(dues.priceMinor, dues.currency)}`}
-    >
-      <span
-        className={`inline-block size-2 rounded-full ${DUES_TONE[dues.status]}`}
-        aria-hidden
-      />
-      <span className="text-muted-foreground">
-        {PAYMENT_STATUS_LABEL[dues.status]}
-      </span>
-    </span>
-  );
-}

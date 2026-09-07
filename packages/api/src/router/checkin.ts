@@ -1,7 +1,7 @@
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
-import { and, asc, eq, gte, isNull, lt } from "@matops/db";
+import { and, asc, eq, gte, isNull, lt, or, sql } from "@matops/db";
 import { classInstance, classParticipation } from "@matops/db/schema";
 import {
   bookingTier,
@@ -73,13 +73,19 @@ export const checkinRouter = {
       const gate = await bookingGate(ctx.db, {
         entity: ctx.entity,
         membership: ctx.membership,
-        userId: me,
+        accountUserId: me,
         sessionAt: cls.startsAt,
       });
       if (gate.locked) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
           message: gate.message ?? "Booking is locked for you.",
+        });
+      }
+      if (!ctx.membership.personId) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Your account is not linked to a person record.",
         });
       }
 
@@ -93,7 +99,13 @@ export const checkinRouter = {
         .where(
           and(
             eq(classParticipation.classId, input.classId),
-            eq(classParticipation.studentId, me),
+            or(
+              eq(classParticipation.personId, ctx.membership.personId),
+              and(
+                isNull(classParticipation.personId),
+                eq(classParticipation.studentId, me),
+              ),
+            ),
           ),
         );
       const willBook = !existing || existing.bookingStatus === "cancelled";
@@ -103,6 +115,8 @@ export const checkinRouter = {
         .values({
           academyId: ctx.academyId,
           classId: input.classId,
+          personOrganizationId: ctx.organizationId,
+          personId: ctx.membership.personId,
           studentId: me,
           bookingStatus: "booked",
           bookingTier: tier,
@@ -111,7 +125,8 @@ export const checkinRouter = {
           cancelledAt: null,
         })
         .onConflictDoUpdate({
-          target: [classParticipation.classId, classParticipation.studentId],
+          target: [classParticipation.classId, classParticipation.personId],
+          targetWhere: sql`person_id is not null`,
           // Always mark present; only (re)book when they weren't already booked
           // (a cancelled row flips back; a walk-in `none` / active `booked` stays).
           set: willBook

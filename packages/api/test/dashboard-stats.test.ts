@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { Harness } from "./helpers";
 import {
   harness,
-  memberId,
   rejectionCode,
   seedAcademies,
   seedClasses,
@@ -50,23 +49,23 @@ async function seedClaim(
   daysAgo: number,
 ): Promise<void> {
   await h.pg.exec(`
-    INSERT INTO "membership_plan" (id, academy_id, name, price_minor, currency, cycle)
-      VALUES ('${PLAN}', '${A}', 'Unlimited', ${amountMinor}, 'EUR', 'monthly')
+    INSERT INTO "access_plan" (id, organization_id, name, price_minor, currency)
+      VALUES ('${PLAN}', '${A}', 'Unlimited', ${amountMinor}, 'EUR')
       ON CONFLICT (id) DO NOTHING;
-    INSERT INTO "payment_claim"
-      (academy_id, member_id, plan_id, amount_minor, currency, period, status, confirmed_at, created_at)
-      VALUES ('${A}', '${memberId(A, ANA)}', '${PLAN}', ${amountMinor}, 'EUR',
-              to_char(now() - interval '${daysAgo} days', 'YYYY-MM'),
-              'confirmed', now() - interval '${daysAgo} days', now());
+    INSERT INTO "membership_purchase"
+      (organization_id, user_id, entity_id, plan_id, plan_name, price_minor,
+       currency, start_month, entity_ids, branch_names, version, reference,
+       status, confirmed_at)
+      VALUES ('${A}', '${ANA}', '${A}', '${PLAN}', 'Unlimited', ${amountMinor},
+              'EUR', date_trunc('month', now())::date, ARRAY['${A}'],
+              ARRAY['Academy A'], 'test', gen_random_uuid()::text,
+              'confirmed', now() - interval '${daysAgo} days');
   `);
 }
 
 describe("stats.dashboard", () => {
   it("counts marked attendance into the gym insights", async () => {
     const h = await base();
-    // A couple of hours ago, not yesterday: weeks are Sunday-aligned, so a
-    // class 24 hours old falls into LAST week whenever the suite runs on a
-    // Sunday, and this assertion is about the count and not the calendar.
     await seedClasses(h.pg, [
       { id: RECENT, academyId: A, instructorId: COACH, startsInMinutes: -120 },
     ]);
@@ -126,12 +125,15 @@ describe("stats.dashboard", () => {
   it("leaves an unconfirmed payment out of the money", async () => {
     const h = await base();
     await h.pg.exec(`
-      INSERT INTO "membership_plan" (id, academy_id, name, price_minor, currency, cycle)
-        VALUES ('${PLAN}', '${A}', 'Unlimited', 5000, 'EUR', 'monthly');
-      INSERT INTO "payment_claim"
-        (academy_id, member_id, plan_id, amount_minor, currency, period, status, created_at)
-        VALUES ('${A}', '${memberId(A, ANA)}', '${PLAN}', 5000, 'EUR',
-                to_char(now(), 'YYYY-MM'), 'pending', now());
+      INSERT INTO "access_plan" (id, organization_id, name, price_minor, currency)
+        VALUES ('${PLAN}', '${A}', 'Unlimited', 5000, 'EUR');
+      INSERT INTO "membership_purchase"
+        (organization_id, user_id, entity_id, plan_id, plan_name, price_minor,
+         currency, start_month, entity_ids, branch_names, version, reference,
+         status)
+        VALUES ('${A}', '${ANA}', '${A}', '${PLAN}', 'Unlimited', 5000, 'EUR',
+                date_trunc('month', now())::date, ARRAY['${A}'],
+                ARRAY['Academy A'], 'test', gen_random_uuid()::text, 'claimed');
     `);
 
     const { revenue } = await h.as(OWNER, A).stats.dashboard();

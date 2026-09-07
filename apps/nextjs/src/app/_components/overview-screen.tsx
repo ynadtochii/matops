@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
@@ -12,6 +13,7 @@ import {
   entityHref,
   formatMoney,
   isPendingCoach,
+  organizationHref,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { Button } from "@matops/ui/button";
@@ -137,6 +139,7 @@ export function OverviewScreen() {
  */
 function NeedsAttention() {
   const trpc = useTRPC();
+  const branchId = useSearchParams().get("branch") ?? undefined;
   const claims = useQuery(trpc.accessPlan.claims.queryOptions());
   const purchases = useQuery(trpc.membershipPurchase.review.queryOptions());
   const directory = useQuery(trpc.stats.organizationMembers.queryOptions());
@@ -167,7 +170,7 @@ function NeedsAttention() {
       name: c.name,
       detail: c.planName,
       reason: "Payment claims",
-      href: `/people/${c.userId}`,
+      href: `/people/${c.personId}`,
     })),
     ...(purchases.data ?? []).map((p) => ({
       key: `purchase-${p.id}`,
@@ -200,11 +203,11 @@ function NeedsAttention() {
     })),
     ...(uncovered.data?.groups ?? []).flatMap((g) =>
       g.people.map((p) => ({
-        key: `uncovered-${g.entityId}-${p.userId}`,
+        key: `uncovered-${g.entityId}-${p.personId}`,
         name: p.name,
         detail: g.entityName,
         reason: "Missing membership",
-        href: `/people/${p.userId}`,
+        href: `/people/${p.personId}`,
       })),
     ),
     ...(review.data?.items ?? []).map((b) => ({
@@ -362,7 +365,7 @@ function NeedsAttention() {
         <p className="text-muted-foreground text-sm">
           Showing the first 50 bookings with access issues.{" "}
           <Link
-            href="/memberships?tab=access"
+            href={organizationHref("/memberships?tab=access", branchId)}
             className="text-brand-strong underline underline-offset-4"
           >
             Review membership access
@@ -466,11 +469,93 @@ function OwnerOverview() {
           className="border-border order-2 flex min-w-0 flex-col gap-6 xl:order-none xl:border-l xl:pl-6"
         >
           <NeedsAttention />
+          <JobHealth />
           <SetupChecklist compact />
         </aside>
       </div>
     </div>
   );
+}
+
+function JobHealth() {
+  const trpc = useTRPC();
+  const health = useQuery(trpc.organization.jobHealth.queryOptions());
+
+  if (health.isPending) {
+    return <SkeletonCard />;
+  }
+  if (health.isError) {
+    return (
+      <section className={`${cardClass()} flex flex-col gap-3 text-sm`}>
+        <p>Scheduled job status could not load.</p>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void health.refetch()}
+          disabled={health.isFetching}
+        >
+          Retry status
+        </Button>
+      </section>
+    );
+  }
+
+  return (
+    <section className={`${cardClass()} flex flex-col gap-4`}>
+      <div>
+        <Eyebrow>Automation</Eyebrow>
+        <h2 className="mt-1 font-semibold">Scheduled jobs</h2>
+      </div>
+      <ul className="flex flex-col gap-3 text-sm">
+        {health.data.jobs.map((job) => {
+          const needsAttention = job.overdue || job.status === "failed";
+          return (
+            <li key={job.job} className="flex flex-col gap-1">
+              <span className="flex items-center justify-between gap-3">
+                <span className="font-medium">{job.label}</span>
+                <span
+                  className={
+                    needsAttention
+                      ? "text-destructive"
+                      : "text-muted-foreground"
+                  }
+                >
+                  {job.status === "never_run"
+                    ? "Never run"
+                    : job.status === "failed"
+                      ? "Failed"
+                      : job.overdue
+                        ? "Late"
+                        : job.status === "running"
+                          ? "Running"
+                          : "Healthy"}
+                </span>
+              </span>
+              {job.lastSucceededAt && (
+                <span className="text-muted-foreground text-xs">
+                  Last successful run {formatJobTime(job.lastSucceededAt)}
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {health.data.exhaustedEmails > 0 && (
+        <p className="text-destructive border-border border-t pt-3 text-sm">
+          {health.data.exhaustedEmails.toLocaleString()} email
+          {health.data.exhaustedEmails === 1 ? "" : "s"} could not be delivered
+          after all retries.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function formatJobTime(value: Date): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(value);
 }
 
 function OrganizationReads({
@@ -482,6 +567,7 @@ function OrganizationReads({
   classes?: number;
   paid?: { currency: string; amountMinor: number }[];
 }) {
+  const branchId = useSearchParams().get("branch") ?? undefined;
   const stats = [
     {
       label: "Active members",
@@ -543,7 +629,7 @@ function OrganizationReads({
                 verified.
               </p>
               <Link
-                href="/memberships?tab=payments"
+                href={organizationHref("/memberships?tab=payments", branchId)}
                 className="text-brand-strong w-fit py-2 font-medium underline underline-offset-4"
               >
                 Manage memberships

@@ -95,7 +95,6 @@ export interface BranchHealthFacts {
   scheduled: boolean;
   /** Somebody active runs this branch: an owner who teaches counts. */
   staffed: boolean;
-  /** The branch runs on shared memberships rather than legacy branch dues. */
   enforced: boolean;
   uncovered: number;
   /** A plan of this gym names this branch among the ones it covers. */

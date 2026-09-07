@@ -224,8 +224,8 @@ export async function seedAcademies(
     );
   if (orgs.length)
     statements.push(
-      `INSERT INTO "organization" (id, name, slug, created_at)
-         VALUES ${orgs.join(",")};`,
+      `INSERT INTO "organization" (id, name, slug, created_at, curriculum_enabled, referrals_enabled)
+         VALUES ${orgs.map((row) => row.replace(/\)$/, ", true, true)")).join(",")};`,
     );
   if (members.length)
     statements.push(

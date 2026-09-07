@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { ScrollView, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { DisciplineTone } from "@matops/domain";
 import { capacityDisplay, dayWindow, disciplineTone } from "@matops/domain";
 
+import type { BookingSubject } from "~/components/book-control";
 import type { Theme } from "~/components/theme";
 import type { RouterOutputs } from "~/utils/api";
 import { AppHeader } from "~/components/app-header";
@@ -16,6 +17,7 @@ import { ScheduleSkeleton } from "~/components/skeletons";
 import { SuspendedNotice } from "~/components/suspended-notice";
 import {
   Banner,
+  Button,
   Card,
   EmptyState,
   ErrorState,
@@ -37,7 +39,9 @@ import {
   spotsLeftLabel,
 } from "~/utils/format";
 
-type ClassRow = RouterOutputs["class"]["mine"][number];
+type ClassRow =
+  | RouterOutputs["class"]["mine"][number]
+  | RouterOutputs["person"]["schedule"][number];
 
 /** The discipline rail colour. Same tones the web schedule paints (ADR 53). */
 const toneColorOf = (t: Theme): Record<DisciplineTone, string> => ({
@@ -82,10 +86,12 @@ function ClassCard({
   c,
   onPress,
   now,
+  subject,
 }: {
   c: ClassRow;
   onPress: () => void;
   now: Date;
+  subject?: BookingSubject;
 }) {
   const t = useTheme();
   const cancelled = c.status === "cancelled";
@@ -204,9 +210,9 @@ function ClassCard({
           {cancelled ? (
             <Chevron />
           ) : bookable ? (
-            <BookButton c={c} />
+            <BookButton c={c} subject={subject} />
           ) : booked && !past ? (
-            <CancelButton classId={c.id} />
+            <CancelButton classId={c.id} subject={subject} />
           ) : (
             <Chevron />
           )}
@@ -232,6 +238,7 @@ function ClassCard({
 export default function Schedule() {
   const router = useRouter();
   const current = useQuery(trpc.academy.current.queryOptions());
+  const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
 
   const now = new Date();
   const todayKey = dayKey(now);
@@ -241,12 +248,41 @@ export default function Schedule() {
   const from = windowStart.toISOString();
   const to = windowEnd.toISOString();
 
-  // A suspended member has no enrolled access — the server rejects `class.mine`.
-  // Gate the query off and show a calm notice instead of a load error (§4).
-  const suspended = current.data?.status === "suspended";
-  const week = useQuery(
-    trpc.class.mine.queryOptions({ from, to }, { enabled: !suspended }),
+  const entityId = current.data?.academyId;
+  const subjects = useQuery(
+    trpc.person.mySubjects.queryOptions(entityId ? { entityId } : undefined, {
+      enabled: Boolean(entityId),
+    }),
   );
+  const selected =
+    subjects.data?.find((subject) => subject.personId === selectedPersonId) ??
+    subjects.data?.find((subject) => subject.relationship === "self") ??
+    subjects.data?.[0];
+  const managedSubject =
+    entityId && selected?.relationship === "guardian"
+      ? { entityId, personId: selected.personId }
+      : undefined;
+  const suspended =
+    selected?.relationship !== "guardian" &&
+    current.data?.status === "suspended";
+  const selfWeek = useQuery(
+    trpc.class.mine.queryOptions(
+      { from, to },
+      { enabled: !suspended && selected?.relationship !== "guardian" },
+    ),
+  );
+  const managedWeek = useQuery(
+    trpc.person.schedule.queryOptions(
+      {
+        entityId: entityId ?? "",
+        personId: selected?.personId ?? "00000000-0000-0000-0000-000000000000",
+        from,
+        to,
+      },
+      { enabled: Boolean(managedSubject) },
+    ),
+  );
+  const week = managedSubject ? managedWeek : selfWeek;
 
   const byDay = useMemo(() => groupByDay(week.data ?? []), [week.data]);
 
@@ -257,12 +293,36 @@ export default function Schedule() {
 
   return (
     <Screen header={<AppHeader />}>
-      <OverdueBanner />
+      {!managedSubject && <OverdueBanner />}
 
       <View style={{ marginBottom: 16 }}>
         <Heading>Schedule</Heading>
-        <Muted>Your classes for the next seven days.</Muted>
+        <Muted>
+          {managedSubject
+            ? `${selected?.name ?? "This student"}'s classes for the next seven days.`
+            : "Your classes for the next seven days."}
+        </Muted>
       </View>
+
+      {(subjects.data?.length ?? 0) > 1 && (
+        <View style={{ gap: 8, marginBottom: 16 }}>
+          <Eyebrow>Booking for</Eyebrow>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            {subjects.data?.map((subject) => (
+              <Button
+                key={subject.personId}
+                label={subject.name}
+                variant={
+                  subject.personId === selected?.personId
+                    ? "primary"
+                    : "outline"
+                }
+                onPress={() => setSelectedPersonId(subject.personId)}
+              />
+            ))}
+          </View>
+        </View>
+      )}
 
       {isPending && (
         <View style={{ marginBottom: 16 }}>
@@ -307,10 +367,19 @@ export default function Schedule() {
                       key={c.id}
                       c={c}
                       now={now}
+                      subject={managedSubject}
                       onPress={() =>
                         router.push({
                           pathname: "/class/[id]",
-                          params: { id: c.id },
+                          params: managedSubject
+                            ? {
+                                id: c.id,
+                                personId: managedSubject.personId,
+                                entityId: managedSubject.entityId,
+                                from,
+                                to,
+                              }
+                            : { id: c.id },
                         })
                       }
                     />

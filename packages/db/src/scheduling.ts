@@ -1,13 +1,16 @@
 import { sql } from "drizzle-orm";
 import {
   check,
+  foreignKey,
   index,
   pgEnum,
   pgTable,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
+import { user } from "./auth-schema";
 import { entity } from "./entity-schema";
+import { person } from "./person-schema";
 
 /**
  * Scheduling domain schema (Phase 2). Owns ONLY the scheduling tables; identity
@@ -224,7 +227,9 @@ export const classParticipation = pgTable(
       .uuid()
       .notNull()
       .references(() => classInstance.id),
-    studentId: t.text().notNull(), // → user.id
+    studentId: t.text(), // → user.id
+    personOrganizationId: t.text(),
+    personId: t.uuid(),
     bookingStatus: bookingStatus().notNull().default("booked"),
     bookingTier: bookingTier().notNull(),
     bookedAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -244,10 +249,64 @@ export const classParticipation = pgTable(
     // One booking per person per class → stops double-book, enables the re-book
     // upsert (ON CONFLICT flips cancelled → booked).
     uniqueIndex("cp_uniq_class_student").on(table.classId, table.studentId),
+    uniqueIndex("cp_uniq_class_person")
+      .on(table.classId, table.personId)
+      .where(sql`person_id is not null`),
     // Per-class attendee lookups (owner attendance, slice 3.3).
     index("cp_by_academy_class").on(table.academyId, table.classId),
     // "My bookings" join for the student schedule + detail reads.
     index("cp_by_academy_student").on(table.academyId, table.studentId),
+    index("cp_by_academy_person").on(table.academyId, table.personId),
+    foreignKey({
+      name: "class_participation_person_same_org",
+      columns: [table.personOrganizationId, table.personId],
+      foreignColumns: [person.organizationId, person.id],
+    }),
+    check(
+      "class_participation_has_subject",
+      sql`student_id is not null or person_id is not null`,
+    ),
+    check(
+      "class_participation_person_complete",
+      sql`(person_organization_id is null) = (person_id is null)`,
+    ),
+  ],
+);
+
+export const attendanceCorrection = pgTable(
+  "attendance_correction",
+  (t) => ({
+    id: t.uuid().notNull().primaryKey().defaultRandom(),
+    academyId: t
+      .text()
+      .notNull()
+      .references(() => entity.id),
+    classId: t
+      .uuid()
+      .notNull()
+      .references(() => classInstance.id),
+    kind: t.text().notNull(),
+    subjectId: t.text(),
+    beforeValue: t.text(),
+    afterValue: t.text(),
+    reason: t.text().notNull(),
+    actorId: t.text().references(() => user.id, { onDelete: "set null" }),
+    createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
+  }),
+  (table) => [
+    index("attendance_correction_by_class").on(
+      table.academyId,
+      table.classId,
+      table.createdAt,
+    ),
+    check(
+      "attendance_correction_kind_supported",
+      sql`kind in ('member','visitor','review')`,
+    ),
+    check(
+      "attendance_correction_reason_bounded",
+      sql`char_length(reason) between 3 and 500`,
+    ),
   ],
 );
 
@@ -352,6 +411,8 @@ export const dropInVisit = pgTable(
     // Returned once to the public caller; the only handle that cancels a
     // visitor booking, so it is never listed by any read endpoint.
     cancelToken: t.text(),
+    cancelTokenExpiresAt: t.timestamp({ withTimezone: true }),
+    bookedClassStartsAt: t.timestamp({ withTimezone: true }),
     bookedAt: t.timestamp({ withTimezone: true }),
     cancelledAt: t.timestamp({ withTimezone: true }),
     attendedAt: t.timestamp({ withTimezone: true }),

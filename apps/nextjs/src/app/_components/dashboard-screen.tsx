@@ -15,7 +15,6 @@ import {
   dayWindow,
   disciplineTone,
   formatMoney,
-  groupMoneyByCurrency,
   isBjjAcademy,
   isFirstRun,
   isStaff as isStaffOf,
@@ -80,20 +79,6 @@ interface QueueItem {
  * What the overdue members owe in total, but only when a single currency is in
  * play. Two currencies are never added together (the rule spec O9 already sets).
  */
-function outstanding(
-  rows: { dues: { priceMinor: number; currency: string } | null }[],
-): string | null {
-  const totals = groupMoneyByCurrency(
-    rows.flatMap((r) =>
-      r.dues
-        ? [{ amountMinor: r.dues.priceMinor, currency: r.dues.currency }]
-        : [],
-    ),
-  );
-  const only = totals.length === 1 ? totals[0] : undefined;
-  return only ? `${formatMoney(only.amountMinor, only.currency)} owed` : null;
-}
-
 /**
  * O1 Dashboard — the "run the week" command center (ticket 03). A "needs you"
  * action queue (every item is a blocker that can be driven to zero), a couple of
@@ -141,10 +126,6 @@ export function DashboardScreen() {
     ...trpc.dropIn.list.queryOptions(),
     enabled: isOwner,
   });
-  const claims = useQuery({
-    ...trpc.payments.claims.queryOptions(),
-    enabled: isOwner,
-  });
   const dash = useQuery({
     ...trpc.stats.dashboard.queryOptions(),
     enabled: isStaff,
@@ -166,7 +147,6 @@ export function DashboardScreen() {
     pendingStudents: pendingCount,
     pendingCoaches,
     active: activeCount,
-    overdue,
   } = rosterSummary(members);
   const weekCount = upcomingClassCount(weekRows, today);
   const unmarked = weekRows.filter(
@@ -204,23 +184,10 @@ export function DashboardScreen() {
       ? []
       : [
           {
-            key: "claims",
-            href: href("/payments"),
-            count: claims.data?.length ?? 0,
-            label: "Payments to confirm",
-          },
-          {
             key: "coach-requests",
             href: href("/coaches"),
             count: pendingCoaches,
             label: "Coach requests",
-          },
-          {
-            key: "overdue",
-            href: href("/members?tab=members&filter=overdue"),
-            count: overdue.length,
-            label: "Overdue members",
-            sub: outstanding(overdue),
           },
           {
             key: "leads",
@@ -243,7 +210,7 @@ export function DashboardScreen() {
     week.isPending ||
     attendance.isPending ||
     memberList.isPending ||
-    (isOwner && (leads.isPending || claims.isPending));
+    (isOwner && leads.isPending);
   const numbersLoading = week.isPending || memberList.isPending;
   const firstRun = isOwner && isFirstRun(activeCount, weekCount);
 

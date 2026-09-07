@@ -301,6 +301,7 @@ function PendingCoaches() {
       queryClient.invalidateQueries(
         trpc.stats.organizationMembers.pathFilter(),
       ),
+      queryClient.invalidateQueries(trpc.stats.navigationSummary.pathFilter()),
     ]);
   const onError = (err: { message: string }) =>
     toast.error(err.message || "Action failed");

@@ -16,7 +16,7 @@ import {
 async function ReferralsData() {
   const academy = await currentAcademy();
 
-  if (academy && runsBranch(academy)) {
+  if (academy?.referralsEnabled && runsBranch(academy)) {
     prefetch(trpc.referral.dashboard.queryOptions());
   }
 

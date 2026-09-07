@@ -33,8 +33,13 @@ import {
   setupProgress,
   slugify,
 } from "@matops/domain";
-import { CreateAcademySchema, IdSchema } from "@matops/validators";
+import {
+  CreateAcademySchema,
+  IdSchema,
+  OrganizationModulesSchema,
+} from "@matops/validators";
 
+import { readScheduledJobHealth } from "../job-run";
 import { studentRosterOf } from "../members";
 import { loadRosterStanding } from "../membership-access";
 import { assignmentAppliesNow } from "../membership-status";
@@ -242,10 +247,6 @@ export const organizationRouter = {
               ),
             );
 
-          // Only a branch that RUNS on memberships can have an uncovered
-          // member: at one still on branch dues the question has no meaning,
-          // and counting it would tell an owner to fix something the gate
-          // there does not ask about (ADR 127 §5).
           let uncovered = 0;
           if (branch.membershipEnforcedAt) {
             const active = (
@@ -351,6 +352,33 @@ export const organizationRouter = {
     if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "No gym" });
     return row;
   }),
+
+  jobHealth: organizationManagerIdentityProcedure.query(({ ctx }) =>
+    readScheduledJobHealth(ctx.baseDb, ctx.organizationId),
+  ),
+
+  modules: organizationManagerIdentityProcedure.query(async ({ ctx }) => {
+    const [row] = await ctx.baseDb
+      .select({
+        curriculumEnabled: organization.curriculumEnabled,
+        referralsEnabled: organization.referralsEnabled,
+      })
+      .from(organization)
+      .where(eq(organization.id, ctx.organizationId))
+      .limit(1);
+    if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "No gym" });
+    return row;
+  }),
+
+  setModules: organizationManagerIdentityProcedure
+    .input(OrganizationModulesSchema)
+    .mutation(async ({ ctx, input }) => {
+      await ctx.baseDb
+        .update(organization)
+        .set(input)
+        .where(eq(organization.id, ctx.organizationId));
+      return input;
+    }),
 
   /**
    * Rename the gym. Writes `organization.name` and nothing else: each branch

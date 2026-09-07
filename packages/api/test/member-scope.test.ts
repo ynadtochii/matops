@@ -89,16 +89,6 @@ describe("member-scoped owner mutations reject a foreign memberId", () => {
     );
   });
 
-  it("payments.setMemberDues", async () => {
-    await expect(
-      owner().payments.setMemberDues({
-        memberId: FOREIGN,
-        planId: null,
-        nextDueAt: "2026-09-01",
-      }),
-    ).rejects.toThrow(/Member not found/);
-  });
-
   it("referral.assign", async () => {
     await expect(
       owner().referral.assign({

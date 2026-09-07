@@ -2,7 +2,6 @@ import type { ClaimRemindersOptions, DbExec } from "@matops/db";
 import type { NotificationKind, PushMessage } from "@matops/domain";
 import type { BatchPush } from "@matops/notifications";
 import {
-  claimDueDuesReminders,
   claimDueReminderClasses,
   getAcademyPublic,
   getPushTargets,
@@ -13,9 +12,7 @@ import {
   buildApprovalMessage,
   buildCancelledMessage,
   buildClassChangeMessage,
-  buildDuesReminderMessage,
   buildReminderMessage,
-  formatMoney,
   formatWhen,
 } from "@matops/domain";
 import { sendPush } from "@matops/notifications";
@@ -362,8 +359,6 @@ export async function runReminderSweep(
 ): Promise<{
   processed: number;
   sent: number;
-  duesProcessed: number;
-  duesSent: number;
 }> {
   const claimed = await claimDueReminderClasses({
     now: opts.now,
@@ -393,61 +388,8 @@ export async function runReminderSweep(
     ),
   );
   const sent = claimed.length;
-  const dues = await sweepDuesReminders(exec, opts);
   return {
     processed: claimed.length,
     sent,
-    duesProcessed: dues.processed,
-    duesSent: dues.sent,
   };
-}
-
-/** Short due-date label for a dues reminder, e.g. "10 Aug" (UTC calendar day). */
-function formatDueLabel(nextDueAt: Date): string {
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
-    month: "short",
-    timeZone: "UTC",
-  }).format(nextDueAt);
-}
-
-/**
- * Dues-reminder sweep (v1.3, R.1 — docs/issues/40). Claims each member who is due
- * soon or overdue and not yet reminded this period (one per period, base
- * connection), then pushes them via the existing transport. Rides the
- * DAILY cron; the frequent cadence stays a Phase-5 concern. Never throws (each
- * `deliver` swallows its own errors).
- */
-export async function sweepDuesReminders(
-  exec: DbExec,
-  opts: SweepOptions = {},
-): Promise<{ processed: number; sent: number }> {
-  const claimed = await claimDueDuesReminders({
-    now: opts.now,
-    limit: opts.limit,
-    exec,
-  });
-  // Same as the class sweep: the period stamp is already written, so every
-  // claimed member has to be attempted in this run.
-  await deliver(
-    claimed.map((d) => {
-      const push = buildDuesReminderMessage({
-        academyName: d.academyName,
-        amountLabel: formatMoney(d.priceMinor, d.currency),
-        dueLabel: formatDueLabel(d.nextDueAt),
-        overdue: d.overdue,
-      });
-      return {
-        academyId: d.academyId,
-        userId: d.userId,
-        kind: "dues_reminder" as const,
-        push,
-        data: { type: "dues" },
-        link: "/payments",
-      };
-    }),
-    exec,
-    opts.send,
-  );
-  return { processed: claimed.length, sent: claimed.length };
 }

@@ -122,7 +122,7 @@ export async function membershipBankDetails(db: TenantTx): Promise<string> {
  */
 export async function membershipStanding(
   db: TenantTx,
-  userId: string,
+  subject: { personId: string; accountUserId: string | null },
   now: Date,
 ): Promise<MembershipStanding[]> {
   const calendar = await membershipCalendar(db);
@@ -140,7 +140,17 @@ export async function membershipStanding(
     })
     .from(accessAssignment)
     .innerJoin(accessPlan, eq(accessPlan.id, accessAssignment.planId))
-    .where(eq(accessAssignment.userId, userId));
+    .where(
+      or(
+        eq(accessAssignment.personId, subject.personId),
+        subject.accountUserId
+          ? and(
+              isNull(accessAssignment.personId),
+              eq(accessAssignment.userId, subject.accountUserId),
+            )
+          : undefined,
+      ),
+    );
   if (rows.length === 0) return [];
   // Only the memberships whose period covers this month (ADR 129). A successor
   // that starts next month owes nothing yet, and the one it replaces still owes

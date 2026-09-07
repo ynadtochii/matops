@@ -1,5 +1,75 @@
 # Goal
 
+Prepare MatOps for the first real academy. Simplify memberships, complete daily workflows, and provide one navigation experience.
+
+## First-academy release, approved 2026-09-07
+
+Status: core implementation complete. Privacy facts, manual acceptance, migration rehearsal, restore rehearsal, and user-run tests remain open.
+
+This section is the active release plan. It supersedes earlier restrictions against legacy dues removal and account-independent students. Earlier URL preservation means retaining working deep links through redirects where routes change. Database organization and branch boundaries remain in place.
+
+### Decisions
+
+1. Keep scheduling, booking, visitors, attendance, member management, staff permissions, and shared memberships as the release core.
+2. Use shared memberships everywhere. Remove legacy branch dues after discovering all dependencies. Keep membership enforcement separate from the choice of payment model.
+3. Let staff create student records without a login. Separate the attending student from the account that signs in. Support an optional account link and a minimal guardian relationship for children. Do not require fake emails. Family discounts and household billing remain deferred.
+4. Keep payments as a monthly paid/unpaid register for this release. Do not describe recorded paid flags as bank revenue. Amount-based reconciliation, partial payments, invoices, refunds, and card collection remain deferred.
+5. Owners and managers may correct and finish attendance older than 14 days. Require a reason and record the actor, time, and changed values. Instructors retain the existing editing window. Apply the rule to members, visitors, and review completion.
+6. Add email for cancelled or rescheduled classes, including visitors. Save pending delivery with the business change and retry failures. Keep the existing inbox and native push. This approves product implementation, not sending messages during this planning task.
+7. Complete visitor booking with durable confirmation, a returnable booking page, and cancellation using the existing token mechanism.
+8. Schedule shared-membership reminders and calendar extension. Record successful runs and show overdue work. Preserve current overdue-payment policy; do not introduce cancellation for ended memberships or lost coverage.
+9. Add assisted student import with preview, duplicate detection, rejected rows, plan assignment, and starting paid/unpaid state. Extend export to archived students, attendance, and payment history. Reuse bulk assignment and the current CSV export.
+10. Make curriculum and referrals optional. Keep general spaces disabled unless needed. Simplify the single-branch experience. Keep native publication outside the first release requirement, while preserving existing mobile support.
+11. Defer new reporting, curriculum expansion, custom rank systems, and automated billing. Add hard capacity limits or waitlists only when the academy's actual booking rules require them.
+12. Fill privacy contact placeholders, close current release checks, and rehearse database recovery before real registration. Measure whether staff complete daily tasks without help.
+13. Provide one persistent application shell across organization and branch pages. Clicking between `/overview` and `/entities/...` must not replace navigation state or remove the other group's badges. Consolidate route layouts under that shell; do not treat matching sidebar styling as completion.
+14. Keep the selected branch visible on organization pages. The selector chooses a branch, not a different navigation mode. Organization badges count authorized organization work; branch badges count the selected branch. Both update regardless of the page currently open.
+15. Keep explicit branch IDs in shareable URLs and scoped API requests. Preserve independent browser tabs, role restrictions, back/forward navigation, and old deep links. A unified interface does not merge database access boundaries.
+16. A clean database is available as a release option, not a task to run now. Inspect the exact target and current records before any reset. Preserve development fixtures and never assume production is empty from an older note.
+
+### Implementation steps
+
+- [x] Inspect current features, release documents, and both navigation shells. Record accepted scope and preserve previous work.
+- [x] R0: Inventory identity, legacy dues, route layouts, badge readers, and affected callers across web, Expo, API, database, scripts, and tests. Record baseline behavior and current migration state. Choose the final route map before changing links.
+- [x] R1: Separate student records from login accounts. Define account linking, guardian permissions, duplicate handling, branch enrollment, and historical references. Reuse the existing person directory. Write focused permission and account-linking coverage.
+- [x] R2: Standardize on shared memberships. Remove legacy readers, writers, screens, reminders, and unused schema only after all callers use the shared model. Preserve paid history, claims, scheduled changes, staff access, and optional enforcement.
+- [x] R3: Replace competing shell composition in `/Users/kuna/projects/matops/apps/nextjs/src/app/_components/app-shell.tsx` and `/Users/kuna/projects/matops/apps/nextjs/src/app/_components/organization-shell.tsx` with one persistent shell. Reuse `/Users/kuna/projects/matops/apps/nextjs/src/app/_components/shell-frame.tsx`. Move shared navigation and badge ownership above route-specific content. Remove duplicate navigation definitions after cutover.
+- [x] R3: Supply both badge groups through authorized summary reads. Scope branch reads explicitly without changing the organization request scope. Keep cache keys scoped to organization and branch. Refresh affected counts after mutations and through the existing freshness policy. Distinguish loading or failed counts from a confirmed zero.
+- [ ] R3: Verify the screenshot case: branch Roster and Coaches badges remain present on organization pages; organization People and Memberships badges remain present on branch pages. Resolve an item from either area and confirm the matching badge updates. Verify zero/one/many branches, rapid switching, expired access, two tabs, deep links, mobile drawer, and keyboard focus.
+- [ ] R4: Implement approved historical attendance corrections with reasons and change history. Preserve changed-roster detection and stale-submit rejection. Complete outstanding attendance browser checks.
+- [ ] R5: Persist notification delivery work with class changes. Add retryable email delivery for members and visitors. Finish visitor confirmation and cancellation. Verify duplicate requests, process failure after commit, expired tokens, changed times, and cancelled classes.
+- [ ] R6: Schedule membership reminders and calendar extension using the existing endpoints. Verify safe retries, delayed jobs, time zones, incomplete batches, and visible failures. Keep overdue cancellation behavior explicit and unchanged.
+- [ ] R7: Build assisted import and complete exports. Preview before writes, match duplicates explicitly, report rejected records, and preserve original history. Verify exports include the intended full record set rather than only the current filtered screen.
+- [ ] R8: Make optional modules opt-in and simplify single-branch setup/navigation. Keep the core tools easy to reach. Fill privacy identity and contact details from the operator's real information.
+- [ ] R9: Close student membership selection and staff separation acceptance checks alongside the new work. Walk a complete academy week: import, assign, book, cancel, notify, attend, confirm payment, and correct mistakes. Rehearse restore against an isolated target. Record task completion without assistance.
+- [ ] R9: Run lint/typecheck, inspect final changes, and hand over exact focused test commands. Do not run tests unless explicitly requested. Update spec, architecture, ADRs, roadmap, and changelog with implemented behavior. Old successful checks do not verify new work.
+
+Dependencies: R0 precedes implementation. R1 precedes import and final identity-dependent changes. R2 precedes final reminder wiring. R3 and R4 can proceed independently after discovery. R5 precedes public visitor launch. R9 gates release.
+
+### Current step
+
+R9 release checks. Add the real privacy operator details, run the manual browser and device journeys, rehearse the staged migration and restore, then run the focused test commands.
+
+### R0 record
+
+- Identity baseline: `user` is both the login account and student profile. Branch enrollment, shared assignments, purchases, attendance, directory URLs, booking, and check-in use account IDs. No guardian model exists.
+- Identity direction: add one organization person record with an optional unique account link. Move student subject references to person IDs. Keep staff actor and login fields on account IDs. Resolve guardian actions with an explicit person target and permission check.
+- Legacy dues baseline: `membership_plan`, `member_dues`, `payment_claim`, and `payment_settings` remain active behind `entity.membership_enforced_at`. Normal readers and writers still exist in web, Expo, API, database helpers, reminders, seeds, erase, and reports.
+- Legacy dues risk: `packages/db/scripts/2026-09-04-alma-onto-shared-memberships.sql` deletes payment history and uses an index removed by migration `0065`. Do not run it. Replace it with a history-preserving conversion before R2 removes old tables.
+- Route map: keep organization paths at `/overview`, `/people`, `/memberships`, and `/settings`. Add `branch=<authorized branch id>` as selected-branch state. Keep `/entities/<branchId>/...` unchanged. Preserve `/staff` and `/profile` through redirects that retain a valid branch.
+- Shell direction: mount one persistent shell under the authenticated app layout. Keep organization calls unscoped by branch headers. Add one authorized summary query keyed by organization and selected branch. Return separate ready, loading, failed, and unavailable badge states.
+- Operations baseline: historical attendance has a fixed 14-day write limit and no audit table. Class notices run after commit without durable retry. Visitor tokens are returned by the API but dropped by the booking page. Only the legacy reminder route is scheduled. Export uses the filtered branch roster. Curriculum and referrals are always on for BJJ branches. Privacy text still has placeholders.
+- Development database verification: the project verifier reported 67 of 67 journal entries applied through `0068`, 27 users, and one organization. Production migration and data state remain unverified.
+- Release order remains R1, R2, then R3-R8 by dependency. R9 remains the release gate. No database reset, production write, deploy, message, or test run occurred during R0.
+
+### Lessons Learned
+
+A shared-looking sidebar is not a unified navigation experience. Review state ownership, route layouts, and both badge groups from every route family. Adding a requirement preserves the rest of the approved release scope.
+
+## Previous implementation record
+
+The sections below describe earlier work and its verification. Where their scope differs, the approved first-academy release above takes precedence. Checked items below do not mark the new release steps complete.
+
 Make organization and branch work clear and complete for owners, managers, coaches, and students. Keep the current data boundaries. Fix permissions, membership workflows, navigation, and task completion across web and mobile.
 
 ## Status and baseline
@@ -178,7 +248,7 @@ Acceptance: the overview answers what needs action today. Setup links open the u
 
 Dependencies: 3 and shared navigation/access contracts from 5.
 
-Files: [app header](/Users/kuna/projects/matops/apps/expo/src/components/app-header.tsx), [profile](/Users/kuna/projects/matops/apps/expo/src/app/(tabs)/profile.tsx), [schedule](/Users/kuna/projects/matops/apps/expo/src/app/(tabs)/schedule.tsx), and [entity store](/Users/kuna/projects/matops/apps/expo/src/utils/entity-store.ts).
+Files: [app header](/Users/kuna/projects/matops/apps/expo/src/components/app-header.tsx), [profile](</Users/kuna/projects/matops/apps/expo/src/app/(tabs)/profile.tsx>), [schedule](</Users/kuna/projects/matops/apps/expo/src/app/(tabs)/schedule.tsx>), and [entity store](/Users/kuna/projects/matops/apps/expo/src/utils/entity-store.ts).
 
 - [x] Extract the existing branch selection behavior into one shared mobile action. Make the schedule/header branch name open the picker when there is a choice.
 - [x] Preserve same-organization local selection and cross-organization session switching. Commit the new selection only after required session changes succeed; recover visibly on failure.
@@ -204,16 +274,16 @@ Acceptance: every approved recommendation maps to a finished slice or an explici
 
 ## Verification matrix
 
-| Area | Cases to write or inspect |
-| --- | --- |
-| Permissions | Manager without branch row; revoked manager; separate student status; assigned instructor; foreign organization; protected owner actions |
-| Coverage | Stale preview; duplicate submit; partial failure/retry; suspended and pending records; overlapping plans; closed branch |
+| Area             | Cases to write or inspect                                                                                                                                                                             |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Permissions      | Manager without branch row; revoked manager; separate student status; assigned instructor; foreign organization; protected owner actions                                                              |
+| Coverage         | Stale preview; duplicate submit; partial failure/retry; suspended and pending records; overlapping plans; closed branch                                                                               |
 | Plan replacement | Month boundary in gym time zone; cron absent; current and future session checks; duplicate requests; historical target plan; target overlap; cancel pending change; pause/end source; archived target |
-| Payments | No copied paid flags/claims; immutable old amounts; new month uses target price; no reminders for ended/not-started assignments |
-| Bookings | Coverage removal and membership end retain reservations and capacity; review list resolves; existing overdue and archive behavior still works |
-| Navigation | Zero/one/many branches; deep links; browser back; two tabs; incompatible branch type; member query changes after mount |
-| Staff | Same person across branches; per-branch approvals; no role escalation; old `/staff` URL |
-| Mobile | Same/cross organization; failed or rapid switch; stale requests; revoked branch; device accessibility |
+| Payments         | No copied paid flags/claims; immutable old amounts; new month uses target price; no reminders for ended/not-started assignments                                                                       |
+| Bookings         | Coverage removal and membership end retain reservations and capacity; review list resolves; existing overdue and archive behavior still works                                                         |
+| Navigation       | Zero/one/many branches; deep links; browser back; two tabs; incompatible branch type; member query changes after mount                                                                                |
+| Staff            | Same person across branches; per-branch approvals; no role escalation; old `/staff` URL                                                                                                               |
+| Mobile           | Same/cross organization; failed or rapid switch; stale requests; revoked branch; device accessibility                                                                                                 |
 
 Extend existing tests where possible. New date-period rules belong in a focused domain test. New database constraints need row-level security and period tests. Use the existing test file patterns, without running them during implementation sessions.
 
@@ -269,33 +339,35 @@ Left open, and why:
 - The baseline manual scenarios, the role and journey walkthroughs, the Expo device checks, the task-completion measurement and the location-hierarchy discovery are human work.
 - Two small pieces of the approved scope are deliberately not built and are named in the unticked boxes above: bounded batches for coverage runs (the loop reports named failures and an incomplete flag, so nothing is presented as complete, but it does not page), and the coach landing on their branch's schedule rather than its dashboard. The coverage preview also shows gains and losses without the affected bookings; the plan-change preview does show them, through the same `bookingsToReview` reader.
 
-
 ## Attendance review, approved 2026-09-07
 
 Goal: let owners check every past class and finish attendance from one list.
 
 Decisions:
+
 - Show all unfinished past classes, oldest first, including empty and partly marked classes.
 - Require explicit completion after every active member and visitor has a mark.
 - Allow an explicit nobody-attended confirmation when there are no present or unmarked people.
 - Store who reviewed the roster, when, and its signature. A changed roster needs another review.
 - Keep existing records unreviewed. Exclude cancelled, deleted, future, and running classes from the queue.
 - Reuse branch navigation, add date and status filters, and page the list.
-- Historical correction permissions await the user's answer. Build independent work first.
+- Historical correction policy is approved in the first-academy release above: owners and managers may correct older records with a reason and history. Instructors retain the existing window. Implementation remains pending.
 - Preserve unrelated working-tree changes. Do not run tests, commit, or deploy.
 
 Implementation steps:
+
 - [x] Inspect current attendance, dashboard, permissions, and all roster writers.
 - [x] Add pure review rules, schema migration, scoped API reads and completion, and focused tests.
 - [x] Build the review list, shared roster completion action, and dashboard summary.
 - [ ] Resolve historical correction permissions and apply them consistently.
 - [x] Update product and architecture docs. Run lint/typecheck and inspect the diff.
 
-Current step: waiting for the historical correction policy. The existing 14-day limit applies to marking and finishing until the user decides.
+Current step: implement the approved historical correction policy. The existing 14-day limit still applies in code until implementation.
 
 Verification: workspace typecheck passed 17/17 and lint passed 15/15. Migration 0068 applied to dev; database verification passed 67/67 migration entries and branch data permissions. Focused regression tests written, not run. Browser walkthrough not performed; no local app server was running. No commit or deployment.
 
 User-run commands:
+
 - `pnpm -F @matops/domain test test/attendance.test.ts`
 - `pnpm -F @matops/api test test/attendance-writes.test.ts`
 
@@ -328,5 +400,6 @@ Lessons: organization records need explicit user ownership when cleaning one bra
 Verification: workspace lint passed 15/15 and typecheck passed 17/17. Diff whitespace check passed. Tests are written but not run. No browser verification, database writes, commit, or deployment.
 
 User-run regression commands:
+
 - `pnpm -F @matops/db test test/seed-fill.test.ts`
 - `pnpm -F @matops/api test test/attendance-writes.test.ts`

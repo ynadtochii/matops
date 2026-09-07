@@ -33,7 +33,6 @@ export interface EntityRows {
   address?: string | null;
   mapUrl?: string | null;
   isDefault?: boolean;
-  /** Omit to run on shared memberships from the first day (ADR 128). */
   membershipEnforcedAt?: Date | null;
   curriculumForStudents?: boolean;
   publicBookingEnabled?: boolean;
@@ -81,11 +80,6 @@ async function provisionEntityRows(
         address: input.address,
         mapUrl: input.mapUrl,
         publicCode: input.publicCode,
-        // Every branch made from now on runs the membership gate, an academy
-        // included: there is no dues history to reconcile at a place that
-        // opened today, so leaving one ungated would only give a new owner two
-        // payment models to learn (ADR 128, spec FP5). The one caller that
-        // passes null is the legacy `provisionOrganization`.
         membershipEnforcedAt:
           input.membershipEnforcedAt === undefined
             ? new Date()
@@ -152,22 +146,6 @@ async function provisionEntityRows(
   return created;
 }
 
-/**
- * Make a gym the way gyms were made BEFORE ADR 128: one organization with one
- * default BJJ academy on the legacy dues gate.
- *
- * **No user path calls this any more.** Registration writes the organization
- * alone and the owner picks the first branch, so this is now what the seeds and
- * the test harness use to build a *pre-cutover* academy, the shape a real gym
- * that predates this release has on disk. Its old second job, repairing an
- * organization whose provisioning died half way, went with the repair path
- * itself: a gym with no branch is a normal state now, not damage.
- *
- * The academy takes the organization's OWN id (Decision 5), so a QR poster or
- * check-in link that names the organization still resolves, and it stays on
- * branch dues, which is what makes it a migration subject. Calling it again
- * creates nothing and reports an empty `created`.
- */
 export async function provisionOrganization(
   input: { organizationId: string; ownerUserId?: string },
   exec: DbExec,
@@ -204,10 +182,6 @@ export async function provisionOrganization(
       publicCode: existing[0]?.code ?? (await generateAcademyCode(exec)),
       ownerUserId,
       isDefault: true,
-      // The legacy path keeps the legacy gate: this makes the academy whose id
-      // is the organization's, which is how gyms were created before ADR 128,
-      // and switching one of those onto memberships is a deliberate act with a
-      // preview behind it (ADR 127 §4).
       membershipEnforcedAt: null,
     },
     exec,

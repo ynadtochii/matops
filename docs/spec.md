@@ -1,5 +1,22 @@
 # matops — MVP Product Spec (v1)
 
+**First academy release, ADR 134**
+
+Status: implemented in code. Static, browser, device, migration, privacy, and restore checks are recorded separately.
+
+- **FA1: Students exist without accounts.** A gym can create a person with a name and optional contact details, enroll them at a branch, assign a membership, and record attendance. Linking a verified login is optional. A guardian may book and cancel for a linked child, but cannot use staff actions or manage the child's private record.
+- **FA2: One payment record.** Shared memberships are the only plan and paid-month system. Branch payment enforcement remains optional. Existing bookings stay booked when access changes. MatOps records a paid flag and never describes it as bank revenue.
+- **FA3: One navigation owner.** Organization and branch pages use one persistent shell. Organization pages keep the selected branch in the URL. Organization and selected-branch badges remain visible together and retain their separate permission scopes.
+- **FA4: Historical attendance is accountable.** Owners and managers may correct or finish attendance older than 14 days with a reason. Instructors keep the 14-day window. Historical changes record the actor, time, previous value, new value, and reason.
+- **FA5: Class email survives request failure.** Cancelling or changing a class queues member and visitor email in the same transaction. Delivery retries later with a stable key. Inbox and native push remain available for linked accounts.
+- **FA6: Visitor bookings return.** The public booking result keeps its private token. The return page shows changed or cancelled class details and accepts a safe cancellation until the token expires.
+- **FA7: Scheduled work is visible.** Email delivery runs every five minutes. Membership reminders, overdue cancellation, and calendar extension run daily. Owners and managers see late jobs and exhausted email work for their own gym.
+- **FA8: Import is reviewed before it writes.** Owners and managers can paste or upload up to 500 CSV rows. The preview validates branch, membership, dates, contact fields, and possible duplicates. Commit repeats the preview and writes every included row in one transaction.
+- **FA9: Export is independent of screen filters.** Organization exports include archived people, enrollments, guardians, memberships, payment records, attendance, and attendance corrections. Each file uses bounded pages.
+- **FA10: Optional modules start off.** Curriculum and referrals remain hidden and refuse direct API use until an owner or manager turns them on for the organization.
+
+These rules replace older account-only student, branch dues, split shell, best-effort email, and detached scheduler rules. See [ADR 134](/Users/kuna/projects/matops/docs/issues/134-first-academy-release.md).
+
 **Attendance review, ADR 133:** implementation in progress. O1 and O5 below describe the approved target. Migration, static checks and browser acceptance remain unverified.
 
 **Staff and student separation (ADR 132)**
@@ -12,7 +29,6 @@
 - **ST6:** New assignments cannot sell access only to staff branches. Existing assignments and payment history require review, not automatic cancellation. The person profile marks staff-only plans for review.
 
 These rules replace earlier statements that owners and instructors require membership coverage. See [ADR 132](/Users/kuna/projects/matops/docs/issues/132-staff-roster-isolation.md).
-
 
 **Student membership selection (ADR 130)**
 

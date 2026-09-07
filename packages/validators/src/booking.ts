@@ -1,6 +1,6 @@
 import { z } from "zod/v4";
 
-import { IdSchema, lineText, personFields } from "./fields";
+import { blockText, IdSchema, lineText, personFields } from "./fields";
 
 // ─── Booking (Phase 3) ───────────────────────────────────────────────────────
 
@@ -23,19 +23,51 @@ export type CancelBookingInput = z.infer<typeof CancelBookingSchema>;
 export const AttendanceStatusSchema = z.enum(["present", "absent", "unmarked"]);
 export type AttendanceStatusInput = z.infer<typeof AttendanceStatusSchema>;
 
+const attendanceReason = blockText(3, 500).optional();
+
 /** Mark one participant present/absent/unmarked on a class (spec O5). */
-export const MarkAttendanceSchema = z.object({
-  classId: z.uuid(),
-  studentId: IdSchema,
-  status: AttendanceStatusSchema,
-});
+export const MarkAttendanceSchema = z
+  .union([
+    z.object({
+      classId: z.uuid(),
+      personId: IdSchema,
+      status: AttendanceStatusSchema,
+      reason: attendanceReason,
+    }),
+    z.object({
+      classId: z.uuid(),
+      studentId: IdSchema,
+      status: AttendanceStatusSchema,
+      reason: attendanceReason,
+    }),
+  ])
+  .transform((input) => ({
+    classId: input.classId,
+    personId: "personId" in input ? input.personId : input.studentId,
+    status: input.status,
+    reason: input.reason,
+  }));
 export type MarkAttendanceInput = z.infer<typeof MarkAttendanceSchema>;
 
 /** Add a walk-in: mark a member present who never booked (spec O5). */
-export const AddWalkInSchema = z.object({
-  classId: z.uuid(),
-  studentId: IdSchema,
-});
+export const AddWalkInSchema = z
+  .union([
+    z.object({
+      classId: z.uuid(),
+      personId: IdSchema,
+      reason: attendanceReason,
+    }),
+    z.object({
+      classId: z.uuid(),
+      studentId: IdSchema,
+      reason: attendanceReason,
+    }),
+  ])
+  .transform((input) => ({
+    classId: input.classId,
+    personId: "personId" in input ? input.personId : input.studentId,
+    reason: input.reason,
+  }));
 export type AddWalkInInput = z.infer<typeof AddWalkInSchema>;
 
 /**
@@ -49,6 +81,7 @@ export const AddVisitorSchema = z.object({
   classId: z.uuid(),
   ...personFields,
   lastName: lineText(0, 60).default(""),
+  reason: attendanceReason,
 });
 export type AddVisitorInput = z.infer<typeof AddVisitorSchema>;
 
@@ -57,8 +90,14 @@ export const MarkVisitorSchema = z.object({
   classId: z.uuid(),
   visitId: z.uuid(),
   status: AttendanceStatusSchema,
+  reason: attendanceReason,
 });
 export type MarkVisitorInput = z.infer<typeof MarkVisitorSchema>;
+
+export const MarkAllAttendanceSchema = z.object({
+  id: z.uuid(),
+  reason: attendanceReason,
+});
 
 export const AttendanceReviewQueueSchema = z
   .object({
@@ -76,4 +115,5 @@ export const FinishAttendanceSchema = z.object({
   id: z.uuid(),
   fingerprint: z.string().regex(/^[a-f0-9]{32}$/),
   nobodyAttended: z.boolean().default(false),
+  reason: attendanceReason,
 });

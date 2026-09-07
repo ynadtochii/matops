@@ -1,6 +1,6 @@
 import type { DbReader, TenantTx } from "@matops/db";
 import type { AccessVerdict, ApplicableAssignment } from "@matops/domain";
-import { and, asc, eq, gt, inArray, isNull } from "@matops/db";
+import { and, asc, eq, gt, inArray, isNull, or, sql } from "@matops/db";
 import {
   accessAssignment,
   accessPlan,
@@ -13,6 +13,7 @@ import {
   member,
   membershipMonth,
   organization,
+  person,
   user,
 } from "@matops/db/schema";
 import {
@@ -98,7 +99,9 @@ export interface MembershipAccess {
 }
 
 interface AccessQuery {
-  userId: string;
+  personId?: string;
+  accountUserId?: string | null;
+  userId?: string;
   entityId: string;
   /** Their standing at this branch, or null for an owner who holds none. */
   membership: { status: string; role?: string } | null;
@@ -111,11 +114,15 @@ export async function loadMembershipAccess(
   db: TenantTx,
   input: AccessQuery,
 ): Promise<MembershipAccess> {
-  const staff = await loadStaffAccess(db, {
-    entityIds: [input.entityId],
-    userIds: [input.userId],
-  });
-  if (staff.get(input.entityId)?.has(input.userId)) {
+  const personId = input.personId ?? input.userId ?? "";
+  const accountUserId = input.accountUserId ?? input.userId ?? null;
+  const staff = accountUserId
+    ? await loadStaffAccess(db, {
+        entityIds: [input.entityId],
+        userIds: [accountUserId],
+      })
+    : new Map<string, Set<string>>();
+  if (accountUserId && staff.get(input.entityId)?.has(accountUserId)) {
     return {
       now: "ok",
       atSession: "ok",
@@ -138,7 +145,12 @@ export async function loadMembershipAccess(
       createdAt: accessAssignment.createdAt,
     })
     .from(accessAssignment)
-    .where(eq(accessAssignment.userId, input.userId));
+    .where(
+      or(
+        eq(accessAssignment.personId, personId),
+        accountUserId ? eq(accessAssignment.userId, accountUserId) : undefined,
+      ),
+    );
 
   if (held.length === 0) {
     const verdict = membershipAccess({
@@ -381,6 +393,8 @@ export interface BookingToReview {
   title: string;
   startsAt: Date;
   userId: string;
+  personId: string;
+  accountUserId: string | null;
   name: string;
   /** Why it needs a look. Never "the month is unpaid": that is the dues gate. */
   reason: "not-covered" | "suspended";
@@ -406,7 +420,7 @@ export async function bookingsNeedingReview(
     entityId: string;
     now: Date;
     /** Narrow to one person, for a preview about them. */
-    userId?: string;
+    personId?: string;
     limit: number;
   },
 ): Promise<BookingToReview[]> {
@@ -431,8 +445,11 @@ export async function bookingsNeedingReview(
       .select({
         participationId: classParticipation.id,
         classId: classParticipation.classId,
-        userId: classParticipation.studentId,
-        name: user.name,
+        userId: sql<string>`coalesce(${classParticipation.personId}::text, ${classParticipation.studentId})`,
+        accountUserId: sql<
+          string | null
+        >`coalesce(${person.accountUserId}, ${classParticipation.studentId})`,
+        name: sql<string>`coalesce(${person.name}, ${user.name})`,
         title: classInstance.title,
         startsAt: classInstance.startsAt,
       })
@@ -441,15 +458,19 @@ export async function bookingsNeedingReview(
         classInstance,
         eq(classInstance.id, classParticipation.classId),
       )
-      .innerJoin(user, eq(user.id, classParticipation.studentId))
+      .leftJoin(person, eq(person.id, classParticipation.personId))
+      .leftJoin(user, eq(user.id, classParticipation.studentId))
       .where(
         and(
           eq(classParticipation.academyId, input.entityId),
           eq(classParticipation.bookingStatus, "booked"),
           gt(classInstance.startsAt, input.now),
           isNull(classInstance.deletedAt),
-          input.userId
-            ? eq(classParticipation.studentId, input.userId)
+          input.personId
+            ? eq(
+                sql<string>`coalesce(${classParticipation.personId}::text, ${classParticipation.studentId})`,
+                input.personId,
+              )
             : undefined,
         ),
       )
@@ -458,40 +479,64 @@ export async function bookingsNeedingReview(
       .offset(offset);
     if (booked.length === 0) break;
 
-    const userIds = [...new Set(booked.map((b) => b.userId))];
+    const personIds = [...new Set(booked.map((b) => b.userId))];
+    const accountUserIds = [
+      ...new Set(
+        booked.flatMap((b) => (b.accountUserId ? [b.accountUserId] : [])),
+      ),
+    ];
     const held = await db
       .select({
         id: accessAssignment.id,
-        userId: accessAssignment.userId,
+        userId: sql<string>`coalesce(${accessAssignment.personId}::text, ${accessAssignment.userId})`,
         status: accessAssignment.status,
         planId: accessAssignment.planId,
         startMonth: accessAssignment.startMonth,
         endMonth: accessAssignment.endMonth,
       })
       .from(accessAssignment)
-      .where(inArray(accessAssignment.userId, userIds));
+      .where(
+        or(
+          inArray(accessAssignment.personId, personIds),
+          accountUserIds.length
+            ? and(
+                isNull(accessAssignment.personId),
+                inArray(accessAssignment.userId, accountUserIds),
+              )
+            : undefined,
+        ),
+      );
     // This branch's own memberships. Someone active here and suspended at the
     // gym across town must not be read as suspended here (ADR 129).
     const standing = await db
       .select({
-        userId: entityMembership.userId,
+        userId: sql<string>`coalesce(${entityMembership.personId}::text, ${entityMembership.userId})`,
         status: entityMembership.status,
       })
       .from(entityMembership)
       .where(
         and(
           eq(entityMembership.entityId, input.entityId),
-          inArray(entityMembership.userId, userIds),
+          or(
+            inArray(entityMembership.personId, personIds),
+            accountUserIds.length
+              ? and(
+                  isNull(entityMembership.personId),
+                  inArray(entityMembership.userId, accountUserIds),
+                )
+              : undefined,
+          ),
         ),
       );
 
     const staff = await loadStaffAccess(db, {
       entityIds: [input.entityId],
-      userIds,
+      userIds: accountUserIds,
     });
 
     for (const b of booked) {
-      if (staff.get(input.entityId)?.has(b.userId)) continue;
+      if (b.accountUserId && staff.get(input.entityId)?.has(b.accountUserId))
+        continue;
       const month = monthOf(b.startsAt, calendar.timeZone);
       // The session's own month decides, not today's: a booking three weeks out
       // is judged against the membership that will be running then.
@@ -515,6 +560,8 @@ export async function bookingsNeedingReview(
         title: b.title,
         startsAt: b.startsAt,
         userId: b.userId,
+        personId: b.userId,
+        accountUserId: b.accountUserId,
         name: b.name,
         reason: blocked ? "suspended" : "not-covered",
       });

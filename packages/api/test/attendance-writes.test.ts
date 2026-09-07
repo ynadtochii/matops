@@ -12,6 +12,7 @@ import {
 
 const A = "academy_A";
 const OWNER = "u_owner";
+const MANAGER = "u_manager";
 const COACH = "u_coach";
 const ANA = "u_ana";
 const BO = "u_bo";
@@ -38,6 +39,7 @@ async function base(): Promise<Harness> {
       code: "100001",
       members: [
         { userId: OWNER, role: "owner", status: "active" },
+        { userId: MANAGER, role: "manager", status: "active" },
         { userId: COACH, role: "instructor", status: "active" },
         { userId: ANA, role: "student", status: "active", name: "Ana" },
         { userId: BO, role: "student", status: "active", name: "Bo" },
@@ -165,6 +167,69 @@ describe("attendance.mark", () => {
 
     expect(await attempt(LONG_AGO)).toBe("PRECONDITION_FAILED");
     expect(await attempt(NEXT_WEEK)).toBe("PRECONDITION_FAILED");
+  });
+
+  it("lets an owner correct old attendance with an audit reason", async () => {
+    const h = await base();
+    await seedParticipations(h.pg, [
+      { classId: LONG_AGO, academyId: A, studentId: ANA },
+    ]);
+
+    expect(
+      await rejectionCode(
+        h.as(OWNER, A).attendance.mark({
+          classId: LONG_AGO,
+          studentId: ANA,
+          status: "present",
+        }),
+      ),
+    ).toBe("PRECONDITION_FAILED");
+
+    await h.as(OWNER, A).attendance.mark({
+      classId: LONG_AGO,
+      studentId: ANA,
+      status: "present",
+      reason: "The paper register was entered late",
+    });
+
+    const result = await h.pg.query<{
+      reason: string;
+      before_value: string | null;
+      after_value: string | null;
+      actor_id: string | null;
+    }>(
+      `SELECT reason, before_value, after_value, actor_id
+       FROM attendance_correction WHERE class_id = $1`,
+      [LONG_AGO],
+    );
+    expect(result.rows).toEqual([
+      {
+        reason: "The paper register was entered late",
+        before_value: "unmarked",
+        after_value: "present",
+        actor_id: OWNER,
+      },
+    ]);
+  });
+
+  it("lets a manager correct old attendance with an audit reason", async () => {
+    const h = await base();
+    await seedParticipations(h.pg, [
+      { classId: LONG_AGO, academyId: A, studentId: ANA },
+    ]);
+
+    await h.as(MANAGER, A).attendance.mark({
+      classId: LONG_AGO,
+      personId: ANA,
+      status: "absent",
+      reason: "The manager checked the signed register",
+    });
+
+    const audit = await h.pg.query<{ actor_id: string | null }>(
+      `SELECT actor_id FROM attendance_correction WHERE class_id = $1`,
+      [LONG_AGO],
+    );
+    expect(audit.rows).toEqual([{ actor_id: MANAGER }]);
   });
 
   it("refuses a student marking anyone, including themselves", async () => {

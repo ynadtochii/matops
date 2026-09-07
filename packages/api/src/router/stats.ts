@@ -1,5 +1,6 @@
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
+import { z } from "zod/v4";
 
 import type { DbExec, MemberRow } from "@matops/db";
 import type {
@@ -14,11 +15,15 @@ import type {
 import {
   and,
   eq,
+  getEntityInOrganization,
+  getEntityMembership,
   gte,
   inArray,
+  isNotNull,
   isNull,
   lt,
   ne,
+  or,
   sql,
   withScope,
 } from "@matops/db";
@@ -27,11 +32,14 @@ import {
   classInstance,
   classParticipation,
   dropIn,
+  entityMembership,
   membershipMonth,
-  paymentClaim,
+  membershipPurchase,
+  notification,
 } from "@matops/db/schema";
 import {
   appliesInMonth,
+  canEnroll,
   canReadCoachFigures,
   classifyDrift,
   COACH_WINDOWS,
@@ -45,6 +53,7 @@ import {
   gymInsights,
   isActiveMember,
   isOnRoster,
+  isPendingCoach,
   isStaff,
   isStudentMember,
   monthBucket,
@@ -53,11 +62,13 @@ import {
   newMemberCounts,
   organizationMetrics,
   runsBranch,
+  runsOrganization,
   trainingStats,
 } from "@matops/domain";
 import {
   CoachDetailSchema,
   CoachStatsSchema,
+  IdSchema,
   OrganizationWindowSchema,
 } from "@matops/validators";
 
@@ -78,6 +89,7 @@ import {
   branchManagerProcedure,
   enrolledProcedure,
   organizationManagerIdentityProcedure,
+  organizationMemberIdentityProcedure,
   staffProcedure,
 } from "../trpc";
 
@@ -131,7 +143,7 @@ async function readCoachRows(
   const marked = await db
     .select({
       classId: classParticipation.classId,
-      studentId: classParticipation.studentId,
+      studentId: sql<string>`coalesce(${classParticipation.personId}::text, ${classParticipation.studentId})`,
       status: classParticipation.attendanceStatus,
     })
     .from(classParticipation)
@@ -180,7 +192,9 @@ async function loadCoachContext(
     range,
     classes,
     marks,
-    instructorIds: staffAmong(members).map((m) => m.userId),
+    instructorIds: staffAmong(members).flatMap((m) =>
+      m.accountUserId ? [m.accountUserId] : [],
+    ),
     nameByUser: userNames(members),
   };
 }
@@ -213,7 +227,9 @@ async function readEntityMetrics(
       });
 
       const present = await db
-        .select({ studentId: classParticipation.studentId })
+        .select({
+          studentId: sql<string>`coalesce(${classParticipation.personId}::text, ${classParticipation.studentId})`,
+        })
         .from(classParticipation)
         .innerJoin(
           classInstance,
@@ -351,7 +367,7 @@ async function readEntityDirectory(
 
       const visits = await db
         .select({
-          studentId: classParticipation.studentId,
+          studentId: sql<string>`coalesce(${classParticipation.personId}::text, ${classParticipation.studentId})`,
           count: sql<number>`count(*)::int`,
         })
         .from(classParticipation)
@@ -365,7 +381,9 @@ async function readEntityDirectory(
             gte(classInstance.startsAt, window.since),
           ),
         )
-        .groupBy(classParticipation.studentId);
+        .groupBy(
+          sql`coalesce(${classParticipation.personId}::text, ${classParticipation.studentId})`,
+        );
       const visitByUser = new Map(visits.map((v) => [v.studentId, v.count]));
 
       return members.map((m) => {
@@ -417,8 +435,13 @@ async function readEntitySummary(
         .where(eq(dropIn.stage, "new"));
       const [claims] = await db
         .select({ n: sql<number>`count(*)::int` })
-        .from(paymentClaim)
-        .where(eq(paymentClaim.status, "pending"));
+        .from(membershipPurchase)
+        .where(
+          and(
+            eq(membershipPurchase.entityId, entity.id),
+            inArray(membershipPurchase.status, ["pending", "claimed"]),
+          ),
+        );
       const [classes] = await db
         .select({ n: sql<number>`count(*)::int` })
         .from(classInstance)
@@ -448,6 +471,96 @@ async function readEntitySummary(
     },
     baseDb,
   );
+}
+
+const navigationCount = (count: number) => ({
+  state: "ready" as const,
+  count,
+});
+
+const unavailableNavigationCount = { state: "unavailable" as const };
+
+async function readBranchNavigationCounts(
+  organizationId: string,
+  entityId: string,
+  userId: string,
+  baseDb: DbExec,
+) {
+  return withScope(
+    { organizationId, entityId },
+    async (db) => {
+      const pending = await db
+        .select({
+          invitedRole: entityMembership.invitedRole,
+          status: entityMembership.status,
+        })
+        .from(entityMembership)
+        .where(
+          and(
+            eq(entityMembership.entityId, entityId),
+            eq(entityMembership.status, "pending"),
+          ),
+        );
+      const [unread] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(notification)
+        .where(
+          and(eq(notification.userId, userId), isNull(notification.readAt)),
+        );
+      const coaches = pending.filter(isPendingCoach).length;
+      return {
+        roster: pending.length - coaches,
+        coaches,
+        claims: 0,
+        unread: unread?.count ?? 0,
+      };
+    },
+    baseDb,
+  );
+}
+
+async function readOrganizationNavigationCounts(
+  organizationId: string,
+  baseDb: DbExec,
+) {
+  const branches = await readOrganizationEntities(organizationId, baseDb);
+  let coaches = 0;
+  for (const branch of branches) {
+    coaches += await withScope(
+      { organizationId, entityId: branch.id },
+      async (db) => {
+        const [row] = await db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(entityMembership)
+          .where(
+            and(
+              eq(entityMembership.entityId, branch.id),
+              eq(entityMembership.status, "pending"),
+              eq(entityMembership.invitedRole, "instructor"),
+            ),
+          );
+        return row?.count ?? 0;
+      },
+      baseDb,
+    );
+  }
+  const claims = await withScope(
+    { organizationId },
+    async (db) => {
+      const [row] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(membershipMonth)
+        .where(
+          and(
+            isNotNull(membershipMonth.claimedAt),
+            eq(membershipMonth.paid, false),
+          ),
+        );
+      return row?.count ?? 0;
+    },
+    baseDb,
+  );
+  return { coaches, claims };
 }
 
 /**
@@ -512,15 +625,16 @@ async function readRevenue(ctx: DashboardScope, now: Date, timeZone: string) {
   );
   const rows = await ctx.db
     .select({
-      amountMinor: paymentClaim.amountMinor,
-      currency: paymentClaim.currency,
-      confirmedAt: paymentClaim.confirmedAt,
+      amountMinor: membershipPurchase.priceMinor,
+      currency: membershipPurchase.currency,
+      confirmedAt: membershipPurchase.confirmedAt,
     })
-    .from(paymentClaim)
+    .from(membershipPurchase)
     .where(
       and(
-        eq(paymentClaim.status, "confirmed"),
-        gte(paymentClaim.confirmedAt, windowStart),
+        eq(membershipPurchase.entityId, ctx.academyId),
+        eq(membershipPurchase.status, "confirmed"),
+        gte(membershipPurchase.confirmedAt, windowStart),
       ),
     );
   const thisBucket = monthBucket(now, timeZone);
@@ -554,13 +668,15 @@ async function readDrifting(
 ) {
   const lastByStudent = await ctx.db
     .select({
-      studentId: classParticipation.studentId,
+      studentId: sql<string>`coalesce(${classParticipation.personId}::text, ${classParticipation.studentId})`,
       last: sql<string>`max(${classInstance.startsAt})`,
     })
     .from(classParticipation)
     .innerJoin(classInstance, eq(classParticipation.classId, classInstance.id))
     .where(eq(classParticipation.attendanceStatus, "present"))
-    .groupBy(classParticipation.studentId);
+    .groupBy(
+      sql`coalesce(${classParticipation.personId}::text, ${classParticipation.studentId})`,
+    );
   const lastByUser = new Map(
     lastByStudent.map((r) => [r.studentId, new Date(r.last)]),
   );
@@ -602,7 +718,13 @@ export const statsRouter = {
       )
       .where(
         and(
-          eq(classParticipation.studentId, ctx.session.user.id),
+          or(
+            eq(classParticipation.personId, ctx.membership.personId ?? ""),
+            and(
+              isNull(classParticipation.personId),
+              eq(classParticipation.studentId, ctx.session.user.id),
+            ),
+          ),
           eq(classParticipation.attendanceStatus, "present"),
         ),
       );
@@ -634,6 +756,99 @@ export const statsRouter = {
       revenue: owner ? await readRevenue(ctx, now, timeZone) : null,
     };
   }),
+
+  navigationSummary: organizationMemberIdentityProcedure
+    .input(
+      z.object({
+        organizationId: IdSchema,
+        branchId: IdSchema.nullable(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      if (input.organizationId !== ctx.organizationId) {
+        throw new TRPCError({ code: "FORBIDDEN" });
+      }
+
+      const runsGym = runsOrganization(ctx.orgMembership);
+      const organization = runsGym
+        ? await readOrganizationNavigationCounts(ctx.organizationId, ctx.baseDb)
+        : null;
+      const branch = input.branchId
+        ? await getEntityInOrganization(
+            input.branchId,
+            ctx.organizationId,
+            ctx.baseDb,
+          )
+        : null;
+      const held = branch
+        ? await getEntityMembership(ctx.session.user.id, branch.id, ctx.baseDb)
+        : null;
+      const membership = branch
+        ? held
+          ? {
+              ...held,
+              role:
+                held.role === "owner"
+                  ? "owner"
+                  : runsGym
+                    ? ctx.orgMembership.role
+                    : held.role,
+              status: runsGym ? "active" : held.status,
+            }
+          : runsGym
+            ? {
+                memberId: null,
+                joinedAt: ctx.orgMembership.joinedAt,
+                role: ctx.orgMembership.role,
+                status: "active",
+              }
+            : null
+        : null;
+      const mayOpenBranch = membership ? canEnroll(membership) : false;
+      const counts =
+        branch && mayOpenBranch && membership
+          ? await readBranchNavigationCounts(
+              ctx.organizationId,
+              branch.id,
+              ctx.session.user.id,
+              ctx.baseDb,
+            )
+          : null;
+      const staff = membership ? isStaff(membership) : false;
+      const manager = membership ? runsBranch(membership) : false;
+      const active = membership ? isActiveMember(membership) : false;
+      return {
+        organizationId: ctx.organizationId,
+        branch:
+          branch && mayOpenBranch
+            ? {
+                id: branch.id,
+                membershipEnforced: branch.membershipEnforcedAt !== null,
+              }
+            : null,
+        counts: {
+          people: organization
+            ? navigationCount(organization.coaches)
+            : unavailableNavigationCount,
+          memberships: organization
+            ? navigationCount(organization.claims)
+            : unavailableNavigationCount,
+          roster:
+            counts && staff
+              ? navigationCount(counts.roster)
+              : unavailableNavigationCount,
+          coaches:
+            counts && manager
+              ? navigationCount(counts.coaches)
+              : unavailableNavigationCount,
+          branchClaims: unavailableNavigationCount,
+          unread:
+            counts && active
+              ? navigationCount(counts.unread)
+              : unavailableNavigationCount,
+        },
+      };
+    }),
 
   /**
    * Every academy the organization runs, and the totals across them (ADR 124,

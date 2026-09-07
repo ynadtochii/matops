@@ -44,7 +44,21 @@ interface PublicClass {
 
 interface Booked {
   bookingId: string;
+  cancelToken: string;
   class: { title: string; startsAt: string; durationMinutes: number };
+}
+
+interface BookingStatus {
+  bookingStatus: string;
+  tokenExpiresAt: string;
+  class: {
+    id: string;
+    title: string;
+    startsAt: string;
+    durationMinutes: number;
+    status: string;
+    changed: boolean;
+  };
 }
 
 const BLANK = { firstName: "", lastName: "", phone: "", email: "" };
@@ -68,6 +82,7 @@ async function callApi<T>(
     } | null;
     throw new Error(body?.error?.message ?? "Something went wrong. Try again.");
   }
+  if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }
 
@@ -114,7 +129,14 @@ function dayLabel(key: string, timeZone: string): string {
   }).format(new Date(year ?? 0, (month ?? 1) - 1, day ?? 1));
 }
 
-export function BookingPage({ apiKey }: { apiKey: string }) {
+export function BookingPage({
+  apiKey,
+  initialToken,
+}: {
+  apiKey: string;
+  initialToken: string | null;
+}) {
+  const [bookingToken, setBookingToken] = useState(initialToken);
   const [classId, setClassId] = useState<string | null>(null);
   const [form, setForm] = useState(BLANK);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -135,6 +157,16 @@ export function BookingPage({ apiKey }: { apiKey: string }) {
       callApi<{ timeZone: string; classes: PublicClass[] }>("/classes", apiKey),
     retry: false,
   });
+  const booking = useQuery({
+    queryKey: ["public-booking", apiKey, bookingToken],
+    queryFn: () =>
+      callApi<BookingStatus>(
+        `/bookings/${encodeURIComponent(bookingToken ?? "")}`,
+        apiKey,
+      ),
+    enabled: bookingToken !== null,
+    retry: false,
+  });
 
   const book = useMutation({
     mutationFn: (body: Record<string, unknown>) =>
@@ -142,10 +174,30 @@ export function BookingPage({ apiKey }: { apiKey: string }) {
         method: "POST",
         body: JSON.stringify(body),
       }),
+    onSuccess: (data) => {
+      setBookingToken(data.cancelToken);
+      const url = new URL(window.location.href);
+      url.searchParams.set("booking", data.cancelToken);
+      window.history.replaceState(null, "", url);
+    },
+    onError: (err: Error) => setError(err.message),
+  });
+  const cancel = useMutation({
+    mutationFn: () =>
+      callApi<void>(
+        `/bookings/${encodeURIComponent(bookingToken ?? "")}`,
+        apiKey,
+        { method: "DELETE" },
+      ),
+    onSuccess: () => booking.refetch(),
     onError: (err: Error) => setError(err.message),
   });
 
-  if (academy.isPending || classes.isPending) {
+  if (
+    academy.isPending ||
+    classes.isPending ||
+    (bookingToken !== null && booking.isPending)
+  ) {
     return <MatLoader label="Opening the schedule" />;
   }
   if (academy.isError || classes.isError) {
@@ -163,6 +215,66 @@ export function BookingPage({ apiKey }: { apiKey: string }) {
 
   const gym = academy.data;
   const timeZone = classes.data.timeZone;
+
+  if (bookingToken && booking.isError) {
+    return (
+      <div className="flex w-full max-w-sm flex-col gap-3 text-center">
+        <h1 className="text-2xl font-semibold tracking-tight">
+          Booking link expired
+        </h1>
+        <p className="text-muted-foreground text-sm">
+          This booking link is no longer available. Contact {gym.name} if you
+          need help.
+        </p>
+      </div>
+    );
+  }
+
+  if (bookingToken && booking.data) {
+    const row = booking.data;
+    const classCancelled = row.class.status === "cancelled";
+    const bookingCancelled = row.bookingStatus === "cancelled";
+    return (
+      <div className="flex w-full max-w-sm flex-col gap-4 text-center">
+        <h1 className="text-2xl font-semibold tracking-tight">
+          {classCancelled
+            ? "This class was cancelled"
+            : bookingCancelled
+              ? "Your booking is cancelled"
+              : "You are booked"}
+        </h1>
+        {row.class.changed && !classCancelled && (
+          <p className="border-warning/40 bg-warning/10 rounded-md border p-3 text-sm">
+            The class time has changed. The current time is shown below.
+          </p>
+        )}
+        <p className="text-sm">
+          {row.class.title} · {whenLabel(row.class.startsAt, timeZone)}
+        </p>
+        {gym.address && (
+          <p className="text-muted-foreground text-sm">{gym.address}</p>
+        )}
+        {!classCancelled && !bookingCancelled && (
+          <Button
+            type="button"
+            variant="outline"
+            disabled={cancel.isPending}
+            onClick={() => {
+              setError(null);
+              cancel.mutate();
+            }}
+          >
+            {cancel.isPending ? "Cancelling…" : "Cancel booking"}
+          </Button>
+        )}
+        {error && (
+          <p role="alert" className="text-error text-sm">
+            {error}
+          </p>
+        )}
+      </div>
+    );
+  }
 
   if (book.isSuccess) {
     return (

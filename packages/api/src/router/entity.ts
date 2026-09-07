@@ -10,13 +10,14 @@ import {
   generalBranchesEnabled,
   getEntityInOrganization,
   gt,
-  hasLegacyDuesAt,
   inArray,
   isNull,
   listEntitiesForUser,
   listEntitiesOf,
+  or,
   rebuildSchedule,
   recordMilestone,
+  sql,
   withScope,
 } from "@matops/db";
 import {
@@ -30,6 +31,7 @@ import {
   member,
   membershipPolicy,
   organization,
+  person,
 } from "@matops/db/schema";
 import {
   isActiveMember,
@@ -121,26 +123,28 @@ async function standingAt(
 }
 
 /** Refuse somebody who is not part of this gym at all. */
-async function requireOrganizationMember(
+async function requireOrganizationPerson(
   ctx: { organizationId: string; baseDb: DbExec },
-  userId: string,
-): Promise<void> {
-  const rows = await ctx.baseDb
-    .select({ id: member.id })
-    .from(member)
+  personId: string,
+) {
+  const [row] = await ctx.baseDb
+    .select({ id: person.id, accountUserId: person.accountUserId })
+    .from(person)
     .where(
       and(
-        eq(member.organizationId, ctx.organizationId),
-        eq(member.userId, userId),
+        eq(person.organizationId, ctx.organizationId),
+        or(eq(person.id, personId), eq(person.accountUserId, personId)),
+        isNull(person.archivedAt),
       ),
     )
     .limit(1);
-  if (rows.length === 0) {
+  if (!row) {
     throw new TRPCError({
       code: "NOT_FOUND",
       message: "That person is not part of this gym",
     });
   }
+  return row;
 }
 
 export const entityRouter = {
@@ -168,6 +172,8 @@ export const entityRouter = {
       .select({
         name: organization.name,
         generalBranches: organization.generalBranchesEnabled,
+        curriculumEnabled: organization.curriculumEnabled,
+        referralsEnabled: organization.referralsEnabled,
       })
       .from(organization)
       .where(eq(organization.id, ctx.organizationId));
@@ -186,6 +192,8 @@ export const entityRouter = {
       // is entitled to them, so a client with only "may I add a branch" would
       // offer a type the server is about to reject (ADR 128).
       canCreateGeneralBranches: owns && (org?.generalBranches ?? false),
+      curriculumEnabled: org?.curriculumEnabled ?? false,
+      referralsEnabled: org?.referralsEnabled ?? false,
       entities: await standingAt(ctx, rows, runs),
     };
   }),
@@ -206,20 +214,22 @@ export const entityRouter = {
     .input(SetBranchRoleSchema)
     .mutation(async ({ ctx, input }) => {
       const branch = await requireOwnEntity(ctx, input.entityId);
-      await requireOrganizationMember(ctx, input.userId);
+      const subject = await requireOrganizationPerson(ctx, input.userId);
 
       await withScope(
         { organizationId: ctx.organizationId, entityId: branch.id },
         async (db) => {
-          const [organizationMember] = await db
-            .select({ role: member.role })
-            .from(member)
-            .where(
-              and(
-                eq(member.organizationId, ctx.organizationId),
-                eq(member.userId, input.userId),
-              ),
-            );
+          const [organizationMember] = subject.accountUserId
+            ? await db
+                .select({ role: member.role })
+                .from(member)
+                .where(
+                  and(
+                    eq(member.organizationId, ctx.organizationId),
+                    eq(member.userId, subject.accountUserId),
+                  ),
+                )
+            : [];
           if (
             organizationMember?.role === "owner" ||
             organizationMember?.role === "manager"
@@ -239,7 +249,15 @@ export const entityRouter = {
             .where(
               and(
                 eq(entityMembership.entityId, branch.id),
-                eq(entityMembership.userId, input.userId),
+                or(
+                  eq(entityMembership.personId, subject.id),
+                  subject.accountUserId
+                    ? and(
+                        isNull(entityMembership.personId),
+                        eq(entityMembership.userId, subject.accountUserId),
+                      )
+                    : undefined,
+                ),
               ),
             );
           // Stepping an owner down is removing an owner, which is not this
@@ -260,7 +278,8 @@ export const entityRouter = {
           await db.insert(entityMembership).values({
             organizationId: ctx.organizationId,
             entityId: branch.id,
-            userId: input.userId,
+            personId: subject.id,
+            userId: subject.accountUserId,
             role: input.role,
             status: "active",
             joinedAt: new Date(),
@@ -280,6 +299,7 @@ export const entityRouter = {
     .input(BranchDecisionSchema)
     .mutation(async ({ ctx, input }) => {
       const branch = await requireOwnEntity(ctx, input.entityId);
+      const subject = await requireOrganizationPerson(ctx, input.userId);
       await withScope(
         { organizationId: ctx.organizationId, entityId: branch.id },
         async (db) => {
@@ -294,7 +314,15 @@ export const entityRouter = {
             .where(
               and(
                 eq(entityMembership.entityId, branch.id),
-                eq(entityMembership.userId, input.userId),
+                or(
+                  eq(entityMembership.personId, subject.id),
+                  subject.accountUserId
+                    ? and(
+                        isNull(entityMembership.personId),
+                        eq(entityMembership.userId, subject.accountUserId),
+                      )
+                    : undefined,
+                ),
               ),
             );
           if (!held) {
@@ -449,7 +477,7 @@ export const entityRouter = {
               ? []
               : await db
                   .select({
-                    studentId: classParticipation.studentId,
+                    personId: sql<string>`coalesce(${classParticipation.personId}::text, ${classParticipation.studentId})`,
                     n: count(),
                   })
                   .from(classParticipation)
@@ -460,7 +488,7 @@ export const entityRouter = {
                   .where(
                     and(
                       inArray(
-                        classParticipation.studentId,
+                        sql<string>`coalesce(${classParticipation.personId}::text, ${classParticipation.studentId})`,
                         uncovered.map((u) => u.userId),
                       ),
                       eq(classParticipation.bookingStatus, "booked"),
@@ -468,7 +496,9 @@ export const entityRouter = {
                       eq(classInstance.status, "scheduled"),
                     ),
                   )
-                  .groupBy(classParticipation.studentId);
+                  .groupBy(
+                    sql`coalesce(${classParticipation.personId}::text, ${classParticipation.studentId})`,
+                  );
 
           // Readiness: the four things that make switching this branch on a
           // bad idea today, each as a count the owner can drive to zero
@@ -498,7 +528,9 @@ export const entityRouter = {
           // believes it has already covered.
           const holders = covering.length
             ? await db
-                .select({ userId: accessAssignment.userId })
+                .select({
+                  userId: sql<string>`coalesce(${accessAssignment.personId}::text, ${accessAssignment.userId})`,
+                })
                 .from(accessAssignment)
                 .where(
                   and(
@@ -516,11 +548,6 @@ export const entityRouter = {
             ...new Set(holders.map((h) => h.userId)),
           ].filter((id) => !activeHere.has(id)).length;
 
-          // Whether this branch ever ran branch dues, which decides if it is a
-          // migration at all: one opened after the cutover has nothing to move
-          // and nothing to roll back to (ADR 128).
-          const legacy = await hasLegacyDuesAt(branch.id, db);
-
           const readiness = {
             uncoveredPeople: blocking,
             unpricedPlans: covering.filter((c) => c.priceMinor === null).length,
@@ -528,7 +555,7 @@ export const entityRouter = {
             pendingEnrolment,
           };
 
-          const byUser = new Map(bookings.map((b) => [b.studentId, b.n]));
+          const byUser = new Map(bookings.map((b) => [b.personId, b.n]));
           return {
             readiness,
             ready:
@@ -539,12 +566,9 @@ export const entityRouter = {
             entityId: branch.id,
             entityName: branch.name,
             enforced: branch.membershipEnforcedAt !== null,
-            hasLegacyDues: legacy,
             activeMembers: active.length,
             uncovered: uncovered.map((u) => ({
               ...u,
-              // Their booked classes still to come, which switching the gate
-              // on would cancel.
               futureBookings: byUser.get(u.userId) ?? 0,
             })),
             futureBookings: bookings.reduce((n, b) => n + b.n, 0),
@@ -554,18 +578,6 @@ export const entityRouter = {
       );
     }),
 
-  /**
-   * Move one branch between the two payment gates (ADR 126 §3, ADR 127).
-   *
-   * On stamps the moment; off hands the branch back to the legacy dues gate,
-   * which is ADR 126's rollback level 2 and is meant to be reachable. Switching
-   * on twice keeps the first timestamp, the same idempotence the legacy gate
-   * toggle has.
-   *
-   * The write runs inside `withScope` rather than straight on the base
-   * connection: `entity` carries an RLS policy on `app.organization_id`, and
-   * ADR 125 put entity writes back under it.
-   */
   setMembershipEnforced: organizationOwnerIdentityProcedure
     .input(SetMembershipEnforcedSchema)
     .mutation(async ({ ctx, input }) => {

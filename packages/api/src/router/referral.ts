@@ -1,11 +1,12 @@
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
-import { desc, eq } from "@matops/db";
+import { and, desc, eq, isNull, or } from "@matops/db";
 import {
+  entityMembership,
   memberReferral,
   memberReferralAudit,
-  paymentClaim,
+  membershipPurchase,
 } from "@matops/db/schema";
 import {
   academyMonthKey,
@@ -28,7 +29,7 @@ import type { MemberRecord, MemberScope } from "../members";
 import { academyTimeZone } from "../academy-tz";
 import { nameByMember, nameByUser, requireMember, rosterOf } from "../members";
 import { isUniqueViolation } from "../pg-error";
-import { branchManagerProcedure } from "../trpc";
+import { referralsBranchManagerProcedure } from "../trpc";
 
 function referralMember(member: MemberRecord) {
   return {
@@ -85,18 +86,31 @@ export const referralRouter = {
    * student. The screen groups and totals the students itself, so this returns
    * the rows and nothing pre-aggregated (ADR 60 deleted the unread half).
    */
-  dashboard: branchManagerProcedure.query(async ({ ctx }) => {
+  dashboard: referralsBranchManagerProcedure.query(async ({ ctx }) => {
     const members = await rosterOf(ctx);
     const referrals = await ctx.db.select().from(memberReferral);
     const confirmedClaims = await ctx.db
       .select({
-        memberId: paymentClaim.memberId,
-        amountMinor: paymentClaim.amountMinor,
-        currency: paymentClaim.currency,
-        confirmedAt: paymentClaim.confirmedAt,
+        memberId: entityMembership.id,
+        amountMinor: membershipPurchase.priceMinor,
+        currency: membershipPurchase.currency,
+        confirmedAt: membershipPurchase.confirmedAt,
       })
-      .from(paymentClaim)
-      .where(eq(paymentClaim.status, "confirmed"));
+      .from(membershipPurchase)
+      .innerJoin(
+        entityMembership,
+        and(
+          eq(entityMembership.entityId, ctx.entityId),
+          or(
+            eq(entityMembership.personId, membershipPurchase.personId),
+            and(
+              isNull(entityMembership.personId),
+              eq(entityMembership.userId, membershipPurchase.userId),
+            ),
+          ),
+        ),
+      )
+      .where(eq(membershipPurchase.status, "confirmed"));
     const timeZone = await academyTimeZone(ctx);
 
     const currentMonth = academyMonthKey(new Date(), timeZone);
@@ -169,7 +183,7 @@ export const referralRouter = {
   }),
 
   /** Permanent one-time initial assignment. */
-  assign: branchManagerProcedure
+  assign: referralsBranchManagerProcedure
     .input(AssignReferralSchema)
     .mutation(async ({ ctx, input }) => {
       await requireReferralPair(
@@ -222,7 +236,7 @@ export const referralRouter = {
     }),
 
   /** Owner-only replacement or clearing, atomically appended to the audit. */
-  correct: branchManagerProcedure
+  correct: referralsBranchManagerProcedure
     .input(CorrectReferralSchema)
     .mutation(async ({ ctx, input }) => {
       const student = await requireMember(ctx, input.studentMemberId);
@@ -278,7 +292,7 @@ export const referralRouter = {
     }),
 
   /** Owner-only attribution audit history for one student. */
-  history: branchManagerProcedure
+  history: referralsBranchManagerProcedure
     .input(ReferralHistorySchema)
     .query(async ({ ctx, input }) => {
       const student = await requireMember(ctx, input.studentMemberId);

@@ -95,6 +95,8 @@ export const organization = pgTable("organization", {
   generalBranchesEnabled: boolean("general_branches_enabled")
     .notNull()
     .default(true),
+  curriculumEnabled: boolean("curriculum_enabled").notNull().default(false),
+  referralsEnabled: boolean("referrals_enabled").notNull().default(false),
   offer: text("offer").notNull().default("pilot"),
   pilotEndsOn: date("pilot_ends_on"),
   agreedPriceMinor: integer("agreed_price_minor"),

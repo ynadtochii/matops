@@ -1,10 +1,6 @@
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
 
-import type {
-  DisciplineTone,
-  DriftStatus,
-  PaymentStatus,
-} from "@matops/domain";
+import type { DisciplineTone, DriftStatus } from "@matops/domain";
 import { disciplineTone } from "@matops/domain";
 import { cn } from "@matops/ui";
 
@@ -278,13 +274,6 @@ export function DriftBadge({
     </span>
   );
 }
-
-/** Payment status → dot colour. The words are `PAYMENT_STATUS_LABEL` (ADR 40). */
-export const DUES_TONE: Record<PaymentStatus, string> = {
-  paid: "bg-success",
-  due_soon: "bg-warning",
-  overdue: "bg-error",
-};
 
 /**
  * Which discipline a class is, as a dot on a list rail. A dot rather than a

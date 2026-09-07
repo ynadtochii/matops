@@ -7,6 +7,7 @@ import {
   and,
   asc,
   attendanceReviewSnapshot,
+  enqueueOutboxEmails,
   eq,
   eventRole,
   getTableColumns,
@@ -15,6 +16,7 @@ import {
   lockBranchSchedule,
   lt,
   ne,
+  or,
   overlappingSessions,
   recordActivity,
   recordMilestone,
@@ -23,14 +25,20 @@ import {
 import {
   classInstance,
   classParticipation,
+  dropIn,
   dropInVisit,
+  entity,
+  person,
   user,
 } from "@matops/db/schema";
 import {
+  buildCancelledMessage,
+  buildClassChangeMessage,
   canReassignCoach,
   capacityPolicyFor,
   classChange,
   findOverlap,
+  formatWhen,
   instantFromLocalDate,
   instructorForNewSession,
   isActiveMember,
@@ -94,24 +102,92 @@ interface NotifyScope {
  */
 type ClassNotifier = typeof notifyClassChanged;
 
-async function notifyBooked(
+export async function notifyBooked(
   ctx: NotifyScope,
-  row: { id: string; title: string; startsAt: Date },
+  row: { id: string; title: string; startsAt: Date; updatedAt: Date },
+  kind: "class_changed" | "class_cancelled",
   send: ClassNotifier,
 ): Promise<void> {
   const booked = await ctx.db
-    .select({ studentId: classParticipation.studentId })
+    .select({
+      studentId: classParticipation.studentId,
+      personId: classParticipation.personId,
+      userEmail: user.email,
+      personEmail: person.email,
+    })
     .from(classParticipation)
+    .leftJoin(user, eq(user.id, classParticipation.studentId))
+    .leftJoin(person, eq(person.id, classParticipation.personId))
     .where(
       and(
         eq(classParticipation.classId, row.id),
         eq(classParticipation.bookingStatus, "booked"),
       ),
     );
-  // Without a zone `formatWhen` labels the new time in UTC, so students would be
-  // told the wrong hour. The reminder sweep already resolves one.
+  const visitors = await ctx.db
+    .select({ visitId: dropInVisit.id, email: dropIn.email })
+    .from(dropInVisit)
+    .innerJoin(dropIn, eq(dropIn.id, dropInVisit.dropInId))
+    .where(
+      and(
+        eq(dropInVisit.classId, row.id),
+        eq(dropInVisit.bookingStatus, "booked"),
+      ),
+    );
   const timeZone = await academyTimeZone(ctx);
-  const studentIds = booked.map((b) => b.studentId);
+  const [academy] = await ctx.db
+    .select({ name: entity.name })
+    .from(entity)
+    .where(eq(entity.id, ctx.academyId))
+    .limit(1);
+  const messageInput = {
+    academyName: academy?.name ?? "your gym",
+    className: row.title,
+    whenLabel: formatWhen(row.startsAt, timeZone),
+  };
+  const message =
+    kind === "class_cancelled"
+      ? buildCancelledMessage(messageInput)
+      : buildClassChangeMessage(messageInput);
+  const eventKey = `${kind}:${row.id}:${row.updatedAt.toISOString()}`;
+  await enqueueOutboxEmails(
+    [
+      ...booked.flatMap((recipient) => {
+        const email = recipient.personEmail ?? recipient.userEmail;
+        if (!email || (!recipient.personId && !recipient.studentId)) return [];
+        return [
+          {
+            academyId: ctx.academyId,
+            eventKey,
+            recipientKey: recipient.personId
+              ? `person:${recipient.personId}`
+              : `user:${recipient.studentId}`,
+            recipientAddress: email,
+            subject: message.title,
+            body: message.body,
+          },
+        ];
+      }),
+      ...visitors.flatMap((recipient) =>
+        recipient.email
+          ? [
+              {
+                academyId: ctx.academyId,
+                eventKey,
+                recipientKey: `visitor:${recipient.visitId}`,
+                recipientAddress: recipient.email,
+                subject: message.title,
+                body: message.body,
+              },
+            ]
+          : [],
+      ),
+    ],
+    ctx.db,
+  );
+  const studentIds = booked.flatMap((recipient) =>
+    recipient.studentId ? [recipient.studentId] : [],
+  );
   ctx.afterCommit((exec) =>
     send(
       {
@@ -224,7 +300,13 @@ export const classRouter = {
         classParticipation,
         and(
           eq(classParticipation.classId, classInstance.id),
-          eq(classParticipation.studentId, ctx.session.user.id),
+          or(
+            eq(classParticipation.personId, ctx.membership.personId ?? ""),
+            and(
+              isNull(classParticipation.personId),
+              eq(classParticipation.studentId, ctx.session.user.id),
+            ),
+          ),
         ),
       )
       .where(
@@ -268,7 +350,13 @@ export const classRouter = {
         classParticipation,
         and(
           eq(classParticipation.classId, classInstance.id),
-          eq(classParticipation.studentId, ctx.session.user.id),
+          or(
+            eq(classParticipation.personId, ctx.membership.personId ?? ""),
+            and(
+              isNull(classParticipation.personId),
+              eq(classParticipation.studentId, ctx.session.user.id),
+            ),
+          ),
         ),
       )
       .where(liveClass(input.id));
@@ -287,11 +375,12 @@ export const classRouter = {
     .query(async ({ ctx, input }) => {
       const rows = await ctx.db
         .select({
-          studentId: classParticipation.studentId,
-          name: user.name,
+          studentId: sql<string>`coalesce(${classParticipation.personId}::text, ${classParticipation.studentId})`,
+          name: sql<string | null>`coalesce(${person.name}, ${user.name})`,
           bookingStatus: classParticipation.bookingStatus,
         })
         .from(classParticipation)
+        .leftJoin(person, eq(person.id, classParticipation.personId))
         .leftJoin(user, eq(user.id, classParticipation.studentId))
         .where(eq(classParticipation.classId, input.id));
 
@@ -306,7 +395,7 @@ export const classRouter = {
         );
 
       return visibleAttendees(rows, dropIns?.count ?? 0, {
-        id: ctx.session.user.id,
+        id: ctx.membership.personId ?? ctx.session.user.id,
         approved: isActiveMember(ctx.membership),
       });
     }),
@@ -417,7 +506,8 @@ export const classRouter = {
         { startsAt: row.startsAt, instructorId: row.instructorId },
         now,
       );
-      if (change.shouldNotify) await notifyBooked(ctx, row, notifyClassChanged);
+      if (change.shouldNotify)
+        await notifyBooked(ctx, row, "class_changed", notifyClassChanged);
       return row;
     }),
 
@@ -458,7 +548,8 @@ export const classRouter = {
         { startsAt: row.startsAt, instructorId: row.instructorId },
         now,
       );
-      if (change.shouldNotify) await notifyBooked(ctx, row, notifyClassChanged);
+      if (change.shouldNotify)
+        await notifyBooked(ctx, row, "class_changed", notifyClassChanged);
       return row;
     }),
 
@@ -480,6 +571,7 @@ export const classRouter = {
           id: classInstance.id,
           title: classInstance.title,
           startsAt: classInstance.startsAt,
+          updatedAt: classInstance.updatedAt,
         });
       if (!row) {
         throw new TRPCError({
@@ -487,7 +579,7 @@ export const classRouter = {
           message: "Class not found or already cancelled",
         });
       }
-      await notifyBooked(ctx, row, notifyClassCancelled);
+      await notifyBooked(ctx, row, "class_cancelled", notifyClassCancelled);
       return { ok: true as const };
     }),
 } satisfies TRPCRouterRecord;

@@ -15,6 +15,8 @@ import {
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@matops/ui/dialog";
+import { Input } from "@matops/ui/input";
+import { Label } from "@matops/ui/label";
 import { Select } from "@matops/ui/select";
 import { toast } from "@matops/ui/toast";
 
@@ -37,7 +39,7 @@ import { EmptyState, ErrorState } from "./states";
  * its own, so arriving from the list costs nothing and the two screens cannot
  * disagree about somebody's branches.
  */
-export function OrganizationPersonScreen({ userId }: { userId: string }) {
+export function OrganizationPersonScreen({ personId }: { personId: string }) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const { canRunOrganization, entities } = useOrganization();
@@ -104,12 +106,16 @@ export function OrganizationPersonScreen({ userId }: { userId: string }) {
     cancelChange.isPending ||
     setBranchRole.isPending ||
     decide.isPending;
+  const personQuery = useQuery({
+    ...trpc.person.get.queryOptions({ personId, includeArchived: true }),
+    enabled: canRunOrganization,
+  });
   const directory = useQuery({
     ...trpc.stats.organizationMembers.queryOptions(),
     enabled: canRunOrganization,
   });
   const held = useQuery({
-    ...trpc.accessPlan.forUser.queryOptions({ userId }),
+    ...trpc.accessPlan.forUser.queryOptions({ personId }),
     enabled: canRunOrganization,
   });
   // The gym's open claims, narrowed to this person. One read the Memberships
@@ -127,12 +133,14 @@ export function OrganizationPersonScreen({ userId }: { userId: string }) {
       <EmptyState title="Only the people who run this gym can open this." />
     );
   }
-  if (directory.isPending || held.isPending) return <SkeletonRows rows={4} />;
-  if (directory.isError || held.isError) {
+  if (personQuery.isPending || directory.isPending || held.isPending)
+    return <SkeletonRows rows={4} />;
+  if (personQuery.isError || directory.isError || held.isError) {
     return (
       <ErrorState
         label="this person"
         onRetry={() => {
+          void personQuery.refetch();
           void directory.refetch();
           void held.refetch();
         }}
@@ -140,20 +148,42 @@ export function OrganizationPersonScreen({ userId }: { userId: string }) {
     );
   }
 
-  const person = directory.data.rows.find((r) => r.userId === userId);
-  if (!person) {
-    return (
-      <EmptyState title="Nobody here by that link.">
-        They may have been removed from every branch of this gym.
-      </EmptyState>
-    );
-  }
+  const legacyPerson = directory.data.rows.find(
+    (row) => row.userId === personId,
+  );
+  const person = {
+    ...personQuery.data,
+    branches: personQuery.data.branches.map((branch) => {
+      const legacyBranch = legacyPerson?.branches.find(
+        (row) => row.entityId === branch.entityId,
+      );
+      return {
+        ...branch,
+        memberId: legacyBranch?.memberId ?? branch.enrollmentId,
+        covered: legacyBranch?.covered ?? false,
+        verdict: legacyBranch?.verdict ?? null,
+      };
+    }),
+  };
 
   const hasStudentBranch = person.branches.some(isStudentMember);
 
   return (
     <div className={`${ENTER} flex flex-col gap-6`}>
-      <PageHeader title={person.name} subtitle={person.email} />
+      <PageHeader
+        title={person.name}
+        subtitle={person.email ?? "No email address"}
+      />
+
+      <PersonAccess
+        person={{
+          personId: person.id,
+          account: person.account,
+          guardians: person.guardians,
+          archivedAt: person.archivedAt,
+          updatedAt: person.updatedAt,
+        }}
+      />
 
       <section className="flex flex-col gap-3">
         <Eyebrow>Branches</Eyebrow>
@@ -189,7 +219,7 @@ export function OrganizationPersonScreen({ userId }: { userId: string }) {
                     onClick={() =>
                       decide.mutate({
                         entityId: b.entityId,
-                        userId,
+                        personId,
                         decision: "approve",
                       })
                     }
@@ -203,7 +233,7 @@ export function OrganizationPersonScreen({ userId }: { userId: string }) {
                     onClick={() =>
                       decide.mutate({
                         entityId: b.entityId,
-                        userId,
+                        personId,
                         decision: "decline",
                       })
                     }
@@ -222,7 +252,7 @@ export function OrganizationPersonScreen({ userId }: { userId: string }) {
                     onChange={(e) =>
                       setBranchRole.mutate({
                         entityId: b.entityId,
-                        userId,
+                        personId,
                         role: e.target.value as "student" | "instructor",
                       })
                     }
@@ -252,7 +282,7 @@ export function OrganizationPersonScreen({ userId }: { userId: string }) {
           held={person.branches.map((b) => b.entityId)}
           busy={busy}
           onAssign={(entityId, role) =>
-            setBranchRole.mutate({ entityId, userId, role })
+            setBranchRole.mutate({ entityId, personId, role })
           }
         />
       </section>
@@ -298,7 +328,7 @@ export function OrganizationPersonScreen({ userId }: { userId: string }) {
                   </span>
                 )}
                 {(claims.data ?? []).some(
-                  (c) => c.assignmentId === h.id && c.userId === userId,
+                  (c) => c.assignmentId === h.id && c.personId === personId,
                 ) && (
                   <span className="text-brand-strong text-xs font-medium">
                     Said they paid — waiting for you to confirm
@@ -375,7 +405,7 @@ export function OrganizationPersonScreen({ userId }: { userId: string }) {
                       variant="outline"
                       disabled={busy}
                       onClick={() =>
-                        assign.mutate({ userId, planId: h.planId })
+                        assign.mutate({ personId, planId: h.planId })
                       }
                     >
                       Resume
@@ -406,7 +436,7 @@ export function OrganizationPersonScreen({ userId }: { userId: string }) {
           <PlanChangeDialog
             assignmentId={changing.assignmentId}
             currentPlanName={changing.planName}
-            userId={userId}
+            personId={personId}
             plans={(plans.data ?? []).filter((p) => !p.archived)}
             nameOf={nameOf}
             onOpenChange={(open) => {
@@ -445,7 +475,7 @@ export function OrganizationPersonScreen({ userId }: { userId: string }) {
             <Button
               size="sm"
               disabled={busy || picked === ""}
-              onClick={() => assign.mutate({ userId, planId: picked })}
+              onClick={() => assign.mutate({ personId, planId: picked })}
             >
               {assign.isPending ? "Adding…" : "Add"}
             </Button>
@@ -453,6 +483,297 @@ export function OrganizationPersonScreen({ userId }: { userId: string }) {
         )}
       </section>
     </div>
+  );
+}
+
+function PersonAccess({
+  person,
+}: {
+  person: {
+    personId: string;
+    account: { userId: string; name: string; email: string } | null;
+    guardians: {
+      relationId: string;
+      userId: string;
+      name: string;
+      email: string;
+    }[];
+    archivedAt: Date | null;
+    updatedAt: Date;
+  };
+}) {
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  const [accountEmail, setAccountEmail] = useState("");
+  const [accountSearch, setAccountSearch] = useState("");
+  const [guardianEmail, setGuardianEmail] = useState("");
+  const [guardianSearch, setGuardianSearch] = useState("");
+  const accountCandidate = useQuery({
+    ...trpc.person.accountCandidate.queryOptions({
+      personId: person.personId,
+      email: accountSearch || "placeholder@example.com",
+    }),
+    enabled: accountSearch !== "",
+  });
+  const guardianCandidate = useQuery({
+    ...trpc.person.guardianCandidate.queryOptions({
+      studentPersonId: person.personId,
+      email: guardianSearch || "placeholder@example.com",
+    }),
+    enabled: guardianSearch !== "",
+  });
+  const refresh = async (message: string) => {
+    await queryClient.invalidateQueries(trpc.person.pathFilter());
+    toast.success(message);
+  };
+  const link = useMutation(
+    trpc.person.linkAccount.mutationOptions({
+      onSuccess: () => refresh("Account linked"),
+      onError: (error) => toast.error(error.message || "Could not link it"),
+    }),
+  );
+  const unlink = useMutation(
+    trpc.person.unlinkAccount.mutationOptions({
+      onSuccess: () => refresh("Account unlinked"),
+      onError: (error) => toast.error(error.message || "Could not unlink it"),
+    }),
+  );
+  const addGuardian = useMutation(
+    trpc.person.addGuardian.mutationOptions({
+      onSuccess: () => refresh("Guardian added"),
+      onError: (error) =>
+        toast.error(error.message || "Could not add that guardian"),
+    }),
+  );
+  const removeGuardian = useMutation(
+    trpc.person.removeGuardian.mutationOptions({
+      onSuccess: () => refresh("Guardian removed"),
+      onError: (error) =>
+        toast.error(error.message || "Could not remove that guardian"),
+    }),
+  );
+  const archive = useMutation(
+    trpc.person.archive.mutationOptions({
+      onSuccess: () => refresh("Person archived"),
+      onError: (error) => toast.error(error.message || "Could not archive"),
+    }),
+  );
+  const restore = useMutation(
+    trpc.person.restore.mutationOptions({
+      onSuccess: () => refresh("Person restored"),
+      onError: (error) => toast.error(error.message || "Could not restore"),
+    }),
+  );
+  const busy =
+    link.isPending ||
+    unlink.isPending ||
+    addGuardian.isPending ||
+    removeGuardian.isPending ||
+    archive.isPending ||
+    restore.isPending;
+  const expectedUpdatedAt = new Date(person.updatedAt).toISOString();
+  const accountMatch = accountCandidate.data;
+  const guardianMatch = guardianCandidate.data;
+
+  return (
+    <section className="flex flex-col gap-3">
+      <Eyebrow>Access</Eyebrow>
+      {person.archivedAt ? (
+        <div className={`${cardClass()} flex flex-wrap items-center gap-3`}>
+          <p className="min-w-0 flex-1 text-sm">
+            This person is archived. Restore them before making changes.
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy}
+            onClick={() => restore.mutate({ personId: person.personId })}
+          >
+            Restore
+          </Button>
+        </div>
+      ) : (
+        <>
+          <div className={`${cardClass()} flex flex-col gap-3`}>
+            <div>
+              <p className="font-medium">Login account</p>
+              <p className="text-muted-foreground text-sm">
+                {person.account
+                  ? `${person.account.name} · ${person.account.email}`
+                  : "No login account is linked."}
+              </p>
+            </div>
+            {person.account ? (
+              <ConfirmDialog
+                title="Unlink this account?"
+                description="The person and their history stay. They cannot sign in as this person until another account is linked."
+                confirmLabel="Unlink account"
+                onConfirm={async () => {
+                  await unlink.mutateAsync({
+                    personId: person.personId,
+                    expectedAccountUserId: person.account?.userId ?? "",
+                    expectedUpdatedAt,
+                  });
+                }}
+                trigger={
+                  <Button size="sm" variant="outline" disabled={busy}>
+                    Unlink account
+                  </Button>
+                }
+              />
+            ) : (
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="flex min-w-56 flex-1 flex-col gap-1.5">
+                  <Label htmlFor="person-account-email">Verified email</Label>
+                  <Input
+                    id="person-account-email"
+                    type="email"
+                    value={accountEmail}
+                    onChange={(event) => {
+                      setAccountEmail(event.target.value);
+                      setAccountSearch("");
+                    }}
+                  />
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy || !accountEmail.trim()}
+                  onClick={() => setAccountSearch(accountEmail.trim())}
+                >
+                  Find account
+                </Button>
+                {accountMatch && (
+                  <Button
+                    size="sm"
+                    disabled={busy || accountMatch.linkedPersonId !== null}
+                    onClick={() =>
+                      link.mutate({
+                        personId: person.personId,
+                        accountUserId: accountMatch.userId,
+                        expectedUpdatedAt,
+                      })
+                    }
+                  >
+                    Link {accountMatch.name}
+                  </Button>
+                )}
+              </div>
+            )}
+            {accountSearch &&
+              !accountCandidate.isPending &&
+              !accountCandidate.data && (
+                <p className="text-muted-foreground text-sm">
+                  No verified account has that email.
+                </p>
+              )}
+            {accountMatch?.linkedPersonId && (
+              <p className="text-error text-sm">
+                That account is already linked to another person.
+              </p>
+            )}
+          </div>
+
+          <div className={`${cardClass()} flex flex-col gap-3`}>
+            <div>
+              <p className="font-medium">Guardians</p>
+              <p className="text-muted-foreground text-sm">
+                Guardians can book and cancel classes for this student.
+              </p>
+            </div>
+            {person.guardians.length > 0 && (
+              <ul className="flex flex-col gap-2">
+                {person.guardians.map((guardian) => (
+                  <li
+                    key={guardian.relationId}
+                    className="flex flex-wrap items-center gap-2 text-sm"
+                  >
+                    <span className="min-w-0 flex-1">
+                      {guardian.name} · {guardian.email}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() =>
+                        removeGuardian.mutate({
+                          studentPersonId: person.personId,
+                          guardianUserId: guardian.userId,
+                        })
+                      }
+                    >
+                      Remove
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="flex min-w-56 flex-1 flex-col gap-1.5">
+                <Label htmlFor="guardian-account-email">Guardian email</Label>
+                <Input
+                  id="guardian-account-email"
+                  type="email"
+                  value={guardianEmail}
+                  onChange={(event) => {
+                    setGuardianEmail(event.target.value);
+                    setGuardianSearch("");
+                  }}
+                />
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy || !guardianEmail.trim()}
+                onClick={() => setGuardianSearch(guardianEmail.trim())}
+              >
+                Find guardian
+              </Button>
+              {guardianMatch && (
+                <Button
+                  size="sm"
+                  disabled={busy}
+                  onClick={() =>
+                    addGuardian.mutate({
+                      studentPersonId: person.personId,
+                      guardianUserId: guardianMatch.userId,
+                    })
+                  }
+                >
+                  Add {guardianMatch.name}
+                </Button>
+              )}
+            </div>
+            {guardianSearch &&
+              !guardianCandidate.isPending &&
+              !guardianCandidate.data && (
+                <p className="text-muted-foreground text-sm">
+                  No verified account has that email.
+                </p>
+              )}
+          </div>
+
+          <ConfirmDialog
+            title="Archive this person?"
+            description="Their history stays. Restore them before changing their account, guardians, branches, or memberships."
+            confirmLabel="Archive person"
+            onConfirm={async () => {
+              await archive.mutateAsync({ personId: person.personId });
+            }}
+            trigger={
+              <Button
+                className="self-start"
+                size="sm"
+                variant="outline"
+                disabled={busy}
+              >
+                Archive person
+              </Button>
+            }
+          />
+        </>
+      )}
+    </section>
   );
 }
 
@@ -526,7 +847,7 @@ function BranchAssign({
 function PlanChangeDialog({
   assignmentId,
   currentPlanName,
-  userId,
+  personId,
   plans,
   nameOf,
   onOpenChange,
@@ -534,7 +855,7 @@ function PlanChangeDialog({
 }: {
   assignmentId: string;
   currentPlanName: string;
-  userId: string;
+  personId: string;
   plans: { id: string; name: string }[];
   nameOf: (id: string) => string;
   onOpenChange: (open: boolean) => void;
@@ -551,7 +872,7 @@ function PlanChangeDialog({
     enabled: targetPlanId !== "",
   });
   const review = useQuery({
-    ...trpc.accessPlan.bookingsToReview.queryOptions({ userId, limit: 20 }),
+    ...trpc.accessPlan.bookingsToReview.queryOptions({ personId, limit: 20 }),
     enabled: targetPlanId !== "" && (preview.data?.loses.length ?? 0) > 0,
   });
   const schedule = useMutation(

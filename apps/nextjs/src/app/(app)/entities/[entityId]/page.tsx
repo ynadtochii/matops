@@ -27,7 +27,6 @@ async function DashboardData() {
     prefetch(trpc.stats.dashboard.queryOptions());
     if (runsBranch(academy)) {
       prefetch(trpc.dropIn.list.queryOptions());
-      prefetch(trpc.payments.claims.queryOptions());
     }
   } else if (academy) {
     prefetch(trpc.class.mine.queryOptions(studentWeekWindow(new Date())));

@@ -4,7 +4,7 @@ import type { LeadSource } from "@matops/domain";
 import { matchLeadByPhone } from "@matops/domain";
 
 import type { DbExec } from "./client";
-import type { DbReader } from "./tenant";
+import type { DbReader, DbWriter } from "./tenant";
 import { entity } from "./entity-schema";
 import { classInstance, dropIn, dropInVisit } from "./scheduling";
 
@@ -103,7 +103,7 @@ export interface DropInResult {
  */
 async function upsertLead(
   input: Omit<CreateDropInInput, "classId">,
-  exec: DbExec,
+  exec: DbWriter,
 ): Promise<string> {
   const now = new Date();
   const [row] = await exec
@@ -135,7 +135,7 @@ async function upsertLead(
 /** How many classes this lead actually turned up to (spec O4 activity line). */
 async function countPresentVisits(
   dropInId: string,
-  exec: DbExec,
+  exec: DbReader,
 ): Promise<number> {
   const [row] = await exec
     .select({ n: sql<number>`count(*)::int` })
@@ -157,7 +157,7 @@ async function countPresentVisits(
  */
 export async function createDropIn(
   input: CreateDropInInput,
-  exec: DbExec,
+  exec: DbWriter,
 ): Promise<DropInResult> {
   const dropInId = await upsertLead(input, exec);
   if (input.classId) {
@@ -199,10 +199,26 @@ export interface BookVisitorResult extends DropInResult {
  */
 export async function bookVisitor(
   input: BookVisitorInput,
-  exec: DbExec,
+  exec: DbWriter,
 ): Promise<BookVisitorResult> {
   const dropInId = await upsertLead(input, exec);
   const now = new Date();
+  const cancelTokenExpiresAt = new Date(
+    now.getTime() + 30 * 24 * 60 * 60 * 1000,
+  );
+  const [bookedClass] = await exec
+    .select({ startsAt: classInstance.startsAt })
+    .from(classInstance)
+    .where(
+      and(
+        eq(classInstance.id, input.classId),
+        eq(classInstance.academyId, input.academyId),
+        eq(classInstance.status, "scheduled"),
+        isNull(classInstance.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (!bookedClass) throw new Error("Class is no longer open for booking");
   const [row] = await exec
     .insert(dropInVisit)
     .values({
@@ -212,6 +228,8 @@ export async function bookVisitor(
       bookingStatus: "booked",
       attendanceStatus: "unmarked",
       cancelToken: input.cancelToken,
+      cancelTokenExpiresAt,
+      bookedClassStartsAt: bookedClass.startsAt,
       bookedAt: now,
     })
     .onConflictDoUpdate({
@@ -221,6 +239,8 @@ export async function bookVisitor(
         cancelledAt: null,
         bookedAt: sql`coalesce(${dropInVisit.bookedAt}, ${now})`,
         cancelToken: sql`coalesce(${dropInVisit.cancelToken}, ${input.cancelToken})`,
+        cancelTokenExpiresAt: sql`case when ${dropInVisit.bookingStatus} = 'cancelled' then ${cancelTokenExpiresAt} else coalesce(${dropInVisit.cancelTokenExpiresAt}, ${cancelTokenExpiresAt}) end`,
+        bookedClassStartsAt: sql`case when ${dropInVisit.bookingStatus} = 'cancelled' then ${bookedClass.startsAt} else coalesce(${dropInVisit.bookedClassStartsAt}, ${bookedClass.startsAt}) end`,
       },
     })
     .returning({ id: dropInVisit.id, cancelToken: dropInVisit.cancelToken });
@@ -244,19 +264,76 @@ export async function bookVisitor(
 export async function cancelVisitorBooking(
   academyId: string,
   cancelToken: string,
-  exec: DbExec,
+  exec: DbWriter,
+  now = new Date(),
 ): Promise<boolean> {
   const rows = await exec
     .update(dropInVisit)
-    .set({ bookingStatus: "cancelled", cancelledAt: new Date() })
+    .set({ bookingStatus: "cancelled", cancelledAt: now })
     .where(
       and(
         eq(dropInVisit.academyId, academyId),
         eq(dropInVisit.cancelToken, cancelToken),
+        gte(dropInVisit.cancelTokenExpiresAt, now),
       ),
     )
     .returning({ id: dropInVisit.id });
   return rows.length > 0;
+}
+
+export async function getVisitorBookingStatus(
+  academyId: string,
+  cancelToken: string,
+  exec: DbReader,
+  now = new Date(),
+): Promise<{
+  bookingStatus: string;
+  tokenExpiresAt: Date;
+  class: {
+    id: string;
+    title: string;
+    startsAt: Date;
+    durationMinutes: number;
+    status: string;
+    changed: boolean;
+  };
+} | null> {
+  const [row] = await exec
+    .select({
+      bookingStatus: dropInVisit.bookingStatus,
+      tokenExpiresAt: dropInVisit.cancelTokenExpiresAt,
+      bookedClassStartsAt: dropInVisit.bookedClassStartsAt,
+      classId: classInstance.id,
+      classTitle: classInstance.title,
+      classStartsAt: classInstance.startsAt,
+      classDurationMinutes: classInstance.durationMinutes,
+      classStatus: classInstance.status,
+    })
+    .from(dropInVisit)
+    .innerJoin(classInstance, eq(classInstance.id, dropInVisit.classId))
+    .where(
+      and(
+        eq(dropInVisit.academyId, academyId),
+        eq(dropInVisit.cancelToken, cancelToken),
+        gte(dropInVisit.cancelTokenExpiresAt, now),
+        isNull(classInstance.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (!row?.tokenExpiresAt) return null;
+  return {
+    bookingStatus: row.bookingStatus,
+    tokenExpiresAt: row.tokenExpiresAt,
+    class: {
+      id: row.classId,
+      title: row.classTitle,
+      startsAt: row.classStartsAt,
+      durationMinutes: row.classDurationMinutes,
+      status: row.classStatus,
+      changed:
+        row.bookedClassStartsAt?.getTime() !== row.classStartsAt.getTime(),
+    },
+  };
 }
 
 /**

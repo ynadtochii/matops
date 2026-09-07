@@ -7,6 +7,7 @@ import { bookingRouter } from "./router/booking";
 import { checkinRouter } from "./router/checkin";
 import { classRouter } from "./router/class";
 import { curriculumRouter } from "./router/curriculum";
+import { dataTransferRouter } from "./router/dataTransfer";
 import { dropInRouter } from "./router/dropin";
 import { entityRouter } from "./router/entity";
 import { inviteRouter } from "./router/invite";
@@ -15,7 +16,7 @@ import { membershipPurchaseRouter } from "./router/membershipPurchase";
 import { noteRouter } from "./router/note";
 import { notificationRouter } from "./router/notification";
 import { organizationRouter } from "./router/organization";
-import { paymentsRouter } from "./router/payments";
+import { personRouter } from "./router/person";
 import { pushTokenRouter } from "./router/pushToken";
 import { rankRouter } from "./router/rank";
 import { referralRouter } from "./router/referral";
@@ -37,10 +38,11 @@ export const appRouter = createTRPCRouter({
   template: templateRouter,
   class: classRouter,
   curriculum: curriculumRouter,
+  dataTransfer: dataTransferRouter,
   booking: bookingRouter,
   attendance: attendanceRouter,
   checkin: checkinRouter,
-  payments: paymentsRouter,
+  person: personRouter,
   rank: rankRouter,
   referral: referralRouter,
   note: noteRouter,

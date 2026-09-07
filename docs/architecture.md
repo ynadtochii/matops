@@ -1,5 +1,27 @@
 # matops — Architecture Design Doc (v1)
 
+## First academy release architecture
+
+ADR 134 adds five structure-only migrations after 0068.
+
+`person` is the organization-owned student subject. It may point at one Better Auth user. `person_guardian` links a child person to a guardian account. Student-owned rows accept `person_id`, while actor, instructor, reviewer, and guardian fields remain account IDs. Two dry-run scripts move existing account subjects and old dues data after operators inspect their reports.
+
+Shared membership tables are the only live payment model. `entity.membership_enforced_at` now controls only whether membership payment can block new bookings at that branch. Migration 0074 refuses to drop old dues tables until the conversion script has emptied them.
+
+Production migration is staged when old dues rows exist. The deploy migrator applies the backward-compatible expansion through 0071 and stops. Operators run the person and dues conversion scripts before the next deployment applies 0072 and 0073. The deploy leaves the old tables in place during that application rollout. A later deployment applies 0074 only when `ALLOW_LEGACY_DUES_DROP=1` is set.
+
+The authenticated route layout mounts one `AppShell`. Organization routes keep a selected branch as `?branch=<id>`. Branch routes keep `/entities/<id>`. `stats.navigationSummary` returns organization work and selected-branch work through their existing scopes. The client represents loading, failure, and unavailable counts separately from zero.
+
+`attendance_correction` is an append-only record of historical changes. The API checks the actor's role before it accepts an old change and writes the change record with the attendance update.
+
+`notification_outbox` stores email work in the class transaction. Workers claim bounded rows with row locks, recover stale claims, retry failures, and send with stable delivery keys. Public visitor bookings keep a private expiring token for status and cancellation.
+
+`scheduled_job_run` records global worker status outside tenant access. The organization health reader returns only run timing plus an exhausted-email count joined through that organization's branches. GitHub Actions calls delivery every five minutes and calls membership and calendar jobs daily.
+
+The `dataTransfer` router uses organization manager access. Import preview and commit use the same parser and duplicate rules. Commit runs in one base transaction with explicit organization filters. Export pages use an ID cursor, a 500-row limit, and one export timestamp.
+
+Organization flags gate curriculum and referrals in navigation and API middleware. Both flags default to false.
+
 ## Explicit attendance review (ADR 133)
 
 Status: implementation in progress. [ADR 133](/Users/kuna/projects/matops/docs/issues/133-explicit-attendance-review.md) records the decision.
@@ -17,7 +39,6 @@ No task table, trigger, background worker or historical fill is added. Existing 
 Attendance marks still drive visits, rates and coach workload. Review completion does not change those statistics.
 The policy for corrections older than 14 days remains pending. Migration and release checks are still open.
 
-
 **Staff identity and access (ADR 132)**
 
 `entity_membership` remains the branch identity record for both staff and students. Its ID does not imply paid enrollment.
@@ -26,7 +47,6 @@ Student list readers use role classification. Approval status still controls per
 `loadStaffAccess` resolves active branch staff and inherited organization authority for coverage readers and background cancellation.
 Cancellation locks existing role records before its access check. Lists expose nullable member IDs for organization-only staff.
 No schema migration or billing cleanup is part of this change. See [ADR 132](/Users/kuna/projects/matops/docs/issues/132-staff-roster-isolation.md).
-
 
 _The design of record for **matops** (the from-scratch rebuild of the old app **MAT**). A build team starts here. Pairs with the product [spec.md](./spec.md); every decision below is a resolved wayfinder ticket (links go to the rationale)._
 

@@ -8,17 +8,12 @@ import { slugify } from "./slug";
 /** The member fields the export needs: a subset of the owner member list row. */
 export interface ExportMember {
   name: string;
-  email: string;
+  email: string | null;
   phone: string | null;
   role: string;
   status: string;
   joinedAt: string | Date;
   visitCount: number;
-  dues: {
-    status: string;
-    planName: string;
-    nextDueAt: string | Date | null;
-  } | null;
 }
 
 const HEADERS = [
@@ -29,9 +24,6 @@ const HEADERS = [
   "Status",
   "Joined",
   "Visits",
-  "Plan",
-  "Dues status",
-  "Next due",
 ] as const;
 
 /**
@@ -55,6 +47,63 @@ function field(value: string | number | null): string {
     : safe;
 }
 
+export function csvDocument(
+  headers: readonly string[],
+  rows: readonly (readonly (string | number | boolean | null)[])[],
+): string {
+  return `${[headers, ...rows]
+    .map((row) =>
+      row
+        .map((value) =>
+          field(typeof value === "boolean" ? String(value) : value),
+        )
+        .join(","),
+    )
+    .join("\r\n")}\r\n`;
+}
+
+export function parseCsv(source: string): string[][] {
+  const text = source.charCodeAt(0) === 0xfeff ? source.slice(1) : source;
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let value = "";
+  let quoted = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (quoted) {
+      if (char === '"' && text[index + 1] === '"') {
+        value += '"';
+        index += 1;
+      } else if (char === '"') {
+        quoted = false;
+      } else {
+        value += char;
+      }
+    } else if (char === '"' && value.length === 0) {
+      quoted = true;
+    } else if (char === ",") {
+      row.push(value);
+      value = "";
+    } else if (char === "\n" || char === "\r") {
+      if (char === "\r" && text[index + 1] === "\n") index += 1;
+      row.push(value);
+      rows.push(row);
+      row = [];
+      value = "";
+    } else {
+      value += char;
+    }
+  }
+
+  if (quoted) throw new Error("The CSV has an unclosed quoted field");
+  if (value.length > 0 || row.length > 0) {
+    row.push(value);
+    rows.push(row);
+  }
+  return rows.filter((cells) => cells.some((cell) => cell.length > 0));
+}
+
 const day = (d: string | Date | null): string =>
   d === null ? "" : dayKey(new Date(d));
 
@@ -71,9 +120,6 @@ export function membersCsv(rows: ExportMember[]): string {
         m.status,
         day(m.joinedAt),
         m.visitCount,
-        m.dues?.planName ?? "",
-        m.dues?.status ?? "",
-        day(m.dues?.nextDueAt ?? null),
       ]
         .map(field)
         .join(","),

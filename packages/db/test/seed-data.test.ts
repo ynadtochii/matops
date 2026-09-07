@@ -51,13 +51,7 @@ describe("buildSeedGraph — pure dataset", () => {
   it("covers every member status on the member list", () => {
     const g = build();
     const statuses = new Set(g.entityMemberships.map((m) => m.status));
-    for (const s of [
-      "active",
-      "pending",
-      "suspended",
-      "archived",
-      "removed",
-    ]) {
+    for (const s of ["active", "pending", "suspended", "archived", "removed"]) {
       expect(statuses).toContain(s);
     }
     // A pending instructor exists (web-lens approval queue).
@@ -68,7 +62,7 @@ describe("buildSeedGraph — pure dataset", () => {
     ).toBe(true);
   });
 
-  it("runs the academy on shared memberships, not on branch dues", () => {
+  it("runs the academy with membership payment enforcement", () => {
     const g = build();
     expect(g.entities[0]?.membershipEnforcedAt).toBeInstanceOf(Date);
     expect(g.memberships.policies).toHaveLength(1);
@@ -128,14 +122,6 @@ describe("buildSeedGraph — pure dataset", () => {
     expect(g.memberships.purchases[0]?.status).toBe("claimed");
   });
 
-  it("keeps confirmed claim history for the referrals ledger, and nothing else", () => {
-    const g = build();
-    const yourMember = seedMemberId(SEED_ACADEMY.key, "you");
-    expect(g.claims.length).toBeGreaterThan(0);
-    expect(g.claims.every((c) => c.status === "confirmed")).toBe(true);
-    expect(g.claims.some((c) => c.memberId === yourMember)).toBe(false);
-  });
-
   it("covers the remaining demo states: unmarked, cancelled booking, paused, no plan", () => {
     const g = build();
     const pastIds = new Set(g.pastClasses.map((c) => c.id));
@@ -151,11 +137,21 @@ describe("buildSeedGraph — pure dataset", () => {
       true,
     );
     expect(g.templates.some((t) => t.status === "paused")).toBe(true);
-    const holding = new Set(g.memberships.assignments.map((a) => a.userId));
+    const holding = new Set(
+      g.memberships.assignments.flatMap((a) => {
+        const subjectId = a.personId ?? a.userId;
+        return subjectId ? [subjectId] : [];
+      }),
+    );
     const activeStudents = g.entityMemberships.filter(
       (m) => m.role === "student" && m.status === "active",
     );
-    expect(activeStudents.some((m) => !holding.has(m.userId))).toBe(true);
+    expect(
+      activeStudents.some((m) => {
+        const subjectId = m.personId ?? m.userId;
+        return subjectId ? !holding.has(subjectId) : false;
+      }),
+    ).toBe(true);
   });
 
   it("seeds a manager who runs the gym without training at it", () => {
@@ -164,9 +160,9 @@ describe("buildSeedGraph — pure dataset", () => {
     expect(manager).toBeDefined();
     // No entity membership: managing a branch must never enrol them as a
     // student of it (ADR 129).
-    expect(
-      g.entityMemberships.some((m) => m.userId === manager?.userId),
-    ).toBe(false);
+    expect(g.entityMemberships.some((m) => m.userId === manager?.userId)).toBe(
+      false,
+    );
     // Staff hold no membership — an active one trains free (ADR 132).
     expect(
       g.memberships.assignments.some((a) => a.userId === manager?.userId),
@@ -203,8 +199,6 @@ describe("buildSeedGraph — pure dataset", () => {
       ...g.templates,
       ...g.pastClasses,
       ...g.participations,
-      ...g.plans,
-      ...g.claims,
       ...g.ranks,
       ...g.promotions,
       ...g.notes,
@@ -253,13 +247,20 @@ describe("buildSeedGraph — pure dataset", () => {
       if (p.attendanceStatus !== "present") continue;
       const startsAt = started.get(p.classId);
       if (!startsAt) continue;
-      const seen = lastPresent.get(p.studentId);
-      if (!seen || startsAt > seen) lastPresent.set(p.studentId, startsAt);
+      const subjectId = p.personId ?? p.studentId;
+      if (!subjectId) continue;
+      const seen = lastPresent.get(subjectId);
+      if (!seen || startsAt > seen) lastPresent.set(subjectId, startsAt);
     }
     const bands = new Set(
       g.entityMemberships
         .filter((m) => m.role === "student" && m.status === "active")
-        .map((m) => classifyDrift(lastPresent.get(m.userId) ?? null, now)),
+        .flatMap((m) => {
+          const subjectId = m.personId ?? m.userId;
+          return subjectId
+            ? [classifyDrift(lastPresent.get(subjectId) ?? null, now)]
+            : [];
+        }),
     );
     for (const band of ["active", "cooling", "at_risk", "dormant"]) {
       expect(bands).toContain(band);
@@ -295,7 +296,7 @@ describe("buildSeedGraph — pure dataset", () => {
     const coachUsers = new Set(coaches.map((c) => c.userId));
     const coachMemberships = new Set(
       g.entityMemberships
-        .filter((m) => coachUsers.has(m.userId))
+        .filter((m) => (m.userId ? coachUsers.has(m.userId) : false))
         .map((m) => m.id),
     );
     expect(g.ranks.some((r) => coachMemberships.has(r.memberId))).toBe(true);

@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 
 import { cronVerdict } from "@matops/api/cron-auth";
+import { runRecordedJob } from "@matops/api/job-run";
 import { runMaterializationSweep } from "@matops/db";
 import { db } from "@matops/db/client";
 
@@ -14,13 +15,6 @@ import { env } from "~/env";
  * every active template's concrete classes to the rolling horizon. Bounded per
  * run (row limit + soft time budget) so it never approaches the serverless
  * duration ceiling; leftovers resume on the next tick.
- *
- * NOT scheduled (ADR 46, 79): a dormant, manually-callable seam. The horizon is
- * the owner's to fill — a template save materializes six months at once, and the
- * Rebuild schedule button on Schedule → Templates regenerates the lot. This route
- * stays because it is the cross-academy version, tested and ready for whenever a
- * scheduler comes back. Callable by hand:
- *   curl -H "Authorization: Bearer $CRON_SECRET" .../api/cron/materialize
  *
  * Protected by CRON_SECRET when set: a caller sends `Authorization: Bearer <secret>`.
  * CRON_SECRET is optional now; if unset, the route still refuses to run in production.
@@ -37,6 +31,14 @@ export async function GET(req: NextRequest) {
     return new Response(verdict.message, { status: verdict.status });
   }
 
-  const result = await runMaterializationSweep({ exec: db });
+  const result = await runRecordedJob(
+    db,
+    "calendar_materialization",
+    () => runMaterializationSweep({ exec: db }),
+    {
+      succeeded: (run) => !run.hasMore,
+      failureMessage: () => "Calendar materialization has more work",
+    },
+  );
   return Response.json({ ok: true, ...result });
 }

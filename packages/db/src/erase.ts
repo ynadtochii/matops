@@ -9,7 +9,6 @@ import {
   classParticipation,
   entityMembership,
   member,
-  memberDues,
   memberNote,
   memberRank,
   memberReferral,
@@ -17,7 +16,9 @@ import {
   membershipMonth,
   membershipPurchase,
   notification,
-  paymentClaim,
+  notificationOutbox,
+  person,
+  personGuardian,
   rankPromotion,
   user,
 } from "./schema";
@@ -76,16 +77,6 @@ export async function eraseMemberData(
         ),
       ),
   );
-  await del("payment_claim", () =>
-    exec
-      .delete(paymentClaim)
-      .where(
-        and(
-          eq(paymentClaim.academyId, academyId),
-          eq(paymentClaim.memberId, memberId),
-        ),
-      ),
-  );
   await del("member_referral_audit", () =>
     exec
       .delete(memberReferralAudit)
@@ -103,16 +94,6 @@ export async function eraseMemberData(
         and(
           eq(memberReferral.academyId, academyId),
           eq(memberReferral.studentMemberId, memberId),
-        ),
-      ),
-  );
-  await del("member_dues", () =>
-    exec
-      .delete(memberDues)
-      .where(
-        and(
-          eq(memberDues.academyId, academyId),
-          eq(memberDues.memberId, memberId),
         ),
       ),
   );
@@ -153,6 +134,16 @@ export async function eraseMemberData(
         and(
           eq(notification.academyId, academyId),
           eq(notification.userId, userId),
+        ),
+      ),
+  );
+  await del("notification_outbox", () =>
+    exec
+      .delete(notificationOutbox)
+      .where(
+        and(
+          eq(notificationOutbox.academyId, academyId),
+          eq(notificationOutbox.recipientKey, `user:${userId}`),
         ),
       ),
   );
@@ -306,6 +297,23 @@ export async function deleteMemberRow(
   organizationId: string,
   userId: string,
 ): Promise<void> {
+  await exec
+    .delete(personGuardian)
+    .where(
+      and(
+        eq(personGuardian.organizationId, organizationId),
+        eq(personGuardian.guardianUserId, userId),
+      ),
+    );
+  await exec
+    .update(person)
+    .set({ accountUserId: null })
+    .where(
+      and(
+        eq(person.organizationId, organizationId),
+        eq(person.accountUserId, userId),
+      ),
+    );
   await exec
     .delete(member)
     .where(

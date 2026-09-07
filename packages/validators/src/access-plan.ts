@@ -73,34 +73,47 @@ export const AccessPlanIdSchema = z.object({ id: z.uuid() });
  * Give a person a membership. `startMonth` is the first day of a calendar
  * month; leave it out and the server uses the month it is in.
  */
-export const AssignMembershipSchema = z.object({
-  userId: IdSchema,
+const AssignmentFieldsSchema = z.object({
   planId: z.uuid(),
-  /** Where the owner was standing. Recorded, never a limit on coverage. */
   assigningEntityId: IdSchema.nullish(),
   startMonth: z.iso.date().nullish(),
 });
+
+export const AssignMembershipSchema = z
+  .union([
+    AssignmentFieldsSchema.extend({ personId: IdSchema }),
+    AssignmentFieldsSchema.extend({ userId: IdSchema }),
+  ])
+  .transform((input) => ({
+    ...input,
+    userId: "personId" in input ? input.personId : input.userId,
+  }));
 export type AssignMembershipInput = z.infer<typeof AssignMembershipSchema>;
 
 /** How many people one bulk run may touch. Past this it is an import, not a click. */
 const MAX_BULK_ASSIGN = 500;
 
 /** Give the same plan to several people at once (ADR 128). */
-export const BulkAssignMembershipSchema = z.object({
-  userIds: z.array(IdSchema).min(1).max(MAX_BULK_ASSIGN),
-  planId: z.uuid(),
-  startMonth: z.iso.date().nullish(),
-});
+export const BulkAssignMembershipSchema = z
+  .union([
+    z.object({
+      personIds: z.array(IdSchema).min(1).max(MAX_BULK_ASSIGN),
+      planId: z.uuid(),
+      startMonth: z.iso.date().nullish(),
+    }),
+    z.object({
+      userIds: z.array(IdSchema).min(1).max(MAX_BULK_ASSIGN),
+      planId: z.uuid(),
+      startMonth: z.iso.date().nullish(),
+    }),
+  ])
+  .transform((input) => ({
+    ...input,
+    userIds: "personIds" in input ? input.personIds : input.userIds,
+  }));
 export type BulkAssignMembershipInput = z.infer<
   typeof BulkAssignMembershipSchema
 >;
-
-/** Who is on one branch's legacy dues plan, for migration (ADR 128). */
-export const LegacyPlanMembersSchema = z.object({
-  entityId: IdSchema,
-  planId: z.uuid().nullish(),
-});
-export type LegacyPlanMembersInput = z.infer<typeof LegacyPlanMembersSchema>;
 
 export const AssignmentIdSchema = z.object({ id: z.uuid() });
 
@@ -122,13 +135,33 @@ export const CancelPlanChangeSchema = z.object({ changeId: z.uuid() });
  * Bounded rather than paged by cursor: the list is work to clear, and a gym
  * with more than a screenful has a bigger problem than pagination.
  */
-export const BookingReviewSchema = z.object({
-  userId: IdSchema.nullish(),
-  limit: z.number().int().min(1).max(200).default(50),
-});
+export const BookingReviewSchema = z
+  .union([
+    z.object({
+      personId: IdSchema.nullish(),
+      limit: z.number().int().min(1).max(200).default(50),
+    }),
+    z.object({
+      userId: IdSchema.nullish(),
+      limit: z.number().int().min(1).max(200).default(50),
+    }),
+  ])
+  .transform((input) => ({
+    personId:
+      "userId" in input
+        ? input.userId
+        : "personId" in input
+          ? input.personId
+          : null,
+    limit: input.limit,
+  }));
 export type BookingReviewInput = z.infer<typeof BookingReviewSchema>;
 
-export const MemberAssignmentsSchema = z.object({ userId: IdSchema });
+export const MemberAssignmentsSchema = z
+  .union([z.object({ personId: IdSchema }), z.object({ userId: IdSchema })])
+  .transform((input) => ({
+    userId: "personId" in input ? input.personId : input.userId,
+  }));
 
 /** The first day of a calendar month, which is how a month is addressed. */
 const MonthSchema = z.iso

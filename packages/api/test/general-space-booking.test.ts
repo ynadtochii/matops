@@ -247,15 +247,12 @@ describe("one place, one booking", () => {
     expect(await countOf(now.id)).toBe(1);
   });
 
-  it("answers for whichever gate the branch runs on", async () => {
-    // The gym is activated, and Chris holds a membership covering it.
+  it("answers whether each branch enforces payment", async () => {
     const covered = await at(gym, CHRIS).booking.access();
     expect([covered.locked, covered.message]).toEqual([false, null]);
 
-    // The mat is NOT activated and has no dues enforcement, so the legacy gate
-    // lets everyone through. Same query, different gate, one shape.
-    const legacy = await at(ORG, ALEX).booking.access();
-    expect([legacy.locked, legacy.message]).toEqual([false, null]);
+    const open = await at(ORG, ALEX).booking.access();
+    expect([open.locked, open.message]).toEqual([false, null]);
   });
 
   it("names the branch when the branch is the reason", async () => {
@@ -294,8 +291,6 @@ describe("one place, one booking", () => {
   });
 
   it("never gates staff on a membership, at either door", async () => {
-    // The owner holds no plan covering the gym, and runs the place rather than
-    // buying access to it. The same rule the legacy dues gate has always had.
     const seen = await at(gym, BOSS).booking.access();
     expect([seen.locked, seen.message]).toEqual([false, null]);
 
@@ -392,7 +387,7 @@ describe("one place, one booking", () => {
     expect(bea?.membership?.verdict).toBe("ok");
   });
 
-  it("says nothing about memberships at a branch on the legacy gate", async () => {
+  it("says nothing about memberships when enforcement is off", async () => {
     const roster = await at(ORG, BOSS).membership.members();
     expect(roster.every((r) => r.membership === null)).toBe(true);
   });

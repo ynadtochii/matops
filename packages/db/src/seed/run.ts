@@ -38,11 +38,9 @@ import {
   memberReferralAudit,
   membershipMonth,
   membershipMonthAudit,
-  membershipPlan,
   membershipPolicy,
   membershipPurchase,
   organization,
-  paymentClaim,
   rankPromotion,
   user,
 } from "../schema";
@@ -128,10 +126,6 @@ export async function seedAll(
   );
   await insert(report, "academy_invite", exec, academyInvite, graph.invites);
 
-  // 2. Payments. The legacy price list survives only because the confirmed
-  //    claims the referrals ledger reads point at it; the gym itself runs on
-  //    the shared membership stack below (ADR 126-129).
-  await insert(report, "membership_plan", exec, membershipPlan, graph.plans);
   const m = graph.memberships;
   await insert(report, "membership_policy", exec, membershipPolicy, m.policies);
   await insert(report, "access_plan", exec, accessPlan, m.plans);
@@ -191,7 +185,6 @@ export async function seedAll(
   );
 
   // 4. The rest of the payments + rank + notes + leads.
-  await insert(report, "payment_claim", exec, paymentClaim, graph.claims);
   await insert(report, "member_rank", exec, memberRank, graph.ranks);
   await insert(report, "rank_promotion", exec, rankPromotion, graph.promotions);
   await insert(report, "member_note", exec, memberNote, graph.notes);
@@ -289,16 +282,14 @@ async function bookFutureClasses(
   const pendingByAcademy = new Map<string, string[]>();
   for (const m of graph.entityMemberships) {
     const acad = m.entityId;
-    if (quiet.has(m.userId)) continue;
+    const userId = m.userId;
+    if (!userId || quiet.has(userId)) continue;
     if (m.role === "student" && m.status === "active") {
-      activeByAcademy.set(acad, [
-        ...(activeByAcademy.get(acad) ?? []),
-        m.userId,
-      ]);
+      activeByAcademy.set(acad, [...(activeByAcademy.get(acad) ?? []), userId]);
     } else if (m.status === "pending" && m.invitedRole === "student") {
       pendingByAcademy.set(acad, [
         ...(pendingByAcademy.get(acad) ?? []),
-        m.userId,
+        userId,
       ]);
     }
   }

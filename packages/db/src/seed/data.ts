@@ -7,10 +7,6 @@
  * ONE demo academy ("Alma beta"), owned by the real user, built for the beta
  * test: an outside tester joins through the seeded instructor invite link.
  *
- * The academy runs on SHARED memberships (ADR 126-129), the way every branch
- * made today does — not on the legacy branch dues, which only a gym that
- * predates the cutover still has.
- *
  * The dataset is shaped to light up EVERY UI state at least once: member
  * statuses (active / pending / suspended / archived / removed), a manager who
  * runs the gym without training at it, all four drift bands (active / cooling /
@@ -21,12 +17,7 @@
  * belts across disciplines with a promotion timeline, drop-in leads across the
  * funnel, referrals in all three audit states, and a live invite link per role.
  */
-import {
-  computeOccurrences,
-  monthOf,
-  nextMonth,
-  paymentPeriod,
-} from "@matops/domain";
+import { computeOccurrences, monthOf, nextMonth } from "@matops/domain";
 
 import type {
   academyInvite,
@@ -50,11 +41,9 @@ import type {
   memberReferralAudit,
   membershipMonth,
   membershipMonthAudit,
-  membershipPlan,
   membershipPolicy,
   membershipPurchase,
   organization,
-  paymentClaim,
   rankPromotion,
   user,
 } from "../schema";
@@ -77,8 +66,6 @@ type NewInvite = typeof academyInvite.$inferInsert;
 type NewTemplate = typeof classTemplate.$inferInsert;
 type NewClass = typeof classInstance.$inferInsert;
 type NewParticipation = typeof classParticipation.$inferInsert;
-type NewPlan = typeof membershipPlan.$inferInsert;
-type NewClaim = typeof paymentClaim.$inferInsert;
 type NewAccessPlan = typeof accessPlan.$inferInsert;
 type NewAccessPlanPrice = typeof accessPlanPrice.$inferInsert;
 type NewAccessPlanEntity = typeof accessPlanEntity.$inferInsert;
@@ -110,8 +97,6 @@ export interface SeedGraph {
   templates: NewTemplate[];
   pastClasses: NewClass[];
   participations: NewParticipation[];
-  plans: NewPlan[];
-  claims: NewClaim[];
   memberships: MembershipRows;
   ranks: NewRank[];
   promotions: NewPromotion[];
@@ -272,8 +257,6 @@ function buildAcademy(args: {
   templates: NewTemplate[];
   pastClasses: NewClass[];
   participations: NewParticipation[];
-  plans: NewPlan[];
-  claims: NewClaim[];
   memberships: MembershipRows;
   ranks: NewRank[];
   promotions: NewPromotion[];
@@ -484,77 +467,6 @@ function buildAcademy(args: {
     });
   });
 
-  // --- Payments: the shared membership stack (ADR 126-129). ------------------
-  // The academy runs the membership gate, so there are no branch dues rows.
-  // The legacy price list and its CONFIRMED claims stay because the referrals
-  // ledger (O9) still reads revenue off `payment_claim` and nothing else.
-  const planId = newId();
-  const planLiteId = newId();
-  const planArchivedId = newId();
-  const legacyPlans: NewPlan[] = [
-    {
-      id: planId,
-      academyId: academy.id,
-      name: "Monthly Unlimited",
-      priceMinor: 5000,
-      currency: academy.currency,
-      cycle: "monthly",
-    },
-    {
-      id: planLiteId,
-      academyId: academy.id,
-      name: "Monthly · 2× / week",
-      priceMinor: 3500,
-      currency: academy.currency,
-      cycle: "monthly",
-    },
-    {
-      id: planArchivedId,
-      academyId: academy.id,
-      name: "Legacy · Unlimited",
-      priceMinor: 4200,
-      currency: academy.currency,
-      cycle: "monthly",
-      deletedAt: new Date(now.getTime() - 60 * DAY_MS),
-    },
-  ];
-
-  const claims: NewClaim[] = [];
-  activeStudents.slice(0, 8).forEach((student, index) => {
-    const lite = index % 3 === 0;
-    const selected = legacyPlans[lite ? 1 : 0];
-    if (!selected) return;
-    const memberId = seedMembershipId(academy.key, student.persona.handle);
-    claims.push(
-      {
-        id: newId(),
-        academyId: academy.id,
-        memberId,
-        planId: selected.id ?? planId,
-        amountMinor: selected.priceMinor,
-        currency: selected.currency,
-        period: paymentPeriod(now),
-        status: "confirmed",
-        confirmedBy: staffInstructorId,
-        confirmedAt: now,
-        claimedAt: new Date(now.getTime() - DAY_MS),
-      },
-      {
-        id: newId(),
-        academyId: academy.id,
-        memberId,
-        planId: selected.id ?? planId,
-        amountMinor: selected.priceMinor,
-        currency: selected.currency,
-        period: paymentPeriod(new Date(now.getTime() - 45 * DAY_MS)),
-        status: "confirmed",
-        confirmedBy: staffInstructorId,
-        confirmedAt: new Date(now.getTime() - 45 * DAY_MS),
-        claimedAt: new Date(now.getTime() - 46 * DAY_MS),
-      },
-    );
-  });
-
   const memberships = buildMemberships({
     academy,
     students,
@@ -742,8 +654,6 @@ function buildAcademy(args: {
     templates,
     pastClasses,
     participations,
-    plans: legacyPlans,
-    claims,
     memberships,
     ranks,
     promotions,
@@ -752,7 +662,6 @@ function buildAcademy(args: {
     dropInVisits,
   };
 }
-
 
 /** The organization-scoped membership rows one seeded academy carries. */
 export interface MembershipRows {
@@ -1183,9 +1092,6 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
       address: academy.address,
       mapUrl: academy.mapUrl,
       publicCode: academy.publicCode,
-      // The gym runs on shared memberships, the way every branch made today
-      // does (ADR 128). Leaving it null would put the demo on the legacy
-      // branch dues gate, which no new academy ever sees.
       membershipEnforcedAt: new Date(now.getTime() - 200 * DAY_MS),
       createdAt: now,
       updatedAt: now,
@@ -1199,17 +1105,17 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
   const entityMemberships: NewEntityMembership[] = seats
     .filter((seat) => seat.branchMembership)
     .map((seat) => ({
-    id: seedEntityMembershipId(seat.id),
-    organizationId: academy.id,
-    entityId: academy.id,
-    userId: seat.userId,
-    role: seat.role,
-    status: seat.status,
-    invitedRole: seat.invitedRole,
-    joinedAt: seat.status === "active" ? seat.createdAt : null,
-    createdAt: seat.createdAt,
-    updatedAt: seat.createdAt,
-  }));
+      id: seedEntityMembershipId(seat.id),
+      organizationId: academy.id,
+      entityId: academy.id,
+      userId: seat.userId,
+      role: seat.role,
+      status: seat.status,
+      invitedRole: seat.invitedRole,
+      joinedAt: seat.status === "active" ? seat.createdAt : null,
+      createdAt: seat.createdAt,
+      updatedAt: seat.createdAt,
+    }));
 
   // One live invite link per role (drives the invite/staff cards). The tester
   // joins the beta through the instructor link.
@@ -1486,8 +1392,6 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
     templates: data.templates,
     pastClasses: data.pastClasses,
     participations: data.participations,
-    plans: data.plans,
-    claims: data.claims,
     memberships: data.memberships,
     ranks: data.ranks,
     promotions: data.promotions,

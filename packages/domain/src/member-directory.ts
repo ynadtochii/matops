@@ -18,7 +18,7 @@ export interface DirectoryEntry {
   memberId: string | null;
   userId: string;
   name: string;
-  email: string;
+  email: string | null;
   /** Their branch membership status: active, pending, suspended… */
   status: string;
   role: string;
@@ -27,7 +27,6 @@ export interface DirectoryEntry {
   /** A shared membership covers them here. */
   covered: boolean;
   planNames: string[];
-  /** Null at a branch still on the legacy gate, which has no verdict to give. */
   verdict: string | null;
   recentVisits: number;
 }
@@ -47,7 +46,7 @@ export interface DirectoryBranch {
 export interface DirectoryRow {
   userId: string;
   name: string;
-  email: string;
+  email: string | null;
   /** Every branch they belong to, name-ordered. */
   branches: DirectoryBranch[];
   /** Every plan covering them anywhere, deduplicated. */

@@ -13,9 +13,9 @@ import {
   matchesDirectoryFilter,
   matchPeopleByEmail,
   parseEmailList,
-  staffRows,
 } from "@matops/domain";
 import { Button } from "@matops/ui/button";
+import { Dialog, DialogContent, DialogTitle } from "@matops/ui/dialog";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
 import { Select } from "@matops/ui/select";
@@ -23,6 +23,10 @@ import { Textarea } from "@matops/ui/textarea";
 import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
+import {
+  OrganizationExportDialog,
+  StudentImportDialog,
+} from "./data-transfer-dialogs";
 import { useOrganization } from "./entity";
 import { cardClass, ENTER, Eyebrow, stagger } from "./primitives";
 import { SkeletonRows } from "./skeletons";
@@ -49,7 +53,9 @@ import { Tabs } from "./tabs";
 export function PeopleScreen() {
   const trpc = useTRPC();
   const { canRunOrganization } = useOrganization();
-  const directory = useQuery(trpc.stats.organizationMembers.queryOptions());
+  const directory = useQuery(trpc.person.directory.queryOptions());
+  const branchSummary = useQuery(trpc.stats.organizationMembers.queryOptions());
+  const accessPlans = useQuery(trpc.accessPlan.list.queryOptions());
   const tabParam = useSearchParams().get("tab");
   const [tab, setTab] = useState<PeopleTab>(
     tabParam === "staff" ? "staff" : "people",
@@ -59,10 +65,43 @@ export function PeopleScreen() {
   const [planName, setPlanName] = useState("");
   const [status, setStatus] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
+  const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   // Memoised so the `?? []` fallback is not a new array on every render, which
   // would defeat the two useMemo hooks below.
-  const rows = useMemo(() => directory.data?.rows ?? [], [directory.data]);
+  const rows = useMemo(
+    () =>
+      (directory.data ?? []).map((person) => {
+        const summary = branchSummary.data?.rows.find(
+          (row) => row.userId === person.id,
+        );
+        return {
+          personId: person.id,
+          userId: person.id,
+          accountUserId: person.accountUserId,
+          name: person.name,
+          email: person.email ?? "",
+          phone: person.phone,
+          recentVisits: summary?.recentVisits ?? 0,
+          planNames: summary?.planNames ?? [],
+          branches: person.branches.map((branch) => {
+            const summaryBranch = summary?.branches.find(
+              (row) => row.entityId === branch.entityId,
+            );
+            return {
+              ...branch,
+              memberId: summaryBranch?.memberId ?? branch.enrollmentId,
+              covered: summaryBranch?.covered ?? false,
+              verdict: summaryBranch?.verdict ?? null,
+              recentVisits: summaryBranch?.recentVisits ?? 0,
+            };
+          }),
+        };
+      }),
+    [directory.data, branchSummary.data],
+  );
   const students = useMemo(
     () => rows.filter((r) => r.branches.some(isStudentMember)),
     [rows],
@@ -73,7 +112,11 @@ export function PeopleScreen() {
   );
   const shown = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    return (tab === "staff" ? staffRows(rows) : students)
+    return (
+      tab === "staff"
+        ? rows.filter((row) => row.branches.some(isStaffRole))
+        : students
+    )
       .filter((r) =>
         matchesDirectoryFilter(
           {
@@ -117,7 +160,31 @@ export function PeopleScreen() {
             branches they train at.
           </p>
         </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setExporting(true)}>
+            Export data
+          </Button>
+          <Button variant="outline" onClick={() => setImporting(true)}>
+            Import students
+          </Button>
+          <Button onClick={() => setCreating(true)}>Add student</Button>
+        </div>
       </div>
+
+      {creating && (
+        <CreateStudentDialog
+          entities={branchSummary.data?.entities ?? []}
+          onOpenChange={setCreating}
+        />
+      )}
+      {importing && (
+        <StudentImportDialog
+          entities={branchSummary.data?.entities ?? []}
+          plans={accessPlans.data ?? []}
+          onOpenChange={setImporting}
+        />
+      )}
+      {exporting && <OrganizationExportDialog onOpenChange={setExporting} />}
 
       <Tabs
         label="Members or staff"
@@ -129,7 +196,11 @@ export function PeopleScreen() {
         }}
         tabs={[
           { id: "people", label: "Members", count: students.length },
-          { id: "staff", label: "Staff", count: staffRows(rows).length },
+          {
+            id: "staff",
+            label: "Staff",
+            count: rows.filter((row) => row.branches.some(isStaffRole)).length,
+          },
         ]}
       />
 
@@ -151,7 +222,7 @@ export function PeopleScreen() {
             onChange={(e) => setEntityId(e.target.value)}
           >
             <option value="">Any branch</option>
-            {(directory.data?.entities ?? []).map((e) => (
+            {(branchSummary.data?.entities ?? []).map((e) => (
               <option key={e.id} value={e.id}>
                 {e.name}
               </option>
@@ -190,9 +261,9 @@ export function PeopleScreen() {
         </div>
       </div>
 
-      {directory.isPending ? (
+      {directory.isPending || branchSummary.isPending ? (
         <SkeletonRows rows={4} />
-      ) : directory.isError ? (
+      ) : directory.isError || branchSummary.isError ? (
         <ErrorState
           label="your members"
           onRetry={() => void directory.refetch()}
@@ -205,7 +276,7 @@ export function PeopleScreen() {
         <ul className="flex flex-col gap-2">
           {shown.map((r, i) => (
             <li
-              key={r.userId}
+              key={r.personId}
               style={stagger(i)}
               className={`${cardClass()} ${ENTER}`}
             >
@@ -215,19 +286,19 @@ export function PeopleScreen() {
                     type="checkbox"
                     className="mt-1 size-4"
                     aria-label={`Select ${r.name}`}
-                    checked={selected.includes(r.userId)}
+                    checked={selected.includes(r.personId)}
                     onChange={(e) =>
                       setSelected((was) =>
                         e.target.checked
-                          ? [...was, r.userId]
-                          : was.filter((id) => id !== r.userId),
+                          ? [...was, r.personId]
+                          : was.filter((id) => id !== r.personId),
                       )
                     }
                   />
                 )}
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <Link
-                    href={`/people/${r.userId}`}
+                    href={`/people/${r.personId}`}
                     className="font-medium hover:underline"
                   >
                     {r.name}
@@ -288,13 +359,6 @@ export function PeopleScreen() {
             people={students}
             onMatched={(ids) => setSelected(ids)}
           />
-          <FromBranchPlan
-            onPicked={(ids) =>
-              setSelected(
-                ids.filter((id) => students.some((r) => r.userId === id)),
-              )
-            }
-          />
         </div>
       )}
 
@@ -302,6 +366,175 @@ export function PeopleScreen() {
         {shown.length === 1 ? "1 person" : `${shown.length} people`}
       </Eyebrow>
     </div>
+  );
+}
+
+function CreateStudentDialog({
+  entities,
+  onOpenChange,
+}: {
+  entities: { id: string; name: string }[];
+  onOpenChange: (open: boolean) => void;
+}) {
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  const [entityId, setEntityId] = useState(entities[0]?.id ?? "");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [reviewed, setReviewed] = useState(false);
+  const input = {
+    name: name.trim() || "Student",
+    email: email.trim() || undefined,
+    phone: phone.trim() || undefined,
+  };
+  const preview = useQuery({
+    ...trpc.person.previewCreateStudent.queryOptions(input),
+    enabled: reviewed,
+  });
+  const create = useMutation(
+    trpc.person.createStudent.mutationOptions({
+      onSuccess: async () => {
+        await queryClient.invalidateQueries();
+        toast.success("Student added");
+        onOpenChange(false);
+      },
+      onError: (error) =>
+        toast.error(error.message || "Could not add the student"),
+    }),
+  );
+  const resetReview = () => setReviewed(false);
+  const submit = (
+    duplicateDecision?:
+      | { kind: "use_existing"; personId: string }
+      | { kind: "create_separate"; reviewedPersonIds: string[] },
+  ) => create.mutate({ entityId, ...input, duplicateDecision });
+
+  return (
+    <Dialog open onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogTitle>Add a student</DialogTitle>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="new-student-branch">Branch</Label>
+            <Select
+              id="new-student-branch"
+              value={entityId}
+              onChange={(event) => setEntityId(event.target.value)}
+            >
+              <option value="">Pick a branch…</option>
+              {entities.map((entity) => (
+                <option key={entity.id} value={entity.id}>
+                  {entity.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="new-student-name">Name</Label>
+            <Input
+              id="new-student-name"
+              value={name}
+              onChange={(event) => {
+                setName(event.target.value);
+                resetReview();
+              }}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="new-student-email">Email, optional</Label>
+            <Input
+              id="new-student-email"
+              type="email"
+              value={email}
+              onChange={(event) => {
+                setEmail(event.target.value);
+                resetReview();
+              }}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="new-student-phone">Phone, optional</Label>
+            <Input
+              id="new-student-phone"
+              type="tel"
+              value={phone}
+              onChange={(event) => {
+                setPhone(event.target.value);
+                resetReview();
+              }}
+            />
+          </div>
+          {preview.isError && (
+            <p role="alert" className="text-error text-sm">
+              {preview.error.message}
+            </p>
+          )}
+          {preview.data && preview.data.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <p className="text-sm font-medium">Possible matches</p>
+              {preview.data.map((match) => (
+                <div
+                  key={match.personId}
+                  className="border-border flex flex-wrap items-center gap-2 rounded-md border p-3"
+                >
+                  <div className="min-w-0 flex-1 text-sm">
+                    <p className="font-medium">{match.name}</p>
+                    <p className="text-muted-foreground">
+                      {[match.email, match.phone].filter(Boolean).join(" · ") ||
+                        "No contact details"}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    disabled={create.isPending || match.archivedAt !== null}
+                    onClick={() =>
+                      submit({
+                        kind: "use_existing",
+                        personId: match.personId,
+                      })
+                    }
+                  >
+                    {match.archivedAt ? "Archived" : "Use this person"}
+                  </Button>
+                </div>
+              ))}
+              <Button
+                variant="outline"
+                disabled={create.isPending}
+                onClick={() =>
+                  submit({
+                    kind: "create_separate",
+                    reviewedPersonIds: preview.data.map(
+                      (match) => match.personId,
+                    ),
+                  })
+                }
+              >
+                Create a separate person
+              </Button>
+            </div>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            {!reviewed ? (
+              <Button
+                disabled={!entityId || !name.trim()}
+                onClick={() => setReviewed(true)}
+              >
+                Review
+              </Button>
+            ) : preview.data?.length === 0 ? (
+              <Button disabled={create.isPending} onClick={() => submit()}>
+                {create.isPending ? "Adding…" : "Add student"}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -414,7 +647,7 @@ function BulkAssign({
       <Button
         size="sm"
         disabled={planId === "" || assign.isPending}
-        onClick={() => assign.mutate({ userIds: selected, planId })}
+        onClick={() => assign.mutate({ personIds: selected, planId })}
       >
         {assign.isPending ? "Adding…" : "Put them on it"}
       </Button>
@@ -438,7 +671,7 @@ function PasteEmails({
   people,
   onMatched,
 }: {
-  people: { userId: string; email: string }[];
+  people: { personId: string; email: string }[];
   onMatched: (ids: string[]) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -479,7 +712,13 @@ function PasteEmails({
         <Button
           size="sm"
           onClick={() => {
-            const found = matchPeopleByEmail(people, parseEmailList(text));
+            const found = matchPeopleByEmail(
+              people.map((person) => ({
+                userId: person.personId,
+                email: person.email,
+              })),
+              parseEmailList(text),
+            );
             setUnmatched(found.unmatched);
             onMatched(found.matched);
             if (found.matched.length === 0) {
@@ -501,88 +740,6 @@ function PasteEmails({
           Close
         </Button>
       </div>
-    </div>
-  );
-}
-
-/**
- * Select everybody on one branch's old dues plan (spec FP8).
- *
- * This is the migration in the owner's own words: the people who were on the
- * mat's Adults plan should go onto the new shared one. It selects rather than
- * assigns, like the paste above, so the plan picker stays the single place a
- * membership is given and the owner sees who they are about to move.
- */
-function FromBranchPlan({ onPicked }: { onPicked: (ids: string[]) => void }) {
-  const trpc = useTRPC();
-  const { entities } = useOrganization();
-  const [open, setOpen] = useState(false);
-  const [entityId, setEntityId] = useState("");
-  const [planId, setPlanId] = useState("");
-
-  const legacy = useQuery({
-    ...trpc.accessPlan.legacyPlanMembers.queryOptions({ entityId }),
-    enabled: open && entityId !== "",
-  });
-
-  if (!open) {
-    return (
-      <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
-        Select from a branch plan
-      </Button>
-    );
-  }
-
-  const onPlan = (legacy.data?.members ?? []).filter(
-    (m) => planId === "" || m.planId === planId,
-  );
-
-  return (
-    <div className={`${cardClass()} flex w-full flex-wrap items-end gap-3`}>
-      <div className="flex min-w-40 flex-1 flex-col gap-2">
-        <Label htmlFor="legacy-branch">Branch</Label>
-        <Select
-          id="legacy-branch"
-          value={entityId}
-          onChange={(e) => {
-            setEntityId(e.target.value);
-            setPlanId("");
-          }}
-        >
-          <option value="">Pick a branch…</option>
-          {entities.map((e) => (
-            <option key={e.id} value={e.id}>
-              {e.name}
-            </option>
-          ))}
-        </Select>
-      </div>
-      <div className="flex min-w-40 flex-1 flex-col gap-2">
-        <Label htmlFor="legacy-plan">Its old plan</Label>
-        <Select
-          id="legacy-plan"
-          value={planId}
-          onChange={(e) => setPlanId(e.target.value)}
-          disabled={entityId === "" || legacy.isPending}
-        >
-          <option value="">Every plan there</option>
-          {(legacy.data?.plans ?? []).map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name} · {formatMoney(p.priceMinor, p.currency)}
-            </option>
-          ))}
-        </Select>
-      </div>
-      <Button
-        size="sm"
-        disabled={entityId === "" || onPlan.length === 0}
-        onClick={() => onPicked([...new Set(onPlan.map((m) => m.userId))])}
-      >
-        Select {onPlan.length === 1 ? "1 person" : `${onPlan.length} people`}
-      </Button>
-      <Button size="sm" variant="outline" onClick={() => setOpen(false)}>
-        Close
-      </Button>
     </div>
   );
 }

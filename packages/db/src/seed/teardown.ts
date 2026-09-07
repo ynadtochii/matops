@@ -19,6 +19,7 @@ import {
   accessPlanEntity,
   accessPlanPrice,
   account,
+  attendanceCorrection,
   classInstance,
   classParticipation,
   classTemplate,
@@ -30,21 +31,20 @@ import {
   entity,
   entityMembership,
   member,
-  memberDues,
   memberNote,
   memberRank,
   memberReferral,
   memberReferralAudit,
   membershipMonth,
   membershipMonthAudit,
-  membershipPlan,
   membershipPolicy,
   membershipPurchase,
   notification,
+  notificationOutbox,
   organization,
+  person,
+  personGuardian,
   productEvent,
-  paymentClaim,
-  paymentSettings,
   rankPromotion,
   session,
   user,
@@ -89,6 +89,11 @@ export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
       .delete(classParticipation)
       .where(inArray(classParticipation.academyId, ids)),
   );
+  await del("attendance_correction", () =>
+    exec
+      .delete(attendanceCorrection)
+      .where(inArray(attendanceCorrection.academyId, ids)),
+  );
   await del("member_referral_audit", () =>
     exec
       .delete(memberReferralAudit)
@@ -103,12 +108,6 @@ export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
   await del("drop_in", () =>
     exec.delete(dropIn).where(inArray(dropIn.academyId, ids)),
   );
-  await del("payment_claim", () =>
-    exec.delete(paymentClaim).where(inArray(paymentClaim.academyId, ids)),
-  );
-  await del("member_dues", () =>
-    exec.delete(memberDues).where(inArray(memberDues.academyId, ids)),
-  );
   await del("rank_promotion", () =>
     exec.delete(rankPromotion).where(inArray(rankPromotion.academyId, ids)),
   );
@@ -118,14 +117,8 @@ export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
   await del("member_rank", () =>
     exec.delete(memberRank).where(inArray(memberRank.academyId, ids)),
   );
-  await del("payment_settings", () =>
-    exec.delete(paymentSettings).where(inArray(paymentSettings.academyId, ids)),
-  );
   await del("class", () =>
     exec.delete(classInstance).where(inArray(classInstance.academyId, ids)),
-  );
-  await del("membership_plan", () =>
-    exec.delete(membershipPlan).where(inArray(membershipPlan.academyId, ids)),
   );
   await del("class_template", () =>
     exec.delete(classTemplate).where(inArray(classTemplate.academyId, ids)),
@@ -151,6 +144,11 @@ export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
   // actually clicked around in fails without them.
   await del("notification", () =>
     exec.delete(notification).where(inArray(notification.academyId, ids)),
+  );
+  await del("notification_outbox", () =>
+    exec
+      .delete(notificationOutbox)
+      .where(inArray(notificationOutbox.academyId, ids)),
   );
   await del("product_event", () =>
     exec
@@ -205,6 +203,12 @@ export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
     exec.delete(accessPlan).where(inArray(accessPlan.organizationId, orgIds)),
   );
 
+  await del("person_guardian", () =>
+    exec
+      .delete(personGuardian)
+      .where(inArray(personGuardian.organizationId, orgIds)),
+  );
+
   // Entity foundation rows, scoped by the seed org id (ADR 124). Membership and
   // profile before the entity they key on.
   await del("entity_membership", () =>
@@ -217,6 +221,9 @@ export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
   );
   await del("entity", () =>
     exec.delete(entity).where(inArray(entity.organizationId, orgIds)),
+  );
+  await del("person", () =>
+    exec.delete(person).where(inArray(person.organizationId, orgIds)),
   );
 
   // Better Auth membership rows, scoped by the seed org id.

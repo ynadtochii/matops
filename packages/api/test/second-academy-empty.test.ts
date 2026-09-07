@@ -16,7 +16,6 @@ const ORG = "acad_second_empty";
 const OWNER = "u_second_owner";
 const COACH = "u_second_coach";
 const STUDENT = "u_second_student";
-const STUDENT_MEMBER = memberId(ORG, STUDENT);
 const CLASS = "aaaaaaaa-0000-4000-8000-000000000901";
 
 const WEEK = {
@@ -61,17 +60,6 @@ describe("a second academy starts empty", () => {
       timeZone: "UTC",
       capacity: 20,
     });
-    const plan = await first().payments.createPlan({
-      name: "Unlimited",
-      priceMinor: 8000,
-      currency: "EUR",
-      cycle: "monthly",
-    });
-    await first().payments.setMemberDues({
-      memberId: STUDENT_MEMBER,
-      planId: plan.id,
-      nextDueAt: "2026-08-31",
-    });
     const made = await h
       .as(OWNER, ORG)
       .entity.create({ name: "Second Mat", type: "bjj_academy" });
@@ -97,11 +85,6 @@ describe("a second academy starts empty", () => {
     expect(await second().template.list()).toEqual([]);
   });
 
-  it("carries no plans and no dues", async () => {
-    expect(await second().payments.plans()).toEqual([]);
-    expect(await second().payments.claims()).toEqual([]);
-  });
-
   it("gets its own join code", async () => {
     const a = await first().academy.current();
     const b = await second().academy.current();
@@ -117,7 +100,6 @@ describe("a second academy starts empty", () => {
     ]);
     expect((await first().class.week(WEEK)).map((c) => c.id)).toContain(CLASS);
     expect(await first().template.list()).toHaveLength(1);
-    expect(await first().payments.plans()).toHaveLength(1);
   });
 });
 

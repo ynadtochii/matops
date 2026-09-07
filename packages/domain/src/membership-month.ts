@@ -22,12 +22,6 @@ import { instantFromLocalDate, localDateISO } from "./materialize";
  */
 export const JOIN_GRACE_DAYS = 7;
 
-// There is deliberately NO default grace constant here. `payments.ts` already
-// exports `DEFAULT_GRACE_DAYS` for the LEGACY branch dues gate, and the two
-// gates must never be applied together (ADR 126). The membership default lives
-// on `membership_policy.grace_days` instead, so a policy row is the only place
-// the number comes from.
-
 export interface MembershipPolicy {
   /** Days after the 1st that an unpaid month still admits. */
   graceDays: number;

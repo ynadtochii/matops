@@ -5,14 +5,15 @@ import {
   classParticipation,
   dropIn,
   dropInVisit,
+  person,
   user,
 } from "@matops/db/schema";
 import { attendanceReview } from "@matops/domain";
 
 type MemberRow = Pick<
   typeof classParticipation.$inferSelect,
-  "studentId" | "bookingStatus" | "bookingTier" | "attendanceStatus"
-> & { name: string | null; attendedAt: string | null };
+  "bookingStatus" | "bookingTier" | "attendanceStatus"
+> & { studentId: string; name: string | null; attendedAt: string | null };
 type VisitorRow = Pick<
   typeof dropInVisit.$inferSelect,
   "id" | "bookingStatus" | "attendanceStatus"
@@ -32,11 +33,13 @@ export async function loadAttendanceRoster(db: TenantTx, classId: string) {
       snapshot: attendanceReviewSnapshot(),
       rows: sql<MemberRow[]>`${sql`coalesce((
       SELECT jsonb_agg(jsonb_build_object(
-        'studentId', ${classParticipation.studentId}, 'name', ${user.name},
+        'studentId', coalesce(${classParticipation.personId}::text, ${classParticipation.studentId}), 'name', coalesce(${person.name}, ${user.name}),
         'bookingStatus', ${classParticipation.bookingStatus}, 'bookingTier', ${classParticipation.bookingTier},
         'attendanceStatus', ${classParticipation.attendanceStatus}, 'attendedAt', ${classParticipation.attendedAt}
       ) ORDER BY ${classParticipation.id})
-      FROM ${classParticipation} LEFT JOIN ${user} ON ${user.id} = ${classParticipation.studentId}
+      FROM ${classParticipation}
+      LEFT JOIN ${person} ON ${person.id} = ${classParticipation.personId}
+      LEFT JOIN ${user} ON ${user.id} = ${classParticipation.studentId}
       WHERE ${classParticipation.classId} = ${classInstance.id}
         AND ${classParticipation.academyId} = ${classInstance.academyId}
     ), '[]'::jsonb)`}`,

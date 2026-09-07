@@ -8,6 +8,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { organization, user } from "./auth-schema";
+import { person } from "./person-schema";
 
 /**
  * The organization/entity foundation (ADR 124).
@@ -48,11 +49,6 @@ export const entity = pgTable(
     mapUrl: t.text(),
     publicCode: t.text().notNull().unique(),
     status: t.text().notNull().default("active"),
-    /**
-     * When shared memberships started deciding access here (ADR 126). Null
-     * means the LEGACY branch dues gate still decides, so an existing academy
-     * is never locked by a deploy. The two gates never both apply.
-     */
     membershipEnforcedAt: t.timestamp({ withTimezone: true }),
     createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: t
@@ -107,10 +103,8 @@ export const entityMembership = pgTable(
       .notNull()
       .references(() => organization.id),
     entityId: t.text().notNull(),
-    userId: t
-      .text()
-      .notNull()
-      .references(() => user.id),
+    userId: t.text().references(() => user.id),
+    personId: t.uuid(),
     role: t.text().notNull(),
     status: t.text().notNull().default("pending"),
     invitedRole: t.text(),
@@ -127,8 +121,13 @@ export const entityMembership = pgTable(
       table.entityId,
       table.userId,
     ),
+    uniqueIndex("entity_membership_one_per_person").on(
+      table.entityId,
+      table.personId,
+    ),
     uniqueIndex("entity_membership_entity_id").on(table.entityId, table.id),
     index("entity_membership_by_user").on(table.userId),
+    index("entity_membership_by_person").on(table.personId),
     index("entity_membership_by_entity_status").on(
       table.entityId,
       table.status,
@@ -138,6 +137,15 @@ export const entityMembership = pgTable(
       columns: [table.organizationId, table.entityId],
       foreignColumns: [entity.organizationId, entity.id],
     }),
+    foreignKey({
+      name: "entity_membership_person_same_org",
+      columns: [table.organizationId, table.personId],
+      foreignColumns: [person.organizationId, person.id],
+    }),
+    check(
+      "entity_membership_has_subject",
+      sql`user_id is not null or person_id is not null`,
+    ),
   ],
 );
 
@@ -174,6 +182,10 @@ export const entityMembershipRelations = relations(
     user: one(user, {
       fields: [entityMembership.userId],
       references: [user.id],
+    }),
+    person: one(person, {
+      fields: [entityMembership.personId],
+      references: [person.id],
     }),
   }),
 );

@@ -7,23 +7,11 @@ import {
   getAcademyMembership,
   getMemberById,
   inArray,
-  isNull,
   listMembersOf,
   setMemberRoleStatus,
 } from "@matops/db";
-import {
-  entity,
-  member,
-  memberDues,
-  membershipPlan,
-  user,
-} from "@matops/db/schema";
-import {
-  autoAssignedPlan,
-  firstDueAt,
-  isStaff,
-  isStudentMember,
-} from "@matops/domain";
+import { entity, member, user } from "@matops/db/schema";
+import { isStaff, isStudentMember } from "@matops/domain";
 
 import { notifyMembershipApproved } from "./notify";
 
@@ -100,7 +88,7 @@ export async function requireInstructor(
   userId: string,
 ): Promise<void> {
   const staff = await staffOf(ctx);
-  if (!staff.some((r) => r.userId === userId)) {
+  if (!staff.some((r) => r.accountUserId === userId)) {
     throw new TRPCError({ code: "NOT_FOUND", message: "Instructor not found" });
   }
 }
@@ -116,7 +104,11 @@ export async function rosterOf(ctx: MemberScope): Promise<MemberRow[]> {
 
 /** Display name by `user.id`, for rows that store a user id. */
 export function nameByUser(rows: MemberRow[]): Map<string, string> {
-  return new Map(rows.map((r) => [r.userId, r.name]));
+  return new Map(
+    rows.flatMap((r) =>
+      r.accountUserId ? [[r.accountUserId, r.name] as const] : [],
+    ),
+  );
 }
 
 /** Display name by `member.id`, for rows that store a member id. */
@@ -153,12 +145,6 @@ export interface ActivateScope {
   withScope: <T>(fn: (tx: TenantTx) => Promise<T>) => Promise<T>;
 }
 
-/**
- * Grant the role, activate the seat, put the member on the one plan if the
- * academy has exactly one, and welcome them. Shared by `approve` and by the
- * owner promoting a lead (ADR 118), so the two cannot drift: a promoted member
- * lands on dues exactly like an approved one.
- */
 export async function activateMember(
   ctx: ActivateScope,
   input: {
@@ -173,30 +159,6 @@ export async function activateMember(
     input.granted,
     ctx.baseDb,
   );
-  if (input.granted.role === "student") {
-    await ctx.withScope(async (db) => {
-      const onlyPlan = autoAssignedPlan(
-        await db
-          .select({ id: membershipPlan.id })
-          .from(membershipPlan)
-          .where(isNull(membershipPlan.deletedAt))
-          .limit(2),
-      );
-      if (onlyPlan) {
-        await db
-          .insert(memberDues)
-          .values({
-            academyId: ctx.academyId,
-            memberId: input.memberId,
-            planId: onlyPlan.id,
-            nextDueAt: firstDueAt(new Date()),
-          })
-          .onConflictDoNothing({
-            target: [memberDues.academyId, memberDues.memberId],
-          });
-      }
-    });
-  }
   // Welcome push to the newly approved member (§4/S3, docs/issues/17).
   await notifyMembershipApproved(
     { academyId: ctx.academyId, userId: input.userId },
@@ -244,6 +206,8 @@ export async function directoryRosterOf(
     } else {
       rows.push({
         ...person,
+        personId: person.userId,
+        accountUserId: person.userId,
         memberId: null,
         status: "active",
         invitedRole: null,

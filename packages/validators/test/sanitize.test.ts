@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   AddMemberNoteSchema,
   CreateClassTemplateSchema,
-  CreatePaymentClaimSchema,
   DropInSchema,
   EmailSchema,
   HttpUrlSchema,
@@ -12,7 +11,6 @@ import {
   PhoneSchema,
   UpdateAcademySettingsSchema,
   UpdateClassSchema,
-  UpdatePaymentRequisitesSchema,
 } from "../src";
 
 const ZWSP = "​";
@@ -188,35 +186,15 @@ describe("UpdateAcademySettingsSchema.mapUrl", () => {
   });
 });
 
-describe("CreatePaymentClaimSchema.proofUrl", () => {
-  it("accepts an https link", () => {
-    expect(
-      CreatePaymentClaimSchema.safeParse({
-        proofUrl: "https://files.example.com/receipt.png",
-      }).success,
-    ).toBe(true);
-  });
-
-  it("rejects a javascript: or data: scheme", () => {
-    for (const proofUrl of [
-      "javascript:alert(document.cookie)",
-      "data:text/html;base64,PHNjcmlwdD4=",
-    ]) {
-      expect(CreatePaymentClaimSchema.safeParse({ proofUrl }).success).toBe(
-        false,
-      );
-    }
-  });
-});
-
 describe("multi-line fields", () => {
   it("keeps paragraphs but drops control characters", () => {
     const parsed = ok(
-      UpdatePaymentRequisitesSchema.safeParse({
-        bankDetails: `Demo Bank\r\nIBAN: DE89${ZWSP} 3704\n\n\n\nRef: 1234  `,
+      AddMemberNoteSchema.safeParse({
+        memberId: "m1",
+        body: `Demo Bank\r\nIBAN: DE89${ZWSP} 3704\n\n\n\nRef: 1234  `,
       }),
     );
-    expect(parsed.bankDetails).toBe("Demo Bank\nIBAN: DE89 3704\n\nRef: 1234");
+    expect(parsed.body).toBe("Demo Bank\nIBAN: DE89 3704\n\nRef: 1234");
   });
 
   it("rejects a note that is blank once cleaned", () => {

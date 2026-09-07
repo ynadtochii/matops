@@ -797,10 +797,4 @@ describe("where a member is told to pay", () => {
       "",
     );
   });
-
-  it("shows the student the gym's account on the legacy dues path too", async () => {
-    expect(
-      (await h.as(ANA, ORG4).payments.myDues()).requisites.bankDetails,
-    ).toBe("Demo Bank\nIBAN: PT50 1111");
-  });
 });

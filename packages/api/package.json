@@ -22,6 +22,10 @@
     "./membership-sweep": {
       "types": "./src/membership-sweep.ts",
       "default": "./src/membership-sweep.ts"
+    },
+    "./job-run": {
+      "types": "./src/job-run.ts",
+      "default": "./src/job-run.ts"
     }
   },
   "license": "MIT",

@@ -61,6 +61,7 @@ describe("gym-level permissions", () => {
       as(MANAGER).stats.organizationMembers(),
     ).resolves.toBeDefined();
     await expect(as(MANAGER).organization.setup()).resolves.toBeDefined();
+    await expect(as(MANAGER).organization.jobHealth()).resolves.toBeDefined();
   });
 
   it("lets a manager do the daily work: assign, confirm, announce, set up", async () => {
@@ -107,6 +108,10 @@ describe("gym-level permissions", () => {
       expect([
         user,
         await rejectionCode(as(user).organization.setup()),
+      ]).toEqual([user, "FORBIDDEN"]);
+      expect([
+        user,
+        await rejectionCode(as(user).organization.jobHealth()),
       ]).toEqual([user, "FORBIDDEN"]);
       expect([
         user,

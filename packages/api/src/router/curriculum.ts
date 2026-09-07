@@ -46,7 +46,7 @@ import {
 
 import { academyContext, academyTimeZone } from "../academy-tz";
 import { liveClass } from "../classes";
-import { bjjEnrolledProcedure, bjjStaffProcedure } from "../trpc";
+import { curriculumEnrolledProcedure, curriculumStaffProcedure } from "../trpc";
 
 interface BlockCtx {
   db: TenantTx;
@@ -284,7 +284,7 @@ function requireEditable(
 }
 
 export const curriculumRouter = {
-  board: bjjStaffProcedure
+  board: curriculumStaffProcedure
     .input(CurriculumBoardSchema.optional())
     .query(async ({ ctx, input }) => {
       const day = await today(ctx);
@@ -349,7 +349,7 @@ export const curriculumRouter = {
       };
     }),
 
-  forDate: bjjStaffProcedure
+  forDate: curriculumStaffProcedure
     .input(z.object({ date: DaySchema, trackId: z.uuid().optional() }))
     .query(async ({ ctx, input }) => {
       const track = await resolveTrack(ctx, input.trackId);
@@ -366,7 +366,7 @@ export const curriculumRouter = {
    * the academy's default track. The track is read at request time and never
    * copied onto the class row, so re-pointing a template needs no backfill.
    */
-  forClass: bjjEnrolledProcedure
+  forClass: curriculumEnrolledProcedure
     .input(ClassIdSchema)
     .query(async ({ ctx, input }) => {
       const staff = isStaff(ctx.membership);
@@ -404,7 +404,7 @@ export const curriculumRouter = {
       };
     }),
 
-  createTrack: bjjStaffProcedure
+  createTrack: curriculumStaffProcedure
     .input(CreateCurriculumTrackSchema)
     .mutation(async ({ ctx, input }) => {
       const [created] = await ctx.db
@@ -420,7 +420,7 @@ export const curriculumRouter = {
       return { id: created.id };
     }),
 
-  renameTrack: bjjStaffProcedure
+  renameTrack: curriculumStaffProcedure
     .input(RenameCurriculumTrackSchema)
     .mutation(async ({ ctx, input }) => {
       const renamed = await ctx.db
@@ -440,7 +440,7 @@ export const curriculumRouter = {
    * what an unassigned class already reads, so nothing is left pointing at a
    * track that is gone. The default track itself stays.
    */
-  deleteTrack: bjjStaffProcedure
+  deleteTrack: curriculumStaffProcedure
     .input(CurriculumTrackIdSchema)
     .mutation(async ({ ctx, input }) => {
       const track = await resolveTrack(ctx, input.id);
@@ -465,7 +465,7 @@ export const curriculumRouter = {
       return { detached: detached.length };
     }),
 
-  createBlock: bjjStaffProcedure
+  createBlock: curriculumStaffProcedure
     .input(CreateCurriculumBlockSchema)
     .mutation(async ({ ctx, input }) => {
       const known = categoryNames(await loadLibrary(ctx));
@@ -488,7 +488,7 @@ export const curriculumRouter = {
       return { id: created.id };
     }),
 
-  updateBlock: bjjStaffProcedure
+  updateBlock: curriculumStaffProcedure
     .input(UpdateCurriculumBlockSchema)
     .mutation(async ({ ctx, input }) => {
       const known = categoryNames(
@@ -511,7 +511,7 @@ export const curriculumRouter = {
       return { ok: true as const };
     }),
 
-  deleteBlock: bjjStaffProcedure
+  deleteBlock: curriculumStaffProcedure
     .input(CurriculumBlockIdSchema)
     .mutation(async ({ ctx, input }) => {
       const uses = (await loadUsage(ctx)).filter(
@@ -530,7 +530,7 @@ export const curriculumRouter = {
       return { ok: true as const };
     }),
 
-  place: bjjStaffProcedure
+  place: curriculumStaffProcedure
     .input(PlaceCurriculumBlockSchema)
     .mutation(async ({ ctx, input }) => {
       const day = await today(ctx);
@@ -639,7 +639,7 @@ export const curriculumRouter = {
       };
     }),
 
-  resize: bjjStaffProcedure
+  resize: curriculumStaffProcedure
     .input(ResizeCurriculumBlockSchema)
     .mutation(async ({ ctx, input }) => {
       const day = await today(ctx);
@@ -661,7 +661,7 @@ export const curriculumRouter = {
       };
     }),
 
-  move: bjjStaffProcedure
+  move: curriculumStaffProcedure
     .input(MoveCurriculumBlockSchema)
     .mutation(async ({ ctx, input }) => {
       const day = await today(ctx);
@@ -679,7 +679,7 @@ export const curriculumRouter = {
       };
     }),
 
-  unplace: bjjStaffProcedure
+  unplace: curriculumStaffProcedure
     .input(CurriculumSlotIdSchema)
     .mutation(async ({ ctx, input }) => {
       const day = await today(ctx);
@@ -706,7 +706,7 @@ export const curriculumRouter = {
    * record of weeks that happened, which is the one thing about the past still
    * worth writing down.
    */
-  setRunNote: bjjStaffProcedure
+  setRunNote: curriculumStaffProcedure
     .input(SetCurriculumRunNoteSchema)
     .mutation(async ({ ctx, input }) => {
       const saved = await ctx.db
@@ -728,7 +728,7 @@ export const curriculumRouter = {
    * stretch, so nothing moves; the last theme has to leave through `unplace`,
    * which takes the whole stretch off and ripples.
    */
-  removeTheme: bjjStaffProcedure
+  removeTheme: curriculumStaffProcedure
     .input(CurriculumPlacementIdSchema)
     .mutation(async ({ ctx, input }) => {
       const day = await today(ctx);

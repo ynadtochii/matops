@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased: first academy release
+
+- Students now have organization person records that do not require login accounts. Verified accounts and guardians can link later.
+- Shared memberships are the only payment model. A dry-run conversion preserves old plans, claims, settings, paid months, and audit history. A gated follow-up migration removes old dues tables after the new application is live.
+- One application shell keeps organization and selected-branch navigation and badges visible across both route groups.
+- Owners and managers can correct old attendance with a reason and a stored change record. Instructors keep the 14-day window.
+- Class changes queue retryable member and visitor email. Public visitor booking keeps a return and cancellation token.
+- Scheduled delivery, membership work, and calendar extension record their runs. Gym managers can see late work and exhausted email for their gym.
+- People now has reviewed CSV import and full organization export. Curriculum and referrals start off until a gym turns them on.
+
 ## Unreleased: PR 8 review fixes
 
 Seed cleanup keeps other branches' demo memberships, payments, and organization seats. Seeded membership months use the organization's policy calendar, with the default branch as fallback. Coach cards again show students taught and expandable class breakdowns. Completed attendance shows the reviewer name beside the time. Regression coverage covers branch cleanup, month boundaries, and reviewer identity. Tests have not run.
@@ -19,7 +29,6 @@ The demo gym "Alma beta" ran on the legacy branch dues, which no branch made tod
 Workspace typecheck passed 17/17 and lint passed 15/15. Regression tests were written but not run. No migration or billing cleanup was applied.
 
 Owners, managers, and instructors appear in Staff and need no paid membership for staff access. Members and member totals count students. Attendance labels staff participants. Coverage warnings and overdue cancellation respect branch staff access. Staff lifecycle actions preserve history. Existing paid plans remain for review. See [ADR 132](/Users/kuna/projects/matops/docs/issues/132-staff-roster-isolation.md).
-
 
 One line per shipped slice (see `docs/delivery.md` §4). Newest first.
 

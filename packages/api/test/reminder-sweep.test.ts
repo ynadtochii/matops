@@ -4,12 +4,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { BatchPush } from "@matops/notifications";
 
 import type { Harness } from "./helpers";
-import { runReminderSweep, sweepDuesReminders } from "../src/notify";
-import { harness, memberId, seedAcademies, seedClasses } from "./helpers";
+import { runReminderSweep } from "../src/notify";
+import { harness, seedAcademies, seedClasses } from "./helpers";
 
 const A = "academy_A";
 const B = "academy_B";
-const PLAN = "11111111-1111-1111-1111-111111111111";
 const C_DUE = "aaaaaaaa-0000-4000-8000-000000000001";
 const C_SOON = "aaaaaaaa-0000-4000-8000-000000000002";
 const C_FAR = "aaaaaaaa-0000-4000-8000-000000000003";
@@ -120,26 +119,6 @@ async function inbox(
     [kind],
   );
   return res.rows;
-}
-
-async function seedDues(
-  pg: PGlite,
-  rows: { userId: string; academyId: string; dueInDays: number }[],
-): Promise<void> {
-  await pg.exec(`
-    INSERT INTO "membership_plan" (id, academy_id, name, price_minor, currency, cycle)
-    VALUES ('${PLAN}', '${A}', 'Unlimited', 5000, 'EUR', 'monthly');
-  `);
-  const values = rows
-    .map(
-      (r) =>
-        `(gen_random_uuid(), '${r.academyId}', '${memberId(r.academyId, r.userId)}', '${PLAN}', now() + interval '${r.dueInDays} days', NULL)`,
-    )
-    .join(",");
-  await pg.exec(`
-    INSERT INTO "member_dues" (id, academy_id, member_id, plan_id, next_due_at, dues_reminder_period)
-      VALUES ${values};
-  `);
 }
 
 describe("class reminder sweep", () => {
@@ -354,145 +333,5 @@ describe("class reminder sweep", () => {
     });
     expect(again.processed).toBe(0);
     expect(retry.sent).toEqual([]);
-  });
-});
-
-describe("dues reminder sweep", () => {
-  it("reminds a member who is due soon, once per period", async () => {
-    const h = await base();
-    await seedDues(h.pg, [{ userId: "u_ana", academyId: A, dueInDays: 1 }]);
-    await givePushToken(h.pg, "u_ana");
-
-    const first = recorder();
-    const run = await sweepDuesReminders(h.exec, {
-      now: new Date(),
-      send: first.send,
-    });
-
-    expect(run.processed).toBe(1);
-    expect(first.sent.map((m) => m.to)).toEqual(["ExponentPushToken[u_ana]"]);
-    expect(await inbox(h.pg, "dues_reminder")).toEqual([
-      { user_id: "u_ana", link: "/payments" },
-    ]);
-
-    const second = recorder();
-    const again = await sweepDuesReminders(h.exec, {
-      now: new Date(),
-      send: second.send,
-    });
-    expect(again.processed).toBe(0);
-    expect(second.sent).toEqual([]);
-  });
-
-  it("leaves a member whose payment is not due yet", async () => {
-    const h = await base();
-    await seedDues(h.pg, [{ userId: "u_ana", academyId: A, dueInDays: 30 }]);
-
-    const r = recorder();
-    const run = await sweepDuesReminders(h.exec, {
-      now: new Date(),
-      send: r.send,
-    });
-
-    expect(run.processed).toBe(0);
-    expect(await inbox(h.pg, "dues_reminder")).toEqual([]);
-  });
-
-  it("does not bill a member who has left the gym", async () => {
-    const h = await base();
-    await seedDues(h.pg, [{ userId: "u_gone", academyId: A, dueInDays: 1 }]);
-
-    const r = recorder();
-    const run = await sweepDuesReminders(h.exec, {
-      now: new Date(),
-      send: r.send,
-    });
-
-    expect(run.processed).toBe(0);
-    expect(await inbox(h.pg, "dues_reminder")).toEqual([]);
-  });
-
-  it("never reminds a member at a branch on shared memberships", async () => {
-    const h = await base();
-    await seedDues(h.pg, [{ userId: "u_ana", academyId: A, dueInDays: 1 }]);
-    await h.pg.exec(
-      `UPDATE "entity" SET membership_enforced_at = now() WHERE id = '${A}'`,
-    );
-
-    const r = recorder();
-    const run = await sweepDuesReminders(h.exec, {
-      now: new Date(),
-      send: r.send,
-    });
-
-    expect(run.processed).toBe(0);
-    expect(await inbox(h.pg, "dues_reminder")).toEqual([]);
-  });
-
-  it("leaves the period unstamped there, so switching back still reminds them", async () => {
-    const h = await base();
-    await seedDues(h.pg, [{ userId: "u_ana", academyId: A, dueInDays: 1 }]);
-    await h.pg.exec(
-      `UPDATE "entity" SET membership_enforced_at = now() WHERE id = '${A}'`,
-    );
-    await sweepDuesReminders(h.exec, {
-      now: new Date(),
-      send: recorder().send,
-    });
-
-    await h.pg.exec(
-      `UPDATE "entity" SET membership_enforced_at = NULL WHERE id = '${A}'`,
-    );
-    const r = recorder();
-    const run = await sweepDuesReminders(h.exec, {
-      now: new Date(),
-      send: r.send,
-    });
-
-    expect(run.processed).toBe(1);
-  });
-
-  it("tells an overdue member apart from one who is merely due soon", async () => {
-    const h = await base();
-    await seedDues(h.pg, [
-      { userId: "u_ana", academyId: A, dueInDays: -5 },
-      { userId: "u_bo", academyId: A, dueInDays: 1 },
-    ]);
-
-    const r = recorder();
-    await sweepDuesReminders(h.exec, { now: new Date(), send: r.send });
-
-    const rows = await h.pg.query<{ user_id: string; title: string }>(
-      `SELECT user_id, title FROM notification WHERE kind = 'dues_reminder' ORDER BY user_id`,
-    );
-    expect(rows.rows).toHaveLength(2);
-    expect(rows.rows[0]?.title).not.toBe(rows.rows[1]?.title);
-  });
-
-  it("runs both halves from one call and reports each separately", async () => {
-    const h = await base();
-    await seedClasses(h.pg, [
-      {
-        id: C_DUE,
-        academyId: A,
-        instructorId: "u_coach",
-        startsInMinutes: 60,
-      },
-    ]);
-    await book(h.pg, C_DUE, A, ["u_ana"]);
-    await seedDues(h.pg, [{ userId: "u_bo", academyId: A, dueInDays: 1 }]);
-
-    const r = recorder();
-    const run = await runReminderSweep(h.exec, {
-      now: new Date(),
-      send: r.send,
-    });
-
-    expect(run).toEqual({
-      processed: 1,
-      sent: 1,
-      duesProcessed: 1,
-      duesSent: 1,
-    });
   });
 });

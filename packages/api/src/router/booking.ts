@@ -7,8 +7,10 @@ import {
   eq,
   isNull,
   ne,
+  or,
   recordActivity,
   recordMilestone,
+  sql,
 } from "@matops/db";
 import { classInstance, classParticipation } from "@matops/db/schema";
 import { bookingTier, canBook, notBookableMessage } from "@matops/domain";
@@ -30,23 +32,11 @@ import { enrolledProcedure, memberProcedure } from "../trpc";
 const MINE_LIMIT = 300;
 
 export const bookingRouter = {
-  /**
-   * May the caller book at this branch right now, and if not, why?
-   *
-   * ONE answer for both clients, through the same `bookingGate` the booking
-   * mutation itself uses, so what a screen shows and what the server does can
-   * never disagree. It covers whichever gate the branch runs on, so neither
-   * client needs to know that the legacy dues path exists.
-   *
-   * Deliberately about NOW and not about a particular class: a screen showing a
-   * week of classes wants one line at the top, and the mutation still checks the
-   * individual class's own start before it books.
-   */
   access: enrolledProcedure.query(async ({ ctx }) => {
     const gate = await bookingGate(ctx.db, {
       entity: ctx.entity,
       membership: ctx.membership,
-      userId: ctx.session.user.id,
+      accountUserId: ctx.session.user.id,
     });
     return { locked: gate.locked, message: gate.message };
   }),
@@ -79,7 +69,13 @@ export const bookingRouter = {
       )
       .where(
         and(
-          eq(classParticipation.studentId, ctx.session.user.id),
+          or(
+            eq(classParticipation.personId, ctx.membership.personId ?? ""),
+            and(
+              isNull(classParticipation.personId),
+              eq(classParticipation.studentId, ctx.session.user.id),
+            ),
+          ),
           isNull(classInstance.deletedAt),
         ),
       )
@@ -114,13 +110,19 @@ export const bookingRouter = {
       const gate = await bookingGate(ctx.db, {
         entity: ctx.entity,
         membership: ctx.membership,
-        userId: ctx.session.user.id,
+        accountUserId: ctx.session.user.id,
         sessionAt: cls.startsAt,
       });
       if (gate.locked) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
           message: gate.message ?? "Booking is locked for you.",
+        });
+      }
+      if (!ctx.membership.personId) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Your account is not linked to a person record.",
         });
       }
 
@@ -132,13 +134,16 @@ export const bookingRouter = {
         .values({
           academyId: ctx.academyId,
           classId: input.classId,
+          personOrganizationId: ctx.organizationId,
+          personId: ctx.membership.personId,
           studentId: ctx.session.user.id,
           bookingStatus: "booked",
           bookingTier: tier,
           cancelledAt: null,
         })
         .onConflictDoUpdate({
-          target: [classParticipation.classId, classParticipation.studentId],
+          target: [classParticipation.classId, classParticipation.personId],
+          targetWhere: sql`person_id is not null`,
           set: {
             bookingStatus: "booked",
             bookingTier: tier,
@@ -189,7 +194,13 @@ export const bookingRouter = {
         .where(
           and(
             eq(classParticipation.classId, input.classId),
-            eq(classParticipation.studentId, ctx.session.user.id),
+            or(
+              eq(classParticipation.personId, ctx.membership.personId ?? ""),
+              and(
+                isNull(classParticipation.personId),
+                eq(classParticipation.studentId, ctx.session.user.id),
+              ),
+            ),
             eq(classParticipation.bookingStatus, "booked"),
           ),
         )

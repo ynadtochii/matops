@@ -166,12 +166,6 @@ describe("shared membership seed isolation", () => {
   );
 });
 
-/**
- * "Fill an existing academy" safety: fill adds fakes onto the REAL academy's own
- * plans + classes; clear removes ONLY the fakes. The real owner, the real
- * student, the real plan, the real class + its real booking, and booking_count
- * must all be exactly as they started.
- */
 describe("seed fill/clear — augment a real academy", () => {
   let pg: Awaited<ReturnType<typeof freshDb>>;
   let exec: SeedExec;
@@ -187,8 +181,6 @@ describe("seed fill/clear — augment a real academy", () => {
     pg = await freshDb([]);
     exec = drizzle(pg, { schema, casing: "snake_case" }) as unknown as SeedExec;
 
-    // A real academy: owner + one real student, one real plan, one upcoming
-    // class with the real student booked (booking_count = 1).
     await pg.exec(`
       INSERT INTO "user" (id, name, email, email_verified, created_at, updated_at) VALUES
         ('owner_real', 'Real Owner', 'owner@real.test', true, now(), now()),
@@ -200,8 +192,12 @@ describe("seed fill/clear — augment a real academy", () => {
       INSERT INTO "member" (id, organization_id, user_id, role, created_at) VALUES
         ('mem_owner', '${ACAD}', 'owner_real', 'owner', now()),
         ('mem_stud', '${ACAD}', 'stud_real', 'student', now());
-      INSERT INTO "membership_plan" (id, academy_id, name, price_minor, currency)
+      INSERT INTO "access_plan" (id, organization_id, name, price_minor, currency)
         VALUES ('${REAL_PLAN}', '${ACAD}', 'Adult', 5000, 'EUR');
+      INSERT INTO "access_plan_price" (organization_id, plan_id, effective_month, price_minor, currency)
+        VALUES ('${ACAD}', '${REAL_PLAN}', '2026-06-01', 5000, 'EUR');
+      INSERT INTO "access_plan_entity" (organization_id, plan_id, entity_id)
+        VALUES ('${ACAD}', '${REAL_PLAN}', '${ACAD}');
       INSERT INTO "class" (id, academy_id, instructor_id, title, starts_at, duration_minutes, capacity, booking_count, status)
         VALUES ('${REAL_CLASS}', '${ACAD}', 'owner_real', 'BJJ', '2026-07-26T17:00:00Z', 60, 20, 1, 'scheduled');
       INSERT INTO "class_participation" (academy_id, class_id, student_id, booking_status, booking_tier)
@@ -216,31 +212,27 @@ describe("seed fill/clear — augment a real academy", () => {
   it("fill adds fake students and books them onto the real class", async () => {
     await fillAcademy(exec, { academyId: ACAD, organizationId: ACAD, now });
     expect(await academyFakeCount(exec, ACAD)).toBe(20);
-    // The upcoming real class now has the real student + fake bookings.
     const booked = await scalar(
       `SELECT count(*)::int n FROM "class_participation" WHERE class_id = $1 AND booking_status='booked'`,
       [REAL_CLASS],
     );
     expect(booked).toBeGreaterThan(1);
-    // booking_count was recomputed to match confirmed bookings.
     const bc = await scalar(
       `SELECT booking_count n FROM "class" WHERE id = $1`,
       [REAL_CLASS],
     );
     expect(bc).toBe(booked);
-    // Dues span the three payment states → seeded onto the real plan.
-    const duesOnRealPlan = await scalar(
-      `SELECT count(*)::int n FROM "member_dues" WHERE plan_id = $1`,
+    const assignmentsOnRealPlan = await scalar(
+      `SELECT count(*)::int n FROM "access_assignment" WHERE plan_id = $1`,
       [REAL_PLAN],
     );
-    expect(duesOnRealPlan).toBeGreaterThan(0);
+    expect(assignmentsOnRealPlan).toBeGreaterThan(0);
   });
 
   it("clear removes every fake and restores the real academy exactly", async () => {
     await clearAcademy(exec, { academyId: ACAD, organizationId: ACAD });
     expect(await academyFakeCount(exec, ACAD)).toBe(0);
 
-    // No fake rows remain anywhere in the academy.
     expect(
       await scalar(
         `SELECT count(*)::int n FROM "member" WHERE organization_id=$1 AND id LIKE 'seed_%'`,
@@ -250,7 +242,6 @@ describe("seed fill/clear — augment a real academy", () => {
     expect(
       await scalar(`SELECT count(*)::int n FROM "user" WHERE id LIKE 'seed_%'`),
     ).toBe(0);
-    // class_participation keys the fake by student_id; the rest by member_id.
     expect(
       await scalar(
         `SELECT count(*)::int n FROM "class_participation" WHERE academy_id=$1 AND student_id LIKE 'seed_%'`,
@@ -258,8 +249,6 @@ describe("seed fill/clear — augment a real academy", () => {
       ),
     ).toBe(0);
     for (const [t, col] of [
-      ["member_dues", "member_id"],
-      ["payment_claim", "member_id"],
       ["member_rank", "member_id"],
       ["rank_promotion", "member_id"],
       ["member_note", "member_id"],
@@ -273,7 +262,6 @@ describe("seed fill/clear — augment a real academy", () => {
         ),
       ).toBe(0);
     }
-    // A fake cannot survive as someone else's referrer either.
     expect(
       await scalar(
         `SELECT count(*)::int n FROM "member_referral" WHERE academy_id=$1 AND referrer_member_id LIKE 'seed_%'`,
@@ -291,7 +279,7 @@ describe("seed fill/clear — augment a real academy", () => {
     ).toBe(2);
     expect(
       await scalar(
-        `SELECT count(*)::int n FROM "membership_plan" WHERE academy_id=$1`,
+        `SELECT count(*)::int n FROM "access_plan" WHERE organization_id=$1`,
         [ACAD],
       ),
     ).toBe(1);
@@ -300,7 +288,6 @@ describe("seed fill/clear — augment a real academy", () => {
         ACAD,
       ]),
     ).toBe(1);
-    // The real student's real booking survives, and booking_count is back to 1.
     const booked = await scalar(
       `SELECT count(*)::int n FROM "class_participation" WHERE class_id=$1 AND student_id='stud_real'`,
       [REAL_CLASS],
@@ -314,13 +301,6 @@ describe("seed fill/clear — augment a real academy", () => {
   });
 });
 
-/**
- * The same fill against a branch that runs SHARED memberships (ADR 126-129).
- * A filled academy full of people with no membership would be the one state it
- * must not show, so fill puts the fakes on the gym's own plans — and clear
- * takes those rows with it, because `access_assignment.user_id` is a real
- * foreign key on the fake user.
- */
 describe("seed fill/clear — a branch on shared memberships", () => {
   let pg: Awaited<ReturnType<typeof freshDb>>;
   let exec: SeedExec;
@@ -358,7 +338,7 @@ describe("seed fill/clear — a branch on shared memberships", () => {
     await pg.close();
   });
 
-  it("fill puts the fakes on the gym's own plan and leaves no branch dues", async () => {
+  it("fill puts the fakes on the gym's own plan", async () => {
     await fillAcademy(exec, { academyId: ACAD, organizationId: ACAD, now });
     expect(
       await scalar(
@@ -372,13 +352,6 @@ describe("seed fill/clear — a branch on shared memberships", () => {
         [ACAD],
       ),
     ).toBeGreaterThan(0);
-    // The legacy dues gate is off here, so nothing writes to it.
-    expect(
-      await scalar(
-        `SELECT count(*)::int n FROM "member_dues" WHERE academy_id=$1`,
-        [ACAD],
-      ),
-    ).toBe(0);
   });
 
   it("clear takes the memberships with the fakes", async () => {

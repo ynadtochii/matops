@@ -9,6 +9,7 @@ import {
   attendanceCounts,
   attendanceReview,
   attendanceReviewError,
+  attendanceWriteAccess,
   bulkMarkTargets,
   canMarkAttendance,
   needsAttendance,
@@ -71,6 +72,45 @@ describe("canMarkAttendance", () => {
         now,
       ),
     ).toBe(false);
+  });
+});
+
+describe("attendanceWriteAccess", () => {
+  const now = new Date("2026-08-15T12:00:00Z");
+  const recent = {
+    status: "scheduled",
+    deletedAt: null,
+    startsAt: new Date("2026-08-10T12:00:00Z"),
+  };
+  const old = {
+    status: "scheduled",
+    deletedAt: null,
+    startsAt: new Date("2026-07-10T12:00:00Z"),
+  };
+
+  it("allows recent attendance for all staff", () => {
+    expect(attendanceWriteAccess(recent, now, false)).toBe("allowed");
+  });
+
+  it("requires a reason when managers correct old attendance", () => {
+    expect(attendanceWriteAccess(old, now, true)).toBe("reason-required");
+  });
+
+  it("keeps old attendance closed to instructors", () => {
+    expect(attendanceWriteAccess(old, now, false)).toBe("closed");
+  });
+
+  it("keeps cancelled and future classes closed", () => {
+    expect(
+      attendanceWriteAccess({ ...recent, status: "cancelled" }, now, true),
+    ).toBe("closed");
+    expect(
+      attendanceWriteAccess(
+        { ...recent, startsAt: new Date("2026-08-18T12:00:00Z") },
+        now,
+        true,
+      ),
+    ).toBe("closed");
   });
 });
 

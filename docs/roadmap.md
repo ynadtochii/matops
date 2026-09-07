@@ -1,18 +1,34 @@
 <!-- matops — live implementation plan + scope matrix. Rules for this file live in delivery.md. -->
 
+**First-academy release implementation, 2026-09-07**
+
+The active release scope is in [PLAN.md](/Users/kuna/projects/matops/PLAN.md). Account-independent students, shared-membership-only cleanup, one persistent shell, historical attendance corrections, durable class email, visitor return links, scheduled job health, assisted import, full export, and optional modules are implemented. Focused tests were written but did not run. Static, browser, device, migration, privacy, and restore checks still gate release.
+
+| Slice                             | DB         | API  | Web  | Mobile     | Shared     | Infra      |
+| --------------------------------- | ---------- | ---- | ---- | ---------- | ---------- | ---------- |
+| Person subjects and guardians     | done       | done | done | done       | done       | not needed |
+| Shared memberships only           | done       | done | done | done       | done       | not needed |
+| Persistent shell and badges       | not needed | done | done | not needed | done       | not needed |
+| Historical attendance correction  | done       | done | done | not needed | done       | not needed |
+| Durable class and visitor email   | done       | done | done | not needed | done       | todo       |
+| Scheduled daily work and health   | done       | done | done | not needed | not needed | done       |
+| Student import and full export    | not needed | done | done | not needed | done       | not needed |
+| Optional curriculum and referrals | done       | done | done | done       | done       | not needed |
+
 **Explicit attendance review, ADR 133**
 
-Status: built with the existing editing limit; historical correction policy pending. Product rules: O1 and O5. [Decision](/Users/kuna/projects/matops/docs/issues/133-explicit-attendance-review.md).
+Status: built with the existing editing limit. The new correction policy is approved in PLAN.md but not implemented. Owners and managers may correct older attendance with a reason and history; instructors retain the current window. Product rules: O1 and O5. [Earlier decision](/Users/kuna/projects/matops/docs/issues/133-explicit-attendance-review.md).
 
-| Slice | DB | API | Web | Mobile | Shared | Infra |
-| --- | --- | --- | --- | --- | --- | --- |
-| Saved review and changed-roster detection | wip | wip | wip | out | wip | n/a |
-| All past classes, filters and pagination | wip | wip | wip | out | wip | n/a |
-| Dashboard review count and zero state | wip | wip | wip | out | wip | n/a |
+| Slice                                     | DB  | API | Web | Mobile | Shared | Infra |
+| ----------------------------------------- | --- | --- | --- | ------ | ------ | ----- |
+| Saved review and changed-roster detection | wip | wip | wip | out    | wip    | n/a   |
+| All past classes, filters and pagination  | wip | wip | wip | out    | wip    | n/a   |
+| Dashboard review count and zero state     | wip | wip | wip | out    | wip    | n/a   |
 
 - [x] Define explicit completion and the all-time review list.
 - [x] Record the product rules and architecture decision.
-- [ ] Set historical correction permissions.
+- [x] Set historical correction permissions in the approved release plan.
+- [ ] Implement the approved historical correction permissions and history.
 - [x] Complete the review flow and inspect the final diff.
 - [x] Run workspace lint and typecheck.
 - [x] Apply the additive migration to dev and verify its schema.
@@ -20,7 +36,6 @@ Status: built with the existing editing limit; historical correction policy pend
 - [ ] Check the workflow in a browser, including empty, partial, stale and historical classes.
 
 Workspace typecheck passed 17/17 and lint passed 15/15. Migration 0068 is applied to dev, with 67/67 migration entries verified. Tests are written but not run. Browser acceptance remains open. The matrix stays wip until the remaining checks and policy decision are complete.
-
 
 **Staff and student separation, ADR 132**
 
@@ -35,7 +50,6 @@ Status: implemented. Workspace typecheck passed 17/17 and lint passed 15/15. Tes
 - [ ] User-run regression tests and browser acceptance.
 
 No migration. Existing billing records remain unchanged. [Plan](/Users/kuna/projects/matops/docs/staff-roster-isolation-plan.md).
-
 
 # matops — Roadmap (live plan + scope matrix)
 

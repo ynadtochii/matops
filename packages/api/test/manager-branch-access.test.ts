@@ -86,7 +86,6 @@ describe("a gym manager at a branch", () => {
   it("runs the schedule, the roster and the money at that branch", async () => {
     await expect(at(MANAGER, second).stats.dashboard()).resolves.toBeDefined();
     await expect(at(MANAGER, second).membership.staff()).resolves.toBeDefined();
-    await expect(at(MANAGER, second).payments.plans()).resolves.toBeDefined();
     await expect(at(MANAGER, second).academy.settings()).resolves.toBeDefined();
     await expect(at(MANAGER, second).dropIn.list()).resolves.toBeDefined();
   });

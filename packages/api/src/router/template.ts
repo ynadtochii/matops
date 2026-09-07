@@ -9,6 +9,7 @@ import {
   eventRole,
   getTableColumns,
   gt,
+  inArray,
   isNull,
   lockBranchSchedule,
   materializeTemplate,
@@ -38,7 +39,9 @@ import {
 
 import { requireInstructor } from "../members";
 import { ROOM_TAKEN, TEMPLATE_NOT_FOUND } from "../messages";
+import { notifyClassCancelled, notifyClassChanged } from "../notify";
 import { branchManagerProcedure, staffProcedure } from "../trpc";
+import { notifyBooked } from "./class";
 
 /**
  * Recurring class templates (spec O3, docs/issues/08, 16). Staff-only CRUD.
@@ -252,15 +255,43 @@ export const templateRouter = {
         // with ON DELETE no action, so a hard delete fails the moment one
         // student has booked, and the owner could never move that template
         // again.
-        await ctx.db
+        const affected = await ctx.db
           .update(classInstance)
           .set({ status: "cancelled" })
-          .where(futureScheduled);
+          .where(futureScheduled)
+          .returning({ id: classInstance.id });
         await fillOrRefuse(
           ctx.db,
           { ...row, generatedUntil: null },
           { now, reviveCancelled: true },
         );
+        if (affected.length > 0) {
+          const cancelled = await ctx.db
+            .select({
+              id: classInstance.id,
+              title: classInstance.title,
+              startsAt: classInstance.startsAt,
+              updatedAt: classInstance.updatedAt,
+            })
+            .from(classInstance)
+            .where(
+              and(
+                inArray(
+                  classInstance.id,
+                  affected.map((item) => item.id),
+                ),
+                eq(classInstance.status, "cancelled"),
+              ),
+            );
+          for (const item of cancelled) {
+            await notifyBooked(
+              ctx,
+              item,
+              "class_cancelled",
+              notifyClassCancelled,
+            );
+          }
+        }
       } else if (strategy === "update-in-place") {
         if (row.durationMinutes !== prev.durationMinutes) {
           await assertRoomFreeAfterEdit(
@@ -269,7 +300,7 @@ export const templateRouter = {
             futureScheduled,
           );
         }
-        await ctx.db
+        const affected = await ctx.db
           .update(classInstance)
           .set({
             title: row.title,
@@ -280,7 +311,18 @@ export const templateRouter = {
             capacity: row.capacity,
             publicBookable: row.publicBookable,
           })
-          .where(futureScheduled);
+          .where(futureScheduled)
+          .returning({
+            id: classInstance.id,
+            title: classInstance.title,
+            startsAt: classInstance.startsAt,
+            updatedAt: classInstance.updatedAt,
+          });
+        if (row.instructorId !== prev.instructorId) {
+          for (const item of affected) {
+            await notifyBooked(ctx, item, "class_changed", notifyClassChanged);
+          }
+        }
       }
       return row;
     }),
@@ -329,7 +371,7 @@ export const templateRouter = {
           message: TEMPLATE_NOT_FOUND,
         });
       }
-      await ctx.db
+      const cancelled = await ctx.db
         .update(classInstance)
         .set({ status: "cancelled" })
         .where(
@@ -339,8 +381,16 @@ export const templateRouter = {
             isNull(classInstance.deletedAt),
             gt(classInstance.startsAt, now),
           ),
-        );
-      // TODO(phase 4): notify booked students of each cancelled class.
+        )
+        .returning({
+          id: classInstance.id,
+          title: classInstance.title,
+          startsAt: classInstance.startsAt,
+          updatedAt: classInstance.updatedAt,
+        });
+      for (const item of cancelled) {
+        await notifyBooked(ctx, item, "class_cancelled", notifyClassCancelled);
+      }
       return { ok: true as const };
     }),
 

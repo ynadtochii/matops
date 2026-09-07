@@ -147,13 +147,6 @@ export const MapUrlSchema = HttpUrlSchema.refine((v) => {
   return host === "google.com" && url.pathname.startsWith("/maps");
 }, "Paste a link from Google Maps, Apple Maps, OpenStreetMap, or Waze");
 
-/**
- * Money, spelled once (the rule ADR 119 set for phones and emails). An amount is
- * an integer in the currency's MINOR unit, never a float, beside a 3-letter
- * ISO-4217 code upper-cased at the boundary. Two products ask for a price now,
- * the legacy branch plan and the shared membership plan, and they must not
- * disagree about what a valid one looks like.
- */
 export const PriceMinorSchema = z.number().int().min(0).max(100_000_000);
 export const CurrencySchema = z
   .string()
@@ -203,7 +196,6 @@ export type CreateEntityInput = z.infer<typeof CreateEntitySchema>;
 export const EntityIdSchema = z.object({ entityId: IdSchema });
 export type EntityIdInput = z.infer<typeof EntityIdSchema>;
 
-/** Move one branch between the two payment gates (ADR 127). */
 export const SetMembershipEnforcedSchema = z.object({
   entityId: IdSchema,
   enforced: z.boolean(),
@@ -233,6 +225,14 @@ export type UpdateAcademySettingsInput = z.infer<
   typeof UpdateAcademySettingsSchema
 >;
 
+export const OrganizationModulesSchema = z.object({
+  curriculumEnabled: z.boolean(),
+  referralsEnabled: z.boolean(),
+});
+export type OrganizationModulesInput = z.infer<
+  typeof OrganizationModulesSchema
+>;
+
 export const DeleteAcademySchema = z.object({
   confirm: lineText(1, 120),
 });
@@ -247,19 +247,43 @@ export type InviteRole = z.infer<typeof InviteRoleSchema>;
  * person profile (ADR 129). ORDINARY roles only: owner grants stay on the
  * branch's own Coaches page, so nothing here can mint an owner.
  */
-export const SetBranchRoleSchema = z.object({
-  entityId: IdSchema,
-  userId: IdSchema,
-  role: InviteRoleSchema,
-});
+export const SetBranchRoleSchema = z
+  .union([
+    z.object({
+      entityId: IdSchema,
+      personId: IdSchema,
+      role: InviteRoleSchema,
+    }),
+    z.object({
+      entityId: IdSchema,
+      userId: IdSchema,
+      role: InviteRoleSchema,
+    }),
+  ])
+  .transform((input) => ({
+    ...input,
+    userId: "personId" in input ? input.personId : input.userId,
+  }));
 export type SetBranchRoleInput = z.infer<typeof SetBranchRoleSchema>;
 
 /** Approve or decline one person's place at one branch (ADR 129). */
-export const BranchDecisionSchema = z.object({
-  entityId: IdSchema,
-  userId: IdSchema,
-  decision: z.enum(["approve", "decline"]),
-});
+export const BranchDecisionSchema = z
+  .union([
+    z.object({
+      entityId: IdSchema,
+      personId: IdSchema,
+      decision: z.enum(["approve", "decline"]),
+    }),
+    z.object({
+      entityId: IdSchema,
+      userId: IdSchema,
+      decision: z.enum(["approve", "decline"]),
+    }),
+  ])
+  .transform((input) => ({
+    ...input,
+    userId: "personId" in input ? input.personId : input.userId,
+  }));
 export type BranchDecisionInput = z.infer<typeof BranchDecisionSchema>;
 
 /**

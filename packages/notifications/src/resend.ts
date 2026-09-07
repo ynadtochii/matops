@@ -7,6 +7,7 @@ export interface EmailPayload {
   subject: string;
   text: string;
   html?: string;
+  idempotencyKey?: string;
 }
 
 export interface SendEmailResult {
@@ -36,6 +37,9 @@ export async function sendEmail(
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${RESEND_API_KEY}`,
+        ...(payload.idempotencyKey
+          ? { "Idempotency-Key": payload.idempotencyKey }
+          : {}),
       },
       body: JSON.stringify({
         from: RESEND_FROM,

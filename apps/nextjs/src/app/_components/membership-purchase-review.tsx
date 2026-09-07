@@ -134,7 +134,7 @@ function PurchaseRow({ purchase }: { purchase: Purchase }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <Link
-            href={`/people/${purchase.userId}`}
+            href={`/people/${purchase.personId}`}
             className="focus-visible:outline-ring font-medium underline-offset-4 hover:underline focus-visible:outline-2"
           >
             {purchase.studentName}

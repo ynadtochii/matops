@@ -7,11 +7,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { RouterOutputs } from "@matops/api";
 import {
   attendanceCounts,
+  attendanceWriteAccess,
   bulkMarkTargets,
-  canMarkAttendance,
   classEndsAt,
   isBjjAcademy,
   isStaffRole,
+  runsBranch,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { Button } from "@matops/ui/button";
@@ -172,15 +173,21 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
   const [walkInIds, setWalkInIds] = useState<Set<string>>(new Set());
   const [walkInQuery, setWalkInQuery] = useState("");
   const [visitor, setVisitor] = useState(BLANK_VISITOR);
+  const [correctionReason, setCorrectionReason] = useState("");
 
-  const canMark = canMarkAttendance(
+  const writeAccess = attendanceWriteAccess(
     {
       status: cls.status,
       startsAt: new Date(cls.startsAt),
       deletedAt: cls.deletedAt ? new Date(cls.deletedAt) : null,
     },
     now,
+    runsBranch(academy),
   );
+  const canMark = writeAccess !== "closed";
+  const reasonRequired = writeAccess === "reason-required";
+  const reason = correctionReason.trim();
+  const correctionReady = !reasonRequired || reason.length >= 3;
 
   const classList = useQuery(
     trpc.attendance.list.queryOptions({ id: classId }),
@@ -194,7 +201,10 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
   // second later and shoves the whole dialog down. Same query options, so React
   // Query serves ClassTheme from cache — one request, one layout swap.
   const theme = useQuery(
-    trpc.curriculum.forClass.queryOptions({ id: classId }, { enabled: bjj }),
+    trpc.curriculum.forClass.queryOptions(
+      { id: classId },
+      { enabled: bjj && academy.curriculumEnabled },
+    ),
   );
 
   // The week read carries `markedCount`, which the O1 dashboard turns into its
@@ -223,7 +233,8 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
       onMutate: (vars) =>
         optimistic(queryClient, listKey(vars.classId), (old) => {
           const rows = old.rows.map((r) =>
-            r.studentId === vars.studentId
+            r.studentId ===
+            ("personId" in vars ? vars.personId : vars.studentId)
               ? { ...r, attendanceStatus: vars.status }
               : r,
           );
@@ -263,7 +274,13 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
   const addSelectedWalkIns = async () => {
     const ids = [...walkInIds];
     const results = await Promise.allSettled(
-      ids.map((studentId) => addWalkIn.mutateAsync({ classId, studentId })),
+      ids.map((studentId) =>
+        addWalkIn.mutateAsync({
+          classId,
+          personId: studentId,
+          reason: reasonRequired ? reason : undefined,
+        }),
+      ),
     );
     setWalkInIds(new Set());
     await invalidate();
@@ -313,7 +330,10 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
     }),
   );
 
-  if (classList.isPending || (bjj && theme.isPending))
+  if (
+    classList.isPending ||
+    (bjj && academy.curriculumEnabled && theme.isPending)
+  )
     return <SkeletonRoster />;
   if (classList.isError) {
     return (
@@ -380,16 +400,38 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
                   ? "No people are listed. Add anyone who attended, or confirm that nobody attended."
                   : "Check the member and visitor marks, then finish attendance."}
           </p>
+          {reasonRequired && (
+            <div className="flex flex-col gap-1.5">
+              <label
+                htmlFor={`attendance-reason-${classId}`}
+                className="text-sm font-medium"
+              >
+                Correction reason
+              </label>
+              <Input
+                id={`attendance-reason-${classId}`}
+                value={correctionReason}
+                maxLength={500}
+                placeholder="Why is this attendance changing?"
+                onChange={(event) => setCorrectionReason(event.target.value)}
+              />
+              <p className="text-muted-foreground text-xs">
+                This class is older than 14 days. The reason is saved in its
+                change history.
+              </p>
+            </div>
+          )}
           {!review.reviewed && canMark && (
             <Button
               className="self-start"
               busy={finish.isPending}
-              disabled={saving}
+              disabled={saving || !correctionReady}
               onClick={() =>
                 finish.mutate({
                   id: classId,
                   fingerprint: review.fingerprint,
                   nobodyAttended: review.present === 0 && review.unmarked === 0,
+                  reason: reasonRequired ? reason : undefined,
                 })
               }
             >
@@ -410,10 +452,30 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
           )}
         </div>
       )}
+      {classList.data.corrections.length > 0 && (
+        <details className="border-border rounded-md border p-3">
+          <summary className="cursor-pointer text-sm font-medium">
+            Change history ({classList.data.corrections.length})
+          </summary>
+          <ul className="mt-3 flex flex-col gap-3">
+            {classList.data.corrections.map((change) => (
+              <li key={change.id} className="text-sm">
+                <p>{change.reason}</p>
+                <p className="text-muted-foreground text-xs">
+                  {change.actorName ?? "Former staff member"} ·{" "}
+                  {new Date(change.createdAt).toLocaleString()} ·{" "}
+                  {change.beforeValue ?? "not recorded"} to{" "}
+                  {change.afterValue ?? "cleared"}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
       <div className="flex flex-col gap-3">
         {bjj && (
           <>
-            <ClassTheme classId={classId} />
+            {academy.curriculumEnabled && <ClassTheme classId={classId} />}
             <CoachSelect
               classId={classId}
               startsAt={cls.startsAt}
@@ -465,8 +527,13 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
               size="sm"
               variant="outline"
               busy={markAll.isPending}
-              disabled={markAll.isPending}
-              onClick={() => markAll.mutate({ id: classId })}
+              disabled={markAll.isPending || !correctionReady}
+              onClick={() =>
+                markAll.mutate({
+                  id: classId,
+                  reason: reasonRequired ? reason : undefined,
+                })
+              }
             >
               Mark all present
             </Button>
@@ -523,14 +590,16 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
                   >
                     <button
                       type="button"
+                      disabled={!correctionReady}
                       aria-pressed={present}
                       aria-label={present ? `Clear ${name}` : `${name} present`}
                       className={segmentClass("present", present)}
                       onClick={() =>
                         mark.mutate({
                           classId,
-                          studentId: r.studentId,
+                          personId: r.studentId,
                           status: present ? "unmarked" : "present",
+                          reason: reasonRequired ? reason : undefined,
                         })
                       }
                     >
@@ -539,14 +608,16 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
                     </button>
                     <button
                       type="button"
+                      disabled={!correctionReady}
                       aria-pressed={absent}
                       aria-label={absent ? `Clear ${name}` : `${name} absent`}
                       className={segmentClass("absent", absent)}
                       onClick={() =>
                         mark.mutate({
                           classId,
-                          studentId: r.studentId,
+                          personId: r.studentId,
                           status: absent ? "unmarked" : "absent",
+                          reason: reasonRequired ? reason : undefined,
                         })
                       }
                     >
@@ -597,6 +668,7 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
                     >
                       <button
                         type="button"
+                        disabled={!correctionReady}
                         aria-pressed={present}
                         aria-label={
                           present ? `Clear ${name}` : `${name} present`
@@ -607,6 +679,7 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
                             classId,
                             visitId: d.id,
                             status: present ? "unmarked" : "present",
+                            reason: reasonRequired ? reason : undefined,
                           })
                         }
                       >
@@ -615,6 +688,7 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
                       </button>
                       <button
                         type="button"
+                        disabled={!correctionReady}
                         aria-pressed={absent}
                         aria-label={absent ? `Clear ${name}` : `${name} absent`}
                         className={segmentClass("absent", absent)}
@@ -623,6 +697,7 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
                             classId,
                             visitId: d.id,
                             status: absent ? "unmarked" : "absent",
+                            reason: reasonRequired ? reason : undefined,
                           })
                         }
                       >
@@ -706,7 +781,11 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
                     size="sm"
                     className="self-start"
                     busy={addWalkIn.isPending}
-                    disabled={walkInIds.size === 0 || addWalkIn.isPending}
+                    disabled={
+                      walkInIds.size === 0 ||
+                      addWalkIn.isPending ||
+                      !correctionReady
+                    }
                     onClick={() => void addSelectedWalkIns()}
                   >
                     {walkInIds.size > 0
@@ -723,7 +802,11 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
               className="flex flex-col gap-2"
               onSubmit={(e) => {
                 e.preventDefault();
-                addVisitor.mutate({ classId, ...visitor });
+                addVisitor.mutate({
+                  classId,
+                  ...visitor,
+                  reason: reasonRequired ? reason : undefined,
+                });
               }}
             >
               <p className="text-sm font-medium">
@@ -768,7 +851,9 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
                 size="sm"
                 className="self-start"
                 busy={addVisitor.isPending}
-                disabled={addVisitor.isPending || !visitorValid}
+                disabled={
+                  addVisitor.isPending || !visitorValid || !correctionReady
+                }
               >
                 Add visitor
               </Button>

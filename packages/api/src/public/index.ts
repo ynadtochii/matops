@@ -6,12 +6,15 @@ import type { PublicErrorCode } from "@matops/domain";
 import {
   bookVisitor,
   cancelVisitorBooking,
+  enqueueOutboxEmails,
   getPublicClass,
+  getVisitorBookingStatus,
   listPublicClasses,
   resolvePublicApiKey,
 } from "@matops/db";
 import {
   FALLBACK_TIME_ZONE,
+  formatWhen,
   isPubliclyBookable,
   normalizePhone,
   originAllowed,
@@ -342,20 +345,55 @@ export async function handleBooking(
     );
   }
 
-  const booked = await bookVisitor(
-    {
-      academyId: caller.academy.academyId,
-      firstName: input.firstName,
-      lastName: input.lastName,
-      phone: phoneKey,
-      email: input.email,
-      consent: input.consent,
-      source: input.source,
-      classId: input.classId,
-      cancelToken: randomBytes(24).toString("base64url"),
-    },
-    db,
-  );
+  let booked;
+  try {
+    booked = await db.transaction(async (tx) => {
+      const result = await bookVisitor(
+        {
+          academyId: caller.academy.academyId,
+          firstName: input.firstName,
+          lastName: input.lastName,
+          phone: phoneKey,
+          email: input.email,
+          consent: input.consent,
+          source: input.source,
+          classId: input.classId,
+          cancelToken: randomBytes(24).toString("base64url"),
+        },
+        tx,
+      );
+      const statusUrl = new URL(
+        `/book/${caller.academy.publicCode}?booking=${encodeURIComponent(result.cancelToken)}`,
+        req.url,
+      ).toString();
+      await enqueueOutboxEmails(
+        [
+          {
+            academyId: caller.academy.academyId,
+            eventKey: `visitor_booking_confirmed:${result.visitId}`,
+            recipientKey: `visitor:${result.visitId}`,
+            recipientAddress: input.email,
+            subject: `Booking confirmed: ${found.cls.title}`,
+            body: `You are booked at ${caller.academy.name} for ${found.cls.title} on ${formatWhen(found.cls.startsAt, caller.timeZone)}. View or cancel your booking: ${statusUrl}`,
+          },
+        ],
+        tx,
+      );
+      return result;
+    });
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === "Class is no longer open for booking"
+    ) {
+      return publicError(
+        "class_cancelled",
+        "That class is no longer open for booking.",
+        { origin: caller.origin },
+      );
+    }
+    throw error;
+  }
 
   return ok(
     {
@@ -366,6 +404,44 @@ export async function handleBooking(
         title: found.cls.title,
         startsAt: publicInstant(found.cls.startsAt, caller.timeZone),
         durationMinutes: found.cls.durationMinutes,
+      },
+    },
+    caller.origin,
+    caller.academy,
+  );
+}
+
+export async function handleBookingStatus(
+  req: Request,
+  cancelToken: string,
+  db: DbExec,
+  now = new Date(),
+): Promise<Response> {
+  const auth = await authenticate(req, db);
+  if ("refusal" in auth) return auth.refusal;
+  const { caller } = auth;
+  const refused = readLimits(caller);
+  if (refused) return refused;
+  const booking = await getVisitorBookingStatus(
+    caller.academy.academyId,
+    cancelToken,
+    db,
+    now,
+  );
+  if (!booking) {
+    return publicError(
+      "class_not_found",
+      "This booking link has expired or is not valid.",
+      { origin: caller.origin },
+    );
+  }
+  return ok(
+    {
+      bookingStatus: booking.bookingStatus,
+      tokenExpiresAt: booking.tokenExpiresAt.toISOString(),
+      class: {
+        ...booking.class,
+        startsAt: publicInstant(booking.class.startsAt, caller.timeZone),
       },
     },
     caller.origin,

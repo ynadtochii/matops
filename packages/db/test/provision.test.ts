@@ -238,7 +238,6 @@ describe("adding a general space", () => {
     const gymRow = rows.find((r) => r.id === gymId);
     const matRow = rows.find((r) => r.id === ORG);
     expect(gymRow?.membershipEnforcedAt).toBeInstanceOf(Date);
-    // The BJJ academy stays on the legacy gate until somebody activates it.
     expect(matRow?.membershipEnforcedAt).toBeNull();
   });
 
@@ -619,7 +618,7 @@ describe("copying a branch's setup into a new one", () => {
     expect(
       rows
         .map((r) => ({ userId: r.userId, role: r.role }))
-        .sort((a, b) => a.userId.localeCompare(b.userId)),
+        .sort((a, b) => (a.userId ?? "").localeCompare(b.userId ?? "")),
     ).toEqual([
       { userId: COACH, role: "instructor" },
       { userId: OWNER, role: "owner" },
