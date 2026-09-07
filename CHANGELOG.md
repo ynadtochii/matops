@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased: PR 8 review fixes
+
+Seed cleanup keeps other branches' demo memberships, payments, and organization seats. Seeded membership months use the organization's policy calendar, with the default branch as fallback. Coach cards again show students taught and expandable class breakdowns. Completed attendance shows the reviewer name beside the time. Regression coverage covers branch cleanup, month boundaries, and reviewer identity. Tests have not run.
+
 ## Unreleased: explicit attendance review
 
 Fixed the attendance roster query failing with an ambiguous column error. Nested query wrappers preserve table names in member, visitor and review reads.

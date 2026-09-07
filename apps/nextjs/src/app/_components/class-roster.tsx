@@ -373,7 +373,7 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
           </p>
           <p className="text-muted-foreground text-sm">
             {review.reviewed && review.reviewedAt
-              ? `Reviewed ${new Date(review.reviewedAt).toLocaleString()}. Changing the roster requires another review.`
+              ? `Reviewed by ${review.reviewer?.name ?? "Unknown reviewer"} on ${new Date(review.reviewedAt).toLocaleString()}. Changing the roster requires another review.`
               : review.unmarked > 0
                 ? `Mark the remaining ${review.unmarked} ${review.unmarked === 1 ? "person" : "people"} present or absent, including visitors.`
                 : review.total === 0

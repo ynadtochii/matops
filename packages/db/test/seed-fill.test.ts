@@ -10,6 +10,162 @@ import {
 } from "../src/seed/augment";
 import { freshDb } from "./helpers";
 
+async function sharedBranches() {
+  const pg = await freshDb([]);
+  const exec = drizzle(pg, {
+    schema,
+    casing: "snake_case",
+  }) as unknown as SeedExec;
+  await pg.exec(`
+    INSERT INTO "user" (id, name, email) VALUES ('shared_owner', 'Owner', 'shared@real.test');
+    INSERT INTO organization (id, name, slug, created_at) VALUES ('shared_org', 'Shared', 'shared', now());
+    INSERT INTO entity (id, organization_id, type, name, slug, is_default, public_code, time_zone, membership_enforced_at) VALUES
+      ('alpha_branch', 'shared_org', 'bjj_academy', 'Alpha', 'alpha', true, '860280', 'America/Los_Angeles', now()),
+      ('beta_branch', 'shared_org', 'bjj_academy', 'Beta', 'beta', false, '860281', 'UTC', now());
+    INSERT INTO member (id, organization_id, user_id, role, created_at)
+      VALUES ('shared_owner_member', 'shared_org', 'shared_owner', 'owner', now());
+    INSERT INTO entity_membership (id, organization_id, entity_id, user_id, role, status) VALUES
+      ('alpha_owner', 'shared_org', 'alpha_branch', 'shared_owner', 'owner', 'active'),
+      ('beta_owner', 'shared_org', 'beta_branch', 'shared_owner', 'owner', 'active');
+    INSERT INTO access_plan (id, organization_id, name, price_minor, currency)
+      VALUES ('44444444-4444-4444-4444-444444444444', 'shared_org', 'Shared plan', 5000, 'EUR');
+    INSERT INTO access_plan_price (organization_id, plan_id, effective_month, price_minor, currency)
+      VALUES ('shared_org', '44444444-4444-4444-4444-444444444444', '2026-06-01', 5000, 'EUR');
+    INSERT INTO access_plan_entity (organization_id, plan_id, entity_id) VALUES
+      ('shared_org', '44444444-4444-4444-4444-444444444444', 'alpha_branch'),
+      ('shared_org', '44444444-4444-4444-4444-444444444444', 'beta_branch');
+  `);
+  return { pg, exec };
+}
+
+describe("shared membership seed isolation", () => {
+  it("clears one branch without changing another branch's fake records", async () => {
+    const { pg, exec } = await sharedBranches();
+    try {
+      const now = new Date("2026-07-24T12:00:00Z");
+      for (const academyId of ["alpha_branch", "beta_branch"]) {
+        await fillAcademy(exec, {
+          academyId,
+          organizationId: "shared_org",
+          now,
+          studentCount: 3,
+        });
+      }
+      await pg.exec(`
+        INSERT INTO membership_purchase (organization_id, user_id, entity_id, plan_id, plan_name, price_minor, currency, start_month, entity_ids, branch_names, version, reference, assignment_id)
+        SELECT a.organization_id, a.user_id, e.entity_id, a.plan_id, 'Shared plan', 5000, 'EUR', '2026-07-01', ARRAY[e.entity_id], ARRAY[e.entity_id], 'v1', a.user_id, a.id
+        FROM access_assignment a JOIN entity_membership e ON e.user_id = a.user_id;
+      `);
+      const snapshot = async () => {
+        const result: Record<string, unknown> = {};
+        for (const [table, condition] of [
+          ["user", "id LIKE 'seed_user_fill_betabran_%'"],
+          ["member", "user_id LIKE 'seed_user_fill_betabran_%'"],
+          ["entity_membership", "entity_id = 'beta_branch'"],
+          ["access_assignment", "user_id LIKE 'seed_user_fill_betabran_%'"],
+          ["membership_purchase", "entity_id = 'beta_branch'"],
+          [
+            "membership_month",
+            "assignment_id IN (SELECT id FROM access_assignment WHERE user_id LIKE 'seed_user_fill_betabran_%')",
+          ],
+          [
+            "membership_month_audit",
+            "assignment_id IN (SELECT id FROM access_assignment WHERE user_id LIKE 'seed_user_fill_betabran_%')",
+          ],
+        ] as const) {
+          result[table] = (
+            await pg.query(
+              `SELECT * FROM "${table}" WHERE ${condition} ORDER BY id`,
+            )
+          ).rows;
+        }
+        return result;
+      };
+      const before = await snapshot();
+      expect(before.access_assignment).toHaveLength(3);
+      expect(before.membership_purchase).toHaveLength(3);
+      await clearAcademy(exec, {
+        academyId: "alpha_branch",
+        organizationId: "shared_org",
+      });
+      expect(await snapshot()).toEqual(before);
+      expect(
+        (
+          await pg.query(
+            "SELECT id FROM access_assignment WHERE user_id LIKE 'seed_user_fill_alphabra_%'",
+          )
+        ).rows,
+      ).toEqual([]);
+      expect(
+        (
+          await pg.query(
+            "SELECT id FROM membership_purchase WHERE entity_id = 'alpha_branch'",
+          )
+        ).rows,
+      ).toEqual([]);
+      expect(
+        (
+          await pg.query(
+            "SELECT id FROM member WHERE user_id LIKE 'seed_user_fill_alphabra_%'",
+          )
+        ).rows,
+      ).toEqual([]);
+      await clearAcademy(exec, {
+        academyId: "alpha_branch",
+        organizationId: "shared_org",
+      });
+      expect(await snapshot()).toEqual(before);
+    } finally {
+      await pg.close();
+    }
+  });
+
+  it.each(["policy", "default branch"])(
+    "uses the %s calendar across a month boundary",
+    async (source) => {
+      const { pg, exec } = await sharedBranches();
+      try {
+        if (source === "policy") {
+          await pg.exec(`
+          UPDATE entity SET time_zone = 'UTC' WHERE id = 'alpha_branch';
+          INSERT INTO membership_policy (organization_id, calendar_time_zone)
+            VALUES ('shared_org', 'America/Los_Angeles');
+        `);
+        }
+        await fillAcademy(exec, {
+          academyId: "beta_branch",
+          organizationId: "shared_org",
+          now: new Date("2026-08-01T00:30:00Z"),
+          studentCount: 4,
+        });
+        expect(
+          (
+            await pg.query(
+              "SELECT DISTINCT start_month::text FROM access_assignment",
+            )
+          ).rows,
+        ).toEqual([{ start_month: "2026-06-01" }]);
+        expect(
+          (
+            await pg.query(
+              "SELECT DISTINCT month::text FROM membership_month ORDER BY month",
+            )
+          ).rows,
+        ).toEqual([{ month: "2026-06-01" }, { month: "2026-07-01" }]);
+        expect(
+          (
+            await pg.query(
+              "SELECT id FROM membership_month WHERE month = '2026-07-01' AND paid",
+            )
+          ).rows,
+        ).toHaveLength(1);
+      } finally {
+        await pg.close();
+      }
+    },
+  );
+});
+
 /**
  * "Fill an existing academy" safety: fill adds fakes onto the REAL academy's own
  * plans + classes; clear removes ONLY the fakes. The real owner, the real

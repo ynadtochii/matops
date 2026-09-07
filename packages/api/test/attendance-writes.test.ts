@@ -433,6 +433,26 @@ describe("attendance.addVisitor", () => {
 });
 
 describe("attendance review", () => {
+  it("returns the reviewer identity and time to another staff member", async () => {
+    const h = await base();
+    await h.pg.query('UPDATE "user" SET name = $1 WHERE id = $2', [
+      "Coach Mira",
+      COACH,
+    ]);
+    const coach = h.as(COACH, A).attendance;
+    const before = await coach.list({ id: YESTERDAY });
+    expect(before.review.reviewer).toBeNull();
+    await coach.finish({
+      id: YESTERDAY,
+      fingerprint: before.review.fingerprint,
+      nobodyAttended: true,
+    });
+    const after = await h.as(OWNER, A).attendance.list({ id: YESTERDAY });
+    expect(after.review.reviewed).toBe(true);
+    expect(after.review.reviewedAt).toBeInstanceOf(Date);
+    expect(after.review.reviewer).toEqual({ id: COACH, name: "Coach Mira" });
+  });
+
   it("loads member and visitor rosters and keeps review counts on their class", async () => {
     const h = await base();
     await seedParticipations(h.pg, [

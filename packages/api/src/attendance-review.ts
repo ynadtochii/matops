@@ -26,6 +26,8 @@ export async function loadAttendanceRoster(db: TenantTx, classId: string) {
       status: classInstance.status,
       deletedAt: classInstance.deletedAt,
       reviewedAt: classInstance.attendanceReviewedAt,
+      reviewerId: classInstance.attendanceReviewedBy,
+      reviewerName: user.name,
       savedFingerprint: classInstance.attendanceReviewFingerprint,
       snapshot: attendanceReviewSnapshot(),
       rows: sql<MemberRow[]>`${sql`coalesce((
@@ -51,6 +53,7 @@ export async function loadAttendanceRoster(db: TenantTx, classId: string) {
     ), '[]'::jsonb)`}`,
     })
     .from(classInstance)
+    .leftJoin(user, eq(user.id, classInstance.attendanceReviewedBy))
     .where(eq(classInstance.id, classId));
   if (!row) return null;
   return {
@@ -59,10 +62,11 @@ export async function loadAttendanceRoster(db: TenantTx, classId: string) {
       ...member,
       attendedAt: member.attendedAt ? new Date(member.attendedAt) : null,
     })),
-    review: attendanceReview(
-      row.snapshot,
-      row.savedFingerprint,
-      row.reviewedAt,
-    ),
+    review: {
+      ...attendanceReview(row.snapshot, row.savedFingerprint, row.reviewedAt),
+      reviewer: row.reviewerId
+        ? { id: row.reviewerId, name: row.reviewerName }
+        : null,
+    },
   };
 }

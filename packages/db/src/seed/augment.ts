@@ -16,7 +16,12 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, isNull, like } from "drizzle-orm";
 
-import { monthOf, paymentPeriod, priceForMonth } from "@matops/domain";
+import {
+  monthOf,
+  paymentPeriod,
+  priceForMonth,
+  resolveAcademyTimeZone,
+} from "@matops/domain";
 
 import type { SeedExec } from "./registry";
 import { recomputeBookingCounts } from "../erase";
@@ -39,6 +44,7 @@ import {
   membershipMonth,
   membershipMonthAudit,
   membershipPlan,
+  membershipPolicy,
   membershipPurchase,
   notification,
   paymentClaim,
@@ -305,7 +311,6 @@ export async function fillAcademy(
   const [branch] = await exec
     .select({
       enforcedAt: entity.membershipEnforcedAt,
-      timeZone: entity.timeZone,
     })
     .from(entity)
     .where(eq(entity.id, academyId))
@@ -319,7 +324,6 @@ export async function fillAcademy(
         organizationId,
         staffId,
         now,
-        timeZone: branch?.timeZone ?? "UTC",
         holders: students.filter(
           (s) => s.status === "active" || s.status === "suspended",
         ),
@@ -399,36 +403,36 @@ export async function fillAcademy(
   // revenue off `payment_claim` and off nothing else.
   if (primary) {
     const confirmed = active.slice(0, 8).flatMap((student, index) => {
-        const plan = plans[index % plans.length] ?? primary;
-        return [
-          {
-            id: randomUUID(),
-            academyId,
-            memberId: student.memberId,
-            planId: plan.id,
-            amountMinor: plan.priceMinor,
-            currency: plan.currency,
-            period: paymentPeriod(now),
-            status: "confirmed" as const,
-            confirmedBy: staffId,
-            confirmedAt: now,
-            claimedAt: new Date(now.getTime() - DAY_MS),
-          },
-          {
-            id: randomUUID(),
-            academyId,
-            memberId: student.memberId,
-            planId: plan.id,
-            amountMinor: plan.priceMinor,
-            currency: plan.currency,
-            period: paymentPeriod(new Date(now.getTime() - 45 * DAY_MS)),
-            status: "confirmed" as const,
-            confirmedBy: staffId,
-            confirmedAt: new Date(now.getTime() - 45 * DAY_MS),
-            claimedAt: new Date(now.getTime() - 46 * DAY_MS),
-          },
-        ];
-      });
+      const plan = plans[index % plans.length] ?? primary;
+      return [
+        {
+          id: randomUUID(),
+          academyId,
+          memberId: student.memberId,
+          planId: plan.id,
+          amountMinor: plan.priceMinor,
+          currency: plan.currency,
+          period: paymentPeriod(now),
+          status: "confirmed" as const,
+          confirmedBy: staffId,
+          confirmedAt: now,
+          claimedAt: new Date(now.getTime() - DAY_MS),
+        },
+        {
+          id: randomUUID(),
+          academyId,
+          memberId: student.memberId,
+          planId: plan.id,
+          amountMinor: plan.priceMinor,
+          currency: plan.currency,
+          period: paymentPeriod(new Date(now.getTime() - 45 * DAY_MS)),
+          status: "confirmed" as const,
+          confirmedBy: staffId,
+          confirmedAt: new Date(now.getTime() - 45 * DAY_MS),
+          claimedAt: new Date(now.getTime() - 46 * DAY_MS),
+        },
+      ];
+    });
     if (confirmed.length > 0) {
       await exec.insert(paymentClaim).values(confirmed);
       report.payment_claim = (report.payment_claim ?? 0) + confirmed.length;
@@ -620,7 +624,6 @@ export async function fillAcademy(
   return report;
 }
 
-
 /**
  * Put the fakes on the academy's OWN membership plans, the way the owner would.
  *
@@ -636,13 +639,30 @@ async function fillMemberships(
     organizationId: string;
     staffId: string;
     now: Date;
-    timeZone: string;
     holders: FakeStudent[];
   },
 ): Promise<FillReport> {
   const { academyId, organizationId, staffId, now, holders } = opts;
   const report: FillReport = {};
-  const month = monthOf(now, opts.timeZone);
+  const [policy] = await exec
+    .select({ timeZone: membershipPolicy.calendarTimeZone })
+    .from(membershipPolicy)
+    .where(eq(membershipPolicy.organizationId, organizationId));
+  let timeZone = policy?.timeZone;
+  if (!timeZone) {
+    const [home] = await exec
+      .select({ timeZone: entity.timeZone })
+      .from(entity)
+      .where(
+        and(
+          eq(entity.organizationId, organizationId),
+          eq(entity.isDefault, true),
+          isNull(entity.deletedAt),
+        ),
+      );
+    timeZone = resolveAcademyTimeZone(home?.timeZone);
+  }
+  const month = monthOf(now, timeZone);
   const lastMonth = monthsBack(month, 1);
 
   const plans = await exec
@@ -774,17 +794,20 @@ export async function clearAcademy(
     report[label] = (await run()).rowCount ?? 0;
   };
 
-  // Anything the fakes hold at the ORGANIZATION: the membership they were
-  // given here, plus whatever an owner assigned by hand while demoing.
-  // `access_assignment.user_id` is a real foreign key, so the fake user rows
-  // cannot be deleted while one survives.
+  const fakeUsers = await exec
+    .select({ id: user.id })
+    .from(user)
+    .where(
+      like(user.id, `${fillUserPrefix(academyId).replaceAll("_", "\\_")}%`),
+    );
+  const fakeUserIds = fakeUsers.map((row) => row.id);
   const held = await exec
     .select({ id: accessAssignment.id })
     .from(accessAssignment)
     .where(
       and(
         eq(accessAssignment.organizationId, opts.organizationId),
-        like(accessAssignment.userId, seedLike),
+        inArray(accessAssignment.userId, fakeUserIds),
       ),
     );
   const heldIds = held.map((row) => row.id);
@@ -794,7 +817,7 @@ export async function clearAcademy(
       .where(
         and(
           eq(membershipPurchase.organizationId, opts.organizationId),
-          like(membershipPurchase.userId, seedLike),
+          inArray(membershipPurchase.userId, fakeUserIds),
         ),
       ),
   );
@@ -815,7 +838,9 @@ export async function clearAcademy(
         .where(inArray(accessAssignmentChange.sourceAssignmentId, heldIds)),
     );
     await del("access_assignment", () =>
-      exec.delete(accessAssignment).where(inArray(accessAssignment.id, heldIds)),
+      exec
+        .delete(accessAssignment)
+        .where(inArray(accessAssignment.id, heldIds)),
     );
   }
   // Messages the gym sent them. `notification.user_id` carries no foreign key,
@@ -931,12 +956,12 @@ export async function clearAcademy(
       .where(
         and(
           eq(member.organizationId, opts.organizationId),
-          like(member.id, seedLike),
+          inArray(member.userId, fakeUserIds),
         ),
       ),
   );
   await del("user", () =>
-    exec.delete(user).where(like(user.id, `${fillUserPrefix(academyId)}%`)),
+    exec.delete(user).where(inArray(user.id, fakeUserIds)),
   );
 
   // Restore the real classes' booking_count now the fakes are gone.

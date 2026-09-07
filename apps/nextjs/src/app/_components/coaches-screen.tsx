@@ -10,18 +10,29 @@ import {
 
 import type { RouterOutputs } from "@matops/api";
 import type { CoachWindowKey } from "@matops/domain";
-import { formatMatTime, isPendingCoach, runsBranch } from "@matops/domain";
+import {
+  DAY_LABELS,
+  formatMatTime,
+  isPendingCoach,
+  runsBranch,
+} from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@matops/ui/collapsible";
 import { toast } from "@matops/ui/toast";
 
-import { monthDayFmt } from "~/lib/format";
+import { dateTimeFmt, monthDayFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { useEntity } from "./entity";
 import { PageHeader } from "./page-header";
 import {
   cardClass,
+  ChevronDownIcon,
   ENTER,
   Eyebrow,
   RESOLVE,
@@ -33,6 +44,8 @@ import { Staff } from "./staff";
 import { EmptyState, ErrorState } from "./states";
 import { Tabs } from "./tabs";
 
+type Breakdown = RouterOutputs["stats"]["coach"]["breakdown"];
+
 type CoachRow = RouterOutputs["stats"]["coaches"]["coaches"][number];
 
 const WINDOW_TABS: { id: CoachWindowKey; label: string }[] = [
@@ -41,45 +54,231 @@ const WINDOW_TABS: { id: CoachWindowKey; label: string }[] = [
   { id: "last_90_days", label: "Last 90 days" },
 ];
 
-function CoachCard({ row }: { row: CoachRow }) {
-  const average =
-    row.avgHeadcount === null ? (
-      <span className="text-muted-foreground text-sm">Not recorded</span>
-    ) : (
-      new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(
-        row.avgHeadcount,
-      )
-    );
+const percent = (rate: number | null) =>
+  rate === null ? "Not recorded" : `${Math.round(rate * 100)}%`;
+const headcount = (avg: number | null) =>
+  avg === null ? "Not recorded" : (Math.round(avg * 10) / 10).toString();
 
+function BarRow({
+  bars,
+  label,
+}: {
+  bars: { key: string; caption: string; value: number }[];
+  label: string;
+}) {
+  const peak = Math.max(1, ...bars.map((b) => b.value));
   return (
-    <article className={cn(cardClass(), "flex flex-col gap-4")}>
-      <p className="font-medium">
-        {row.name}
-        {!row.onStaff && (
-          <span className="text-muted-foreground ml-2 font-mono text-xs uppercase">
-            no longer staff
-          </span>
-        )}
+    <div>
+      <Eyebrow>{label}</Eyebrow>
+      <ul className="mt-2 flex items-end gap-1.5">
+        {bars.map((b) => (
+          <li key={b.key} className="flex flex-1 flex-col items-center gap-1">
+            <span className="font-mono text-[10px] tabular-nums">
+              {b.value || ""}
+            </span>
+            <span
+              aria-hidden
+              className="bg-muted-foreground/40 w-full rounded-sm"
+              style={{ height: `${Math.max(2, (b.value / peak) * 40)}px` }}
+            />
+            <span className="text-muted-foreground font-mono text-[10px]">
+              {b.caption}
+            </span>
+            <span className="sr-only">
+              {b.caption}: {b.value}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+const RECENT_SHOWN = 8;
+
+function BreakdownPanel({ breakdown }: { breakdown: Breakdown }) {
+  if (breakdown.recent.length === 0) {
+    return (
+      <p className="text-muted-foreground text-sm">
+        No classes led in this window. Pick a wider window, or set this coach on
+        a class from the schedule.
       </p>
-      <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
-        <Stat value={row.classesLed} label="classes led" />
-        <Stat value={formatMatTime(row.minutesLed)} label="time coached" />
-        <Stat value={average} label="avg. recorded attendance" />
+    );
+  }
+  const hidden = breakdown.recent.length - RECENT_SHOWN;
+  return (
+    <div className="flex flex-col gap-5">
+      <div>
+        <Eyebrow>Which classes</Eyebrow>
+        <ul className="mt-2 flex flex-col gap-1">
+          {breakdown.byClass.map((g) => (
+            <li
+              key={g.title}
+              className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm"
+            >
+              <span>
+                {g.title}
+                {g.discipline && (
+                  <span className="text-muted-foreground ml-2 text-xs uppercase">
+                    {g.discipline}
+                  </span>
+                )}
+              </span>
+              <span className="text-muted-foreground font-mono text-xs tabular-nums">
+                {g.classesLed}× · avg {headcount(g.avgHeadcount)}
+              </span>
+            </li>
+          ))}
+        </ul>
       </div>
-      <div className="text-muted-foreground space-y-1 border-t border-dashed pt-3 text-xs">
-        <p>
-          {row.classesLed === 0
-            ? "No completed classes in this period."
-            : `Attendance recorded for ${row.markedClasses} of ${row.classesLed} classes.`}
-        </p>
-        {row.cancelled > 0 && (
-          <p>
-            {row.cancelled} {row.cancelled === 1 ? "class" : "classes"}{" "}
-            cancelled.
+
+      <div className="grid gap-5 sm:grid-cols-2">
+        <BarRow
+          label="By weekday"
+          bars={breakdown.byWeekday.map((value, i) => ({
+            key: String(i),
+            caption: DAY_LABELS[i] ?? "",
+            value,
+          }))}
+        />
+        <BarRow
+          label="By week"
+          bars={breakdown.byWeek.map((w, i) => ({
+            key: String(w.weekBucket),
+            caption: `w${i + 1}`,
+            value: w.classesLed,
+          }))}
+        />
+      </div>
+
+      <div>
+        <Eyebrow>Classes led</Eyebrow>
+        <ul className="mt-2 flex flex-col gap-1">
+          {breakdown.recent.slice(0, RECENT_SHOWN).map((c) => (
+            <li
+              key={c.classId}
+              className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm"
+            >
+              <span>
+                <span className="text-muted-foreground font-mono text-xs tabular-nums">
+                  {dateTimeFmt.format(new Date(c.startsAt))}
+                </span>{" "}
+                {c.title}
+              </span>
+              <span className="text-muted-foreground font-mono text-xs tabular-nums">
+                {c.marked ? `${c.headcount} present` : "not marked"}
+              </span>
+            </li>
+          ))}
+        </ul>
+        {hidden > 0 && (
+          <p className="text-muted-foreground mt-1.5 font-mono text-[10px] tracking-wide uppercase tabular-nums">
+            + {hidden} more in this window
           </p>
         )}
       </div>
-    </article>
+    </div>
+  );
+}
+
+function CoachDetail({
+  instructorId,
+  window,
+}: {
+  instructorId: string | undefined;
+  window: CoachWindowKey;
+}) {
+  const trpc = useTRPC();
+  const detail = useQuery({
+    ...trpc.stats.coach.queryOptions({ window, instructorId }),
+    placeholderData: keepPreviousData,
+  });
+  if (detail.isPending) return <SkeletonCoachCards n={1} toggle={false} />;
+  if (detail.isError) {
+    return (
+      <ErrorState
+        label="this coach's classes"
+        onRetry={() => void detail.refetch()}
+      />
+    );
+  }
+  return <BreakdownPanel breakdown={detail.data.breakdown} />;
+}
+
+function CoachCard({
+  row,
+  window,
+  open,
+  onToggle,
+  breakdown,
+}: {
+  row: CoachRow;
+  window: CoachWindowKey;
+  open: boolean;
+  onToggle?: () => void;
+
+  breakdown?: Breakdown;
+}) {
+  const partial = row.markedRate !== null && row.markedRate < 1;
+  const body = breakdown ? (
+    <BreakdownPanel breakdown={breakdown} />
+  ) : (
+    <CoachDetail instructorId={row.instructorId} window={window} />
+  );
+  return (
+    <Collapsible
+      open={open}
+      onOpenChange={onToggle}
+      className={cn(cardClass(), "flex flex-col gap-4")}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="font-medium">
+          {row.name}
+          {!row.onStaff && (
+            <span className="text-muted-foreground ml-2 font-mono text-xs uppercase">
+              no longer staff
+            </span>
+          )}
+        </p>
+        {onToggle && (
+          <CollapsibleTrigger asChild>
+            <Button size="sm" variant="outline">
+              Breakdown
+              <ChevronDownIcon
+                className={cn(
+                  "transition-[rotate] duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none",
+                  open && "rotate-180",
+                )}
+              />
+            </Button>
+          </CollapsibleTrigger>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
+        <Stat value={row.classesLed} label="classes led" />
+        <Stat value={formatMatTime(row.minutesLed)} label="on the mat" />
+        <Stat value={row.distinctStudents} label="students" />
+        <Stat value={headcount(row.avgHeadcount)} label="avg headcount" />
+        <Stat value={percent(row.markedRate)} label="attendance marked" />
+      </div>
+
+      {partial && (
+        <p className="text-muted-foreground text-xs">
+          {row.classesLed - row.markedClasses} of {row.classesLed} classes have
+          no attendance marked, so the headcount above covers only the marked
+          ones.
+        </p>
+      )}
+      {row.cancelled > 0 && (
+        <p className="text-muted-foreground text-xs">
+          {row.cancelled} class{row.cancelled === 1 ? "" : "es"} cancelled in
+          this window.
+        </p>
+      )}
+
+      {onToggle ? <CollapsibleContent>{body}</CollapsibleContent> : body}
+    </Collapsible>
   );
 }
 
@@ -198,6 +397,7 @@ function PendingCoaches() {
  */
 export function CoachesScreen() {
   const trpc = useTRPC();
+  const [openId, setOpenId] = useState<string | null>(null);
   const [window, setWindow] = useState<CoachWindowKey>("this_month");
 
   const me = useEntity();
@@ -275,12 +475,22 @@ export function CoachesScreen() {
               ) : (
                 <div className={cn("flex flex-col gap-4", RESOLVE)}>
                   {coaches.map((row) => (
-                    <CoachCard key={row.instructorId} row={row} />
+                    <CoachCard
+                      key={row.instructorId}
+                      row={row}
+                      window={window}
+                      open={openId === row.instructorId}
+                      onToggle={() =>
+                        setOpenId(
+                          openId === row.instructorId ? null : row.instructorId,
+                        )
+                      }
+                    />
                   ))}
                 </div>
               )
             ) : mine.isPending ? (
-              <SkeletonCoachCards n={1} />
+              <SkeletonCoachCards n={1} toggle={false} />
             ) : mine.isError ? (
               <ErrorState
                 label="your classes"
@@ -289,6 +499,9 @@ export function CoachesScreen() {
             ) : (
               <div className={RESOLVE}>
                 <CoachCard
+                  window={window}
+                  breakdown={mine.data.breakdown}
+                  open
                   row={{
                     ...mine.data.workload,
                     name: mine.data.name,

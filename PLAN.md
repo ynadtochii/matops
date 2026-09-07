@@ -314,3 +314,19 @@ Read-only reproduction: the existing class read failed with PostgreSQL 42702, co
 After changing nested database queries, inspect the generated SQL and replay the affected read. Typecheck and lint cannot confirm database query behavior. Keep regression coverage for joins and outer-class references.
 
 Verification: affected API and DB lint/typecheck passed, 8/8 tasks including dependency builds. Diff whitespace check passed. Regression test written but not run.
+
+## PR 8 review fixes
+
+- [x] Inspect cleanup ownership, membership calendars, coach details, and attendance reads.
+- [x] Scope organization cleanup to the selected branch's fake users.
+- [x] Use the membership policy calendar, with the default branch fallback.
+- [x] Restore coach breakdowns and show attendance reviewer names.
+- [x] Add regression coverage and run lint/typecheck. Do not run tests.
+
+Lessons: organization records need explicit user ownership when cleaning one branch. Membership months must use the organization's calendar. Check existing spec requirements before removing screen content.
+
+Verification: workspace lint passed 15/15 and typecheck passed 17/17. Diff whitespace check passed. Tests are written but not run. No browser verification, database writes, commit, or deployment.
+
+User-run regression commands:
+- `pnpm -F @matops/db test test/seed-fill.test.ts`
+- `pnpm -F @matops/api test test/attendance-writes.test.ts`

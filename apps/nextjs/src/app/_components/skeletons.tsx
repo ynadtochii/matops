@@ -459,14 +459,23 @@ export function SkeletonFeed({
   );
 }
 
-export function SkeletonCoachCards({ n = 2 }: { n?: number }) {
+export function SkeletonCoachCards({
+  n = 2,
+  toggle = true,
+}: {
+  n?: number;
+  toggle?: boolean;
+}) {
   return (
     <div aria-hidden className="flex flex-col gap-4">
       {Array.from({ length: n }).map((_, i) => (
         <div key={i} className={cn(cardClass(), "flex flex-col gap-4")}>
-          <Bar className={cn("h-4", pick(TITLE_W, i))} />
-          <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
-            {[0, 1, 2].map((j) => (
+          <div className="flex items-center justify-between gap-2">
+            <Bar className={cn("h-4", pick(TITLE_W, i))} />
+            {toggle && <Bar className="h-8 w-28 shrink-0 rounded-md" />}
+          </div>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
+            {[0, 1, 2, 3, 4].map((j) => (
               <div key={j} className="space-y-2">
                 <Bar className="h-6 w-14" />
                 <Bar className="h-2.5 w-24" />
