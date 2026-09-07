@@ -298,52 +298,6 @@ export function SkeletonControlPanel({
   );
 }
 
-/** A coach's breakdown: which classes, then the weekday and hour bars. */
-export function SkeletonBreakdown() {
-  return (
-    <div aria-hidden className="flex flex-col gap-5">
-      <div>
-        <Bar className="h-2.5 w-28" />
-        <div className="mt-2 flex flex-col gap-1.5">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="flex items-baseline justify-between gap-3">
-              <Bar className={cn("h-3.5", pick(TITLE_W, i))} />
-              <Bar className="h-3 w-24 shrink-0" />
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="grid gap-5 sm:grid-cols-2">
-        {[0, 1].map((i) => (
-          <div key={i} className="flex flex-col gap-2">
-            <Bar className="h-2.5 w-24" />
-            <div className="flex h-9 items-end gap-1.5">
-              {[16, 28, 10, 34, 22, 30, 14].map((h, j) => (
-                <span
-                  key={j}
-                  className="bg-muted flex-1 animate-pulse rounded-sm motion-reduce:animate-none"
-                  style={{ height: h }}
-                />
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-      <div>
-        <Bar className="h-2.5 w-24" />
-        <div className="mt-2 flex flex-col gap-1.5">
-          {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
-            <div key={i} className="flex items-baseline justify-between gap-3">
-              <Bar className={cn("h-3.5", pick(TITLE_W, i))} />
-              <Bar className="h-3 w-20 shrink-0" />
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /** The O1 "needs you" strip — equal channels on a hairline grid. */
 export function SkeletonQueue({ tiles = 4 }: { tiles?: number }) {
   return (
@@ -505,29 +459,22 @@ export function SkeletonFeed({
   );
 }
 
-/** A coach card — the name, the breakdown toggle, five numbers. */
-export function SkeletonCoachCards({
-  n = 2,
-  toggle = true,
-}: {
-  n?: number;
-  toggle?: boolean;
-}) {
+export function SkeletonCoachCards({ n = 2 }: { n?: number }) {
   return (
     <div aria-hidden className="flex flex-col gap-4">
       {Array.from({ length: n }).map((_, i) => (
         <div key={i} className={cn(cardClass(), "flex flex-col gap-4")}>
-          <div className="flex items-center justify-between gap-2">
-            <Bar className={cn("h-4", pick(TITLE_W, i))} />
-            {toggle && <Bar className="h-8 w-28 shrink-0 rounded-md" />}
-          </div>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
-            {Array.from({ length: 5 }).map((_, j) => (
-              <div key={j} className="flex flex-col gap-2">
-                <Bar className="h-6 w-12" />
-                <Bar className="h-2.5 w-16" />
+          <Bar className={cn("h-4", pick(TITLE_W, i))} />
+          <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
+            {[0, 1, 2].map((j) => (
+              <div key={j} className="space-y-2">
+                <Bar className="h-6 w-14" />
+                <Bar className="h-2.5 w-24" />
               </div>
             ))}
+          </div>
+          <div className="border-t border-dashed pt-3">
+            <Bar className="h-3 w-64" />
           </div>
         </div>
       ))}
@@ -765,7 +712,7 @@ export function CoachesSkeleton() {
           <SkeletonTabs tabs={3} />
           <Bar className="h-2.5 w-32" />
         </div>
-        <SkeletonCoachCards n={1} toggle={false} />
+        <SkeletonCoachCards n={1} />
       </div>
     </Frame>
   );

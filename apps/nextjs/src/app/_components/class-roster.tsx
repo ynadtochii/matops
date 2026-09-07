@@ -9,6 +9,7 @@ import {
   attendanceCounts,
   bulkMarkTargets,
   canMarkAttendance,
+  classEndsAt,
   isBjjAcademy,
   isStaffRole,
 } from "@matops/domain";
@@ -38,8 +39,19 @@ import {
 } from "./primitives";
 import { SkeletonRoster } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
+import { useMinuteClock } from "./use-clock";
 
-type ClassRow = RouterOutputs["class"]["week"][number];
+type ClassRow = Pick<
+  RouterOutputs["class"]["week"][number],
+  | "id"
+  | "status"
+  | "startsAt"
+  | "deletedAt"
+  | "instructorId"
+  | "instructorName"
+  | "description"
+  | "durationMinutes"
+>;
 
 const BLANK_VISITOR = { firstName: "", lastName: "", phone: "" };
 
@@ -156,6 +168,7 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
   const queryClient = useQueryClient();
   const invalidateFor = useInvalidate();
   const classId = cls.id;
+  const now = useMinuteClock();
   const [walkInIds, setWalkInIds] = useState<Set<string>>(new Set());
   const [walkInQuery, setWalkInQuery] = useState("");
   const [visitor, setVisitor] = useState(BLANK_VISITOR);
@@ -166,7 +179,7 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
       startsAt: new Date(cls.startsAt),
       deletedAt: cls.deletedAt ? new Date(cls.deletedAt) : null,
     },
-    new Date(),
+    now,
   );
 
   const classList = useQuery(
@@ -198,7 +211,7 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
 
   const invalidate = async () => {
     setTouched(true);
-    await queryClient.invalidateQueries(trpc.attendance.list.pathFilter());
+    await queryClient.invalidateQueries(trpc.attendance.pathFilter());
   };
   const onError = (err: { message: string }) =>
     toast.error(err.message || "Action failed");
@@ -289,7 +302,19 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
     }),
   );
 
-  if (classList.isPending || theme.isPending) return <SkeletonRoster />;
+  const finish = useMutation(
+    trpc.attendance.finish.mutationOptions({
+      onError,
+      onSuccess: async () => {
+        toast.success("Attendance reviewed");
+        await invalidateFor("attendance");
+      },
+      onSettled: () => invalidate(),
+    }),
+  );
+
+  if (classList.isPending || (bjj && theme.isPending))
+    return <SkeletonRoster />;
   if (classList.isError) {
     return (
       <ErrorState
@@ -300,7 +325,11 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
   }
 
   // Members not already on the class list — the walk-in candidates.
-  const onList = new Set(classList.data.rows.map((r) => r.studentId));
+  const rows = classList.data.rows.filter(
+    (row) =>
+      row.bookingStatus !== "cancelled" || row.attendanceStatus !== "unmarked",
+  );
+  const onList = new Set(rows.map((r) => r.studentId));
   const walkInCandidates = (members.data ?? []).filter(
     (m) => !onList.has(m.id),
   );
@@ -308,8 +337,20 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
   const matchingCandidates = query
     ? walkInCandidates.filter((m) => m.name.toLowerCase().includes(query))
     : walkInCandidates;
-  const rows = classList.data.rows;
   const counts = classList.data.counts;
+  const review = classList.data.review;
+  const ended =
+    classEndsAt({
+      startsAt: new Date(cls.startsAt),
+      durationMinutes: cls.durationMinutes,
+    }) <= now.getTime();
+  const saving =
+    mark.isPending ||
+    markAll.isPending ||
+    markVisitor.isPending ||
+    addWalkIn.isPending ||
+    addVisitor.isPending ||
+    finish.isPending;
   const dropIns = classList.data.dropIns;
   const pendingMarks = bulkMarkTargets(rows).length;
   // Gate on the same schema the server enforces, so a name or phone the API
@@ -321,6 +362,54 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
 
   return (
     <div className="flex flex-col gap-4">
+      {ended && cls.status !== "cancelled" && !cls.deletedAt && (
+        <div className="border-border flex flex-col gap-3 rounded-md border p-3">
+          <p role="status" className="text-sm font-medium">
+            {review.reviewed
+              ? review.present === 0
+                ? "Nobody attended, confirmed"
+                : "Attendance reviewed"
+              : "Attendance needs review"}
+          </p>
+          <p className="text-muted-foreground text-sm">
+            {review.reviewed && review.reviewedAt
+              ? `Reviewed ${new Date(review.reviewedAt).toLocaleString()}. Changing the roster requires another review.`
+              : review.unmarked > 0
+                ? `Mark the remaining ${review.unmarked} ${review.unmarked === 1 ? "person" : "people"} present or absent, including visitors.`
+                : review.total === 0
+                  ? "No people are listed. Add anyone who attended, or confirm that nobody attended."
+                  : "Check the member and visitor marks, then finish attendance."}
+          </p>
+          {!review.reviewed && canMark && (
+            <Button
+              className="self-start"
+              busy={finish.isPending}
+              disabled={saving}
+              onClick={() =>
+                finish.mutate({
+                  id: classId,
+                  fingerprint: review.fingerprint,
+                  nobodyAttended: review.present === 0 && review.unmarked === 0,
+                })
+              }
+            >
+              {review.present === 0 && review.unmarked === 0
+                ? "Nobody attended"
+                : "Finish attendance"}
+            </Button>
+          )}
+          {!review.reviewed && !canMark && (
+            <p className="text-muted-foreground text-sm">
+              This class is outside your attendance editing window.
+            </p>
+          )}
+          {finish.isError && (
+            <p role="alert" className="text-error text-sm">
+              {finish.error.message}
+            </p>
+          )}
+        </div>
+      )}
       <div className="flex flex-col gap-3">
         {bjj && (
           <>
@@ -341,23 +430,23 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <p className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-xs tabular-nums">
-            {canMark ? (
+            {canMark || ended ? (
               <>
                 <span className="flex items-center gap-1.5">
                   <MarkDot kind="present" filled />
-                  {counts.present} present
+                  {review.present} present
                 </span>
                 <span className="flex items-center gap-1.5">
                   <MarkDot kind="absent" filled />
-                  {counts.absent} absent
+                  {review.absent} absent
                 </span>
-                {counts.unmarked > 0 ? (
+                {review.unmarked > 0 ? (
                   <span className="text-foreground flex items-center gap-1.5">
                     <MarkDot kind="present" filled={false} />
-                    {counts.unmarked} to mark
+                    {review.unmarked} to mark
                   </span>
                 ) : (
-                  rows.length > 0 && (
+                  review.total > 0 && (
                     <span className="text-success">All marked</span>
                   )
                 )}
@@ -385,18 +474,18 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
         </div>
         {canMark && (
           <MarkRule
-            present={counts.present}
-            absent={counts.absent}
-            total={rows.length}
+            present={review.present}
+            absent={review.absent}
+            total={review.total}
           />
         )}
       </div>
 
       {rows.length === 0 ? (
-        <EmptyState title="No one booked yet.">
+        <EmptyState title="No members listed.">
           {canMark
-            ? "Mark people present as they arrive — add a walk-in below."
-            : "Bookings will show up here."}
+            ? "Add any members who attended as walk-ins below."
+            : "This class has no member attendance records."}
         </EmptyState>
       ) : (
         <ul className={ROSTER_LIST}>
@@ -406,7 +495,7 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
             const name = r.name ?? "Member";
             return (
               <li key={r.studentId} className={ROSTER_ROW}>
-                {canMark && (
+                {(canMark || ended) && (
                   <MarkDot
                     kind={absent ? "absent" : "present"}
                     filled={present || absent}
@@ -415,6 +504,11 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
                 <span className="min-w-0 flex-1 truncate text-sm" title={name}>
                   {name}
                 </span>
+                {!canMark && ended && (
+                  <RowTag>
+                    {present ? "present" : absent ? "absent" : "unmarked"}
+                  </RowTag>
+                )}
                 {r.role && isStaffRole({ role: r.role }) && (
                   <RowTag>{r.role}</RowTag>
                 )}
@@ -477,7 +571,7 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
               const name = `${d.firstName} ${d.lastName}`.trim();
               return (
                 <li key={d.id} className={ROSTER_ROW}>
-                  {canMark && (
+                  {(canMark || ended) && (
                     <MarkDot
                       kind={absent ? "absent" : "present"}
                       filled={present || absent}
@@ -486,6 +580,11 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
                   <span className="min-w-0 flex-1 truncate text-sm">
                     {name}
                   </span>
+                  {!canMark && ended && (
+                    <RowTag>
+                      {present ? "present" : absent ? "absent" : "unmarked"}
+                    </RowTag>
+                  )}
                   {d.bookingStatus === "booked" && <RowTag>booked</RowTag>}
                   <span className="text-muted-foreground shrink-0 font-mono text-xs tabular-nums">
                     {d.phone}

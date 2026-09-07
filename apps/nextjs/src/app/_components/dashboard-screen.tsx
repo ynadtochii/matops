@@ -20,7 +20,6 @@ import {
   isFirstRun,
   isStaff as isStaffOf,
   leadQueues,
-  needsAttendance,
   rosterSummary,
   runsBranch,
   startOfDay,
@@ -126,6 +125,14 @@ export function DashboardScreen() {
     ...trpc.class.week.queryOptions(dashboardWeekWindow(now)),
     enabled: isStaff,
   });
+  const attendance = useQuery({
+    ...trpc.attendance.reviewQueue.queryOptions({
+      status: "needs_review",
+      offset: 0,
+    }),
+    enabled: isStaff,
+    refetchInterval: 60_000,
+  });
   const memberList = useQuery({
     ...trpc.membership.members.queryOptions({ audience: "all" }),
     enabled: isStaff,
@@ -162,7 +169,12 @@ export function DashboardScreen() {
     overdue,
   } = rosterSummary(members);
   const weekCount = upcomingClassCount(weekRows, today);
-  const unmarked = weekRows.filter((r) => needsAttendance(r, now));
+  const unmarked = weekRows.filter(
+    (r) =>
+      r.status !== "cancelled" &&
+      classEndsAt(r) <= now.getTime() &&
+      !r.attendanceReviewed,
+  );
   const unmarkedIds = new Set(unmarked.map((r) => r.id));
   const { newLeads, trainedNotJoined } = leadQueues(
     (leads.data ?? []).map((l) => ({
@@ -179,8 +191,8 @@ export function DashboardScreen() {
     {
       key: "attendance",
       href: href("/attendance"),
-      count: unmarked.length,
-      label: "Classes to mark",
+      count: attendance.data?.needsReview ?? 0,
+      label: "Classes to review",
     },
     {
       key: "approvals",
@@ -229,6 +241,7 @@ export function DashboardScreen() {
   // "counting", a bare 0 reads as "nothing to do".
   const queueLoading =
     week.isPending ||
+    attendance.isPending ||
     memberList.isPending ||
     (isOwner && (leads.isPending || claims.isPending));
   const numbersLoading = week.isPending || memberList.isPending;
@@ -307,10 +320,18 @@ export function DashboardScreen() {
                 )}
               </PanelNotice>
             ) : queue.length === 0 ? (
-              <PanelNotice title="All clear.">
-                {isOwner
-                  ? "Every class is marked, everyone is approved, every payment is settled."
-                  : "Every class is marked and everyone is approved."}
+              <PanelNotice
+                title={
+                  attendance.isError
+                    ? "Attendance could not be checked."
+                    : "All clear."
+                }
+              >
+                {attendance.isError
+                  ? "Retry below to check past classes."
+                  : isOwner
+                    ? "All past classes reviewed, everyone approved, and no payments waiting for confirmation."
+                    : "All past classes reviewed and everyone approved."}
               </PanelNotice>
             ) : (
               queue.map((i) => (
@@ -325,6 +346,20 @@ export function DashboardScreen() {
             )}
           </Panel>
         )}
+
+        {attendance.isError ? (
+          <ErrorState
+            label="attendance reviews"
+            onRetry={() => void attendance.refetch()}
+          />
+        ) : attendance.data?.needsReview === 0 ? (
+          <Link
+            href={href("/attendance")}
+            className="text-success mt-3 inline-block text-sm underline underline-offset-4"
+          >
+            All past classes reviewed
+          </Link>
+        ) : null}
 
         {/* Context, not readings — a caption under the panel, so the counts
             that need an action stay the only numbers competing for the eye. */}
@@ -545,7 +580,7 @@ function DayRow({
       </span>
       {unmarked && (
         <span className="text-warning border-warning/40 shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium">
-          Unmarked
+          Needs review
         </span>
       )}
       {mine ? (

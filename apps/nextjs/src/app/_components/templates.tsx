@@ -14,7 +14,12 @@ import {
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
-import { Dialog, DialogContent, DialogTitle } from "@matops/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@matops/ui/dialog";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
 import { Select } from "@matops/ui/select";
@@ -114,6 +119,7 @@ export function Templates({
   const me = useEntity();
 
   const [form, setForm] = useState<FormState | null>(null);
+  const [daysError, setDaysError] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const academyTz = me.timeZone ?? browserTz();
   const owner = runsBranch(me);
@@ -125,6 +131,7 @@ export function Templates({
 
   const closeForm = () => {
     setForm(null);
+    setDaysError(false);
     setEditingId(null);
     onOpened?.();
   };
@@ -179,8 +186,13 @@ export function Templates({
 
   const submit = () => {
     if (!shown) return;
-    if (shown.title.trim().length < 1 || shown.daysOfWeek.length === 0) {
-      toast.error("Add a title and pick at least one day");
+    if (shown.title.trim().length < 1) {
+      toast.error("Add a class name");
+      return;
+    }
+    if (shown.daysOfWeek.length === 0) {
+      setDaysError(true);
+      document.getElementById("tpl-day-0")?.focus();
       return;
     }
     const payload = {
@@ -322,226 +334,315 @@ export function Templates({
         open={shown !== null}
         onOpenChange={(next) => !next && closeForm()}
       >
-        <DialogContent>
+        <DialogContent className="max-h-[90dvh] max-w-xl gap-0 overflow-hidden p-0 sm:p-0">
           {shown !== null && (
             <form
-              className="flex flex-col gap-4"
+              className="flex min-h-0 flex-col"
               onSubmit={(e) => {
                 e.preventDefault();
                 submit();
               }}
             >
-              <DialogTitle>
-                {openId ? "Edit template" : "New template"}
-              </DialogTitle>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="tpl-title">Title</Label>
-                <Input
-                  id="tpl-title"
-                  value={shown.title}
-                  onChange={(e) => setForm({ ...shown, title: e.target.value })}
-                  placeholder="Evening No-Gi"
-                  maxLength={80}
-                  required
-                />
+              <div className="shrink-0 border-b px-5 py-5 sm:px-6">
+                <DialogTitle className="text-xl">
+                  {openId ? "Edit template" : "New template"}
+                </DialogTitle>
+                <DialogDescription className="mt-1 pr-6">
+                  Set the weekly schedule for a recurring class.
+                </DialogDescription>
               </div>
-
-              <div className="flex flex-col gap-1.5">
-                <Label>Days</Label>
-                <div className="flex flex-wrap gap-1.5">
-                  {DAY_LABELS.map((label, day) => {
-                    const on = shown.daysOfWeek.includes(day);
-                    return (
-                      <button
-                        key={day}
-                        type="button"
-                        aria-pressed={on}
-                        onClick={() =>
+              <div className="min-h-0 space-y-6 overflow-y-auto overscroll-contain px-5 py-5 sm:px-6">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="tpl-title">Class name</Label>
+                  <Input
+                    id="tpl-title"
+                    value={shown.title}
+                    onChange={(e) =>
+                      setForm({ ...shown, title: e.target.value })
+                    }
+                    placeholder="Evening No-Gi"
+                    maxLength={80}
+                    required
+                  />
+                </div>
+                <section
+                  aria-labelledby="tpl-schedule-heading"
+                  className="space-y-4 border-y py-5"
+                >
+                  <h3
+                    id="tpl-schedule-heading"
+                    className="text-muted-foreground font-mono text-xs tracking-wider uppercase"
+                  >
+                    Weekly schedule
+                  </h3>
+                  <fieldset className="min-w-0">
+                    <legend className="mb-2 text-sm font-medium">
+                      Repeat on
+                    </legend>
+                    <div className="grid grid-cols-7 gap-1 sm:gap-2">
+                      {DAY_LABELS.map((label, day) => {
+                        const on = shown.daysOfWeek.includes(day);
+                        return (
+                          <Button
+                            key={day}
+                            id={`tpl-day-${day}`}
+                            type="button"
+                            variant="outline"
+                            aria-pressed={on}
+                            aria-describedby="tpl-days-help"
+                            onClick={() => {
+                              setDaysError(false);
+                              setForm({
+                                ...shown,
+                                daysOfWeek: on
+                                  ? shown.daysOfWeek.filter((d) => d !== day)
+                                  : [...shown.daysOfWeek, day],
+                              });
+                            }}
+                            className={cn(
+                              "h-11 min-w-0 flex-col gap-1 px-0 text-xs sm:text-sm",
+                              on &&
+                                "border-foreground bg-secondary text-foreground hover:bg-secondary/80",
+                            )}
+                          >
+                            {label}
+                            <span
+                              aria-hidden="true"
+                              className={cn(
+                                "h-0.5 w-3 rounded-full",
+                                on ? "bg-foreground" : "bg-transparent",
+                              )}
+                            />
+                          </Button>
+                        );
+                      })}
+                    </div>
+                    <p
+                      id="tpl-days-help"
+                      role={daysError ? "alert" : undefined}
+                      className={cn(
+                        "mt-2 text-xs",
+                        daysError ? "text-error" : "text-muted-foreground",
+                      )}
+                    >
+                      {daysError
+                        ? "Choose at least one day."
+                        : shown.daysOfWeek.length > 0
+                          ? `Repeats every ${DAY_LABELS.filter((_, day) => shown.daysOfWeek.includes(day)).join(", ")}.`
+                          : "Choose the days this class repeats each week."}
+                    </p>
+                  </fieldset>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="tpl-time">Start time</Label>
+                      <Input
+                        id="tpl-time"
+                        type="time"
+                        className="font-mono tabular-nums dark:[color-scheme:dark]"
+                        value={shown.time}
+                        onChange={(e) =>
+                          setForm({ ...shown, time: e.target.value })
+                        }
+                        required
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="tpl-duration">Duration (min)</Label>
+                      <Input
+                        id="tpl-duration"
+                        type="number"
+                        className="font-mono tabular-nums"
+                        min={5}
+                        max={600}
+                        value={shown.durationMinutes}
+                        onChange={(e) =>
                           setForm({
                             ...shown,
-                            daysOfWeek: on
-                              ? shown.daysOfWeek.filter((d) => d !== day)
-                              : [...shown.daysOfWeek, day],
+                            durationMinutes: e.target.valueAsNumber,
                           })
                         }
-                        className={`rounded-md border px-3 py-1.5 text-sm ${
-                          on
-                            ? "bg-primary text-primary-foreground border-primary"
-                            : "bg-background"
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="tpl-time">Start</Label>
-                  <Input
-                    id="tpl-time"
-                    type="time"
-                    value={shown.time}
-                    onChange={(e) =>
-                      setForm({ ...shown, time: e.target.value })
-                    }
-                    required
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="tpl-duration">Duration (min)</Label>
-                  <Input
-                    id="tpl-duration"
-                    type="number"
-                    min={5}
-                    max={600}
-                    value={shown.durationMinutes}
-                    onChange={(e) =>
-                      setForm({
-                        ...shown,
-                        durationMinutes: e.target.valueAsNumber,
-                      })
-                    }
-                    required
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="tpl-capacity">Capacity</Label>
-                  <Input
-                    id="tpl-capacity"
-                    type="number"
-                    min={0}
-                    max={1000}
-                    value={shown.capacity}
-                    onChange={(e) =>
-                      setForm({ ...shown, capacity: e.target.valueAsNumber })
-                    }
-                    required
-                  />
-                </div>
-                <label
-                  title="Only classes you share appear on your booking link and in the public API. Kids classes and competition training stay off unless you tick this."
-                  className="text-muted-foreground hover:text-foreground flex min-h-11 cursor-pointer items-center gap-2 text-sm sm:col-span-2"
-                >
-                  <input
-                    type="checkbox"
-                    className="accent-brand size-4"
-                    checked={shown.publicBookable}
-                    onChange={(e) =>
-                      setForm({ ...shown, publicBookable: e.target.checked })
-                    }
-                  />
-                  Share this class publicly
-                </label>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="tpl-instructor">Coach</Label>
-                  <Select
-                    id="tpl-instructor"
-                    value={shown.instructorId}
-                    onChange={(e) =>
-                      setForm({ ...shown, instructorId: e.target.value })
-                    }
-                  >
-                    <InstructorOptions
-                      value={shown.instructorId}
-                      fallbackLabel={editingTemplate?.instructorName ?? "You"}
-                      noneLabel={bjj ? undefined : "Nobody"}
-                    />
-                  </Select>
-                </div>
-                <div className="flex flex-col gap-1.5 sm:col-span-2">
-                  <Label htmlFor="tpl-description">Description</Label>
-                  <Textarea
-                    id="tpl-description"
-                    rows={3}
-                    maxLength={500}
-                    value={shown.description}
-                    placeholder="What happens in this session. Optional."
-                    onChange={(e) =>
-                      setForm({ ...shown, description: e.target.value })
-                    }
-                  />
-                </div>
-                {bjj && (
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="tpl-discipline">Discipline</Label>
-                    <Select
-                      id="tpl-discipline"
-                      value={shown.discipline}
-                      onChange={(e) =>
-                        setForm({
-                          ...shown,
-                          discipline: e.target.value as Discipline | "",
-                        })
-                      }
-                    >
-                      <option value="">None</option>
-                      {DISCIPLINES.map((d) => (
-                        <option key={d} value={d}>
-                          {d.toUpperCase()}
-                        </option>
-                      ))}
-                    </Select>
+                        required
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="tpl-capacity">Capacity</Label>
+                      <Input
+                        id="tpl-capacity"
+                        type="number"
+                        className="font-mono tabular-nums"
+                        min={0}
+                        max={1000}
+                        value={shown.capacity}
+                        onChange={(e) =>
+                          setForm({
+                            ...shown,
+                            capacity: e.target.valueAsNumber,
+                          })
+                        }
+                        required
+                      />
+                    </div>
                   </div>
-                )}
-                {bjj && tracks.length > 1 && (
                   <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="tpl-track">Curriculum</Label>
-                    <Select
-                      id="tpl-track"
-                      value={shown.curriculumTrackId}
-                      onChange={(e) =>
-                        setForm({ ...shown, curriculumTrackId: e.target.value })
-                      }
-                    >
-                      <option value="">
-                        {defaultTrack
-                          ? `${defaultTrack.name} (default)`
-                          : "Default"}
-                      </option>
-                      {tracks
-                        .filter((t) => !t.isDefault)
-                        .map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.name}
-                          </option>
-                        ))}
-                    </Select>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <Label>Time zone</Label>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-sm">{shown.timeZone}</span>
-                  {shown.timeZone === academyTz ? (
-                    <span className="text-muted-foreground text-xs">
-                      Your academy time zone, set in Settings.
-                    </span>
-                  ) : (
-                    <>
-                      <span className="text-muted-foreground text-xs">
-                        Your academy runs on {academyTz}.
+                    <p className="text-muted-foreground text-xs">Time zone</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-xs break-all">
+                        {shown.timeZone}
                       </span>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() =>
-                          setForm({ ...shown, timeZone: academyTz })
+                      {shown.timeZone === academyTz ? (
+                        <span className="text-muted-foreground text-xs">
+                          Set in academy settings.
+                        </span>
+                      ) : (
+                        <>
+                          <span className="text-muted-foreground text-xs">
+                            Your academy runs on {academyTz}.
+                          </span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              setForm({ ...shown, timeZone: academyTz })
+                            }
+                          >
+                            Move to {academyTz}
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </section>
+                <section
+                  aria-labelledby="tpl-details-heading"
+                  className="space-y-4"
+                >
+                  <h3
+                    id="tpl-details-heading"
+                    className="text-muted-foreground font-mono text-xs tracking-wider uppercase"
+                  >
+                    Class details
+                  </h3>
+                  <div className="grid gap-4 sm:grid-cols-2 [&>div]:min-w-0">
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="tpl-instructor">Coach</Label>
+                      <Select
+                        className="w-full min-w-0"
+                        id="tpl-instructor"
+                        value={shown.instructorId}
+                        onChange={(e) =>
+                          setForm({ ...shown, instructorId: e.target.value })
                         }
                       >
-                        Move to {academyTz}
-                      </Button>
-                    </>
-                  )}
-                </div>
+                        <InstructorOptions
+                          value={shown.instructorId}
+                          fallbackLabel={
+                            editingTemplate?.instructorName ?? "You"
+                          }
+                          noneLabel={bjj ? undefined : "Nobody"}
+                        />
+                      </Select>
+                    </div>
+                    {bjj && (
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="tpl-discipline">Discipline</Label>
+                        <Select
+                          className="w-full min-w-0"
+                          id="tpl-discipline"
+                          value={shown.discipline}
+                          onChange={(e) =>
+                            setForm({
+                              ...shown,
+                              discipline: e.target.value as Discipline | "",
+                            })
+                          }
+                        >
+                          <option value="">None</option>
+                          {DISCIPLINES.map((d) => (
+                            <option key={d} value={d}>
+                              {d.toUpperCase()}
+                            </option>
+                          ))}
+                        </Select>
+                      </div>
+                    )}
+                    {bjj && tracks.length > 1 && (
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="tpl-track">Curriculum</Label>
+                        <Select
+                          className="w-full min-w-0"
+                          id="tpl-track"
+                          value={shown.curriculumTrackId}
+                          onChange={(e) =>
+                            setForm({
+                              ...shown,
+                              curriculumTrackId: e.target.value,
+                            })
+                          }
+                        >
+                          <option value="">
+                            {defaultTrack
+                              ? `${defaultTrack.name} (default)`
+                              : "Default"}
+                          </option>
+                          {tracks
+                            .filter((t) => !t.isDefault)
+                            .map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.name}
+                              </option>
+                            ))}
+                        </Select>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="tpl-description">
+                      Description{" "}
+                      <span className="text-muted-foreground font-normal">
+                        (optional)
+                      </span>
+                    </Label>
+                    <Textarea
+                      id="tpl-description"
+                      rows={2}
+                      className="min-h-20 resize-y"
+                      maxLength={500}
+                      value={shown.description}
+                      placeholder="What should students know about this class?"
+                      onChange={(e) =>
+                        setForm({ ...shown, description: e.target.value })
+                      }
+                    />
+                  </div>
+                  <label className="hover:bg-muted/50 flex cursor-pointer items-start gap-3 rounded-md border p-3 transition-colors">
+                    <input
+                      type="checkbox"
+                      className="accent-primary focus-visible:ring-ring/50 mt-0.5 size-5 shrink-0 rounded-sm focus-visible:ring-[3px]"
+                      checked={shown.publicBookable}
+                      aria-describedby="tpl-public-help"
+                      onChange={(e) =>
+                        setForm({ ...shown, publicBookable: e.target.checked })
+                      }
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium">
+                        Share this class publicly
+                      </span>
+                      <span
+                        id="tpl-public-help"
+                        className="text-muted-foreground mt-1 block text-xs leading-relaxed"
+                      >
+                        Show this class on your public booking page.
+                      </span>
+                    </span>
+                  </label>
+                </section>
               </div>
-
-              <div className="flex gap-2">
+              <div className="flex shrink-0 items-center justify-end gap-2 border-t px-5 py-4 sm:px-6">
+                <Button type="button" variant="ghost" onClick={closeForm}>
+                  Cancel
+                </Button>
                 <Button type="submit" disabled={busy}>
                   {busy && <Spinner size="sm" className="text-current" />}
                   {busy
@@ -549,9 +650,6 @@ export function Templates({
                     : openId
                       ? "Save changes"
                       : "Create template"}
-                </Button>
-                <Button type="button" variant="ghost" onClick={closeForm}>
-                  Cancel
                 </Button>
               </div>
             </form>

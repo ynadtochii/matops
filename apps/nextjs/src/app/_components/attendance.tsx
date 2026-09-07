@@ -1,76 +1,232 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
+import type { RouterOutputs } from "@matops/api";
+import { Button } from "@matops/ui/button";
 import {
-  ATTENDANCE_BACKFILL_DAYS,
-  attendanceWindow,
-  DAY_MS,
-} from "@matops/domain";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@matops/ui/dialog";
+import { Input } from "@matops/ui/input";
+import { Label } from "@matops/ui/label";
 import { Select } from "@matops/ui/select";
 
-import { dateTimeFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { ClassRoster } from "./class-roster";
-import { RESOLVE } from "./primitives";
+import { useEntity } from "./entity";
+import { AttendanceSkeleton } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 
-/**
- * O5 Attendance (spec O5, slice 3.3). Staff pick a class from the backfill
- * window and work its roster — the shared `ClassRoster`
- * panel, which the O2 schedule's class modal shows too.
- */
+type ReviewClass = RouterOutputs["attendance"]["reviewQueue"]["rows"][number];
+
+function reviewLabel(review: ReviewClass["review"]) {
+  if (review.reviewed) {
+    return review.present === 0 ? "Nobody attended, confirmed" : "Reviewed";
+  }
+  if (review.total === 0) return "Empty roster, needs review";
+  if (review.unmarked === review.total) return "Not started";
+  if (review.unmarked > 0) return `${review.unmarked} people unmarked`;
+  return "Ready to finish";
+}
+
 export function Attendance() {
   const trpc = useTRPC();
-  const [classId, setClassId] = useState<string>("");
-  const [openedAt] = useState(() => Date.now());
-
-  const classes = useQuery(
-    trpc.class.week.queryOptions(attendanceWindow(new Date(openedAt))),
-  );
-
-  // The window is snapped to a UTC day so the server and the browser build the
-  // same cache key. Trimming here is what keeps the picker to the real 14 days.
-  const options = useMemo(() => {
-    const cutoff = openedAt - ATTENDANCE_BACKFILL_DAYS * DAY_MS;
-    return [...(classes.data ?? [])]
-      .filter((c) => new Date(c.startsAt).getTime() >= cutoff)
-      .reverse();
-  }, [classes.data, openedAt]);
-  const selected = options.find((c) => c.id === classId);
+  const academy = useEntity();
+  const [status, setStatus] = useState<"needs_review" | "all">("needs_review");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [offset, setOffset] = useState(0);
+  const [selected, setSelected] = useState<ReviewClass | null>(null);
+  const validDates = !from || !to || from <= to;
+  const classes = useQuery({
+    ...trpc.attendance.reviewQueue.queryOptions({
+      status,
+      from: from || undefined,
+      to: to || undefined,
+      offset,
+    }),
+    enabled: validDates,
+    refetchInterval: 60_000,
+  });
+  const format = new Intl.DateTimeFormat(undefined, {
+    timeZone: classes.data?.timeZone ?? academy.timeZone ?? undefined,
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
 
   return (
-    <section className="flex flex-col gap-4">
-      <Select
-        aria-label="Class to take attendance for"
-        value={classId}
-        onChange={(e) => setClassId(e.target.value)}
-        className="w-full"
-      >
-        <option value="">Pick a class…</option>
-        {options.map((c) => (
-          <option key={c.id} value={c.id}>
-            {dateTimeFmt.format(new Date(c.startsAt))} · {c.title}
-            {c.status === "cancelled" ? " (cancelled)" : ""}
-          </option>
-        ))}
-      </Select>
-
-      {classes.isError ? (
+    <section className="flex flex-col gap-5">
+      <p className="text-muted-foreground text-sm">
+        {academy.name} · Times in{" "}
+        {classes.data?.timeZone ?? academy.timeZone ?? "the branch time zone"}.
+        Switch branches using the branch picker.
+      </p>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="space-y-1.5">
+          <Label htmlFor="attendance-status">Show</Label>
+          <Select
+            id="attendance-status"
+            value={status}
+            onChange={(event) => {
+              setStatus(event.target.value === "all" ? "all" : "needs_review");
+              setOffset(0);
+            }}
+          >
+            <option value="needs_review">Needs review</option>
+            <option value="all">All past classes</option>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="attendance-from">From</Label>
+          <Input
+            id="attendance-from"
+            type="date"
+            value={from}
+            onChange={(event) => {
+              setFrom(event.target.value);
+              setOffset(0);
+            }}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="attendance-to">To</Label>
+          <Input
+            id="attendance-to"
+            type="date"
+            value={to}
+            aria-invalid={!validDates}
+            aria-describedby={!validDates ? "attendance-date-error" : undefined}
+            onChange={(event) => {
+              setTo(event.target.value);
+              setOffset(0);
+            }}
+          />
+        </div>
+      </div>
+      {!validDates ? (
+        <p
+          id="attendance-date-error"
+          role="alert"
+          className="text-error text-sm"
+        >
+          Choose an end date on or after the start date.
+        </p>
+      ) : classes.isPending ? (
+        <AttendanceSkeleton />
+      ) : classes.isError ? (
         <ErrorState
-          label="your classes"
+          label="attendance reviews"
           onRetry={() => void classes.refetch()}
         />
-      ) : selected ? (
-        <div key={selected.id} className={RESOLVE}>
-          <ClassRoster cls={selected} />
-        </div>
-      ) : !classes.isPending && options.length === 0 ? (
-        <EmptyState title="No recent classes.">
-          Attendance opens once a class has run. Add classes on the schedule.
-        </EmptyState>
-      ) : null}
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p role="status" className="text-sm font-medium">
+              {classes.data.needsReview === 0
+                ? "All past classes reviewed"
+                : `${classes.data.needsReview} ${classes.data.needsReview === 1 ? "class needs" : "classes need"} attendance review`}
+            </p>
+            {(from || to) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setFrom("");
+                  setTo("");
+                  setOffset(0);
+                }}
+              >
+                Clear dates
+              </Button>
+            )}
+          </div>
+          {classes.data.rows.length === 0 ? (
+            <EmptyState
+              title={
+                offset > 0
+                  ? "No more classes on this page."
+                  : "No classes to show."
+              }
+            >
+              {from || to
+                ? "Try another date range or clear the dates."
+                : "Use All past classes to see reviewed attendance. New classes appear here after they end."}
+            </EmptyState>
+          ) : (
+            <ul className="divide-border divide-y">
+              {classes.data.rows.map((cls) => (
+                <li
+                  key={cls.id}
+                  className="flex flex-wrap items-center justify-between gap-3 py-4"
+                >
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <p className="text-muted-foreground text-xs">
+                      {format.format(new Date(cls.startsAt))}
+                    </p>
+                    <p className="font-medium break-words">{cls.title}</p>
+                    <p className="text-muted-foreground text-sm">
+                      {cls.instructorName ?? "No coach assigned"}
+                    </p>
+                    <p className="text-sm">{reviewLabel(cls.review)}</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    aria-label={`${cls.review.reviewed ? "View" : "Review"} ${cls.title}, ${format.format(new Date(cls.startsAt))}`}
+                    onClick={() => setSelected(cls)}
+                  >
+                    {cls.review.reviewed ? "View" : "Review attendance"}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {(offset > 0 ||
+            offset + classes.data.rows.length < classes.data.total) && (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <Button
+                variant="outline"
+                disabled={offset === 0}
+                onClick={() => setOffset(Math.max(0, offset - 50))}
+              >
+                Previous
+              </Button>
+              <p className="text-muted-foreground text-sm">
+                Page {Math.floor(offset / 50) + 1} · {classes.data.total}{" "}
+                classes
+              </p>
+              <Button
+                variant="outline"
+                disabled={offset + 50 >= classes.data.total}
+                onClick={() => setOffset(offset + 50)}
+              >
+                Next
+              </Button>
+            </div>
+          )}
+        </>
+      )}
+      <Dialog
+        open={selected !== null}
+        onOpenChange={(open) => !open && setSelected(null)}
+      >
+        <DialogContent>
+          {selected && (
+            <>
+              <DialogTitle>{selected.title}</DialogTitle>
+              <DialogDescription>
+                {format.format(new Date(selected.startsAt))} ·{" "}
+                {selected.durationMinutes} min
+              </DialogDescription>
+              <ClassRoster key={selected.id} cls={selected} />
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
