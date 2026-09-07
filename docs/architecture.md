@@ -1,5 +1,23 @@
 # matops — Architecture Design Doc (v1)
 
+## Explicit attendance review (ADR 133)
+
+Status: implementation in progress. [ADR 133](/Users/kuna/projects/matops/docs/issues/133-explicit-attendance-review.md) records the decision.
+Each class stores a nullable review timestamp, reviewer user ID and roster signature.
+The signature is a stable value from sorted member and visitor row IDs, booking states and attendance states.
+A class needs review when it has no saved review or its current signature differs from the saved signature.
+The roster reader returns rows and their signature from the same SQL statement snapshot.
+Finishing compares the supplied signature with the current roster before saving the reviewer and timestamp.
+It rejects stale rosters, unresolved attendance, cancelled classes and classes that have not ended.
+A zero-present register requires explicit confirmation, including an empty register.
+
+Branch-scoped readers provide the all-time count and oldest-first list with 50-row pages.
+Date filters use branch-local calendar dates. The existing branch authorization and database isolation rules apply.
+No task table, trigger, background worker or historical fill is added. Existing classes remain unreviewed.
+Attendance marks still drive visits, rates and coach workload. Review completion does not change those statistics.
+The policy for corrections older than 14 days remains pending. Migration and release checks are still open.
+
+
 **Staff identity and access (ADR 132)**
 
 `entity_membership` remains the branch identity record for both staff and students. Its ID does not imply paid enrollment.
@@ -223,7 +241,7 @@ Settings had collected five unrelated controls, four of which were the setup ste
 
 A screen of per-coach figures could not be built until the column it reads was true. `class.instructor_id` has been `NOT NULL` since Phase 2, but both create paths fell back to `input.instructorId ?? ctx.session.user.id`, no client ever sent the field, and the web never called `class.update`, so the column held whoever typed the template in. It also had no FK and no RLS of its own, so any staff member could write an arbitrary user id into it. The wave therefore ships attribution first: a **coach picker** on the O3 template form and the O2 one-off form fed by a new staff-tier `membership.instructors` read (not the owner-only `membership.staff`, which carries emails and returns `member.id` where this needs `user.id`), a **`class.setInstructor`** mutation behind a narrow `SetClassInstructorSchema` so a cover night cannot overwrite the title or capacity as a side effect, and **`requireInstructor`** in `packages/api/src/members.ts` guarding all four write paths. `canReassignCoach` lets any staff set the coach on a class that has not started and restricts a finished one to owners; `classChange` now takes **`now`** (required, so the compiler forced the one call site to decide) and returns `historyOnly`, so correcting a past class notifies nobody. The notification block moved out of `class.update` into a shared `notifyBookedOfChange`.
 
-The numbers are the pure **`packages/domain/src/coach.ts`**: `coachWorkload` / `coachWorkloadFor` / `coachBreakdown` / `coachWindowRange` / `COACH_WINDOWS` / `canReassignCoach` / `formatMatTime`. `localDate` moved out of `stats.ts` into **`local-date.ts`** so both stat engines draw academy-zone boundaries with one helper. `stats.coaches` (owner) and `stats.coach` (staff, own unless owner) run two bounded reads on the RLS-scoped `ctx.db` covered by `cl_by_academy_start` / `cp_by_academy_class`, then the engine; read-time, no cache, the ADR 39 call. `/coaches` is a staff nav item. **Averages divide by marked classes, drop-ins are not visits, and cards are name-ordered and never sorted by headcount.** No migration, no new table, no scheduler. The planned O1 unmarked-classes nudge was **dropped as already built**: `needsAttendance` has driven the dashboard "Classes to mark" queue since v1.2 with a better rule.
+The numbers are the pure **`packages/domain/src/coach.ts`**: `coachWorkload` / `coachWorkloadFor` / `coachBreakdown` / `coachWindowRange` / `COACH_WINDOWS` / `canReassignCoach` / `formatMatTime`. `localDate` moved out of `stats.ts` into **`local-date.ts`** so both stat engines draw academy-zone boundaries with one helper. `stats.coaches` (owner) and `stats.coach` (staff, own unless owner) run two bounded reads on the RLS-scoped `ctx.db` covered by `cl_by_academy_start` / `cp_by_academy_class`, then the engine; read-time, no cache, the ADR 39 call. `/coaches` is a staff nav item. **Averages divide by marked classes, drop-ins are not visits, and cards are name-ordered and never sorted by headcount.** No migration, no new table, no scheduler. ADR 133 replaces the dashboard missing-attendance heuristic with explicit review. Coach statistics keep their existing attendance-based rules.
 
 **v2.4 as-built (Frontend review fixes; ADR [59](issues/59-join-link-prefills-only.md)):**
 

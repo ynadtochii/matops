@@ -1,8 +1,17 @@
 import { eq } from "drizzle-orm";
 
+import { monthOf } from "@matops/domain";
+
 import type { SeedExec } from "./registry";
 import { createEntity, provisionOrganization } from "../provision";
-import { accessPlan, accessPlanEntity, entity, organization } from "../schema";
+import {
+  accessPlan,
+  accessPlanEntity,
+  accessPlanPrice,
+  entity,
+  membershipPolicy,
+  organization,
+} from "../schema";
 import { SEED_MARKER } from "./registry";
 
 /**
@@ -33,6 +42,8 @@ const PLAN_ID = {
   gym_sauna: "5eed0000-0000-4000-8000-000000000003",
 } as const;
 
+const PILOT_TIME_ZONE = "Europe/Lisbon";
+
 export interface PilotReport {
   organizationId: string;
   branches: { id: string; name: string; type: string }[];
@@ -62,10 +73,28 @@ export async function seedPilot(
     { organizationId: PILOT_ORG_ID, ownerUserId },
     exec,
   );
+  // `provisionOrganization` builds a PRE-cutover academy, on branch dues. The
+  // pilot is about shared memberships, so the mat runs the same gate its gym
+  // and sauna do.
   await exec
     .update(entity)
-    .set({ name: "Pilot BJJ", timeZone: "Europe/Lisbon" })
+    .set({
+      name: "Pilot BJJ",
+      timeZone: PILOT_TIME_ZONE,
+      membershipEnforcedAt: new Date(),
+    })
     .where(eq(entity.id, PILOT_ORG_ID));
+
+  await exec
+    .insert(membershipPolicy)
+    .values({
+      organizationId: PILOT_ORG_ID,
+      graceDays: 7,
+      calendarTimeZone: PILOT_TIME_ZONE,
+      bankDetails:
+        "Pilot Gym\nIBAN: PT50 0002 0123 1234 5678 9015 4\nRef: the reference on your membership",
+    })
+    .onConflictDoNothing();
 
   for (const branch of [
     { id: PILOT_GYM_ID, name: "Pilot Gym floor" },
@@ -94,18 +123,26 @@ export async function seedPilot(
   }
 
   const plans = [
-    { id: PLAN_ID.bjj, name: "BJJ Only", covers: [PILOT_ORG_ID] },
+    {
+      id: PLAN_ID.bjj,
+      name: "BJJ Only",
+      priceMinor: 5000,
+      covers: [PILOT_ORG_ID],
+    },
     {
       id: PLAN_ID.bjj_gym,
       name: "BJJ + Gym",
+      priceMinor: 7000,
       covers: [PILOT_ORG_ID, PILOT_GYM_ID],
     },
     {
       id: PLAN_ID.gym_sauna,
       name: "Gym + Sauna",
+      priceMinor: 6000,
       covers: [PILOT_GYM_ID, PILOT_SAUNA_ID],
     },
   ];
+  const month = monthOf(new Date(), PILOT_TIME_ZONE);
   for (const plan of plans) {
     await exec
       .insert(accessPlan)
@@ -113,6 +150,22 @@ export async function seedPilot(
         id: plan.id,
         organizationId: PILOT_ORG_ID,
         name: plan.name,
+        studentSelectable: true,
+        priceMinor: plan.priceMinor,
+        currency: "EUR",
+      })
+      .onConflictDoNothing();
+    // A plan with no price for the month cannot be sold or assigned, so the
+    // pilot would otherwise be three plans nobody can hold.
+    await exec
+      .insert(accessPlanPrice)
+      .values({
+        organizationId: PILOT_ORG_ID,
+        planId: plan.id,
+        effectiveMonth: month,
+        priceMinor: plan.priceMinor,
+        currency: "EUR",
+        recordedBy: ownerUserId,
       })
       .onConflictDoNothing();
     await exec

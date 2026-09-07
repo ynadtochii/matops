@@ -59,3 +59,21 @@ export const MarkVisitorSchema = z.object({
   status: AttendanceStatusSchema,
 });
 export type MarkVisitorInput = z.infer<typeof MarkVisitorSchema>;
+
+export const AttendanceReviewQueueSchema = z
+  .object({
+    status: z.enum(["needs_review", "all"]).default("needs_review"),
+    from: z.iso.date().optional(),
+    to: z.iso.date().optional(),
+    offset: z.number().int().min(0).max(1000000).default(0),
+  })
+  .refine((input) => !input.from || !input.to || input.from <= input.to, {
+    message: "The end date must follow the start date.",
+    path: ["to"],
+  });
+
+export const FinishAttendanceSchema = z.object({
+  id: z.uuid(),
+  fingerprint: z.string().regex(/^[a-f0-9]{32}$/),
+  nobodyAttended: z.boolean().default(false),
+});

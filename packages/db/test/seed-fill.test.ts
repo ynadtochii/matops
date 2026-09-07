@@ -157,3 +157,91 @@ describe("seed fill/clear — augment a real academy", () => {
     ).toBe(1);
   });
 });
+
+/**
+ * The same fill against a branch that runs SHARED memberships (ADR 126-129).
+ * A filled academy full of people with no membership would be the one state it
+ * must not show, so fill puts the fakes on the gym's own plans — and clear
+ * takes those rows with it, because `access_assignment.user_id` is a real
+ * foreign key on the fake user.
+ */
+describe("seed fill/clear — a branch on shared memberships", () => {
+  let pg: Awaited<ReturnType<typeof freshDb>>;
+  let exec: SeedExec;
+  const now = new Date("2026-07-24T12:00:00.000Z");
+  const ACAD = "real_gated";
+  const PLAN = "33333333-3333-3333-3333-333333333333";
+
+  const scalar = async (sqlText: string, params: unknown[] = []) =>
+    (await pg.query<{ n: number }>(sqlText, params)).rows[0]?.n ?? 0;
+
+  beforeAll(async () => {
+    pg = await freshDb([]);
+    exec = drizzle(pg, { schema, casing: "snake_case" }) as unknown as SeedExec;
+    await pg.exec(`
+      INSERT INTO "user" (id, name, email, email_verified, created_at, updated_at)
+        VALUES ('owner_gated', 'Gated Owner', 'owner@gated.test', true, now(), now());
+      INSERT INTO "organization" (id, name, slug, created_at)
+        VALUES ('${ACAD}', 'Gated', 'gated', now());
+      INSERT INTO "entity" (id, organization_id, type, name, slug, is_default, public_code, time_zone, membership_enforced_at)
+        VALUES ('${ACAD}', '${ACAD}', 'bjj_academy', 'Gated', 'gated', true, '860276', 'Europe/Lisbon', now());
+      INSERT INTO "member" (id, organization_id, user_id, role, created_at)
+        VALUES ('mem_gated_owner', '${ACAD}', 'owner_gated', 'owner', now());
+      INSERT INTO "entity_membership" (id, organization_id, entity_id, user_id, role, status, joined_at)
+        VALUES ('emem_gated_owner', '${ACAD}', '${ACAD}', 'owner_gated', 'owner', 'active', now());
+      INSERT INTO "access_plan" (id, organization_id, name, student_selectable, price_minor, currency)
+        VALUES ('${PLAN}', '${ACAD}', 'Unlimited', true, 5000, 'EUR');
+      INSERT INTO "access_plan_price" (organization_id, plan_id, effective_month, price_minor, currency)
+        VALUES ('${ACAD}', '${PLAN}', '2026-06-01', 5000, 'EUR');
+      INSERT INTO "access_plan_entity" (organization_id, plan_id, entity_id)
+        VALUES ('${ACAD}', '${PLAN}', '${ACAD}');
+    `);
+  });
+
+  afterAll(async () => {
+    await pg.close();
+  });
+
+  it("fill puts the fakes on the gym's own plan and leaves no branch dues", async () => {
+    await fillAcademy(exec, { academyId: ACAD, organizationId: ACAD, now });
+    expect(
+      await scalar(
+        `SELECT count(*)::int n FROM "access_assignment" WHERE organization_id=$1`,
+        [ACAD],
+      ),
+    ).toBeGreaterThan(0);
+    expect(
+      await scalar(
+        `SELECT count(*)::int n FROM "membership_month" WHERE organization_id=$1 AND paid`,
+        [ACAD],
+      ),
+    ).toBeGreaterThan(0);
+    // The legacy dues gate is off here, so nothing writes to it.
+    expect(
+      await scalar(
+        `SELECT count(*)::int n FROM "member_dues" WHERE academy_id=$1`,
+        [ACAD],
+      ),
+    ).toBe(0);
+  });
+
+  it("clear takes the memberships with the fakes", async () => {
+    await clearAcademy(exec, { academyId: ACAD, organizationId: ACAD });
+    expect(await academyFakeCount(exec, ACAD)).toBe(0);
+    for (const table of [
+      "access_assignment",
+      "membership_month",
+      "membership_month_audit",
+    ]) {
+      expect(
+        await scalar(
+          `SELECT count(*)::int n FROM "${table}" WHERE organization_id=$1`,
+          [ACAD],
+        ),
+      ).toBe(0);
+    }
+    expect(
+      await scalar(`SELECT count(*)::int n FROM "user" WHERE id LIKE 'seed_%'`),
+    ).toBe(0);
+  });
+});

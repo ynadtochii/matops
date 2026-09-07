@@ -4,22 +4,30 @@ import { TRPCError } from "@trpc/server";
 import type { DbExec, TenantTx } from "@matops/db";
 import {
   and,
+  asc,
+  attendanceReviewSnapshot,
   createDropIn,
   eq,
   eventRole,
+  getTableColumns,
   inArray,
+  isNull,
   ne,
+  or,
   recordActivity,
   recordMilestone,
+  sql,
 } from "@matops/db";
 import {
+  classInstance,
   classParticipation,
-  dropIn,
   dropInVisit,
   user,
 } from "@matops/db/schema";
 import {
   attendanceCounts,
+  attendanceReview,
+  attendanceReviewError,
   bulkMarkTargets,
   canMarkAttendance,
   normalizePhone,
@@ -27,11 +35,15 @@ import {
 import {
   AddVisitorSchema,
   AddWalkInSchema,
+  AttendanceReviewQueueSchema,
   ClassIdSchema,
+  FinishAttendanceSchema,
   MarkAttendanceSchema,
   MarkVisitorSchema,
 } from "@matops/validators";
 
+import { academyTimeZone } from "../academy-tz";
+import { loadAttendanceRoster } from "../attendance-review";
 import { claimSeatIfStrict, requireClassFacts, SESSION_FULL } from "../classes";
 import { directoryRosterOf } from "../members";
 import { staffIdentityProcedure, staffProcedure } from "../trpc";
@@ -59,36 +71,10 @@ export const attendanceRouter = {
    * with names and marks. Plus the summary counts for the header.
    */
   list: staffProcedure.input(ClassIdSchema).query(async ({ ctx, input }) => {
-    const rows = await ctx.db
-      .select({
-        studentId: classParticipation.studentId,
-        name: user.name,
-        bookingStatus: classParticipation.bookingStatus,
-        bookingTier: classParticipation.bookingTier,
-        attendanceStatus: classParticipation.attendanceStatus,
-        attendedAt: classParticipation.attendedAt,
-      })
-      .from(classParticipation)
-      .leftJoin(user, eq(user.id, classParticipation.studentId))
-      .where(eq(classParticipation.classId, input.id));
-    const dropIns = await ctx.db
-      .select({
-        id: dropInVisit.id,
-        leadId: dropIn.id,
-        firstName: dropIn.firstName,
-        lastName: dropIn.lastName,
-        phone: dropIn.phone,
-        bookingStatus: dropInVisit.bookingStatus,
-        attendanceStatus: dropInVisit.attendanceStatus,
-      })
-      .from(dropInVisit)
-      .innerJoin(dropIn, eq(dropIn.id, dropInVisit.dropInId))
-      .where(
-        and(
-          eq(dropInVisit.classId, input.id),
-          ne(dropInVisit.bookingStatus, "cancelled"),
-        ),
-      );
+    const data = await loadAttendanceRoster(ctx.db, input.id);
+    if (!data)
+      throw new TRPCError({ code: "NOT_FOUND", message: "Class not found." });
+    const { rows, dropIns, review } = data;
     const roster = await directoryRosterOf(ctx);
     const roleByUser = new Map(
       roster.map((person) => [person.userId, person.role]),
@@ -100,8 +86,129 @@ export const attendanceRouter = {
       })),
       dropIns,
       counts: attendanceCounts(rows),
+      review,
     };
   }),
+
+  reviewQueue: staffProcedure
+    .input(AttendanceReviewQueueSchema)
+    .query(async ({ ctx, input }) => {
+      const now = new Date();
+      const zone = await academyTimeZone(ctx);
+      const classes = ctx.db.$with("attendance_review_classes").as(
+        ctx.db
+          .select({
+            ...getTableColumns(classInstance),
+            instructorName: user.name,
+            snapshot: attendanceReviewSnapshot().as("snapshot"),
+            pendingCount:
+              sql<number>`(SELECT count(*)::int FROM ${classParticipation}
+          WHERE ${classParticipation.classId} = ${classInstance.id}
+          AND ${classParticipation.bookingStatus} = 'booked'
+          AND ${classParticipation.bookingTier} = 'provisional')`.as(
+                "pending_count",
+              ),
+          })
+          .from(classInstance)
+          .leftJoin(user, eq(user.id, classInstance.instructorId))
+          .where(
+            and(
+              isNull(classInstance.deletedAt),
+              eq(classInstance.status, "scheduled"),
+              sql`${classInstance.startsAt} + ${classInstance.durationMinutes} * interval '1 minute' <= ${now}`,
+            ),
+          ),
+      );
+      const reviewed = sql<boolean>`${classes.attendanceReviewedAt} IS NOT NULL AND ${classes.attendanceReviewFingerprint} = ${classes.snapshot}->>'fingerprint'`;
+      const needsReview = sql<boolean>`NOT coalesce((${reviewed}), false)`;
+      const filters = and(
+        input.status === "needs_review" ? needsReview : undefined,
+        input.from
+          ? sql`(${classes.startsAt} AT TIME ZONE ${zone})::date >= ${input.from}::date`
+          : undefined,
+        input.to
+          ? sql`(${classes.startsAt} AT TIME ZONE ${zone})::date <= ${input.to}::date`
+          : undefined,
+      );
+      const [counts] = await ctx.db
+        .with(classes)
+        .select({
+          total: sql<number>`count(*) FILTER (WHERE ${filters ?? sql`true`})::int`,
+          needsReview: sql<number>`count(*) FILTER (WHERE ${needsReview})::int`,
+        })
+        .from(classes);
+      const rows = await ctx.db
+        .with(classes)
+        .select()
+        .from(classes)
+        .where(filters)
+        .orderBy(asc(classes.startsAt), asc(classes.id))
+        .limit(50)
+        .offset(input.offset);
+      return {
+        rows: rows.map(({ snapshot, ...row }) => ({
+          ...row,
+          markedCount: snapshot.present + snapshot.absent,
+          review: attendanceReview(
+            snapshot,
+            row.attendanceReviewFingerprint,
+            row.attendanceReviewedAt,
+          ),
+        })),
+        timeZone: zone,
+        total: counts?.total ?? 0,
+        needsReview: counts?.needsReview ?? 0,
+      };
+    }),
+
+  finish: staffProcedure
+    .input(FinishAttendanceSchema)
+    .mutation(async ({ ctx, input }) => {
+      await assertMarkable(ctx.db, input.id);
+      const data = await loadAttendanceRoster(ctx.db, input.id);
+      if (!data)
+        throw new TRPCError({ code: "NOT_FOUND", message: "Class not found." });
+      const now = new Date();
+      if (
+        data.deletedAt ||
+        data.status === "cancelled" ||
+        data.startsAt.getTime() + data.durationMinutes * 60000 > now.getTime()
+      ) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Attendance can only be finished after a live class ends.",
+        });
+      }
+      const error = attendanceReviewError(
+        data.snapshot,
+        input.fingerprint,
+        input.nobodyAttended,
+      );
+      if (error) throw new TRPCError({ code: "CONFLICT", message: error });
+      const [saved] = await ctx.db
+        .update(classInstance)
+        .set({
+          attendanceReviewedAt: now,
+          attendanceReviewedBy: ctx.session.user.id,
+          attendanceReviewFingerprint: input.fingerprint,
+        })
+        .where(
+          and(
+            eq(classInstance.id, input.id),
+            isNull(classInstance.deletedAt),
+            eq(classInstance.status, "scheduled"),
+            sql`${classInstance.startsAt} + ${classInstance.durationMinutes} * interval '1 minute' <= ${now}`,
+            sql`${attendanceReviewSnapshot()}->>'fingerprint' = ${input.fingerprint}`,
+          ),
+        )
+        .returning({ id: classInstance.id });
+      if (!saved)
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Attendance changed. Review the latest list and try again.",
+        });
+      return { ok: true as const };
+    }),
 
   /** Mark an existing participant present/absent/unmarked (spec O5). */
   mark: staffProcedure
@@ -314,7 +421,10 @@ export const attendanceRouter = {
           and(
             eq(dropInVisit.id, input.visitId),
             eq(dropInVisit.classId, input.classId),
-            ne(dropInVisit.bookingStatus, "cancelled"),
+            or(
+              ne(dropInVisit.bookingStatus, "cancelled"),
+              ne(dropInVisit.attendanceStatus, "unmarked"),
+            ),
           ),
         )
         .returning({ id: dropInVisit.id });

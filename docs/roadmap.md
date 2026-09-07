@@ -1,5 +1,27 @@
 <!-- matops — live implementation plan + scope matrix. Rules for this file live in delivery.md. -->
 
+**Explicit attendance review, ADR 133**
+
+Status: built with the existing editing limit; historical correction policy pending. Product rules: O1 and O5. [Decision](/Users/kuna/projects/matops/docs/issues/133-explicit-attendance-review.md).
+
+| Slice | DB | API | Web | Mobile | Shared | Infra |
+| --- | --- | --- | --- | --- | --- | --- |
+| Saved review and changed-roster detection | wip | wip | wip | out | wip | n/a |
+| All past classes, filters and pagination | wip | wip | wip | out | wip | n/a |
+| Dashboard review count and zero state | wip | wip | wip | out | wip | n/a |
+
+- [x] Define explicit completion and the all-time review list.
+- [x] Record the product rules and architecture decision.
+- [ ] Set historical correction permissions.
+- [x] Complete the review flow and inspect the final diff.
+- [x] Run workspace lint and typecheck.
+- [x] Apply the additive migration to dev and verify its schema.
+- [ ] Run focused regression tests only when the user requests them.
+- [ ] Check the workflow in a browser, including empty, partial, stale and historical classes.
+
+Workspace typecheck passed 17/17 and lint passed 15/15. Migration 0068 is applied to dev, with 67/67 migration entries verified. Tests are written but not run. Browser acceptance remains open. The matrix stays wip until the remaining checks and policy decision are complete.
+
+
 **Staff and student separation, ADR 132**
 
 Status: implemented. Workspace typecheck passed 17/17 and lint passed 15/15. Tests written but not run under the user's session rule.

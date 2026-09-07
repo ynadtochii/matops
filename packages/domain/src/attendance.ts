@@ -197,3 +197,37 @@ export function visibleAttendees(
     namesHidden: false,
   };
 }
+
+export interface AttendanceReviewSnapshot {
+  fingerprint: string;
+  unmarked: number;
+  present: number;
+  absent: number;
+  total: number;
+}
+
+export function attendanceReview(
+  snapshot: AttendanceReviewSnapshot,
+  savedFingerprint: string | null,
+  reviewedAt: Date | null,
+) {
+  const reviewed =
+    reviewedAt !== null && savedFingerprint === snapshot.fingerprint;
+  return { ...snapshot, reviewed, reviewedAt: reviewed ? reviewedAt : null };
+}
+
+export function attendanceReviewError(
+  snapshot: AttendanceReviewSnapshot,
+  expectedFingerprint: string,
+  nobodyAttended: boolean,
+): string | null {
+  if (snapshot.fingerprint !== expectedFingerprint)
+    return "Attendance changed. Review the latest list and try again.";
+  if (snapshot.unmarked > 0)
+    return "Mark everyone present or absent before finishing attendance.";
+  if (nobodyAttended && snapshot.present > 0)
+    return "Someone is marked present. Correct their attendance first.";
+  if (!nobodyAttended && snapshot.present === 0)
+    return "Confirm that nobody attended this class.";
+  return null;
+}

@@ -268,3 +268,49 @@ Left open, and why:
 
 - The baseline manual scenarios, the role and journey walkthroughs, the Expo device checks, the task-completion measurement and the location-hierarchy discovery are human work.
 - Two small pieces of the approved scope are deliberately not built and are named in the unticked boxes above: bounded batches for coverage runs (the loop reports named failures and an incomplete flag, so nothing is presented as complete, but it does not page), and the coach landing on their branch's schedule rather than its dashboard. The coverage preview also shows gains and losses without the affected bookings; the plan-change preview does show them, through the same `bookingsToReview` reader.
+
+
+## Attendance review, approved 2026-09-07
+
+Goal: let owners check every past class and finish attendance from one list.
+
+Decisions:
+- Show all unfinished past classes, oldest first, including empty and partly marked classes.
+- Require explicit completion after every active member and visitor has a mark.
+- Allow an explicit nobody-attended confirmation when there are no present or unmarked people.
+- Store who reviewed the roster, when, and its signature. A changed roster needs another review.
+- Keep existing records unreviewed. Exclude cancelled, deleted, future, and running classes from the queue.
+- Reuse branch navigation, add date and status filters, and page the list.
+- Historical correction permissions await the user's answer. Build independent work first.
+- Preserve unrelated working-tree changes. Do not run tests, commit, or deploy.
+
+Implementation steps:
+- [x] Inspect current attendance, dashboard, permissions, and all roster writers.
+- [x] Add pure review rules, schema migration, scoped API reads and completion, and focused tests.
+- [x] Build the review list, shared roster completion action, and dashboard summary.
+- [ ] Resolve historical correction permissions and apply them consistently.
+- [x] Update product and architecture docs. Run lint/typecheck and inspect the diff.
+
+Current step: waiting for the historical correction policy. The existing 14-day limit applies to marking and finishing until the user decides.
+
+Verification: workspace typecheck passed 17/17 and lint passed 15/15. Migration 0068 applied to dev; database verification passed 67/67 migration entries and branch data permissions. Focused regression tests written, not run. Browser walkthrough not performed; no local app server was running. No commit or deployment.
+
+User-run commands:
+- `pnpm -F @matops/domain test test/attendance.test.ts`
+- `pnpm -F @matops/api test test/attendance-writes.test.ts`
+
+## Attendance query error, 2026-09-07
+
+- [x] Reproduce the failing roster read against dev in a read-only transaction.
+- [x] Fix the query cause and add regression coverage without running tests.
+- [x] Repeat the read, run lint/typecheck, and record the lesson.
+
+Cause: Drizzle removes direct SQL column table names from single-table selections. That made nested roster joins ambiguous and broke class-specific review counts. Nested SQL wrappers preserve the table names.
+
+Read-only reproduction: the existing class read failed with PostgreSQL 42702, column reference id is ambiguous. After the fix, the same scoped read returned 10 member rows, 7 present and 2 absent. No data was changed. The temporary diagnostic was removed.
+
+### Lessons Learned
+
+After changing nested database queries, inspect the generated SQL and replay the affected read. Typecheck and lint cannot confirm database query behavior. Keep regression coverage for joins and outer-class references.
+
+Verification: affected API and DB lint/typecheck passed, 8/8 tasks including dependency builds. Diff whitespace check passed. Regression test written but not run.

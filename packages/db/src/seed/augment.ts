@@ -14,13 +14,18 @@
  * both fill and clear, so it stays correct with fakes added or removed.
  */
 import { randomUUID } from "node:crypto";
-import { and, eq, isNull, like } from "drizzle-orm";
+import { and, eq, inArray, isNull, like } from "drizzle-orm";
 
-import { paymentPeriod } from "@matops/domain";
+import { monthOf, paymentPeriod, priceForMonth } from "@matops/domain";
 
 import type { SeedExec } from "./registry";
 import { recomputeBookingCounts } from "../erase";
 import {
+  accessAssignment,
+  accessAssignmentChange,
+  accessPlan,
+  accessPlanEntity,
+  accessPlanPrice,
   classInstance,
   classParticipation,
   entity,
@@ -31,11 +36,16 @@ import {
   memberRank,
   memberReferral,
   memberReferralAudit,
+  membershipMonth,
+  membershipMonthAudit,
   membershipPlan,
+  membershipPurchase,
+  notification,
   paymentClaim,
   rankPromotion,
   user,
 } from "../schema";
+import { monthsBack } from "./data";
 import { SEED_MARKER } from "./registry";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -289,7 +299,35 @@ export async function fillAcademy(
     .onConflictDoNothing();
   report.entity_membership = students.length;
 
-  // 2. Dues on the academy's EXISTING plans (skip if the owner has none yet).
+  // 2a. Memberships, if this branch runs the shared gate (ADR 126-129). Without
+  //     them every fake reads as a person with no membership, which is the one
+  //     state a filled academy should NOT be full of.
+  const [branch] = await exec
+    .select({
+      enforcedAt: entity.membershipEnforcedAt,
+      timeZone: entity.timeZone,
+    })
+    .from(entity)
+    .where(eq(entity.id, academyId))
+    .limit(1);
+  const gated = Boolean(branch?.enforcedAt);
+  if (gated) {
+    Object.assign(
+      report,
+      await fillMemberships(exec, {
+        academyId,
+        organizationId,
+        staffId,
+        now,
+        timeZone: branch?.timeZone ?? "UTC",
+        holders: students.filter(
+          (s) => s.status === "active" || s.status === "suspended",
+        ),
+      }),
+    );
+  }
+
+  // 2b. Dues on the academy's EXISTING plans (skip if the owner has none yet).
   const plans = await exec
     .select({
       id: membershipPlan.id,
@@ -304,7 +342,7 @@ export async function fillAcademy(
       ),
     );
   const primary = plans[0];
-  if (primary) {
+  if (primary && !gated) {
     const dueOffsets = [2, 22, -6, 40, -20]; // paid / due-soon / overdue mix
     const duesTargets = students.filter(
       (s) => s.status === "active" || s.status === "suspended",
@@ -325,7 +363,8 @@ export async function fillAcademy(
       .onConflictDoNothing();
     report.member_dues = duesTargets.length;
 
-    // One fake open claim plus confirmed history for referral reporting.
+    // The open and rejected claims belong to the LEGACY dues screen, which is
+    // the only place that can answer them.
     if (active[0]) {
       await exec.insert(paymentClaim).values({
         id: randomUUID(),
@@ -337,7 +376,29 @@ export async function fillAcademy(
         period: paymentPeriod(now),
         status: "pending",
       });
-      const confirmed = active.slice(0, 8).flatMap((student, index) => {
+      let rejectedCount = 0;
+      if (active[1]) {
+        await exec.insert(paymentClaim).values({
+          id: randomUUID(),
+          academyId,
+          memberId: active[1].memberId,
+          planId: primary.id,
+          amountMinor: primary.priceMinor,
+          currency: primary.currency,
+          period: paymentPeriod(new Date(now.getTime() - 32 * DAY_MS)),
+          status: "rejected",
+          claimedAt: new Date(now.getTime() - 30 * DAY_MS),
+        });
+        rejectedCount = 1;
+      }
+      report.payment_claim = 1 + rejectedCount;
+    }
+  }
+
+  // Confirmed claim history, on either gate: the referrals ledger (O9) reads
+  // revenue off `payment_claim` and off nothing else.
+  if (primary) {
+    const confirmed = active.slice(0, 8).flatMap((student, index) => {
         const plan = plans[index % plans.length] ?? primary;
         return [
           {
@@ -368,26 +429,9 @@ export async function fillAcademy(
           },
         ];
       });
-      if (confirmed.length > 0) {
-        await exec.insert(paymentClaim).values(confirmed);
-      }
-      let rejectedCount = 0;
-      // A rejected claim — the third claim state, so a demo shows all three.
-      if (active[1]) {
-        await exec.insert(paymentClaim).values({
-          id: randomUUID(),
-          academyId,
-          memberId: active[1].memberId,
-          planId: primary.id,
-          amountMinor: primary.priceMinor,
-          currency: primary.currency,
-          period: paymentPeriod(new Date(now.getTime() - 32 * DAY_MS)),
-          status: "rejected",
-          claimedAt: new Date(now.getTime() - 30 * DAY_MS),
-        });
-        rejectedCount = 1;
-      }
-      report.payment_claim = 1 + confirmed.length + rejectedCount;
+    if (confirmed.length > 0) {
+      await exec.insert(paymentClaim).values(confirmed);
+      report.payment_claim = (report.payment_claim ?? 0) + confirmed.length;
     }
   }
 
@@ -576,6 +620,141 @@ export async function fillAcademy(
   return report;
 }
 
+
+/**
+ * Put the fakes on the academy's OWN membership plans, the way the owner would.
+ *
+ * Reads the live plans that cover this branch and have a price for this month;
+ * a gym still setting up has none, and then this writes nothing rather than
+ * inventing a plan the owner never made. Last month is settled for everybody
+ * and this month spreads across paid, silent, reminded and claimed.
+ */
+async function fillMemberships(
+  exec: SeedExec,
+  opts: {
+    academyId: string;
+    organizationId: string;
+    staffId: string;
+    now: Date;
+    timeZone: string;
+    holders: FakeStudent[];
+  },
+): Promise<FillReport> {
+  const { academyId, organizationId, staffId, now, holders } = opts;
+  const report: FillReport = {};
+  const month = monthOf(now, opts.timeZone);
+  const lastMonth = monthsBack(month, 1);
+
+  const plans = await exec
+    .select({ id: accessPlan.id, archivedAt: accessPlan.archivedAt })
+    .from(accessPlan)
+    .innerJoin(accessPlanEntity, eq(accessPlanEntity.planId, accessPlan.id))
+    .where(
+      and(
+        eq(accessPlan.organizationId, organizationId),
+        eq(accessPlanEntity.entityId, academyId),
+        isNull(accessPlan.archivedAt),
+      ),
+    );
+  const prices = await exec
+    .select()
+    .from(accessPlanPrice)
+    .where(eq(accessPlanPrice.organizationId, organizationId));
+  const sellable = plans.filter(
+    (p) =>
+      priceForMonth(
+        prices.filter((row) => row.planId === p.id),
+        month,
+      ) !== null,
+  );
+  if (sellable.length === 0) return report;
+
+  const assignments: (typeof accessAssignment.$inferInsert)[] = [];
+  const months: (typeof membershipMonth.$inferInsert)[] = [];
+  const audits: (typeof membershipMonthAudit.$inferInsert)[] = [];
+
+  holders.forEach((s, i) => {
+    const plan = sellable[i % sellable.length];
+    if (!plan) return;
+    const id = randomUUID();
+    assignments.push({
+      id,
+      organizationId,
+      userId: s.userId,
+      planId: plan.id,
+      assigningEntityId: academyId,
+      startMonth: lastMonth,
+      status: s.status === "suspended" ? "suspended" : "active",
+      assignedBy: staffId,
+    });
+    months.push({
+      id: randomUUID(),
+      organizationId,
+      assignmentId: id,
+      month: lastMonth,
+      paid: true,
+      recordedBy: staffId,
+      recordedAt: new Date(now.getTime() - 25 * DAY_MS),
+    });
+    audits.push({
+      id: randomUUID(),
+      organizationId,
+      assignmentId: id,
+      month: lastMonth,
+      wasPaid: null,
+      paid: true,
+      actorId: staffId,
+    });
+    // Paid is the normal state; three people carry the other three answers.
+    if (i > 2) {
+      months.push({
+        id: randomUUID(),
+        organizationId,
+        assignmentId: id,
+        month,
+        paid: true,
+        recordedBy: staffId,
+        recordedAt: new Date(now.getTime() - 2 * DAY_MS),
+      });
+      audits.push({
+        id: randomUUID(),
+        organizationId,
+        assignmentId: id,
+        month,
+        wasPaid: null,
+        paid: true,
+        actorId: staffId,
+      });
+    } else if (i === 1) {
+      months.push({
+        id: randomUUID(),
+        organizationId,
+        assignmentId: id,
+        month,
+        paid: false,
+        remindedAt: new Date(now.getTime() - DAY_MS),
+      });
+    } else if (i === 2) {
+      months.push({
+        id: randomUUID(),
+        organizationId,
+        assignmentId: id,
+        month,
+        paid: false,
+        claimedAt: new Date(now.getTime() - DAY_MS),
+      });
+    }
+  });
+
+  if (assignments.length === 0) return report;
+  await exec.insert(accessAssignment).values(assignments).onConflictDoNothing();
+  await exec.insert(membershipMonth).values(months).onConflictDoNothing();
+  await exec.insert(membershipMonthAudit).values(audits);
+  report.access_assignment = assignments.length;
+  report.membership_month = months.length;
+  return report;
+}
+
 /**
  * Remove every fake (seed_) row this seed added to a real academy — and NOTHING
  * else. Scoped to `academy_id = X AND <member/user id> LIKE 'seed_%'`, so the
@@ -594,6 +773,63 @@ export async function clearAcademy(
   ) => {
     report[label] = (await run()).rowCount ?? 0;
   };
+
+  // Anything the fakes hold at the ORGANIZATION: the membership they were
+  // given here, plus whatever an owner assigned by hand while demoing.
+  // `access_assignment.user_id` is a real foreign key, so the fake user rows
+  // cannot be deleted while one survives.
+  const held = await exec
+    .select({ id: accessAssignment.id })
+    .from(accessAssignment)
+    .where(
+      and(
+        eq(accessAssignment.organizationId, opts.organizationId),
+        like(accessAssignment.userId, seedLike),
+      ),
+    );
+  const heldIds = held.map((row) => row.id);
+  await del("membership_purchase", () =>
+    exec
+      .delete(membershipPurchase)
+      .where(
+        and(
+          eq(membershipPurchase.organizationId, opts.organizationId),
+          like(membershipPurchase.userId, seedLike),
+        ),
+      ),
+  );
+  if (heldIds.length > 0) {
+    await del("membership_month_audit", () =>
+      exec
+        .delete(membershipMonthAudit)
+        .where(inArray(membershipMonthAudit.assignmentId, heldIds)),
+    );
+    await del("membership_month", () =>
+      exec
+        .delete(membershipMonth)
+        .where(inArray(membershipMonth.assignmentId, heldIds)),
+    );
+    await del("access_assignment_change", () =>
+      exec
+        .delete(accessAssignmentChange)
+        .where(inArray(accessAssignmentChange.sourceAssignmentId, heldIds)),
+    );
+    await del("access_assignment", () =>
+      exec.delete(accessAssignment).where(inArray(accessAssignment.id, heldIds)),
+    );
+  }
+  // Messages the gym sent them. `notification.user_id` carries no foreign key,
+  // so these would simply be left behind pointing at a user that is gone.
+  await del("notification", () =>
+    exec
+      .delete(notification)
+      .where(
+        and(
+          eq(notification.academyId, academyId),
+          like(notification.userId, seedLike),
+        ),
+      ),
+  );
 
   // Fake students' participation on the real classes (student_id is a seed user).
   await del("class_participation", () =>

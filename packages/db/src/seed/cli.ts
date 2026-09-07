@@ -2,9 +2,12 @@
  * Seed CLI.
  *
  * Fill YOUR real academy (recommended — the mode you use day to day):
- *   fill <code>   add ~20 fake students + dues/bookings/attendance/ranks to the
- *                 academy with that 6-digit code. Uses its EXISTING plans +
- *                 classes; your real data is untouched. Refuses if already filled.
+ *   fill <code>   add ~20 fake students + memberships/bookings/attendance/ranks
+ *                 to the academy with that 6-digit code. Uses its EXISTING
+ *                 plans + classes; your real data is untouched. Refuses if
+ *                 already filled. A branch on shared memberships gets
+ *                 assignments and paid months; one still on branch dues gets
+ *                 dues rows instead.
  *   clear <code>  remove ONLY the fake students + their data from that academy.
  *
  * A separate fake demo academy — "Alma beta", the one the beta test runs on
@@ -94,7 +97,7 @@ function printStatus(rows: Awaited<ReturnType<typeof seedStatus>>): void {
     console.log(
       `  ${mark} ${r.name}  (${r.academyId})` +
         (r.present
-          ? `  — ${r.members} members, ${r.classes} classes, ${r.dues} dues`
+          ? `  — ${r.members} members, ${r.classes} classes, ${r.memberships} memberships`
           : "  — not seeded"),
     );
   }

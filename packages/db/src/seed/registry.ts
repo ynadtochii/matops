@@ -37,6 +37,9 @@ export interface SeedAcademy {
   publicCode: string;
   timeZone: string;
   currency: string;
+  country?: string;
+  address?: string;
+  mapUrl?: string;
 }
 
 /**
@@ -51,6 +54,9 @@ export const SEED_ACADEMY: SeedAcademy = {
   publicCode: "990001",
   timeZone: "Europe/Kyiv",
   currency: "EUR",
+  country: "UA",
+  address: "vul. Velyka Vasylkivska 100, Kyiv",
+  mapUrl: "https://maps.google.com/?q=50.4262,30.5196",
 };
 
 /**

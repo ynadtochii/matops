@@ -7,6 +7,8 @@ import type {
 } from "../src/attendance";
 import {
   attendanceCounts,
+  attendanceReview,
+  attendanceReviewError,
   bulkMarkTargets,
   canMarkAttendance,
   needsAttendance,
@@ -296,5 +298,36 @@ describe("needsAttendance", () => {
         now,
       ),
     ).toBe(true);
+  });
+});
+
+describe("attendance review", () => {
+  const snapshot = {
+    fingerprint: "current",
+    unmarked: 0,
+    present: 1,
+    absent: 2,
+    total: 3,
+  };
+  it("requires an explicit matching review", () => {
+    expect(attendanceReview(snapshot, null, null).reviewed).toBe(false);
+    expect(attendanceReview(snapshot, "current", new Date()).reviewed).toBe(
+      true,
+    );
+    expect(attendanceReview(snapshot, "old", new Date()).reviewed).toBe(false);
+  });
+  it("refuses a stale roster and unfinished attendance", () => {
+    expect(attendanceReviewError(snapshot, "old", false)).toContain("changed");
+    expect(
+      attendanceReviewError({ ...snapshot, unmarked: 1 }, "current", false),
+    ).toContain("everyone");
+  });
+  it("requires explicit confirmation when nobody attended", () => {
+    const empty = { ...snapshot, present: 0, absent: 0, total: 0 };
+    expect(attendanceReviewError(empty, "current", false)).toContain("nobody");
+    expect(attendanceReviewError(empty, "current", true)).toBeNull();
+    expect(attendanceReviewError(snapshot, "current", true)).toContain(
+      "present",
+    );
   });
 });

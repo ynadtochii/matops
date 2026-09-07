@@ -18,6 +18,11 @@ import { materializeTemplate } from "../materialize";
 import {
   academyInvite,
   academyProfile,
+  accessAssignment,
+  accessAssignmentChange,
+  accessPlan,
+  accessPlanEntity,
+  accessPlanPrice,
   classInstance,
   classParticipation,
   classTemplate,
@@ -27,15 +32,17 @@ import {
   entity,
   entityMembership,
   member,
-  memberDues,
   memberNote,
   memberRank,
   memberReferral,
   memberReferralAudit,
+  membershipMonth,
+  membershipMonthAudit,
   membershipPlan,
+  membershipPolicy,
+  membershipPurchase,
   organization,
   paymentClaim,
-  paymentSettings,
   rankPromotion,
   user,
 } from "../schema";
@@ -105,8 +112,8 @@ export async function seedAll(
     "curriculum_track",
     exec,
     curriculumTrack,
-    graph.organizations.map((org) => ({
-      academyId: org.id,
+    graph.entities.map((e) => ({
+      academyId: e.id,
       name: DEFAULT_TRACK_NAME,
       isDefault: true,
     })),
@@ -121,8 +128,56 @@ export async function seedAll(
   );
   await insert(report, "academy_invite", exec, academyInvite, graph.invites);
 
-  // 2. Payments price list first (dues + claims FK the plan).
+  // 2. Payments. The legacy price list survives only because the confirmed
+  //    claims the referrals ledger reads point at it; the gym itself runs on
+  //    the shared membership stack below (ADR 126-129).
   await insert(report, "membership_plan", exec, membershipPlan, graph.plans);
+  const m = graph.memberships;
+  await insert(report, "membership_policy", exec, membershipPolicy, m.policies);
+  await insert(report, "access_plan", exec, accessPlan, m.plans);
+  await insert(
+    report,
+    "access_plan_price",
+    exec,
+    accessPlanPrice,
+    m.planPrices,
+  );
+  await insert(
+    report,
+    "access_plan_entity",
+    exec,
+    accessPlanEntity,
+    m.planEntities,
+  );
+  await insert(
+    report,
+    "access_assignment",
+    exec,
+    accessAssignment,
+    m.assignments,
+  );
+  await insert(
+    report,
+    "access_assignment_change",
+    exec,
+    accessAssignmentChange,
+    m.changes,
+  );
+  await insert(report, "membership_month", exec, membershipMonth, m.months);
+  await insert(
+    report,
+    "membership_month_audit",
+    exec,
+    membershipMonthAudit,
+    m.monthAudits,
+  );
+  await insert(
+    report,
+    "membership_purchase",
+    exec,
+    membershipPurchase,
+    m.purchases,
+  );
 
   // 3. Templates → past classes → their participations.
   await insert(report, "class_template", exec, classTemplate, graph.templates);
@@ -136,15 +191,7 @@ export async function seedAll(
   );
 
   // 4. The rest of the payments + rank + notes + leads.
-  await insert(report, "member_dues", exec, memberDues, graph.dues);
   await insert(report, "payment_claim", exec, paymentClaim, graph.claims);
-  await insert(
-    report,
-    "payment_settings",
-    exec,
-    paymentSettings,
-    graph.settings,
-  );
   await insert(report, "member_rank", exec, memberRank, graph.ranks);
   await insert(report, "rank_promotion", exec, rankPromotion, graph.promotions);
   await insert(report, "member_note", exec, memberNote, graph.notes);

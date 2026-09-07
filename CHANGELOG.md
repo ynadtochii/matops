@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased: explicit attendance review
+
+Fixed the attendance roster query failing with an ambiguous column error. Nested query wrappers preserve table names in member, visitor and review reads.
+
+Owners can review every past class from Attendance, with date filters and an oldest-first list. The dashboard counts unfinished reviews across all past classes. Finish attendance checks members and visitors, supports an explicit nobody-attended confirmation, and records the reviewer. A changed roster needs another review. Existing classes start unreviewed. The existing 14-day editing limit also applies to finishing, pending the historical correction decision. Migration 0068 is applied to dev. Workspace typecheck and lint passed. Tests are written but not run.
+
+## Unreleased: the seed catches up with the membership model
+
+The demo gym "Alma beta" ran on the legacy branch dues, which no branch made today uses. It now runs on shared memberships: plans with a price history, a membership policy with the bank details, an assignment per student, this month on all four answers (paid, silent, reminded, claimed), a plan change waiting for the 1st, one person with no membership and a claimed purchase for the owner to confirm. `member_dues` and `payment_settings` are gone from the seed; the confirmed `payment_claim` history stays, because the referrals ledger reads revenue off it and off nothing else. The gym also gained a manager who holds no branch membership, an archived member, an address and map link, and leads spread across the funnel. `seed fill` writes memberships when the academy it fills runs the gate, and `seed clear` takes them back out. `seed down` no longer fails on a gym somebody used: teardown was missing `notification`, `product_event`, `access_plan_price` and `membership_purchase`, all of which hold a foreign key into the seed academy. The pilot gym's three plans got prices and a policy, so they can actually be held.
+
 ## Unreleased: staff stay separate from members
 
 Workspace typecheck passed 17/17 and lint passed 15/15. Regression tests were written but not run. No migration or billing cleanup was applied.

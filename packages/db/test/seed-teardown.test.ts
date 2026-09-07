@@ -50,6 +50,17 @@ describe("seed roundtrip — up then down", () => {
     );
 
     await seedAll(exec, { realUser, now });
+
+    // What USING the demo gym writes: an announcement in the notification
+    // centre and a product event. Neither is seeded, both hold a foreign key
+    // into the seed academy, and teardown used to leave them behind — which
+    // made `seed down` fail on the entity delete.
+    await pg.exec(
+      `INSERT INTO "notification" (academy_id, user_id, kind, title, body)
+       VALUES ('${SEED_ACADEMY.id}', 'seed_user_s01', 'announcement', 'Mat closed', 'No class tonight.');
+       INSERT INTO "product_event" (organization_id, entity_id, kind, name)
+       VALUES ('${SEED_ACADEMY.id}', '${SEED_ACADEMY.id}', 'milestone', 'first_class');`,
+    );
   });
 
   afterAll(async () => {
@@ -98,8 +109,23 @@ describe("seed roundtrip — up then down", () => {
       "member_referral",
       "member_referral_audit",
       "drop_in",
+      "notification",
     ]) {
       expect(await countLike(table, "academy_id", "seed_org_%")).toBe(0);
+    }
+    for (const table of [
+      "access_plan",
+      "access_plan_price",
+      "access_plan_entity",
+      "access_assignment",
+      "access_assignment_change",
+      "membership_month",
+      "membership_month_audit",
+      "membership_policy",
+      "membership_purchase",
+      "product_event",
+    ]) {
+      expect(await countLike(table, "organization_id", "seed_org_%")).toBe(0);
     }
   });
 

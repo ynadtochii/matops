@@ -2,6 +2,7 @@
 
 # Map: matops — MVP rebuild (product spec + architecture)
 
+- [133: Explicit attendance review](/Users/kuna/projects/matops/docs/issues/133-explicit-attendance-review.md): all past classes, explicit completion, and review after roster changes. Implementation in progress.
 - [132: Staff roster isolation](/Users/kuna/projects/matops/docs/issues/132-staff-roster-isolation.md): staff access, student-only Members, and preserved billing history.
 
 **Planned feature documents**

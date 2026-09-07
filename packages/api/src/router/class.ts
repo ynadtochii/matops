@@ -6,6 +6,7 @@ import type { Membership } from "@matops/domain";
 import {
   and,
   asc,
+  attendanceReviewSnapshot,
   eq,
   eventRole,
   getTableColumns,
@@ -165,6 +166,7 @@ export const classRouter = {
       .select({
         ...getTableColumns(classInstance),
         instructorName: user.name,
+        attendanceReviewed: sql<boolean>`coalesce(${classInstance.attendanceReviewedAt} IS NOT NULL AND ${classInstance.attendanceReviewFingerprint} = ${attendanceReviewSnapshot()}->>'fingerprint', false)`,
         pendingCount: sql<number>`(
           SELECT count(*)::int FROM ${classParticipation}
           WHERE ${classParticipation.classId} = ${classInstance.id}

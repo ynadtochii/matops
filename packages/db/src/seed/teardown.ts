@@ -17,6 +17,7 @@ import {
   accessAssignmentChange,
   accessPlan,
   accessPlanEntity,
+  accessPlanPrice,
   account,
   classInstance,
   classParticipation,
@@ -38,7 +39,10 @@ import {
   membershipMonthAudit,
   membershipPlan,
   membershipPolicy,
+  membershipPurchase,
+  notification,
   organization,
+  productEvent,
   paymentClaim,
   paymentSettings,
   rankPromotion,
@@ -141,6 +145,19 @@ export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
     exec.delete(curriculumTrack).where(inArray(curriculumTrack.academyId, ids)),
   );
 
+  // What the demo gym wrote while it was being USED: the notification centre
+  // and the product event log. Neither is ever seeded, and both hold a foreign
+  // key to the entity or the organization, so `seed down` on a gym somebody
+  // actually clicked around in fails without them.
+  await del("notification", () =>
+    exec.delete(notification).where(inArray(notification.academyId, ids)),
+  );
+  await del("product_event", () =>
+    exec
+      .delete(productEvent)
+      .where(inArray(productEvent.organizationId, orgIds)),
+  );
+
   // Shared memberships, scoped by the seed org id (ADR 126). Children first:
   // the months and the audit hang off an assignment, and `access_plan_entity`
   // holds a composite key to `entity`, so all of it goes before the entity does.
@@ -153,6 +170,11 @@ export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
     exec
       .delete(membershipMonth)
       .where(inArray(membershipMonth.organizationId, orgIds)),
+  );
+  await del("membership_purchase", () =>
+    exec
+      .delete(membershipPurchase)
+      .where(inArray(membershipPurchase.organizationId, orgIds)),
   );
   await del("access_assignment_change", () =>
     exec
@@ -173,6 +195,11 @@ export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
     exec
       .delete(membershipPolicy)
       .where(inArray(membershipPolicy.organizationId, orgIds)),
+  );
+  await del("access_plan_price", () =>
+    exec
+      .delete(accessPlanPrice)
+      .where(inArray(accessPlanPrice.organizationId, orgIds)),
   );
   await del("access_plan", () =>
     exec.delete(accessPlan).where(inArray(accessPlan.organizationId, orgIds)),
@@ -223,7 +250,7 @@ export interface SeedAcademyStatus {
   present: boolean;
   members: number;
   classes: number;
-  dues: number;
+  memberships: number;
 }
 
 /** Report which seed academies exist and roughly how much data each holds. */
@@ -243,10 +270,10 @@ export async function seedStatus(exec: SeedExec): Promise<SeedAcademyStatus[]> {
       .select({ n: count() })
       .from(classInstance)
       .where(eq(classInstance.academyId, a.id));
-    const dues = await exec
+    const memberships = await exec
       .select({ n: count() })
-      .from(memberDues)
-      .where(eq(memberDues.academyId, a.id));
+      .from(accessAssignment)
+      .where(eq(accessAssignment.organizationId, a.id));
     result.push({
       key: a.key,
       academyId: a.id,
@@ -254,7 +281,7 @@ export async function seedStatus(exec: SeedExec): Promise<SeedAcademyStatus[]> {
       present: org.length > 0,
       members: members[0]?.n ?? 0,
       classes: classes[0]?.n ?? 0,
-      dues: dues[0]?.n ?? 0,
+      memberships: memberships[0]?.n ?? 0,
     });
   }
   return result;

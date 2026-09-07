@@ -165,6 +165,9 @@ export const classInstance = pgTable(
     // Phase 4 (docs/issues/17): stamped when the reminder cron has pushed this
     // class's reminder, so a re-run never double-sends (idempotency guard).
     reminderSentAt: t.timestamp({ withTimezone: true }),
+    attendanceReviewedAt: t.timestamp({ withTimezone: true }),
+    attendanceReviewedBy: t.text(),
+    attendanceReviewFingerprint: t.text(),
     deletedAt: t.timestamp({ withTimezone: true }),
     createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: t

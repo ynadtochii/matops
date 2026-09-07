@@ -431,3 +431,248 @@ describe("attendance.addVisitor", () => {
     ).toBe("FORBIDDEN");
   });
 });
+
+describe("attendance review", () => {
+  it("loads member and visitor rosters and keeps review counts on their class", async () => {
+    const h = await base();
+    await seedParticipations(h.pg, [
+      {
+        classId: YESTERDAY,
+        academyId: A,
+        studentId: ANA,
+        attendanceStatus: "present",
+      },
+      {
+        classId: TODAY,
+        academyId: A,
+        studentId: BO,
+        attendanceStatus: "absent",
+      },
+    ]);
+    const caller = h.as(OWNER, A).attendance;
+    await caller.addVisitor({
+      classId: YESTERDAY,
+      firstName: "Visitor",
+      lastName: "",
+      phone: "+351911111111",
+    });
+    const yesterday = await caller.list({ id: YESTERDAY });
+    const today = await caller.list({ id: TODAY });
+    expect(yesterday.rows.map((row) => row.studentId)).toEqual([ANA]);
+    expect(yesterday.dropIns).toHaveLength(1);
+    expect(yesterday.review).toMatchObject({
+      present: 2,
+      absent: 0,
+      unmarked: 0,
+      total: 2,
+    });
+    expect(today.rows.map((row) => row.studentId)).toEqual([BO]);
+    expect(today.dropIns).toHaveLength(0);
+    expect(today.review).toMatchObject({
+      present: 0,
+      absent: 1,
+      unmarked: 0,
+      total: 1,
+    });
+    expect(yesterday.review.fingerprint).not.toBe(today.review.fingerprint);
+  });
+
+  it("keeps the existing editing limit when finishing older attendance", async () => {
+    const h = await base();
+    const caller = h.as(OWNER, A).attendance;
+    const roster = await caller.list({ id: LONG_AGO });
+    expect(
+      await rejectionCode(
+        caller.finish({
+          id: LONG_AGO,
+          fingerprint: roster.review.fingerprint,
+          nobodyAttended: true,
+        }),
+      ),
+    ).toBe("PRECONDITION_FAILED");
+  });
+
+  it("includes empty and old classes until someone reviews them", async () => {
+    const h = await base();
+    const caller = h.as(OWNER, A).attendance;
+    const queue = await caller.reviewQueue({});
+    expect(queue.rows[0]?.id).toBe(LONG_AGO);
+    expect(queue.rows.map((row) => row.id)).toContain(YESTERDAY);
+    expect(queue.rows.map((row) => row.id)).not.toContain(NEXT_WEEK);
+    const roster = await caller.list({ id: YESTERDAY });
+    expect(
+      await rejectionCode(
+        caller.finish({
+          id: YESTERDAY,
+          fingerprint: roster.review.fingerprint,
+        }),
+      ),
+    ).toBe("CONFLICT");
+    await caller.finish({
+      id: YESTERDAY,
+      fingerprint: roster.review.fingerprint,
+      nobodyAttended: true,
+    });
+    expect(
+      (await caller.reviewQueue({})).rows.map((row) => row.id),
+    ).not.toContain(YESTERDAY);
+    expect((await caller.list({ id: YESTERDAY })).review.reviewed).toBe(true);
+  });
+
+  it("refuses partial attendance and reopens after changes or deletion", async () => {
+    const h = await base();
+    await seedParticipations(h.pg, [
+      { classId: YESTERDAY, academyId: A, studentId: ANA },
+      { classId: YESTERDAY, academyId: A, studentId: BO },
+    ]);
+    const caller = h.as(OWNER, A).attendance;
+    await caller.mark({
+      classId: YESTERDAY,
+      studentId: ANA,
+      status: "present",
+    });
+    const partial = await caller.list({ id: YESTERDAY });
+    expect(partial.review.unmarked).toBe(1);
+    expect(
+      await rejectionCode(
+        caller.finish({
+          id: YESTERDAY,
+          fingerprint: partial.review.fingerprint,
+        }),
+      ),
+    ).toBe("CONFLICT");
+    await caller.mark({ classId: YESTERDAY, studentId: BO, status: "absent" });
+    expect(
+      await rejectionCode(
+        caller.finish({
+          id: YESTERDAY,
+          fingerprint: partial.review.fingerprint,
+        }),
+      ),
+    ).toBe("CONFLICT");
+    const complete = await caller.list({ id: YESTERDAY });
+    await caller.finish({
+      id: YESTERDAY,
+      fingerprint: complete.review.fingerprint,
+    });
+    expect((await caller.list({ id: YESTERDAY })).review.reviewed).toBe(true);
+    await h.pg.query(
+      "DELETE FROM class_participation WHERE class_id = $1 AND student_id = $2",
+      [YESTERDAY, BO],
+    );
+    expect((await caller.list({ id: YESTERDAY })).review.reviewed).toBe(false);
+  });
+
+  it("filters inclusive branch dates without narrowing the all-time count", async () => {
+    const h = await base();
+    await h.pg.query("UPDATE entity SET time_zone = $1 WHERE id = $2", [
+      "America/Los_Angeles",
+      A,
+    ]);
+    await h.pg.query('UPDATE "class" SET starts_at = $1 WHERE id = $2', [
+      "2020-01-02T01:00:00Z",
+      YESTERDAY,
+    ]);
+    const caller = h.as(OWNER, A).attendance;
+    const all = await caller.reviewQueue({});
+    const day = await caller.reviewQueue({
+      from: "2020-01-01",
+      to: "2020-01-01",
+    });
+    expect(day.rows.map((row) => row.id)).toEqual([YESTERDAY]);
+    expect(day.total).toBe(1);
+    expect(day.needsReview).toBe(all.needsReview);
+    expect(
+      (await caller.reviewQueue({ from: "2020-01-02", to: "2020-01-02" }))
+        .total,
+    ).toBe(0);
+  });
+
+  it("includes visitor marks and invalidates a review after a visitor change", async () => {
+    const h = await base();
+    const caller = h.as(OWNER, A).attendance;
+    await caller.addVisitor({
+      classId: YESTERDAY,
+      firstName: "Visitor",
+      lastName: "",
+      phone: "+351911111111",
+    });
+    const roster = await caller.list({ id: YESTERDAY });
+    expect(roster.review.present).toBe(1);
+    const visitor = roster.dropIns[0];
+    if (!visitor) throw new Error("Visitor missing");
+    await caller.finish({
+      id: YESTERDAY,
+      fingerprint: roster.review.fingerprint,
+    });
+    await caller.markVisitor({
+      classId: YESTERDAY,
+      visitId: visitor.id,
+      status: "unmarked",
+    });
+    const changed = await caller.list({ id: YESTERDAY });
+    expect(changed.review.reviewed).toBe(false);
+    expect(changed.review.unmarked).toBe(1);
+    expect(
+      await rejectionCode(
+        caller.finish({
+          id: YESTERDAY,
+          fingerprint: changed.review.fingerprint,
+          nobodyAttended: true,
+        }),
+      ),
+    ).toBe("CONFLICT");
+  });
+
+  it("excludes cancelled classes and refuses students and foreign classes", async () => {
+    const h = await base();
+    await h.pg.query('UPDATE "class" SET status = $1 WHERE id = $2', [
+      "cancelled",
+      YESTERDAY,
+    ]);
+    const caller = h.as(OWNER, A).attendance;
+    expect(
+      (await caller.reviewQueue({})).rows.map((row) => row.id),
+    ).not.toContain(YESTERDAY);
+    const roster = await caller.list({ id: YESTERDAY });
+    expect(
+      await rejectionCode(
+        caller.finish({
+          id: YESTERDAY,
+          fingerprint: roster.review.fingerprint,
+          nobodyAttended: true,
+        }),
+      ),
+    ).toBe("PRECONDITION_FAILED");
+    expect(await rejectionCode(h.as(ANA, A).attendance.reviewQueue({}))).toBe(
+      "FORBIDDEN",
+    );
+    expect(
+      await rejectionCode(
+        h.as(ANA, A).attendance.finish({
+          id: LONG_AGO,
+          fingerprint: roster.review.fingerprint,
+          nobodyAttended: true,
+        }),
+      ),
+    ).toBe("FORBIDDEN");
+    await seedAcademies(h.pg, [
+      {
+        id: "academy_B",
+        code: "100002",
+        members: [{ userId: "u_other", role: "owner", status: "active" }],
+      },
+    ]);
+    const foreign = h.as("u_other", "academy_B").attendance;
+    expect((await foreign.reviewQueue({})).needsReview).toBe(0);
+    expect(
+      await rejectionCode(
+        foreign.finish({
+          id: LONG_AGO,
+          fingerprint: roster.review.fingerprint,
+          nobodyAttended: true,
+        }),
+      ),
+    ).toBe("NOT_FOUND");
+  });
+});
