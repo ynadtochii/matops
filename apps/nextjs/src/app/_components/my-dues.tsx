@@ -13,6 +13,7 @@ import { dateFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { useEntity } from "./entity";
 import { MembershipChangeNotice, MembershipNotice } from "./membership-notice";
+import { MembershipSelection } from "./membership-selection";
 import { PageHeader } from "./page-header";
 import { cardClass, DUES_TONE, ENTER, Eyebrow, Section } from "./primitives";
 import { SkeletonDuesBody } from "./skeletons";
@@ -32,7 +33,7 @@ export function MyDues() {
     trpc.payments.claim.mutationOptions({
       onSuccess: async () => {
         await queryClient.invalidateQueries(trpc.payments.pathFilter());
-        toast.success("Sent — your gym will confirm it");
+        toast.success("Payment submitted. Your gym will confirm it.");
       },
       onError: (err) => toast.error(err.message || "Could not send that"),
     }),
@@ -42,10 +43,10 @@ export function MyDues() {
     <>
       <PageHeader
         title={membershipEnforced ? "Membership" : "Membership dues"}
-        subtitle="What you owe, and how to pay it."
+        subtitle="Check your membership, payment status, and transfer details."
       />
       <MembershipNotice />
-      <MembershipChangeNotice />
+      {!membershipEnforced && <MembershipChangeNotice />}
     </>
   );
 
@@ -55,7 +56,15 @@ export function MyDues() {
     return (
       <>
         {header}
-        <MembershipSettled />
+        <div className="mt-8 space-y-8">
+          {status === "suspended" ? (
+            <SuspendedState />
+          ) : (
+            <MembershipSelection />
+          )}
+          <MembershipSettled />
+          <MembershipChangeNotice />
+        </div>
       </>
     );
   }
@@ -74,7 +83,8 @@ export function MyDues() {
       <>
         {header}
         <EmptyState title="Dues appear once your gym approves you.">
-          You can browse and book in the meantime.
+          You can browse the schedule while you wait. Booking opens after
+          approval.
         </EmptyState>
       </>
     );
@@ -122,9 +132,9 @@ export function MyDues() {
   return (
     <>
       {header}
-      <div className="flex flex-col gap-8">
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         {d && (
-          <Section label="What you owe" className={ENTER}>
+          <Section label="Your membership" className={ENTER}>
             <div className={cardClass()}>
               <div className="flex flex-wrap items-center gap-3">
                 <span className="font-mono text-2xl tabular-nums">
@@ -140,12 +150,21 @@ export function MyDues() {
                   </span>
                 </span>
               </div>
-              <p className="text-muted-foreground mt-1 text-sm">
-                {d.planName} · due{" "}
+              <p className="text-muted-foreground mt-2 text-sm">
+                {d.planName} · next due{" "}
                 <span className="font-mono tabular-nums">
                   {dateFmt.format(new Date(d.nextDueAt))}
                 </span>
               </p>
+              {openClaim && (
+                <p
+                  className="bg-brand-wash mt-4 rounded-md p-3 text-sm"
+                  role="status"
+                >
+                  Payment submitted. Waiting for your gym to confirm. You can
+                  book while it is pending.
+                </p>
+              )}
             </div>
           </Section>
         )}
@@ -157,34 +176,32 @@ export function MyDues() {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <Eyebrow>Bank details</Eyebrow>
-                    <p className="mt-1 text-sm whitespace-pre-wrap">
+                    <p className="mt-1 text-sm break-words whitespace-pre-wrap">
                       {requisites.bankDetails}
                     </p>
                   </div>
                   <CopyButton
                     value={requisites.bankDetails}
                     label="Copy bank details"
-                    iconOnly
                   />
                 </div>
-              </div>
-              <div className={cardClass()}>
-                <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="border-border mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
                   <div className="min-w-0">
-                    <Eyebrow>Reference — add this to your transfer</Eyebrow>
-                    <p className="mt-1 font-mono text-base">
+                    <Eyebrow>Transfer reference</Eyebrow>
+                    <p className="mt-1 font-mono text-base break-all">
                       {requisites.reference}
                     </p>
                   </div>
                   <CopyButton
                     value={requisites.reference}
                     label="Copy reference"
-                    iconOnly
                   />
                 </div>
               </div>
               <p className="text-muted-foreground text-sm">
-                Pay in your own bank app, then tell your gym here.
+                {openClaim
+                  ? "Keep these details for your records. Your payment is awaiting confirmation."
+                  : "Pay in your own bank app, then select “I paid” here."}
               </p>
             </div>
           ) : (
@@ -193,16 +210,11 @@ export function MyDues() {
 
           {d && (
             <div className="mt-2">
-              {openClaim ? (
-                <p className="text-muted-foreground text-sm">
-                  Payment submitted — waiting for your gym to confirm. You can
-                  book while it&apos;s pending.
-                </p>
-              ) : (
+              {!openClaim && (
                 <ConfirmDialog
-                  title="Mark this as paid?"
+                  title="Have you sent the bank transfer?"
                   description="This tells your gym you sent the transfer. They'll confirm it once the money arrives."
-                  confirmLabel="I paid"
+                  confirmLabel="Yes, I paid"
                   variant="primary"
                   onConfirm={async () => {
                     await claim.mutateAsync({});
@@ -305,24 +317,41 @@ function ChoosePlan() {
   );
 }
 
-/** Shown at an activated branch when every month is settled, so the screen is
- * never blank: the notice above says nothing when there is nothing owed. */
 function MembershipSettled() {
   const trpc = useTRPC();
   const standing = useQuery(trpc.accessPlan.mine.queryOptions());
   const memberships = standing.data?.memberships ?? [];
-  if (standing.isPending || memberships.some((m) => m.warning)) return null;
+  const settled = memberships.filter((m) => !m.warning);
+  if (standing.isPending || standing.isError) return null;
+  if (memberships.length > 0 && settled.length === 0) return null;
 
-  if (memberships.length === 0) {
-    return (
-      <EmptyState title="No membership covers you here yet.">
-        Ask your gym to put you on one.
-      </EmptyState>
-    );
-  }
+  if (memberships.length === 0) return null;
   return (
-    <EmptyState title="You are all paid up.">
-      Your gym will tell you here when the next month is due.
-    </EmptyState>
+    <Section label="Your memberships">
+      <div className="divide-border divide-y">
+        {settled.map((membership) => (
+          <div
+            key={membership.assignmentId}
+            className="flex flex-wrap items-center justify-between gap-3 py-4"
+          >
+            <div>
+              <h3 className="font-semibold">{membership.planName}</h3>
+              <p className="text-muted-foreground mt-1 text-sm">
+                {membership.status === "active"
+                  ? "No payment is due for this month."
+                  : "This membership is inactive. Contact your gym for help."}
+              </p>
+            </div>
+            <span className="text-muted-foreground text-sm">
+              {membership.status === "active"
+                ? membership.paymentRequired
+                  ? "Up to date"
+                  : "Free"
+                : "Inactive"}
+            </span>
+          </div>
+        ))}
+      </div>
+    </Section>
   );
 }

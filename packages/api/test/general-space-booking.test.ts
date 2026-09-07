@@ -185,7 +185,7 @@ describe("one place, one booking", () => {
     const before = await countOf(session);
     expect(
       await rejectionCode(at(gym, PENDING).booking.book({ classId: session })),
-    ).toBe("PRECONDITION_FAILED");
+    ).toBe("FORBIDDEN");
     expect(await countOf(session)).toBe(before);
   });
 

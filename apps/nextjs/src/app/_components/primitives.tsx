@@ -45,13 +45,22 @@ export const ROSTER_ROW =
   "border-border/60 flex min-h-11 items-center gap-3 border-b py-1.5 last:border-b-0";
 
 export const ENTER =
-  "animate-in fade-in-0 slide-in-from-bottom-1 fill-mode-backwards duration-300 motion-reduce:animate-none";
+  "animate-in fade-in-0 slide-in-from-bottom-1 fill-mode-backwards duration-300 ease-out motion-reduce:animate-none";
 
 export const TAP =
   "relative min-h-0! min-w-0! after:absolute after:-inset-2.5 after:content-[''] sm:after:hidden";
 
+/**
+ * A capped entrance stagger for list rows: the first few land one after
+ * another, everything past the cap arrives together. Uncapped, a hundred-row
+ * roster would still be dealing itself out seconds after it loaded.
+ */
+export const stagger = (index: number): CSSProperties => ({
+  animationDelay: `${Math.min(index, 6) * 40}ms`,
+});
+
 export const RESOLVE =
-  "animate-in fade-in-0 duration-200 motion-reduce:animate-none";
+  "animate-in fade-in-0 duration-200 ease-out motion-reduce:animate-none";
 
 export function Panel({
   cols = 1,
@@ -232,57 +241,6 @@ export function Eyebrow({
     >
       {children}
     </Tag>
-  );
-}
-
-export function Tabs<T extends string>({
-  label,
-  value,
-  onChange,
-  tabs,
-  className,
-}: {
-  label: string;
-  value: T;
-  onChange: (next: T) => void;
-  tabs: { id: T; label: string; count?: number }[];
-  className?: string;
-}) {
-  return (
-    <div
-      role="group"
-      aria-label={label}
-      className={cn(
-        "border-border flex [scrollbar-width:none] gap-1 overflow-x-auto border-b [&::-webkit-scrollbar]:hidden",
-        className,
-      )}
-    >
-      {tabs.map((t) => {
-        const active = t.id === value;
-        return (
-          <button
-            key={t.id}
-            type="button"
-            aria-pressed={active}
-            onClick={() => onChange(t.id)}
-            className={cn(
-              "relative flex min-h-11 shrink-0 items-center gap-2 px-3 py-2 text-sm whitespace-nowrap transition-colors sm:min-h-0",
-              active
-                ? "text-foreground font-medium"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {t.label}
-            {t.count != null && t.count > 0 && (
-              <CountBadge>{t.count}</CountBadge>
-            )}
-            {active && (
-              <span className="bg-brand absolute inset-x-0 bottom-0 h-0.5" />
-            )}
-          </button>
-        );
-      })}
-    </div>
   );
 }
 

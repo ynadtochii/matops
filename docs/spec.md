@@ -1,5 +1,33 @@
 # matops — MVP Product Spec (v1)
 
+**Staff and student separation (ADR 132)**
+
+- **ST1:** Members lists students, including pending student requests. Staff lists owners, managers, instructors, and pending coach requests. Inactive staff remain in Staff.
+- **ST2:** Active staff train at their branch without a paid membership. Staff role, approval status, and payment standing are separate. Inherited organization access creates no student enrollment.
+- **ST3:** Roster warnings, activation previews, booking review, and overdue cancellation respect staff access. A staff role at one branch does not exempt student access elsewhere.
+- **ST4:** Staff participants remain in class attendance with role badges and count toward capacity. Teaching alone creates no student attendance.
+- **ST5:** Staff lifecycle controls preserve history. Moving an instructor to Members is explicit and creates no paid plan. Branch actions cannot remove inherited organization authority.
+- **ST6:** New assignments cannot sell access only to staff branches. Existing assignments and payment history require review, not automatic cancellation. The person profile marks staff-only plans for review.
+
+These rules replace earlier statements that owners and instructors require membership coverage. See [ADR 132](/Users/kuna/projects/matops/docs/issues/132-staff-roster-isolation.md).
+
+
+**Student membership selection (ADR 130)**
+
+Status: code implemented. Workspace typecheck passes 17/17 and lint passes 15/15. [Decision](/Users/kuna/projects/matops/docs/issues/130-students-choose-a-membership.md). Tests were written but have not run. The migration has not been applied. Browser control timed out, so browser acceptance remains open.
+
+- **SP1: Approval comes before purchase.** A student joins using the existing branch code or invite. While pending, they can browse that branch's schedule and class details. They cannot book or check in. Account edits remain available. Approved students can choose a published shared membership covering their current branch.
+- **SP2: Plans explain their coverage.** A student sees the price, currency, calendar month and every included branch before selecting. A BJJ student can choose a BJJ plus Gym bundle when it covers their BJJ branch. Private plans, plans without a usable price, and plans with unavailable coverage cannot be selected. Owners and managers choose which plans to publish; existing plans start private.
+- **SP3: Selection reserves no access.** Selection creates a pending purchase, not an active assignment. The student sees bank details and a payment reference, transfers money outside the app, then selects **I paid**. Neither selection nor the claim grants access. A student can cancel an unclaimed purchase. A claimed payment needs staff review. Staff can close rejected requests after recording the outcome. A student can cancel a rejected free request. Pending students may preview the catalog, but cannot select a plan.
+- **SP4: Confirmation activates the membership.** An owner or manager checks the transfer and confirms the purchase. Confirmation creates the assignment once and records a paid month only for a paid plan. Free plans require approval, but create no payment record. Later months remain usable while their effective historical price is zero. It adds missing included branches as active student memberships. It preserves existing roles and never restores a suspended, rejected, archived or removed branch membership. A changed restriction requires staff review before activation.
+- **SP5: Calendar months stay explicit.** Students choose this month or next month. The full monthly amount and covered dates appear before payment; there is no proration. A future membership does not permit booking before its start. A stale price, changed coverage or a month that has passed sends a confirmed transfer to a staff resolution queue. It grants no access until staff handle the issue; no automatic refund occurs.
+- **SP6: Existing access rules remain separate.** First purchases receive no access before confirmation. Existing renewal grace and staff privileges remain. Users may cancel their own existing bookings while payment blocks new bookings. Older provisional booking records remain readable, but new pending bookings are refused in both clients by the shared API.
+- **SP7: The first release is web selection.** Student purchase and staff review use the web app. Existing mobile requests retain their shapes and receive the same approval checks. Organization invitations, branch discovery outside the relevant catalog, trial policies, card processing and student plan replacement are outside this release.
+
+These rules replace earlier permissions for pending members to book or check in. Historical release notes below describe their original releases.
+
+---
+
 **The manager runs every branch, and a plan change waits for the 1st (v7.7)**
 
 Status: **built, not clicked through**. Decisions: [ADR 129](/Users/kuna/projects/matops/docs/issues/129-the-manager-runs-every-branch.md). Run file: [PLAN.md](/Users/kuna/projects/matops/PLAN.md).
@@ -123,13 +151,13 @@ The owner is the buyer, but the **student is the user**. The owner's data only e
 
 ### Roles
 
-| Role                           | Client       | Can do                                                                                                                                                                                                                   |
-| ------------------------------ | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Owner**                      | Web          | Everything: academy settings, invites, member list + **approve members and coaches**, all templates/classes, attendance                                                                                                  |
-| **Instructor**                 | Web          | _(after owner approval)_ Run the **whole schedule**, **take attendance**, and see **their own Coaches card**; _not_ the Members screen, the Referrals ledger, Payments controls, academy settings, invites, or approvals |
+| Role                           | Client       | Can do                                                                                                                                                                                                                                                         |
+| ------------------------------ | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Owner**                      | Web          | Everything: academy settings, invites, member list + **approve members and coaches**, all templates/classes, attendance                                                                                                                                        |
+| **Instructor**                 | Web          | _(after owner approval)_ Run the **whole schedule**, **take attendance**, and see **their own Coaches card**; _not_ the Members screen, the Referrals ledger, Payments controls, academy settings, invites, or approvals                                       |
 | **Manager (gym)** _(v7.6)_     | Web          | _(organization level, ADR 128)_ The gym's people, plans, payments, staff and reports; assign memberships, confirm claims, announce, finish setup; _not_ deleting the gym, owner changes, the commercial account, or switching a branch onto shared memberships |
-| **Pending (student or coach)** | Mobile / Web | **View-only:** browse the schedule, book/cancel own, check in. **No** member names, no tools — until the owner approves                                                                                                  |
-| **Student**                    | Mobile       | _(after approval)_ View schedule, **book/cancel**, see who's in a class, own classes/profile                                                                                                                             |
+| **Pending (student or coach)** | Mobile / Web | **View-only:** browse the schedule, book/cancel own, check in. **No** member names, no tools — until the owner approves                                                                                                                                        |
+| **Student**                    | Mobile       | _(after approval)_ View schedule, **book/cancel**, see who's in a class, own classes/profile                                                                                                                                                                   |
 
 _(Everyone joins **pending/view-only**; the invite link carries the intended role; **owner approval** grants it — this is uniform for students and coaches, so a forwarded coach link can't hand out real access. Roles are **per membership**: one login can be an owner at one gym and a student at another. The **client is the lens** — web shows gyms you run, mobile shows gyms you train at. Multi-academy is native; v1 shows one active academy with a **switcher** if you belong to more than one.)_
 
@@ -178,8 +206,8 @@ No blank waiting screen. A **slim banner** on the schedule: "Pending approval �
 
 - Title, discipline, day/time, duration, instructor, capacity ("8 / 12").
 - **You can book up to a week ahead** _(v3.9, ADR 79)._ Classes exist six months out so the owner can plan and print a poster, but a booking further ahead than seven days is noise: the gym's plans change first. Both schedules only ever show the rolling seven-day week, so this changes nothing a student can see — it closes the one way past it, a direct link to `/class/<id>` for a class further out, which now answers "You can book up to 7 days ahead". _(Amended v4.2, ADR 95: both clients now ask the same `canBook` rule the server does, so that page shows the reason and offers no Book button, instead of offering one the server then refuses.)_
-- **Booking is never blocked.** Primary action, in a **sticky bottom bar** (thumb zone; v1.8 slice 6) while the details scroll above:
-  - Not booked → **Book** (success **toast**, e.g. "Booked — Tue · 18:00"). Pending members can book too; theirs is tagged **"pending approval"**.
+- **Booking requires approval and valid branch access.** Primary action, in a **sticky bottom bar** (thumb zone; v1.8 slice 6) while the details scroll above:
+  - Not booked → **Book** (success **toast**, e.g. "Booked — Tue · 18:00"). Pending members can browse but cannot book (SP1).
   - When the class is at/over capacity → the count shows **red** ("**22/20 · may be busy**") and Book asks **"This class looks full — book anyway?"** → user decides; the owner manages the room.
   - Booked → **Cancel booking** (also toasts).
   - _Booking here is optional — the S4 schedule row books inline (v1.8). The shared `useBookClass` rule drives both surfaces._
@@ -213,7 +241,7 @@ No blank waiting screen. A **slim banner** on the schedule: "Pending approval �
 - **The member path is the Scan tab** _(v3.0, ADR 70)_. Tap **Scan** → the phone's own scanner sheet opens → point it at the gym poster → the app **books + marks attended** for the class happening now → _"You're checked in ✓"_. Camera permission is asked on the first tap, not at launch; refused for good → the tab says so and offers system settings. A phone that cannot present the OS scanner (iOS 15, Android without Play Services) is told to use its camera app on the poster. Any other code (a wifi QR, the gym's own `/join` poster) **closes the scanner** and says what to scan instead — the sheet covers the screen, so a message left behind it is a message nobody reads.
 - **The poster is unchanged:** it encodes the public **`https://…/checkin/<academyId>`** page, so a first-time, no-app visitor still lands on the **drop-in form** (§4), and **"Open the app to check in"** stays there as the deep-link fallback (`matops://checkin/<academyId>`) for anyone who scans with the camera app. The scanner accepts either form and refuses anything else, including the gym's `/join/<token>` invite poster.
 - **The web has no scanner** _(v3.2, ADR 73)_. It does not need one: the poster's own URL is a web page, so a student who scans it with their phone's camera app lands on `/checkin/<academyId>` and checks in there. Only scanning from **inside** the app is app-only.
-- Works **even if the class is full** (you're physically there); **already booked → attend, no double-book**; **pending member → allowed** (provisional). Edge messages, never a dead end: not signed in → sign in then complete; no class live → _"No class to check into right now."_; not a member → clear message (owner can still mark present, O5). _(v4.2, ADR 96: the server now enforces "the class happening now" too. It had been guarding the check-in mutation with the 14-day attendance backfill window instead, so the rule described here ran on the client only. Same rule, same message, now true on both sides.)_
+- Works **even if the class is full** (you're physically there); **already booked → attend, no double-book**; **pending member → read-only, check-in refused** (SP1). Edge messages, never a dead end: not signed in → sign in then complete; no class live → _"No class to check into right now."_; not a member → clear message (owner can still mark present, O5). _(v4.2, ADR 96: the server now enforces "the class happening now" too. It had been guarding the check-in mutation with the 14-day attendance backfill window instead, so the rule described here ran on the client only. Same rule, same message, now true on both sides.)_
 
 ### S9 · Pay (dues + requisites) _(v1.3 — manual bank transfer; ADR 40)_
 

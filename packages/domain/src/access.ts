@@ -104,3 +104,29 @@ export function isArchived(m: Pick<Membership, "status">): boolean {
 export function isOnRoster(m: Pick<Membership, "status">): boolean {
   return !isArchived(m) && m.status !== "removed";
 }
+
+export function isStaffRole(m: {
+  role: string;
+  invitedRole?: string | null;
+  status?: string;
+}): boolean {
+  return (
+    ["owner", "manager", "instructor"].includes(m.role) ||
+    (m.status === "pending" &&
+      ["owner", "manager", "instructor"].includes(m.invitedRole ?? ""))
+  );
+}
+
+export function isStudentMember(m: {
+  role: string;
+  invitedRole?: string | null;
+  status?: string;
+}): boolean {
+  return (
+    !isStaffRole(m) &&
+    (m.role === "student" ||
+      (m.role === "member" &&
+        m.status === "pending" &&
+        (m.invitedRole ?? "student") === "student"))
+  );
+}

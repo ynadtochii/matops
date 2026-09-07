@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import type { BranchIssue, SetupKey } from "@matops/domain";
 import { entityHref } from "@matops/domain";
+import { Button } from "@matops/ui/button";
 
 import { useTRPC } from "~/trpc/react";
 import { useOrganization } from "./entity";
@@ -22,7 +23,7 @@ import { SkeletonCard } from "./skeletons";
 const LABELS: Record<SetupKey, string> = {
   gym: "Name your gym",
   branch: "Add your first branch",
-  location: "Say where each branch is, and its time zone",
+  location: "Add branch locations and time zones",
   schedule: "Put your weekly classes on the schedule",
   staff: "Bring an instructor in",
   bank: "Add the bank details members pay into",
@@ -89,8 +90,9 @@ function hrefFor(
     case "invite":
       return at("/members");
     case "plan":
+      return "/memberships?tab=plans";
     case "ready":
-      return "/memberships";
+      return "/memberships?tab=access";
     case "assign":
       return "/people";
   }
@@ -104,23 +106,79 @@ export function SetupChecklist({ compact = false }: { compact?: boolean }) {
   // The compact card is a reminder on a screen that has its own job, so it
   // draws nothing while it loads rather than a skeleton nobody asked for.
   if (setup.isPending) return compact ? null : <SkeletonCard />;
-  // A checklist that cannot load is not worth an error state: the screen it
-  // sits on still works, so it steps aside rather than shouting.
-  if (setup.isError) return null;
+  if (setup.isError)
+    return (
+      <div
+        role="status"
+        className={`${cardClass()} flex flex-wrap items-center justify-between gap-3 text-sm`}
+      >
+        <p>Setup progress could not load.</p>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={setup.isFetching}
+          onClick={() => void setup.refetch()}
+        >
+          Retry setup
+        </Button>
+      </div>
+    );
 
   const { items, progress, branches } = setup.data;
   const firstBranchId = entities[0]?.id;
   const behind = branches.filter((b) => b.issues.length > 0);
   // Finished setup is not a thing to keep looking at. The card goes for good
   // once every item is done, and comes back on its own if one stops being true.
-  if (progress.complete) return null;
+  if (progress.complete && (!compact || behind.length === 0)) return null;
+
+  const checklist = (
+    <ul className="flex flex-col gap-2">
+      {items.map((item) => (
+        <li key={item.key} className="flex items-center gap-3">
+          <span className="sr-only">
+            {item.done
+              ? "Complete: "
+              : item.blocked
+                ? "Requires earlier steps: "
+                : "To do: "}
+          </span>
+          <span
+            aria-hidden
+            className={`flex size-5 shrink-0 items-center justify-center rounded-full border ${
+              item.done
+                ? "bg-brand-strong border-transparent text-white"
+                : "border-border"
+            }`}
+          >
+            {item.done && <Tick />}
+          </span>
+          <ItemLabel
+            item={item}
+            firstBranchId={firstBranchId}
+            behind={behind}
+            className={`text-sm ${
+              item.done
+                ? "text-muted-foreground line-through"
+                : item.blocked
+                  ? "text-muted-foreground"
+                  : ""
+            }`}
+          />
+        </li>
+      ))}
+    </ul>
+  );
 
   if (compact) {
     const next = items.find((i) => !i.done && !i.blocked);
     return (
-      <section className={`${cardClass()} ${ENTER} flex flex-col gap-2`}>
+      <section
+        className={`${ENTER} border-border flex flex-col gap-3 border-t pt-5`}
+      >
         <div className="flex items-baseline justify-between gap-3">
-          <Eyebrow>Setting up</Eyebrow>
+          <h2 className="text-muted-foreground text-sm font-medium">
+            Gym setup
+          </h2>
           <span className="text-muted-foreground text-xs tabular-nums">
             {progress.done} of {progress.total}
           </span>
@@ -137,9 +195,18 @@ export function SetupChecklist({ compact = false }: { compact?: boolean }) {
               />
             </>
           ) : (
-            "Waiting on the steps above."
+            "Open the checklist to review the remaining steps."
           )}
         </p>
+        <details>
+          <summary className="focus-visible:outline-ring min-h-11 cursor-pointer content-center text-sm font-medium focus-visible:outline-2">
+            View setup checklist
+          </summary>
+          <div className="flex flex-col gap-5 pt-3">
+            {checklist}
+            <BranchLaunchHealth embedded />
+          </div>
+        </details>
       </section>
     );
   }
@@ -152,34 +219,7 @@ export function SetupChecklist({ compact = false }: { compact?: boolean }) {
           {progress.done} of {progress.total}
         </span>
       </div>
-      <ul className="flex flex-col gap-2">
-        {items.map((item) => (
-          <li key={item.key} className="flex items-center gap-3">
-            <span
-              aria-hidden
-              className={`flex size-5 shrink-0 items-center justify-center rounded-full border ${
-                item.done
-                  ? "bg-brand-strong border-transparent text-white"
-                  : "border-border"
-              }`}
-            >
-              {item.done && <Tick />}
-            </span>
-            <ItemLabel
-              item={item}
-              firstBranchId={firstBranchId}
-              behind={behind}
-              className={`text-sm ${
-                item.done
-                  ? "text-muted-foreground line-through"
-                  : item.blocked
-                    ? "text-muted-foreground"
-                    : ""
-              }`}
-            />
-          </li>
-        ))}
-      </ul>
+      {checklist}
     </section>
   );
 }
@@ -206,18 +246,21 @@ function ItemLabel({
       : hrefFor(item.key, firstBranchId, behind);
   if (!href) return <span className={className}>{LABELS[item.key]}</span>;
   return (
-    <Link href={href} className={`${className ?? ""} hover:underline`}>
+    <Link
+      href={href}
+      className={`${className ?? ""} focus-visible:outline-ring inline-flex min-h-11 items-center underline underline-offset-4 focus-visible:outline-2`}
+    >
       {LABELS[item.key]}
     </Link>
   );
 }
 
 const ISSUES: Record<BranchIssue, string> = {
-  schedule: "nothing on the schedule",
-  staff: "nobody runs it",
-  membership: "no plan covers it",
-  covered: "members nothing covers",
-  public: "public booking on, no class shared",
+  schedule: "Add classes",
+  staff: "Assign an instructor",
+  membership: "Add membership coverage",
+  covered: "Review member access",
+  public: "Choose classes for public booking",
 };
 
 /**
@@ -225,7 +268,11 @@ const ISSUES: Record<BranchIssue, string> = {
  * is not listed: the block exists to name work, so a gym where every branch is
  * ready draws nothing at all rather than a row of ticks.
  */
-export function BranchLaunchHealth() {
+export function BranchLaunchHealth({
+  embedded = false,
+}: {
+  embedded?: boolean;
+}) {
   const trpc = useTRPC();
   const setup = useQuery(trpc.organization.setup.queryOptions());
 
@@ -234,20 +281,40 @@ export function BranchLaunchHealth() {
   if (behind.length === 0) return null;
 
   return (
-    <section className={`${cardClass()} ${ENTER} flex flex-col gap-3`}>
-      <Eyebrow>Not ready to open</Eyebrow>
+    <section
+      className={`${embedded ? "border-border border-t pt-4" : cardClass()} ${ENTER} flex flex-col gap-3`}
+    >
+      <h2 className="text-sm font-semibold">Branch setup</h2>
       <ul className="flex flex-col gap-2">
         {behind.map((b) => (
-          <li key={b.id} className="flex flex-wrap items-baseline gap-x-2">
+          <li key={b.id} className="flex min-w-0 flex-col gap-1">
             <Link
               href={entityHref(b.id)}
               className="text-sm font-medium hover:underline"
             >
               {b.name}
             </Link>
-            <span className="text-muted-foreground text-sm">
-              {b.issues.map((i) => ISSUES[i]).join(" · ")}
-            </span>
+            <ul className="flex flex-wrap gap-x-4 gap-y-1">
+              {b.issues.map((issue) => (
+                <li key={issue}>
+                  <Link
+                    href={
+                      issue === "membership"
+                        ? "/memberships?tab=plans"
+                        : issue === "covered"
+                          ? "/memberships?tab=access"
+                          : entityHref(
+                              b.id,
+                              issue === "staff" ? "/coaches" : "/schedule",
+                            )
+                    }
+                    className="text-brand-strong focus-visible:outline-ring inline-flex min-h-11 items-center text-sm underline underline-offset-4 focus-visible:outline-2"
+                  >
+                    {ISSUES[issue]}
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </li>
         ))}
       </ul>

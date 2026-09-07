@@ -17,7 +17,7 @@ import { useTRPC } from "~/trpc/react";
 import { AnnounceForm } from "./announce-form";
 import { useEntity, useEntityHref } from "./entity";
 import { PageHeader } from "./page-header";
-import { cardClass, Section } from "./primitives";
+import { cardClass, ENTER, Section, stagger } from "./primitives";
 import { SkeletonFeed } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 
@@ -92,8 +92,8 @@ function Feed({ items }: { items: FeedItem[] }) {
           label={dayLongFmt.format(rows[0]?.createdAt ?? new Date())}
         >
           <ul className="flex flex-col gap-2">
-            {rows.map((n) => (
-              <li key={n.id}>
+            {rows.map((n, i) => (
+              <li key={n.id} style={stagger(i)} className={ENTER}>
                 <FeedRow item={n} />
               </li>
             ))}

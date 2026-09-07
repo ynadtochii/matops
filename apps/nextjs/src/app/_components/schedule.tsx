@@ -2,7 +2,12 @@
 
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
 import type { DisciplineTone } from "@matops/domain";
@@ -42,7 +47,7 @@ import { useTRPC } from "~/trpc/react";
 import { ClassRoster } from "./class-roster";
 import { InstructorOptions } from "./coach-select";
 import { useEntity } from "./entity";
-import { Section } from "./primitives";
+import { RESOLVE, Section } from "./primitives";
 import { SchedulePoster } from "./schedule-poster";
 import { SkeletonScheduleWeek } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
@@ -163,7 +168,12 @@ export function Schedule({
     () => scheduleWeekWindow(new Date(), offset),
     [offset],
   );
-  const week = useQuery(trpc.class.week.queryOptions(weekWindow));
+  const week = useQuery(
+    trpc.class.week.queryOptions(weekWindow, {
+      placeholderData: keepPreviousData,
+    }),
+  );
+  const stale = week.isPlaceholderData;
   const templates = useQuery(trpc.template.list.queryOptions());
   const me = useEntity();
   const invalidate = () =>
@@ -512,7 +522,13 @@ export function Schedule({
           Add a one-off class above, or set up a recurring template below.
         </EmptyState>
       ) : (
-        <>
+        <div
+          className={cn(
+            "flex flex-col gap-6 transition-opacity duration-200 motion-reduce:transition-none",
+            RESOLVE,
+            stale && "opacity-60",
+          )}
+        >
           <WeekGrid
             rows={rows}
             weekStart={weekStart(offset)}
@@ -638,7 +654,7 @@ export function Schedule({
               </Section>
             ))}
           </div>
-        </>
+        </div>
       )}
     </section>
   );

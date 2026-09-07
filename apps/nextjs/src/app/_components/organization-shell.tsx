@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
@@ -8,8 +9,9 @@ import { pendingCoachCount } from "@matops/domain";
 
 import type { NavItem } from "./shell-frame";
 import { useTRPC } from "~/trpc/react";
-import { useOrganization } from "./entity";
-import { EntitySelector } from "./entity-selector";
+import { branchNavItems, GYM_GROUP, PlusIcon } from "./app-shell";
+import { useLastBranch, useOrganization } from "./entity";
+import { AddBranchDialog, EntitySelector } from "./entity-selector";
 import {
   DashboardIcon,
   MembersIcon,
@@ -38,6 +40,8 @@ export function OrganizationShell({
   const trpc = useTRPC();
   const pathname = usePathname();
   const organization = useOrganization();
+  const lastBranch = useLastBranch();
+  const [addingBranch, setAddingBranch] = useState(false);
   // `canCreateBranches` is the owner answer `entity.list` already carries, so the shell
   // asks nobody a second time who this person is.
   const owner = organization.canRunOrganization;
@@ -58,10 +62,19 @@ export function OrganizationShell({
     enabled: running,
   });
 
-  const items: NavItem[] = [
+  const branch =
+    organization.entities.find((e) => e.id === lastBranch) ??
+    organization.entities[0];
+
+  // Namespaced so `isCurrent` can never light up a branch screen from a gym path.
+  const branchItems = branch
+    ? branchNavItems(branch).map((i) => ({ ...i, path: `branch:${i.path}` }))
+    : [];
+
+  const gymItems: NavItem[] = [
     {
       path: "/overview",
-      label: "Gym overview",
+      label: "Organization overview",
       icon: <DashboardIcon />,
       show: true,
     },
@@ -84,13 +97,37 @@ export function OrganizationShell({
     },
     {
       path: "/settings",
-      label: "Gym settings",
+      label: "Organization settings",
       icon: <SettingsIcon />,
       show: owner,
     },
   ]
     .filter((i) => i.show)
-    .map((i) => ({ ...i, href: i.path }));
+    .map((i) => ({
+      ...i,
+      href: i.path,
+      // A lone group leaves the selector, which sits in the ungrouped section,
+      // nowhere to render.
+      group: branchItems.length > 0 ? GYM_GROUP : undefined,
+    }));
+
+  const items = [
+    ...branchItems,
+    ...gymItems,
+    ...(organization.canCreateBranches && branchItems.length > 0
+      ? [
+          {
+            path: "gym:add-branch",
+            href: "#add-branch",
+            label: "Add branch",
+            icon: <PlusIcon />,
+            show: true,
+            group: GYM_GROUP,
+            onSelect: () => setAddingBranch(true),
+          },
+        ]
+      : []),
+  ];
 
   const isCurrent = (path: string) =>
     pathname === path || pathname.startsWith(`${path}/`);
@@ -107,6 +144,12 @@ export function OrganizationShell({
       columnClass="mx-auto w-full max-w-6xl px-6 md:px-8"
     >
       {children}
+      <AddBranchDialog
+        open={addingBranch}
+        onOpenChange={setAddingBranch}
+        canCreateGeneralBranches={organization.canCreateGeneralBranches}
+        branches={organization.entities}
+      />
     </ShellFrame>
   );
 }

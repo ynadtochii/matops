@@ -9,6 +9,8 @@ import {
   isOnRoster,
   isOwner,
   isStaff,
+  isStaffRole,
+  isStudentMember,
   isSuspended,
   runsBranch,
   runsOrganization,
@@ -132,4 +134,74 @@ describe("running one branch", () => {
     expect(isStaff({ role: "manager", status: "active" })).toBe(true);
     expect(isStaff({ role: "manager", status: "pending" })).toBe(false);
   });
+});
+
+describe("roster classification", () => {
+  it("keeps staff separate regardless of relationship status", () => {
+    for (const role of ["owner", "manager", "instructor"]) {
+      for (const status of [
+        "active",
+        "pending",
+        "suspended",
+        "archived",
+        "removed",
+      ]) {
+        expect(isStaffRole(m(role, status))).toBe(true);
+        expect(isStudentMember(m(role, status))).toBe(false);
+      }
+    }
+  });
+
+  it("classifies an instructor invitation as staff before approval", () => {
+    const pending = {
+      role: "student",
+      status: "pending",
+      invitedRole: "instructor",
+    };
+    expect(isStaffRole(pending)).toBe(true);
+    expect(isStudentMember(pending)).toBe(false);
+    expect(isStaff(pending)).toBe(false);
+  });
+
+  it("keeps a person's student role at another branch", () => {
+    expect(isStudentMember(m("instructor", "active"))).toBe(false);
+    expect(isStudentMember(m("student", "active"))).toBe(true);
+  });
+});
+
+it("ignores an old coach invitation after a student transition", () => {
+  const student = {
+    role: "student",
+    status: "active",
+    invitedRole: "instructor",
+  };
+  expect(isStudentMember(student)).toBe(true);
+  expect(isStaffRole(student)).toBe(false);
+});
+
+it("keeps unapproved student invitations in Members", () => {
+  expect(
+    isStudentMember({ role: "member", status: "pending", invitedRole: null }),
+  ).toBe(true);
+  expect(
+    isStudentMember({
+      role: "member",
+      status: "pending",
+      invitedRole: "student",
+    }),
+  ).toBe(true);
+  expect(
+    isStudentMember({
+      role: "member",
+      status: "pending",
+      invitedRole: "instructor",
+    }),
+  ).toBe(false);
+  expect(
+    isStudentMember({
+      role: "member",
+      status: "active",
+      invitedRole: "student",
+    }),
+  ).toBe(false);
 });

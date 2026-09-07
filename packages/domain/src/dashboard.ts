@@ -1,4 +1,5 @@
 import type { MoneyAmount } from "./referrals";
+import { isStudentMember } from "./access";
 import { onSameLocalDay } from "./calendar";
 import { DAY_MS } from "./local-date";
 import { isPendingCoach } from "./membership";
@@ -52,6 +53,7 @@ export function dayPlan<T extends DashClass>(
 }
 
 export interface DashMember {
+  role?: string;
   status: string;
   invitedRole?: string | null;
   dues?: { status: string } | null;
@@ -68,12 +70,14 @@ export function rosterSummary<T extends DashMember>(
   members: T[],
 ): RosterSummary<T> {
   const pendingCoaches = members.filter(isPendingCoach).length;
+  const students = members.filter((m) =>
+    isStudentMember({ ...m, role: m.role ?? "student" }),
+  );
   return {
     pendingCoaches,
-    pendingStudents:
-      members.filter((m) => m.status === "pending").length - pendingCoaches,
-    active: members.filter((m) => m.status === "active").length,
-    overdue: members.filter((m) => m.dues?.status === "overdue"),
+    pendingStudents: students.filter((m) => m.status === "pending").length,
+    active: students.filter((m) => m.status === "active").length,
+    overdue: students.filter((m) => m.dues?.status === "overdue"),
   };
 }
 

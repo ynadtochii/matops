@@ -207,3 +207,19 @@ export const OrganizationWindowSchema = z.object({
   to: z.iso.datetime(),
 });
 export type OrganizationWindowInput = z.infer<typeof OrganizationWindowSchema>;
+
+export const PurchaseCatalogSchema = z.object({
+  start: z.enum(["current", "next"]).default("current"),
+});
+export const SelectMembershipPurchaseSchema = PurchaseCatalogSchema.extend({
+  planId: z.uuid(),
+  version: z.string().min(1).max(5000),
+});
+export const MembershipPurchaseIdSchema = z.object({ id: z.uuid() });
+export const RejectMembershipPurchaseSchema = MembershipPurchaseIdSchema.extend(
+  { reason: blockText(1, 500) },
+);
+export const MembershipAvailabilitySchema = z.object({
+  planId: z.uuid(),
+  available: z.boolean(),
+});

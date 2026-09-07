@@ -174,3 +174,18 @@ describe("daysSince", () => {
     expect(daysSince(null, TODAY)).toBeNull();
   });
 });
+
+it("excludes staff from student totals and overdue dues", () => {
+  const result = rosterSummary([
+    { role: "owner", status: "active", dues: { status: "overdue" } },
+    { role: "instructor", status: "active", dues: null },
+    { role: "student", status: "pending", invitedRole: "instructor" },
+    { role: "student", status: "pending" },
+    { role: "student", status: "active", dues: { status: "overdue" } },
+  ]);
+  expect(result.active).toBe(1);
+  expect(result.pendingStudents).toBe(1);
+  expect(result.pendingCoaches).toBe(1);
+  expect(result.overdue).toHaveLength(1);
+  expect(result.overdue[0]?.role).toBe("student");
+});

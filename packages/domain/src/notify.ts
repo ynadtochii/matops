@@ -111,6 +111,7 @@ export type NotificationKind =
   | "dues_reminder"
   | "membership_due"
   | "membership_approved"
+  | "membership_update"
   | "announcement";
 
 /** Short label for the inbox row, so both clients spell the kinds the same. */
@@ -121,6 +122,7 @@ const NOTIFICATION_KIND_LABEL: Record<NotificationKind, string> = {
   dues_reminder: "Membership dues",
   membership_due: "Membership dues",
   membership_approved: "Membership",
+  membership_update: "Membership",
   announcement: "Gym news",
 };
 

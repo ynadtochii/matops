@@ -3,7 +3,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createEntity, withScope } from "@matops/db";
 
 import type { Harness } from "./helpers";
-import { loadMembershipAccess } from "../src/membership-access";
+import {
+  loadMembershipAccess,
+  loadRosterStanding,
+} from "../src/membership-access";
 import { harness, seedAcademies } from "./helpers";
 
 const ORG = "acad_reader";
@@ -53,6 +56,12 @@ describe("the scoped membership access reader", () => {
         members: [
           { userId: BOSS, role: "owner", status: "active" },
           { userId: SAM, role: "student", status: "active" },
+          { userId: "reader_coach", role: "instructor", status: "active" },
+          {
+            userId: "reader_paused_coach",
+            role: "instructor",
+            status: "suspended",
+          },
         ],
       },
     ]);
@@ -126,7 +135,7 @@ describe("the scoped membership access reader", () => {
     expect(seen.now).toBe("suspended");
   });
 
-  it("says not covered for somebody holding nothing", async () => {
+  it("grants an owner staff access without a paid membership", async () => {
     const seen = await withScope(
       { organizationId: ORG, entityId: ORG },
       (tx) =>
@@ -138,6 +147,57 @@ describe("the scoped membership access reader", () => {
         }),
       h.exec,
     );
-    expect([seen.now, seen.assignments]).toEqual(["not-covered", []]);
+    expect([seen.now, seen.assignments, seen.accessSource]).toEqual([
+      "ok",
+      [],
+      "staff",
+    ]);
+  });
+  it("keeps active and suspended instructors separate from payment coverage", async () => {
+    const seen = await withScope(
+      { organizationId: ORG, entityId: ORG },
+      (tx) =>
+        loadRosterStanding(tx, {
+          entityId: ORG,
+          people: [
+            { userId: "reader_coach", role: "instructor", status: "active" },
+            {
+              userId: "reader_paused_coach",
+              role: "instructor",
+              status: "suspended",
+            },
+          ],
+          now: IN_GRACE,
+        }),
+      h.exec,
+    );
+    expect(seen.get("reader_coach")).toMatchObject({
+      verdict: "ok",
+      accessSource: "staff",
+      covered: false,
+    });
+    expect(seen.get("reader_paused_coach")).toMatchObject({
+      verdict: "suspended",
+      accessSource: null,
+    });
+  });
+
+  it("inherits owner access at another branch without coverage", async () => {
+    const seen = await withScope(
+      { organizationId: ORG, entityId: gym },
+      (tx) =>
+        loadMembershipAccess(tx, {
+          userId: BOSS,
+          entityId: gym,
+          membership: { status: "suspended" },
+          now: PAST_GRACE,
+        }),
+      h.exec,
+    );
+    expect(seen).toMatchObject({
+      now: "ok",
+      atSession: "ok",
+      accessSource: "staff",
+    });
   });
 });

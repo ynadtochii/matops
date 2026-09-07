@@ -33,7 +33,7 @@ import {
 } from "@matops/validators";
 
 import { claimSeatIfStrict, requireClassFacts, SESSION_FULL } from "../classes";
-import { requireMembership, rosterOf } from "../members";
+import { directoryRosterOf } from "../members";
 import { staffIdentityProcedure, staffProcedure } from "../trpc";
 
 /**
@@ -47,10 +47,10 @@ export const attendanceRouter = {
   /** Active members of the academy (id = user.id, name) for the walk-in picker. */
   members: staffProcedure.query(async ({ ctx }) => {
     // Members live in the auth `member` table (no RLS); list + filter to active.
-    const members = await rosterOf(ctx);
+    const members = await directoryRosterOf(ctx);
     return members
       .filter((m) => m.status === "active")
-      .map((m) => ({ id: m.userId, name: m.name }));
+      .map((m) => ({ id: m.userId, name: m.name, role: m.role }));
   }),
 
   /**
@@ -89,7 +89,18 @@ export const attendanceRouter = {
           ne(dropInVisit.bookingStatus, "cancelled"),
         ),
       );
-    return { rows, dropIns, counts: attendanceCounts(rows) };
+    const roster = await directoryRosterOf(ctx);
+    const roleByUser = new Map(
+      roster.map((person) => [person.userId, person.role]),
+    );
+    return {
+      rows: rows.map((row) => ({
+        ...row,
+        role: roleByUser.get(row.studentId) ?? null,
+      })),
+      dropIns,
+      counts: attendanceCounts(rows),
+    };
   }),
 
   /** Mark an existing participant present/absent/unmarked (spec O5). */
@@ -172,12 +183,18 @@ export const attendanceRouter = {
       await assertMarkable(ctx.db, input.classId);
       // Defense-in-depth: the RLS WITH CHECK only scopes academy_id, not that the
       // student is a member — so verify membership before recording a walk-in.
-      await requireMembership(
-        input.studentId,
-        ctx.academyId,
-        ctx.db,
-        "That person is not a member of this academy",
-      );
+      const roster = await directoryRosterOf(ctx);
+      if (
+        !roster.some(
+          (person) =>
+            person.userId === input.studentId && person.status === "active",
+        )
+      ) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "That person does not have active access to this academy",
+        });
+      }
       const now = new Date();
       // Admitting somebody at the desk takes a place in a STRICT room, the same
       // as booking one, unless they already hold one. Two rules meet here and

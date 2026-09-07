@@ -29,6 +29,7 @@ export interface ApplicableAssignment {
   entityIds: string[];
   /** Whether the month being judged is ticked paid. Missing means unpaid. */
   paid: boolean;
+  paymentRequired?: boolean;
   /** The first moment that is too late for that month. */
   deadline: Date;
 }
@@ -45,7 +46,11 @@ export interface AccessInput {
 
 /** A membership admits when its month is paid, or the deadline has not passed. */
 function admits(assignment: ApplicableAssignment, at: Date): boolean {
-  return assignment.paid || at.getTime() < assignment.deadline.getTime();
+  return (
+    assignment.paymentRequired === false ||
+    assignment.paid ||
+    at.getTime() < assignment.deadline.getTime()
+  );
 }
 
 /** The active memberships whose plan names this branch. */

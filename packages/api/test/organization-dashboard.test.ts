@@ -139,8 +139,12 @@ describe("the organization dashboard", () => {
       (n, e) => n + e.memberUserIds.length,
       0,
     );
-    expect(perMat).toBe(5);
-    expect(total.members).toBe(3);
+    expect(perMat).toBe(2);
+    expect(total.members).toBe(1);
+    expect(total.entities.flatMap((e) => e.memberUserIds)).toEqual([
+      NOMAD,
+      NOMAD,
+    ]);
   });
 
   it("groups the work by academy", async () => {

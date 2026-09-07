@@ -13,15 +13,8 @@ import { CheckInSchema } from "@matops/validators";
 
 import { claimSeat, requireClassFacts, SESSION_FULL } from "../classes";
 import { bookingGate } from "../payments-gate";
-import { enrolledProcedure } from "../trpc";
+import { enrolledProcedure, memberProcedure } from "../trpc";
 
-/**
- * QR self check-in (slice 3.4, spec S8; docs/issues/24). `enrolledProcedure`, so
- * a pending member can check in too (provisional). Check-in = **book + attend**:
- * it books the class if needed (soft cap — never blocked, present even if full)
- * and marks the caller present. Booking alone (slice 3.1) does not attend; this
- * does both. The client resolves which class via `resolveCheckInClass`.
- */
 export const checkinRouter = {
   /**
    * The class(es) the caller can check into right now (spec S8) — resolved
@@ -56,12 +49,7 @@ export const checkinRouter = {
     }));
   }),
 
-  /**
-   * Check in to a class: book-if-needed + mark present, even if full. Idempotent
-   * — re-scanning keeps you present. Books a `confirmed` spot for an active
-   * member (increments the count), `provisional` for a pending one (uncounted).
-   */
-  checkIn: enrolledProcedure
+  checkIn: memberProcedure
     .input(CheckInSchema)
     .mutation(async ({ ctx, input }) => {
       const cls = await requireClassFacts(ctx.db, input.classId);
@@ -82,22 +70,17 @@ export const checkinRouter = {
       const me = ctx.session.user.id;
       const now = new Date();
 
-      // The door runs the same gate as the booking screen (ADR 126). Without
-      // it a QR scan is a way round it: check-in books as well as marks
-      // present, so an unpaid or uncovered member would let themselves in.
-      if (tier === "confirmed" || ctx.entity.membershipEnforcedAt) {
-        const gate = await bookingGate(ctx.db, {
-          entity: ctx.entity,
-          membership: ctx.membership,
-          userId: me,
-          sessionAt: cls.startsAt,
+      const gate = await bookingGate(ctx.db, {
+        entity: ctx.entity,
+        membership: ctx.membership,
+        userId: me,
+        sessionAt: cls.startsAt,
+      });
+      if (gate.locked) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: gate.message ?? "Booking is locked for you.",
         });
-        if (gate.locked) {
-          throw new TRPCError({
-            code: "PRECONDITION_FAILED",
-            message: gate.message ?? "Booking is locked for you.",
-          });
-        }
       }
 
       // Read the caller's current row (if any) to know whether this check-in is a

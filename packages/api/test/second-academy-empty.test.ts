@@ -80,11 +80,9 @@ describe("a second academy starts empty", () => {
 
   afterAll(() => h.close());
 
-  it("carries no roster but the owner", async () => {
+  it("starts with no students", async () => {
     const rows = await second().membership.members();
-    expect(rows).toHaveLength(1);
-    expect(rows[0]?.role).toBe("owner");
-    expect(rows[0]?.email).toBe(`${OWNER}@test.local`);
+    expect(rows).toHaveLength(0);
   });
 
   it("carries no instructors", async () => {
@@ -114,9 +112,9 @@ describe("a second academy starts empty", () => {
 
   it("leaves the first academy's data where it was", async () => {
     const roster = await first().membership.members();
-    expect(roster.map((r) => r.memberId).sort()).toEqual(
-      [COACH, OWNER, STUDENT].map((u) => memberId(ORG, u)).sort(),
-    );
+    expect(roster.map((r) => r.memberId).sort()).toEqual([
+      memberId(ORG, STUDENT),
+    ]);
     expect((await first().class.week(WEEK)).map((c) => c.id)).toContain(CLASS);
     expect(await first().template.list()).toHaveLength(1);
     expect(await first().payments.plans()).toHaveLength(1);

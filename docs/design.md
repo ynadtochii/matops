@@ -264,6 +264,31 @@ is the reference pair (`packages/ui/src/button.tsx` + `button.native.tsx` +
   one job: an **action** already in flight (a button mid-submit), which is
   feedback for something the person just did, not a stand-in for content.
 
+### Motion
+
+One vocabulary, four curves, no library (ADR 131).
+
+- **Curves** live in `tooling/tailwind/theme.css` and both apps read them.
+  `ease-out` (`cubic-bezier(0.23, 1, 0.32, 1)`) for anything entering or
+  leaving, `ease-in-out` (`cubic-bezier(0.77, 0, 0.175, 1)`) for something
+  moving on screen, `ease-drawer` for a sheet. A `transition-*` with no curve
+  of its own falls back to the ease-out. **There is no ease-in token**: it
+  starts slow and delays the frame the reader is watching.
+- **Durations.** A press 150ms, a menu 150ms, a tab or a panel 200ms, a modal
+  200ms, a page section 300ms. Nothing in the interface runs longer.
+- **The vocabulary** is in `primitives.tsx`: `ENTER` for a page section
+  arriving (fade + 1 unit up, delayed with `delay-100` / `delay-200` to stage a
+  page), `RESOLVE` for a query settling or a panel swapping, `stagger(i)` for
+  list rows (40ms apart, capped at six so a long roster is not still arriving),
+  `TAP` for a touch target, and `PRESS` / `FOCUS_RING` in `@matops/ui/motion`.
+- **What does not animate.** The sidebar, the mobile tab bar, and anything else
+  a person hits dozens of times a day. Navigation is instant on purpose.
+- **Only `transform` and `opacity`.** A width or a height animation relays out
+  the page; the one exception is the collapsible, which has no transform
+  equivalent.
+- **Reduced motion** is gentler, not absent: every transform transition names
+  `motion-reduce:transition-none`, and the opacity and colour stay.
+
 ---
 
 ## 5. Voice (Better Auth's four rules, for our copy)

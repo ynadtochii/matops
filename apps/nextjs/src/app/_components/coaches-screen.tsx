@@ -38,11 +38,11 @@ import {
   RESOLVE,
   SectionHeading,
   Stat,
-  Tabs,
 } from "./primitives";
 import { SkeletonBreakdown, SkeletonCoachCards } from "./skeletons";
 import { Staff } from "./staff";
 import { EmptyState, ErrorState } from "./states";
+import { Tabs } from "./tabs";
 
 type CoachRow = RouterOutputs["stats"]["coaches"]["coaches"][number];
 type CoachDetailData = RouterOutputs["stats"]["coach"];
@@ -296,10 +296,18 @@ function CoachCard({
 function PendingCoaches() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const memberList = useQuery(trpc.membership.members.queryOptions());
+  const memberList = useQuery(
+    trpc.membership.members.queryOptions({ audience: "all" }),
+  );
 
   const invalidate = () =>
-    queryClient.invalidateQueries(trpc.membership.members.pathFilter());
+    Promise.all([
+      queryClient.invalidateQueries(trpc.membership.members.pathFilter()),
+      queryClient.invalidateQueries(trpc.membership.staff.pathFilter()),
+      queryClient.invalidateQueries(
+        trpc.stats.organizationMembers.pathFilter(),
+      ),
+    ]);
   const onError = (err: { message: string }) =>
     toast.error(err.message || "Action failed");
 

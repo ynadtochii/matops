@@ -1,5 +1,6 @@
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
+import { z } from "zod/v4";
 
 import type { TenantTx } from "@matops/db";
 import type { Membership } from "@matops/domain";
@@ -45,6 +46,8 @@ import {
   isArchived,
   isOnRoster,
   isOwner,
+  isStaffRole,
+  isStudentMember,
   isSuspended,
   paymentStatus,
   runsBranch,
@@ -60,7 +63,12 @@ import {
 import type { createTRPCContext } from "../trpc";
 import { academyTimeZone } from "../academy-tz";
 import { releaseSeats } from "../classes";
-import { activateMember, requireMember, rosterOf, staffOf } from "../members";
+import {
+  activateMember,
+  directoryRosterOf,
+  requireMember,
+  staffOf,
+} from "../members";
 import { loadRosterStanding } from "../membership-access";
 import { LAST_OWNER } from "../messages";
 import { readAllDuesWithPlan, readPaymentSettings } from "../payments-read";
@@ -231,6 +239,34 @@ function requireSeatDecider(
   }
 }
 
+async function requireBranchLifecycleChange(
+  ctx: {
+    organizationId: string;
+    baseDb: BaseContext["baseDb"];
+    membership: Membership;
+  },
+  target: { role: string; userId: string },
+): Promise<void> {
+  if (target.role === "owner" && !isOwner(ctx.membership)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Owner only" });
+  }
+  const organizationMembership = await getMembership(
+    target.userId,
+    ctx.organizationId,
+    ctx.baseDb,
+  );
+  if (
+    organizationMembership?.role === "owner" ||
+    organizationMembership?.role === "manager"
+  ) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "Change this person's organization role before changing their branch access.",
+    });
+  }
+}
+
 export const membershipRouter = {
   /**
    * Self-join via an invite link (spec S1–S3, docs/issues/14, 20, 26). The caller
@@ -294,121 +330,136 @@ export const membershipRouter = {
    * member attended (present), powering the "attended 3×" nudge on pending rows
    * (§4). Counted on the RLS-scoped `ctx.db`, grouped by student.
    */
-  members: staffProcedure.query(async ({ ctx }) => {
-    const rows = await rosterOf(ctx);
-    const visits = await ctx.db
-      .select({
-        studentId: classParticipation.studentId,
-        count: sql<number>`count(*)::int`,
-      })
-      .from(classParticipation)
-      .where(eq(classParticipation.attendanceStatus, "present"))
-      .groupBy(classParticipation.studentId);
-    const visitByUser = new Map(visits.map((v) => [v.studentId, v.count]));
-
-    // Per-member dues + derived payment status (slice P.2, ADR 40). All three
-    // reads run on the RLS-scoped `ctx.db` (the payment tables carry academy_id
-    // policies), so no explicit academy pin is needed here. `member_dues.memberId`
-    // is the `member.id`, aligning with the member row's `memberId`.
-    const duesRows = await readAllDuesWithPlan(ctx.db);
-    const duesByMember = new Map(duesRows.map((d) => [d.memberId, d]));
-
-    const confirmed = await ctx.db
-      .select({
-        memberId: paymentClaim.memberId,
-        lastConfirmedAt: sql<Date | null>`max(${paymentClaim.confirmedAt})`,
-      })
-      .from(paymentClaim)
-      .where(eq(paymentClaim.status, "confirmed"))
-      .groupBy(paymentClaim.memberId);
-    const lastConfirmedByMember = new Map(
-      confirmed.map((c) => [c.memberId, c.lastConfirmedAt]),
-    );
-
-    const now = new Date();
-    // Where each person stands on their shared memberships, in three queries
-    // for the whole roster rather than three each (ADR 126).
-    const standing = ctx.entity.membershipEnforcedAt
-      ? await loadRosterStanding(ctx.db, {
-          entityId: ctx.academyId,
-          people: rows.map((r) => ({ userId: r.userId, status: r.status })),
-          now,
+  members: staffProcedure
+    .input(
+      z
+        .object({ audience: z.enum(["students", "all"]).default("students") })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => {
+      const rows = (await directoryRosterOf(ctx)).filter(
+        (r): r is typeof r & { memberId: string } =>
+          r.memberId !== null &&
+          (input?.audience === "all" || isStudentMember(r)),
+      );
+      const visits = await ctx.db
+        .select({
+          studentId: classParticipation.studentId,
+          count: sql<number>`count(*)::int`,
         })
-      : null;
-    // Money is the owner group's business, not the coach's: an instructor runs
-    // the desk (approve, rank) and gets the same roster without the dues
-    // figures.
-    const seesDues = runsBranch(ctx.membership);
-    // Never two gates on one screen (ADR 126): at an activated branch the
-    // shared membership decides, so the legacy dues state is not consulted.
-    const gate =
-      seesDues && !ctx.entity.membershipEnforcedAt
-        ? await readPaymentSettings(ctx.db)
+        .from(classParticipation)
+        .where(eq(classParticipation.attendanceStatus, "present"))
+        .groupBy(classParticipation.studentId);
+      const visitByUser = new Map(visits.map((v) => [v.studentId, v.count]));
+
+      // Per-member dues + derived payment status (slice P.2, ADR 40). All three
+      // reads run on the RLS-scoped `ctx.db` (the payment tables carry academy_id
+      // policies), so no explicit academy pin is needed here. `member_dues.memberId`
+      // is the `member.id`, aligning with the member row's `memberId`.
+      const duesRows = await readAllDuesWithPlan(ctx.db);
+      const duesByMember = new Map(duesRows.map((d) => [d.memberId, d]));
+
+      const confirmed = await ctx.db
+        .select({
+          memberId: paymentClaim.memberId,
+          lastConfirmedAt: sql<Date | null>`max(${paymentClaim.confirmedAt})`,
+        })
+        .from(paymentClaim)
+        .where(eq(paymentClaim.status, "confirmed"))
+        .groupBy(paymentClaim.memberId);
+      const lastConfirmedByMember = new Map(
+        confirmed.map((c) => [c.memberId, c.lastConfirmedAt]),
+      );
+
+      const now = new Date();
+      // Where each person stands on their shared memberships, in three queries
+      // for the whole roster rather than three each (ADR 126).
+      const standing = ctx.entity.membershipEnforcedAt
+        ? await loadRosterStanding(ctx.db, {
+            entityId: ctx.academyId,
+            people: rows.map((r) => ({
+              userId: r.userId,
+              status: r.status,
+              role: r.role,
+            })),
+            now,
+          })
         : null;
-    const openClaimMembers = new Set(
-      gate?.enforcedAt
-        ? (
-            await ctx.db
-              .select({ memberId: paymentClaim.memberId })
-              .from(paymentClaim)
-              .where(eq(paymentClaim.status, "pending"))
-          ).map((c) => c.memberId)
-        : [],
-    );
-    return rows.filter(isOnRoster).map((r) => {
-      const d = seesDues ? duesByMember.get(r.memberId) : undefined;
-      const access =
-        gate && r.role === "student" && r.status === "active"
-          ? bookingAccess(
-              {
-                enforcedAt: gate.enforcedAt,
-                graceDays: gate.graceDays,
-                memberSince: r.createdAt,
-                nextDueAt: duesByMember.get(r.memberId)?.nextDueAt ?? null,
-                hasOpenClaim: openClaimMembers.has(r.memberId),
-              },
-              now,
-            )
+      // Money is the owner group's business, not the coach's: an instructor runs
+      // the desk (approve, rank) and gets the same roster without the dues
+      // figures.
+      const seesDues = runsBranch(ctx.membership);
+      // Never two gates on one screen (ADR 126): at an activated branch the
+      // shared membership decides, so the legacy dues state is not consulted.
+      const gate =
+        seesDues && !ctx.entity.membershipEnforcedAt
+          ? await readPaymentSettings(ctx.db)
           : null;
-      const membership = standing?.get(r.userId) ?? null;
-      return {
-        access,
-        // Why they are on this roster and where they stand. Null at a branch
-        // still on the legacy gate, so nothing shows a half-answer there.
-        membership: membership
-          ? {
-              verdict: membership.verdict,
-              covered: membership.covered,
-              planNames: membership.planNames,
-            }
-          : null,
-        memberId: r.memberId,
-        // A shared membership keys on the person, not on their standing at one
-        // branch, so the member profile needs the user id to read it (ADR 126).
-        userId: r.userId,
-        name: r.name,
-        email: r.email,
-        phone: r.phone,
-        role: r.role,
-        status: r.status,
-        invitedRole: r.invitedRole,
-        joinedAt: r.createdAt,
-        visitCount: visitByUser.get(r.userId) ?? 0,
-        // null = the owner has not set up dues for this member yet (P.2).
-        dues: d
-          ? {
-              status: paymentStatus(d.nextDueAt, now),
-              planId: d.planId,
-              nextDueAt: d.nextDueAt,
-              priceMinor: d.priceMinor,
-              currency: d.currency,
-              planName: d.planName,
-              lastConfirmedAt: lastConfirmedByMember.get(r.memberId) ?? null,
-            }
-          : null,
-      };
-    });
-  }),
+      const openClaimMembers = new Set(
+        gate?.enforcedAt
+          ? (
+              await ctx.db
+                .select({ memberId: paymentClaim.memberId })
+                .from(paymentClaim)
+                .where(eq(paymentClaim.status, "pending"))
+            ).map((c) => c.memberId)
+          : [],
+      );
+      return rows.filter(isOnRoster).map((r) => {
+        const d = seesDues ? duesByMember.get(r.memberId) : undefined;
+        const access =
+          gate && r.role === "student" && r.status === "active"
+            ? bookingAccess(
+                {
+                  enforcedAt: gate.enforcedAt,
+                  graceDays: gate.graceDays,
+                  memberSince: r.createdAt,
+                  nextDueAt: duesByMember.get(r.memberId)?.nextDueAt ?? null,
+                  hasOpenClaim: openClaimMembers.has(r.memberId),
+                },
+                now,
+              )
+            : null;
+        const membership = standing?.get(r.userId) ?? null;
+        return {
+          access,
+          // Why they are on this roster and where they stand. Null at a branch
+          // still on the legacy gate, so nothing shows a half-answer there.
+          membership: membership
+            ? {
+                verdict: membership.verdict,
+                accessSource: membership.accessSource,
+                covered: membership.covered,
+                planNames: membership.planNames,
+              }
+            : null,
+          memberId: r.memberId,
+          // A shared membership keys on the person, not on their standing at one
+          // branch, so the member profile needs the user id to read it (ADR 126).
+          userId: r.userId,
+          name: r.name,
+          email: r.email,
+          phone: r.phone,
+          role: r.role,
+          status: r.status,
+          invitedRole: r.invitedRole,
+          joinedAt: r.createdAt,
+          visitCount: visitByUser.get(r.userId) ?? 0,
+          // null = the owner has not set up dues for this member yet (P.2).
+          dues: d
+            ? {
+                status: paymentStatus(d.nextDueAt, now),
+                planId: d.planId,
+                nextDueAt: d.nextDueAt,
+                priceMinor: d.priceMinor,
+                currency: d.currency,
+                planName: d.planName,
+                lastConfirmedAt: lastConfirmedByMember.get(r.memberId) ?? null,
+              }
+            : null,
+        };
+      });
+    }),
 
   /**
    * The people who left (spec O4 "Archived" tab, docs/issues/84). Owner-only:
@@ -419,7 +470,10 @@ export const membershipRouter = {
    * here: they were never members.
    */
   archived: branchManagerProcedure.query(async ({ ctx }) => {
-    const rows = await rosterOf(ctx);
+    const rows = (await directoryRosterOf(ctx)).filter(
+      (r): r is typeof r & { memberId: string } =>
+        r.memberId !== null && isStudentMember(r),
+    );
     return rows.filter(isArchived).map((r) => ({
       memberId: r.memberId,
       name: r.name,
@@ -516,6 +570,7 @@ export const membershipRouter = {
     .input(MemberActionSchema)
     .mutation(async ({ ctx, input }) => {
       const m = await requireMember(identityScope(ctx), input.memberId);
+      await requireBranchLifecycleChange(ctx, m);
       // Only someone who WAS a member can leave. Archiving a pending applicant
       // and restoring them would activate them without approval, and with the
       // placeholder Better Auth role, because the real role is granted at
@@ -618,7 +673,8 @@ export const membershipRouter = {
   suspend: branchManagerIdentityProcedure
     .input(MemberActionSchema)
     .mutation(async ({ ctx, input }) => {
-      await requireMember(identityScope(ctx), input.memberId);
+      const m = await requireMember(identityScope(ctx), input.memberId);
+      await requireBranchLifecycleChange(ctx, m);
       await rejectIfLastOwner(
         setMemberStatusIfNotLastOwner(
           ctx.academyId,
@@ -641,6 +697,7 @@ export const membershipRouter = {
     .input(MemberActionSchema)
     .mutation(async ({ ctx, input }) => {
       const m = await requireMember(identityScope(ctx), input.memberId);
+      await requireBranchLifecycleChange(ctx, m);
       if (!isSuspended(m) && !isArchived(m)) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
@@ -680,11 +737,7 @@ export const membershipRouter = {
     .input(MemberActionSchema.extend({ role: InviteRoleSchema }))
     .mutation(async ({ ctx, input }) => {
       const target = await requireMember(identityScope(ctx), input.memberId);
-      // Stepping an owner down is removing an owner, which stays with owners
-      // (ADR 129). Assigning an instructor is ordinary work.
-      if (target.role === "owner" && !isOwner(ctx.membership)) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Owner only" });
-      }
+      await requireBranchLifecycleChange(ctx, target);
       await rejectIfLastOwner(
         setMemberRoleIfNotLastOwner(
           ctx.academyId,
@@ -707,18 +760,17 @@ export const membershipRouter = {
     return rows.map((r) => ({ userId: r.userId, name: r.name, role: r.role }));
   }),
 
-  /**
-   * The academy's staff — active owners + instructors (spec O10, moved by ADR
-   * 63). A lean read for the Coaches staff list; no dues/visit joins (that's the
-   * member list's job). Carries emails, so owner-only.
-   */
   staff: branchManagerProcedure.query(async ({ ctx }) => {
-    const rows = await staffOf(ctx);
+    const rows = (await directoryRosterOf(ctx)).filter(isStaffRole);
     return rows.map((r) => ({
       memberId: r.memberId,
+      userId: r.userId,
+      inheritedRole: r.inheritedRole,
       name: r.name,
       email: r.email,
       role: r.role,
+      status: r.status,
+      invitedRole: r.invitedRole,
     }));
   }),
 } satisfies TRPCRouterRecord;

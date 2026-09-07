@@ -168,7 +168,7 @@ describe("membership booking gate", () => {
     expect(res.ok).toBe(true);
   });
 
-  it("a pending member's provisional booking is never gated", async () => {
+  it("a pending member cannot bypass the legacy gate", async () => {
     await enforce();
     await h.pg.exec(
       `UPDATE "entity_membership" SET created_at = now() - interval '300 days', joined_at = now() - interval '300 days'`,
@@ -176,8 +176,10 @@ describe("membership booking gate", () => {
     await h.pg.exec(
       `UPDATE "payment_settings" SET enforced_at = now() - interval '300 days'`,
     );
-    const res = await h.as(PENDING, ACAD).booking.book({ classId: CLASS });
-    expect(res.tier).toBe("provisional");
+    expect(
+      await rejectionCode(h.as(PENDING, ACAD).booking.book({ classId: CLASS })),
+    ).toBe("FORBIDDEN");
+    expect((await h.as(PENDING, ACAD).booking.access()).locked).toBe(true);
   });
 
   it("staff are never gated", async () => {
@@ -190,6 +192,23 @@ describe("membership booking gate", () => {
     );
     const res = await h.as(OWNER, ACAD).booking.book({ classId: CLASS });
     expect(res.tier).toBe("confirmed");
+  });
+
+  it("does not assign or sell legacy dues to staff", async () => {
+    expect(
+      await rejectionCode(h.as(OWNER, ACAD).payments.choosePlan({ planId })),
+    ).toBe("PRECONDITION_FAILED");
+    expect(
+      await rejectionCode(
+        h
+          .as(OWNER, ACAD)
+          .payments.setMemberDues({
+            memberId: memberId(ACAD, OWNER),
+            planId,
+            nextDueAt: isoDaysFromNow(30),
+          }),
+      ),
+    ).toBe("PRECONDITION_FAILED");
   });
 
   it("choosePlan sets the first due date to the 1st of next month, once", async () => {
@@ -254,7 +273,7 @@ describe("membership booking gate", () => {
     const student = rows.find((r) => r.memberId === STUDENT_MEMBER);
     expect(student?.access?.state).toBe("locked");
     const owner = rows.find((r) => r.memberId === memberId(ACAD, OWNER));
-    expect(owner?.access).toBeNull();
+    expect(owner).toBeUndefined();
   });
 
   it("the gate toggle round-trips through getRequisites", async () => {

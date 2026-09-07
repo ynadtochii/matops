@@ -18,7 +18,7 @@ import { useTRPC } from "~/trpc/react";
 import { ClassTheme } from "./class-theme";
 import { useEntity, useEntityHref } from "./entity";
 import { PageHeader } from "./page-header";
-import { cardClass, ENTER, Eyebrow, Section } from "./primitives";
+import { cardClass, ENTER, SectionHeading } from "./primitives";
 import { ClassDetailSkeleton, SkeletonCard } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 import { useBooking } from "./use-booking";
@@ -41,16 +41,10 @@ export function ClassDetail({ classId }: { classId: string }) {
     return (
       <>
         <PageHeader title="Class" />
-        <EmptyState
-          title="We couldn't open that class."
-          action={
-            <Button asChild size="sm" variant="outline">
-              <Link href={href("/")}>Back to the schedule</Link>
-            </Button>
-          }
-        >
-          It may have been removed, or it belongs to another gym.
-        </EmptyState>
+        <ErrorState label="this class" onRetry={() => void cls.refetch()} />
+        <Button asChild size="sm" variant="outline" className="mt-4">
+          <Link href={href("/")}>Back to schedule</Link>
+        </Button>
       </>
     );
   }
@@ -73,25 +67,48 @@ export function ClassDetail({ classId }: { classId: string }) {
 
   return (
     <>
+      <Link
+        href={href("/")}
+        className="text-muted-foreground hover:text-foreground focus-visible:outline-brand mb-4 inline-flex min-h-11 items-center rounded-sm text-sm focus-visible:outline-2 focus-visible:outline-offset-4"
+      >
+        ← Back to schedule
+      </Link>
       <PageHeader
         title={c.title}
         subtitle={`${dayLongFmt.format(start)} · ${timeFmt.format(start)}`}
       />
       <div className="flex flex-col gap-8">
-        {cancelled && refusal && (
-          <div className="border-error/30 bg-error/5 rounded-lg border p-4 text-sm">
-            {refusal}. Booking is closed.
-          </div>
-        )}
-
-        {!cancelled && refusal && (
-          <p className="text-muted-foreground text-sm">{refusal}.</p>
-        )}
-
-        {!cancelled && !past && (
-          <div className={cn(ENTER, "flex flex-wrap items-center gap-3")}>
-            {booked ? (
-              <>
+        <section className={cn(cardClass(), ENTER, "space-y-4")}>
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="space-y-1">
+              <h2 className="text-lg font-semibold">
+                {cancelled
+                  ? "Class cancelled"
+                  : past
+                    ? "Booking closed"
+                    : booked
+                      ? provisional
+                        ? "Waiting for approval"
+                        : "You're booked"
+                      : "Book your place"}
+              </h2>
+              <p className="text-muted-foreground text-sm">
+                {cancelled
+                  ? "This class will not take place. Choose another session from the schedule."
+                  : past
+                    ? `${refusal ?? "This class has started"}.`
+                    : provisional
+                      ? "Your booking is saved. Your gym still needs to approve it."
+                      : booked
+                        ? "Cancel your booking if your plans change."
+                        : cap.isOver
+                          ? "This class looks full. Your gym still allows bookings."
+                          : `${cap.label} · ${c.durationMinutes} min`}
+              </p>
+            </div>
+            {!cancelled &&
+              !past &&
+              (booked ? (
                 <Button
                   variant="outline"
                   busy={busy}
@@ -100,66 +117,84 @@ export function ClassDetail({ classId }: { classId: string }) {
                 >
                   Cancel booking
                 </Button>
-                <span className="text-muted-foreground text-sm">
-                  {provisional ? "Booked · pending approval" : "You're booked"}
-                </span>
-              </>
-            ) : cap.isOver ? (
-              <ConfirmDialog
-                title="This class looks full"
-                description="Your gym manages the room, so you can still book it."
-                confirmLabel="Book anyway"
-                variant="primary"
-                onConfirm={() => book.mutate({ classId })}
-                trigger={
-                  <Button
-                    variant="secondary"
-                    busy={busy}
-                    disabled={busy || !!lockedMessage || !bookable.ok}
-                  >
-                    Book
-                  </Button>
-                }
-              />
-            ) : (
-              <Button
-                busy={busy}
-                disabled={busy || !!lockedMessage || !bookable.ok}
-                onClick={() => book.mutate({ classId })}
-              >
-                Book
-              </Button>
-            )}
+              ) : cap.isOver ? (
+                <ConfirmDialog
+                  title="This class looks full"
+                  description="Your gym manages the room, so you can still book it."
+                  confirmLabel="Book anyway"
+                  variant="primary"
+                  onConfirm={() => book.mutate({ classId })}
+                  trigger={
+                    <Button
+                      variant="secondary"
+                      busy={busy}
+                      disabled={busy || !!lockedMessage || !bookable.ok}
+                    >
+                      Book class
+                    </Button>
+                  }
+                />
+              ) : (
+                <Button
+                  busy={busy}
+                  disabled={busy || !!lockedMessage || !bookable.ok}
+                  onClick={() => book.mutate({ classId })}
+                >
+                  Book class
+                </Button>
+              ))}
           </div>
-        )}
+          {!cancelled && !past && !booked && lockedMessage && (
+            <p role="status" className="border-border border-t pt-4 text-sm">
+              {lockedMessage}
+            </p>
+          )}
+        </section>
 
-        {bjj && <ClassTheme classId={classId} />}
-
-        <Section label="Details" className={cn(ENTER, "delay-100")}>
+        <section className={cn(ENTER, "space-y-4 delay-100")}>
+          <SectionHeading>Class details</SectionHeading>
           <dl className={cn(cardClass(), "grid gap-4 sm:grid-cols-2")}>
             <Detail
               term="Time"
               value={`${timeFmt.format(start)} · ${c.durationMinutes} min`}
             />
-            {bjj && <Detail term="Discipline" value={c.discipline ?? "—"} />}
-            <Detail term="Instructor" value={c.instructorName ?? "Nobody"} />
+            {bjj && (
+              <Detail
+                term="Discipline"
+                value={c.discipline ?? "Not specified"}
+              />
+            )}
             <Detail
-              term="Spots"
+              term="Instructor"
+              value={c.instructorName ?? "Not assigned yet"}
+            />
+            <Detail
+              term="Availability"
               value={cap.label}
-              note={cap.isOver ? "may be busy" : undefined}
+              note={
+                cap.isOver && bookable.ok ? "Bookings still allowed" : undefined
+              }
               alert={cap.isOver}
             />
             {c.description && (
               <div className="sm:col-span-2">
-                <Detail term="About" value={c.description} />
+                <dt className="text-muted-foreground text-sm">
+                  About this class
+                </dt>
+                <dd className="mt-1 text-sm leading-relaxed whitespace-pre-wrap">
+                  {c.description}
+                </dd>
               </div>
             )}
           </dl>
-        </Section>
+        </section>
 
-        <Section label="Who's in" className={cn(ENTER, "delay-200")}>
-          <Attendees classId={classId} />
-        </Section>
+        {bjj && <ClassTheme classId={classId} />}
+
+        <section className={cn(ENTER, "space-y-4 delay-200")}>
+          <SectionHeading>Who's booked</SectionHeading>
+          <Attendees classId={classId} booked={booked && !cancelled} />
+        </section>
       </div>
     </>
   );
@@ -178,8 +213,8 @@ function Detail({
 }) {
   return (
     <div>
-      <Eyebrow as="dt">{term}</Eyebrow>
-      <dd className="mt-0.5 text-sm font-medium capitalize">
+      <dt className="text-muted-foreground text-sm">{term}</dt>
+      <dd className="mt-1 text-sm leading-relaxed whitespace-pre-wrap">
         {value}
         {note && (
           <span
@@ -196,7 +231,7 @@ function Detail({
   );
 }
 
-function Attendees({ classId }: { classId: string }) {
+function Attendees({ classId, booked }: { classId: string; booked: boolean }) {
   const trpc = useTRPC();
   const view = useQuery(trpc.class.attendees.queryOptions({ id: classId }));
 
@@ -207,7 +242,9 @@ function Attendees({ classId }: { classId: string }) {
 
   const { names, othersCount, namesHidden } = view.data;
   if (names.length === 0 && othersCount === 0) {
-    return <EmptyState title="Just you so far." />;
+    return (
+      <EmptyState title={booked ? "Just you so far" : "No bookings yet"} />
+    );
   }
 
   return (

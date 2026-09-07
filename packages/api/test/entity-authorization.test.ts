@@ -565,10 +565,8 @@ describe("switching a branch onto memberships", () => {
       entityId: ORG_S,
     });
     expect(preview.enforced).toBe(false);
-    expect(preview.activeMembers).toBe(3);
-    expect(preview.uncovered.map((m) => m.userId).sort()).toEqual(
-      [BOSS, HAND, SAM].sort(),
-    );
+    expect(preview.activeMembers).toBe(1);
+    expect(preview.uncovered.map((m) => m.userId).sort()).toEqual([SAM]);
   });
 
   it("counts nobody once a plan covers the branch", async () => {
@@ -576,9 +574,7 @@ describe("switching a branch onto memberships", () => {
       name: "Everything",
       entityIds: [ORG_S],
     });
-    for (const userId of [BOSS, HAND, SAM]) {
-      await owner().accessPlan.assign({ userId, planId: plan.id });
-    }
+    await owner().accessPlan.assign({ userId: SAM, planId: plan.id });
     const preview = await owner().entity.activationPreview({
       entityId: ORG_S,
     });
@@ -589,7 +585,7 @@ describe("switching a branch onto memberships", () => {
     const preview = await owner().entity.activationPreview({
       entityId: second,
     });
-    expect([preview.entityId, preview.activeMembers]).toEqual([second, 1]);
+    expect([preview.entityId, preview.activeMembers]).toEqual([second, 0]);
   });
 
   it("keeps the first timestamp when switched on twice", async () => {

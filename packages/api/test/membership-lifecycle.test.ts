@@ -73,6 +73,11 @@ describe("member archive and permanent erase (docs/issues/84)", () => {
       },
     ]);
 
+    await h.pg.query(
+      `UPDATE "member" SET role = 'member' WHERE organization_id = $1 AND user_id = $2`,
+      [ACAD, COOWNER],
+    );
+
     await seedClasses(h.pg, [
       {
         id: PAST,
@@ -417,6 +422,10 @@ describe("member archive and permanent erase (docs/issues/84)", () => {
     });
 
     it("leaves the gym owner their organization and their account", async () => {
+      await h.pg.query(
+        `UPDATE "member" SET role = 'owner' WHERE organization_id = $1 AND user_id = $2`,
+        [ACAD, COOWNER],
+      );
       const res = await h
         .as(OWNER, ACAD)
         .membership.purge({ memberId: memberId(ACAD, COOWNER) });

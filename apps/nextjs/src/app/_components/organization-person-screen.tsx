@@ -5,7 +5,13 @@ import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { AccessVerdict } from "@matops/domain";
-import { accessReason, entityHref, formatMoney } from "@matops/domain";
+import {
+  accessReason,
+  entityHref,
+  formatMoney,
+  isStaffRole,
+  isStudentMember,
+} from "@matops/domain";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@matops/ui/dialog";
@@ -143,6 +149,8 @@ export function OrganizationPersonScreen({ userId }: { userId: string }) {
     );
   }
 
+  const hasStudentBranch = person.branches.some(isStudentMember);
+
   return (
     <div className={`${ENTER} flex flex-col gap-6`}>
       <PageHeader title={person.name} subtitle={person.email} />
@@ -160,11 +168,15 @@ export function OrganizationPersonScreen({ userId }: { userId: string }) {
                 <span className="text-muted-foreground text-sm">
                   {b.role}
                   {b.status !== "active" ? ` · ${b.status}` : ""}
-                  {b.verdict && b.verdict !== "ok"
-                    ? ` · ${accessReason(b.verdict as AccessVerdict, b.entityName)}`
-                    : b.covered
-                      ? " · covered"
-                      : " · no membership covers them here"}
+                  {isStaffRole(b)
+                    ? b.status === "active"
+                      ? " · Staff access. No membership required"
+                      : " · Staff access is not active"
+                    : b.verdict && b.verdict !== "ok"
+                      ? ` · ${accessReason(b.verdict as AccessVerdict, b.entityName)}`
+                      : b.covered
+                        ? " · covered"
+                        : " · no membership covers them here"}
                 </span>
               </div>
               {/* A request is a per-branch decision, so it is answered here
@@ -200,30 +212,34 @@ export function OrganizationPersonScreen({ userId }: { userId: string }) {
                   </Button>
                 </>
               )}
-              {b.role !== "owner" && b.status === "active" && (
-                <Select
-                  aria-label={`Role at ${b.entityName}`}
-                  value={b.role === "instructor" ? "instructor" : "student"}
-                  disabled={busy}
-                  onChange={(e) =>
-                    setBranchRole.mutate({
-                      entityId: b.entityId,
-                      userId,
-                      role: e.target.value as "student" | "instructor",
-                    })
-                  }
-                >
-                  <option value="student">Student</option>
-                  <option value="instructor">Instructor</option>
-                </Select>
-              )}
+              {b.role !== "owner" &&
+                b.role !== "manager" &&
+                b.status === "active" && (
+                  <Select
+                    aria-label={`Role at ${b.entityName}`}
+                    value={b.role === "instructor" ? "instructor" : "student"}
+                    disabled={busy}
+                    onChange={(e) =>
+                      setBranchRole.mutate({
+                        entityId: b.entityId,
+                        userId,
+                        role: e.target.value as "student" | "instructor",
+                      })
+                    }
+                  >
+                    <option value="student">Student</option>
+                    <option value="instructor">Instructor</option>
+                  </Select>
+                )}
               {/* Rank, notes and attendance stay that branch's business
                   (ADR 128). */}
               <Button asChild size="sm" variant="outline">
                 <Link
                   href={entityHref(
                     b.entityId,
-                    `/members?tab=${b.status === "pending" ? "requests" : b.status === "archived" ? "archived" : "members"}&member=${encodeURIComponent(b.memberId)}`,
+                    isStaffRole(b) || !b.memberId
+                      ? "/coaches"
+                      : `/members?tab=${b.status === "pending" ? "requests" : b.status === "archived" ? "archived" : "members"}&member=${encodeURIComponent(b.memberId)}`,
                   )}
                 >
                   Open at this branch
@@ -244,8 +260,16 @@ export function OrganizationPersonScreen({ userId }: { userId: string }) {
       <section className="flex flex-col gap-3">
         <Eyebrow>Memberships</Eyebrow>
         {held.data.length === 0 ? (
-          <EmptyState title="They hold no membership.">
-            Give them one from their member profile at any branch.
+          <EmptyState
+            title={
+              hasStudentBranch
+                ? "They hold no membership."
+                : "No membership required."
+            }
+          >
+            {hasStudentBranch
+              ? "Give them a membership for the branches where they are a student."
+              : "Staff access comes from their role at each branch."}
           </EmptyState>
         ) : (
           <ul className="flex flex-col gap-2">
@@ -286,6 +310,22 @@ export function OrganizationPersonScreen({ userId }: { userId: string }) {
                     on 1 {h.pendingChange.effectiveMonthLabel}
                   </span>
                 )}
+                {h.status === "active" &&
+                  h.entityIds.length > 0 &&
+                  h.entityIds.every((id) =>
+                    person.branches.some(
+                      (b) =>
+                        b.entityId === id &&
+                        isStaffRole(b) &&
+                        b.status === "active",
+                    ),
+                  ) && (
+                    <p className="text-muted-foreground text-sm">
+                      Staff access covers every branch on this plan. Review
+                      whether this membership should end. Payment history stays
+                      unchanged.
+                    </p>
+                  )}
                 <PaymentHistory assignmentId={h.id} />
                 <div className="mt-1 flex flex-wrap gap-2">
                   {h.status === "active" &&
@@ -381,34 +421,36 @@ export function OrganizationPersonScreen({ userId }: { userId: string }) {
 
         {/* An ADDITIONAL independent plan. Replacing one they hold is
             "Change plan" on that membership, which waits for the 1st. */}
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="flex min-w-48 flex-1 flex-col gap-2">
-            <Eyebrow as="span">Add another membership</Eyebrow>
-            <Select
-              id="person-plan"
-              value={picked}
-              onChange={(e) => setPicked(e.target.value)}
+        {hasStudentBranch && (
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="flex min-w-48 flex-1 flex-col gap-2">
+              <Eyebrow as="span">Add another membership</Eyebrow>
+              <Select
+                id="person-plan"
+                value={picked}
+                onChange={(e) => setPicked(e.target.value)}
+              >
+                <option value="">Pick a plan…</option>
+                {(plans.data ?? [])
+                  .filter((p) => !p.archived)
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.priceMinor !== null && p.currency
+                        ? `${p.name} · ${formatMoney(p.priceMinor, p.currency)} a month`
+                        : `${p.name} · no price yet`}
+                    </option>
+                  ))}
+              </Select>
+            </div>
+            <Button
+              size="sm"
+              disabled={busy || picked === ""}
+              onClick={() => assign.mutate({ userId, planId: picked })}
             >
-              <option value="">Pick a plan…</option>
-              {(plans.data ?? [])
-                .filter((p) => !p.archived)
-                .map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.priceMinor !== null && p.currency
-                      ? `${p.name} · ${formatMoney(p.priceMinor, p.currency)} a month`
-                      : `${p.name} · no price yet`}
-                  </option>
-                ))}
-            </Select>
+              {assign.isPending ? "Adding…" : "Add"}
+            </Button>
           </div>
-          <Button
-            size="sm"
-            disabled={busy || picked === ""}
-            onClick={() => assign.mutate({ userId, planId: picked })}
-          >
-            {assign.isPending ? "Adding…" : "Add"}
-          </Button>
-        </div>
+        )}
       </section>
     </div>
   );

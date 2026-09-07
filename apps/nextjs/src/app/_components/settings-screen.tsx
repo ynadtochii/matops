@@ -1,6 +1,7 @@
 "use client";
 
 import { isBjjAcademy, isOwner } from "@matops/domain";
+import { cn } from "@matops/ui";
 
 import { AcademyDangerZone } from "./academy-danger-zone";
 import { AcademyIdentity } from "./academy-identity";
@@ -8,6 +9,7 @@ import { AcademyLocation } from "./academy-location";
 import { BookingGate } from "./booking-gate";
 import { useEntity } from "./entity";
 import { PageHeader } from "./page-header";
+import { ENTER } from "./primitives";
 import { PublicBooking } from "./public-booking";
 
 /**
@@ -39,7 +41,7 @@ export function SettingsScreen() {
             : "Your branch: name, code, time zone and where it is."
         }
       />
-      <div className="flex flex-col gap-8">
+      <div className={cn("flex flex-col gap-8", ENTER)}>
         <AcademyIdentity name={academy.name} code={academy.code} />
         <AcademyLocation address={academy.address} mapUrl={academy.mapUrl} />
         {/* The legacy booking gate belongs to branch dues, so it follows the

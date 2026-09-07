@@ -34,9 +34,10 @@ import { toast } from "@matops/ui/toast";
 import { dateYearFmt, dayShortFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { EmailField } from "./form-fields";
-import { cardClass, Eyebrow, MoreIcon, Tabs, TAP } from "./primitives";
+import { cardClass, Eyebrow, MoreIcon, RESOLVE, TAP } from "./primitives";
 import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
+import { Tabs } from "./tabs";
 
 type Lead = RouterOutputs["dropIn"]["list"][number];
 
@@ -207,7 +208,7 @@ export function LeadsPipeline({ initialFilter }: { initialFilter?: string }) {
           No lead is at this stage right now.
         </EmptyState>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div key={filter} className={cn("flex flex-col gap-3", RESOLVE)}>
           {shown.map((l) => {
             const busy =
               (setStage.isPending && setStage.variables.id === l.id) ||

@@ -35,7 +35,6 @@ import {
   isActiveMember,
   isGeneralSpace,
   isOwner,
-  isStaff,
   runsOrganization,
 } from "@matops/domain";
 import {
@@ -46,7 +45,7 @@ import {
   SetMembershipEnforcedSchema,
 } from "@matops/validators";
 
-import { rosterOf } from "../members";
+import { studentRosterOf } from "../members";
 import { loadRosterStanding } from "../membership-access";
 import { assignmentAppliesNow } from "../membership-status";
 import {
@@ -212,6 +211,25 @@ export const entityRouter = {
       await withScope(
         { organizationId: ctx.organizationId, entityId: branch.id },
         async (db) => {
+          const [organizationMember] = await db
+            .select({ role: member.role })
+            .from(member)
+            .where(
+              and(
+                eq(member.organizationId, ctx.organizationId),
+                eq(member.userId, input.userId),
+              ),
+            );
+          if (
+            organizationMember?.role === "owner" ||
+            organizationMember?.role === "manager"
+          ) {
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message:
+                "This person already has organization staff access. Change their organization role before assigning a branch role.",
+            });
+          }
           const [held] = await db
             .select({
               id: entityMembership.id,
@@ -394,17 +412,6 @@ export const entityRouter = {
       return made;
     }),
 
-  /**
-   * Who stops being able to book if this branch is switched onto shared
-   * memberships (ADR 127).
-   *
-   * The names are the point: a count alone does not tell an owner whether the
-   * switch is safe. Every ACTIVE member counts, whatever their role, because
-   * the gate runs for anybody who books and gives staff no bypass.
-   *
-   * No new rule: `covered` is computed by the same `membershipAccess` the gate
-   * itself runs, so the preview and the gate cannot disagree.
-   */
   activationPreview: organizationManagerIdentityProcedure
     .input(EntityIdSchema)
     .query(async ({ ctx, input }) => {
@@ -412,13 +419,14 @@ export const entityRouter = {
       return withScope(
         { organizationId: ctx.organizationId, entityId: branch.id },
         async (db) => {
-          const members = await rosterOf({ academyId: branch.id, db });
+          const members = await studentRosterOf({ academyId: branch.id, db });
           const active = members.filter((m) => m.status === "active");
           const standing = await loadRosterStanding(db, {
             entityId: branch.id,
             people: active.map((m) => ({
               userId: m.userId,
               status: m.status,
+              role: m.role,
             })),
             now: new Date(),
           });
@@ -430,11 +438,7 @@ export const entityRouter = {
             name: m.name,
             role: m.role,
           }));
-          // Staff run the branch rather than buying access to it, so an owner
-          // or a coach holding no plan is not a reason to refuse activation.
-          // They stay on the list above, which is what the switch would take
-          // away, because staff book classes too.
-          const blocking = notCovered.filter((m) => !isStaff(m)).length;
+          const blocking = notCovered.length;
 
           // What switching the gate on would actually take away. ADR 126 §8
           // recorded this as promised and not built: the preview named the

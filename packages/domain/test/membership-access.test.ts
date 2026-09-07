@@ -168,3 +168,32 @@ describe("accessAdmits and accessReason", () => {
     expect(accessReason("suspended", "The Gym")).toContain("The Gym");
   });
 });
+
+describe("free membership months", () => {
+  it("admits an approved active free membership after the pay deadline", () => {
+    expect(
+      ask({
+        at: LATER,
+        assignments: [holding({ id: "free", paymentRequired: false })],
+      }),
+    ).toBe("ok");
+  });
+
+  it("does not override branch or assignment restrictions", () => {
+    const assignments = [holding({ id: "free", paymentRequired: false })];
+    expect(
+      ask({ at: LATER, membership: { status: "pending" }, assignments }),
+    ).toBe("pending-approval");
+    expect(
+      ask({ at: LATER, membership: { status: "suspended" }, assignments }),
+    ).toBe("suspended");
+    expect(
+      ask({
+        at: LATER,
+        assignments: [
+          holding({ id: "free", status: "suspended", paymentRequired: false }),
+        ],
+      }),
+    ).toBe("not-covered");
+  });
+});

@@ -3,6 +3,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
+import { usePathname } from "next/navigation";
 import { createTRPCClient, httpBatchLink, loggerLink } from "@trpc/client";
 import { createTRPCContext } from "@trpc/tanstack-react-query";
 import SuperJSON from "superjson";
@@ -43,8 +44,12 @@ export const { useTRPC, TRPCProvider } = createTRPCContext<AppRouter>();
  * the academy it is supposed to be replacing. On the first load there is no
  * previous id and nothing is dropped.
  *
- * The entity layout mounts it because it already knows the id: the root
- * provider would need `usePathname`, which makes the static shell dynamic
+ * It reads the id off the client router and not off a prop from the entity
+ * layout, because a soft navigation can reuse that layout: the id would then
+ * still be the branch you left, nothing would be dropped, and the shell would
+ * keep serving it. `usePathname` changes on every navigation whatever the
+ * server re-rendered. The entity layout still mounts it: the root provider
+ * wraps the static shell too, and reading the path there makes it dynamic
  * (ADR 91).
  */
 let lastEntityId: string | undefined;
@@ -55,9 +60,10 @@ function switchedAcademy(entityId: string): boolean {
   return switched;
 }
 
-export function EntityCacheBoundary({ entityId }: { entityId: string }) {
+export function EntityCacheBoundary() {
   const queryClient = useQueryClient();
-  if (switchedAcademy(entityId)) queryClient.removeQueries();
+  const entityId = entityFromPath(usePathname());
+  if (entityId && switchedAcademy(entityId)) queryClient.removeQueries();
   return null;
 }
 

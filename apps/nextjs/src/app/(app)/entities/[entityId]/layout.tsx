@@ -39,7 +39,7 @@ async function EntityShell({
 
   return (
     <>
-      <EntityCacheBoundary entityId={entityId} />
+      <EntityCacheBoundary />
       <HydrateClient>
         <AppShell
           entityId={entityId}

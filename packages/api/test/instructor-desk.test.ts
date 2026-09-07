@@ -159,7 +159,7 @@ describe("an instructor runs the desk", () => {
     );
 
     await owner().membership.approve(target);
-    const seated = (await owner().membership.members()).find(
+    const seated = (await owner().membership.staff()).find(
       (r) => r.memberId === target.memberId,
     );
     expect(seated?.role).toBe("instructor");

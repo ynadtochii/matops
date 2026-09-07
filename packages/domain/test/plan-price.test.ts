@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import type { PlanPrice } from "../src/plan-price";
-import { canPriceFrom, priceForMonth } from "../src/plan-price";
+import {
+  canPriceFrom,
+  isFreeMembershipMonth,
+  priceForMonth,
+} from "../src/plan-price";
 
 const history: PlanPrice[] = [
   { effectiveMonth: "2026-01-01", priceMinor: 5000, currency: "EUR" },
@@ -58,5 +62,21 @@ describe("canPriceFrom", () => {
   it("accepts the month after this one, and any month beyond it", () => {
     expect(canPriceFrom("2026-10-01", "2026-09-01")).toBe(true);
     expect(canPriceFrom("2027-01-01", "2026-09-01")).toBe(true);
+  });
+});
+
+describe("isFreeMembershipMonth", () => {
+  it("requires an explicit zero price and follows future price changes", () => {
+    const prices = [
+      { effectiveMonth: "2026-09-01", priceMinor: 0, currency: "EUR" },
+      { effectiveMonth: "2026-10-01", priceMinor: 5000, currency: "EUR" },
+    ];
+    expect(isFreeMembershipMonth(null)).toBe(false);
+    expect(isFreeMembershipMonth(priceForMonth(prices, "2026-09-01"))).toBe(
+      true,
+    );
+    expect(isFreeMembershipMonth(priceForMonth(prices, "2026-10-01"))).toBe(
+      false,
+    );
   });
 });
