@@ -38,12 +38,10 @@ import {
   membershipMonth,
   membershipMonthAudit,
   membershipPolicy,
-  membershipPurchase,
   notification,
-  notificationOutbox,
+  notificationNotice,
   organization,
   person,
-  personGuardian,
   productEvent,
   rankPromotion,
   session,
@@ -145,10 +143,10 @@ export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
   await del("notification", () =>
     exec.delete(notification).where(inArray(notification.academyId, ids)),
   );
-  await del("notification_outbox", () =>
+  await del("notification_notice", () =>
     exec
-      .delete(notificationOutbox)
-      .where(inArray(notificationOutbox.academyId, ids)),
+      .delete(notificationNotice)
+      .where(inArray(notificationNotice.academyId, ids)),
   );
   await del("product_event", () =>
     exec
@@ -168,11 +166,6 @@ export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
     exec
       .delete(membershipMonth)
       .where(inArray(membershipMonth.organizationId, orgIds)),
-  );
-  await del("membership_purchase", () =>
-    exec
-      .delete(membershipPurchase)
-      .where(inArray(membershipPurchase.organizationId, orgIds)),
   );
   await del("access_assignment_change", () =>
     exec
@@ -201,12 +194,6 @@ export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
   );
   await del("access_plan", () =>
     exec.delete(accessPlan).where(inArray(accessPlan.organizationId, orgIds)),
-  );
-
-  await del("person_guardian", () =>
-    exec
-      .delete(personGuardian)
-      .where(inArray(personGuardian.organizationId, orgIds)),
   );
 
   // Entity foundation rows, scoped by the seed org id (ADR 124). Membership and

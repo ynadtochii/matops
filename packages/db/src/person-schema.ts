@@ -40,63 +40,13 @@ export const person = pgTable(
   ],
 );
 
-export const personGuardian = pgTable(
-  "person_guardian",
-  (t) => ({
-    id: t.uuid().notNull().primaryKey().defaultRandom(),
-    organizationId: t
-      .text()
-      .notNull()
-      .references(() => organization.id),
-    studentPersonId: t.uuid().notNull(),
-    guardianUserId: t.text().notNull(),
-    createdByUserId: t.text().references(() => user.id, {
-      onDelete: "set null",
-    }),
-    createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
-  }),
-  (table) => [
-    uniqueIndex("person_guardian_one_relation").on(
-      table.organizationId,
-      table.studentPersonId,
-      table.guardianUserId,
-    ),
-    index("person_guardian_by_account").on(
-      table.organizationId,
-      table.guardianUserId,
-    ),
-    foreignKey({
-      name: "person_guardian_student_same_org",
-      columns: [table.organizationId, table.studentPersonId],
-      foreignColumns: [person.organizationId, person.id],
-    }),
-    foreignKey({
-      name: "person_guardian_account_same_org",
-      columns: [table.organizationId, table.guardianUserId],
-      foreignColumns: [member.organizationId, member.userId],
-    }),
-  ],
-);
-
-export const personRelations = relations(person, ({ one, many }) => ({
+export const personRelations = relations(person, ({ one }) => ({
   organization: one(organization, {
     fields: [person.organizationId],
     references: [organization.id],
   }),
   account: one(user, {
     fields: [person.accountUserId],
-    references: [user.id],
-  }),
-  guardians: many(personGuardian),
-}));
-
-export const personGuardianRelations = relations(personGuardian, ({ one }) => ({
-  student: one(person, {
-    fields: [personGuardian.studentPersonId],
-    references: [person.id],
-  }),
-  guardian: one(user, {
-    fields: [personGuardian.guardianUserId],
     references: [user.id],
   }),
 }));

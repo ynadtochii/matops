@@ -14,12 +14,11 @@ import {
   memberRank,
   memberReferral,
   memberReferralAudit,
+  membershipAccessHold,
   membershipMonth,
-  membershipPurchase,
   notification,
-  notificationOutbox,
+  notificationRecipient,
   person,
-  personGuardian,
   rankPromotion,
   user,
 } from "./schema";
@@ -73,6 +72,16 @@ export async function eraseMemberData(
     .from(person)
     .where(eq(person.accountUserId, userId));
   const subjectIds = [userId, ...linkedPeople.map((row) => row.id)];
+  const notificationRecipientIdentity =
+    linkedPeople.length === 0
+      ? eq(notificationRecipient.userId, userId)
+      : or(
+          eq(notificationRecipient.userId, userId),
+          inArray(
+            notificationRecipient.personId,
+            linkedPeople.map((row) => row.id),
+          ),
+        );
 
   await del("attendance_correction", () =>
     exec
@@ -158,13 +167,13 @@ export async function eraseMemberData(
         ),
       ),
   );
-  await del("notification_outbox", () =>
+  await del("notification_recipient", () =>
     exec
-      .delete(notificationOutbox)
+      .delete(notificationRecipient)
       .where(
         and(
-          eq(notificationOutbox.academyId, academyId),
-          eq(notificationOutbox.recipientKey, `user:${userId}`),
+          eq(notificationRecipient.academyId, academyId),
+          notificationRecipientIdentity,
         ),
       ),
   );
@@ -256,17 +265,25 @@ export async function deleteEntityMembership(
 export async function deleteOrganizationAssignments(
   exec: DbExec,
   organizationId: string,
-  userId: string,
+  personId: string,
 ): Promise<number> {
-  await exec
-    .delete(membershipPurchase)
-    .where(
-      and(
-        eq(membershipPurchase.organizationId, organizationId),
-        eq(membershipPurchase.userId, userId),
+  await exec.delete(membershipAccessHold).where(
+    and(
+      eq(membershipAccessHold.organizationId, organizationId),
+      inArray(
+        membershipAccessHold.assignmentId,
+        exec
+          .select({ id: accessAssignment.id })
+          .from(accessAssignment)
+          .where(
+            and(
+              eq(accessAssignment.organizationId, organizationId),
+              eq(accessAssignment.personId, personId),
+            ),
+          ),
       ),
-    );
-
+    ),
+  );
   // The months hang off the assignment with a foreign key, so they go first or
   // the delete below is refused. `membership_month_audit` deliberately has no
   // such key and is NOT deleted: who marked which month paid outlives the
@@ -282,7 +299,7 @@ export async function deleteOrganizationAssignments(
           .where(
             and(
               eq(accessAssignment.organizationId, organizationId),
-              eq(accessAssignment.userId, userId),
+              eq(accessAssignment.personId, personId),
             ),
           ),
       ),
@@ -297,7 +314,7 @@ export async function deleteOrganizationAssignments(
     .where(
       and(
         eq(accessAssignmentChange.organizationId, organizationId),
-        eq(accessAssignmentChange.userId, userId),
+        eq(accessAssignmentChange.personId, personId),
       ),
     );
 
@@ -306,7 +323,7 @@ export async function deleteOrganizationAssignments(
     .where(
       and(
         eq(accessAssignment.organizationId, organizationId),
-        eq(accessAssignment.userId, userId),
+        eq(accessAssignment.personId, personId),
       ),
     )
     .returning({ id: accessAssignment.id });
@@ -318,14 +335,6 @@ export async function deleteMemberRow(
   organizationId: string,
   userId: string,
 ): Promise<void> {
-  await exec
-    .delete(personGuardian)
-    .where(
-      and(
-        eq(personGuardian.organizationId, organizationId),
-        eq(personGuardian.guardianUserId, userId),
-      ),
-    );
   await exec
     .update(person)
     .set({ accountUserId: null })

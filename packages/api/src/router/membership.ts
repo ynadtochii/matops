@@ -25,7 +25,6 @@ import {
   or,
   recordMilestone,
   resolveInviteToken,
-  setMemberRoleIfNotLastOwner,
   setMemberRoleStatus,
   setMemberStatus,
   setMemberStatusIfNotLastOwner,
@@ -49,7 +48,6 @@ import {
   trainingStats,
 } from "@matops/domain";
 import {
-  InviteRoleSchema,
   JoinAcademySchema,
   JoinByCodeSchema,
   MemberActionSchema,
@@ -565,6 +563,12 @@ export const membershipRouter = {
           message: "Archive this person instead of erasing an account.",
         });
       }
+      if (!m.personId) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "This membership has no person record.",
+        });
+      }
       const accountUserId = m.accountUserId;
       await rejectIfLastOwner(
         setMemberStatusIfNotLastOwner(
@@ -606,7 +610,7 @@ export const membershipRouter = {
         report.access_assignment = await deleteOrganizationAssignments(
           ctx.baseDb,
           ctx.organizationId,
-          accountUserId,
+          m.personId,
         );
         await deleteMemberRow(ctx.baseDb, ctx.organizationId, accountUserId);
       }
@@ -678,28 +682,6 @@ export const membershipRouter = {
         input.memberId,
         { role: "owner", status: "active" },
         ctx.baseDb,
-      );
-      return { ok: true as const };
-    }),
-
-  /**
-   * Set a member's academy role: make a student an instructor, step a coach back
-   * to student, or step an owner down to instructor (spec O6). Atomic
-   * never-ownerless check: the last active owner can't be stepped down (promote
-   * a co-owner first, §4).
-   */
-  setRole: branchManagerIdentityProcedure
-    .input(MemberActionSchema.extend({ role: InviteRoleSchema }))
-    .mutation(async ({ ctx, input }) => {
-      const target = await requireMember(identityScope(ctx), input.memberId);
-      await requireBranchLifecycleChange(ctx, target);
-      await rejectIfLastOwner(
-        setMemberRoleIfNotLastOwner(
-          ctx.academyId,
-          input.memberId,
-          input.role,
-          ctx.baseDb,
-        ),
       );
       return { ok: true as const };
     }),

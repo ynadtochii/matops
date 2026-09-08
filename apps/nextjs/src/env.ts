@@ -18,9 +18,6 @@ export const env = createEnv({
    */
   server: {
     POSTGRES_URL: z.url(),
-    // Shared secret the Vercel Cron request must present (Authorization: Bearer …)
-    // to run the materialization sweep. Optional in dev; required in production.
-    CRON_SECRET: z.string().min(1).optional(),
   },
 
   /**

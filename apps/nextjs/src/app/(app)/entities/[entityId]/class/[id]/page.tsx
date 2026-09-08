@@ -6,7 +6,6 @@ import { HydrateClient, prefetch, setRequestEntity, trpc } from "~/trpc/server";
 
 function ClassData({ id }: { id: string }) {
   prefetch(trpc.class.get.queryOptions({ id }));
-  prefetch(trpc.class.attendees.queryOptions({ id }));
 
   return (
     <HydrateClient>

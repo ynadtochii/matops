@@ -3,13 +3,10 @@ import { and, eq, isNull, or, sql } from "drizzle-orm";
 
 import type { DbReader, DbWriter } from "./tenant";
 import {
-  accessAssignment,
-  accessAssignmentChange,
   classParticipation,
   entity,
   entityMembership,
   member,
-  membershipPurchase,
   person,
   user,
 } from "./schema";
@@ -167,36 +164,6 @@ export async function backfillLinkedPersonSubjects(
       ),
     );
   await exec
-    .update(accessAssignment)
-    .set({ personId: input.personId })
-    .where(
-      and(
-        eq(accessAssignment.organizationId, input.organizationId),
-        eq(accessAssignment.userId, input.userId),
-        isNull(accessAssignment.personId),
-      ),
-    );
-  await exec
-    .update(accessAssignmentChange)
-    .set({ personId: input.personId })
-    .where(
-      and(
-        eq(accessAssignmentChange.organizationId, input.organizationId),
-        eq(accessAssignmentChange.userId, input.userId),
-        isNull(accessAssignmentChange.personId),
-      ),
-    );
-  await exec
-    .update(membershipPurchase)
-    .set({ personId: input.personId })
-    .where(
-      and(
-        eq(membershipPurchase.organizationId, input.organizationId),
-        eq(membershipPurchase.userId, input.userId),
-        isNull(membershipPurchase.personId),
-      ),
-    );
-  await exec
     .update(classParticipation)
     .set({
       personOrganizationId: input.organizationId,
@@ -229,36 +196,6 @@ export async function countLegacyOnlyPersonSubjects(
       ),
     exec
       .select({ count: sql<number>`count(*)::int` })
-      .from(accessAssignment)
-      .where(
-        and(
-          eq(accessAssignment.organizationId, input.organizationId),
-          eq(accessAssignment.userId, input.userId),
-          isNull(accessAssignment.personId),
-        ),
-      ),
-    exec
-      .select({ count: sql<number>`count(*)::int` })
-      .from(accessAssignmentChange)
-      .where(
-        and(
-          eq(accessAssignmentChange.organizationId, input.organizationId),
-          eq(accessAssignmentChange.userId, input.userId),
-          isNull(accessAssignmentChange.personId),
-        ),
-      ),
-    exec
-      .select({ count: sql<number>`count(*)::int` })
-      .from(membershipPurchase)
-      .where(
-        and(
-          eq(membershipPurchase.organizationId, input.organizationId),
-          eq(membershipPurchase.userId, input.userId),
-          isNull(membershipPurchase.personId),
-        ),
-      ),
-    exec
-      .select({ count: sql<number>`count(*)::int` })
       .from(classParticipation)
       .where(
         and(
@@ -284,36 +221,6 @@ export async function clearLinkedPersonAccountSubjects(
         eq(entityMembership.organizationId, input.organizationId),
         eq(entityMembership.personId, input.personId),
         eq(entityMembership.userId, input.userId),
-      ),
-    );
-  await exec
-    .update(accessAssignment)
-    .set({ userId: null })
-    .where(
-      and(
-        eq(accessAssignment.organizationId, input.organizationId),
-        eq(accessAssignment.personId, input.personId),
-        eq(accessAssignment.userId, input.userId),
-      ),
-    );
-  await exec
-    .update(accessAssignmentChange)
-    .set({ userId: null })
-    .where(
-      and(
-        eq(accessAssignmentChange.organizationId, input.organizationId),
-        eq(accessAssignmentChange.personId, input.personId),
-        eq(accessAssignmentChange.userId, input.userId),
-      ),
-    );
-  await exec
-    .update(membershipPurchase)
-    .set({ userId: null })
-    .where(
-      and(
-        eq(membershipPurchase.organizationId, input.organizationId),
-        eq(membershipPurchase.personId, input.personId),
-        eq(membershipPurchase.userId, input.userId),
       ),
     );
   await exec

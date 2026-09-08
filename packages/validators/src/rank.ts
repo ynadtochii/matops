@@ -22,6 +22,7 @@ export type SetMemberRankInput = z.infer<typeof SetMemberRankSchema>;
 export const ClearMemberRankSchema = z.object({
   memberId: IdSchema,
   discipline: lineText(1, 40),
+  reason: lineText(1, 500),
 });
 export type ClearMemberRankInput = z.infer<typeof ClearMemberRankSchema>;
 

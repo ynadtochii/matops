@@ -31,6 +31,8 @@ export interface ApplicableAssignment {
   entityIds: string[];
   /** Whether the month being judged is ticked paid. Missing means unpaid. */
   paid: boolean;
+  paymentStatus?: "unpaid" | "reported" | "confirmed" | "rejected";
+  held?: boolean;
   paymentRequired?: boolean;
   /** The first moment that is too late for that month. */
   deadline: Date;
@@ -50,7 +52,9 @@ export interface AccessInput {
 function admits(assignment: ApplicableAssignment, at: Date): boolean {
   return (
     assignment.paymentRequired === false ||
-    assignment.paid ||
+    assignment.paymentStatus === "confirmed" ||
+    assignment.paymentStatus === "reported" ||
+    (assignment.paymentStatus === undefined && assignment.paid) ||
     at.getTime() < assignment.deadline.getTime()
   );
 }
@@ -88,6 +92,17 @@ export function membershipAccess(input: AccessInput): AccessVerdict {
 
   const covering = coveringAssignments(input);
   if (covering.length === 0) return "not-covered";
+  if (
+    covering.some(
+      (assignment) =>
+        assignment.held === true || assignment.paymentStatus === "rejected",
+    )
+  ) {
+    return "payment-declined";
+  }
+  if (covering.some((assignment) => assignment.paymentStatus === "reported")) {
+    return "provisional";
+  }
   return covering.some((a) => admits(a, input.at)) ? "ok" : "expired";
 }
 

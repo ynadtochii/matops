@@ -77,6 +77,7 @@ const AssignmentFieldsSchema = z.object({
   planId: z.uuid(),
   assigningEntityId: IdSchema.nullish(),
   startMonth: z.iso.date().nullish(),
+  startsOn: z.iso.date().nullish(),
 });
 
 export const AssignMembershipSchema = z
@@ -192,6 +193,9 @@ export const MarkMembershipMonthSchema = z.object({
   assignmentId: z.uuid(),
   month: MonthSchema,
   paid: z.boolean(),
+  expectedVersion: z.number().int().positive().optional(),
+  reason: blockText(1, 500).optional(),
+  resolveHoldReason: blockText(1, 500).optional(),
 });
 export type MarkMembershipMonthInput = z.infer<
   typeof MarkMembershipMonthSchema
@@ -203,7 +207,12 @@ export const MembershipMonthsSchema = z.object({ assignmentId: z.uuid() });
  * A member says they sent the transfer. No month: the server uses the one they
  * are being judged on, which is the only month they are ever shown (ADR 127).
  */
-export const ClaimMembershipMonthSchema = z.object({ assignmentId: z.uuid() });
+export const ClaimMembershipMonthSchema = z.object({
+  assignmentId: z.uuid(),
+  expectedVersion: z.number().int().positive().optional(),
+  priceMinor: PriceMinorSchema.optional(),
+  currency: CurrencySchema.optional(),
+});
 export type ClaimMembershipMonthInput = z.infer<
   typeof ClaimMembershipMonthSchema
 >;
@@ -211,9 +220,19 @@ export type ClaimMembershipMonthInput = z.infer<
 /** Clear a claim without marking the month paid. */
 export const RejectMembershipClaimSchema = MarkMembershipMonthSchema.omit({
   paid: true,
-});
+  resolveHoldReason: true,
+}).extend({ reason: blockText(1, 500).default("Payment report rejected") });
 export type RejectMembershipClaimInput = z.infer<
   typeof RejectMembershipClaimSchema
+>;
+
+export const ResolveMembershipHoldSchema = z.object({
+  holdId: z.uuid(),
+  expectedVersion: z.number().int().positive(),
+  reason: blockText(1, 500),
+});
+export type ResolveMembershipHoldInput = z.infer<
+  typeof ResolveMembershipHoldSchema
 >;
 
 /**
@@ -244,19 +263,3 @@ export const OrganizationWindowSchema = z.object({
   to: z.iso.datetime(),
 });
 export type OrganizationWindowInput = z.infer<typeof OrganizationWindowSchema>;
-
-export const PurchaseCatalogSchema = z.object({
-  start: z.enum(["current", "next"]).default("current"),
-});
-export const SelectMembershipPurchaseSchema = PurchaseCatalogSchema.extend({
-  planId: z.uuid(),
-  version: z.string().min(1).max(5000),
-});
-export const MembershipPurchaseIdSchema = z.object({ id: z.uuid() });
-export const RejectMembershipPurchaseSchema = MembershipPurchaseIdSchema.extend(
-  { reason: blockText(1, 500) },
-);
-export const MembershipAvailabilitySchema = z.object({
-  planId: z.uuid(),
-  available: z.boolean(),
-});

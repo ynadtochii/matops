@@ -219,6 +219,7 @@ export const UpdateAcademySettingsSchema = z.object({
     .optional(),
   address: blockText(0, 200).optional(),
   mapUrl: z.union([MapUrlSchema, z.literal("")]).optional(),
+  bookingWindowDays: z.number().int().min(1).max(90).optional(),
   curriculumForStudents: z.boolean().optional(),
 });
 export type UpdateAcademySettingsInput = z.infer<
@@ -242,29 +243,22 @@ export type DeleteAcademyInput = z.infer<typeof DeleteAcademySchema>;
 export const InviteRoleSchema = z.enum(["student", "instructor"]);
 export type InviteRole = z.infer<typeof InviteRoleSchema>;
 
-/**
- * Put somebody on one branch, or change what they are there, from the gym's
- * person profile (ADR 129). ORDINARY roles only: owner grants stay on the
- * branch's own Coaches page, so nothing here can mint an owner.
- */
-export const SetBranchRoleSchema = z
+export const AddStudentToBranchSchema = z
   .union([
     z.object({
       entityId: IdSchema,
       personId: IdSchema,
-      role: InviteRoleSchema,
     }),
     z.object({
       entityId: IdSchema,
       userId: IdSchema,
-      role: InviteRoleSchema,
     }),
   ])
   .transform((input) => ({
     ...input,
     userId: "personId" in input ? input.personId : input.userId,
   }));
-export type SetBranchRoleInput = z.infer<typeof SetBranchRoleSchema>;
+export type AddStudentToBranchInput = z.infer<typeof AddStudentToBranchSchema>;
 
 /** Approve or decline one person's place at one branch (ADR 129). */
 export const BranchDecisionSchema = z

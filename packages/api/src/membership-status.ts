@@ -59,11 +59,13 @@ export interface MembershipStanding {
   /** The month being judged, as its first day. */
   month: string;
   paid: boolean;
+  paymentStatus: string;
+  version: number;
   paymentRequired: boolean;
   /** The first moment that is too late. */
   deadline: Date;
   /** When the member said they sent the money for this month. */
-  claimedAt: Date | null;
+  reportedAt: Date | null;
   warning: MembershipWarning | null;
 }
 
@@ -135,23 +137,16 @@ export async function membershipStanding(
       startMonth: accessAssignment.startMonth,
       endMonth: accessAssignment.endMonth,
       createdAt: accessAssignment.createdAt,
+      startsOn: accessAssignment.startsOn,
       planId: accessAssignment.planId,
       planName: accessPlan.name,
     })
     .from(accessAssignment)
     .innerJoin(accessPlan, eq(accessPlan.id, accessAssignment.planId))
     .where(
-      or(
-        subject.personId
-          ? eq(accessAssignment.personId, subject.personId)
-          : undefined,
-        subject.accountUserId
-          ? and(
-              isNull(accessAssignment.personId),
-              eq(accessAssignment.userId, subject.accountUserId),
-            )
-          : undefined,
-      ),
+      subject.personId
+        ? eq(accessAssignment.personId, subject.personId)
+        : sql`false`,
     );
   if (rows.length === 0) return [];
   // Only the memberships whose period covers this month (ADR 129). A successor
@@ -170,8 +165,12 @@ export async function membershipStanding(
     .select({
       assignmentId: membershipMonth.assignmentId,
       month: membershipMonth.month,
-      paid: membershipMonth.paid,
-      claimedAt: membershipMonth.claimedAt,
+      status: membershipMonth.status,
+      version: membershipMonth.version,
+      priceMinor: membershipMonth.priceMinor,
+      currency: membershipMonth.currency,
+      deadline: membershipMonth.deadline,
+      reportedAt: membershipMonth.reportedAt,
     })
     .from(membershipMonth)
     .where(eq(membershipMonth.month, month));
@@ -189,21 +188,28 @@ export async function membershipStanding(
 
   return applicable.map((r) => {
     const held = months.find((m) => m.assignmentId === r.id);
-    const paid = held?.paid ?? false;
-    const amount = priceForMonth(
+    const paymentStatus = held?.status ?? "unpaid";
+    const paid = paymentStatus === "confirmed";
+    const currentAmount = priceForMonth(
       prices.filter((p) => p.planId === r.planId),
       month,
     );
+    const amount =
+      held?.priceMinor !== null &&
+      held?.priceMinor !== undefined &&
+      held.currency
+        ? { priceMinor: held.priceMinor, currency: held.currency }
+        : currentAmount;
     const paymentRequired = !isFreeMembershipMonth(amount);
     const shared = {
       month,
       startMonth: r.startMonth,
       // The day they joined only matters in the month they joined, and it is
       // the assignment's own creation day.
-      joinedOn: r.createdAt.toISOString().slice(0, 10),
+      joinedOn: r.startsOn,
       policy: calendar,
     };
-    const deadline = payDeadline(shared);
+    const deadline = held?.deadline ?? payDeadline(shared);
     return {
       assignmentId: r.id,
       planName: r.planName,
@@ -218,12 +224,18 @@ export async function membershipStanding(
         .sort(),
       month,
       paid,
+      paymentStatus,
+      version: held?.version ?? 0,
       deadline,
-      claimedAt: held?.claimedAt ?? null,
+      reportedAt: held?.reportedAt ?? null,
       warning:
         r.status === "active" && paymentRequired
           ? membershipWarning({
-              verdict: monthVerdict({ ...shared, paid, now }),
+              verdict: monthVerdict({
+                ...shared,
+                paid: paid || paymentStatus === "reported",
+                now,
+              }),
               month,
               deadline,
               planName: r.planName,

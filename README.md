@@ -1,6 +1,6 @@
 # matops
 
-Multi-academy admin SaaS for grappling gyms — a **Next.js** owner/instructor web app and an **Expo** student mobile app in one TypeScript monorepo.
+Multi-academy admin SaaS for grappling gyms. It has a **Next.js** owner and instructor web app and an **Expo** student mobile app in one TypeScript monorepo.
 
 Scaffolded from [`create-t3-turbo`](https://github.com/t3-oss/create-t3-turbo).
 
@@ -14,7 +14,7 @@ Turborepo · pnpm · tRPC v11 · Better Auth (Organization + magic-link) · Driz
 
 ```
 apps/
-  nextjs        owner/instructor web app (hosts the tRPC API + cron)
+  nextjs        owner/instructor web app and hosted tRPC API
   expo          student mobile app
 packages/
   api           tRPC routers + procedure tiers
@@ -26,6 +26,18 @@ packages/
 tooling/         eslint · prettier · tailwind · typescript · github
 docs/            spec, architecture, roadmap, delivery rulebook, decisions (ADRs)
 ```
+
+## First academy operating model
+
+- Staff create adult student records and assign shared membership plans. A login link is optional.
+- Students report monthly payment. Owners and managers confirm, correct, or reject each month.
+- A rejected month creates a branch coverage hold. Only an owner or manager can resolve it.
+- Each branch has a 1-90 day booking window. The default is 7 local calendar days.
+- Owners extend the generated calendar or preview and apply a safe schedule rebuild from Templates.
+- Visitors book at `/book/<academy-code>`. The page stores a private return token for status and cancellation.
+- Class and visitor email creates a saved notice. The request sends a bounded first batch. Staff send remaining recipients or retry failures from Notifications.
+
+MatOps has no scheduled application jobs or external public booking API. It does not need `CRON_SECRET`, public API keys, or allowed-origin settings.
 
 ## Getting started
 

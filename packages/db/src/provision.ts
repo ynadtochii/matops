@@ -36,8 +36,6 @@ export interface EntityRows {
   membershipEnforcedAt?: Date | null;
   curriculumForStudents?: boolean;
   publicBookingEnabled?: boolean;
-  publicApiKey?: string | null;
-  publicApiOrigins?: string[] | null;
 }
 
 /**
@@ -102,8 +100,6 @@ async function provisionEntityRows(
           entityId: input.entityId,
           curriculumForStudents: input.curriculumForStudents ?? false,
           publicBookingEnabled: input.publicBookingEnabled ?? false,
-          publicApiKey: input.publicApiKey,
-          publicApiOrigins: input.publicApiOrigins,
         })
         .onConflictDoNothing()
         .returning({ id: academyProfile.entityId }),

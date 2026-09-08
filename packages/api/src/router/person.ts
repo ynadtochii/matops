@@ -4,7 +4,6 @@ import { TRPCError } from "@trpc/server";
 import type { DbExec, DbReader, DbWriter } from "@matops/db";
 import {
   and,
-  asc,
   backfillLinkedPersonSubjects,
   clearLinkedPersonAccountSubjects,
   countLegacyOnlyPersonSubjects,
@@ -13,49 +12,21 @@ import {
   findPersonDuplicates,
   findVerifiedAccountByEmail,
   getOrganizationPerson,
-  gte,
   inArray,
   isNull,
-  lt,
-  ne,
-  or,
-  sql,
-  withScope,
 } from "@matops/db";
-import {
-  classInstance,
-  classParticipation,
-  entity,
-  entityMembership,
-  person,
-  personGuardian,
-  user,
-} from "@matops/db/schema";
-import { bookingTier, canBook, notBookableMessage } from "@matops/domain";
+import { entity, entityMembership, person, user } from "@matops/db/schema";
 import {
   CreateStudentPersonSchema,
   GetPersonSchema,
-  GuardianCandidateSchema,
   LinkPersonAccountSchema,
-  MySubjectsSchema,
   PersonAccountCandidateSchema,
-  PersonClassBookingSchema,
   PersonDirectorySchema,
-  PersonGuardianSchema,
   PersonIdSchema,
-  PersonScheduleSchema,
   PreviewCreatePersonSchema,
   UnlinkPersonAccountSchema,
 } from "@matops/validators";
 
-import {
-  claimSeat,
-  releaseSeats,
-  requireClassFacts,
-  SESSION_FULL,
-} from "../classes";
-import { CLASS_NOT_FOUND } from "../messages";
-import { bookingGate } from "../payments-gate";
 import {
   organizationManagerIdentityProcedure,
   organizationMemberIdentityProcedure,
@@ -186,88 +157,6 @@ async function requireOrganizationEntity(
   if (!row) {
     throw new TRPCError({ code: "NOT_FOUND", message: "Branch not found" });
   }
-}
-
-async function requireSubjectAccess(
-  exec: DbReader,
-  input: {
-    organizationId: string;
-    entityId: string;
-    personId: string;
-    actorUserId: string;
-  },
-) {
-  const [subject] = await exec
-    .select()
-    .from(person)
-    .where(
-      and(
-        eq(person.organizationId, input.organizationId),
-        eq(person.id, input.personId),
-      ),
-    )
-    .limit(1)
-    .for("share");
-  if (!subject) {
-    throw new TRPCError({ code: "NOT_FOUND", message: PERSON_NOT_FOUND });
-  }
-  if (subject.archivedAt) {
-    throw new TRPCError({ code: "NOT_FOUND", message: PERSON_NOT_FOUND });
-  }
-  if (subject.accountUserId !== input.actorUserId) {
-    const [guardian] = await exec
-      .select({ id: personGuardian.id })
-      .from(personGuardian)
-      .where(
-        and(
-          eq(personGuardian.organizationId, input.organizationId),
-          eq(personGuardian.studentPersonId, input.personId),
-          eq(personGuardian.guardianUserId, input.actorUserId),
-        ),
-      )
-      .limit(1)
-      .for("share");
-    if (!guardian) {
-      throw new TRPCError({ code: "NOT_FOUND", message: PERSON_NOT_FOUND });
-    }
-  }
-  const [branch] = await exec
-    .select({
-      id: entity.id,
-      name: entity.name,
-      membershipEnforcedAt: entity.membershipEnforcedAt,
-      membershipId: entityMembership.id,
-      role: entityMembership.role,
-      status: entityMembership.status,
-      joinedAt: entityMembership.joinedAt,
-      createdAt: entityMembership.createdAt,
-    })
-    .from(entityMembership)
-    .innerJoin(entity, eq(entity.id, entityMembership.entityId))
-    .where(
-      and(
-        eq(entity.organizationId, input.organizationId),
-        eq(entity.id, input.entityId),
-        eq(entity.status, "active"),
-        isNull(entity.deletedAt),
-        or(
-          eq(entityMembership.personId, input.personId),
-          subject.accountUserId
-            ? and(
-                isNull(entityMembership.personId),
-                eq(entityMembership.userId, subject.accountUserId),
-              )
-            : undefined,
-        ),
-        inArray(entityMembership.status, ["active", "pending"]),
-      ),
-    )
-    .limit(1)
-    .for("share");
-  if (!branch) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "Branch not found" });
-  }
-  return { subject, branch };
 }
 
 async function requirePersonCreator(
@@ -411,191 +300,6 @@ export const personRouter = {
       });
     }),
 
-  schedule: organizationMemberIdentityProcedure
-    .input(PersonScheduleSchema)
-    .query(async ({ ctx, input }) => {
-      return withScope(
-        { organizationId: ctx.organizationId, entityId: input.entityId },
-        async (db) => {
-          const { subject } = await requireSubjectAccess(db, {
-            organizationId: ctx.organizationId,
-            entityId: input.entityId,
-            personId: input.personId,
-            actorUserId: ctx.session.user.id,
-          });
-          return db
-            .select({
-              id: classInstance.id,
-              title: classInstance.title,
-              description: classInstance.description,
-              discipline: classInstance.discipline,
-              startsAt: classInstance.startsAt,
-              durationMinutes: classInstance.durationMinutes,
-              capacity: classInstance.capacity,
-              bookingCount: classInstance.bookingCount,
-              status: classInstance.status,
-              instructorId: classInstance.instructorId,
-              instructorName: user.name,
-              myBooking: classParticipation.bookingStatus,
-              myBookingTier: classParticipation.bookingTier,
-            })
-            .from(classInstance)
-            .leftJoin(user, eq(user.id, classInstance.instructorId))
-            .leftJoin(
-              classParticipation,
-              and(
-                eq(classParticipation.classId, classInstance.id),
-                or(
-                  eq(classParticipation.personId, subject.id),
-                  subject.accountUserId
-                    ? and(
-                        isNull(classParticipation.personId),
-                        eq(classParticipation.studentId, subject.accountUserId),
-                      )
-                    : undefined,
-                ),
-              ),
-            )
-            .where(
-              and(
-                isNull(classInstance.deletedAt),
-                gte(classInstance.startsAt, new Date(input.from)),
-                lt(classInstance.startsAt, new Date(input.to)),
-              ),
-            )
-            .orderBy(asc(classInstance.startsAt));
-        },
-        ctx.baseDb,
-      );
-    }),
-
-  bookClass: organizationMemberIdentityProcedure
-    .input(PersonClassBookingSchema)
-    .mutation(async ({ ctx, input }) => {
-      return withScope(
-        { organizationId: ctx.organizationId, entityId: input.entityId },
-        async (db) => {
-          const { subject, branch } = await requireSubjectAccess(db, {
-            organizationId: ctx.organizationId,
-            entityId: input.entityId,
-            personId: input.personId,
-            actorUserId: ctx.session.user.id,
-          });
-          const cls = await requireClassFacts(db, input.classId);
-          const bookable = canBook(cls, new Date());
-          if (bookable.reason === "deleted") {
-            throw new TRPCError({
-              code: "NOT_FOUND",
-              message: CLASS_NOT_FOUND,
-            });
-          }
-          if (bookable.reason) {
-            throw new TRPCError({
-              code: "PRECONDITION_FAILED",
-              message: notBookableMessage(bookable.reason),
-            });
-          }
-          const membership = {
-            memberId: branch.membershipId,
-            personId: subject.id,
-            role: branch.role,
-            status: branch.status,
-            joinedAt: branch.joinedAt ?? branch.createdAt,
-          };
-          const gate = await bookingGate(db, {
-            entity: {
-              id: branch.id,
-              name: branch.name,
-              membershipEnforcedAt: branch.membershipEnforcedAt,
-            },
-            membership,
-            accountUserId: subject.accountUserId,
-            sessionAt: cls.startsAt,
-          });
-          if (gate.locked) {
-            throw new TRPCError({
-              code: "PRECONDITION_FAILED",
-              message: gate.message ?? "Booking is locked for this person.",
-            });
-          }
-          const tier = gate.provisional
-            ? ("provisional" as const)
-            : bookingTier(membership);
-          const [transition] = await db
-            .insert(classParticipation)
-            .values({
-              academyId: input.entityId,
-              classId: input.classId,
-              personOrganizationId: ctx.organizationId,
-              personId: subject.id,
-              studentId: subject.accountUserId,
-              bookingStatus: "booked",
-              bookingTier: tier,
-              cancelledAt: null,
-            })
-            .onConflictDoUpdate({
-              target: [classParticipation.classId, classParticipation.personId],
-              targetWhere: sql`person_id is not null`,
-              set: {
-                bookingStatus: "booked",
-                bookingTier: tier,
-                cancelledAt: null,
-              },
-              setWhere: ne(classParticipation.bookingStatus, "booked"),
-            })
-            .returning({ id: classParticipation.id });
-          if (transition && tier === "confirmed") {
-            const took = await claimSeat(db, input.classId);
-            if (!took) {
-              throw new TRPCError({ code: "CONFLICT", message: SESSION_FULL });
-            }
-          }
-          return { ok: true as const, tier };
-        },
-        ctx.baseDb,
-      );
-    }),
-
-  cancelBooking: organizationMemberIdentityProcedure
-    .input(PersonClassBookingSchema)
-    .mutation(async ({ ctx, input }) => {
-      return withScope(
-        { organizationId: ctx.organizationId, entityId: input.entityId },
-        async (db) => {
-          const { subject } = await requireSubjectAccess(db, {
-            organizationId: ctx.organizationId,
-            entityId: input.entityId,
-            personId: input.personId,
-            actorUserId: ctx.session.user.id,
-          });
-          const [cancelled] = await db
-            .update(classParticipation)
-            .set({ bookingStatus: "cancelled", cancelledAt: new Date() })
-            .where(
-              and(
-                eq(classParticipation.classId, input.classId),
-                or(
-                  eq(classParticipation.personId, subject.id),
-                  subject.accountUserId
-                    ? and(
-                        isNull(classParticipation.personId),
-                        eq(classParticipation.studentId, subject.accountUserId),
-                      )
-                    : undefined,
-                ),
-                eq(classParticipation.bookingStatus, "booked"),
-              ),
-            )
-            .returning({ tier: classParticipation.bookingTier });
-          if (cancelled?.tier === "confirmed") {
-            await releaseSeats(db, [input.classId]);
-          }
-          return { ok: true as const };
-        },
-        ctx.baseDb,
-      );
-    }),
-
   directory: organizationManagerIdentityProcedure
     .input(PersonDirectorySchema)
     .query(async ({ ctx, input }) => {
@@ -640,27 +344,9 @@ export const personRouter = {
             .limit(1)
             .then((found) => found[0] ?? null)
         : null;
-      const guardians = await ctx.baseDb
-        .select({
-          relationId: personGuardian.id,
-          userId: user.id,
-          name: user.name,
-          email: user.email,
-          createdAt: personGuardian.createdAt,
-          createdByUserId: personGuardian.createdByUserId,
-        })
-        .from(personGuardian)
-        .innerJoin(user, eq(user.id, personGuardian.guardianUserId))
-        .where(
-          and(
-            eq(personGuardian.organizationId, ctx.organizationId),
-            eq(personGuardian.studentPersonId, row.id),
-          ),
-        );
       return {
         ...row,
         account,
-        guardians,
         branches: await branchesForPerson(
           ctx.organizationId,
           row.id,
@@ -811,84 +497,6 @@ export const personRouter = {
       return { personId: target.id, updatedAt: saved.updatedAt };
     }),
 
-  guardianCandidate: organizationManagerIdentityProcedure
-    .input(GuardianCandidateSchema)
-    .query(async ({ ctx, input }) => {
-      await requirePerson(
-        ctx.baseDb,
-        ctx.organizationId,
-        input.studentPersonId,
-      );
-      return findVerifiedAccountByEmail(ctx.baseDb, input.email);
-    }),
-
-  addGuardian: organizationManagerIdentityProcedure
-    .input(PersonGuardianSchema)
-    .mutation(async ({ ctx, input }) => {
-      const student = await requirePerson(
-        ctx.baseDb,
-        ctx.organizationId,
-        input.studentPersonId,
-      );
-      if (student.archivedAt) {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: PERSON_ARCHIVED,
-        });
-      }
-      if (student.accountUserId === input.guardianUserId) {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: "A person cannot be their own guardian",
-        });
-      }
-      await verifiedAccountById(ctx.baseDb, input.guardianUserId);
-      const [created] = await ctx.baseDb.transaction(async (db) => {
-        await ensureOrganizationAccount(db, {
-          organizationId: ctx.organizationId,
-          userId: input.guardianUserId,
-        });
-        return db
-          .insert(personGuardian)
-          .values({
-            organizationId: ctx.organizationId,
-            studentPersonId: student.id,
-            guardianUserId: input.guardianUserId,
-            createdByUserId: ctx.session.user.id,
-          })
-          .onConflictDoNothing({
-            target: [
-              personGuardian.organizationId,
-              personGuardian.studentPersonId,
-              personGuardian.guardianUserId,
-            ],
-          })
-          .returning({ id: personGuardian.id });
-      });
-      return { created: created !== undefined };
-    }),
-
-  removeGuardian: organizationManagerIdentityProcedure
-    .input(PersonGuardianSchema)
-    .mutation(async ({ ctx, input }) => {
-      await requirePerson(
-        ctx.baseDb,
-        ctx.organizationId,
-        input.studentPersonId,
-      );
-      const removed = await ctx.baseDb
-        .delete(personGuardian)
-        .where(
-          and(
-            eq(personGuardian.organizationId, ctx.organizationId),
-            eq(personGuardian.studentPersonId, input.studentPersonId),
-            eq(personGuardian.guardianUserId, input.guardianUserId),
-          ),
-        )
-        .returning({ id: personGuardian.id });
-      return { removed: removed.length > 0 };
-    }),
-
   archive: organizationManagerIdentityProcedure
     .input(PersonIdSchema)
     .mutation(async ({ ctx, input }) => {
@@ -936,88 +544,5 @@ export const personRouter = {
         )
         .returning({ id: person.id });
       return { changed: saved !== undefined };
-    }),
-
-  mySubjects: organizationMemberIdentityProcedure
-    .input(MySubjectsSchema)
-    .query(async ({ ctx, input }) => {
-      if (input?.entityId) {
-        const [owned] = await ctx.baseDb
-          .select({ id: entity.id })
-          .from(entity)
-          .where(
-            and(
-              eq(entity.organizationId, ctx.organizationId),
-              eq(entity.id, input.entityId),
-              isNull(entity.deletedAt),
-            ),
-          )
-          .limit(1);
-        if (!owned) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Branch not found",
-          });
-        }
-      }
-      const guarded = await ctx.baseDb
-        .select({ personId: personGuardian.studentPersonId })
-        .from(personGuardian)
-        .where(
-          and(
-            eq(personGuardian.organizationId, ctx.organizationId),
-            eq(personGuardian.guardianUserId, ctx.session.user.id),
-          ),
-        );
-      const subjectIds = guarded.map((row) => row.personId);
-      const rows = await ctx.baseDb
-        .select({
-          personId: person.id,
-          name: person.name,
-          accountUserId: person.accountUserId,
-        })
-        .from(person)
-        .where(
-          and(
-            eq(person.organizationId, ctx.organizationId),
-            isNull(person.archivedAt),
-            or(
-              eq(person.accountUserId, ctx.session.user.id),
-              subjectIds.length > 0
-                ? inArray(person.id, subjectIds)
-                : undefined,
-            ),
-          ),
-        );
-      const activeIds = input?.entityId
-        ? new Set(
-            (
-              await ctx.baseDb
-                .select({ personId: entityMembership.personId })
-                .from(entityMembership)
-                .where(
-                  and(
-                    eq(entityMembership.organizationId, ctx.organizationId),
-                    eq(entityMembership.entityId, input.entityId),
-                    eq(entityMembership.role, "student"),
-                    inArray(entityMembership.status, ["active", "pending"]),
-                    inArray(
-                      entityMembership.personId,
-                      rows.map((row) => row.personId),
-                    ),
-                  ),
-                )
-            ).flatMap((row) => (row.personId ? [row.personId] : [])),
-          )
-        : null;
-      return rows
-        .filter((row) => !activeIds || activeIds.has(row.personId))
-        .map((row) => ({
-          ...row,
-          relationship:
-            row.accountUserId === ctx.session.user.id
-              ? ("self" as const)
-              : ("guardian" as const),
-        }));
     }),
 } satisfies TRPCRouterRecord;

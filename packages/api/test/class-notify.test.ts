@@ -63,10 +63,10 @@ describe("the booked students hear about a class", () => {
   it("tells them when it is cancelled", async () => {
     await h.as(OWNER, ACAD).class.cancel({ id: TO_CANCEL });
     expect(await kindsFor(STUDENT)).toContain("class_cancelled");
-    const recipients = await h.pg.query<{ recipient_address: string }>(
-      `SELECT recipient_address FROM "notification_outbox" ORDER BY recipient_address`,
+    const recipients = await h.pg.query<{ email: string }>(
+      `SELECT email FROM "notification_recipient" ORDER BY email`,
     );
-    expect(recipients.rows.map((row) => row.recipient_address)).toEqual([
+    expect(recipients.rows.map((row) => row.email)).toEqual([
       `${STUDENT}@test.local`,
       "visitor@example.com",
     ]);

@@ -28,6 +28,10 @@ describe("sendEmail", () => {
   it("no-ops (ok) when Resend is unconfigured", async () => {
     // RESEND_API_KEY / RESEND_FROM are unset in the test env.
     const r = await sendEmail({ to: "a@b.com", subject: "s", text: "t" });
-    expect(r).toEqual({ sent: false, ok: true });
+    expect(r).toEqual({
+      sent: false,
+      ok: true,
+      outcome: "not_configured",
+    });
   });
 });

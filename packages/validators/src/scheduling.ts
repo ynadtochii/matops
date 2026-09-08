@@ -76,6 +76,10 @@ export const TemplateStatusSchema = z.object({
 /** Address a single template by id (setStatus target reuse / delete). */
 export const TemplateIdSchema = z.object({ id: z.uuid() });
 
+export const RebuildScheduleSchema = z.object({
+  version: z.number().int().min(0),
+});
+
 /**
  * One-off class (spec O2, docs/issues/08). `template_id` is null. The start is a
  * LOCAL date + minutes in `timeZone`; the router resolves the UTC instant with

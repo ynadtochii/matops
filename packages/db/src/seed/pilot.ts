@@ -149,7 +149,6 @@ export async function seedPilot(
         id: plan.id,
         organizationId: PILOT_ORG_ID,
         name: plan.name,
-        studentSelectable: true,
         priceMinor: plan.priceMinor,
         currency: "EUR",
       })

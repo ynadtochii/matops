@@ -2,7 +2,7 @@ import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
 import { and, desc, eq, getMemberIdForUser } from "@matops/db";
-import { memberRank, rankPromotion } from "@matops/db/schema";
+import { memberRank, rankCorrection, rankPromotion } from "@matops/db/schema";
 import { isRankChange, isRankRegression, isValidRank } from "@matops/domain";
 import {
   ClearMemberRankSchema,
@@ -55,12 +55,21 @@ export const rankRouter = {
         .from(rankPromotion)
         .where(eq(rankPromotion.memberId, input.memberId))
         .orderBy(desc(rankPromotion.promotedAt));
+      const corrections = await ctx.db
+        .select()
+        .from(rankCorrection)
+        .where(eq(rankCorrection.memberId, input.memberId))
+        .orderBy(desc(rankCorrection.correctedAt));
       const byUser = nameByUser(await rosterOf(ctx));
       return {
         ranks,
         history: history.map((h) => ({
           ...h,
           promotedByName: byUser.get(h.promotedBy) ?? "Staff",
+        })),
+        corrections: corrections.map((event) => ({
+          ...event,
+          correctedByName: byUser.get(event.correctedBy) ?? "Staff",
         })),
       };
     }),
@@ -145,6 +154,21 @@ export const rankRouter = {
     .input(ClearMemberRankSchema)
     .mutation(async ({ ctx, input }) => {
       await requireMember(ctx, input.memberId);
+      const current = (
+        await ctx.db
+          .select({ belt: memberRank.belt, stripes: memberRank.stripes })
+          .from(memberRank)
+          .where(
+            and(
+              eq(memberRank.memberId, input.memberId),
+              eq(memberRank.discipline, input.discipline),
+            ),
+          )
+          .limit(1)
+      )[0];
+      if (!current) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Rank not found" });
+      }
       await ctx.db
         .delete(memberRank)
         .where(
@@ -153,6 +177,17 @@ export const rankRouter = {
             eq(memberRank.discipline, input.discipline),
           ),
         );
+      await ctx.db.insert(rankCorrection).values({
+        academyId: ctx.academyId,
+        memberId: input.memberId,
+        discipline: input.discipline,
+        fromBelt: current.belt,
+        fromStripes: current.stripes,
+        toBelt: null,
+        toStripes: null,
+        reason: input.reason,
+        correctedBy: ctx.session.user.id,
+      });
       return { ok: true as const };
     }),
 

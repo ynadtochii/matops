@@ -100,13 +100,18 @@ describe("data transfer", () => {
       .select()
       .from(membershipMonth)
       .where(eq(membershipMonth.assignmentId, imported.assignmentId));
-    expect(month?.paid).toBe(true);
+    expect(month?.status).toBe("confirmed");
     const [audit] = await h.exec
       .select()
       .from(membershipMonthAudit)
       .where(eq(membershipMonthAudit.assignmentId, imported.assignmentId));
     expect(audit).toEqual(
-      expect.objectContaining({ wasPaid: null, paid: true, actorId: MANAGER }),
+      expect.objectContaining({
+        event: "imported",
+        beforeStatus: null,
+        afterStatus: "confirmed",
+        actorId: MANAGER,
+      }),
     );
     const classId = "19fca10f-4dd6-4f3d-b907-915d6552637a";
     await h.exec.insert(classInstance).values({

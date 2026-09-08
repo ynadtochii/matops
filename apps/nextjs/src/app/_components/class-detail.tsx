@@ -20,14 +20,15 @@ import { ClassTheme } from "./class-theme";
 import { useEntity, useEntityHref, useOrganization } from "./entity";
 import { PageHeader } from "./page-header";
 import { cardClass, ENTER, SectionHeading } from "./primitives";
-import { ClassDetailSkeleton, SkeletonCard } from "./skeletons";
-import { EmptyState, ErrorState } from "./states";
+import { ClassDetailSkeleton } from "./skeletons";
+import { ErrorState } from "./states";
 import { useBooking } from "./use-booking";
 import { useMinuteClock } from "./use-clock";
 
 export function ClassDetail({ classId }: { classId: string }) {
   const href = useEntityHref();
-  const bjj = isBjjAcademy(useEntity().type);
+  const academy = useEntity();
+  const bjj = isBjjAcademy(academy.type);
   const trpc = useTRPC();
   const { book, cancel, busy, lockedMessage } = useBooking();
   const { canRunOrganization } = useOrganization();
@@ -61,10 +62,14 @@ export function ClassDetail({ classId }: { classId: string }) {
   const bookable = canBook(
     { status: c.status, startsAt: start, deletedAt: null },
     now,
+    {
+      bookingWindowDays: academy.bookingWindowDays,
+      timeZone: academy.timeZone ?? "UTC",
+    },
   );
   const refusal =
     bookable.reason && bookable.reason !== "deleted"
-      ? notBookableMessage(bookable.reason)
+      ? notBookableMessage(bookable.reason, academy.bookingWindowDays)
       : null;
   const cap = capacityDisplay(c.bookingCount, c.capacity);
 
@@ -213,7 +218,6 @@ export function ClassDetail({ classId }: { classId: string }) {
 
         <section className={cn(ENTER, "space-y-4 delay-200")}>
           <SectionHeading>Who's booked</SectionHeading>
-          <Attendees classId={classId} booked={booked && !cancelled} />
         </section>
       </div>
     </>
@@ -247,41 +251,6 @@ function Detail({
           </span>
         )}
       </dd>
-    </div>
-  );
-}
-
-function Attendees({ classId, booked }: { classId: string; booked: boolean }) {
-  const trpc = useTRPC();
-  const view = useQuery(trpc.class.attendees.queryOptions({ id: classId }));
-
-  if (view.isPending) return <SkeletonCard lines={2} />;
-  if (view.isError) {
-    return <ErrorState label="who's in" onRetry={() => void view.refetch()} />;
-  }
-
-  const { names, othersCount, namesHidden } = view.data;
-  if (names.length === 0 && othersCount === 0) {
-    return (
-      <EmptyState title={booked ? "Just you so far" : "No bookings yet"} />
-    );
-  }
-
-  return (
-    <div className={cardClass()}>
-      {names.length > 0 && <p className="text-sm">{names.join(", ")}</p>}
-      {othersCount > 0 && (
-        <p className="text-muted-foreground mt-1 text-sm">
-          {names.length > 0
-            ? `+${othersCount} others`
-            : `${othersCount} booked`}
-        </p>
-      )}
-      {namesHidden && (
-        <p className="text-muted-foreground mt-1 text-sm">
-          Names show once your gym approves you.
-        </p>
-      )}
     </div>
   );
 }

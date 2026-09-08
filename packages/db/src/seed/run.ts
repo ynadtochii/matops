@@ -39,8 +39,8 @@ import {
   membershipMonth,
   membershipMonthAudit,
   membershipPolicy,
-  membershipPurchase,
   organization,
+  person,
   rankPromotion,
   user,
 } from "../schema";
@@ -117,6 +117,7 @@ export async function seedAll(
     })),
   );
   await insert(report, "member", exec, member, graph.members);
+  await insert(report, "person", exec, person, graph.people);
   await insert(
     report,
     "entity_membership",
@@ -165,14 +166,6 @@ export async function seedAll(
     membershipMonthAudit,
     m.monthAudits,
   );
-  await insert(
-    report,
-    "membership_purchase",
-    exec,
-    membershipPurchase,
-    m.purchases,
-  );
-
   // 3. Templates → past classes → their participations.
   await insert(report, "class_template", exec, classTemplate, graph.templates);
   await insert(report, "class(past)", exec, classInstance, graph.pastClasses);

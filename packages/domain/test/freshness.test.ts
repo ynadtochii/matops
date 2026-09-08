@@ -21,7 +21,7 @@ describe("staleTimeMs", () => {
   });
 
   it("gives stats two minutes", () => {
-    for (const path of ["stats.dashboard", "stats.me", "stats.coaches"]) {
+    for (const path of ["stats.dashboard", "stats.coaches"]) {
       expect(staleTimeMs(path)).toBe(120_000);
     }
   });

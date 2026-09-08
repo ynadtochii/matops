@@ -25,8 +25,6 @@ import {
   membershipMonthAudit,
   membershipPolicy,
   person,
-  personGuardian,
-  user,
 } from "@matops/db/schema";
 import { monthOf, parseCsv, resolveAcademyTimeZone } from "@matops/domain";
 import {
@@ -65,7 +63,6 @@ interface PreviewRow {
 const datasets = [
   "people",
   "enrollments",
-  "guardians",
   "memberships",
   "membership_months",
   "payment_history",
@@ -96,15 +93,6 @@ const exportHeaders: Record<(typeof datasets)[number], string[]> = {
     "created_at",
     "updated_at",
   ],
-  guardians: [
-    "relation_id",
-    "person_id",
-    "guardian_account_user_id",
-    "guardian_name",
-    "guardian_email",
-    "created_by_account_user_id",
-    "created_at",
-  ],
   memberships: [
     "assignment_id",
     "person_id",
@@ -123,11 +111,16 @@ const exportHeaders: Record<(typeof datasets)[number], string[]> = {
     "assignment_id",
     "person_id",
     "month",
-    "paid",
-    "recorded_by_account_user_id",
-    "recorded_at",
-    "claimed_at",
-    "reminded_at",
+    "status",
+    "version",
+    "claimed_by_account_user_id",
+    "reported_at",
+    "reviewed_by_account_user_id",
+    "reviewed_at",
+    "price_minor",
+    "currency",
+    "deadline",
+    "calendar_time_zone",
     "created_at",
     "updated_at",
   ],
@@ -136,8 +129,14 @@ const exportHeaders: Record<(typeof datasets)[number], string[]> = {
     "assignment_id",
     "person_id",
     "month",
-    "was_paid",
-    "paid",
+    "event",
+    "before_status",
+    "after_status",
+    "reason",
+    "price_minor",
+    "currency",
+    "deadline",
+    "calendar_time_zone",
     "actor_account_user_id",
     "created_at",
   ],
@@ -541,33 +540,11 @@ async function exportRows(
         )
         .orderBy(asc(entityMembership.id))
         .limit(limit);
-    case "guardians":
-      return db
-        .select({
-          id: personGuardian.id,
-          personId: personGuardian.studentPersonId,
-          guardianUserId: personGuardian.guardianUserId,
-          guardianName: user.name,
-          guardianEmail: user.email,
-          createdByUserId: personGuardian.createdByUserId,
-          createdAt: personGuardian.createdAt,
-        })
-        .from(personGuardian)
-        .innerJoin(user, eq(user.id, personGuardian.guardianUserId))
-        .where(
-          and(
-            eq(personGuardian.organizationId, organizationId),
-            lte(personGuardian.createdAt, asOf),
-            input.cursor ? gt(personGuardian.id, input.cursor) : undefined,
-          ),
-        )
-        .orderBy(asc(personGuardian.id))
-        .limit(limit);
     case "memberships":
       return db
         .select({
           id: accessAssignment.id,
-          personId: sql<string>`coalesce(${accessAssignment.personId}::text, ${accessAssignment.userId})`,
+          personId: accessAssignment.personId,
           planId: accessAssignment.planId,
           planName: accessPlan.name,
           status: accessAssignment.status,
@@ -594,13 +571,18 @@ async function exportRows(
         .select({
           id: membershipMonth.id,
           assignmentId: membershipMonth.assignmentId,
-          personId: sql<string>`coalesce(${accessAssignment.personId}::text, ${accessAssignment.userId})`,
+          personId: accessAssignment.personId,
           month: membershipMonth.month,
-          paid: membershipMonth.paid,
-          recordedBy: membershipMonth.recordedBy,
-          recordedAt: membershipMonth.recordedAt,
-          claimedAt: membershipMonth.claimedAt,
-          remindedAt: membershipMonth.remindedAt,
+          status: membershipMonth.status,
+          version: membershipMonth.version,
+          claimedBy: membershipMonth.claimedBy,
+          reportedAt: membershipMonth.reportedAt,
+          reviewedBy: membershipMonth.reviewedBy,
+          reviewedAt: membershipMonth.reviewedAt,
+          priceMinor: membershipMonth.priceMinor,
+          currency: membershipMonth.currency,
+          deadline: membershipMonth.deadline,
+          calendarTimeZone: membershipMonth.calendarTimeZone,
           createdAt: membershipMonth.createdAt,
           updatedAt: membershipMonth.updatedAt,
         })
@@ -623,12 +605,16 @@ async function exportRows(
         .select({
           id: membershipMonthAudit.id,
           assignmentId: membershipMonthAudit.assignmentId,
-          personId: sql<
-            string | null
-          >`coalesce(${accessAssignment.personId}::text, ${accessAssignment.userId})`,
+          personId: accessAssignment.personId,
           month: membershipMonthAudit.month,
-          wasPaid: membershipMonthAudit.wasPaid,
-          paid: membershipMonthAudit.paid,
+          event: membershipMonthAudit.event,
+          beforeStatus: membershipMonthAudit.beforeStatus,
+          afterStatus: membershipMonthAudit.afterStatus,
+          reason: membershipMonthAudit.reason,
+          priceMinor: membershipMonthAudit.priceMinor,
+          currency: membershipMonthAudit.currency,
+          deadline: membershipMonthAudit.deadline,
+          calendarTimeZone: membershipMonthAudit.calendarTimeZone,
           actorId: membershipMonthAudit.actorId,
           createdAt: membershipMonthAudit.createdAt,
         })
@@ -854,9 +840,10 @@ export const dataTransferRouter = {
                 organizationId: ctx.organizationId,
                 assignmentId: assignment.id,
                 month: paymentMonth,
-                paid: true,
-                recordedBy: ctx.session.user.id,
-                recordedAt: new Date(),
+                status: "confirmed",
+                version: 1,
+                reviewedBy: ctx.session.user.id,
+                reviewedAt: new Date(),
               })
               .onConflictDoNothing({
                 target: [membershipMonth.assignmentId, membershipMonth.month],
@@ -871,8 +858,9 @@ export const dataTransferRouter = {
               organizationId: ctx.organizationId,
               assignmentId: assignment.id,
               month: paymentMonth,
-              wasPaid: null,
-              paid: true,
+              event: "imported",
+              beforeStatus: null,
+              afterStatus: "confirmed",
               actorId: ctx.session.user.id,
             });
             paymentRecorded = true;

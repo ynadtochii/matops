@@ -16,11 +16,9 @@ export * from "./dropin";
 export * from "./materialize";
 // Push-token helpers (Expo push registration / target resolution) — ./push-token.ts.
 export * from "./push-token";
-// Class-reminder claim (base-connection cron helper) — see ./reminder.ts.
-export * from "./reminder";
 // Notification-center writes (base-connection) — see ./notification.ts.
 export * from "./notification";
-export * from "./notification-outbox";
+export * from "./notification-notice";
 // Academy settings (time zone, address, soft delete) — see ./academy-settings.ts.
 export * from "./academy-settings";
 // Permanent erasure of one member (spec O4) — see ./erase.ts.

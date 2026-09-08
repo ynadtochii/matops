@@ -12,7 +12,6 @@ import { dropInRouter } from "./router/dropin";
 import { entityRouter } from "./router/entity";
 import { inviteRouter } from "./router/invite";
 import { membershipRouter } from "./router/membership";
-import { membershipPurchaseRouter } from "./router/membershipPurchase";
 import { noteRouter } from "./router/note";
 import { notificationRouter } from "./router/notification";
 import { organizationRouter } from "./router/organization";
@@ -23,6 +22,7 @@ import { referralRouter } from "./router/referral";
 import { statsRouter } from "./router/stats";
 import { systemRouter } from "./router/system";
 import { templateRouter } from "./router/template";
+import { visitorRouter } from "./router/visitor";
 import { createTRPCRouter } from "./trpc";
 
 export const appRouter = createTRPCRouter({
@@ -34,7 +34,6 @@ export const appRouter = createTRPCRouter({
   account: accountRouter,
   invite: inviteRouter,
   membership: membershipRouter,
-  membershipPurchase: membershipPurchaseRouter,
   template: templateRouter,
   class: classRouter,
   curriculum: curriculumRouter,
@@ -51,6 +50,7 @@ export const appRouter = createTRPCRouter({
   pushToken: pushTokenRouter,
   stats: statsRouter,
   system: systemRouter,
+  visitor: visitorRouter,
 });
 
 // export type definition of API

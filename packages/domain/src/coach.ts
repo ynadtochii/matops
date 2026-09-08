@@ -40,6 +40,7 @@ export interface CoachClass {
   title: string;
   discipline: string | null;
   cancelled: boolean;
+  reviewed: boolean;
 }
 
 /** One attendance-marked participation, joined to its class. */
@@ -96,6 +97,7 @@ export interface CoachRosterInput extends CoachInput {
 export interface CoachWorkload {
   instructorId: string;
   classesLed: number;
+  unresolvedEnded: number;
   minutesLed: number;
   markedClasses: number;
   visitsTaught: number;
@@ -139,6 +141,8 @@ export interface CoachBreakdown {
   byWeek: { weekBucket: number; classesLed: number }[];
   /** Led classes, most recent first. */
   recent: CoachClassSummary[];
+  unresolved: CoachClassSummary[];
+  cancelled: CoachClassSummary[];
 }
 
 const pad = (n: number, width: number) => String(n).padStart(width, "0");
@@ -207,7 +211,9 @@ function hasEnded(c: CoachClass, now: Date): boolean {
 
 /** A class that counts as led: in window, not cancelled, already finished. */
 function isLed(c: CoachClass, now: Date, range: DateRange): boolean {
-  return inRange(c.startsAt, range) && !c.cancelled && hasEnded(c, now);
+  return (
+    inRange(c.startsAt, range) && !c.cancelled && c.reviewed && hasEnded(c, now)
+  );
 }
 
 const ratio = (numerator: number, denominator: number) =>
@@ -227,6 +233,7 @@ function summarize(
   let markedClasses = 0;
   let visitsTaught = 0;
   let cancelled = 0;
+  let unresolvedEnded = 0;
 
   for (const c of classes) {
     if (c.instructorId !== instructorId) continue;
@@ -236,6 +243,10 @@ function summarize(
       continue;
     }
     if (!hasEnded(c, now)) continue;
+    if (!c.reviewed) {
+      unresolvedEnded += 1;
+      continue;
+    }
     classesLed += 1;
     minutesLed += c.durationMinutes;
     const summary = markSummary.get(c.id);
@@ -248,6 +259,7 @@ function summarize(
   return {
     instructorId,
     classesLed,
+    unresolvedEnded,
     minutesLed,
     markedClasses,
     visitsTaught,
@@ -318,6 +330,18 @@ export function coachBreakdown(
   const byWeekday = [0, 0, 0, 0, 0, 0, 0];
   const weekCounts = new Map<number, number>();
   const recent: CoachClassSummary[] = [];
+  const sourceSummary = (c: CoachClass): CoachClassSummary => {
+    const summary = markSummary.get(c.id);
+    return {
+      classId: c.id,
+      startsAt: c.startsAt,
+      title: c.title,
+      discipline: c.discipline,
+      durationMinutes: c.durationMinutes,
+      headcount: summary?.present ?? 0,
+      marked: c.reviewed,
+    };
+  };
 
   for (const c of led) {
     const summary = markSummary.get(c.id);
@@ -380,6 +404,27 @@ export function coachBreakdown(
     byWeekday,
     byWeek,
     recent,
+    unresolved: classes
+      .filter(
+        (c) =>
+          c.instructorId === instructorId &&
+          inRange(c.startsAt, range) &&
+          !c.cancelled &&
+          !c.reviewed &&
+          hasEnded(c, now),
+      )
+      .sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime())
+      .map(sourceSummary),
+    cancelled: classes
+      .filter(
+        (c) =>
+          c.instructorId === instructorId &&
+          inRange(c.startsAt, range) &&
+          c.cancelled &&
+          c.startsAt.getTime() < now.getTime(),
+      )
+      .sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime())
+      .map(sourceSummary),
   };
 }
 

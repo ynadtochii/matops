@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto";
 import { and, asc, eq, gte, isNull, lt } from "drizzle-orm";
 
 import type { DbReader, DbWriter } from "./tenant";
@@ -35,7 +34,7 @@ export interface PublicApiAcademy {
   address: string | null;
   mapUrl: string | null;
   publicCode: string;
-  origins: string[];
+  bookingWindowDays: number;
   enabled: boolean;
 }
 
@@ -44,10 +43,6 @@ export interface PublicApiAcademy {
  * names the academy, can be revoked, and carries the per-academy limits. The
  * prefix makes one recognisable in a log or a support ticket.
  */
-export function newPublicApiKey(): string {
-  return `mk_pub_${randomBytes(24).toString("base64url")}`;
-}
-
 const academyCols = {
   academyId: entity.id,
   name: entity.name,
@@ -56,7 +51,7 @@ const academyCols = {
   address: entity.address,
   mapUrl: entity.mapUrl,
   publicCode: entity.publicCode,
-  origins: academyProfile.publicApiOrigins,
+  bookingWindowDays: entity.bookingWindowDays,
   enabled: academyProfile.publicBookingEnabled,
 };
 
@@ -68,10 +63,10 @@ function toAcademy(row: {
   address: string | null;
   mapUrl: string | null;
   publicCode: string;
-  origins: string[] | null;
+  bookingWindowDays: number;
   enabled: boolean;
 }): PublicApiAcademy {
-  return { ...row, origins: row.origins ?? [] };
+  return row;
 }
 
 /**
@@ -80,27 +75,13 @@ function toAcademy(row: {
  * than filtering the query, so a gym that paused answers "switched off" instead
  * of "bad key" and the integrator knows which one to fix.
  */
-export async function resolvePublicApiKey(
-  key: string,
-  exec: DbReader,
-): Promise<PublicApiAcademy | null> {
-  const rows = await exec
-    .select(academyCols)
-    .from(academyProfile)
-    .innerJoin(entity, eq(entity.id, academyProfile.entityId))
-    .where(and(eq(academyProfile.publicApiKey, key), isNull(entity.deletedAt)))
-    .limit(1);
-  const row = rows[0];
-  return row ? toAcademy(row) : null;
-}
-
 /** The same academy by its 6-digit code, for the shared `/book/<code>` page. */
 export async function findPublicAcademyByCode(
   code: string,
   exec: DbReader,
-): Promise<(PublicApiAcademy & { apiKey: string }) | null> {
+): Promise<PublicApiAcademy | null> {
   const rows = await exec
-    .select({ ...academyCols, apiKey: academyProfile.publicApiKey })
+    .select(academyCols)
     .from(entity)
     .innerJoin(academyProfile, eq(academyProfile.entityId, entity.id))
     .where(
@@ -112,14 +93,11 @@ export async function findPublicAcademyByCode(
     )
     .limit(1);
   const row = rows[0];
-  if (!row?.apiKey) return null;
-  return { ...toAcademy(row), apiKey: row.apiKey };
+  return row ? toAcademy(row) : null;
 }
 
 export interface PublicApiSettings {
   enabled: boolean;
-  apiKey: string | null;
-  origins: string[];
   publicCode: string;
 }
 
@@ -130,8 +108,6 @@ export async function getPublicApiSettings(
   const rows = await exec
     .select({
       enabled: academyProfile.publicBookingEnabled,
-      apiKey: academyProfile.publicApiKey,
-      origins: academyProfile.publicApiOrigins,
       publicCode: entity.publicCode,
     })
     .from(entity)
@@ -139,7 +115,7 @@ export async function getPublicApiSettings(
     .where(and(eq(entity.id, academyId), isNull(entity.deletedAt)))
     .limit(1);
   const row = rows[0];
-  return row ? { ...row, origins: row.origins ?? [] } : null;
+  return row ?? null;
 }
 
 /**
@@ -154,38 +130,11 @@ export async function setPublicApiEnabled(
 ): Promise<PublicApiSettings | null> {
   const current = await getPublicApiSettings(academyId, exec);
   if (!current) return null;
-  const apiKey = enabled
-    ? (current.apiKey ?? newPublicApiKey())
-    : current.apiKey;
   await exec
     .update(academyProfile)
-    .set({ publicBookingEnabled: enabled, publicApiKey: apiKey })
+    .set({ publicBookingEnabled: enabled })
     .where(eq(academyProfile.entityId, academyId));
-  return { ...current, enabled, apiKey };
-}
-
-/** Rotate the key: the old one stops working the moment this commits. */
-export async function rotatePublicApiKey(
-  academyId: string,
-  exec: DbWriter,
-): Promise<string> {
-  const apiKey = newPublicApiKey();
-  await exec
-    .update(academyProfile)
-    .set({ publicApiKey: apiKey })
-    .where(eq(academyProfile.entityId, academyId));
-  return apiKey;
-}
-
-export async function setPublicApiOrigins(
-  academyId: string,
-  origins: string[],
-  exec: DbWriter,
-): Promise<void> {
-  await exec
-    .update(academyProfile)
-    .set({ publicApiOrigins: origins })
-    .where(eq(academyProfile.entityId, academyId));
+  return { ...current, enabled };
 }
 
 export interface PublicClass {

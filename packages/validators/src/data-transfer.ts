@@ -52,7 +52,6 @@ export const OrganizationExportPageSchema = z.object({
   dataset: z.enum([
     "people",
     "enrollments",
-    "guardians",
     "memberships",
     "membership_months",
     "payment_history",

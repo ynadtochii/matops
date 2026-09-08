@@ -350,7 +350,10 @@ describe("marking a membership month paid", () => {
       assignmentId: assignment,
     });
     expect(months).toHaveLength(1);
-    expect([months[0]?.month, months[0]?.paid]).toEqual(["2026-09-01", true]);
+    expect([months[0]?.month, months[0]?.status]).toEqual([
+      "2026-09-01",
+      "confirmed",
+    ]);
     expect(await auditCount()).toBe(1);
   });
 
@@ -540,7 +543,7 @@ describe("a member says they paid", () => {
   it("leaves the month unpaid while it waits", async () => {
     const mine = await h.as(SAM, ORGC).accessPlan.mine();
     expect(mine.memberships[0]?.paid).toBe(false);
-    expect(mine.memberships[0]?.claimedAt).toBeInstanceOf(Date);
+    expect(mine.memberships[0]?.reportedAt).toBeInstanceOf(Date);
   });
 
   it("refuses a claim on somebody else's membership", async () => {
@@ -578,9 +581,10 @@ describe("a member says they paid", () => {
     });
     expect(await owner().accessPlan.claims()).toEqual([]);
     const mine = await h.as(SAM, ORGC).accessPlan.mine();
-    expect([mine.memberships[0]?.paid, mine.memberships[0]?.claimedAt]).toEqual(
-      [true, null],
-    );
+    expect([
+      mine.memberships[0]?.paid,
+      mine.memberships[0]?.reportedAt,
+    ]).toEqual([true, null]);
   });
 
   it("leaves no claim behind when a paid month is corrected back to unpaid", async () => {
@@ -591,7 +595,7 @@ describe("a member says they paid", () => {
     });
     expect(await owner().accessPlan.claims()).toEqual([]);
     expect(
-      (await h.as(SAM, ORGC).accessPlan.mine()).memberships[0]?.claimedAt,
+      (await h.as(SAM, ORGC).accessPlan.mine()).memberships[0]?.reportedAt,
     ).toBeNull();
   });
 

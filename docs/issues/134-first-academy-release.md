@@ -1,6 +1,8 @@
 # 134: First academy release
 
-Date: 2026-09-07. Status: implemented, release checks pending.
+Date: 2026-09-07. Status: superseded by [ADR 135](/Users/kuna/projects/matops/docs/issues/135-first-academy-fresh-install-contract.md).
+
+ADR 135 replaces this staged migration and worker design with a fresh install. Guardian access, student shopping, scheduled jobs, and the external booking API described below are not part of the current release.
 
 ## Problem
 

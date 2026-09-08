@@ -16,6 +16,8 @@
 
 // Type-only import — erased at runtime, so this file (and teardown) stay free of
 // the `./client` connection side effect and remain unit-testable without a DB.
+import { createHash } from "node:crypto";
+
 import type { db } from "../client";
 import { assertDevDatabase } from "../env-guard";
 
@@ -96,6 +98,11 @@ export const seedMemberId = (academyKey: string, handle: string): string =>
 /** The seed `entity_membership.id` mirroring one `member.id` (ADR 124). */
 export const seedEntityMembershipId = (memberId: string): string =>
   memberId.replace(`${SEED_MARKER}mem_`, `${SEED_MARKER}emem_`);
+
+export function seedPersonId(memberId: string): string {
+  const hex = createHash("sha256").update(memberId).digest("hex").slice(0, 32);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20)}`;
+}
 
 /** The seed `entity_membership.id` for one academy + persona. Dues, claims,
  * ranks, notes and referrals key on this, not on `member.id` (ADR 124). */

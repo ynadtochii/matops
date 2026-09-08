@@ -51,11 +51,6 @@ describe("shared membership seed isolation", () => {
           studentCount: 3,
         });
       }
-      await pg.exec(`
-        INSERT INTO membership_purchase (organization_id, user_id, entity_id, plan_id, plan_name, price_minor, currency, start_month, entity_ids, branch_names, version, reference, assignment_id)
-        SELECT a.organization_id, a.user_id, e.entity_id, a.plan_id, 'Shared plan', 5000, 'EUR', '2026-07-01', ARRAY[e.entity_id], ARRAY[e.entity_id], 'v1', a.user_id, a.id
-        FROM access_assignment a JOIN entity_membership e ON e.user_id = a.user_id;
-      `);
       const snapshot = async () => {
         const result: Record<string, unknown> = {};
         for (const [table, condition] of [
@@ -63,7 +58,6 @@ describe("shared membership seed isolation", () => {
           ["member", "user_id LIKE 'seed_user_fill_betabran_%'"],
           ["entity_membership", "entity_id = 'beta_branch'"],
           ["access_assignment", "user_id LIKE 'seed_user_fill_betabran_%'"],
-          ["membership_purchase", "entity_id = 'beta_branch'"],
           [
             "membership_month",
             "assignment_id IN (SELECT id FROM access_assignment WHERE user_id LIKE 'seed_user_fill_betabran_%')",
@@ -83,7 +77,6 @@ describe("shared membership seed isolation", () => {
       };
       const before = await snapshot();
       expect(before.access_assignment).toHaveLength(3);
-      expect(before.membership_purchase).toHaveLength(3);
       await clearAcademy(exec, {
         academyId: "alpha_branch",
         organizationId: "shared_org",
@@ -93,13 +86,6 @@ describe("shared membership seed isolation", () => {
         (
           await pg.query(
             "SELECT id FROM access_assignment WHERE user_id LIKE 'seed_user_fill_alphabra_%'",
-          )
-        ).rows,
-      ).toEqual([]);
-      expect(
-        (
-          await pg.query(
-            "SELECT id FROM membership_purchase WHERE entity_id = 'alpha_branch'",
           )
         ).rows,
       ).toEqual([]);

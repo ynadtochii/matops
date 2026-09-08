@@ -12,6 +12,7 @@ export interface AcademySettings {
   timeZone: string | null;
   address: string | null;
   mapUrl: string | null;
+  bookingWindowDays: number;
   curriculumForStudents: boolean;
 }
 
@@ -27,6 +28,7 @@ export async function getAcademySettings(
       timeZone: entity.timeZone,
       address: entity.address,
       mapUrl: entity.mapUrl,
+      bookingWindowDays: entity.bookingWindowDays,
       curriculumForStudents: sql<boolean>`coalesce(${academyProfile.curriculumForStudents}, false)`,
     })
     .from(entity)
@@ -44,6 +46,7 @@ export async function updateAcademySettings(
     country?: string;
     address?: string;
     mapUrl?: string;
+    bookingWindowDays?: number;
     curriculumForStudents?: boolean;
   },
   exec: DbWriter,
@@ -54,6 +57,7 @@ export async function updateAcademySettings(
     country?: string | null;
     address?: string | null;
     mapUrl?: string | null;
+    bookingWindowDays?: number;
     curriculumForStudents?: boolean;
   } = {};
   if (patch.name !== undefined) next.name = patch.name;
@@ -61,6 +65,8 @@ export async function updateAcademySettings(
   if (patch.country !== undefined) next.country = patch.country || null;
   if (patch.address !== undefined) next.address = patch.address || null;
   if (patch.mapUrl !== undefined) next.mapUrl = patch.mapUrl.trim() || null;
+  if (patch.bookingWindowDays !== undefined)
+    next.bookingWindowDays = patch.bookingWindowDays;
   if (patch.curriculumForStudents !== undefined)
     next.curriculumForStudents = patch.curriculumForStudents;
   const { curriculumForStudents, ...place } = next;

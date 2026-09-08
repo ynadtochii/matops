@@ -113,11 +113,6 @@ describe("an instructor runs the desk", () => {
     expect(await rejectionCode(coach().membership.promote(target))).toBe(
       "FORBIDDEN",
     );
-    expect(
-      await rejectionCode(
-        coach().membership.setRole({ ...target, role: "instructor" }),
-      ),
-    ).toBe("FORBIDDEN");
     expect(await rejectionCode(coach().membership.staff())).toBe("FORBIDDEN");
     expect(await rejectionCode(coach().dropIn.list())).toBe("FORBIDDEN");
     expect(

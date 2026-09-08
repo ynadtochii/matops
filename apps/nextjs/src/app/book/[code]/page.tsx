@@ -50,7 +50,7 @@ async function Resolve({
   if (!academy) notFound();
   return (
     <BookingPage
-      apiKey={academy.apiKey}
+      code={code}
       initialToken={typeof booking === "string" ? booking : null}
     />
   );

@@ -32,7 +32,7 @@ describe("person schema", () => {
     expect(columns.get("account_user_id")).toBe("YES");
   });
 
-  it("adds nullable person subjects without removing account subjects", async () => {
+  it("uses required person subjects for membership assignments", async () => {
     const result = await pg.query<{
       table_name: string;
       column_name: string;
@@ -43,9 +43,8 @@ describe("person schema", () => {
       WHERE table_schema = 'public'
         AND (
           (table_name = 'entity_membership' AND column_name IN ('user_id', 'person_id'))
-          OR (table_name = 'access_assignment' AND column_name IN ('user_id', 'person_id'))
-          OR (table_name = 'access_assignment_change' AND column_name IN ('user_id', 'person_id'))
-          OR (table_name = 'membership_purchase' AND column_name IN ('user_id', 'person_id'))
+          OR (table_name = 'access_assignment' AND column_name = 'person_id')
+          OR (table_name = 'access_assignment_change' AND column_name = 'person_id')
           OR (table_name = 'class_participation' AND column_name IN ('student_id', 'person_organization_id', 'person_id'))
         )
     `);
@@ -56,36 +55,29 @@ describe("person schema", () => {
       ]),
     );
     expect(Object.fromEntries(columns)).toEqual({
-      "access_assignment.person_id": "YES",
-      "access_assignment.user_id": "YES",
-      "access_assignment_change.person_id": "YES",
-      "access_assignment_change.user_id": "YES",
+      "access_assignment.person_id": "NO",
+      "access_assignment_change.person_id": "NO",
       "class_participation.person_id": "YES",
       "class_participation.person_organization_id": "YES",
       "class_participation.student_id": "YES",
       "entity_membership.person_id": "YES",
       "entity_membership.user_id": "YES",
-      "membership_purchase.person_id": "YES",
-      "membership_purchase.user_id": "YES",
     });
   });
 
-  it("enforces organization matches on person subjects and guardians", async () => {
+  it("enforces organization matches on person subjects", async () => {
     const result = await pg.query<{ conname: string; definition: string }>(`
       SELECT conname, pg_get_constraintdef(oid) AS definition
       FROM pg_constraint
       WHERE conname IN (
         'person_account_same_org',
-        'person_guardian_student_same_org',
-        'person_guardian_account_same_org',
         'entity_membership_person_same_org',
         'access_assignment_person_same_org',
         'access_assignment_change_person_same_org',
-        'membership_purchase_person_same_org',
         'class_participation_person_same_org'
       )
     `);
-    expect(result.rows).toHaveLength(8);
+    expect(result.rows).toHaveLength(5);
     expect(
       result.rows.every((row) => row.definition.includes("FOREIGN KEY (")),
     ).toBe(true);
@@ -120,19 +112,12 @@ describe("person schema", () => {
              has_table_privilege('matops_app', c.relname, 'INSERT,UPDATE,DELETE') AS can_write
       FROM pg_class c
       JOIN pg_namespace n ON n.oid = c.relnamespace
-      WHERE n.nspname = 'public' AND c.relname IN ('person', 'person_guardian')
+      WHERE n.nspname = 'public' AND c.relname = 'person'
       ORDER BY c.relname
     `);
     expect(result.rows).toEqual([
       {
         table_name: "person",
-        row_security: true,
-        policy_count: 1,
-        can_read: true,
-        can_write: true,
-      },
-      {
-        table_name: "person_guardian",
         row_security: true,
         policy_count: 1,
         can_read: true,

@@ -1,9 +1,33 @@
 import { ATTENDANCE_BACKFILL_DAYS, UNMARKED_LOOKBACK_DAYS } from "./attendance";
-import { DAY_MS } from "./local-date";
+import { academyDay, addLocalDays, DAY_MS, localMidnight } from "./local-date";
 
 export interface QueryWindow {
   from: string;
   to: string;
+}
+
+export interface SelfServiceWindowRule {
+  bookingWindowDays: number;
+  timeZone: string;
+}
+
+export function selfServiceWindow(
+  now: Date,
+  rule: SelfServiceWindowRule,
+): QueryWindow {
+  if (
+    !Number.isInteger(rule.bookingWindowDays) ||
+    rule.bookingWindowDays < 1 ||
+    rule.bookingWindowDays > 90
+  ) {
+    throw new RangeError("Booking window days must be an integer from 1 to 90");
+  }
+  const firstDay = academyDay(now, rule.timeZone);
+  const afterLastDay = addLocalDays(firstDay, rule.bookingWindowDays);
+  return {
+    from: localMidnight(firstDay, rule.timeZone).toISOString(),
+    to: localMidnight(afterLastDay, rule.timeZone).toISOString(),
+  };
 }
 
 export function utcDayStart(now: Date): number {

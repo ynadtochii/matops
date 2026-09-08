@@ -359,6 +359,7 @@ export interface UserAcademy {
   country: string | null;
   address: string | null;
   mapUrl: string | null;
+  bookingWindowDays: number;
   curriculumForStudents: boolean;
   /** Set once shared memberships decide access here (ADR 126). */
   membershipEnforcedAt: Date | null;
@@ -398,6 +399,7 @@ export async function listMembershipsForUser(
     country: entity.country,
     address: entity.address,
     mapUrl: entity.mapUrl,
+    bookingWindowDays: entity.bookingWindowDays,
     curriculumForStudents: sql<boolean>`coalesce(${academyProfile.curriculumForStudents}, false)`,
     membershipEnforcedAt: entity.membershipEnforcedAt,
   };
@@ -685,29 +687,6 @@ export async function setMemberStatusIfNotLastOwner(
       return { ok: false };
     }
     await writeMembership({ entityId, memberId, next: { status } }, tx);
-    return { ok: true };
-  });
-}
-
-/**
- * Set a member's ROLE (demote an owner → instructor) ATOMICALLY with the "never
- * ownerless" check (spec §4). The sibling of `setMemberStatusIfNotLastOwner`:
- * same locked transaction, same `canRemoveOrDemote` re-check on the freshly
- * locked rows — so two owners stepping each other down at the same time cannot
- * both pass and strand the gym. Writes the role only when the change keeps at
- * least one active owner; returns `{ ok: false }` (no write) otherwise.
- */
-export async function setMemberRoleIfNotLastOwner(
-  entityId: string,
-  memberId: string,
-  role: string,
-  exec: DbExec,
-): Promise<{ ok: boolean }> {
-  return exec.transaction(async (tx) => {
-    if (!(await mayChangeEntityMembership(tx, entityId, memberId))) {
-      return { ok: false };
-    }
-    await writeMembership({ entityId, memberId, next: { role } }, tx);
     return { ok: true };
   });
 }

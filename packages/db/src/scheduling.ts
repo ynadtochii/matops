@@ -165,9 +165,6 @@ export const classInstance = pgTable(
     bookingCount: t.integer().notNull().default(0),
     publicBookable: t.boolean().notNull().default(false),
     status: classStatus().notNull().default("scheduled"),
-    // Phase 4 (docs/issues/17): stamped when the reminder cron has pushed this
-    // class's reminder, so a re-run never double-sends (idempotency guard).
-    reminderSentAt: t.timestamp({ withTimezone: true }),
     attendanceReviewedAt: t.timestamp({ withTimezone: true }),
     attendanceReviewedBy: t.text(),
     attendanceReviewFingerprint: t.text(),
@@ -190,9 +187,6 @@ export const classInstance = pgTable(
     // Idempotent materialization: a template yields at most one class per instant.
     // Postgres treats NULL template_id as distinct, so multiple one-offs are fine.
     uniqueIndex("cl_uniq_template_start").on(table.templateId, table.startsAt),
-    index("cl_reminder_due")
-      .on(table.startsAt)
-      .where(sql`reminder_sent_at IS NULL AND deleted_at IS NULL`),
     check("cl_description_bounded", sql`char_length(description) <= 500`),
     check(
       "cl_capacity_policy_supported",

@@ -112,6 +112,45 @@ export function AcademyLocation({
 
       <div className="flex flex-col gap-3">
         <div>
+          <SectionHeading>Booking window</SectionHeading>
+          <p className="text-muted-foreground text-sm">
+            Students can book classes on these branch-local calendar days.
+          </p>
+        </div>
+        {settings.isPending ? (
+          <SkeletonControlPanel />
+        ) : settings.isError ? null : (
+          <div className="border-border flex items-center gap-3 rounded-lg border p-4">
+            <Label htmlFor="booking-window-days">Days ahead</Label>
+            <Input
+              id="booking-window-days"
+              type="number"
+              min={1}
+              max={90}
+              className="w-24"
+              defaultValue={settings.data.bookingWindowDays}
+              disabled={save.isPending}
+              onBlur={(event) => {
+                const bookingWindowDays = Number(event.target.value);
+                if (
+                  Number.isInteger(bookingWindowDays) &&
+                  bookingWindowDays >= 1 &&
+                  bookingWindowDays <= 90 &&
+                  bookingWindowDays !== settings.data.bookingWindowDays
+                ) {
+                  save.mutate(
+                    { bookingWindowDays },
+                    { onSuccess: () => toast.success("Booking window saved") },
+                  );
+                }
+              }}
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <div>
           <SectionHeading>Country</SectionHeading>
           <p className="text-muted-foreground text-sm">
             Which country code every phone field starts on. Until you set one,

@@ -29,6 +29,7 @@ interface ClassOverrides {
   title?: string;
   discipline?: string | null;
   cancelled?: boolean;
+  reviewed?: boolean;
 }
 
 const cls = (o: ClassOverrides): CoachClass => ({
@@ -39,6 +40,7 @@ const cls = (o: ClassOverrides): CoachClass => ({
   title: o.title ?? "Gi Fundamentals",
   discipline: o.discipline === undefined ? "bjj" : o.discipline,
   cancelled: o.cancelled ?? false,
+  reviewed: o.reviewed ?? true,
 });
 
 const mark = (
@@ -98,6 +100,7 @@ describe("coachWorkload", () => {
       {
         instructorId: ANA,
         classesLed: 0,
+        unresolvedEnded: 0,
         minutesLed: 0,
         markedClasses: 0,
         visitsTaught: 0,
@@ -109,6 +112,7 @@ describe("coachWorkload", () => {
       {
         instructorId: BRUNO,
         classesLed: 0,
+        unresolvedEnded: 0,
         minutesLed: 0,
         markedClasses: 0,
         visitsTaught: 0,
@@ -146,6 +150,17 @@ describe("coachWorkload", () => {
       cls({ id: "later", startsAt: "2026-08-24T18:00:00Z" }),
     ]);
     expect(rows[0]?.classesLed).toBe(0);
+  });
+
+  it("keeps an ended class unresolved until its current review is complete", () => {
+    const rows = roster([
+      cls({
+        id: "unresolved",
+        startsAt: "2026-08-03T18:00:00Z",
+        reviewed: false,
+      }),
+    ]);
+    expect(rows[0]).toMatchObject({ classesLed: 0, unresolvedEnded: 1 });
   });
 
   it("credits a class the moment its last minute passes", () => {

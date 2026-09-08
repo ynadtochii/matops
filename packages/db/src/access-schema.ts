@@ -39,7 +39,6 @@ export const accessPlan = pgTable(
       .notNull()
       .references(() => organization.id),
     name: t.text().notNull(),
-    studentSelectable: t.boolean().notNull().default(false),
     description: t.text(),
     /**
      * What the plan costs a member each month, in the currency's MINOR unit,
@@ -174,12 +173,12 @@ export const accessAssignment = pgTable(
       .text()
       .notNull()
       .references(() => organization.id),
-    userId: t.text().references(() => user.id),
-    personId: t.uuid(),
+    personId: t.uuid().notNull(),
     planId: t.uuid().notNull(),
     /** Where the owner assigned it. Never a limit on what the plan covers. */
     assigningEntityId: t.text(),
     startMonth: t.date().notNull(),
+    startsOn: t.date().notNull(),
     /**
      * The first month this assignment no longer applies. Exclusive, and null
      * for one that runs on (ADR 129). A plan change writes it on the old row
@@ -201,14 +200,10 @@ export const accessAssignment = pgTable(
     // rule went with ADR 129: somebody who leaves a plan and comes back later
     // holds two periods, and rewriting the first would erase what they paid.
     // Overlap between live periods is refused by the writer, under a lock.
-    uniqueIndex("access_assignment_one_per_plan_user_start")
-      .on(table.planId, table.userId, table.startMonth)
-      .where(sql`status <> 'cancelled'`),
     uniqueIndex("access_assignment_one_per_plan_person_start")
       .on(table.planId, table.personId, table.startMonth)
-      .where(sql`person_id is not null and status <> 'cancelled'`),
+      .where(sql`status <> 'cancelled'`),
     uniqueIndex("access_assignment_org_id").on(table.organizationId, table.id),
-    index("access_assignment_by_user").on(table.userId),
     index("access_assignment_by_person").on(table.personId),
     index("access_assignment_by_org_status").on(
       table.organizationId,
@@ -233,14 +228,6 @@ export const accessAssignment = pgTable(
       "access_assignment_status_supported",
       sql`status in ('active','suspended','cancelled')`,
     ),
-    check(
-      "access_assignment_has_subject",
-      sql`user_id is not null or person_id is not null`,
-    ),
-    index("access_assignment_by_user_period").on(
-      table.userId,
-      table.startMonth,
-    ),
     index("access_assignment_by_person_period").on(
       table.personId,
       table.startMonth,
@@ -248,6 +235,10 @@ export const accessAssignment = pgTable(
     check(
       "access_assignment_start_is_a_month",
       sql`date_trunc('month', start_month) = start_month`,
+    ),
+    check(
+      "access_assignment_starts_on_in_month",
+      sql`date_trunc('month', starts_on) = start_month`,
     ),
     check(
       "access_assignment_end_is_a_month",
@@ -279,8 +270,7 @@ export const accessAssignmentChange = pgTable(
       .text()
       .notNull()
       .references(() => organization.id),
-    userId: t.text().references(() => user.id),
-    personId: t.uuid(),
+    personId: t.uuid().notNull(),
     sourceAssignmentId: t.uuid().notNull(),
     targetAssignmentId: t.uuid().notNull(),
     /** The month the target starts and the source stops. */
@@ -315,7 +305,6 @@ export const accessAssignmentChange = pgTable(
       table.organizationId,
       table.effectiveMonth,
     ),
-    index("access_assignment_change_by_user").on(table.userId),
     index("access_assignment_change_by_person").on(table.personId),
     check(
       "access_assignment_change_is_a_month",
@@ -324,10 +313,6 @@ export const accessAssignmentChange = pgTable(
     check(
       "access_assignment_change_two_rows",
       sql`source_assignment_id <> target_assignment_id`,
-    ),
-    check(
-      "access_assignment_change_has_subject",
-      sql`user_id is not null or person_id is not null`,
     ),
   ],
 );
@@ -389,25 +374,16 @@ export const membershipMonth = pgTable(
     assignmentId: t.uuid().notNull(),
     /** The first day of the month, in the organization's calendar zone. */
     month: t.date().notNull(),
-    paid: t.boolean().notNull().default(false),
-    recordedBy: t.text().references(() => user.id, { onDelete: "set null" }),
-    recordedAt: t.timestamp({ withTimezone: true }),
-    /**
-     * When this member was last warned that the month is unpaid. The claim the
-     * reminder sweep stamps, so a re-run never tells anybody twice.
-     *
-     * Its presence is what lets an UNPAID month have a row at all: `paid` false
-     * and no row mean the same thing to every rule, so writing one to record
-     * the reminder changes nothing about whether they owe.
-     */
-    remindedAt: t.timestamp({ withTimezone: true }),
-    /**
-     * When the member said they sent the transfer (ADR 127). The owner confirms
-     * it, which marks the month paid and clears this, or rejects it, which
-     * clears this and nothing else. No amount: the tracker records that
-     * somebody said they paid, not money.
-     */
-    claimedAt: t.timestamp({ withTimezone: true }),
+    status: t.text().notNull().default("unpaid"),
+    version: t.integer().notNull().default(1),
+    claimedBy: t.text().references(() => user.id, { onDelete: "set null" }),
+    reportedAt: t.timestamp({ withTimezone: true }),
+    reviewedBy: t.text().references(() => user.id, { onDelete: "set null" }),
+    reviewedAt: t.timestamp({ withTimezone: true }),
+    priceMinor: t.integer(),
+    currency: t.text(),
+    deadline: t.timestamp({ withTimezone: true }),
+    calendarTimeZone: t.text(),
     createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: t
       .timestamp({ withTimezone: true })
@@ -416,6 +392,7 @@ export const membershipMonth = pgTable(
       .$onUpdateFn(() => new Date()),
   }),
   (table) => [
+    uniqueIndex("membership_month_org_id").on(table.organizationId, table.id),
     uniqueIndex("membership_month_one_per_month").on(
       table.assignmentId,
       table.month,
@@ -432,6 +409,18 @@ export const membershipMonth = pgTable(
     check(
       "membership_month_is_a_month",
       sql`date_trunc('month', month) = month`,
+    ),
+    check(
+      "membership_month_status_supported",
+      sql`status in ('unpaid','reported','confirmed','rejected')`,
+    ),
+    check(
+      "membership_month_price_complete",
+      sql`(price_minor is null) = (currency is null)`,
+    ),
+    check(
+      "membership_month_price_sane",
+      sql`price_minor is null or (price_minor >= 0 and char_length(currency) = 3)`,
     ),
   ],
 );
@@ -457,9 +446,14 @@ export const membershipMonthAudit = pgTable(
       .references(() => organization.id),
     assignmentId: t.uuid().notNull(),
     month: t.date().notNull(),
-    /** Null when nothing was recorded for that month before. */
-    wasPaid: t.boolean(),
-    paid: t.boolean().notNull(),
+    event: t.text().notNull().default("corrected"),
+    beforeStatus: t.text(),
+    afterStatus: t.text().notNull().default("unpaid"),
+    reason: t.text(),
+    priceMinor: t.integer(),
+    currency: t.text(),
+    deadline: t.timestamp({ withTimezone: true }),
+    calendarTimeZone: t.text(),
     actorId: t.text().references(() => user.id, { onDelete: "set null" }),
     createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
   }),
@@ -467,6 +461,62 @@ export const membershipMonthAudit = pgTable(
     index("membership_month_audit_by_assignment").on(
       table.assignmentId,
       table.month,
+    ),
+  ],
+);
+
+export const membershipAccessHold = pgTable(
+  "membership_access_hold",
+  (t) => ({
+    id: t.uuid().notNull().primaryKey().defaultRandom(),
+    organizationId: t
+      .text()
+      .notNull()
+      .references(() => organization.id),
+    personId: t.uuid().notNull(),
+    assignmentId: t.uuid().notNull(),
+    membershipMonthId: t.uuid().notNull(),
+    entityId: t.text().notNull(),
+    rejectedBy: t.text().references(() => user.id, { onDelete: "set null" }),
+    rejectionReason: t.text().notNull(),
+    createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
+    resolvedBy: t.text().references(() => user.id, { onDelete: "set null" }),
+    resolutionReason: t.text(),
+    resolvedAt: t.timestamp({ withTimezone: true }),
+  }),
+  (table) => [
+    uniqueIndex("membership_access_hold_one_open_source")
+      .on(table.membershipMonthId, table.entityId)
+      .where(sql`resolved_at is null`),
+    index("membership_access_hold_open_person_entity").on(
+      table.organizationId,
+      table.personId,
+      table.entityId,
+      table.resolvedAt,
+    ),
+    foreignKey({
+      name: "membership_access_hold_person_same_org",
+      columns: [table.organizationId, table.personId],
+      foreignColumns: [person.organizationId, person.id],
+    }),
+    foreignKey({
+      name: "membership_access_hold_assignment_same_org",
+      columns: [table.organizationId, table.assignmentId],
+      foreignColumns: [accessAssignment.organizationId, accessAssignment.id],
+    }),
+    foreignKey({
+      name: "membership_access_hold_month_same_org",
+      columns: [table.organizationId, table.membershipMonthId],
+      foreignColumns: [membershipMonth.organizationId, membershipMonth.id],
+    }),
+    foreignKey({
+      name: "membership_access_hold_entity_same_org",
+      columns: [table.organizationId, table.entityId],
+      foreignColumns: [entity.organizationId, entity.id],
+    }),
+    check(
+      "membership_access_hold_resolution_complete",
+      sql`(resolved_at is null and resolved_by is null and resolution_reason is null) or (resolved_at is not null and resolution_reason is not null)`,
     ),
   ],
 );
@@ -498,89 +548,4 @@ export const accessAssignmentRelations = relations(
       references: [accessPlan.id],
     }),
   }),
-);
-
-export const membershipPurchase = pgTable(
-  "membership_purchase",
-  (t) => ({
-    id: t.uuid().notNull().primaryKey().defaultRandom(),
-    organizationId: t
-      .text()
-      .notNull()
-      .references(() => organization.id),
-    userId: t.text().references(() => user.id),
-    personId: t.uuid(),
-    entityId: t.text().notNull(),
-    planId: t.uuid().notNull(),
-    planName: t.text().notNull(),
-    priceMinor: t.integer().notNull(),
-    currency: t.text().notNull(),
-    startMonth: t.date().notNull(),
-    entityIds: t.text().array().notNull(),
-    branchNames: t.text().array().notNull(),
-    version: t.text().notNull(),
-    reference: t.text().notNull(),
-    status: t.text().notNull().default("pending"),
-    reason: t.text(),
-    assignmentId: t.uuid(),
-    claimedAt: t.timestamp({ withTimezone: true }),
-    confirmedAt: t.timestamp({ withTimezone: true }),
-    reviewedBy: t.text().references(() => user.id, { onDelete: "set null" }),
-    reviewedAt: t.timestamp({ withTimezone: true }),
-    createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
-  }),
-  (table) => [
-    foreignKey({
-      name: "membership_purchase_plan_same_org",
-      columns: [table.organizationId, table.planId],
-      foreignColumns: [accessPlan.organizationId, accessPlan.id],
-    }),
-    foreignKey({
-      name: "membership_purchase_entity_same_org",
-      columns: [table.organizationId, table.entityId],
-      foreignColumns: [entity.organizationId, entity.id],
-    }),
-    foreignKey({
-      name: "membership_purchase_assignment_same_org",
-      columns: [table.organizationId, table.assignmentId],
-      foreignColumns: [accessAssignment.organizationId, accessAssignment.id],
-    }),
-    foreignKey({
-      name: "membership_purchase_person_same_org",
-      columns: [table.organizationId, table.personId],
-      foreignColumns: [person.organizationId, person.id],
-    }),
-    uniqueIndex("membership_purchase_one_unresolved")
-      .on(table.organizationId, table.userId)
-      .where(
-        sql`status in ('pending','claimed','rejected','resolution') and version not like 'legacy-dues-v1:%'`,
-      ),
-    uniqueIndex("membership_purchase_one_unresolved_person")
-      .on(table.organizationId, table.personId)
-      .where(
-        sql`person_id is not null and status in ('pending','claimed','rejected','resolution') and version not like 'legacy-dues-v1:%'`,
-      ),
-    uniqueIndex("membership_purchase_reference").on(table.reference),
-    index("membership_purchase_by_org_status").on(
-      table.organizationId,
-      table.status,
-    ),
-    index("membership_purchase_by_person").on(table.personId),
-    check(
-      "membership_purchase_status_supported",
-      sql`status in ('pending','claimed','confirmed','rejected','cancelled','resolution')`,
-    ),
-    check(
-      "membership_purchase_price_sane",
-      sql`price_minor >= 0 and char_length(currency) = 3`,
-    ),
-    check(
-      "membership_purchase_is_a_month",
-      sql`date_trunc('month', start_month) = start_month`,
-    ),
-    check(
-      "membership_purchase_has_subject",
-      sql`user_id is not null or person_id is not null`,
-    ),
-  ],
 );

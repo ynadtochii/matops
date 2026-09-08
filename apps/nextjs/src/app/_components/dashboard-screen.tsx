@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
-import type { DisciplineTone } from "@matops/domain";
 import {
   capacityDisplay,
   classEndsAt,
@@ -13,8 +12,6 @@ import {
   dayPlan,
   daysSince,
   dayWindow,
-  disciplineTone,
-  formatMoney,
   isBjjAcademy,
   isFirstRun,
   isStaff as isStaffOf,
@@ -43,21 +40,13 @@ import {
   disciplineDot,
   DriftBadge,
   ENTER,
-  Eyebrow,
   Panel,
   panelCell,
   PanelNotice,
   RESOLVE,
   Section,
-  Stat,
 } from "./primitives";
-import {
-  Bar,
-  SkeletonDayRail,
-  SkeletonInsights,
-  SkeletonQueue,
-  SkeletonRows,
-} from "./skeletons";
+import { Bar, SkeletonDayRail, SkeletonQueue, SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 import { StudentScreen } from "./student-screen";
 import { useMinuteClock } from "./use-clock";
@@ -419,32 +408,13 @@ export function DashboardScreen() {
                 </EmptyState>
               ) : (
                 <div className={cn("flex flex-col gap-2", RESOLVE)}>
-                  {dash.data.drifting.slice(0, 6).map((m) => (
+                  {dash.data.drifting.map((m) => (
                     <DriftRow key={m.memberId} m={m} today={today} />
                   ))}
                 </div>
               )}
             </Section>
           )}
-        </div>
-
-        <div className={cn("flex flex-col gap-10", ENTER, "delay-200")}>
-          {/* Insights — gym activity over the last 30 days */}
-          <Section label="Insights">
-            {dash.isPending ? (
-              <SkeletonInsights />
-            ) : dash.isError ? (
-              <ErrorState
-                label="gym insights"
-                onRetry={() => void dash.refetch()}
-              />
-            ) : (
-              <Insights
-                data={dash.data.insights}
-                revenue={dash.data.revenue ?? []}
-              />
-            )}
-          </Section>
         </div>
       </div>
     </div>
@@ -572,106 +542,7 @@ function DayRow({
 }
 
 type Dashboard = RouterOutputs["stats"]["dashboard"];
-type GymInsights = Dashboard["insights"];
-type BusiestClass = GymInsights["busiest"][number];
 type DriftMember = NonNullable<Dashboard["drifting"]>[number];
-
-/**
- * The health block: a handful of numbers, each carrying the baseline that gives
- * it meaning. Money leads for an owner and is absent for an instructor, who is
- * never shown payments. "Visits this month" is gone — a part-month count says
- * less than the weekly pulse, and its own baseline (last month) sits outside the
- * 30-day read this block is built on. The rate keeps no comparison because a
- * 30-day window has nothing to compare itself against. A currency shows up only
- * once the gym has confirmed money in it, so a gym that takes no payments here
- * sees no money row rather than a zero.
- */
-function Insights({
-  data,
-  revenue,
-}: {
-  data: GymInsights;
-  revenue: NonNullable<Dashboard["revenue"]>;
-}) {
-  return (
-    <div className={cn("flex flex-col gap-4", RESOLVE)}>
-      <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-1">
-        {revenue.map((m) => (
-          <Stat
-            key={m.currency}
-            value={formatMoney(m.amountMinor, m.currency)}
-            label="Confirmed this month"
-            delta={m.amountMinor - m.previousMinor}
-            deltaLabel="last month"
-            formatDelta={(size) => formatMoney(size, m.currency)}
-          />
-        ))}
-        <Stat
-          value={data.visitsThisWeek}
-          label="Visits this week"
-          delta={data.visitsThisWeek - data.visitsLastWeek}
-          deltaLabel="last week"
-        />
-        {data.newMembers && (
-          <Stat
-            value={data.newMembers.thisMonth}
-            label="New members this month"
-            delta={data.newMembers.thisMonth - data.newMembers.lastMonth}
-            deltaLabel="last month"
-          />
-        )}
-        {data.attendanceRate !== null && (
-          <Stat
-            value={`${Math.round(data.attendanceRate * 100)}%`}
-            label="Attendance rate · 30d"
-          />
-        )}
-      </div>
-      {data.busiest.length > 0 && (
-        <div className="flex flex-col gap-1">
-          <Eyebrow>Busiest classes · 30d</Eyebrow>
-          {data.busiest.slice(0, 3).map((b) => (
-            <BusiestRow
-              key={b.title}
-              row={b}
-              top={data.busiest[0]?.count ?? b.count}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/**
- * A class in the busiest list is drawn as a bar of its own share. Three bare
- * numbers made the reader do the arithmetic; the length says it at a glance.
- */
-const BAR_SKIN: Record<DisciplineTone, string> = {
-  gi: "bg-gi/20",
-  nogi: "bg-nogi/20",
-  other: "bg-muted",
-};
-
-function BusiestRow({ row, top }: { row: BusiestClass; top: number }) {
-  const share = top > 0 ? Math.max(row.count / top, 0.04) : 0;
-  return (
-    <div className="relative flex items-center justify-between gap-3 px-2.5 py-1.5 text-sm">
-      <span
-        aria-hidden
-        className={cn(
-          "absolute inset-y-0 left-0 rounded-[2px]",
-          BAR_SKIN[disciplineTone(row.discipline)],
-        )}
-        style={{ width: `${share * 100}%` }}
-      />
-      <span className="relative font-medium">{row.title}</span>
-      <span className="text-muted-foreground relative font-mono text-xs tabular-nums">
-        {row.count}
-      </span>
-    </div>
-  );
-}
 
 /** One "who's drifting" row — links to the member's detail (C.2). */
 function DriftRow({ m, today }: { m: DriftMember; today: Date }) {

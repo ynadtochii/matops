@@ -78,14 +78,13 @@ describe("buildSeedGraph — pure dataset", () => {
       ...g.memberships.changes,
       ...g.memberships.months,
       ...g.memberships.monthAudits,
-      ...g.memberships.purchases,
     ];
     expect(
       orgScoped.every((row) => row.organizationId === SEED_ACADEMY.id),
     ).toBe(true);
   });
 
-  it("puts this month on all four answers and settles last month", () => {
+  it("seeds explicit month states and settles last month", () => {
     const g = build();
     const month = monthOf(now, SEED_ACADEMY.timeZone);
     const live = g.memberships.assignments.filter((a) =>
@@ -96,15 +95,16 @@ describe("buildSeedGraph — pure dataset", () => {
     );
     expect(live.length).toBeGreaterThan(0);
     const thisMonth = g.memberships.months.filter((m) => m.month === month);
-    expect(thisMonth.some((m) => m.paid)).toBe(true);
-    expect(thisMonth.some((m) => !m.paid && m.remindedAt)).toBe(true);
-    expect(thisMonth.some((m) => !m.paid && m.claimedAt)).toBe(true);
+    expect(thisMonth.some((m) => m.status === "confirmed")).toBe(true);
+    expect(thisMonth.some((m) => m.status === "reported")).toBe(true);
     // Silence is a state too: somebody who owes has no row for this month.
     const told = new Set(thisMonth.map((m) => m.assignmentId));
     expect(live.some((a) => !told.has(a.id ?? ""))).toBe(true);
-    expect(g.memberships.months.some((m) => m.month !== month && m.paid)).toBe(
-      true,
-    );
+    expect(
+      g.memberships.months.some(
+        (m) => m.month !== month && m.status === "confirmed",
+      ),
+    ).toBe(true);
   });
 
   it("seeds a plan change that waits for the 1st, and a claimed purchase", () => {
@@ -119,7 +119,9 @@ describe("buildSeedGraph — pure dataset", () => {
     );
     expect(source?.endMonth).toBe(change?.effectiveMonth);
     expect(target?.startMonth).toBe(change?.effectiveMonth);
-    expect(g.memberships.purchases[0]?.status).toBe("claimed");
+    expect(g.memberships.months.some((row) => row.status === "reported")).toBe(
+      true,
+    );
   });
 
   it("covers the remaining demo states: unmarked, cancelled booking, paused, no plan", () => {
@@ -138,18 +140,14 @@ describe("buildSeedGraph — pure dataset", () => {
     );
     expect(g.templates.some((t) => t.status === "paused")).toBe(true);
     const holding = new Set(
-      g.memberships.assignments.flatMap((a) => {
-        const subjectId = a.personId ?? a.userId;
-        return subjectId ? [subjectId] : [];
-      }),
+      g.memberships.assignments.map((assignment) => assignment.personId),
     );
     const activeStudents = g.entityMemberships.filter(
       (m) => m.role === "student" && m.status === "active",
     );
     expect(
       activeStudents.some((m) => {
-        const subjectId = m.personId ?? m.userId;
-        return subjectId ? !holding.has(subjectId) : false;
+        return m.personId ? !holding.has(m.personId) : false;
       }),
     ).toBe(true);
   });
@@ -164,8 +162,13 @@ describe("buildSeedGraph — pure dataset", () => {
       false,
     );
     // Staff hold no membership — an active one trains free (ADR 132).
+    const managerPerson = g.people.find(
+      (candidate) => candidate.accountUserId === manager?.userId,
+    );
     expect(
-      g.memberships.assignments.some((a) => a.userId === manager?.userId),
+      g.memberships.assignments.some(
+        (assignment) => assignment.personId === managerPerson?.id,
+      ),
     ).toBe(false);
   });
 
@@ -277,11 +280,10 @@ describe("buildSeedGraph — pure dataset", () => {
     }
   });
 
-  it("seeds an archived membership plan nobody can pick", () => {
+  it("seeds an archived membership plan with no assignments", () => {
     const g = build();
     const archived = g.memberships.plans.find((p) => p.archivedAt != null);
     expect(archived).toBeDefined();
-    expect(archived?.studentSelectable).toBe(false);
     expect(
       g.memberships.assignments.some((a) => a.planId === archived?.id),
     ).toBe(false);

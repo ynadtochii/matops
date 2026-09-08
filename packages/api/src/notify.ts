@@ -1,18 +1,15 @@
-import type { ClaimRemindersOptions, DbExec } from "@matops/db";
+import type { DbExec } from "@matops/db";
 import type { NotificationKind, PushMessage } from "@matops/domain";
 import type { BatchPush } from "@matops/notifications";
 import {
-  claimDueReminderClasses,
   getAcademyPublic,
   getPushTargets,
   insertNotifications,
 } from "@matops/db";
 import {
-  buildAnnouncementMessage,
   buildApprovalMessage,
   buildCancelledMessage,
   buildClassChangeMessage,
-  buildReminderMessage,
   formatWhen,
 } from "@matops/domain";
 import { sendPush } from "@matops/notifications";
@@ -69,23 +66,26 @@ async function deliver(
   items: PersonalDelivery[],
   exec: DbExec,
   send: PushSender = sendPush,
+  writeInbox = true,
 ): Promise<void> {
   if (items.length === 0) return;
-  try {
-    await insertNotifications(
-      items.map((m) => ({
-        academyId: m.academyId,
-        userId: m.userId,
-        kind: m.kind,
-        title: m.push.title,
-        body: m.push.body,
-        link: m.link,
-        sentBy: m.sentBy,
-      })),
-      exec,
-    );
-  } catch (err) {
-    console.error("[notify] inbox write failed", err);
+  if (writeInbox) {
+    try {
+      await insertNotifications(
+        items.map((m) => ({
+          academyId: m.academyId,
+          userId: m.userId,
+          kind: m.kind,
+          title: m.push.title,
+          body: m.push.body,
+          link: m.link,
+          sentBy: m.sentBy,
+        })),
+        exec,
+      );
+    } catch (err) {
+      console.error("[notify] inbox write failed", err);
+    }
   }
   try {
     const byUser = new Map(
@@ -121,63 +121,6 @@ async function academyName(academyId: string, exec: DbExec): Promise<string> {
   }
 }
 
-export async function notifyMembershipPurchase(
-  input: { academyId: string; userId: string; title: string; body: string },
-  exec: DbExec,
-): Promise<void> {
-  await deliver(
-    [
-      {
-        academyId: input.academyId,
-        userId: input.userId,
-        kind: "membership_update",
-        push: { title: input.title, body: input.body },
-        data: { type: "membership" },
-        link: "/payments",
-      },
-    ],
-    exec,
-  );
-}
-
-export interface MembershipDueInput {
-  /** Where the message is filed. ONE branch, never one per covered branch. */
-  academyId: string;
-  userId: string;
-  headline: string;
-  detail: string;
-}
-
-/**
- * A membership month is unpaid and the clock is running (ADR 126).
- *
- * One message per MEMBERSHIP, filed against a single branch, even when the plan
- * covers three. Somebody who owes one payment must not get three warnings about
- * it, so the caller picks the branch and this never fans out.
- *
- * The wording arrives already built, from `membershipWarning` in the domain, so
- * the push, the notification centre, the web and the app all say the same
- * sentence about the same situation.
- */
-export async function notifyMembershipDue(
-  items: MembershipDueInput[],
-  exec: DbExec,
-  send?: PushSender,
-): Promise<void> {
-  await deliver(
-    items.map((m) => ({
-      academyId: m.academyId,
-      userId: m.userId,
-      kind: "membership_due" as const,
-      push: { title: m.headline, body: m.detail },
-      data: { type: "membership" },
-      link: "/payments",
-    })),
-    exec,
-    send,
-  );
-}
-
 export interface ClassEventInput {
   academyId: string;
   className: string;
@@ -207,6 +150,8 @@ export async function notifyClassCancelled(
       link: `/class/${input.classId}`,
     }),
     exec,
+    sendPush,
+    false,
   );
 }
 
@@ -229,6 +174,8 @@ export async function notifyClassChanged(
       link: `/class/${input.classId}`,
     }),
     exec,
+    sendPush,
+    false,
   );
 }
 
@@ -259,137 +206,3 @@ export async function notifyMembershipApproved(
  * Owner-written gym news (v3.7, spec O12; docs/issues/77). Lands in the inbox
  * and pushes.
  */
-export async function notifyAnnouncement(
-  input: {
-    academyId: string;
-    userIds: string[];
-    title: string;
-    body: string;
-    sentBy: string;
-  },
-  exec: DbExec,
-): Promise<void> {
-  await deliver(
-    each(input.userIds, {
-      academyId: input.academyId,
-      kind: "announcement",
-      push: buildAnnouncementMessage({
-        title: input.title,
-        body: input.body,
-      }),
-      data: { type: "announcement" },
-      sentBy: input.sentBy,
-    }),
-    exec,
-  );
-}
-
-/**
- * One announcement across several branches (ADR 127).
- *
- * NOT through `deliver`, which pushes once per row: the inbox copy is per
- * branch, because the feed is per branch, while the push is per person, because
- * one message must buzz one phone once. The caller decides both lists with the
- * pure `announcementFanOut`.
- *
- * Both halves swallow their own errors, end to end, like every other function
- * here: an announcement must never fail the mutation that sent it.
- */
-export async function notifyAnnouncementAcross(
-  input: {
-    rows: { entityId: string; userId: string }[];
-    push: string[];
-    title: string;
-    body: string;
-    sentBy: string;
-  },
-  exec: DbExec,
-  send: PushSender = sendPush,
-): Promise<void> {
-  if (input.rows.length === 0) return;
-  const message = buildAnnouncementMessage({
-    title: input.title,
-    body: input.body,
-  });
-  try {
-    await insertNotifications(
-      input.rows.map((r) => ({
-        academyId: r.entityId,
-        userId: r.userId,
-        kind: "announcement" as const,
-        title: message.title,
-        body: message.body,
-        sentBy: input.sentBy,
-      })),
-      exec,
-    );
-  } catch (err) {
-    console.error("[notify] inbox write failed", err);
-  }
-  try {
-    const targets = await getPushTargets(input.push, exec);
-    await send(
-      targets.flatMap((t) =>
-        t.tokens.map((to) => ({
-          to,
-          ...message,
-          data: { type: "announcement" },
-        })),
-      ),
-    );
-  } catch (err) {
-    console.error("[notify] delivery failed", err);
-  }
-}
-
-export interface SweepOptions extends ClaimRemindersOptions {
-  send?: PushSender;
-}
-
-/**
- * Class-reminder sweep (Phase 4, docs/issues/17). The cron route calls this: it
- * claims every due class on the base connection (idempotent, concurrency-safe),
- * then pushes each class's booked students. Code ships in Phase 4; the frequent
- * cron SCHEDULE is deferred to Phase 5 (needs a sub-daily cron). Runs OUTSIDE the
- * tenant seam like the materialization sweep. Returns run counts for the route.
- */
-export async function runReminderSweep(
-  exec: DbExec,
-  opts: SweepOptions = {},
-): Promise<{
-  processed: number;
-  sent: number;
-}> {
-  const claimed = await claimDueReminderClasses({
-    now: opts.now,
-    leadMinutes: opts.leadMinutes,
-    limit: opts.limit,
-    exec,
-  });
-  // Claiming already stamped these rows, so a claimed-but-unsent reminder is
-  // lost for good. Send the batch concurrently rather than one HTTP round trip
-  // at a time, so the run finishes inside the serverless limit.
-  await Promise.all(
-    claimed.map((c) =>
-      deliver(
-        each(c.studentIds, {
-          academyId: c.academyId,
-          kind: "class_reminder",
-          push: buildReminderMessage({
-            className: c.title,
-            whenLabel: formatWhen(c.startsAt, c.timeZone ?? undefined),
-          }),
-          data: { type: "class", classId: c.classId },
-          link: `/class/${c.classId}`,
-        }),
-        exec,
-        opts.send,
-      ),
-    ),
-  );
-  const sent = claimed.length;
-  return {
-    processed: claimed.length,
-    sent,
-  };
-}

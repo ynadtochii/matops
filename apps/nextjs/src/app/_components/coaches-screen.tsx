@@ -10,12 +10,7 @@ import {
 
 import type { RouterOutputs } from "@matops/api";
 import type { CoachWindowKey } from "@matops/domain";
-import {
-  DAY_LABELS,
-  formatMatTime,
-  isPendingCoach,
-  runsBranch,
-} from "@matops/domain";
+import { DAY_LABELS, isPendingCoach, runsBranch } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
@@ -54,8 +49,6 @@ const WINDOW_TABS: { id: CoachWindowKey; label: string }[] = [
   { id: "last_90_days", label: "Last 90 days" },
 ];
 
-const percent = (rate: number | null) =>
-  rate === null ? "Not recorded" : `${Math.round(rate * 100)}%`;
 const headcount = (avg: number | null) =>
   avg === null ? "Not recorded" : (Math.round(avg * 10) / 10).toString();
 
@@ -94,10 +87,12 @@ function BarRow({
   );
 }
 
-const RECENT_SHOWN = 8;
-
 function BreakdownPanel({ breakdown }: { breakdown: Breakdown }) {
-  if (breakdown.recent.length === 0) {
+  if (
+    breakdown.recent.length === 0 &&
+    breakdown.unresolved.length === 0 &&
+    breakdown.cancelled.length === 0
+  ) {
     return (
       <p className="text-muted-foreground text-sm">
         No classes led in this window. Pick a wider window, or set this coach on
@@ -105,7 +100,6 @@ function BreakdownPanel({ breakdown }: { breakdown: Breakdown }) {
       </p>
     );
   }
-  const hidden = breakdown.recent.length - RECENT_SHOWN;
   return (
     <div className="flex flex-col gap-5">
       <div>
@@ -154,7 +148,7 @@ function BreakdownPanel({ breakdown }: { breakdown: Breakdown }) {
       <div>
         <Eyebrow>Classes led</Eyebrow>
         <ul className="mt-2 flex flex-col gap-1">
-          {breakdown.recent.slice(0, RECENT_SHOWN).map((c) => (
+          {breakdown.recent.map((c) => (
             <li
               key={c.classId}
               className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm"
@@ -171,12 +165,43 @@ function BreakdownPanel({ breakdown }: { breakdown: Breakdown }) {
             </li>
           ))}
         </ul>
-        {hidden > 0 && (
-          <p className="text-muted-foreground mt-1.5 font-mono text-[10px] tracking-wide uppercase tabular-nums">
-            + {hidden} more in this window
-          </p>
-        )}
       </div>
+      {breakdown.unresolved.length > 0 && (
+        <div>
+          <Eyebrow>Needs attendance review</Eyebrow>
+          <ul className="mt-2 flex flex-col gap-1">
+            {breakdown.unresolved.map((c) => (
+              <li
+                key={c.classId}
+                className="flex justify-between gap-3 text-sm"
+              >
+                <span>{c.title}</span>
+                <span className="text-muted-foreground">
+                  {dateTimeFmt.format(new Date(c.startsAt))}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {breakdown.cancelled.length > 0 && (
+        <div>
+          <Eyebrow>Cancelled</Eyebrow>
+          <ul className="mt-2 flex flex-col gap-1">
+            {breakdown.cancelled.map((c) => (
+              <li
+                key={c.classId}
+                className="flex justify-between gap-3 text-sm"
+              >
+                <span>{c.title}</span>
+                <span className="text-muted-foreground">
+                  {dateTimeFmt.format(new Date(c.startsAt))}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
@@ -219,7 +244,6 @@ function CoachCard({
 
   breakdown?: Breakdown;
 }) {
-  const partial = row.markedRate !== null && row.markedRate < 1;
   const body = breakdown ? (
     <BreakdownPanel breakdown={breakdown} />
   ) : (
@@ -257,23 +281,15 @@ function CoachCard({
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
         <Stat value={row.classesLed} label="classes led" />
-        <Stat value={formatMatTime(row.minutesLed)} label="on the mat" />
-        <Stat value={row.distinctStudents} label="students" />
-        <Stat value={headcount(row.avgHeadcount)} label="avg headcount" />
-        <Stat value={percent(row.markedRate)} label="attendance marked" />
+        <Stat value={row.unresolvedEnded} label="needs review" />
+        <Stat value={row.cancelled} label="cancelled" />
       </div>
 
-      {partial && (
+      {row.unresolvedEnded > 0 && (
         <p className="text-muted-foreground text-xs">
-          {row.classesLed - row.markedClasses} of {row.classesLed} classes have
-          no attendance marked, so the headcount above covers only the marked
-          ones.
-        </p>
-      )}
-      {row.cancelled > 0 && (
-        <p className="text-muted-foreground text-xs">
-          {row.cancelled} class{row.cancelled === 1 ? "" : "es"} cancelled in
-          this window.
+          {row.unresolvedEnded} ended class
+          {row.unresolvedEnded === 1 ? " needs" : "es need"} attendance review
+          before counting as taught.
         </p>
       )}
 

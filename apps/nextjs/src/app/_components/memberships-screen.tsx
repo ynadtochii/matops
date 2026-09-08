@@ -28,7 +28,6 @@ import {
 import { dateFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { useOrganization } from "./entity";
-import { MembershipPurchaseReview } from "./membership-purchase-review";
 import { cardClass, ENTER, Eyebrow, Section, stagger } from "./primitives";
 import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
@@ -113,14 +112,12 @@ export function MembershipsScreen() {
 
       {tab === "payments" && (
         <div className="flex min-w-0 flex-col gap-8">
-          <MembershipPurchaseReview />
           <ClaimsWaiting />
           <MonthBoard nameOf={nameOf} />
         </div>
       )}
       {tab === "access" && (
         <div className="flex min-w-0 flex-col gap-8">
-          <MembershipPurchaseReview />
           <UncoveredQueue />
           <BookingAccessQueue />
         </div>
@@ -128,8 +125,7 @@ export function MembershipsScreen() {
       {tab === "plans" && (
         <div className="flex min-w-0 flex-col gap-6">
           <p className="text-muted-foreground text-sm">
-            Set prices and covered branches, then make plans available for
-            students to choose. You can also assign plans from a person’s
+            Set prices and covered branches. Assign plans from a person’s
             profile.
           </p>
           {plans.isPending ? (
@@ -279,9 +275,9 @@ function ClaimsWaiting() {
                 <span className="text-muted-foreground truncate text-sm">
                   {c.planName} · {c.monthLabel}
                 </span>
-                {c.claimedAt && (
+                {c.reportedAt && (
                   <span className="text-muted-foreground text-xs">
-                    Said they paid on {dateFmt.format(new Date(c.claimedAt))}
+                    Said they paid on {dateFmt.format(new Date(c.reportedAt))}
                   </span>
                 )}
               </div>
@@ -543,16 +539,6 @@ function PlanCard({
     }),
   );
   const [pricing, setPricing] = useState(false);
-  const availability = useMutation(
-    trpc.membershipPurchase.setAvailability.mutationOptions({
-      onSuccess: async () => {
-        await Promise.all([
-          invalidate(),
-          queryClient.invalidateQueries(trpc.membershipPurchase.pathFilter()),
-        ]);
-      },
-    }),
-  );
 
   return (
     <div className={`${cardClass()} flex flex-wrap gap-3`}>
@@ -606,34 +592,6 @@ function PlanCard({
           {plan.archived ? "Restore" : "Archive"}
         </Button>
       </div>
-      {!plan.archived && (
-        <div className="border-border flex w-full flex-col gap-2 border-t pt-3">
-          <label className="flex min-h-11 cursor-pointer items-start gap-3 text-sm">
-            <input
-              type="checkbox"
-              className="accent-brand mt-1 size-4 shrink-0"
-              checked={plan.studentSelectable}
-              disabled={availability.isPending}
-              onChange={(event) =>
-                availability.mutate({
-                  planId: plan.id,
-                  available: event.target.checked,
-                })
-              }
-            />
-            <span>
-              <span className="block font-medium">Available to students</span>
-              <span className="text-muted-foreground block">
-                Students can choose this plan. Access starts after you approve
-                it.
-              </span>
-            </span>
-          </label>
-          {availability.isError && (
-            <FieldError>{availability.error.message}</FieldError>
-          )}
-        </div>
-      )}
     </div>
   );
 }

@@ -13,13 +13,6 @@ const OWNER = "u_owner";
 const COACH = "u_coach";
 const NOMAD = "u_nomad";
 const RIVAL = "u_rival";
-const PLAN = "11111111-1111-4111-8111-000000000001";
-
-function withEntity(id: string): Headers {
-  const headers = new Headers();
-  headers.set("x-matops-entity", id);
-  return headers;
-}
 
 describe("the organization dashboard", () => {
   let h: Harness;
@@ -101,22 +94,6 @@ describe("the organization dashboard", () => {
     ]);
 
     await pg.exec(`
-      INSERT INTO "access_plan" (id, organization_id, name, price_minor, currency)
-        VALUES ('${PLAN}', '${ORG_A}', 'Unlimited', 8000, 'EUR');
-      INSERT INTO "membership_purchase"
-        (organization_id, user_id, entity_id, plan_id, plan_name, price_minor,
-         currency, start_month, entity_ids, branch_names, version, reference,
-         status)
-        VALUES ('${ORG_A}', '${NOMAD}', '${north}', '${PLAN}', 'Unlimited',
-                8000, 'EUR', '2026-09-01', ARRAY['${north}'], ARRAY['North'],
-                'test', gen_random_uuid()::text, 'claimed');
-      INSERT INTO "membership_purchase"
-        (organization_id, user_id, entity_id, plan_id, plan_name, price_minor,
-         currency, start_month, entity_ids, branch_names, version, reference,
-         status, confirmed_at, reviewed_by, reviewed_at)
-        VALUES ('${ORG_A}', '${COACH}', '${north}', '${PLAN}', 'Unlimited',
-                8000, 'EUR', '2026-08-01', ARRAY['${north}'], ARRAY['North'],
-                'test', gen_random_uuid()::text, 'confirmed', now(), '${OWNER}', now());
       INSERT INTO "drop_in"
         (academy_id, first_name, last_name, phone, consent, stage)
         VALUES ('${south}', 'Dana', 'Reis', '+351900000001', true, 'new');
@@ -155,11 +132,11 @@ describe("the organization dashboard", () => {
   it("groups the work by academy", async () => {
     const total = await h.as(OWNER, ORG_A).stats.organization();
     const byId = new Map(total.entities.map((e) => [e.entityId, e]));
-    expect(byId.get(north)?.openClaims).toBe(1);
+    expect(byId.get(north)?.openClaims).toBe(0);
     expect(byId.get(south)?.newLeads).toBe(1);
     expect(byId.get(south)?.pendingMembers).toBe(1);
     expect([total.openClaims, total.newLeads, total.pendingMembers]).toEqual([
-      1, 1, 1,
+      0, 1, 1,
     ]);
   });
 
@@ -172,12 +149,5 @@ describe("the organization dashboard", () => {
   it("refuses the owner of another organization", async () => {
     const total = await h.as(RIVAL, ORG_B).stats.organization();
     expect(total.entities.map((e) => e.entityId)).toEqual([ORG_B]);
-  });
-
-  it("leaves the per-academy dashboard entity-only", async () => {
-    const here = await h.as(OWNER, ORG_A, withEntity(north)).stats.dashboard();
-    const there = await h.as(OWNER, ORG_A, withEntity(south)).stats.dashboard();
-    expect(here.revenue?.map((r) => r.currency)).toEqual(["EUR"]);
-    expect(there.revenue).toEqual([]);
   });
 });

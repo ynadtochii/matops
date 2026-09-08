@@ -20,7 +20,6 @@ import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
 import { useOrganization } from "./entity";
-import { PersonTrainingAccessReview } from "./membership-purchase-review";
 import { PageHeader } from "./page-header";
 import { cardClass, ENTER, Eyebrow } from "./primitives";
 import { SkeletonRows } from "./skeletons";
@@ -76,10 +75,10 @@ export function OrganizationPersonScreen({ personId }: { personId: string }) {
       onError: (e) => toast.error(e.message || "Could not end it"),
     }),
   );
-  const setBranchRole = useMutation(
-    trpc.entity.setBranchRole.mutationOptions({
-      onSuccess: () => after("Branch updated"),
-      onError: (e) => toast.error(e.message || "Could not change that"),
+  const addStudentToBranch = useMutation(
+    trpc.entity.addStudentToBranch.mutationOptions({
+      onSuccess: () => after("Student added to branch"),
+      onError: (e) => toast.error(e.message || "Could not add that student"),
     }),
   );
   const decide = useMutation(
@@ -103,7 +102,7 @@ export function OrganizationPersonScreen({ personId }: { personId: string }) {
     suspend.isPending ||
     cancel.isPending ||
     cancelChange.isPending ||
-    setBranchRole.isPending ||
+    addStudentToBranch.isPending ||
     decide.isPending;
   const personQuery = useQuery({
     ...trpc.person.get.queryOptions({ personId, includeArchived: true }),
@@ -174,13 +173,6 @@ export function OrganizationPersonScreen({ personId }: { personId: string }) {
         subtitle={person.email ?? "No email address"}
       />
 
-      <PersonTrainingAccessReview
-        personId={person.id}
-        provisionalBranches={person.branches
-          .filter((branch) => branch.verdict === "provisional")
-          .map((branch) => branch.entityName)}
-      />
-
       <section className="flex flex-col gap-3">
         <Eyebrow>Branches</Eyebrow>
         <ul className="flex flex-col gap-2">
@@ -238,25 +230,6 @@ export function OrganizationPersonScreen({ personId }: { personId: string }) {
                   </Button>
                 </>
               )}
-              {b.role !== "owner" &&
-                b.role !== "manager" &&
-                b.status === "active" && (
-                  <Select
-                    aria-label={`Role at ${b.entityName}`}
-                    value={b.role === "instructor" ? "instructor" : "student"}
-                    disabled={busy}
-                    onChange={(e) =>
-                      setBranchRole.mutate({
-                        entityId: b.entityId,
-                        personId,
-                        role: e.target.value as "student" | "instructor",
-                      })
-                    }
-                  >
-                    <option value="student">Student</option>
-                    <option value="instructor">Instructor</option>
-                  </Select>
-                )}
               {/* Rank, notes and attendance stay that branch's business
                   (ADR 128). */}
               <Button asChild size="sm" variant="outline">
@@ -277,8 +250,8 @@ export function OrganizationPersonScreen({ personId }: { personId: string }) {
         <BranchAssign
           held={person.branches.map((b) => b.entityId)}
           busy={busy}
-          onAssign={(entityId, role) =>
-            setBranchRole.mutate({ entityId, personId, role })
+          onAssign={(entityId) =>
+            addStudentToBranch.mutate({ entityId, personId })
           }
         />
       </section>
@@ -575,11 +548,10 @@ function BranchAssign({
 }: {
   held: string[];
   busy: boolean;
-  onAssign: (entityId: string, role: "student" | "instructor") => void;
+  onAssign: (entityId: string) => void;
 }) {
   const { entities } = useOrganization();
   const [entityId, setEntityId] = useState("");
-  const [role, setRole] = useState<"student" | "instructor">("instructor");
   const free = entities.filter((e) => !held.includes(e.id));
   if (free.length === 0) return null;
 
@@ -600,23 +572,15 @@ function BranchAssign({
           ))}
         </Select>
       </div>
-      <Select
-        aria-label="Role at that branch"
-        value={role}
-        onChange={(e) => setRole(e.target.value as "student" | "instructor")}
-      >
-        <option value="instructor">Instructor</option>
-        <option value="student">Student</option>
-      </Select>
       <Button
         size="sm"
         disabled={busy || entityId === ""}
         onClick={() => {
-          onAssign(entityId, role);
+          onAssign(entityId);
           setEntityId("");
         }}
       >
-        Add
+        Add student
       </Button>
     </div>
   );
@@ -780,7 +744,7 @@ function PaymentHistory({ assignmentId }: { assignmentId: string }) {
             {m.amount
               ? ` · ${formatMoney(m.amount.priceMinor, m.amount.currency)}`
               : ""}{" "}
-            · {m.paid ? "paid" : "not paid"}
+            · {m.status}
           </li>
         ))}
       </ul>

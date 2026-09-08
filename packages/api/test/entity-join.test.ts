@@ -219,15 +219,6 @@ describe("owner actions write the entity membership", () => {
     expect((await rowFor(ORG))?.status).toBe("active");
     expect((await rowFor(secondEntity))?.status).toBe("active");
   });
-
-  it("refuses to strip the entity of its last active owner", async () => {
-    const refused = await h
-      .as(OWNER, ORG)
-      .membership.setRole({ memberId: memberId(ORG, OWNER), role: "student" })
-      .then(() => "allowed")
-      .catch((e: { code?: string }) => e.code ?? "threw");
-    expect(refused).toBe("PRECONDITION_FAILED");
-  });
 });
 
 describe("erasing a member from one entity", () => {

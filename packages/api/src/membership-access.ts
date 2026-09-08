@@ -11,8 +11,8 @@ import {
   entity,
   entityMembership,
   member,
+  membershipAccessHold,
   membershipMonth,
-  membershipPurchase,
   organization,
   person,
   user,
@@ -142,51 +142,12 @@ export async function loadMembershipAccess(
       status: accessAssignment.status,
       planId: accessAssignment.planId,
       startMonth: accessAssignment.startMonth,
+      startsOn: accessAssignment.startsOn,
       endMonth: accessAssignment.endMonth,
       createdAt: accessAssignment.createdAt,
     })
     .from(accessAssignment)
-    .where(
-      or(
-        personId ? eq(accessAssignment.personId, personId) : undefined,
-        accountUserId ? eq(accessAssignment.userId, accountUserId) : undefined,
-      ),
-    );
-
-  const purchases = await db
-    .select({
-      status: membershipPurchase.status,
-      priceMinor: membershipPurchase.priceMinor,
-      startMonth: membershipPurchase.startMonth,
-      entityIds: membershipPurchase.entityIds,
-    })
-    .from(membershipPurchase)
-    .where(
-      or(
-        personId ? eq(membershipPurchase.personId, personId) : undefined,
-        accountUserId
-          ? eq(membershipPurchase.userId, accountUserId)
-          : undefined,
-      ),
-    );
-
-  const purchaseVerdict = (month: string): AccessVerdict | null => {
-    const covering = purchases.filter(
-      (purchase) =>
-        purchase.entityIds.includes(input.entityId) &&
-        purchase.startMonth <= month,
-    );
-    if (covering.some((purchase) => purchase.status === "rejected"))
-      return "payment-declined";
-    if (
-      input.membership?.status === "active" &&
-      covering.some(
-        (purchase) => purchase.status === "claimed" && purchase.priceMinor > 0,
-      )
-    )
-      return "provisional";
-    return null;
-  };
+    .where(personId ? eq(accessAssignment.personId, personId) : sql`false`);
 
   if (held.length === 0) {
     const verdict = membershipAccess({
@@ -196,8 +157,8 @@ export async function loadMembershipAccess(
       at: input.now,
     });
     return {
-      now: purchaseVerdict(nowMonth) ?? verdict,
-      atSession: purchaseVerdict(sessionMonth) ?? verdict,
+      now: verdict,
+      atSession: verdict,
       assignments: [],
       accessSource: null,
     };
@@ -216,7 +177,10 @@ export async function loadMembershipAccess(
     .select({
       assignmentId: membershipMonth.assignmentId,
       month: membershipMonth.month,
-      paid: membershipMonth.paid,
+      status: membershipMonth.status,
+      priceMinor: membershipMonth.priceMinor,
+      currency: membershipMonth.currency,
+      deadline: membershipMonth.deadline,
     })
     .from(membershipMonth)
     .where(
@@ -228,6 +192,20 @@ export async function loadMembershipAccess(
         inArray(membershipMonth.month, [...new Set([nowMonth, sessionMonth])]),
       ),
     );
+
+  const holds = personId
+    ? await db
+        .select({ assignmentId: membershipAccessHold.assignmentId })
+        .from(membershipAccessHold)
+        .where(
+          and(
+            eq(membershipAccessHold.personId, personId),
+            eq(membershipAccessHold.entityId, input.entityId),
+            isNull(membershipAccessHold.resolvedAt),
+          ),
+        )
+    : [];
+  const heldAssignmentIds = new Set(holds.map((hold) => hold.assignmentId));
 
   // A membership only counts in the months its period covers (ADR 129), so a
   // plan that ended in October takes nothing with it into October and its
@@ -242,21 +220,39 @@ export async function loadMembershipAccess(
           .filter((c) => c.planId === a.planId)
           .map((c) => c.entityId),
         paymentRequired: !isFreeMembershipMonth(
-          priceForMonth(
-            prices.filter((p) => p.planId === a.planId),
-            month,
-          ),
+          (() => {
+            const recorded = months.find(
+              (m) => m.assignmentId === a.id && m.month === month,
+            );
+            return recorded?.priceMinor !== null &&
+              recorded?.priceMinor !== undefined &&
+              recorded.currency
+              ? {
+                  priceMinor: recorded.priceMinor,
+                  currency: recorded.currency,
+                }
+              : priceForMonth(
+                  prices.filter((p) => p.planId === a.planId),
+                  month,
+                );
+          })(),
         ),
         paid:
           months.find((m) => m.assignmentId === a.id && m.month === month)
-            ?.paid ?? false,
-        deadline: payDeadline({
-          month,
-          startMonth: a.startMonth,
-          // The day they joined only counts in the month they joined.
-          joinedOn: a.createdAt.toISOString().slice(0, 10),
-          policy: calendar,
-        }),
+            ?.status === "confirmed",
+        paymentStatus:
+          (months.find((m) => m.assignmentId === a.id && m.month === month)
+            ?.status as ApplicableAssignment["paymentStatus"]) ?? "unpaid",
+        held: heldAssignmentIds.has(a.id),
+        deadline:
+          months.find((m) => m.assignmentId === a.id && m.month === month)
+            ?.deadline ??
+          payDeadline({
+            month,
+            startMonth: a.startMonth,
+            joinedOn: a.startsOn,
+            policy: calendar,
+          }),
       }));
 
   const nowAssignments = forMonth(nowMonth);
@@ -274,8 +270,8 @@ export async function loadMembershipAccess(
     at: sessionAt,
   });
   return {
-    now: purchaseVerdict(nowMonth) ?? nowVerdict,
-    atSession: purchaseVerdict(sessionMonth) ?? sessionVerdict,
+    now: nowVerdict,
+    atSession: sessionVerdict,
     assignments: nowAssignments,
     accessSource: nowAssignments.some(
       (a) => a.status === "active" && a.entityIds.includes(input.entityId),
@@ -326,7 +322,8 @@ export async function loadRosterStanding(
   const held = await db
     .select({
       id: accessAssignment.id,
-      userId: accessAssignment.userId,
+      personId: person.id,
+      accountUserId: person.accountUserId,
       status: accessAssignment.status,
       planId: accessAssignment.planId,
       planName: accessPlan.name,
@@ -336,18 +333,10 @@ export async function loadRosterStanding(
     })
     .from(accessAssignment)
     .innerJoin(accessPlan, eq(accessPlan.id, accessAssignment.planId))
-    .where(inArray(accessAssignment.userId, userIds));
-  const purchases = await db
-    .select({
-      userId: membershipPurchase.userId,
-      status: membershipPurchase.status,
-      priceMinor: membershipPurchase.priceMinor,
-      startMonth: membershipPurchase.startMonth,
-      entityIds: membershipPurchase.entityIds,
-    })
-    .from(membershipPurchase)
-    .where(inArray(membershipPurchase.userId, userIds));
-
+    .innerJoin(person, eq(person.id, accessAssignment.personId))
+    .where(
+      or(inArray(person.id, userIds), inArray(person.accountUserId, userIds)),
+    );
   const calendar = await membershipCalendar(db);
   const month = monthOf(input.now, calendar.timeZone);
   const coverage = held.length
@@ -362,7 +351,7 @@ export async function loadRosterStanding(
     ? await db
         .select({
           assignmentId: membershipMonth.assignmentId,
-          paid: membershipMonth.paid,
+          status: membershipMonth.status,
         })
         .from(membershipMonth)
         .where(
@@ -380,7 +369,11 @@ export async function loadRosterStanding(
 
   for (const person of input.people) {
     const theirs = held
-      .filter((a) => a.userId === person.userId && appliesInMonth(a, month))
+      .filter(
+        (a) =>
+          (a.personId === person.userId || a.accountUserId === person.userId) &&
+          appliesInMonth(a, month),
+      )
       .map((a) => ({
         id: a.id,
         status: a.status as ApplicableAssignment["status"],
@@ -394,7 +387,11 @@ export async function loadRosterStanding(
             month,
           ),
         ),
-        paid: months.find((m) => m.assignmentId === a.id)?.paid ?? false,
+        paid:
+          months.find((m) => m.assignmentId === a.id)?.status === "confirmed",
+        paymentStatus:
+          (months.find((m) => m.assignmentId === a.id)
+            ?.status as ApplicableAssignment["paymentStatus"]) ?? "unpaid",
         deadline: payDeadline({
           month,
           startMonth: a.startMonth,
@@ -405,41 +402,23 @@ export async function loadRosterStanding(
     const covering = theirs.filter(
       (a) => a.status === "active" && a.entityIds.includes(input.entityId),
     );
-    const purchaseCoverage = purchases.filter(
-      (purchase) =>
-        purchase.userId === person.userId &&
-        purchase.entityIds.includes(input.entityId) &&
-        purchase.startMonth <= month,
-    );
-    const purchaseVerdict = purchaseCoverage.some(
-      (purchase) => purchase.status === "rejected",
-    )
-      ? "payment-declined"
-      : person.status === "active" &&
-          purchaseCoverage.some(
-            (purchase) =>
-              purchase.status === "claimed" && purchase.priceMinor > 0,
-          )
-        ? "provisional"
-        : null;
     answer.set(person.userId, {
       enrolled: true,
-      covered: covering.length > 0 || purchaseVerdict === "provisional",
+      covered: covering.length > 0,
       planNames: [...new Set(covering.map((a) => a.planName))].sort(),
       accessSource: staff.get(input.entityId)?.has(person.userId)
         ? "staff"
-        : covering.length > 0 || purchaseVerdict === "provisional"
+        : covering.length > 0
           ? "membership"
           : null,
       verdict: staff.get(input.entityId)?.has(person.userId)
         ? "ok"
-        : (purchaseVerdict ??
-          membershipAccess({
+        : membershipAccess({
             entityId: input.entityId,
             membership: { status: person.status },
             assignments: theirs,
             at: input.now,
-          })),
+          }),
     });
   }
   return answer;
@@ -558,44 +537,26 @@ export async function bookingsNeedingReview(
     const held = await db
       .select({
         id: accessAssignment.id,
-        userId: sql<string>`coalesce(${accessAssignment.personId}::text, ${accessAssignment.userId})`,
+        userId: accessAssignment.personId,
         status: accessAssignment.status,
         planId: accessAssignment.planId,
         startMonth: accessAssignment.startMonth,
         endMonth: accessAssignment.endMonth,
       })
       .from(accessAssignment)
-      .where(
-        or(
-          inArray(accessAssignment.personId, personIds),
-          accountUserIds.length
-            ? and(
-                isNull(accessAssignment.personId),
-                inArray(accessAssignment.userId, accountUserIds),
-              )
-            : undefined,
-        ),
-      );
-    const purchases = await db
-      .select({
-        userId: sql<string>`coalesce(${membershipPurchase.personId}::text, ${membershipPurchase.userId})`,
-        status: membershipPurchase.status,
-        priceMinor: membershipPurchase.priceMinor,
-        startMonth: membershipPurchase.startMonth,
-        entityIds: membershipPurchase.entityIds,
-      })
-      .from(membershipPurchase)
-      .where(
-        or(
-          inArray(membershipPurchase.personId, personIds),
-          accountUserIds.length
-            ? and(
-                isNull(membershipPurchase.personId),
-                inArray(membershipPurchase.userId, accountUserIds),
-              )
-            : undefined,
-        ),
-      );
+      .where(inArray(accessAssignment.personId, personIds));
+    const holds = personIds.length
+      ? await db
+          .select({ personId: membershipAccessHold.personId })
+          .from(membershipAccessHold)
+          .where(
+            and(
+              inArray(membershipAccessHold.personId, personIds),
+              eq(membershipAccessHold.entityId, input.entityId),
+              isNull(membershipAccessHold.resolvedAt),
+            ),
+          )
+      : [];
     // This branch's own memberships. Someone active here and suspended at the
     // gym across town must not be read as suspended here (ADR 129).
     const standing = await db
@@ -647,22 +608,13 @@ export async function bookingsNeedingReview(
             (c) => c.planId === a.planId && c.entityId === input.entityId,
           ),
       );
-      const purchaseCoverage = purchases.filter(
-        (purchase) =>
-          purchase.userId === b.userId &&
-          purchase.startMonth <= month &&
-          purchase.entityIds.includes(input.entityId),
-      );
-      const paymentDeclined = purchaseCoverage.some(
-        (purchase) => purchase.status === "rejected",
-      );
-      const provisional = purchaseCoverage.some(
-        (purchase) => purchase.status === "claimed" && purchase.priceMinor > 0,
+      const paymentDeclined = holds.some(
+        (hold) => hold.personId === b.personId,
       );
       const local = standing.find((m) => m.userId === b.userId)?.status;
       const blocked =
         local !== undefined && local !== "active" && local !== "pending";
-      if (!paymentDeclined && !blocked && (covers || provisional)) continue;
+      if (!paymentDeclined && !blocked && covers) continue;
       items.push({
         participationId: b.participationId,
         classId: b.classId,

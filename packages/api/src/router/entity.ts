@@ -40,10 +40,10 @@ import {
   runsOrganization,
 } from "@matops/domain";
 import {
+  AddStudentToBranchSchema,
   BranchDecisionSchema,
   CreateEntitySchema,
   EntityIdSchema,
-  SetBranchRoleSchema,
   SetMembershipEnforcedSchema,
 } from "@matops/validators";
 
@@ -210,20 +210,8 @@ export const entityRouter = {
     };
   }),
 
-  /**
-   * Put somebody on a branch, or change what they are there, from the gym's
-   * person profile (ADR 129).
-   *
-   * Organization-tier with an explicit branch check, so it never widens a
-   * scope: the branch is verified to belong to this gym before anything is
-   * read, and the write runs inside that branch's own transaction.
-   *
-   * ORDINARY roles only. `student` and `instructor` are the whole list, so a
-   * plan assignment or a staff edit can never mint an owner; making one stays
-   * on `membership.promote`, which is owner-only (ADR 129).
-   */
-  setBranchRole: organizationManagerIdentityProcedure
-    .input(SetBranchRoleSchema)
+  addStudentToBranch: organizationManagerIdentityProcedure
+    .input(AddStudentToBranchSchema)
     .mutation(async ({ ctx, input }) => {
       const branch = await requireOwnEntity(ctx, input.entityId);
       const subject = await requireOrganizationPerson(ctx, input.userId);
@@ -274,27 +262,19 @@ export const entityRouter = {
                 ),
               ),
             );
-          // Stepping an owner down is removing an owner, which is not this
-          // screen's job whoever is looking at it.
           if (held?.role === "owner") {
             throw new TRPCError({
               code: "FORBIDDEN",
               message: "Owner roles are changed on that branch's Coaches page.",
             });
           }
-          if (held) {
-            await db
-              .update(entityMembership)
-              .set({ role: input.role, status: "active", joinedAt: new Date() })
-              .where(eq(entityMembership.id, held.id));
-            return;
-          }
+          if (held) return;
           await db.insert(entityMembership).values({
             organizationId: ctx.organizationId,
             entityId: branch.id,
             personId: subject.id,
             userId: subject.accountUserId,
-            role: input.role,
+            role: "student",
             status: "active",
             joinedAt: new Date(),
           });
@@ -545,7 +525,7 @@ export const entityRouter = {
           const holders = covering.length
             ? await db
                 .select({
-                  userId: sql<string>`coalesce(${accessAssignment.personId}::text, ${accessAssignment.userId})`,
+                  userId: accessAssignment.personId,
                 })
                 .from(accessAssignment)
                 .where(

@@ -2,11 +2,40 @@
 
 Prepare MatOps for the first real academy. Simplify memberships, complete daily workflows, and provide one navigation experience.
 
-## First-academy release, approved 2026-09-07
+## First academy release, accepted 2026-09-08
 
-Status: core implementation complete. Privacy facts, manual acceptance, migration rehearsal, restore rehearsal, and user-run tests remain open.
+Status: S0-S8 implementation is in final static verification. Manual browser, device, privacy, and restore checks remain open.
 
-This section is the active release plan. It supersedes earlier restrictions against legacy dues removal and account-independent students. Earlier URL preservation means retaining working deep links through redirects where routes change. Database organization and branch boundaries remain in place.
+ADR 135 and [the technical plan](/Users/kuna/projects/matops/docs/first-academy-technical-plan.md) are the current contract. They replace the 2026-09-07 staged migration plan below where it describes guardians, student shopping, workers, scheduled jobs, or an external booking API.
+
+### Current release contract
+
+1. A person is the adult student record. It may have an optional account link. Guardian storage and delegated booking are removed.
+2. Staff assign shared plans. Students cannot shop for or purchase a plan in MatOps.
+3. Each membership month is unpaid, reported, confirmed, or rejected. It stores versioned claim and review evidence.
+4. A rejected month creates a branch coverage hold. Only an explicit staff resolution removes it.
+5. The fixed seven-day payment grace controls new booking and self check-in. Existing reservations remain.
+6. Each branch sets a booking window from 1 to 90 local calendar days. The default is 7.
+7. Calendar extension is manual. Safe rebuild uses a versioned preview, preserves history and cancellations, and refuses booked stale classes.
+8. Class and visitor email uses saved notices and recipient snapshots. The request sends a bounded first batch. Staff send remaining recipients or retry failures from Notifications.
+9. Hosted visitor booking remains at `/book/<academy-code>` with private status and cancellation tokens. External REST booking, API keys, and origin settings are removed.
+10. Coach counts use current attendance review evidence. Referrals show confirmed membership-month evidence without bonus calculations. Rank clears and corrections append events.
+11. Curriculum and referrals remain optional. Broad insights, student training statistics, announcements, job panels, and shopping screens are removed.
+12. The release uses one fresh migration baseline. There is no backfill, legacy conversion, staged drop, or compatibility deployment.
+
+### Remaining release checks
+
+- [ ] Run workspace formatting, lint, and typecheck.
+- [ ] Check the fresh migration baseline, row security, grants, indexes, and foreign keys.
+- [ ] Run the focused tests listed in the technical plan when the user starts a test session.
+- [ ] Walk staff, student, hosted visitor, notice recovery, schedule rebuild, import, and export paths in a browser.
+- [ ] Check Expo booking and self check-in on a device.
+- [ ] Fill the real privacy operator and contact details.
+- [ ] Rehearse backup and restore against an isolated database.
+
+## Superseded 2026-09-07 plan
+
+This section records the superseded release plan. ADR 135 replaces its identity, payment, delivery, job, visitor API, and database rollout choices.
 
 ### Decisions
 
@@ -46,9 +75,9 @@ This section is the active release plan. It supersedes earlier restrictions agai
 
 Dependencies: R0 precedes implementation. R1 precedes import and final identity-dependent changes. R2 precedes final reminder wiring. R3 and R4 can proceed independently after discovery. R5 precedes public visitor launch. R9 gates release.
 
-### Current step
+### Historical current step
 
-R9 release checks. Add the real privacy operator details, run the manual browser and device journeys, rehearse the staged migration and restore, then run the focused test commands.
+This staged release step no longer applies. Use the remaining release checks at the top of this file.
 
 ### R0 record
 

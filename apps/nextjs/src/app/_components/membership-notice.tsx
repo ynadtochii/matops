@@ -30,7 +30,7 @@ export function MembershipNotice() {
   const warned = (standing.data?.memberships ?? []).filter((m) => m.warning);
   const bankDetails = standing.data?.bankDetails ?? "";
   const showPaymentInstructions =
-    Boolean(bankDetails) && warned.some((m) => !m.claimedAt);
+    Boolean(bankDetails) && warned.some((m) => !m.reportedAt);
 
   if (standing.isPending) return <SkeletonDuesBody />;
   if (standing.isError) {
@@ -75,7 +75,7 @@ export function MembershipNotice() {
                 {m.warning?.detail}
               </p>
             </div>
-            {m.claimedAt ? (
+            {m.reportedAt ? (
               <div className="bg-brand-wash rounded-md p-3" role="status">
                 <p className="text-sm font-medium">Waiting for confirmation</p>
                 <p className="text-muted-foreground mt-1 text-sm">

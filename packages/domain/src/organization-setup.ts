@@ -16,6 +16,7 @@ export interface SetupFacts {
   branchesScheduled: number;
   instructors: number;
   bankDetails: boolean;
+  paidPlans: number;
   plans: number;
   assignments: number;
   /** Active members no membership covers, across every branch. */
@@ -53,7 +54,7 @@ export function organizationSetup(facts: SetupFacts): SetupItem[] {
   const hasBranch = facts.branches > 0;
   const hasPlan = facts.plans > 0;
 
-  return [
+  const items: SetupItem[] = [
     { key: "gym", done: facts.gymNamed, blocked: false },
     { key: "branch", done: hasBranch, blocked: false },
     {
@@ -67,8 +68,12 @@ export function organizationSetup(facts: SetupFacts): SetupItem[] {
       blocked: !hasBranch,
     },
     { key: "staff", done: facts.instructors > 0, blocked: !hasBranch },
-    { key: "bank", done: facts.bankDetails, blocked: false },
     { key: "plan", done: hasPlan, blocked: !hasBranch },
+  ];
+  if (facts.paidPlans > 0) {
+    items.push({ key: "bank", done: facts.bankDetails, blocked: false });
+  }
+  items.push(
     { key: "assign", done: facts.assignments > 0, blocked: !hasPlan },
     {
       key: "ready",
@@ -78,7 +83,8 @@ export function organizationSetup(facts: SetupFacts): SetupItem[] {
       blocked: facts.assignments === 0,
     },
     { key: "invite", done: facts.invites > 0, blocked: !hasBranch },
-  ];
+  );
+  return items;
 }
 
 /** How far along setup is, counting only what the owner can act on today. */

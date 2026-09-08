@@ -14,6 +14,7 @@ import type {
 } from "@matops/domain";
 import {
   and,
+  attendanceReviewSnapshot,
   eq,
   getEntityInOrganization,
   getEntityMembership,
@@ -23,18 +24,17 @@ import {
   isNull,
   lt,
   ne,
-  or,
   sql,
   withScope,
 } from "@matops/db";
 import {
   accessAssignment,
+  accessPlanEntity,
   classInstance,
   classParticipation,
   dropIn,
   entityMembership,
   membershipMonth,
-  membershipPurchase,
   notification,
 } from "@matops/db/schema";
 import {
@@ -50,20 +50,15 @@ import {
   combineDirectory,
   combineEntitySummaries,
   groupMoneyByCurrency,
-  gymInsights,
   isActiveMember,
-  isOnRoster,
   isPendingCoach,
   isStaff,
-  isStudentMember,
   monthBucket,
   monthOf,
   monthVerdict,
-  newMemberCounts,
   organizationMetrics,
   runsBranch,
   runsOrganization,
-  trainingStats,
 } from "@matops/domain";
 import {
   CoachDetailSchema,
@@ -87,7 +82,6 @@ import { membershipCalendar } from "../membership-status";
 import { readOrganizationEntities } from "../organization-read";
 import {
   branchManagerProcedure,
-  enrolledProcedure,
   organizationManagerIdentityProcedure,
   organizationMemberIdentityProcedure,
   staffProcedure,
@@ -100,9 +94,6 @@ import {
  * with `monthBucket`, so this bound only keeps the query from growing forever.
  */
 const REVENUE_WINDOW_DAYS = 70;
-
-/** Days of marked attendance the gym-insights window looks back over. */
-const GYM_WINDOW_DAYS = 30;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -131,6 +122,9 @@ async function readCoachRows(
       title: classInstance.title,
       discipline: classInstance.discipline,
       status: classInstance.status,
+      attendanceReviewedAt: classInstance.attendanceReviewedAt,
+      attendanceReviewFingerprint: classInstance.attendanceReviewFingerprint,
+      snapshot: attendanceReviewSnapshot().as("attendance_snapshot"),
     })
     .from(classInstance)
     .where(
@@ -159,10 +153,27 @@ async function readCoachRows(
   return {
     // A session nobody taught has no coach to credit, so it leaves the workload
     // report rather than being attributed to a placeholder (ADR 126).
-    classes: rows.flatMap(({ status, instructorId, ...c }) =>
-      instructorId === null
-        ? []
-        : [{ ...c, instructorId, cancelled: status === "cancelled" }],
+    classes: rows.flatMap(
+      ({
+        status,
+        instructorId,
+        attendanceReviewedAt,
+        attendanceReviewFingerprint,
+        snapshot,
+        ...c
+      }) =>
+        instructorId === null
+          ? []
+          : [
+              {
+                ...c,
+                instructorId,
+                cancelled: status === "cancelled",
+                reviewed:
+                  attendanceReviewedAt !== null &&
+                  attendanceReviewFingerprint === snapshot.fingerprint,
+              },
+            ],
     ),
     // The `where` already excludes `unmarked`; narrow rather than assert so the
     // compiler proves it instead of taking our word for it.
@@ -312,13 +323,14 @@ async function readPaymentTally(
       const months = await db
         .select({
           assignmentId: membershipMonth.assignmentId,
-          paid: membershipMonth.paid,
+          status: membershipMonth.status,
         })
         .from(membershipMonth)
         .where(eq(membershipMonth.month, month));
 
       for (const a of held.filter((r) => appliesInMonth(r, month))) {
-        const paid = months.find((m) => m.assignmentId === a.id)?.paid ?? false;
+        const paid =
+          months.find((m) => m.assignmentId === a.id)?.status === "confirmed";
         const verdict = monthVerdict({
           month,
           startMonth: a.startMonth,
@@ -435,11 +447,19 @@ async function readEntitySummary(
         .where(eq(dropIn.stage, "new"));
       const [claims] = await db
         .select({ n: sql<number>`count(*)::int` })
-        .from(membershipPurchase)
+        .from(membershipMonth)
+        .innerJoin(
+          accessAssignment,
+          eq(accessAssignment.id, membershipMonth.assignmentId),
+        )
+        .innerJoin(
+          accessPlanEntity,
+          eq(accessPlanEntity.planId, accessAssignment.planId),
+        )
         .where(
           and(
-            eq(membershipPurchase.entityId, entity.id),
-            inArray(membershipPurchase.status, ["pending", "claimed"]),
+            eq(accessPlanEntity.entityId, entity.id),
+            eq(membershipMonth.status, "reported"),
           ),
         );
       const [classes] = await db
@@ -550,12 +570,7 @@ async function readOrganizationNavigationCounts(
       const [row] = await db
         .select({ count: sql<number>`count(*)::int` })
         .from(membershipMonth)
-        .where(
-          and(
-            isNotNull(membershipMonth.claimedAt),
-            eq(membershipMonth.paid, false),
-          ),
-        );
+        .where(eq(membershipMonth.status, "reported"));
       return row?.count ?? 0;
     },
     baseDb,
@@ -572,78 +587,50 @@ async function readOrganizationNavigationCounts(
  */
 type DashboardScope = MemberScope & { db: TenantDb };
 
-async function readGymInsights(
-  ctx: DashboardScope,
-  now: Date,
-  timeZone: string,
-  members: MemberRow[] | null,
-) {
-  const windowStart = new Date(
-    now.getTime() - GYM_WINDOW_DAYS * 24 * 60 * 60 * 1000,
-  );
-  const marked = await ctx.db
-    .select({
-      startsAt: classInstance.startsAt,
-      title: classInstance.title,
-      discipline: classInstance.discipline,
-      status: classParticipation.attendanceStatus,
-    })
-    .from(classParticipation)
-    .innerJoin(classInstance, eq(classParticipation.classId, classInstance.id))
-    .where(
-      and(
-        inArray(classParticipation.attendanceStatus, ["present", "absent"]),
-        gte(classInstance.startsAt, windowStart),
-      ),
-    );
-  const newMembers = members
-    ? newMemberCounts(
-        members
-          .filter(isOnRoster)
-          .filter(isStudentMember)
-          .map((m) => monthBucket(m.createdAt, timeZone)),
-        monthBucket(now, timeZone),
-      )
-    : null;
-  return {
-    ...gymInsights(
-      // The `where` already excludes `unmarked`; narrow rather than assert so
-      // the compiler proves it instead of taking our word for it.
-      marked.flatMap((r) =>
-        r.status === "unmarked" ? [] : [{ ...r, status: r.status }],
-      ),
-      now,
-      timeZone,
-    ),
-    newMembers,
-  };
-}
-
 async function readRevenue(ctx: DashboardScope, now: Date, timeZone: string) {
   const windowStart = new Date(
     now.getTime() - REVENUE_WINDOW_DAYS * 24 * 60 * 60 * 1000,
   );
   const rows = await ctx.db
     .select({
-      amountMinor: membershipPurchase.priceMinor,
-      currency: membershipPurchase.currency,
-      confirmedAt: membershipPurchase.confirmedAt,
+      amountMinor: membershipMonth.priceMinor,
+      currency: membershipMonth.currency,
+      confirmedAt: membershipMonth.reviewedAt,
     })
-    .from(membershipPurchase)
+    .from(membershipMonth)
+    .innerJoin(
+      accessAssignment,
+      eq(accessAssignment.id, membershipMonth.assignmentId),
+    )
+    .innerJoin(
+      accessPlanEntity,
+      eq(accessPlanEntity.planId, accessAssignment.planId),
+    )
     .where(
       and(
-        eq(membershipPurchase.entityId, ctx.academyId),
-        eq(membershipPurchase.status, "confirmed"),
-        gte(membershipPurchase.confirmedAt, windowStart),
+        eq(accessPlanEntity.entityId, ctx.academyId),
+        eq(membershipMonth.status, "confirmed"),
+        gte(membershipMonth.reviewedAt, windowStart),
+        isNotNull(membershipMonth.priceMinor),
+        isNotNull(membershipMonth.currency),
       ),
     );
   const thisBucket = monthBucket(now, timeZone);
   const inMonth = (bucket: number) =>
     groupMoneyByCurrency(
-      rows.filter(
-        (r) =>
-          r.confirmedAt !== null &&
-          monthBucket(r.confirmedAt, timeZone) === bucket,
+      rows.flatMap((r) =>
+        r.confirmedAt !== null &&
+        r.amountMinor !== null &&
+        r.currency !== null &&
+        monthBucket(r.confirmedAt, timeZone) === bucket
+          ? [
+              {
+                amountMinor: r.amountMinor,
+                currency: r.currency,
+                confirmedAt: r.confirmedAt,
+              },
+            ]
+          : [],
       ),
     );
   const current = inMonth(thisBucket);
@@ -701,40 +688,6 @@ async function readDrifting(
 
 export const statsRouter = {
   /**
-   * The caller's own training summary (spec S7, mobile "My Training" card).
-   * Pending members may call it — they just have no present rows yet.
-   */
-  me: enrolledProcedure.query(async ({ ctx }) => {
-    const sessions = await ctx.db
-      .select({
-        startsAt: classInstance.startsAt,
-        discipline: classInstance.discipline,
-        title: classInstance.title,
-      })
-      .from(classParticipation)
-      .innerJoin(
-        classInstance,
-        eq(classParticipation.classId, classInstance.id),
-      )
-      .where(
-        and(
-          or(
-            ctx.membership.personId
-              ? eq(classParticipation.personId, ctx.membership.personId)
-              : undefined,
-            and(
-              isNull(classParticipation.personId),
-              eq(classParticipation.studentId, ctx.session.user.id),
-            ),
-          ),
-          eq(classParticipation.attendanceStatus, "present"),
-        ),
-      );
-    const timeZone = await academyTimeZone(ctx);
-    return trainingStats(sessions, new Date(), timeZone);
-  }),
-
-  /**
    * Everything the O1 dashboard's lower half needs, in one read (ADR 98).
    * Gym-activity insights (spec O1, C.1), who is drifting (C.1/C.2) and the
    * month's confirmed revenue used to be three owner/staff procedures. They
@@ -748,14 +701,11 @@ export const statsRouter = {
    */
   dashboard: staffProcedure.query(async ({ ctx }) => {
     const now = new Date();
-    const timeZone = await academyTimeZone(ctx);
     const owner = runsBranch(ctx.membership);
     const members = owner ? await studentRosterOf(ctx) : null;
 
     return {
-      insights: await readGymInsights(ctx, now, timeZone, members),
       drifting: members ? await readDrifting(ctx, now, members) : null,
-      revenue: owner ? await readRevenue(ctx, now, timeZone) : null,
     };
   }),
 

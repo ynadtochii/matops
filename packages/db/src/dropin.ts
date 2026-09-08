@@ -1,4 +1,4 @@
-import { and, eq, gte, isNull, lt, ne, sql } from "drizzle-orm";
+import { and, eq, gte, isNull, lt, ne, or, sql } from "drizzle-orm";
 
 import type { LeadSource } from "@matops/domain";
 import { matchLeadByPhone } from "@matops/domain";
@@ -6,6 +6,10 @@ import { matchLeadByPhone } from "@matops/domain";
 import type { DbExec } from "./client";
 import type { DbReader, DbWriter } from "./tenant";
 import { entity } from "./entity-schema";
+import {
+  bumpScheduleRevision,
+  lockAndReadScheduleRevision,
+} from "./schedule-guard";
 import { classInstance, dropIn, dropInVisit } from "./scheduling";
 
 /**
@@ -161,6 +165,7 @@ export async function createDropIn(
 ): Promise<DropInResult> {
   const dropInId = await upsertLead(input, exec);
   if (input.classId) {
+    await lockAndReadScheduleRevision(exec, input.academyId);
     const now = new Date();
     await exec
       .insert(dropInVisit)
@@ -176,6 +181,7 @@ export async function createDropIn(
         target: [dropInVisit.dropInId, dropInVisit.classId],
         set: { attendanceStatus: "present", attendedAt: now },
       });
+    await bumpScheduleRevision(exec, input.academyId);
   }
   return { dropInId, visitCount: await countPresentVisits(dropInId, exec) };
 }
@@ -201,11 +207,9 @@ export async function bookVisitor(
   input: BookVisitorInput,
   exec: DbWriter,
 ): Promise<BookVisitorResult> {
+  await lockAndReadScheduleRevision(exec, input.academyId);
   const dropInId = await upsertLead(input, exec);
   const now = new Date();
-  const cancelTokenExpiresAt = new Date(
-    now.getTime() + 30 * 24 * 60 * 60 * 1000,
-  );
   const [bookedClass] = await exec
     .select({ startsAt: classInstance.startsAt })
     .from(classInstance)
@@ -219,6 +223,41 @@ export async function bookVisitor(
     )
     .limit(1);
   if (!bookedClass) throw new Error("Class is no longer open for booking");
+  const cancelTokenExpiresAt = new Date(
+    Math.max(
+      now.getTime() + 30 * 24 * 60 * 60 * 1000,
+      bookedClass.startsAt.getTime() + 24 * 60 * 60 * 1000,
+    ),
+  );
+  const [existing] = await exec
+    .select({ status: dropInVisit.bookingStatus })
+    .from(dropInVisit)
+    .where(
+      and(
+        eq(dropInVisit.dropInId, dropInId),
+        eq(dropInVisit.classId, input.classId),
+      ),
+    )
+    .limit(1);
+  if (existing?.status !== "booked") {
+    const [seat] = await exec
+      .update(classInstance)
+      .set({ bookingCount: sql`${classInstance.bookingCount} + 1` })
+      .where(
+        and(
+          eq(classInstance.id, input.classId),
+          eq(classInstance.academyId, input.academyId),
+          eq(classInstance.status, "scheduled"),
+          isNull(classInstance.deletedAt),
+          or(
+            eq(classInstance.capacity, 0),
+            lt(classInstance.bookingCount, classInstance.capacity),
+          ),
+        ),
+      )
+      .returning({ id: classInstance.id });
+    if (!seat) throw new Error("Class is full");
+  }
   const [row] = await exec
     .insert(dropInVisit)
     .values({
@@ -246,6 +285,9 @@ export async function bookVisitor(
     .returning({ id: dropInVisit.id, cancelToken: dropInVisit.cancelToken });
   if (!row?.cancelToken)
     throw new Error("drop_in_visit upsert returned no row");
+  if (existing?.status !== "booked") {
+    await bumpScheduleRevision(exec, input.academyId);
+  }
   return {
     dropInId,
     visitId: row.id,
@@ -267,6 +309,7 @@ export async function cancelVisitorBooking(
   exec: DbWriter,
   now = new Date(),
 ): Promise<boolean> {
+  await lockAndReadScheduleRevision(exec, academyId);
   const rows = await exec
     .update(dropInVisit)
     .set({ bookingStatus: "cancelled", cancelledAt: now })
@@ -274,10 +317,21 @@ export async function cancelVisitorBooking(
       and(
         eq(dropInVisit.academyId, academyId),
         eq(dropInVisit.cancelToken, cancelToken),
+        eq(dropInVisit.bookingStatus, "booked"),
         gte(dropInVisit.cancelTokenExpiresAt, now),
       ),
     )
-    .returning({ id: dropInVisit.id });
+    .returning({ id: dropInVisit.id, classId: dropInVisit.classId });
+  const cancelled = rows[0];
+  if (cancelled?.classId) {
+    await exec
+      .update(classInstance)
+      .set({
+        bookingCount: sql`greatest(${classInstance.bookingCount} - 1, 0)`,
+      })
+      .where(eq(classInstance.id, cancelled.classId));
+    await bumpScheduleRevision(exec, academyId);
+  }
   return rows.length > 0;
 }
 

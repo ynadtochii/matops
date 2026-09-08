@@ -116,7 +116,8 @@ describe("O10 coach stats", () => {
     const ana = res.coaches.find((c) => c.instructorId === ANA);
     expect(ana).toMatchObject({
       name: "Ana",
-      classesLed: 2,
+      classesLed: 0,
+      unresolvedEnded: 2,
       minutesLed: 150,
       markedClasses: 1,
       visitsTaught: 1,
@@ -125,7 +126,7 @@ describe("O10 coach stats", () => {
       cancelled: 0,
       onStaff: true,
     });
-    expect(ana?.markedRate).toBeCloseTo(0.5);
+    expect(ana?.markedRate).toBeNull();
   });
 
   it("counts a cancelled class as cancelled, not as led", async () => {

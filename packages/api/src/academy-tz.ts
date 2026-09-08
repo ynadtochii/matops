@@ -14,6 +14,8 @@ export interface TimeZoneCtx {
 export interface AcademyContext {
   timeZone: string;
   country: string | null;
+  bookingWindowDays: number;
+  scheduleRevision: number;
   curriculumForStudents: boolean;
 }
 
@@ -24,6 +26,8 @@ export async function academyContext(
     .select({
       timeZone: entity.timeZone,
       country: entity.country,
+      bookingWindowDays: entity.bookingWindowDays,
+      scheduleRevision: entity.scheduleRevision,
       curriculumForStudents: sql<boolean>`coalesce(${academyProfile.curriculumForStudents}, false)`,
     })
     .from(entity)
@@ -32,10 +36,14 @@ export async function academyContext(
     .limit(1);
   const curriculumForStudents = org?.curriculumForStudents ?? false;
   const country = org?.country ?? null;
+  const bookingWindowDays = org?.bookingWindowDays ?? 7;
+  const scheduleRevision = org?.scheduleRevision ?? 0;
   if (org?.timeZone) {
     return {
       timeZone: resolveAcademyTimeZone(org.timeZone),
       country,
+      bookingWindowDays,
+      scheduleRevision,
       curriculumForStudents,
     };
   }
@@ -49,6 +57,8 @@ export async function academyContext(
   return {
     timeZone: resolveAcademyTimeZone(null, row?.timeZone),
     country,
+    bookingWindowDays,
+    scheduleRevision,
     curriculumForStudents,
   };
 }

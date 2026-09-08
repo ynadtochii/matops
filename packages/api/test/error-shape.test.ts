@@ -53,7 +53,7 @@ describe("publicErrorMessage", () => {
     expect(
       publicErrorMessage(
         "INTERNAL_SERVER_ERROR",
-        'duplicate key value violates unique constraint "membership_purchase_one_unresolved"',
+        'duplicate key value violates unique constraint "membership_month_assignment_month"',
       ),
     ).toBe(GENERIC_ERROR);
   });

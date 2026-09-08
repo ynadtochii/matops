@@ -8,6 +8,7 @@ import {
   and,
   count,
   eq,
+  gt,
   inArray,
   isNull,
   listOwnedOrganizations,
@@ -20,6 +21,7 @@ import {
   accessAssignment,
   accessPlan,
   accessPlanEntity,
+  accessPlanPrice,
   classTemplate,
   entity,
   entityMembership,
@@ -39,7 +41,6 @@ import {
   OrganizationModulesSchema,
 } from "@matops/validators";
 
-import { readScheduledJobHealth } from "../job-run";
 import { studentRosterOf } from "../members";
 import { loadRosterStanding } from "../membership-access";
 import { assignmentAppliesNow } from "../membership-status";
@@ -159,6 +160,16 @@ export const organizationRouter = {
           .select({ n: count() })
           .from(accessPlan)
           .where(isNull(accessPlan.archivedAt));
+        const [paidPlans] = await tx
+          .select({ n: count() })
+          .from(accessPlanPrice)
+          .innerJoin(accessPlan, eq(accessPlan.id, accessPlanPrice.planId))
+          .where(
+            and(
+              isNull(accessPlan.archivedAt),
+              gt(accessPlanPrice.priceMinor, 0),
+            ),
+          );
         const [assignments] = await tx
           .select({ n: count() })
           .from(accessAssignment)
@@ -169,6 +180,7 @@ export const organizationRouter = {
           name: org?.name ?? "",
           bankDetails: (policy?.bankDetails ?? "").trim().length > 0,
           plans: plans?.n ?? 0,
+          paidPlans: paidPlans?.n ?? 0,
           assignments: assignments?.n ?? 0,
         };
       },
@@ -318,6 +330,7 @@ export const organizationRouter = {
       branchesScheduled,
       instructors,
       bankDetails: gym.bankDetails,
+      paidPlans: gym.paidPlans,
       plans: gym.plans,
       assignments: gym.assignments,
       uncoveredMembers,
@@ -352,10 +365,6 @@ export const organizationRouter = {
     if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "No gym" });
     return row;
   }),
-
-  jobHealth: organizationManagerIdentityProcedure.query(({ ctx }) =>
-    readScheduledJobHealth(ctx.baseDb, ctx.organizationId),
-  ),
 
   modules: organizationManagerIdentityProcedure.query(async ({ ctx }) => {
     const [row] = await ctx.baseDb

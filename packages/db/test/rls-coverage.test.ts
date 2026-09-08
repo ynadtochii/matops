@@ -6,8 +6,6 @@ import { freshDb, single } from "./helpers";
 const NO_RLS_BY_DESIGN: Record<string, string> = {
   academy_invite:
     "The public join screen resolves a token with no active academy, so a policy on app.academy_id would match nothing (docs/issues/28). Migration 0020 revokes every matops_app grant on the table instead, which is stricter than a policy.",
-  scheduled_job_run:
-    "Scheduled jobs run across organizations on the base connection, and the application role has no table privileges.",
 };
 
 const NO_ENTITY_KEY_BY_DESIGN = ["tenant_probe"];
@@ -16,7 +14,6 @@ const SCOPE_GUC: Record<string, string> = {
   entity: "app.organization_id",
   entity_membership: "app.organization_id",
   person: "app.organization_id",
-  person_guardian: "app.organization_id",
   academy_profile: "app.academy_id",
   // One membership can cover a mat and a gym at once, so the four access tables
   // belong to the organization and none of them carries an academy_id (ADR 126).

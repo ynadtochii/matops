@@ -7,8 +7,6 @@ import { HydrateClient, prefetch, setRequestEntity, trpc } from "~/trpc/server";
 
 function PaymentsData() {
   prefetch(trpc.accessPlan.mine.queryOptions());
-  prefetch(trpc.membershipPurchase.catalog.queryOptions({ start: "current" }));
-  prefetch(trpc.membershipPurchase.mine.queryOptions());
 
   return (
     <HydrateClient>

@@ -32,8 +32,7 @@ import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 
 type StaffMember = RouterOutputs["membership"]["staff"][number];
-type Action =
-  "promote" | "demote" | "student" | "suspend" | "archive" | "restore";
+type Action = "promote" | "suspend" | "archive" | "restore";
 
 /** Owners rank above instructors; then alphabetical by name. */
 function byRoleThenName(a: StaffMember, b: StaffMember): number {
@@ -65,13 +64,6 @@ const COPY: Record<
     confirmLabel: "Make co-owner",
     variant: "primary",
   },
-  student: {
-    title: (name) => `Move ${name} to Members?`,
-    description:
-      "They lose staff tools and free staff access. Normal student membership rules apply. Their history stays. No payment plan is created or restarted.",
-    confirmLabel: "Move to Members",
-    variant: "destructive",
-  },
   suspend: {
     title: (name) => `Suspend ${name}?`,
     description:
@@ -92,13 +84,6 @@ const COPY: Record<
       "They regain staff access without a paid membership. Their history stays. Cancelled bookings do not return.",
     confirmLabel: "Restore staff access",
     variant: "primary",
-  },
-  demote: {
-    title: (name) => `Step ${name} down to instructor?`,
-    description:
-      "They keep the schedule and attendance tools but lose owner powers — payments, settings, and staff.",
-    confirmLabel: "Step down",
-    variant: "destructive",
   },
 };
 
@@ -175,19 +160,6 @@ function StaffRow({
             {owner && m.role === "instructor" && m.status === "active" && (
               <DropdownMenuItem onSelect={() => setAction("promote")}>
                 Make co-owner
-              </DropdownMenuItem>
-            )}
-            {owner && m.role === "owner" && (
-              <DropdownMenuItem
-                disabled={isOnlyOwner}
-                onSelect={() => setAction("demote")}
-              >
-                Step down to instructor
-              </DropdownMenuItem>
-            )}
-            {m.role === "instructor" && (
-              <DropdownMenuItem onSelect={() => setAction("student")}>
-                Move to Members
               </DropdownMenuItem>
             )}
             {m.status === "active" && (
@@ -274,20 +246,6 @@ export function Staff() {
       onError: (e) => toast.error(e.message),
     }),
   );
-  const demote = useMutation(
-    trpc.membership.setRole.mutationOptions({
-      onSuccess: async (_result, input) => {
-        await invalidate();
-        toast.success(
-          input.role === "student"
-            ? "Moved to Members"
-            : "Stepped down to instructor",
-        );
-      },
-      onError: (e) => toast.error(e.message),
-    }),
-  );
-
   const suspend = useMutation(
     trpc.membership.suspend.mutationOptions({
       onSuccess: async () => {
@@ -318,7 +276,6 @@ export function Staff() {
 
   const busy =
     promote.isPending ||
-    demote.isPending ||
     suspend.isPending ||
     archive.isPending ||
     restore.isPending;
@@ -326,13 +283,6 @@ export function Staff() {
     switch (action) {
       case "promote":
         await promote.mutateAsync({ memberId });
-        break;
-      case "demote":
-      case "student":
-        await demote.mutateAsync({
-          memberId,
-          role: action === "student" ? "student" : "instructor",
-        });
         break;
       case "suspend":
         await suspend.mutateAsync({ memberId });

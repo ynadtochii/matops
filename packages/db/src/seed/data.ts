@@ -42,8 +42,8 @@ import type {
   membershipMonth,
   membershipMonthAudit,
   membershipPolicy,
-  membershipPurchase,
   organization,
+  person,
   rankPromotion,
   user,
 } from "../schema";
@@ -53,11 +53,13 @@ import {
   seedEntityMembershipId,
   seedMemberId,
   seedMembershipId,
+  seedPersonId,
   seedUserId,
 } from "./registry";
 
 type NewUser = typeof user.$inferInsert;
 type NewOrganization = typeof organization.$inferInsert;
+type NewPerson = typeof person.$inferInsert;
 type NewMember = typeof member.$inferInsert;
 type NewEntity = typeof entity.$inferInsert;
 type NewAcademyProfile = typeof academyProfile.$inferInsert;
@@ -74,7 +76,6 @@ type NewAssignment = typeof accessAssignment.$inferInsert;
 type NewAssignmentChange = typeof accessAssignmentChange.$inferInsert;
 type NewMembershipMonth = typeof membershipMonth.$inferInsert;
 type NewMembershipMonthAudit = typeof membershipMonthAudit.$inferInsert;
-type NewPurchase = typeof membershipPurchase.$inferInsert;
 type NewRank = typeof memberRank.$inferInsert;
 type NewPromotion = typeof rankPromotion.$inferInsert;
 type NewNote = typeof memberNote.$inferInsert;
@@ -90,6 +91,7 @@ export interface SeedGraph {
   users: NewUser[];
   organizations: NewOrganization[];
   members: NewMember[];
+  people: NewPerson[];
   entities: NewEntity[];
   academyProfiles: NewAcademyProfile[];
   entityMemberships: NewEntityMembership[];
@@ -673,7 +675,6 @@ export interface MembershipRows {
   changes: NewAssignmentChange[];
   months: NewMembershipMonth[];
   monthAudits: NewMembershipMonthAudit[];
-  purchases: NewPurchase[];
 }
 
 /** Move a "YYYY-MM-01" month key back by whole months. */
@@ -724,7 +725,6 @@ function buildMemberships(args: {
     id,
     organizationId: academy.id,
     name,
-    studentSelectable: true,
     priceMinor,
     currency: academy.currency,
     createdAt: planUpdatedAt,
@@ -743,7 +743,6 @@ function buildMemberships(args: {
   });
   const closed = plan(closedId, "Foundation", 3000, {
     description: "The old beginners' rate.",
-    studentSelectable: false,
     archivedAt: new Date(now.getTime() - 20 * DAY_MS),
   });
   const plans = [unlimited, twice, closed];
@@ -793,7 +792,6 @@ function buildMemberships(args: {
   const changes: NewAssignmentChange[] = [];
   const months: NewMembershipMonth[] = [];
   const monthAudits: NewMembershipMonthAudit[] = [];
-  const purchases: NewPurchase[] = [];
 
   const settle = (
     assignmentId: string,
@@ -805,17 +803,17 @@ function buildMemberships(args: {
       organizationId: academy.id,
       assignmentId,
       month: on,
-      paid: false,
       ...row,
     });
-    if (row.paid) {
+    if (row.status === "confirmed") {
       monthAudits.push({
         id: newId(),
         organizationId: academy.id,
         assignmentId,
         month: on,
-        wasPaid: null,
-        paid: true,
+        event: "confirmed",
+        beforeStatus: null,
+        afterStatus: "confirmed",
         actorId: ownerUserId,
       });
     }
@@ -841,10 +839,11 @@ function buildMemberships(args: {
     assignments.push({
       id,
       organizationId: academy.id,
-      userId: s.persona.userId,
+      personId: seedPersonId(seedMemberId(academy.key, s.persona.handle)),
       planId: heldPlanId,
       assigningEntityId: academy.id,
       startMonth: joinedMonth,
+      startsOn: joinedMonth,
       status: s.status === "suspended" ? "suspended" : "active",
       assignedBy: ownerUserId,
       createdAt,
@@ -855,9 +854,9 @@ function buildMemberships(args: {
     // debt from before the demo starts.
     settledMonths.forEach((past, back) => {
       settle(id, past, {
-        paid: true,
-        recordedBy: ownerUserId,
-        recordedAt: new Date(now.getTime() - (25 + back * 30) * DAY_MS),
+        status: "confirmed",
+        reviewedBy: ownerUserId,
+        reviewedAt: new Date(now.getTime() - (25 + back * 30) * DAY_MS),
       });
     });
 
@@ -870,22 +869,19 @@ function buildMemberships(args: {
         // the same thing to every rule.
         break;
       case 1:
-        // Told about it. The row exists to carry the reminder stamp, so the
-        // sweep never warns the same person twice.
-        settle(id, month, {
-          remindedAt: new Date(now.getTime() - DAY_MS),
-        });
         break;
       case 2:
         settle(id, month, {
-          claimedAt: new Date(now.getTime() - DAY_MS),
+          status: "reported",
+          claimedBy: s.persona.userId,
+          reportedAt: new Date(now.getTime() - DAY_MS),
         });
         break;
       default:
         settle(id, month, {
-          paid: true,
-          recordedBy: ownerUserId,
-          recordedAt: new Date(now.getTime() - 2 * DAY_MS),
+          status: "confirmed",
+          reviewedBy: ownerUserId,
+          reviewedAt: new Date(now.getTime() - 2 * DAY_MS),
         });
         break;
     }
@@ -902,48 +898,23 @@ function buildMemberships(args: {
     assignments.push({
       id: successorId,
       organizationId: academy.id,
-      userId: source.userId,
+      personId: source.personId,
       planId: twiceId,
       assigningEntityId: academy.id,
       startMonth: comingMonth,
+      startsOn: comingMonth,
       status: "active",
       assignedBy: ownerUserId,
     });
     changes.push({
       id: newId(),
       organizationId: academy.id,
-      userId: source.userId,
+      personId: source.personId,
       sourceAssignmentId: sourceId,
       targetAssignmentId: successorId,
       effectiveMonth: comingMonth,
       previousSourceEndMonth: null,
       scheduledBy: ownerUserId,
-    });
-  }
-
-  if (awaiting) {
-    const id = newId();
-    purchases.push({
-      id,
-      organizationId: academy.id,
-      userId: awaiting.persona.userId,
-      entityId: academy.id,
-      planId: unlimitedId,
-      planName: unlimited.name,
-      priceMinor: 5000,
-      currency: academy.currency,
-      startMonth: month,
-      entityIds: [academy.id],
-      branchNames: [academy.name],
-      version: JSON.stringify({
-        updatedAt: planUpdatedAt.toISOString(),
-        month,
-        price: { priceMinor: 5000, currency: academy.currency },
-        entityIds: [academy.id],
-      }),
-      reference: `MEM-${id.replaceAll("-", "").toUpperCase()}`,
-      status: "claimed",
-      claimedAt: new Date(now.getTime() - DAY_MS),
     });
   }
 
@@ -956,7 +927,6 @@ function buildMemberships(args: {
     changes,
     months,
     monthAudits,
-    purchases,
   };
 }
 
@@ -1075,6 +1045,16 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
     role: seat.role,
     createdAt: seat.createdAt,
   }));
+  const people: NewPerson[] = seats
+    .filter((seat) => seat.branchMembership)
+    .map((seat) => ({
+      id: seedPersonId(seat.id),
+      organizationId: academy.id,
+      accountUserId: seat.userId,
+      name:
+        users.find((candidate) => candidate.id === seat.userId)?.name ??
+        opts.realUser.name,
+    }));
 
   // The default BJJ academy entity carries the organization's own id, so every
   // `academy_id` already on a seed row keeps pointing at the right place and the
@@ -1108,6 +1088,7 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
       id: seedEntityMembershipId(seat.id),
       organizationId: academy.id,
       entityId: academy.id,
+      personId: seedPersonId(seat.id),
       userId: seat.userId,
       role: seat.role,
       status: seat.status,
@@ -1385,6 +1366,7 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
     users,
     organizations,
     members,
+    people,
     entities,
     academyProfiles,
     entityMemberships,

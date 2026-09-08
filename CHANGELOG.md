@@ -2,13 +2,20 @@
 
 ## Unreleased: first academy release
 
-- Students now have organization person records that do not require login accounts. Verified accounts and guardians can link later.
-- Shared memberships are the only payment model. A dry-run conversion preserves old plans, claims, settings, paid months, and audit history. A gated follow-up migration removes old dues tables after the new application is live.
+- Removed direct student-to-instructor role changes from member details, Staff, organization People, and the API. Adding an existing person to another branch now always adds them as a student. Instructors join through the instructor invite link and owner approval.
+- The release now targets one fresh database baseline. It has no legacy conversion or staged table removal.
+- Students now have organization person records that do not require login accounts. A verified account may link to one person. Guardian access is removed.
+- Shared memberships are the only payment model. Staff assign plans. Monthly records use unpaid, reported, confirmed, and rejected states with frozen price evidence and append-only audit history.
+- Rejected payment creates a branch coverage hold that survives month and plan changes until staff resolve it.
 - One application shell keeps organization and selected-branch navigation and badges visible across both route groups.
 - Owners and managers can correct old attendance with a reason and a stored change record. Instructors keep the 14-day window.
-- Class changes queue retryable member and visitor email. Public visitor booking keeps a return and cancellation token.
-- Scheduled delivery, membership work, and calendar extension record their runs. Gym managers can see late work and exhausted email for their gym.
-- People now has reviewed CSV import and full organization export. Curriculum and referrals start off until a gym turns them on.
+- Class and visitor actions save notice intent with recipient snapshots. The request sends a bounded first batch. Staff can send remaining recipients and retry failures without resending accepted recipients.
+- Hosted visitor booking keeps a private return and cancellation token at `/book/<academy-code>`. External booking routes, API keys, and origin settings are removed.
+- Branch booking windows accept 1-90 local calendar days and default to 7. The same rule controls lists, direct booking, check-in, and hosted visitor booking.
+- Owners can extend the calendar or apply a versioned rebuild. Rebuild preserves history and cancellations, and refuses booked stale classes.
+- Scheduled application jobs, `CRON_SECRET`, announcements, student shopping, and the old purchase records are removed.
+- Coach reports use current attendance review evidence. Referrals use confirmed membership-month evidence. Rank corrections append an event.
+- People has reviewed CSV import and full organization export. Curriculum and referrals remain optional.
 
 ## Unreleased: PR 8 review fixes
 
@@ -1092,5 +1099,3 @@ Built the deferred Expo student UI in one pass (closes Mob cells 1.3/1.4/1.6/2.4
 - **0.3 Tenant seam (RLS)** — swapped the DB to the `pg` driver so requests can run an interactive transaction; added `withTenant(academyId, fn)` (`packages/db/src/tenant.ts`) that does `SET LOCAL ROLE matops_app` + `set_config('app.academy_id', …, true)`. Migration `0001_tenant_rls.sql` creates the restricted role, grants, and a `tenant_probe` table with an RLS policy. A PGlite-based leak test (`test/rls.test.ts`, 5 cases) proves isolation with no external DB. `academy_id` is text (no `::uuid`); queries fail closed when the GUC is unset.
 - **0.2 DB package** — retargeted from `@vercel/postgres` (HTTP) to `pg` on the Neon `-pooler` endpoint; versioned migrations (`drizzle-kit generate` → `migrations/`), a `_health` table, and a `seed` script. Migrations run against Neon's direct endpoint (drizzle strips `-pooler`). Health smoke test in `test/health.test.ts`.
 - **0.1 Monorepo scaffold** — scaffolded from `create-t3-turbo`: Turborepo + pnpm, `apps/{nextjs,expo}` + `packages/{api,auth,db,validators,domain,ui}` + `tooling/*`. Renamed scope to `@matops/*`, dropped the unused `tanstack-start` app, added the framework-free `packages/domain`, and promoted the planning docs into `docs/`.
-
-#

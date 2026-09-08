@@ -7,7 +7,6 @@ import { nextClass, splitMyClasses } from "@matops/domain";
 import type { RouterOutputs } from "~/utils/api";
 import { AppHeader } from "~/components/app-header";
 import { useCancelBooking } from "~/components/book-control";
-import { MyTrainingCard } from "~/components/my-training-card";
 import { OverdueBanner } from "~/components/overdue-banner";
 import { useRefreshControl } from "~/components/refresh";
 import { MyClassesSkeleton } from "~/components/skeletons";
@@ -115,9 +114,6 @@ export default function Training() {
   const mine = useQuery(
     trpc.booking.mine.queryOptions(undefined, { enabled: !suspended }),
   );
-  // Same key as MyTrainingCard, which renders inside the `mine.isPending`
-  // branch and so would not start fetching until bookings land.
-  useQuery(trpc.stats.me.queryOptions(undefined, { enabled: !suspended }));
 
   const { onCancel, pendingClassId } = useCancelBooking();
 
@@ -165,8 +161,6 @@ export default function Training() {
                   onPress={() => openClass(next.classId)}
                 />
               ) : null}
-
-              <MyTrainingCard />
 
               {upcoming.length === 0 ? (
                 <View style={{ gap: 8 }}>

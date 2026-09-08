@@ -85,10 +85,16 @@ describe("RLS — notification center", () => {
   it("keeps delivery work inside its academy", async () => {
     await asTenant(pg, "academy_A", (tx) =>
       tx.query(`
-        INSERT INTO notification_outbox
-          (academy_id, event_key, recipient_key, channel, recipient_address, subject, body)
-        VALUES
-          ('academy_A', 'event_a', 'user:a', 'email', 'a@example.com', 'A', 'Body')
+        WITH notice AS (
+          INSERT INTO notification_notice
+            (academy_id, event_key, kind, subject, body, template_version)
+          VALUES
+            ('academy_A', 'event_a', 'class_changed', 'A', 'Body', '1')
+          RETURNING id
+        )
+        INSERT INTO notification_recipient
+          (notice_id, academy_id, recipient_key, email)
+        SELECT id, 'academy_A', 'user:a', 'a@example.com' FROM notice
       `),
     );
     const seen = await asTenant(
@@ -96,8 +102,8 @@ describe("RLS — notification center", () => {
       "academy_B",
       async (tx) =>
         (
-          await tx.query<{ event_key: string }>(
-            "SELECT event_key FROM notification_outbox",
+          await tx.query<{ recipient_key: string }>(
+            "SELECT recipient_key FROM notification_recipient",
           )
         ).rows,
     );
@@ -105,10 +111,10 @@ describe("RLS — notification center", () => {
     await expect(
       asTenant(pg, "academy_A", (tx) =>
         tx.query(`
-          INSERT INTO notification_outbox
-            (academy_id, event_key, recipient_key, channel, recipient_address, subject, body)
+          INSERT INTO notification_notice
+            (academy_id, event_key, kind, subject, body, template_version)
           VALUES
-            ('academy_B', 'event_b', 'user:b', 'email', 'b@example.com', 'B', 'Body')
+            ('academy_B', 'event_b', 'class_changed', 'B', 'Body', '1')
         `),
       ),
     ).rejects.toThrow();

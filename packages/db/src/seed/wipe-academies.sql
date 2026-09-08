@@ -21,7 +21,7 @@ DELETE FROM "rank_promotion";
 DELETE FROM "member_note";
 DELETE FROM "member_rank";
 DELETE FROM "notification";
-DELETE FROM "notification_outbox";
+DELETE FROM "notification_notice";
 DELETE FROM "curriculum_block";
 DELETE FROM "curriculum_block_template";
 DELETE FROM "curriculum_track";

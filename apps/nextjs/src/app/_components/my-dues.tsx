@@ -5,7 +5,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useTRPC } from "~/trpc/react";
 import { useEntity } from "./entity";
 import { MembershipChangeNotice, MembershipNotice } from "./membership-notice";
-import { MembershipSelection } from "./membership-selection";
 import { PageHeader } from "./page-header";
 import { Section } from "./primitives";
 import { EmptyState, SuspendedState } from "./states";
@@ -26,9 +25,7 @@ export function MyDues() {
           <EmptyState title="Memberships appear after your gym approves you.">
             You can browse the schedule while you wait.
           </EmptyState>
-        ) : (
-          <MembershipSelection />
-        )}
+        ) : null}
         <MembershipSettled />
         <MembershipChangeNotice />
       </div>
@@ -39,11 +36,18 @@ export function MyDues() {
 function MembershipSettled() {
   const trpc = useTRPC();
   const standing = useQuery(trpc.accessPlan.mine.queryOptions());
-  const settled = (standing.data?.memberships ?? []).filter(
+  if (standing.isPending || standing.isError) return null;
+  if (standing.data.memberships.length === 0) {
+    return (
+      <EmptyState title="Your gym has not assigned a membership yet.">
+        Ask an owner or manager to assign your plan.
+      </EmptyState>
+    );
+  }
+  const settled = standing.data.memberships.filter(
     (membership) => !membership.warning,
   );
-  if (standing.isPending || standing.isError || settled.length === 0)
-    return null;
+  if (settled.length === 0) return null;
 
   return (
     <Section label="Your memberships">

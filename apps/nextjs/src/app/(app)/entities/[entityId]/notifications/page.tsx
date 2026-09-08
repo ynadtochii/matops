@@ -1,7 +1,5 @@
 import { Suspense } from "react";
 
-import { isStaff } from "@matops/domain";
-
 import type { EntityPageProps } from "~/trpc/server";
 import { NotificationsScreen } from "~/app/_components/notifications-screen";
 import { NotificationsSkeleton } from "~/app/_components/skeletons";
@@ -14,12 +12,9 @@ import {
 } from "~/trpc/server";
 
 async function NotificationsData() {
-  const academy = await currentAcademy();
+  await currentAcademy();
 
   prefetch(trpc.notification.list.queryOptions());
-  if (academy && isStaff(academy)) {
-    prefetch(trpc.notification.audienceCounts.queryOptions());
-  }
 
   return (
     <HydrateClient>

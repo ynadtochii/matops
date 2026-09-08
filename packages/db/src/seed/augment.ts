@@ -4,12 +4,12 @@
  * looks alive when you sign in. Unlike the two-fake-academy seed (data.ts/run.ts),
  * this writes into a REAL academy, so teardown must be surgical:
  *
- *   - it NEVER touches the academy, its plans, its templates, its real classes,
- *     or its real members;
+ *   - it NEVER changes the academy, its real plans, its real templates, its
+ *     real classes, or its real members;
  *   - it removes ONLY rows tied to a `seed_` member/user id.
  *
- * Fake students reuse the academy's EXISTING plans (dues) and EXISTING classes
- * (bookings/attendance) — the seed adds no plan/class/template of its own here.
+ * Fake students reuse existing plans and classes. An empty academy gets marked
+ * demo plans, templates, and classes that clear can identify and remove.
  * `booking_count` on each real class is RECOMPUTED from its confirmed bookings on
  * both fill and clear, so it stays correct with fakes added or removed.
  */
@@ -20,6 +20,7 @@ import { monthOf, priceForMonth, resolveAcademyTimeZone } from "@matops/domain";
 
 import type { SeedExec } from "./registry";
 import { recomputeBookingCounts } from "../erase";
+import { materializeTemplate } from "../materialize";
 import {
   accessAssignment,
   accessAssignmentChange,
@@ -28,6 +29,7 @@ import {
   accessPlanPrice,
   classInstance,
   classParticipation,
+  classTemplate,
   entity,
   entityMembership,
   member,
@@ -38,8 +40,8 @@ import {
   membershipMonth,
   membershipMonthAudit,
   membershipPolicy,
-  membershipPurchase,
   notification,
+  person,
   rankPromotion,
   user,
 } from "../schema";
@@ -47,6 +49,8 @@ import { monthsBack } from "./data";
 import { SEED_MARKER } from "./registry";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const FILL_TEMPLATE_MARKER = "[demo seed]";
+const FILL_PLAN_MARKER = "[demo seed]";
 
 export type FillReport = Record<string, number>;
 
@@ -102,6 +106,7 @@ const LAST_NAMES = [
 /** A fake student to add to a real academy, all ids `seed_`-prefixed. */
 interface FakeStudent {
   userId: string;
+  personId: string;
   orgMemberId: string;
   memberId: string;
   name: string;
@@ -149,6 +154,7 @@ function buildFakeStudents(academyId: string, count = 20): FakeStudent[] {
     }
     return {
       userId: `${SEED_MARKER}user_${handle}`,
+      personId: randomUUID(),
       orgMemberId: `${SEED_MARKER}mem_${handle}`,
       memberId: `${SEED_MARKER}emem_${handle}`,
       name,
@@ -276,6 +282,21 @@ export async function fillAcademy(
   report.member = students.length;
 
   await exec
+    .insert(person)
+    .values(
+      students.map((s) => ({
+        id: s.personId,
+        organizationId,
+        accountUserId: s.userId,
+        name: s.name,
+        email: s.email,
+        phone: s.phone,
+      })),
+    )
+    .onConflictDoNothing();
+  report.person = students.length;
+
+  await exec
     .insert(entityMembership)
     .values(
       students.map((s, i) => {
@@ -284,6 +305,7 @@ export async function fillAcademy(
           id: s.memberId,
           organizationId,
           entityId: academyId,
+          personId: s.personId,
           userId: s.userId,
           role: s.role,
           status: s.status,
@@ -313,6 +335,61 @@ export async function fillAcademy(
       ),
     }),
   );
+
+  const existingClasses = await exec
+    .select({ id: classInstance.id })
+    .from(classInstance)
+    .where(
+      and(
+        eq(classInstance.academyId, academyId),
+        isNull(classInstance.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (existingClasses.length === 0) {
+    const [academy] = await exec
+      .select({ timeZone: entity.timeZone })
+      .from(entity)
+      .where(eq(entity.id, academyId));
+    const templates = [
+      {
+        title: "Gi fundamentals",
+        daysOfWeek: [1, 3, 5],
+        startsAtMinutes: 18 * 60,
+      },
+      { title: "NoGi", daysOfWeek: [2, 4], startsAtMinutes: 19 * 60 },
+      { title: "Open mat", daysOfWeek: [6], startsAtMinutes: 11 * 60 },
+    ].map((template) => ({
+      id: randomUUID(),
+      academyId,
+      instructorId: staffId,
+      description: FILL_TEMPLATE_MARKER,
+      discipline:
+        template.title === "NoGi" ? ("nogi" as const) : ("bjj" as const),
+      durationMinutes: 60,
+      capacity: 24,
+      capacityPolicy: "soft",
+      publicBookable: true,
+      timeZone: resolveAcademyTimeZone(academy?.timeZone),
+      ...template,
+    }));
+    await exec.insert(classTemplate).values(templates);
+    report.class_template = templates.length;
+    const savedTemplates = await exec
+      .select()
+      .from(classTemplate)
+      .where(
+        inArray(
+          classTemplate.id,
+          templates.map((template) => template.id),
+        ),
+      );
+    let created = 0;
+    for (const template of savedTemplates) {
+      created += await materializeTemplate(exec, template, { now });
+    }
+    report.class = created;
+  }
 
   // Multiple referrers + unassigned examples. All referral rows target fakes,
   // which keeps `clear` surgical even though the actor is the real owner.
@@ -540,6 +617,45 @@ async function fillMemberships(
   const month = monthOf(now, timeZone);
   const lastMonth = monthsBack(month, 1);
 
+  const existingPlans = await exec
+    .select({ id: accessPlan.id })
+    .from(accessPlan)
+    .where(eq(accessPlan.organizationId, organizationId));
+  if (existingPlans.length === 0) {
+    const seededPlans = [
+      { id: randomUUID(), name: "Unlimited", priceMinor: 6500 },
+      { id: randomUUID(), name: "8 classes", priceMinor: 5000 },
+    ];
+    await exec.insert(accessPlan).values(
+      seededPlans.map((plan) => ({
+        ...plan,
+        organizationId,
+        description: FILL_PLAN_MARKER,
+        currency: "EUR",
+      })),
+    );
+    await exec.insert(accessPlanPrice).values(
+      seededPlans.map((plan) => ({
+        organizationId,
+        planId: plan.id,
+        effectiveMonth: lastMonth,
+        priceMinor: plan.priceMinor,
+        currency: "EUR",
+        recordedBy: staffId,
+      })),
+    );
+    await exec.insert(accessPlanEntity).values(
+      seededPlans.map((plan) => ({
+        organizationId,
+        planId: plan.id,
+        entityId: academyId,
+      })),
+    );
+    report.access_plan = seededPlans.length;
+    report.access_plan_price = seededPlans.length;
+    report.access_plan_entity = seededPlans.length;
+  }
+
   const plans = await exec
     .select({ id: accessPlan.id, archivedAt: accessPlan.archivedAt })
     .from(accessPlan)
@@ -575,10 +691,11 @@ async function fillMemberships(
     assignments.push({
       id,
       organizationId,
-      userId: s.userId,
+      personId: s.personId,
       planId: plan.id,
       assigningEntityId: academyId,
       startMonth: lastMonth,
+      startsOn: lastMonth,
       status: s.status === "suspended" ? "suspended" : "active",
       assignedBy: staffId,
     });
@@ -587,47 +704,39 @@ async function fillMemberships(
       organizationId,
       assignmentId: id,
       month: lastMonth,
-      paid: true,
-      recordedBy: staffId,
-      recordedAt: new Date(now.getTime() - 25 * DAY_MS),
+      status: "confirmed",
+      reviewedBy: staffId,
+      reviewedAt: new Date(now.getTime() - 25 * DAY_MS),
     });
     audits.push({
       id: randomUUID(),
       organizationId,
       assignmentId: id,
       month: lastMonth,
-      wasPaid: null,
-      paid: true,
+      event: "confirmed",
+      beforeStatus: null,
+      afterStatus: "confirmed",
       actorId: staffId,
     });
-    // Paid is the normal state; three people carry the other three answers.
     if (i > 2) {
       months.push({
         id: randomUUID(),
         organizationId,
         assignmentId: id,
         month,
-        paid: true,
-        recordedBy: staffId,
-        recordedAt: new Date(now.getTime() - 2 * DAY_MS),
+        status: "confirmed",
+        reviewedBy: staffId,
+        reviewedAt: new Date(now.getTime() - 2 * DAY_MS),
       });
       audits.push({
         id: randomUUID(),
         organizationId,
         assignmentId: id,
         month,
-        wasPaid: null,
-        paid: true,
+        event: "confirmed",
+        beforeStatus: null,
+        afterStatus: "confirmed",
         actorId: staffId,
-      });
-    } else if (i === 1) {
-      months.push({
-        id: randomUUID(),
-        organizationId,
-        assignmentId: id,
-        month,
-        paid: false,
-        remindedAt: new Date(now.getTime() - DAY_MS),
       });
     } else if (i === 2) {
       months.push({
@@ -635,8 +744,8 @@ async function fillMemberships(
         organizationId,
         assignmentId: id,
         month,
-        paid: false,
-        claimedAt: new Date(now.getTime() - DAY_MS),
+        status: "reported",
+        reportedAt: new Date(now.getTime() - DAY_MS),
       });
     }
   });
@@ -651,9 +760,7 @@ async function fillMemberships(
 }
 
 /**
- * Remove every fake (seed_) row this seed added to a real academy — and NOTHING
- * else. Scoped to `academy_id = X AND <member/user id> LIKE 'seed_%'`, so the
- * academy, its plans, templates, real classes, and real members are untouched.
+ * Remove every marked demo row this seed added to a real academy.
  */
 export async function clearAcademy(
   exec: SeedExec,
@@ -676,26 +783,26 @@ export async function clearAcademy(
       like(user.id, `${fillUserPrefix(academyId).replaceAll("_", "\\_")}%`),
     );
   const fakeUserIds = fakeUsers.map((row) => row.id);
+  const fakePeople = await exec
+    .select({ id: person.id })
+    .from(person)
+    .where(
+      and(
+        eq(person.organizationId, opts.organizationId),
+        inArray(person.accountUserId, fakeUserIds),
+      ),
+    );
+  const fakePersonIds = fakePeople.map((row) => row.id);
   const held = await exec
     .select({ id: accessAssignment.id })
     .from(accessAssignment)
     .where(
       and(
         eq(accessAssignment.organizationId, opts.organizationId),
-        inArray(accessAssignment.userId, fakeUserIds),
+        inArray(accessAssignment.personId, fakePersonIds),
       ),
     );
   const heldIds = held.map((row) => row.id);
-  await del("membership_purchase", () =>
-    exec
-      .delete(membershipPurchase)
-      .where(
-        and(
-          eq(membershipPurchase.organizationId, opts.organizationId),
-          inArray(membershipPurchase.userId, fakeUserIds),
-        ),
-      ),
-  );
   if (heldIds.length > 0) {
     await del("membership_month_audit", () =>
       exec
@@ -716,6 +823,31 @@ export async function clearAcademy(
       exec
         .delete(accessAssignment)
         .where(inArray(accessAssignment.id, heldIds)),
+    );
+  }
+  const seededPlans = await exec
+    .select({ id: accessPlan.id })
+    .from(accessPlan)
+    .where(
+      and(
+        eq(accessPlan.organizationId, opts.organizationId),
+        eq(accessPlan.description, FILL_PLAN_MARKER),
+      ),
+    );
+  const seededPlanIds = seededPlans.map((row) => row.id);
+  if (seededPlanIds.length > 0) {
+    await del("access_plan_entity", () =>
+      exec
+        .delete(accessPlanEntity)
+        .where(inArray(accessPlanEntity.planId, seededPlanIds)),
+    );
+    await del("access_plan_price", () =>
+      exec
+        .delete(accessPlanPrice)
+        .where(inArray(accessPlanPrice.planId, seededPlanIds)),
+    );
+    await del("access_plan", () =>
+      exec.delete(accessPlan).where(inArray(accessPlan.id, seededPlanIds)),
     );
   }
   // Messages the gym sent them. `notification.user_id` carries no foreign key,
@@ -742,6 +874,28 @@ export async function clearAcademy(
         ),
       ),
   );
+  const seededTemplates = await exec
+    .select({ id: classTemplate.id })
+    .from(classTemplate)
+    .where(
+      and(
+        eq(classTemplate.academyId, academyId),
+        eq(classTemplate.description, FILL_TEMPLATE_MARKER),
+      ),
+    );
+  const seededTemplateIds = seededTemplates.map((row) => row.id);
+  if (seededTemplateIds.length > 0) {
+    await del("class", () =>
+      exec
+        .delete(classInstance)
+        .where(inArray(classInstance.templateId, seededTemplateIds)),
+    );
+    await del("class_template", () =>
+      exec
+        .delete(classTemplate)
+        .where(inArray(classTemplate.id, seededTemplateIds)),
+    );
+  }
   // Their dues / claims / rank / promotions / notes (member_id is a seed member).
   await del("member_referral_audit", () =>
     exec
@@ -802,6 +956,9 @@ export async function clearAcademy(
           like(entityMembership.id, seedLike),
         ),
       ),
+  );
+  await del("person", () =>
+    exec.delete(person).where(inArray(person.id, fakePersonIds)),
   );
   // The fake members themselves, then the fake user rows (scoped to THIS academy's
   // fill prefix — never another academy's fakes or any real user).

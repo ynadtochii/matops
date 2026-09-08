@@ -9,7 +9,6 @@ import {
   notBookableMessage,
 } from "@matops/domain";
 
-import type { BookingSubject } from "~/components/book-control";
 import { useBookClass, useCancelBooking } from "~/components/book-control";
 import { ClassDetailSkeleton } from "~/components/skeletons";
 import {
@@ -29,50 +28,6 @@ import {
 import { trpc } from "~/utils/api";
 import { dayLongFmt, timeFmt } from "~/utils/format";
 
-function WhoIsIn({
-  classId,
-  viewerBooked,
-}: {
-  classId: string;
-  viewerBooked: boolean;
-}) {
-  const q = useQuery(trpc.class.attendees.queryOptions({ id: classId }));
-
-  if (q.isPending || q.isError) return null;
-
-  const { names, othersCount, namesHidden } = q.data;
-
-  if (names.length === 0 && othersCount === 0) {
-    return (
-      <Field label="Who's in">
-        <Muted>
-          {viewerBooked ? "Just you so far." : "No one booked yet."}
-        </Muted>
-      </Field>
-    );
-  }
-
-  return (
-    <Field label="Who's in">
-      <UIStack gap={4}>
-        {names.length > 0 ? <Txt size={16}>{names.join(", ")}</Txt> : null}
-        {othersCount > 0 ? (
-          <Txt
-            size={names.length > 0 ? 14 : 16}
-            tone={names.length > 0 ? "muted" : "default"}
-          >
-            {names.length > 0 ? "+" : ""}
-            {othersCount} {othersCount === 1 ? "other" : "others"}
-          </Txt>
-        ) : null}
-        {namesHidden ? (
-          <Muted>Names show once your gym approves you.</Muted>
-        ) : null}
-      </UIStack>
-    </Field>
-  );
-}
-
 /**
  * Class detail (spec S5) — title, discipline, day/time, duration, instructor,
  * capacity, and Book / Cancel. Enrolled tier, so a PENDING member may book too
@@ -83,62 +38,27 @@ function WhoIsIn({
  */
 export default function ClassDetail() {
   const t = useTheme();
-  const { id, personId, entityId, from, to } = useLocalSearchParams<{
+  const { id } = useLocalSearchParams<{
     id: string;
-    personId?: string;
-    entityId?: string;
-    from?: string;
-    to?: string;
   }>();
-  const subject: BookingSubject | undefined =
-    personId && entityId ? { personId, entityId } : undefined;
-  const ownClass = useQuery(
-    trpc.class.get.queryOptions({ id }, { retry: false, enabled: !subject }),
-  );
-  const subjectSchedule = useQuery(
-    trpc.person.schedule.queryOptions(
-      {
-        entityId: entityId ?? "",
-        personId: personId ?? "00000000-0000-0000-0000-000000000000",
-        from: from ?? new Date(0).toISOString(),
-        to: to ?? new Date(0).toISOString(),
-      },
-      { retry: false, enabled: Boolean(subject && from && to) },
-    ),
-  );
-  const managedClass = subjectSchedule.data?.find((row) => row.id === id);
-  const q = subject
-    ? {
-        data: managedClass,
-        isPending: subjectSchedule.isPending,
-        isError:
-          subjectSchedule.isError ||
-          (!subjectSchedule.isPending && !managedClass),
-        refetch: subjectSchedule.refetch,
-      }
-    : ownClass;
+  const q = useQuery(trpc.class.get.queryOptions({ id }, { retry: false }));
+  const academy = useQuery(trpc.academy.current.queryOptions());
   // Same key as WhoIsIn, which renders below the `q.isPending` gate and so
   // would not start fetching until the class itself lands.
-  useQuery(trpc.class.attendees.queryOptions({ id }, { enabled: !subject }));
   const current = useQuery(trpc.academy.current.queryOptions());
   const theme = useQuery(
     trpc.curriculum.forClass.queryOptions(
       { id },
       {
         enabled:
-          !subject &&
           current.data?.curriculumEnabled === true &&
           isBjjAcademy(current.data.type),
       },
     ),
   );
 
-  const {
-    onBook,
-    isPending: booking,
-    error: bookError,
-  } = useBookClass(undefined, { subject });
-  const { onCancel, isPending: cancelling } = useCancelBooking(subject);
+  const { onBook, isPending: booking, error: bookError } = useBookClass();
+  const { onCancel, isPending: cancelling } = useCancelBooking();
   const busy = booking || cancelling;
 
   if (q.isPending) {
@@ -150,7 +70,7 @@ export default function ClassDetail() {
     );
   }
 
-  if (q.isError || !q.data) {
+  if (q.isError) {
     return (
       <Screen center>
         <Stack.Screen options={{ title: "Class" }} />
@@ -172,10 +92,17 @@ export default function ClassDetail() {
   const bookable = canBook(
     { status: c.status, startsAt: start, deletedAt: null },
     new Date(),
+    {
+      bookingWindowDays: academy.data?.bookingWindowDays ?? 7,
+      timeZone: academy.data?.timeZone ?? "UTC",
+    },
   );
   const refusal =
     bookable.reason && bookable.reason !== "deleted"
-      ? notBookableMessage(bookable.reason)
+      ? notBookableMessage(
+          bookable.reason,
+          academy.data?.bookingWindowDays ?? 7,
+        )
       : null;
 
   const action =
@@ -262,7 +189,6 @@ export default function ClassDetail() {
                 {over ? " · may be busy" : ""}
               </Mono>
             </Field>
-            {!subject && <WhoIsIn classId={c.id} viewerBooked={booked} />}
           </UIStack>
 
           {bookError && (

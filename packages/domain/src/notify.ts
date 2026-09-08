@@ -6,9 +6,6 @@
  * message text here makes it trivially unit-testable.
  */
 
-import type { Membership } from "./access";
-import { isActiveMember, isStaff } from "./access";
-
 /** A push/in-app message: a short title + a one-line body. */
 export interface PushMessage {
   title: string;
@@ -135,76 +132,4 @@ export function notificationKindLabel(kind: string): string {
   return kind in NOTIFICATION_KIND_LABEL
     ? NOTIFICATION_KIND_LABEL[kind as NotificationKind]
     : "Update";
-}
-
-/** Who an owner may send an announcement to. */
-export type AnnouncementAudience = "all" | "students" | "staff";
-
-export const ANNOUNCEMENT_AUDIENCES: AnnouncementAudience[] = [
-  "all",
-  "students",
-  "staff",
-];
-
-/** Wording for the audience picker, shared by the compose form and the feed. */
-export const ANNOUNCEMENT_AUDIENCE_LABEL: Record<AnnouncementAudience, string> =
-  {
-    all: "Everyone",
-    students: "Students",
-    staff: "Coaches",
-  };
-
-/** A membership row reduced to what audience selection needs. */
-export interface AnnouncementCandidate extends Membership {
-  userId: string;
-}
-
-/**
- * The user ids an announcement goes to (v3.7, docs/issues/77). Only ACTIVE
- * members receive one: a pending person has not been approved into the gym yet,
- * and a suspended or removed one has lost access while keeping their history.
- * "staff" is owner + instructor, "students" is everyone active who is not staff,
- * so the two never overlap and together they are "all". Deduped, order kept.
- */
-export function announcementRecipients(
-  members: AnnouncementCandidate[],
-  audience: AnnouncementAudience,
-): string[] {
-  const ids = new Set<string>();
-  for (const m of members) {
-    if (!isActiveMember(m)) continue;
-    const staff = isStaff(m);
-    if (audience === "staff" && !staff) continue;
-    if (audience === "students" && staff) continue;
-    ids.add(m.userId);
-  }
-  return [...ids];
-}
-
-/** Owner-written gym news → push. */
-export function buildAnnouncementMessage(input: {
-  title: string;
-  body: string;
-}): PushMessage {
-  return { title: input.title, body: input.body };
-}
-
-/**
- * One announcement, several branches (ADR 127).
- *
- * A person at two branches gets an inbox row at EACH, because the feed is per
- * branch and a message they cannot find where they are looking is a message
- * they did not get. They get ONE push, because a phone buzzing twice for one
- * announcement is the gym shouting.
- */
-export function announcementFanOut(
-  perEntity: { entityId: string; userIds: string[] }[],
-): { rows: { entityId: string; userId: string }[]; push: string[] } {
-  const rows = perEntity.flatMap((e) =>
-    [...new Set(e.userIds)].map((userId) => ({
-      entityId: e.entityId,
-      userId,
-    })),
-  );
-  return { rows, push: [...new Set(rows.map((r) => r.userId))] };
 }

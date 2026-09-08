@@ -199,7 +199,7 @@ function MembershipNotice() {
                 value={m.reference}
                 data
               />
-              {m.claimedAt ? (
+              {m.reportedAt ? (
                 <Txt size={13} tone="muted">
                   Payment submitted — waiting for your gym to confirm.
                 </Txt>

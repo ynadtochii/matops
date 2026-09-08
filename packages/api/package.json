@@ -7,25 +7,9 @@
       "types": "./src/index.ts",
       "default": "./src/index.ts"
     },
-    "./cron-auth": {
-      "types": "./src/cron-auth.ts",
-      "default": "./src/cron-auth.ts"
-    },
-    "./public": {
-      "types": "./src/public/index.ts",
-      "default": "./src/public/index.ts"
-    },
     "./notify": {
       "types": "./src/notify.ts",
       "default": "./src/notify.ts"
-    },
-    "./membership-sweep": {
-      "types": "./src/membership-sweep.ts",
-      "default": "./src/membership-sweep.ts"
-    },
-    "./job-run": {
-      "types": "./src/job-run.ts",
-      "default": "./src/job-run.ts"
     }
   },
   "license": "MIT",

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { and, eq } from "@matops/db";
+import { eq } from "@matops/db";
 import { accessAssignment } from "@matops/db/schema";
 import { monthOf, nextMonth } from "@matops/domain";
 
@@ -192,12 +192,7 @@ describe("changing somebody's plan at the month boundary", () => {
     const [past] = await h.exec
       .select({ id: accessAssignment.id })
       .from(accessAssignment)
-      .where(
-        and(
-          eq(accessAssignment.userId, ALEX),
-          eq(accessAssignment.planId, basic),
-        ),
-      );
+      .where(eq(accessAssignment.planId, basic));
     expect(past?.id).toBe(held);
   });
 });

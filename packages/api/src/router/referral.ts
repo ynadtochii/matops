@@ -1,12 +1,14 @@
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
-import { and, desc, eq, isNull, or } from "@matops/db";
+import { and, desc, eq } from "@matops/db";
 import {
+  accessAssignment,
+  accessPlanEntity,
   entityMembership,
   memberReferral,
   memberReferralAudit,
-  membershipPurchase,
+  membershipMonth,
 } from "@matops/db/schema";
 import {
   academyMonthKey,
@@ -91,26 +93,37 @@ export const referralRouter = {
     const referrals = await ctx.db.select().from(memberReferral);
     const confirmedClaims = await ctx.db
       .select({
+        id: membershipMonth.id,
+        assignmentId: membershipMonth.assignmentId,
         memberId: entityMembership.id,
-        amountMinor: membershipPurchase.priceMinor,
-        currency: membershipPurchase.currency,
-        confirmedAt: membershipPurchase.confirmedAt,
+        month: membershipMonth.month,
+        amountMinor: membershipMonth.priceMinor,
+        currency: membershipMonth.currency,
+        confirmedBy: membershipMonth.reviewedBy,
+        confirmedAt: membershipMonth.reviewedAt,
       })
-      .from(membershipPurchase)
+      .from(membershipMonth)
+      .innerJoin(
+        accessAssignment,
+        eq(accessAssignment.id, membershipMonth.assignmentId),
+      )
+      .innerJoin(
+        accessPlanEntity,
+        eq(accessPlanEntity.planId, accessAssignment.planId),
+      )
       .innerJoin(
         entityMembership,
         and(
           eq(entityMembership.entityId, ctx.entityId),
-          or(
-            eq(entityMembership.personId, membershipPurchase.personId),
-            and(
-              isNull(entityMembership.personId),
-              eq(entityMembership.userId, membershipPurchase.userId),
-            ),
-          ),
+          eq(entityMembership.personId, accessAssignment.personId),
         ),
       )
-      .where(eq(membershipPurchase.status, "confirmed"));
+      .where(
+        and(
+          eq(accessPlanEntity.entityId, ctx.entityId),
+          eq(membershipMonth.status, "confirmed"),
+        ),
+      );
     const timeZone = await academyTimeZone(ctx);
 
     const currentMonth = academyMonthKey(new Date(), timeZone);
@@ -122,14 +135,34 @@ export const referralRouter = {
     );
     const claimsByMember = new Map<
       string,
-      { amountMinor: number; currency: string; confirmedAt: Date }[]
+      {
+        id: string;
+        assignmentId: string;
+        month: string;
+        amountMinor: number;
+        currency: string;
+        confirmedBy: string | null;
+        confirmedAt: Date;
+      }[]
     >();
+    const seenClaims = new Set<string>();
     for (const claim of confirmedClaims) {
-      if (!claim.confirmedAt) continue;
+      if (
+        !claim.confirmedAt ||
+        claim.amountMinor === null ||
+        claim.currency === null
+      )
+        continue;
+      if (seenClaims.has(claim.id)) continue;
+      seenClaims.add(claim.id);
       const claims = claimsByMember.get(claim.memberId) ?? [];
       claims.push({
         amountMinor: claim.amountMinor,
         currency: claim.currency,
+        id: claim.id,
+        assignmentId: claim.assignmentId,
+        month: claim.month,
+        confirmedBy: claim.confirmedBy,
         confirmedAt: claim.confirmedAt,
       });
       claimsByMember.set(claim.memberId, claims);
@@ -153,6 +186,7 @@ export const referralRouter = {
       return {
         memberId: member.memberId,
         name: member.name,
+        joinedAt: member.createdAt,
         status: member.status,
         removed: !isOnRoster(member),
         assignmentState: referralAssignmentState(referral),
@@ -160,12 +194,22 @@ export const referralRouter = {
           ? { memberId: referrer.memberId, name: referrer.name }
           : null,
         monthRevenue: groupMoneyByCurrency(
-          claims.filter(
-            (claim) =>
-              academyMonthKey(claim.confirmedAt, timeZone) === currentMonth,
-          ),
+          claims.filter((claim) => claim.month === currentMonth),
         ),
         lifetimeRevenue: groupMoneyByCurrency(claims),
+        confirmedMonths: claims
+          .map((claim) => ({
+            id: claim.id,
+            assignmentId: claim.assignmentId,
+            month: claim.month,
+            amountMinor: claim.amountMinor,
+            currency: claim.currency,
+            confirmedAt: claim.confirmedAt,
+            confirmedByName: claim.confirmedBy
+              ? (nameByUser(members).get(claim.confirmedBy) ?? "Staff")
+              : "Staff",
+          }))
+          .sort((a, b) => b.month.localeCompare(a.month)),
       };
     });
 

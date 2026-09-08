@@ -47,6 +47,8 @@ export const entity = pgTable(
     country: t.text(),
     address: t.text(),
     mapUrl: t.text(),
+    bookingWindowDays: t.integer().notNull().default(7),
+    scheduleRevision: t.integer().notNull().default(0),
     publicCode: t.text().notNull().unique(),
     status: t.text().notNull().default("active"),
     membershipEnforcedAt: t.timestamp({ withTimezone: true }),
@@ -69,6 +71,14 @@ export const entity = pgTable(
       "entity_type_supported",
       sql`type in ('bjj_academy','general_space')`,
     ),
+    check(
+      "entity_booking_window_days_valid",
+      sql`${table.bookingWindowDays} between 1 and 90`,
+    ),
+    check(
+      "entity_schedule_revision_valid",
+      sql`${table.scheduleRevision} >= 0`,
+    ),
   ],
 );
 
@@ -80,8 +90,6 @@ export const academyProfile = pgTable("academy_profile", (t) => ({
     .references(() => entity.id),
   curriculumForStudents: t.boolean().notNull().default(false),
   publicBookingEnabled: t.boolean().notNull().default(false),
-  publicApiKey: t.text().unique(),
-  publicApiOrigins: t.text().array(),
   createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
   updatedAt: t
     .timestamp({ withTimezone: true })

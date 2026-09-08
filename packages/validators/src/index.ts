@@ -7,7 +7,6 @@ export * from "./curriculum";
 export * from "./push";
 export * from "./rank";
 export * from "./referrals";
-export * from "./notifications";
 export * from "./person";
 export * from "./data-transfer";
 export * from "./public-api";

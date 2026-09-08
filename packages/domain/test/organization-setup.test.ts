@@ -16,6 +16,7 @@ const nothing: SetupFacts = {
   branchesScheduled: 0,
   instructors: 0,
   bankDetails: false,
+  paidPlans: 0,
   plans: 0,
   assignments: 0,
   uncoveredMembers: 0,
@@ -28,14 +29,13 @@ const blocked = (facts: SetupFacts, key: string) =>
   organizationSetup(facts).find((i) => i.key === key)?.blocked;
 
 describe("organizationSetup", () => {
-  it("gives ten items in the order the work happens", () => {
+  it("omits bank details until a paid plan exists", () => {
     expect(organizationSetup(nothing).map((i) => i.key)).toEqual([
       "gym",
       "branch",
       "location",
       "schedule",
       "staff",
-      "bank",
       "plan",
       "assign",
       "ready",
@@ -82,9 +82,22 @@ describe("organizationSetup", () => {
     ).toBe(true);
   });
 
-  it("keeps bank details free of the branch, since the gym is paid once", () => {
-    expect(blocked(nothing, "bank")).toBe(false);
-    expect(done({ ...nothing, bankDetails: true }, "bank")).toBe(true);
+  it("adds bank details after a paid plan", () => {
+    const paid = { ...nothing, branches: 1, plans: 1, paidPlans: 1 };
+    expect(organizationSetup(paid).map((i) => i.key)).toEqual([
+      "gym",
+      "branch",
+      "location",
+      "schedule",
+      "staff",
+      "plan",
+      "bank",
+      "assign",
+      "ready",
+      "invite",
+    ]);
+    expect(blocked(paid, "bank")).toBe(false);
+    expect(done({ ...paid, bankDetails: true }, "bank")).toBe(true);
   });
 
   it("blocks assignment until a plan exists", () => {
@@ -111,7 +124,7 @@ describe("setupProgress", () => {
   it("counts nothing done for a gym that has just been made", () => {
     expect(setupProgress(organizationSetup(nothing))).toEqual({
       done: 0,
-      total: 10,
+      total: 9,
       complete: false,
     });
   });
@@ -124,6 +137,7 @@ describe("setupProgress", () => {
       branchesScheduled: 1,
       instructors: 1,
       bankDetails: true,
+      paidPlans: 1,
       plans: 1,
       assignments: 2,
       uncoveredMembers: 0,

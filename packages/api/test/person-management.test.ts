@@ -1,12 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { eq } from "@matops/db";
-import {
-  classInstance,
-  classParticipation,
-  personGuardian,
-  user,
-} from "@matops/db/schema";
+import { user } from "@matops/db/schema";
 
 import type { Harness } from "./helpers";
 import { harness, rejectionCode, seedAcademies } from "./helpers";
@@ -19,7 +13,6 @@ const COACH = "u_person_coach";
 const STUDENT = "u_person_student";
 const OTHER_OWNER = "u_person_other_owner";
 const LINKED = "u_person_linked";
-const GUARDIAN = "u_person_guardian";
 
 describe("person management", () => {
   let h: Harness;
@@ -43,20 +36,12 @@ describe("person management", () => {
         members: [{ userId: OTHER_OWNER, role: "owner", status: "active" }],
       },
     ]);
-    await h.exec.insert(user).values([
-      {
-        id: LINKED,
-        name: "Linked Account",
-        email: "linked@test.local",
-        emailVerified: true,
-      },
-      {
-        id: GUARDIAN,
-        name: "Guardian Account",
-        email: "guardian@test.local",
-        emailVerified: true,
-      },
-    ]);
+    await h.exec.insert(user).values({
+      id: LINKED,
+      name: "Linked Account",
+      email: "linked@test.local",
+      emailVerified: true,
+    });
   });
 
   afterAll(() => h.close());
@@ -157,15 +142,6 @@ describe("person management", () => {
       accountUserId: LINKED,
       expectedUpdatedAt: before.updatedAt.toISOString(),
     });
-    const subjects = await h
-      .as(LINKED, GYM)
-      .person.mySubjects({ entityId: GYM });
-    expect(subjects).toEqual([
-      expect.objectContaining({
-        personId: created.personId,
-        relationship: "self",
-      }),
-    ]);
     await expect(
       h.as(MANAGER, GYM).person.unlinkAccount({
         personId: created.personId,
@@ -173,93 +149,6 @@ describe("person management", () => {
         expectedUpdatedAt: linked.updatedAt.toISOString(),
       }),
     ).resolves.toEqual(expect.objectContaining({ personId: created.personId }));
-  });
-
-  it("adds and removes a guardian with the manager account as actor", async () => {
-    const created = await h
-      .as(MANAGER, GYM)
-      .person.createStudent({ entityId: GYM, name: "Child Student" });
-    await expect(
-      h.as(MANAGER, GYM).person.guardianCandidate({
-        studentPersonId: created.personId,
-        email: "guardian@test.local",
-      }),
-    ).resolves.toEqual(expect.objectContaining({ userId: GUARDIAN }));
-    await expect(
-      h.as(MANAGER, GYM).person.addGuardian({
-        studentPersonId: created.personId,
-        guardianUserId: GUARDIAN,
-      }),
-    ).resolves.toEqual({ created: true });
-    const [relation] = await h.exec
-      .select()
-      .from(personGuardian)
-      .where(eq(personGuardian.studentPersonId, created.personId));
-    expect(relation?.createdByUserId).toBe(MANAGER);
-    await expect(
-      h.as(GUARDIAN, GYM).person.mySubjects({ entityId: GYM }),
-    ).resolves.toContainEqual(
-      expect.objectContaining({
-        personId: created.personId,
-        relationship: "guardian",
-      }),
-    );
-    const classId = "f101bc33-8bd7-4e73-8d5f-fde5fd320193";
-    const startsAt = new Date(Date.now() + 60 * 60 * 1000);
-    const endsAt = new Date(startsAt.getTime() + 60 * 60 * 1000);
-    await h.exec.insert(classInstance).values({
-      id: classId,
-      academyId: GYM,
-      title: "Guardian booking",
-      startsAt,
-      durationMinutes: 60,
-      capacity: 20,
-    });
-    const schedule = await h.as(GUARDIAN, GYM).person.schedule({
-      entityId: GYM,
-      personId: created.personId,
-      from: startsAt.toISOString(),
-      to: endsAt.toISOString(),
-    });
-    expect(schedule).toContainEqual(
-      expect.objectContaining({ id: classId, myBooking: null }),
-    );
-    await h.as(GUARDIAN, GYM).person.bookClass({
-      entityId: GYM,
-      personId: created.personId,
-      classId,
-    });
-    const [booking] = await h.exec
-      .select()
-      .from(classParticipation)
-      .where(eq(classParticipation.classId, classId));
-    expect(booking).toMatchObject({
-      personId: created.personId,
-      studentId: null,
-      bookingStatus: "booked",
-    });
-    expect(
-      await rejectionCode(h.as(GUARDIAN, GYM).checkin.checkIn({ classId })),
-    ).toBe("FORBIDDEN");
-    expect(
-      await rejectionCode(
-        h.as(GUARDIAN, GYM).accessPlan.forUser({
-          personId: created.personId,
-        }),
-      ),
-    ).toBe("FORBIDDEN");
-    await h.as(GUARDIAN, GYM).person.cancelBooking({
-      entityId: GYM,
-      personId: created.personId,
-      classId,
-    });
-    await expect(
-      h.as(MANAGER, GYM).person.removeGuardian({
-        studentPersonId: created.personId,
-        guardianUserId: GUARDIAN,
-      }),
-    ).resolves.toEqual({ removed: true });
-    await expect(h.as(GUARDIAN, GYM).person.mySubjects()).resolves.toEqual([]);
   });
 
   it("blocks linking and enrollment while archived", async () => {

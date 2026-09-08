@@ -1,14 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { and, eq } from "@matops/db";
-import {
-  accessAssignment,
-  classParticipation,
-  member,
-} from "@matops/db/schema";
+import { classParticipation, member } from "@matops/db/schema";
 
 import type { Harness } from "./helpers";
-import { runMembershipCancellationSweep } from "../src/membership-sweep";
 import { harness, seedAcademies, seedClasses } from "./helpers";
 
 const ORG = "acad_review";
@@ -102,18 +97,6 @@ describe("bookings that need a review, not a cancellation", () => {
     expect(await bookingStatus()).toBe("booked");
   });
 
-  it("does not cancel a booking because an assignment period ended", async () => {
-    await h.exec
-      .update(accessAssignment)
-      .set({ endMonth: "2026-02-01", startMonth: "2026-01-01" })
-      .where(eq(accessAssignment.userId, ALEX));
-
-    const swept = await runMembershipCancellationSweep(h.exec, {
-      now: new Date("2026-03-20T12:00:00Z"),
-    });
-    expect(swept.cancelled).toBe(0);
-    expect(await bookingStatus()).toBe("booked");
-  });
   it("excludes an active instructor booking without coverage", async () => {
     await h.exec.insert(classParticipation).values({
       academyId: ORG,

@@ -101,7 +101,6 @@ describe("seed roundtrip — up then down", () => {
       "membership_month",
       "membership_month_audit",
       "membership_policy",
-      "membership_purchase",
       "product_event",
     ]) {
       expect(await countLike(table, "organization_id", "seed_org_%")).toBe(0);

@@ -55,3 +55,48 @@ export function academyDay(instant: Date, timeZone: string): string {
     day: "2-digit",
   }).format(instant);
 }
+
+function localDayParts(day: string): [number, number, number] {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+  if (!match) throw new RangeError("Local day must use YYYY-MM-DD");
+  return [Number(match[1]), Number(match[2]), Number(match[3])];
+}
+
+export function localMidnight(day: string, timeZone: string): Date {
+  const [year, month, date] = localDayParts(day);
+  const target = Date.UTC(year, month - 1, date);
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  });
+  const offsetAt = (instant: Date) => {
+    const parts = formatter.formatToParts(instant);
+    const get = (type: string) =>
+      Number(parts.find((part) => part.type === type)?.value);
+    return (
+      Date.UTC(
+        get("year"),
+        get("month") - 1,
+        get("day"),
+        get("hour"),
+        get("minute"),
+        get("second"),
+      ) - instant.getTime()
+    );
+  };
+  const first = new Date(target - offsetAt(new Date(target)));
+  return new Date(target - offsetAt(first));
+}
+
+export function addLocalDays(day: string, days: number): string {
+  const [year, month, date] = localDayParts(day);
+  return new Date(Date.UTC(year, month - 1, date + days))
+    .toISOString()
+    .slice(0, 10);
+}

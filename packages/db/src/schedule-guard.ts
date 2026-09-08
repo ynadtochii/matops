@@ -53,6 +53,32 @@ export async function lockBranchSchedule(
   await exec.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${academyId}))`);
 }
 
+export async function lockAndReadScheduleRevision(
+  exec: Executor,
+  academyId: string,
+): Promise<number> {
+  await lockBranchSchedule(exec, academyId);
+  const [row] = await exec
+    .select({ revision: entity.scheduleRevision })
+    .from(entity)
+    .where(eq(entity.id, academyId));
+  if (!row) throw new Error("Branch schedule was not found");
+  return row.revision;
+}
+
+export async function bumpScheduleRevision(
+  exec: Executor,
+  academyId: string,
+): Promise<number> {
+  const [row] = await exec
+    .update(entity)
+    .set({ scheduleRevision: sql`${entity.scheduleRevision} + 1` })
+    .where(eq(entity.id, academyId))
+    .returning({ revision: entity.scheduleRevision });
+  if (!row) throw new Error("Branch schedule was not found");
+  return row.revision;
+}
+
 /**
  * The live sessions of this branch that any of `spans` runs into.
  *

@@ -78,9 +78,14 @@ export function CoachSelect({
 
   const setInstructor = useMutation(
     trpc.class.setInstructor.mutationOptions({
-      onSuccess: async () => {
+      onSuccess: async (result) => {
         await queryClient.invalidateQueries(trpc.class.pathFilter());
-        toast.success("Coach updated");
+        const delivery = result.notice?.delivery;
+        toast.success(
+          delivery
+            ? `Coach updated. Email: ${delivery.accepted} accepted, ${delivery.remaining} remaining.`
+            : "Coach updated",
+        );
       },
       onError: (err: { message: string }) =>
         toast.error(err.message || "Could not change the coach"),

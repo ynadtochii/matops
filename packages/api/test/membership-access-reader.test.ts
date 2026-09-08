@@ -182,6 +182,31 @@ describe("the scoped membership access reader", () => {
     });
   });
 
+  it("finds a student assignment by person id", async () => {
+    const [student] = await h.exec.query.person.findMany({
+      where: (person, { eq }) => eq(person.accountUserId, SAM),
+      limit: 1,
+    });
+    expect(student).toBeDefined();
+    const seen = await withScope(
+      { organizationId: ORG, entityId: ORG },
+      (tx) =>
+        loadRosterStanding(tx, {
+          entityId: ORG,
+          people: [
+            {
+              userId: student?.id ?? "missing",
+              role: "student",
+              status: "active",
+            },
+          ],
+          now: IN_GRACE,
+        }),
+      h.exec,
+    );
+    expect(seen.get(student?.id ?? "missing")?.covered).toBe(true);
+  });
+
   it("inherits owner access at another branch without coverage", async () => {
     const seen = await withScope(
       { organizationId: ORG, entityId: gym },

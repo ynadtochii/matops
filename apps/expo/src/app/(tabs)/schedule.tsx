@@ -4,7 +4,11 @@ import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 
 import type { DisciplineTone } from "@matops/domain";
-import { capacityDisplay, dayWindow, disciplineTone } from "@matops/domain";
+import {
+  capacityDisplay,
+  disciplineTone,
+  studentWeekWindow,
+} from "@matops/domain";
 
 import type { Theme } from "~/components/theme";
 import type { RouterOutputs } from "~/utils/api";
@@ -235,11 +239,7 @@ export default function Schedule() {
 
   const now = new Date();
   const todayKey = dayKey(now);
-  const { from: windowStart, to: windowEnd } = dayWindow(now, {
-    aheadDays: 7,
-  });
-  const from = windowStart.toISOString();
-  const to = windowEnd.toISOString();
+  const { from, to } = studentWeekWindow(now);
 
   const suspended = current.data?.status === "suspended";
   const selfWeek = useQuery(
@@ -260,7 +260,9 @@ export default function Schedule() {
 
       <View style={{ marginBottom: 16 }}>
         <Heading>Schedule</Heading>
-        <Muted>Your classes for the next seven days.</Muted>
+        <Muted>
+          Your classes for the next {current.data?.bookingWindowDays ?? 7} days.
+        </Muted>
       </View>
 
       {isPending && (

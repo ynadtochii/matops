@@ -3,9 +3,11 @@ import { TRPCError } from "@trpc/server";
 
 import {
   and,
+  bumpScheduleRevision,
   desc,
   eq,
   isNull,
+  lockAndReadScheduleRevision,
   ne,
   or,
   recordActivity,
@@ -16,6 +18,7 @@ import { classInstance, classParticipation } from "@matops/db/schema";
 import { bookingTier, canBook, notBookableMessage } from "@matops/domain";
 import { BookClassSchema, CancelBookingSchema } from "@matops/validators";
 
+import { academyContext } from "../academy-tz";
 import {
   claimSeat,
   releaseSeats,
@@ -26,9 +29,6 @@ import { CLASS_NOT_FOUND } from "../messages";
 import { bookingGate } from "../payments-gate";
 import { enrolledProcedure, memberProcedure } from "../trpc";
 
-// ponytail: newest 300 by start time. A student who trains daily loses past rows
-// past ~10 months; `stats.me` is the lifetime figure, not this list. Paginate if
-// the Past list ever needs to go further back.
 const MINE_LIMIT = 300;
 
 export const bookingRouter = {
@@ -93,17 +93,26 @@ export const bookingRouter = {
   book: memberProcedure
     .input(BookClassSchema)
     .mutation(async ({ ctx, input }) => {
+      await lockAndReadScheduleRevision(ctx.db, ctx.academyId);
       // 1. Pre-read for a precise, friendly error (NOT the race guard — that is
       //    the atomic upsert + increment below). RLS scopes this to the academy.
       const cls = await requireClassFacts(ctx.db, input.classId);
-      const bookable = canBook(cls, new Date());
+      const academy = await academyContext(ctx);
+      const bookingRule = {
+        bookingWindowDays: academy.bookingWindowDays,
+        timeZone: academy.timeZone,
+      };
+      const bookable = canBook(cls, new Date(), bookingRule);
       if (bookable.reason === "deleted") {
         throw new TRPCError({ code: "NOT_FOUND", message: CLASS_NOT_FOUND });
       }
       if (bookable.reason) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
-          message: notBookableMessage(bookable.reason),
+          message: notBookableMessage(
+            bookable.reason,
+            academy.bookingWindowDays,
+          ),
         });
       }
 
@@ -166,6 +175,7 @@ export const bookingRouter = {
           throw new TRPCError({ code: "CONFLICT", message: SESSION_FULL });
         }
       }
+      if (transition) await bumpScheduleRevision(ctx.db, ctx.academyId);
 
       if (ctx.membership.role === "student") {
         ctx.afterCommit(async (exec) => {
@@ -190,6 +200,7 @@ export const bookingRouter = {
   cancel: enrolledProcedure
     .input(CancelBookingSchema)
     .mutation(async ({ ctx, input }) => {
+      await lockAndReadScheduleRevision(ctx.db, ctx.academyId);
       const [cancelled] = await ctx.db
         .update(classParticipation)
         .set({ bookingStatus: "cancelled", cancelledAt: new Date() })
@@ -213,6 +224,7 @@ export const bookingRouter = {
       if (cancelled?.tier === "confirmed") {
         await releaseSeats(ctx.db, [input.classId]);
       }
+      if (cancelled) await bumpScheduleRevision(ctx.db, ctx.academyId);
 
       return { ok: true as const };
     }),

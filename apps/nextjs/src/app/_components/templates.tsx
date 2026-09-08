@@ -675,7 +675,23 @@ export function Templates({
 function RebuildSchedule() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
+  const academy = useEntity();
   const preview = useQuery(trpc.template.rebuildPreview.queryOptions());
+
+  const extend = useMutation(
+    trpc.template.extend.mutationOptions({
+      onSuccess: async (res) => {
+        await queryClient.invalidateQueries(trpc.class.pathFilter());
+        await queryClient.invalidateQueries(trpc.template.pathFilter());
+        toast.success(
+          res.created === 0
+            ? "Schedule is already extended"
+            : `Generated ${res.created} ${res.created === 1 ? "class" : "classes"}`,
+        );
+      },
+      onError: (e) => toast.error(e.message || "Could not extend the schedule"),
+    }),
+  );
 
   const rebuild = useMutation(
     trpc.template.rebuild.mutationOptions({
@@ -684,7 +700,7 @@ function RebuildSchedule() {
         await queryClient.invalidateQueries(trpc.template.pathFilter());
         await queryClient.invalidateQueries(trpc.booking.pathFilter());
         toast.success(
-          `Rebuilt: ${res.deleted} removed, ${res.created} generated`,
+          `Rebuilt: ${res.cancelled} cancelled, ${res.created} generated`,
         );
       },
       onError: (e) =>
@@ -692,53 +708,108 @@ function RebuildSchedule() {
     }),
   );
 
-  const toDelete = preview.data?.toDelete ?? 0;
-  const bookings = preview.data?.bookingsAffected ?? 0;
+  const affected = preview.data?.affected ?? [];
+  const activeBookings = affected.reduce(
+    (sum, item) => sum + item.activeParticipants + item.activeVisitors,
+    0,
+  );
+  const records = affected.reduce(
+    (sum, item) => sum + item.otherParticipations + item.otherVisits,
+    0,
+  );
+  const generatedThrough = preview.data?.generatedThrough
+    ? new Intl.DateTimeFormat(undefined, {
+        dateStyle: "medium",
+        timeZone: academy.timeZone ?? "UTC",
+      }).format(preview.data.generatedThrough)
+    : null;
 
   const damage =
-    toDelete === 0
+    affected.length === 0
       ? "Nothing is stale right now."
-      : `Removes ${toDelete} upcoming ${toDelete === 1 ? "class" : "classes"}` +
-        (bookings > 0
-          ? ` and ${bookings} ${bookings === 1 ? "booking" : "bookings"}.`
-          : ".");
+      : `Cancels ${affected.length} upcoming ${affected.length === 1 ? "class" : "classes"}.`;
 
   return (
     <div className="mt-4 flex flex-col gap-3 border-t pt-6">
       <div>
         <SectionHeading>Rebuild schedule</SectionHeading>
         <p className="text-muted-foreground text-sm">
-          Regenerates every class from your active templates, six months ahead.
-          Use it after pausing or deleting a template: its classes stay on the
-          calendar until you do.
+          Extend the calendar to six months, or review classes that no longer
+          match an active template.
         </p>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
         <div>
           <p className="text-sm font-medium">{damage}</p>
           <p className="text-muted-foreground text-sm">
-            Past classes and their attendance are never touched. One-off classes
-            you added by hand stay.
+            {generatedThrough
+              ? `Recurring classes are generated through ${generatedThrough}.`
+              : "There is no active recurring schedule."}
           </p>
+          {activeBookings > 0 && (
+            <p className="text-destructive text-sm">
+              {activeBookings} active{" "}
+              {activeBookings === 1 ? "booking blocks" : "bookings block"} this
+              rebuild. Cancel those classes first.
+            </p>
+          )}
+          {records > 0 && (
+            <p className="text-muted-foreground text-sm">
+              {records} historical or cancelled{" "}
+              {records === 1 ? "record stays" : "records stay"} attached.
+            </p>
+          )}
+          {affected.length > 0 && (
+            <ul className="text-muted-foreground mt-2 space-y-1 text-sm">
+              {affected.map((item) => (
+                <li key={item.id}>
+                  {item.title},{" "}
+                  {new Intl.DateTimeFormat(undefined, {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                    timeZone: academy.timeZone ?? "UTC",
+                  }).format(item.startsAt)}
+                  : cancel
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
-        <ConfirmDialog
-          title="Rebuild the schedule?"
-          description={`${damage} Students lose those bookings without being told. Your templates, past classes, attendance history and one-off classes are unaffected.`}
-          confirmLabel="Rebuild schedule"
-          variant="destructive"
-          onConfirm={async () => {
-            await rebuild.mutateAsync();
-          }}
-          trigger={
-            <Button
-              size="sm"
-              variant="destructive-outline"
-              disabled={rebuild.isPending || preview.isPending}
-            >
-              {rebuild.isPending ? "Rebuilding…" : "Rebuild schedule"}
-            </Button>
-          }
-        />
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={extend.isPending}
+            onClick={() => extend.mutate()}
+          >
+            {extend.isPending ? "Extending…" : "Extend schedule"}
+          </Button>
+          <ConfirmDialog
+            title="Rebuild the schedule?"
+            description={`${damage} Past classes, one-off classes, cancelled classes, participation, and visitor records stay.`}
+            confirmLabel="Rebuild schedule"
+            variant="destructive"
+            onConfirm={async () => {
+              if (preview.data) {
+                await rebuild.mutateAsync({ version: preview.data.version });
+              }
+            }}
+            trigger={
+              <Button
+                size="sm"
+                variant="destructive-outline"
+                disabled={
+                  rebuild.isPending ||
+                  preview.isPending ||
+                  !preview.data ||
+                  activeBookings > 0
+                }
+              >
+                {rebuild.isPending ? "Rebuilding…" : "Rebuild schedule"}
+              </Button>
+            }
+          />
+        </div>
       </div>
     </div>
   );

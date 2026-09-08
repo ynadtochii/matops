@@ -4,31 +4,14 @@ import { createEntity, eq } from "@matops/db";
 import { academyProfile, entity, entityMembership } from "@matops/db/schema";
 
 import type { Harness } from "./helpers";
-import { handleAcademy, handleClasses } from "../src/public";
-import { resetRateLimits } from "../src/rate-limit";
 import { harness, seedClasses } from "./helpers";
 
 const ORG = "org_alma";
 const OWNER = "u_owner";
 const NOMAD = "u_nomad";
 
-const KEY_NORTH = "mk_pub_north";
-const KEY_SOUTH = "mk_pub_south";
 const CLASS_NORTH = "aaaaaaaa-0000-4000-8000-00000000000a";
 const CLASS_SOUTH = "aaaaaaaa-0000-4000-8000-00000000000b";
-
-function get(path: string, key: string): Request {
-  return new Request(`https://matops.test${path}`, {
-    headers: new Headers({
-      "x-forwarded-for": "1.1.1.1",
-      "x-matops-key": key,
-    }),
-  });
-}
-
-function json(res: Response): Promise<unknown> {
-  return res.json();
-}
 
 describe("a public link names one academy, never its sibling", () => {
   let h: Harness;
@@ -36,7 +19,6 @@ describe("a public link names one academy, never its sibling", () => {
   let southCode: string;
 
   beforeAll(async () => {
-    resetRateLimits();
     h = await harness([
       {
         id: ORG,
@@ -67,11 +49,11 @@ describe("a public link names one academy, never its sibling", () => {
 
     await h.exec
       .update(academyProfile)
-      .set({ publicBookingEnabled: true, publicApiKey: KEY_NORTH })
+      .set({ publicBookingEnabled: true })
       .where(eq(academyProfile.entityId, ORG));
     await h.exec
       .update(academyProfile)
-      .set({ publicBookingEnabled: true, publicApiKey: KEY_SOUTH })
+      .set({ publicBookingEnabled: true })
       .where(eq(academyProfile.entityId, south));
     await h.exec
       .update(entity)
@@ -109,29 +91,6 @@ describe("a public link names one academy, never its sibling", () => {
   });
 
   afterAll(() => h.close());
-
-  it("gives each key its own academy", async () => {
-    const read = async (key: string) =>
-      (await json(await handleAcademy(get("/academy", key), h.exec))) as {
-        name: string;
-        timeZone: string | null;
-      };
-
-    expect((await read(KEY_NORTH)).name).toBe("Academy org_alma");
-    expect((await read(KEY_SOUTH)).name).toBe("South Mat");
-    expect((await read(KEY_SOUTH)).timeZone).toBe("Europe/Kyiv");
-  });
-
-  it("never shows a key the sibling mat's classes", async () => {
-    const titles = async (key: string) => {
-      const body = (await json(
-        await handleClasses(get("/classes", key), h.exec),
-      )) as { classes: { title: string }[] };
-      return body.classes.map((c) => c.title);
-    };
-    expect(await titles(KEY_NORTH)).toEqual(["North Gi"]);
-    expect(await titles(KEY_SOUTH)).toEqual(["South No-gi"]);
-  });
 
   it("gives the two mats different six-digit codes", () => {
     expect(southCode).toHaveLength(6);
