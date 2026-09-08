@@ -154,7 +154,7 @@ export function MembershipSelection() {
           </SectionHeading>
           <p className="text-muted-foreground text-sm">
             Plans for {academy.name}, including memberships that cover other
-            branches. Your gym confirms payment before booking opens.
+            branches. Report payment to book while your gym confirms it.
           </p>
         </div>
         <div className="flex flex-col gap-2">
@@ -305,9 +305,7 @@ function PurchaseDetails({
   const waiting =
     purchase.status === "claimed" ||
     (purchase.status === "pending" && purchase.priceMinor === 0);
-  const canClaim =
-    purchase.priceMinor > 0 &&
-    ["pending", "rejected"].includes(purchase.status);
+  const canClaim = purchase.priceMinor > 0 && purchase.status === "pending";
   const error = claim.error ?? cancel.error;
   return (
     <section className="space-y-5" aria-label="Selected membership">
@@ -353,10 +351,10 @@ function PurchaseDetails({
             : waiting
               ? purchase.priceMinor === 0
                 ? "Your gym will approve this free membership. You can browse while you wait."
-                : "Your payment claim is submitted. You can browse while your gym confirms it. No need to send it again."
+                : "Payment reported. You can book while your gym checks your payment. If payment is declined, booking and check-in access will pause."
               : purchase.status === "resolution"
                 ? "Your gym has a payment or access issue to resolve. Contact them before sending more money."
-                : "Booking stays locked until your gym confirms payment. You can still browse the schedule."}
+                : "An owner must approve this payment before booking and check-in access can return."}
         </p>
         {purchase.reason && <p className="text-sm">{purchase.reason}</p>}
         {confirmed && (
@@ -371,15 +369,6 @@ function PurchaseDetails({
           if you have not paid. If you already transferred, submit your claim so
           the gym can resolve it.
         </p>
-      )}
-      {purchase.priceMinor === 0 && purchase.status === "rejected" && (
-        <Button
-          onClick={() => claim.mutate({ id: purchase.id })}
-          disabled={claim.isPending}
-          busy={claim.isPending}
-        >
-          Resubmit request
-        </Button>
       )}
       {canClaim && (
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,0.7fr)]">

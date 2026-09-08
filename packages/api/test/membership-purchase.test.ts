@@ -114,7 +114,7 @@ describe("student membership purchases", () => {
     vi.useRealTimers();
   });
 
-  it("keeps selection and payment claims read only until staff confirms", async () => {
+  it("grants provisional access after a paid claim", async () => {
     const selected = await choose();
     expect(selected.status).toBe("pending");
     expect(await owner().accessPlan.forUser({ userId: STUDENT })).toEqual([]);
@@ -129,10 +129,11 @@ describe("student membership purchases", () => {
     ).toBe("CONFLICT");
 
     await student().membershipPurchase.claim({ id: selected.id });
-    expect((await student().booking.access()).locked).toBe(true);
-    expect(
-      await rejectionCode(student().booking.book({ classId: CLASS })),
-    ).toBe("PRECONDITION_FAILED");
+    expect((await student().booking.access()).locked).toBe(false);
+    expect(await student().booking.book({ classId: CLASS })).toEqual({
+      ok: true,
+      tier: "provisional",
+    });
 
     const confirmed = await owner().membershipPurchase.confirm({
       id: selected.id,
@@ -333,7 +334,7 @@ describe("student membership purchases", () => {
     expect((await student().booking.access()).locked).toBe(false);
   });
 
-  it("returns a claim for correction and lets its student claim again", async () => {
+  it("keeps a declined claim blocked until the owner approves it", async () => {
     const selected = await choose();
     await student().membershipPurchase.claim({ id: selected.id });
     const returned = await owner().membershipPurchase.reject({
@@ -345,15 +346,15 @@ describe("student membership purchases", () => {
       (await student().membershipPurchase.mine()).purchases[0]?.reason,
     ).toBe("Please check the payment reference.");
     expect((await student().booking.access()).locked).toBe(true);
-    const reclaimed = await student().membershipPurchase.claim({
-      id: selected.id,
-    });
-    expect(reclaimed.status).toBe("claimed");
-    expect(reclaimed.reason).toBeNull();
-    expect(reclaimed.reference).toBe(selected.reference);
+    expect(
+      await rejectionCode(
+        student().membershipPurchase.claim({ id: selected.id }),
+      ),
+    ).toBe("CONFLICT");
     expect(
       (await owner().membershipPurchase.confirm({ id: selected.id })).status,
     ).toBe("confirmed");
+    expect((await student().booking.access()).locked).toBe(false);
   });
 
   it("closes a resolved payment while preserving its payment evidence", async () => {
@@ -375,7 +376,7 @@ describe("student membership purchases", () => {
     expect(await owner().membershipPurchase.review()).toEqual([]);
   });
 
-  it("lets staff close a returned payment before the student chooses again", async () => {
+  it("does not let staff close a declined paid claim", async () => {
     const selected = await choose();
     await student().membershipPurchase.claim({ id: selected.id });
     const returned = await owner().membershipPurchase.reject({
@@ -400,16 +401,17 @@ describe("student membership purchases", () => {
         }),
       ),
     ).toBe("FORBIDDEN");
-    const closed = await owner().membershipPurchase.close({
-      id: selected.id,
-      reason: "Student confirmed no transfer was sent.",
-    });
-    expect(closed.status).toBe("cancelled");
-    const next = await choose();
-    expect(next.status).toBe("pending");
-    expect(next.id).not.toBe(selected.id);
-    expect(next.reference).not.toBe(selected.reference);
-    expect((await student().booking.access()).locked).toBe(true);
+    expect(
+      await rejectionCode(
+        owner().membershipPurchase.close({
+          id: selected.id,
+          reason: "Student confirmed no transfer was sent.",
+        }),
+      ),
+    ).toBe("CONFLICT");
+    expect(
+      (await owner().membershipPurchase.confirm({ id: selected.id })).status,
+    ).toBe("confirmed");
   });
 
   it("lets students cancel a returned free request and choose another plan", async () => {

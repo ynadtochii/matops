@@ -12,6 +12,7 @@ import {
   entityMembership,
   member,
   membershipMonth,
+  membershipPurchase,
   organization,
   person,
   user,
@@ -152,6 +153,41 @@ export async function loadMembershipAccess(
       ),
     );
 
+  const purchases = await db
+    .select({
+      status: membershipPurchase.status,
+      priceMinor: membershipPurchase.priceMinor,
+      startMonth: membershipPurchase.startMonth,
+      entityIds: membershipPurchase.entityIds,
+    })
+    .from(membershipPurchase)
+    .where(
+      or(
+        personId ? eq(membershipPurchase.personId, personId) : undefined,
+        accountUserId
+          ? eq(membershipPurchase.userId, accountUserId)
+          : undefined,
+      ),
+    );
+
+  const purchaseVerdict = (month: string): AccessVerdict | null => {
+    const covering = purchases.filter(
+      (purchase) =>
+        purchase.entityIds.includes(input.entityId) &&
+        purchase.startMonth <= month,
+    );
+    if (covering.some((purchase) => purchase.status === "rejected"))
+      return "payment-declined";
+    if (
+      input.membership?.status === "active" &&
+      covering.some(
+        (purchase) => purchase.status === "claimed" && purchase.priceMinor > 0,
+      )
+    )
+      return "provisional";
+    return null;
+  };
+
   if (held.length === 0) {
     const verdict = membershipAccess({
       entityId: input.entityId,
@@ -160,8 +196,8 @@ export async function loadMembershipAccess(
       at: input.now,
     });
     return {
-      now: verdict,
-      atSession: verdict,
+      now: purchaseVerdict(nowMonth) ?? verdict,
+      atSession: purchaseVerdict(sessionMonth) ?? verdict,
       assignments: [],
       accessSource: null,
     };
@@ -224,20 +260,22 @@ export async function loadMembershipAccess(
       }));
 
   const nowAssignments = forMonth(nowMonth);
+  const nowVerdict = membershipAccess({
+    entityId: input.entityId,
+    membership: input.membership,
+    assignments: nowAssignments,
+    at: input.now,
+  });
+  const sessionVerdict = membershipAccess({
+    entityId: input.entityId,
+    membership: input.membership,
+    assignments:
+      sessionMonth === nowMonth ? nowAssignments : forMonth(sessionMonth),
+    at: sessionAt,
+  });
   return {
-    now: membershipAccess({
-      entityId: input.entityId,
-      membership: input.membership,
-      assignments: nowAssignments,
-      at: input.now,
-    }),
-    atSession: membershipAccess({
-      entityId: input.entityId,
-      membership: input.membership,
-      assignments:
-        sessionMonth === nowMonth ? nowAssignments : forMonth(sessionMonth),
-      at: sessionAt,
-    }),
+    now: purchaseVerdict(nowMonth) ?? nowVerdict,
+    atSession: purchaseVerdict(sessionMonth) ?? sessionVerdict,
     assignments: nowAssignments,
     accessSource: nowAssignments.some(
       (a) => a.status === "active" && a.entityIds.includes(input.entityId),
@@ -299,6 +337,16 @@ export async function loadRosterStanding(
     .from(accessAssignment)
     .innerJoin(accessPlan, eq(accessPlan.id, accessAssignment.planId))
     .where(inArray(accessAssignment.userId, userIds));
+  const purchases = await db
+    .select({
+      userId: membershipPurchase.userId,
+      status: membershipPurchase.status,
+      priceMinor: membershipPurchase.priceMinor,
+      startMonth: membershipPurchase.startMonth,
+      entityIds: membershipPurchase.entityIds,
+    })
+    .from(membershipPurchase)
+    .where(inArray(membershipPurchase.userId, userIds));
 
   const calendar = await membershipCalendar(db);
   const month = monthOf(input.now, calendar.timeZone);
@@ -357,23 +405,41 @@ export async function loadRosterStanding(
     const covering = theirs.filter(
       (a) => a.status === "active" && a.entityIds.includes(input.entityId),
     );
+    const purchaseCoverage = purchases.filter(
+      (purchase) =>
+        purchase.userId === person.userId &&
+        purchase.entityIds.includes(input.entityId) &&
+        purchase.startMonth <= month,
+    );
+    const purchaseVerdict = purchaseCoverage.some(
+      (purchase) => purchase.status === "rejected",
+    )
+      ? "payment-declined"
+      : person.status === "active" &&
+          purchaseCoverage.some(
+            (purchase) =>
+              purchase.status === "claimed" && purchase.priceMinor > 0,
+          )
+        ? "provisional"
+        : null;
     answer.set(person.userId, {
       enrolled: true,
-      covered: covering.length > 0,
+      covered: covering.length > 0 || purchaseVerdict === "provisional",
       planNames: [...new Set(covering.map((a) => a.planName))].sort(),
       accessSource: staff.get(input.entityId)?.has(person.userId)
         ? "staff"
-        : covering.length > 0
+        : covering.length > 0 || purchaseVerdict === "provisional"
           ? "membership"
           : null,
       verdict: staff.get(input.entityId)?.has(person.userId)
         ? "ok"
-        : membershipAccess({
+        : (purchaseVerdict ??
+          membershipAccess({
             entityId: input.entityId,
             membership: { status: person.status },
             assignments: theirs,
             at: input.now,
-          }),
+          })),
     });
   }
   return answer;
@@ -397,7 +463,8 @@ export interface BookingToReview {
   accountUserId: string | null;
   name: string;
   /** Why it needs a look. Never "the month is unpaid": that is the dues gate. */
-  reason: "not-covered" | "suspended";
+  reason:
+    "not-covered" | "suspended" | "membership-inactive" | "payment-declined";
 }
 
 /**
@@ -509,6 +576,26 @@ export async function bookingsNeedingReview(
             : undefined,
         ),
       );
+    const purchases = await db
+      .select({
+        userId: sql<string>`coalesce(${membershipPurchase.personId}::text, ${membershipPurchase.userId})`,
+        status: membershipPurchase.status,
+        priceMinor: membershipPurchase.priceMinor,
+        startMonth: membershipPurchase.startMonth,
+        entityIds: membershipPurchase.entityIds,
+      })
+      .from(membershipPurchase)
+      .where(
+        or(
+          inArray(membershipPurchase.personId, personIds),
+          accountUserIds.length
+            ? and(
+                isNull(membershipPurchase.personId),
+                inArray(membershipPurchase.userId, accountUserIds),
+              )
+            : undefined,
+        ),
+      );
     // This branch's own memberships. Someone active here and suspended at the
     // gym across town must not be read as suspended here (ADR 129).
     const standing = await db
@@ -552,10 +639,30 @@ export async function bookingsNeedingReview(
             (c) => c.planId === a.planId && c.entityId === input.entityId,
           ),
       );
+      const coveredAssignments = held.filter(
+        (a) =>
+          a.userId === b.userId &&
+          appliesInMonth(a, month) &&
+          coverage.some(
+            (c) => c.planId === a.planId && c.entityId === input.entityId,
+          ),
+      );
+      const purchaseCoverage = purchases.filter(
+        (purchase) =>
+          purchase.userId === b.userId &&
+          purchase.startMonth <= month &&
+          purchase.entityIds.includes(input.entityId),
+      );
+      const paymentDeclined = purchaseCoverage.some(
+        (purchase) => purchase.status === "rejected",
+      );
+      const provisional = purchaseCoverage.some(
+        (purchase) => purchase.status === "claimed" && purchase.priceMinor > 0,
+      );
       const local = standing.find((m) => m.userId === b.userId)?.status;
       const blocked =
         local !== undefined && local !== "active" && local !== "pending";
-      if (!blocked && covers) continue;
+      if (!paymentDeclined && !blocked && (covers || provisional)) continue;
       items.push({
         participationId: b.participationId,
         classId: b.classId,
@@ -566,7 +673,13 @@ export async function bookingsNeedingReview(
         personId: b.userId,
         accountUserId: b.accountUserId,
         name: b.name,
-        reason: blocked ? "suspended" : "not-covered",
+        reason: paymentDeclined
+          ? "payment-declined"
+          : blocked
+            ? "suspended"
+            : coveredAssignments.length > 0
+              ? "membership-inactive"
+              : "not-covered",
       });
       if (items.length >= input.limit) break;
     }

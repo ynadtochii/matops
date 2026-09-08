@@ -91,7 +91,7 @@ describe("bookings that need a review, not a cancellation", () => {
   it("names the booking instead, with the reason", async () => {
     const seen = await owner().accessPlan.bookingsToReview({ limit: 50 });
     expect(seen.items.map((b) => [b.userId, b.classId, b.reason])).toEqual([
-      [ALEX, NEXT_WEEK, "not-covered"],
+      [ALEX, NEXT_WEEK, "membership-inactive"],
     ]);
   });
 

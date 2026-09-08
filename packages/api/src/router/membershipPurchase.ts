@@ -398,7 +398,7 @@ export const membershipPurchaseRouter = {
     .mutation(async ({ ctx, input }) => {
       const row = await purchase(ctx.db, input.id, ctx.session.user.id);
       if (row.status === "claimed" || row.status === "confirmed") return row;
-      if (!["pending", "rejected"].includes(row.status))
+      if (row.status !== "pending")
         conflict("This request cannot accept a payment claim.");
       return save(ctx.db, row.id, {
         status: row.priceMinor === 0 ? "pending" : "claimed",
@@ -478,6 +478,7 @@ export const membershipPurchaseRouter = {
       if (row.status === "confirmed" || row.status === "resolution") return row;
       if (
         row.status !== "claimed" &&
+        row.status !== "rejected" &&
         !(row.status === "pending" && row.priceMinor === 0)
       )
         conflict(
@@ -622,6 +623,8 @@ export const membershipPurchaseRouter = {
     .mutation(async ({ ctx, input }) => {
       const row = await purchase(ctx.db, input.id);
       if (row.status === "cancelled") return row;
+      if (row.status === "rejected" && row.priceMinor > 0)
+        conflict("Confirm this declined payment to restore access.");
       if (row.status !== "rejected" && row.status !== "resolution")
         conflict(
           "Return the request or record its payment outcome before closing it.",

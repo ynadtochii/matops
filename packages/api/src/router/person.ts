@@ -518,7 +518,9 @@ export const personRouter = {
               message: gate.message ?? "Booking is locked for this person.",
             });
           }
-          const tier = bookingTier(membership);
+          const tier = gate.provisional
+            ? ("provisional" as const)
+            : bookingTier(membership);
           const [transition] = await db
             .insert(classParticipation)
             .values({

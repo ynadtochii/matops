@@ -66,7 +66,6 @@ export const checkinRouter = {
         });
       }
 
-      const tier = bookingTier(ctx.membership);
       const me = ctx.session.user.id;
       const now = new Date();
 
@@ -82,6 +81,9 @@ export const checkinRouter = {
           message: gate.message ?? "Booking is locked for you.",
         });
       }
+      const tier = gate.provisional
+        ? ("provisional" as const)
+        : bookingTier(ctx.membership);
       // Read the caller's current row (if any) to know whether this check-in is a
       // NEW booking transition — that decides the confirmed-count increment. A
       // single user tapping once; a rare double-tap self-race is corrected by the

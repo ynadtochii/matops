@@ -107,8 +107,6 @@ export const bookingRouter = {
         });
       }
 
-      const tier = bookingTier(ctx.membership);
-
       const gate = await bookingGate(ctx.db, {
         entity: ctx.entity,
         membership: ctx.membership,
@@ -121,6 +119,9 @@ export const bookingRouter = {
           message: gate.message ?? "Booking is locked for you.",
         });
       }
+      const tier = gate.provisional
+        ? ("provisional" as const)
+        : bookingTier(ctx.membership);
       // 3. Transition the participation to booked, only if not already booked
       //    (idempotent). A returned row ⇒ a real transition (new insert OR
       //    cancelled → booked); no row ⇒ already booked, leave the count alone.

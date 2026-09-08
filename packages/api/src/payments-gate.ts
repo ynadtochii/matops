@@ -16,6 +16,7 @@ export interface GatedEntity {
 
 export interface BookingGate {
   locked: boolean;
+  provisional: boolean;
   /** What to tell them, or null when nothing is in the way. */
   message: string | null;
 }
@@ -38,12 +39,13 @@ export async function bookingGate(
   if (!isActiveMember(input.membership)) {
     return {
       locked: true,
+      provisional: false,
       message: `${input.entity.name} has not approved you yet. You can browse classes while you wait.`,
     };
   }
 
   if (!input.entity.membershipEnforcedAt || isStaff(input.membership)) {
-    return { locked: false, message: null };
+    return { locked: false, provisional: false, message: null };
   }
   const seen = await loadMembershipAccess(db, {
     personId: input.membership.personId ?? undefined,
@@ -55,6 +57,17 @@ export async function bookingGate(
   });
   const verdict = accessAdmits(seen.now) ? seen.atSession : seen.now;
   return accessAdmits(verdict)
-    ? { locked: false, message: null }
-    : { locked: true, message: accessReason(verdict, input.entity.name) };
+    ? {
+        locked: false,
+        provisional: verdict === "provisional",
+        message:
+          verdict === "provisional"
+            ? accessReason(verdict, input.entity.name)
+            : null,
+      }
+    : {
+        locked: true,
+        provisional: false,
+        message: accessReason(verdict, input.entity.name),
+      };
 }

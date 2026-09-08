@@ -79,7 +79,8 @@ export function MembershipsScreen() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Memberships</h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            Track payments, resolve access issues, and manage your plans.
+            Track payments, resolve work that needs action, and manage your
+            plans.
           </p>
         </div>
         {tab === "plans" && (
@@ -95,7 +96,7 @@ export function MembershipsScreen() {
       >
         {[
           { id: "payments", label: "Payments" },
-          { id: "access", label: "Access issues" },
+          { id: "access", label: "Needs action" },
           { id: "plans", label: "Plans" },
         ].map((view) => (
           <Link
@@ -119,6 +120,7 @@ export function MembershipsScreen() {
       )}
       {tab === "access" && (
         <div className="flex min-w-0 flex-col gap-8">
+          <MembershipPurchaseReview />
           <UncoveredQueue />
           <BookingAccessQueue />
         </div>
@@ -476,13 +478,38 @@ function BookingAccessQueue() {
                   {booking.title} · {booking.entityName} ·{" "}
                   {dateFmt.format(new Date(booking.startsAt))}
                 </span>
+                <span className="text-sm">
+                  {booking.reason === "payment-declined"
+                    ? "Payment declined. Owner approval is required."
+                    : booking.reason === "suspended"
+                      ? "Branch access is paused."
+                      : booking.reason === "membership-inactive"
+                        ? "Membership is paused or ended."
+                        : "No active membership covers this branch."}
+                </span>
               </div>
-              <Link
-                href={entityHref(booking.entityId, `/class/${booking.classId}`)}
-                className="text-brand-strong inline-flex min-h-11 items-center text-sm underline underline-offset-4"
-              >
-                Review booking
-              </Link>
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href={`/people/${booking.personId}`}
+                  className="text-brand-strong inline-flex min-h-11 items-center text-sm underline underline-offset-4"
+                >
+                  {booking.reason === "suspended" ||
+                  booking.reason === "membership-inactive"
+                    ? "Restore access"
+                    : booking.reason === "payment-declined"
+                      ? "Confirm payment"
+                      : "Give membership"}
+                </Link>
+                <Link
+                  href={entityHref(
+                    booking.entityId,
+                    `/class/${booking.classId}?accessPerson=${encodeURIComponent(booking.name)}&accessReason=${booking.reason}`,
+                  )}
+                  className="text-muted-foreground inline-flex min-h-11 items-center text-sm underline underline-offset-4"
+                >
+                  Open roster
+                </Link>
+              </div>
             </li>
           ))}
         </ul>

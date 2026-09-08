@@ -38,7 +38,7 @@ export function MembershipPurchaseReview() {
       rows: review.data.filter((row) => row.status === "resolution"),
     },
     {
-      title: "Returned for correction",
+      title: "Declined payments",
       rows: review.data.filter((row) => row.status === "rejected"),
     },
     {
@@ -80,14 +80,81 @@ export function MembershipPurchaseReview() {
   );
 }
 
-function PurchaseRow({ purchase }: { purchase: Purchase }) {
+export function PersonTrainingAccessReview({
+  personId,
+  provisionalBranches,
+}: {
+  personId: string;
+  provisionalBranches: string[];
+}) {
+  const trpc = useTRPC();
+  const review = useQuery(trpc.membershipPurchase.review.queryOptions());
+  const purchase = review.data
+    ?.filter((row) => row.personId === personId)
+    .sort((a, b) => {
+      const priority: Record<string, number> = {
+        rejected: 0,
+        claimed: 1,
+        pending: 2,
+        resolution: 3,
+      };
+      return (priority[a.status] ?? 4) - (priority[b.status] ?? 4);
+    })[0];
+
+  if (review.isPending) return <SkeletonRows rows={1} />;
+  if (review.isError)
+    return (
+      <ErrorState
+        label="training access"
+        onRetry={() => void review.refetch()}
+      />
+    );
+  if (!purchase) return null;
+
+  const branches = purchase.branchNames.join(", ");
+  const title =
+    purchase.status === "claimed"
+      ? provisionalBranches.length > 0
+        ? `Provisional access at ${provisionalBranches.join(", ")}`
+        : "Payment waiting for confirmation"
+      : purchase.status === "rejected"
+        ? `Access blocked at ${branches}`
+        : purchase.status === "pending"
+          ? `Access waiting for approval at ${branches}`
+          : `Training access needs a decision at ${branches}`;
+  const description =
+    purchase.status === "claimed"
+      ? "Payment is waiting for confirmation. Booking and check-in access are provisional."
+      : purchase.status === "rejected"
+        ? "Payment was declined. Only owner approval can restore booking and check-in access."
+        : purchase.status === "pending"
+          ? "This free membership needs owner approval before access starts."
+          : "Resolve this request before training access can start.";
+
+  return (
+    <section className="flex flex-col gap-3">
+      <div>
+        <p className="font-medium">{title}</p>
+        <p className="text-muted-foreground mt-1 text-sm">{description}</p>
+      </div>
+      <PurchaseRow purchase={purchase} showPerson={false} />
+    </section>
+  );
+}
+
+function PurchaseRow({
+  purchase,
+  showPerson = true,
+}: {
+  purchase: Purchase;
+  showPerson?: boolean;
+}) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const needsResolution =
-    purchase.status === "resolution" || purchase.status === "rejected";
+  const needsResolution = purchase.status === "resolution";
   const invalidate = () => queryClient.invalidateQueries();
   const confirm = useMutation(
     trpc.membershipPurchase.confirm.mutationOptions({
@@ -111,7 +178,7 @@ function PurchaseRow({ purchase }: { purchase: Purchase }) {
         toast.success(
           needsResolution
             ? "Request closed. Your resolution is saved."
-            : "Request returned. The student can read your reason.",
+            : "Payment declined. Booking and check-in are blocked.",
         );
       },
       onError: (failure) => setError(failure.message),
@@ -132,17 +199,19 @@ function PurchaseRow({ purchase }: { purchase: Purchase }) {
   return (
     <li className={`${cardClass()} flex flex-col gap-4`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <Link
-            href={`/people/${purchase.personId}`}
-            className="focus-visible:outline-ring font-medium underline-offset-4 hover:underline focus-visible:outline-2"
-          >
-            {purchase.studentName}
-          </Link>
-          <p className="text-muted-foreground mt-1 text-sm break-words">
-            {purchase.studentEmail}
-          </p>
-        </div>
+        {showPerson && (
+          <div className="min-w-0">
+            <Link
+              href={`/people/${purchase.personId}`}
+              className="focus-visible:outline-ring font-medium underline-offset-4 hover:underline focus-visible:outline-2"
+            >
+              {purchase.studentName}
+            </Link>
+            <p className="text-muted-foreground mt-1 text-sm break-words">
+              {purchase.studentEmail}
+            </p>
+          </div>
+        )}
         <span className="text-lg font-semibold tabular-nums">
           {formatMoney(purchase.priceMinor, purchase.currency)}
         </span>
@@ -188,7 +257,7 @@ function PurchaseRow({ purchase }: { purchase: Purchase }) {
               setError(
                 needsResolution
                   ? "Describe how you resolved this request."
-                  : "Tell the student what needs to be corrected.",
+                  : "Tell the student why you declined this payment.",
               );
               return;
             }
@@ -198,7 +267,7 @@ function PurchaseRow({ purchase }: { purchase: Purchase }) {
           <Label htmlFor={`purchase-reason-${purchase.id}`}>
             {needsResolution
               ? "How was this resolved?"
-              : "What should the student correct?"}
+              : "Why decline this payment?"}
           </Label>
           <Textarea
             id={`purchase-reason-${purchase.id}`}
@@ -218,7 +287,7 @@ function PurchaseRow({ purchase }: { purchase: Purchase }) {
           <p className="text-muted-foreground text-xs">
             {needsResolution
               ? "Closing saves your note. It does not send a refund or grant access."
-              : "The student can correct this and submit their request again. No money is returned by this action."}
+              : "Declining blocks new booking and check-in. Existing bookings stay for review."}
           </p>
           <div className="flex flex-wrap justify-end gap-2">
             <Button
@@ -234,7 +303,7 @@ function PurchaseRow({ purchase }: { purchase: Purchase }) {
                 ? "Saving…"
                 : needsResolution
                   ? "Close after resolving"
-                  : "Return for correction"}
+                  : "Decline payment"}
             </Button>
           </div>
         </form>
@@ -256,9 +325,9 @@ function PurchaseRow({ purchase }: { purchase: Purchase }) {
                 setRejecting(true);
               }}
             >
-              {needsResolution ? "Record resolution" : "Return for correction"}
+              {needsResolution ? "Record resolution" : "Decline"}
             </Button>
-            {!needsResolution && (
+            {purchase.status !== "resolution" && (
               <Button
                 disabled={busy}
                 onClick={() => {
@@ -270,7 +339,7 @@ function PurchaseRow({ purchase }: { purchase: Purchase }) {
                   ? "Approving…"
                   : purchase.priceMinor === 0
                     ? "Approve membership"
-                    : "Confirm payment and approve"}
+                    : "Confirm payment"}
               </Button>
             )}
           </div>

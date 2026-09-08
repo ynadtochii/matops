@@ -15,13 +15,12 @@ import {
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@matops/ui/dialog";
-import { Input } from "@matops/ui/input";
-import { Label } from "@matops/ui/label";
 import { Select } from "@matops/ui/select";
 import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
 import { useOrganization } from "./entity";
+import { PersonTrainingAccessReview } from "./membership-purchase-review";
 import { PageHeader } from "./page-header";
 import { cardClass, ENTER, Eyebrow } from "./primitives";
 import { SkeletonRows } from "./skeletons";
@@ -175,14 +174,11 @@ export function OrganizationPersonScreen({ personId }: { personId: string }) {
         subtitle={person.email ?? "No email address"}
       />
 
-      <PersonAccess
-        person={{
-          personId: person.id,
-          account: person.account,
-          guardians: person.guardians,
-          archivedAt: person.archivedAt,
-          updatedAt: person.updatedAt,
-        }}
+      <PersonTrainingAccessReview
+        personId={person.id}
+        provisionalBranches={person.branches
+          .filter((branch) => branch.verdict === "provisional")
+          .map((branch) => branch.entityName)}
       />
 
       <section className="flex flex-col gap-3">
@@ -482,6 +478,14 @@ export function OrganizationPersonScreen({ personId }: { personId: string }) {
           </div>
         )}
       </section>
+
+      <PersonAccess
+        person={{
+          personId: person.id,
+          account: person.account,
+          archivedAt: person.archivedAt,
+        }}
+      />
     </div>
   );
 }
@@ -491,67 +495,16 @@ function PersonAccess({
 }: {
   person: {
     personId: string;
-    account: { userId: string; name: string; email: string } | null;
-    guardians: {
-      relationId: string;
-      userId: string;
-      name: string;
-      email: string;
-    }[];
+    account: { email: string } | null;
     archivedAt: Date | null;
-    updatedAt: Date;
   };
 }) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const [accountEmail, setAccountEmail] = useState("");
-  const [accountSearch, setAccountSearch] = useState("");
-  const [guardianEmail, setGuardianEmail] = useState("");
-  const [guardianSearch, setGuardianSearch] = useState("");
-  const accountCandidate = useQuery({
-    ...trpc.person.accountCandidate.queryOptions({
-      personId: person.personId,
-      email: accountSearch || "placeholder@example.com",
-    }),
-    enabled: accountSearch !== "",
-  });
-  const guardianCandidate = useQuery({
-    ...trpc.person.guardianCandidate.queryOptions({
-      studentPersonId: person.personId,
-      email: guardianSearch || "placeholder@example.com",
-    }),
-    enabled: guardianSearch !== "",
-  });
   const refresh = async (message: string) => {
     await queryClient.invalidateQueries(trpc.person.pathFilter());
     toast.success(message);
   };
-  const link = useMutation(
-    trpc.person.linkAccount.mutationOptions({
-      onSuccess: () => refresh("Account linked"),
-      onError: (error) => toast.error(error.message || "Could not link it"),
-    }),
-  );
-  const unlink = useMutation(
-    trpc.person.unlinkAccount.mutationOptions({
-      onSuccess: () => refresh("Account unlinked"),
-      onError: (error) => toast.error(error.message || "Could not unlink it"),
-    }),
-  );
-  const addGuardian = useMutation(
-    trpc.person.addGuardian.mutationOptions({
-      onSuccess: () => refresh("Guardian added"),
-      onError: (error) =>
-        toast.error(error.message || "Could not add that guardian"),
-    }),
-  );
-  const removeGuardian = useMutation(
-    trpc.person.removeGuardian.mutationOptions({
-      onSuccess: () => refresh("Guardian removed"),
-      onError: (error) =>
-        toast.error(error.message || "Could not remove that guardian"),
-    }),
-  );
   const archive = useMutation(
     trpc.person.archive.mutationOptions({
       onSuccess: () => refresh("Person archived"),
@@ -564,214 +517,46 @@ function PersonAccess({
       onError: (error) => toast.error(error.message || "Could not restore"),
     }),
   );
-  const busy =
-    link.isPending ||
-    unlink.isPending ||
-    addGuardian.isPending ||
-    removeGuardian.isPending ||
-    archive.isPending ||
-    restore.isPending;
-  const expectedUpdatedAt = new Date(person.updatedAt).toISOString();
-  const accountMatch = accountCandidate.data;
-  const guardianMatch = guardianCandidate.data;
+  const busy = archive.isPending || restore.isPending;
 
   return (
     <section className="flex flex-col gap-3">
       <Eyebrow>Access</Eyebrow>
+      <div className={`${cardClass()} flex flex-col gap-1`}>
+        <p className="font-medium">Sign-in email</p>
+        <p className="text-muted-foreground text-sm">
+          {person.account?.email ?? "No sign-in account"}
+        </p>
+      </div>
       {person.archivedAt ? (
-        <div className={`${cardClass()} flex flex-wrap items-center gap-3`}>
-          <p className="min-w-0 flex-1 text-sm">
-            This person is archived. Restore them before making changes.
-          </p>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={busy}
-            onClick={() => restore.mutate({ personId: person.personId })}
-          >
-            Restore
-          </Button>
-        </div>
+        <Button
+          className="self-start"
+          size="sm"
+          variant="outline"
+          disabled={busy}
+          onClick={() => restore.mutate({ personId: person.personId })}
+        >
+          Restore person
+        </Button>
       ) : (
-        <>
-          <div className={`${cardClass()} flex flex-col gap-3`}>
-            <div>
-              <p className="font-medium">Login account</p>
-              <p className="text-muted-foreground text-sm">
-                {person.account
-                  ? `${person.account.name} · ${person.account.email}`
-                  : "No login account is linked."}
-              </p>
-            </div>
-            {person.account ? (
-              <ConfirmDialog
-                title="Unlink this account?"
-                description="The person and their history stay. They cannot sign in as this person until another account is linked."
-                confirmLabel="Unlink account"
-                onConfirm={async () => {
-                  await unlink.mutateAsync({
-                    personId: person.personId,
-                    expectedAccountUserId: person.account?.userId ?? "",
-                    expectedUpdatedAt,
-                  });
-                }}
-                trigger={
-                  <Button size="sm" variant="outline" disabled={busy}>
-                    Unlink account
-                  </Button>
-                }
-              />
-            ) : (
-              <div className="flex flex-wrap items-end gap-2">
-                <div className="flex min-w-56 flex-1 flex-col gap-1.5">
-                  <Label htmlFor="person-account-email">Verified email</Label>
-                  <Input
-                    id="person-account-email"
-                    type="email"
-                    value={accountEmail}
-                    onChange={(event) => {
-                      setAccountEmail(event.target.value);
-                      setAccountSearch("");
-                    }}
-                  />
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={busy || !accountEmail.trim()}
-                  onClick={() => setAccountSearch(accountEmail.trim())}
-                >
-                  Find account
-                </Button>
-                {accountMatch && (
-                  <Button
-                    size="sm"
-                    disabled={busy || accountMatch.linkedPersonId !== null}
-                    onClick={() =>
-                      link.mutate({
-                        personId: person.personId,
-                        accountUserId: accountMatch.userId,
-                        expectedUpdatedAt,
-                      })
-                    }
-                  >
-                    Link {accountMatch.name}
-                  </Button>
-                )}
-              </div>
-            )}
-            {accountSearch &&
-              !accountCandidate.isPending &&
-              !accountCandidate.data && (
-                <p className="text-muted-foreground text-sm">
-                  No verified account has that email.
-                </p>
-              )}
-            {accountMatch?.linkedPersonId && (
-              <p className="text-error text-sm">
-                That account is already linked to another person.
-              </p>
-            )}
-          </div>
-
-          <div className={`${cardClass()} flex flex-col gap-3`}>
-            <div>
-              <p className="font-medium">Guardians</p>
-              <p className="text-muted-foreground text-sm">
-                Guardians can book and cancel classes for this student.
-              </p>
-            </div>
-            {person.guardians.length > 0 && (
-              <ul className="flex flex-col gap-2">
-                {person.guardians.map((guardian) => (
-                  <li
-                    key={guardian.relationId}
-                    className="flex flex-wrap items-center gap-2 text-sm"
-                  >
-                    <span className="min-w-0 flex-1">
-                      {guardian.name} · {guardian.email}
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={busy}
-                      onClick={() =>
-                        removeGuardian.mutate({
-                          studentPersonId: person.personId,
-                          guardianUserId: guardian.userId,
-                        })
-                      }
-                    >
-                      Remove
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <div className="flex flex-wrap items-end gap-2">
-              <div className="flex min-w-56 flex-1 flex-col gap-1.5">
-                <Label htmlFor="guardian-account-email">Guardian email</Label>
-                <Input
-                  id="guardian-account-email"
-                  type="email"
-                  value={guardianEmail}
-                  onChange={(event) => {
-                    setGuardianEmail(event.target.value);
-                    setGuardianSearch("");
-                  }}
-                />
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={busy || !guardianEmail.trim()}
-                onClick={() => setGuardianSearch(guardianEmail.trim())}
-              >
-                Find guardian
-              </Button>
-              {guardianMatch && (
-                <Button
-                  size="sm"
-                  disabled={busy}
-                  onClick={() =>
-                    addGuardian.mutate({
-                      studentPersonId: person.personId,
-                      guardianUserId: guardianMatch.userId,
-                    })
-                  }
-                >
-                  Add {guardianMatch.name}
-                </Button>
-              )}
-            </div>
-            {guardianSearch &&
-              !guardianCandidate.isPending &&
-              !guardianCandidate.data && (
-                <p className="text-muted-foreground text-sm">
-                  No verified account has that email.
-                </p>
-              )}
-          </div>
-
-          <ConfirmDialog
-            title="Archive this person?"
-            description="Their history stays. Restore them before changing their account, guardians, branches, or memberships."
-            confirmLabel="Archive person"
-            onConfirm={async () => {
-              await archive.mutateAsync({ personId: person.personId });
-            }}
-            trigger={
-              <Button
-                className="self-start"
-                size="sm"
-                variant="outline"
-                disabled={busy}
-              >
-                Archive person
-              </Button>
-            }
-          />
-        </>
+        <ConfirmDialog
+          title="Archive this person?"
+          description="Their history stays. Restore them before changing branches or memberships."
+          confirmLabel="Archive person"
+          onConfirm={async () => {
+            await archive.mutateAsync({ personId: person.personId });
+          }}
+          trigger={
+            <Button
+              className="self-start"
+              size="sm"
+              variant="outline"
+              disabled={busy}
+            >
+              Archive person
+            </Button>
+          }
+        />
       )}
     </section>
   );

@@ -12,12 +12,14 @@ import type { AssignmentStatus } from "./access-plan";
 
 export type AccessVerdict =
   | "ok"
+  | "provisional"
   /** Nothing they hold covers this branch. */
   | "not-covered"
   /** They are covered, but their month ran out. */
   | "expired"
   /** The branch has not approved them yet. */
   | "pending-approval"
+  | "payment-declined"
   /** The branch stopped them, whatever their memberships say. */
   | "suspended";
 
@@ -91,7 +93,7 @@ export function membershipAccess(input: AccessInput): AccessVerdict {
 
 /** Does this verdict let them book and come in? */
 export function accessAdmits(verdict: AccessVerdict): boolean {
-  return verdict === "ok";
+  return verdict === "ok" || verdict === "provisional";
 }
 
 /** What to tell someone, in the words both clients use. */
@@ -102,10 +104,14 @@ export function accessReason(
   switch (verdict) {
     case "ok":
       return "";
+    case "provisional":
+      return "Payment reported. You can book while the gym checks your payment. If payment is declined, booking and check-in access will pause.";
     case "expired":
       return "Your membership month is unpaid, so booking is closed. Pay at the desk and your gym will open it again.";
     case "pending-approval":
       return `${branchName} has not approved you yet.`;
+    case "payment-declined":
+      return `Your payment for ${branchName} was declined. An owner must approve it before you can book or check in.`;
     case "suspended":
       return `Your place at ${branchName} is paused. Ask the gym to restore it.`;
     case "not-covered":
