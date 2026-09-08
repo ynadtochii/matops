@@ -4,7 +4,13 @@ import { createEntity, eq } from "@matops/db";
 import { classInstance, classParticipation } from "@matops/db/schema";
 
 import type { Harness } from "./helpers";
-import { harness, rejectionCode, seedAcademies, seedClasses } from "./helpers";
+import {
+  harness,
+  personId,
+  rejectionCode,
+  seedAcademies,
+  seedClasses,
+} from "./helpers";
 
 const ORG = "acad_strict";
 const BOSS = "u_strict_owner";
@@ -349,6 +355,8 @@ describe("one place, one booking", () => {
       academyId: gym,
       classId: past.id,
       studentId: ALEX,
+      personOrganizationId: ORG,
+      personId: personId(ORG, ALEX),
       bookingStatus: "cancelled",
       bookingTier: "confirmed",
     });
@@ -381,7 +389,7 @@ describe("one place, one booking", () => {
     const roster = await at(gym, BOSS).membership.members();
     // By user id: the gym membership was created by the assignment, so its
     // `member_id` is a generated uuid rather than the seeded `emem_` shape.
-    const bea = roster.find((r) => r.userId === BEA);
+    const bea = roster.find((r) => r.userId === personId(ORG, BEA));
     expect(bea?.membership?.covered).toBe(true);
     expect(bea?.membership?.planNames).toEqual(["Gym"]);
     expect(bea?.membership?.verdict).toBe("ok");
@@ -394,11 +402,12 @@ describe("one place, one booking", () => {
 
   it("gives the owner one directory row per person across branches", async () => {
     const directory = await owner().stats.organizationMembers();
-    const alex = directory.rows.find((r) => r.userId === ALEX);
+    const alexId = personId(ORG, ALEX);
+    const alex = directory.rows.find((r) => r.userId === alexId);
     expect(alex?.branches.map((b) => b.entityId).sort()).toEqual(
       [ORG, gym].sort(),
     );
-    expect(directory.rows.filter((r) => r.userId === ALEX)).toHaveLength(1);
+    expect(directory.rows.filter((r) => r.userId === alexId)).toHaveLength(1);
     expect(directory.entities.map((e) => e.id).sort()).toEqual(
       [ORG, gym].sort(),
     );

@@ -57,14 +57,17 @@ describe("shared membership seed isolation", () => {
           ["user", "id LIKE 'seed_user_fill_betabran_%'"],
           ["member", "user_id LIKE 'seed_user_fill_betabran_%'"],
           ["entity_membership", "entity_id = 'beta_branch'"],
-          ["access_assignment", "user_id LIKE 'seed_user_fill_betabran_%'"],
+          [
+            "access_assignment",
+            "person_id IN (SELECT id FROM person WHERE account_user_id LIKE 'seed_user_fill_betabran_%')",
+          ],
           [
             "membership_month",
-            "assignment_id IN (SELECT id FROM access_assignment WHERE user_id LIKE 'seed_user_fill_betabran_%')",
+            "assignment_id IN (SELECT id FROM access_assignment WHERE person_id IN (SELECT id FROM person WHERE account_user_id LIKE 'seed_user_fill_betabran_%'))",
           ],
           [
             "membership_month_audit",
-            "assignment_id IN (SELECT id FROM access_assignment WHERE user_id LIKE 'seed_user_fill_betabran_%')",
+            "assignment_id IN (SELECT id FROM access_assignment WHERE person_id IN (SELECT id FROM person WHERE account_user_id LIKE 'seed_user_fill_betabran_%'))",
           ],
         ] as const) {
           result[table] = (
@@ -85,7 +88,7 @@ describe("shared membership seed isolation", () => {
       expect(
         (
           await pg.query(
-            "SELECT id FROM access_assignment WHERE user_id LIKE 'seed_user_fill_alphabra_%'",
+            "SELECT id FROM access_assignment WHERE person_id IN (SELECT id FROM person WHERE account_user_id LIKE 'seed_user_fill_alphabra_%')",
           )
         ).rows,
       ).toEqual([]);
@@ -141,7 +144,7 @@ describe("shared membership seed isolation", () => {
         expect(
           (
             await pg.query(
-              "SELECT id FROM membership_month WHERE month = '2026-07-01' AND paid",
+              "SELECT id FROM membership_month WHERE month = '2026-07-01' AND status = 'confirmed'",
             )
           ).rows,
         ).toHaveLength(1);
@@ -311,8 +314,8 @@ describe("seed fill/clear — a branch on shared memberships", () => {
         VALUES ('mem_gated_owner', '${ACAD}', 'owner_gated', 'owner', now());
       INSERT INTO "entity_membership" (id, organization_id, entity_id, user_id, role, status, joined_at)
         VALUES ('emem_gated_owner', '${ACAD}', '${ACAD}', 'owner_gated', 'owner', 'active', now());
-      INSERT INTO "access_plan" (id, organization_id, name, student_selectable, price_minor, currency)
-        VALUES ('${PLAN}', '${ACAD}', 'Unlimited', true, 5000, 'EUR');
+      INSERT INTO "access_plan" (id, organization_id, name, price_minor, currency)
+        VALUES ('${PLAN}', '${ACAD}', 'Unlimited', 5000, 'EUR');
       INSERT INTO "access_plan_price" (organization_id, plan_id, effective_month, price_minor, currency)
         VALUES ('${ACAD}', '${PLAN}', '2026-06-01', 5000, 'EUR');
       INSERT INTO "access_plan_entity" (organization_id, plan_id, entity_id)
@@ -334,7 +337,7 @@ describe("seed fill/clear — a branch on shared memberships", () => {
     ).toBeGreaterThan(0);
     expect(
       await scalar(
-        `SELECT count(*)::int n FROM "membership_month" WHERE organization_id=$1 AND paid`,
+        `SELECT count(*)::int n FROM "membership_month" WHERE organization_id=$1 AND status = 'confirmed'`,
         [ACAD],
       ),
     ).toBeGreaterThan(0);

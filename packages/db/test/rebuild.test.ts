@@ -78,19 +78,20 @@ describe("rebuildSchedule", () => {
   const uuid = (n: number) =>
     `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
-  it("removes a paused template's future classes and the bookings on them", async () => {
+  it("refuses to cancel a paused template's class with an active booking", async () => {
     const t = uuid(1);
     const c = uuid(2);
     await daily(t, "Dropped", "paused");
     await classAt(c, t, new Date(Date.now() + 3 * DAY_MS));
     await book(c, "u_student");
 
-    const res = await rebuildSchedule(exec());
-
-    expect(res.deleted).toBe(1);
-    expect(res.bookingsRemoved).toBe(1);
-    expect(await exists("class", `id = '${c}'`)).toBe(false);
-    expect(await count("class_participation")).toBe(0);
+    await expect(rebuildSchedule(exec())).rejects.toThrow(
+      "1 stale class has active bookings",
+    );
+    expect(await exists("class", `id = '${c}' AND status = 'scheduled'`)).toBe(
+      true,
+    );
+    expect(await count("class_participation")).toBe(1);
   });
 
   it("never touches a past class or its attendance", async () => {
@@ -147,7 +148,7 @@ describe("rebuildSchedule", () => {
     ).toBe(true);
   });
 
-  it("keeps a walk-in lead when the class it attached to is removed", async () => {
+  it("keeps a walk-in visit attached to the cancelled class", async () => {
     const t = uuid(8);
     const c = uuid(9);
     const lead = uuid(10);
@@ -160,9 +161,13 @@ describe("rebuildSchedule", () => {
          VALUES ('${ACAD}', '${lead}', '${c}');`,
     );
 
-    await rebuildSchedule(exec());
+    const result = await rebuildSchedule(exec());
 
+    expect(result.cancelled).toBe(1);
     expect(await count("drop_in")).toBe(1);
-    expect(await count("drop_in_visit")).toBe(0);
+    expect(await count("drop_in_visit")).toBe(1);
+    expect(await exists("class", `id = '${c}' AND status = 'cancelled'`)).toBe(
+      true,
+    );
   });
 });

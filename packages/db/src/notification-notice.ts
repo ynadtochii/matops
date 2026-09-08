@@ -311,9 +311,8 @@ export async function noticeStatus(exec: DbReader, noticeId: string) {
     noEmail: 0,
   };
   for (const row of grouped) {
-    if (row.status in counts) {
-      counts[row.status as keyof typeof counts] = Number(row.value);
-    }
+    const key = row.status === "no_email" ? "noEmail" : row.status;
+    if (key in counts) counts[key as keyof typeof counts] = Number(row.value);
   }
   return { noticeId, counts, recipients };
 }

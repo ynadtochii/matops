@@ -197,7 +197,7 @@ export async function directoryRosterOf(
       ),
     );
   for (const person of organizationStaff) {
-    const held = rows.find((row) => row.userId === person.userId);
+    const held = rows.find((row) => row.accountUserId === person.userId);
     if (held) {
       held.inheritedRole = true;
       held.role = held.role === "owner" ? "owner" : person.role;

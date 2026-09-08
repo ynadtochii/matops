@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createEntity } from "@matops/db";
 
 import type { Harness } from "./helpers";
-import { harness, rejectionCode, seedAcademies } from "./helpers";
+import { harness, personId, rejectionCode, seedAcademies } from "./helpers";
 
 const ORG = "acad_plans";
 const OTHER = "acad_plans_other";
@@ -316,7 +316,7 @@ describe("what a plan costs, and what it cost", () => {
     // it names, and this month still says what they were asked for.
     const board = await owner().accessPlan.monthBoard();
     const row = board.rows.find(
-      (r) => r.userId === MEMBER && r.planName === "Rising",
+      (r) => r.userId === personId(PRICED, MEMBER) && r.planName === "Rising",
     );
     expect(row?.amount).toEqual({ priceMinor: 5000, currency: "EUR" });
 
@@ -432,7 +432,7 @@ describe("moving several people at once", () => {
     });
     expect(saved.checked).toBe(2);
     expect(saved.enrolled.map((e) => e.userId).sort()).toEqual(
-      [ANA, BEA].sort(),
+      [personId(BULK, ANA), personId(BULK, BEA)].sort(),
     );
     expect([saved.failed, saved.incomplete]).toEqual([[], false]);
 

@@ -250,8 +250,16 @@ export async function assignOne(
 
   let assignmentId: string;
   let created = false;
+  let restored = false;
   if (held) {
     assignmentId = held.id;
+    if (held.status !== "active") {
+      await ctx.db
+        .update(accessAssignment)
+        .set({ status: "active" })
+        .where(eq(accessAssignment.id, held.id));
+      restored = true;
+    }
   } else {
     requireNoOverlap(periods, plan.id, { startMonth, endMonth: null });
     const [made] = await ctx.db
@@ -283,7 +291,7 @@ export async function assignOne(
     subject.accountUserId,
     entityIds,
   );
-  return { id: assignmentId, created, restored: false, ...reconciliation };
+  return { id: assignmentId, created, restored, ...reconciliation };
 }
 
 /**

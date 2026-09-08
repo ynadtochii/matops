@@ -5,7 +5,13 @@ import { createEntity, eq, provisionOrganization } from "@matops/db";
 import { entityMembership } from "@matops/db/schema";
 
 import type { Harness } from "./helpers";
-import { harness, memberId, rejectionCode, seedAcademies } from "./helpers";
+import {
+  harness,
+  memberId,
+  personId,
+  rejectionCode,
+  seedAcademies,
+} from "./helpers";
 
 const GYM = "org_mgr_branch";
 const OTHER = "org_mgr_other";
@@ -185,7 +191,9 @@ describe("a gym manager at a branch", () => {
       const current = await at(OWNER, GYM).entity.current();
       const staff = await at(OWNER, GYM).membership.staff();
       expect(current.role).toBe("owner");
-      expect(staff.find((row) => row.userId === OWNER)?.role).toBe("owner");
+      expect(
+        staff.find((row) => row.userId === personId(GYM, OWNER))?.role,
+      ).toBe("owner");
     } finally {
       await pg.exec(
         `UPDATE "member" SET role = 'owner' WHERE user_id = '${OWNER}' AND organization_id = '${GYM}';`,

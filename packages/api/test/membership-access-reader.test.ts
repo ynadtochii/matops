@@ -7,7 +7,7 @@ import {
   loadMembershipAccess,
   loadRosterStanding,
 } from "../src/membership-access";
-import { harness, seedAcademies } from "./helpers";
+import { harness, personId, seedAcademies } from "./helpers";
 
 const ORG = "acad_reader";
 const BOSS = "u_reader_owner";
@@ -35,6 +35,7 @@ describe("the scoped membership access reader", () => {
       { organizationId: ORG, entityId: input.entityId ?? ORG },
       (tx) =>
         loadMembershipAccess(tx, {
+          personId: personId(ORG, SAM),
           userId: SAM,
           entityId: input.entityId ?? ORG,
           membership:
@@ -78,6 +79,8 @@ describe("the scoped membership access reader", () => {
     const plan = await owner().accessPlan.create({
       name: "Mat only",
       entityIds: [ORG],
+      priceMinor: 5000,
+      currency: "EUR",
     });
     assignment = (
       await owner().accessPlan.assign({

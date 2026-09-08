@@ -149,7 +149,7 @@ describe("a gym with no branch", () => {
 
     const setup = await h.as(OWNER, null).organization.setup();
 
-    expect(setup.progress).toEqual({ done: 1, total: 10, complete: false });
+    expect(setup.progress).toEqual({ done: 1, total: 9, complete: false });
     expect(setup.items.filter((i) => i.done).map((i) => i.key)).toEqual([
       "gym",
     ]);

@@ -83,7 +83,7 @@ describe("shared membership booking gate", () => {
   const ageAssignment = (id: string) =>
     h.exec
       .update(accessAssignment)
-      .set({ createdAt: new Date("2026-09-01T00:00:00Z") })
+      .set({ startsOn: "2026-09-01" })
       .where(eq(accessAssignment.id, id));
 
   it("allows booking when enforcement is off", async () => {
@@ -110,14 +110,14 @@ describe("shared membership booking gate", () => {
     ).toBe("PRECONDITION_FAILED");
   });
 
-  it("keeps a shared month claim locked until staff marks it paid", async () => {
+  it("allows provisional booking while staff checks a payment claim", async () => {
     await enforce(true);
     const assignmentId = await assign();
     await ageAssignment(assignmentId);
     await student().accessPlan.claimMonth({ assignmentId });
-    expect(
-      await rejectionCode(student().booking.book({ classId: CLASS })),
-    ).toBe("PRECONDITION_FAILED");
+    expect((await student().booking.book({ classId: CLASS })).tier).toBe(
+      "provisional",
+    );
     await owner().accessPlan.markMonth({
       assignmentId,
       month: "2026-09-01",

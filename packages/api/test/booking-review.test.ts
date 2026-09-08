@@ -15,6 +15,7 @@ describe("bookings that need a review, not a cancellation", () => {
   let h: Harness;
   let plan: string;
   let held: string;
+  let alexPersonId: string;
 
   const owner = () => h.as(BOSS, ORG);
 
@@ -45,6 +46,13 @@ describe("bookings that need a review, not a cancellation", () => {
         ],
       },
     ]);
+    const people = await h.pg.query<{ id: string }>(
+      `SELECT id FROM "person" WHERE organization_id = $1 AND account_user_id = $2`,
+      [ORG, ALEX],
+    );
+    const alex = people.rows[0];
+    if (!alex) throw new Error("expected Alex's person row");
+    alexPersonId = alex.id;
     await owner().accessPlan.setPolicy({
       graceDays: 7,
       calendarTimeZone: "UTC",
@@ -65,7 +73,7 @@ describe("bookings that need a review, not a cancellation", () => {
         id: NEXT_WEEK,
         academyId: ORG,
         instructorId: BOSS,
-        startsInMinutes: 60 * 24 * 7,
+        startsInMinutes: 60 * 24 * 6,
       },
     ]);
     await h.as(ALEX, ORG).booking.book({ classId: NEXT_WEEK });
@@ -86,7 +94,7 @@ describe("bookings that need a review, not a cancellation", () => {
   it("names the booking instead, with the reason", async () => {
     const seen = await owner().accessPlan.bookingsToReview({ limit: 50 });
     expect(seen.items.map((b) => [b.userId, b.classId, b.reason])).toEqual([
-      [ALEX, NEXT_WEEK, "membership-inactive"],
+      [alexPersonId, NEXT_WEEK, "membership-inactive"],
     ]);
   });
 

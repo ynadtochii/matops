@@ -414,6 +414,7 @@ export const attendanceRouter = {
       // at all, which `booking-count.test.ts` holds (ADR 126).
       const [held] = await ctx.db
         .select({
+          id: classParticipation.id,
           status: classParticipation.bookingStatus,
           tier: classParticipation.bookingTier,
           attendanceStatus: classParticipation.attendanceStatus,
@@ -450,46 +451,44 @@ export const attendanceRouter = {
         }
         claimed = seat.strict;
       }
-      const [saved] = await ctx.db
-        .insert(classParticipation)
-        .values({
-          academyId: ctx.academyId,
-          classId: input.classId,
-          personOrganizationId: subjectPersonId ? ctx.organizationId : null,
-          personId: subjectPersonId,
-          studentId: subject.accountUserId,
-          bookingStatus: "none",
-          bookingTier: "confirmed",
-          attendanceStatus: "present",
-          attendedAt: now,
-          markedBy: ctx.session.user.id,
-        })
-        .onConflictDoUpdate({
-          // If they DID book, keep booking_status — just mark them present. A
-          // place this admission just claimed is written onto the row, or the
-          // next admission of the same person would take a second one.
-          target: subjectPersonId
-            ? [classParticipation.classId, classParticipation.personId]
-            : [classParticipation.classId, classParticipation.studentId],
-          targetWhere: subjectPersonId ? sql`person_id is not null` : undefined,
-          set: claimed
-            ? {
-                bookingStatus:
-                  held?.status === "cancelled"
-                    ? "none"
-                    : (held?.status ?? "none"),
-                bookingTier: "confirmed",
-                attendanceStatus: "present",
-                attendedAt: now,
-                markedBy: ctx.session.user.id,
-              }
-            : {
-                attendanceStatus: "present",
-                attendedAt: now,
-                markedBy: ctx.session.user.id,
-              },
-        })
-        .returning({ id: classParticipation.id });
+      const values = {
+        personOrganizationId: subjectPersonId ? ctx.organizationId : null,
+        personId: subjectPersonId,
+        studentId: subject.accountUserId,
+        bookingStatus:
+          claimed && held?.status === "cancelled"
+            ? ("none" as const)
+            : held?.status,
+        bookingTier: claimed ? ("confirmed" as const) : held?.tier,
+        attendanceStatus: "present" as const,
+        attendedAt: now,
+        markedBy: ctx.session.user.id,
+      };
+      const [saved] = held
+        ? await ctx.db
+            .update(classParticipation)
+            .set(values)
+            .where(eq(classParticipation.id, held.id))
+            .returning({ id: classParticipation.id })
+        : await ctx.db
+            .insert(classParticipation)
+            .values({
+              academyId: ctx.academyId,
+              classId: input.classId,
+              ...values,
+              bookingStatus: "none",
+              bookingTier: "confirmed",
+            })
+            .onConflictDoUpdate({
+              target: subjectPersonId
+                ? [classParticipation.classId, classParticipation.personId]
+                : [classParticipation.classId, classParticipation.studentId],
+              targetWhere: subjectPersonId
+                ? sql`person_id is not null`
+                : undefined,
+              set: values,
+            })
+            .returning({ id: classParticipation.id });
       if (!saved) {
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       }

@@ -19,6 +19,7 @@ import {
   notification,
   notificationRecipient,
   person,
+  rankCorrection,
   rankPromotion,
   user,
 } from "./schema";
@@ -134,6 +135,16 @@ export async function eraseMemberData(
         and(
           eq(rankPromotion.academyId, academyId),
           eq(rankPromotion.memberId, memberId),
+        ),
+      ),
+  );
+  await del("rank_correction", () =>
+    exec
+      .delete(rankCorrection)
+      .where(
+        and(
+          eq(rankCorrection.academyId, academyId),
+          eq(rankCorrection.memberId, memberId),
         ),
       ),
   );

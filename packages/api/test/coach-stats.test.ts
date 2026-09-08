@@ -100,13 +100,20 @@ describe("O10 coach stats", () => {
         studentId: STUDENT_B,
         attendanceStatus: "absent",
       },
-      {
-        academyId: ACAD,
-        classId: "11111111-1111-4111-8111-000000000002",
-        studentId: STUDENT_A,
-        attendanceStatus: "unmarked",
-      },
     ]);
+    for (const [academyId, userId, classId, nobodyAttended] of [
+      [ACAD, ANA, "11111111-1111-4111-8111-000000000001", false],
+      [ACAD, ANA, "11111111-1111-4111-8111-000000000002", true],
+      [OTHER, OTHER_OWNER, "11111111-1111-4111-8111-000000000005", true],
+    ] as const) {
+      const caller = h.as(userId, academyId).attendance;
+      const before = await caller.list({ id: classId });
+      await caller.finish({
+        id: classId,
+        fingerprint: before.review.fingerprint,
+        nobodyAttended,
+      });
+    }
   });
 
   afterAll(() => h.close());
@@ -116,8 +123,8 @@ describe("O10 coach stats", () => {
     const ana = res.coaches.find((c) => c.instructorId === ANA);
     expect(ana).toMatchObject({
       name: "Ana",
-      classesLed: 0,
-      unresolvedEnded: 2,
+      classesLed: 2,
+      unresolvedEnded: 0,
       minutesLed: 150,
       markedClasses: 1,
       visitsTaught: 1,
@@ -126,7 +133,7 @@ describe("O10 coach stats", () => {
       cancelled: 0,
       onStaff: true,
     });
-    expect(ana?.markedRate).toBeNull();
+    expect(ana?.markedRate).toBe(0.5);
   });
 
   it("counts a cancelled class as cancelled, not as led", async () => {

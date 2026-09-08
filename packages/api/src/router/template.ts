@@ -268,7 +268,11 @@ export const templateRouter = {
           .set({ status: "cancelled" })
           .where(futureScheduled)
           .returning({ id: classInstance.id });
-        await fillOrRefuse(ctx.db, { ...row, generatedUntil: null }, { now });
+        await fillOrRefuse(
+          ctx.db,
+          { ...row, generatedUntil: null },
+          { now, reviveCancelled: true },
+        );
         if (affected.length > 0) {
           const cancelled = await ctx.db
             .select({

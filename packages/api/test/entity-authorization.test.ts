@@ -5,7 +5,7 @@ import { and, createEntity, eq, provisionOrganization } from "@matops/db";
 import { entityMembership, organization } from "@matops/db/schema";
 
 import type { Harness } from "./helpers";
-import { harness, rejectionCode, seedAcademies } from "./helpers";
+import { harness, personId, rejectionCode, seedAcademies } from "./helpers";
 
 const ORG_A = "org_a";
 const ORG_B = "org_b";
@@ -589,7 +589,9 @@ describe("switching a branch onto memberships", () => {
     });
     expect(preview.enforced).toBe(false);
     expect(preview.activeMembers).toBe(1);
-    expect(preview.uncovered.map((m) => m.userId).sort()).toEqual([SAM]);
+    expect(preview.uncovered.map((m) => m.userId).sort()).toEqual([
+      personId(ORG_S, SAM),
+    ]);
   });
 
   it("counts nobody once a plan covers the branch", async () => {

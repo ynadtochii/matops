@@ -1,5 +1,11 @@
 import { sql } from "drizzle-orm";
-import { check, foreignKey, index, pgTable } from "drizzle-orm/pg-core";
+import {
+  check,
+  foreignKey,
+  index,
+  pgTable,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 
 import { organization } from "./auth-schema";
 import { entity } from "./entity-schema";
@@ -29,6 +35,13 @@ export const productEvent = pgTable(
       table.organizationId,
       table.occurredAt,
     ),
+    uniqueIndex("product_event_milestone_once")
+      .on(
+        table.organizationId,
+        sql`coalesce(${table.entityId}, '')`,
+        table.name,
+      )
+      .where(sql`${table.kind} = 'milestone'`),
     check(
       "product_event_kind_known",
       sql`${table.kind} IN ('milestone', 'activity')`,

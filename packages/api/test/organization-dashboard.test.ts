@@ -5,7 +5,7 @@ import { createEntity } from "@matops/db";
 import { entityMembership } from "@matops/db/schema";
 
 import type { Harness } from "./helpers";
-import { harness, rejectionCode, seedClasses } from "./helpers";
+import { harness, personId, rejectionCode, seedClasses } from "./helpers";
 
 const ORG_A = "org_a";
 const ORG_B = "org_b";
@@ -56,6 +56,7 @@ describe("the organization dashboard", () => {
         id: "emem_south_nomad",
         organizationId: ORG_A,
         entityId: south,
+        personId: personId(ORG_A, NOMAD),
         userId: NOMAD,
         role: "student",
         status: "active",
@@ -65,6 +66,7 @@ describe("the organization dashboard", () => {
         id: "emem_south_coach",
         organizationId: ORG_A,
         entityId: south,
+        personId: personId(ORG_A, COACH),
         userId: COACH,
         role: "member",
         status: "pending",
@@ -124,8 +126,8 @@ describe("the organization dashboard", () => {
     expect(perMat).toBe(2);
     expect(total.members).toBe(1);
     expect(total.entities.flatMap((e) => e.memberUserIds)).toEqual([
-      NOMAD,
-      NOMAD,
+      personId(ORG_A, NOMAD),
+      personId(ORG_A, NOMAD),
     ]);
   });
 

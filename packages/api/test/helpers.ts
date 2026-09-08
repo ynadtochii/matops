@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { PGlite } from "@electric-sql/pglite";
 import { TRPCError } from "@trpc/server";
 
@@ -190,6 +191,14 @@ function orgMemberId(academyId: string, userId: string): string {
   return `mem_${academyId}_${userId}`;
 }
 
+export function personId(academyId: string, userId: string): string {
+  const hex = createHash("sha256")
+    .update(`${academyId}:${userId}`)
+    .digest("hex")
+    .slice(0, 32);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20)}`;
+}
+
 export async function seedAcademies(
   pg: PGlite,
   academies: AcademySpec[],
@@ -198,6 +207,7 @@ export async function seedAcademies(
   const users: string[] = [];
   const orgs: string[] = [];
   const members: string[] = [];
+  const people: string[] = [];
 
   for (const academy of academies) {
     orgs.push(
@@ -212,6 +222,9 @@ export async function seedAcademies(
       }
       members.push(
         `(${lit(orgMemberId(academy.id, m.userId))}, ${lit(academy.id)}, ${lit(m.userId)}, ${lit(m.role)}, now())`,
+      );
+      people.push(
+        `(${lit(personId(academy.id, m.userId))}, ${lit(academy.id)}, ${lit(m.name ?? `User ${m.userId}`)}, ${lit(`${m.userId}@test.local`)}, ${lit(m.userId)}, now(), now())`,
       );
     }
   }
@@ -232,6 +245,11 @@ export async function seedAcademies(
       `INSERT INTO "member" (id, organization_id, user_id, role, created_at)
          VALUES ${members.join(",")};`,
     );
+  if (people.length)
+    statements.push(
+      `INSERT INTO "person" (id, organization_id, name, email, account_user_id, created_at, updated_at)
+         VALUES ${people.join(",")};`,
+    );
   if (statements.length) await pg.exec(statements.join("\n"));
 
   const exec = execOn(pg);
@@ -249,6 +267,7 @@ export async function seedAcademies(
           id: memberId(academy.id, m.userId),
           organizationId: academy.id,
           entityId: academy.id,
+          personId: personId(academy.id, m.userId),
           userId: m.userId,
           role: m.role,
           status: m.status,
@@ -301,10 +320,10 @@ export async function seedParticipations(
 ): Promise<void> {
   const values = rows.map(
     (r) =>
-      `(gen_random_uuid(), ${lit(r.academyId)}, ${lit(r.classId)}, ${lit(r.studentId)}, ${lit(r.bookingStatus ?? "booked")}, ${lit(r.bookingTier ?? "confirmed")}, ${lit(r.attendanceStatus ?? "unmarked")}, now(), now(), now())`,
+      `(gen_random_uuid(), ${lit(r.academyId)}, ${lit(r.classId)}, ${lit(r.studentId)}, ${lit(r.academyId)}, ${lit(personId(r.academyId, r.studentId))}, ${lit(r.bookingStatus ?? "booked")}, ${lit(r.bookingTier ?? "confirmed")}, ${lit(r.attendanceStatus ?? "unmarked")}, now(), now(), now())`,
   );
   await pg.exec(`
-    INSERT INTO "class_participation" (id, academy_id, class_id, student_id, booking_status, booking_tier, attendance_status, booked_at, created_at, updated_at)
+    INSERT INTO "class_participation" (id, academy_id, class_id, student_id, person_organization_id, person_id, booking_status, booking_tier, attendance_status, booked_at, created_at, updated_at)
       VALUES ${values.join(",")};
   `);
 }

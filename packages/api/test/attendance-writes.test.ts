@@ -543,7 +543,16 @@ describe("attendance review", () => {
     });
     const yesterday = await caller.list({ id: YESTERDAY });
     const today = await caller.list({ id: TODAY });
-    expect(yesterday.rows.map((row) => row.studentId)).toEqual([ANA]);
+    const people = await h.pg.query<{ id: string; account_user_id: string }>(
+      `SELECT id, account_user_id FROM "person" WHERE account_user_id IN ($1, $2)`,
+      [ANA, BO],
+    );
+    const personId = new Map(
+      people.rows.map((row) => [row.account_user_id, row.id]),
+    );
+    expect(yesterday.rows.map((row) => row.studentId)).toEqual([
+      personId.get(ANA),
+    ]);
     expect(yesterday.dropIns).toHaveLength(1);
     expect(yesterday.review).toMatchObject({
       present: 2,
@@ -551,7 +560,7 @@ describe("attendance review", () => {
       unmarked: 0,
       total: 2,
     });
-    expect(today.rows.map((row) => row.studentId)).toEqual([BO]);
+    expect(today.rows.map((row) => row.studentId)).toEqual([personId.get(BO)]);
     expect(today.dropIns).toHaveLength(0);
     expect(today.review).toMatchObject({
       present: 0,

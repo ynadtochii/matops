@@ -4,7 +4,7 @@ import { and, createEntity, eq } from "@matops/db";
 import { entityMembership } from "@matops/db/schema";
 
 import type { Harness } from "./helpers";
-import { harness, rejectionCode, seedAcademies } from "./helpers";
+import { harness, personId, rejectionCode, seedAcademies } from "./helpers";
 
 const ORG = "acad_assign";
 const OWNER = "u_assign_owner";
@@ -286,6 +286,8 @@ describe("marking a membership month paid", () => {
     const plan = await owner().accessPlan.create({
       name: "Mat only",
       entityIds: [ORG2],
+      priceMinor: 6500,
+      currency: "EUR",
     });
     const made = await owner().accessPlan.assign({
       userId: SAM,
@@ -373,12 +375,15 @@ describe("marking a membership month paid", () => {
     });
     expect(await auditCount()).toBe(before + 1);
 
-    const rows = await h.pg.query<{ was_paid: boolean | null; paid: boolean }>(
-      `SELECT was_paid, paid FROM "membership_month_audit" ORDER BY created_at ASC`,
+    const rows = await h.pg.query<{
+      before_status: string | null;
+      after_status: string;
+    }>(
+      `SELECT before_status, after_status FROM "membership_month_audit" ORDER BY created_at ASC`,
     );
-    expect(rows.rows.map((r) => [r.was_paid, r.paid])).toEqual([
-      [null, true],
-      [true, false],
+    expect(rows.rows.map((r) => [r.before_status, r.after_status])).toEqual([
+      [null, "confirmed"],
+      ["confirmed", "unpaid"],
     ]);
   });
 
@@ -412,7 +417,7 @@ describe("marking a membership month paid", () => {
     expect(board.monthLabel).toBeTruthy();
 
     const row = board.rows.find((r) => r.assignmentId === assignment);
-    expect(row?.userId).toBe(SAM);
+    expect(row?.userId).toBe(personId(ORG2, SAM));
     expect(row?.planName).toBe("Mat only");
     expect(row?.entityIds).toEqual([ORG2]);
     expect(row?.deadlineLabel).toBeTruthy();
@@ -503,6 +508,8 @@ describe("a member says they paid", () => {
     const plan = await owner().accessPlan.create({
       name: "Mat only",
       entityIds: [ORGC],
+      priceMinor: 6500,
+      currency: "EUR",
     });
     sams = (await owner().accessPlan.assign({ userId: SAM, planId: plan.id }))
       .id;
@@ -599,7 +606,7 @@ describe("a member says they paid", () => {
     ).toBeNull();
   });
 
-  it("clears the claim and nothing else when the owner rejects, and the member can claim again", async () => {
+  it("rejects the claim and blocks another report until the hold is resolved", async () => {
     await h.as(SAM, ORGC).accessPlan.claimMonth({ assignmentId: sams });
     const before = await auditCount();
 
@@ -609,14 +616,12 @@ describe("a member says they paid", () => {
     });
     expect(rejected.cleared).toBe(true);
     expect(await owner().accessPlan.claims()).toEqual([]);
-    // No audit row: `paid` did not change, and the audit is that flag's history.
-    expect(await auditCount()).toBe(before);
+    expect(await auditCount()).toBe(before + 1);
 
-    const again = await h
-      .as(SAM, ORGC)
-      .accessPlan.claimMonth({ assignmentId: sams });
-    expect(again.claimed).toBe(true);
-    expect(await owner().accessPlan.claims()).toHaveLength(1);
+    expect(
+      await h.as(SAM, ORGC).accessPlan.claimMonth({ assignmentId: sams }),
+    ).toMatchObject({ claimed: false, status: "rejected" });
+    expect(await owner().accessPlan.claims()).toHaveLength(0);
   });
 
   it("reports nothing cleared when there was no claim", async () => {

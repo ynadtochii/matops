@@ -631,6 +631,7 @@ CREATE UNIQUE INDEX "person_one_per_account" ON "person" USING btree ("organizat
 CREATE INDEX "person_by_org_name" ON "person" USING btree ("organization_id","name");;--> statement-breakpoint
 CREATE INDEX "product_event_by_time" ON "product_event" USING btree ("occurred_at");;--> statement-breakpoint
 CREATE INDEX "product_event_by_org_time" ON "product_event" USING btree ("organization_id","occurred_at");;--> statement-breakpoint
+CREATE UNIQUE INDEX "product_event_milestone_once" ON "product_event" USING btree ("organization_id",coalesce("entity_id", ''),"name") WHERE "product_event"."kind" = 'milestone';;--> statement-breakpoint
 CREATE INDEX "pt_by_user" ON "push_token" USING btree ("user_id");;--> statement-breakpoint
 CREATE INDEX "mn_by_member" ON "member_note" USING btree ("academy_id","member_id");;--> statement-breakpoint
 CREATE UNIQUE INDEX "mr_uniq_member_discipline" ON "member_rank" USING btree ("academy_id","member_id","discipline");;--> statement-breakpoint
