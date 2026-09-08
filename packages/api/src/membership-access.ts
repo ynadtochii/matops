@@ -335,7 +335,10 @@ export async function loadRosterStanding(
     .innerJoin(accessPlan, eq(accessPlan.id, accessAssignment.planId))
     .innerJoin(person, eq(person.id, accessAssignment.personId))
     .where(
-      or(inArray(person.id, userIds), inArray(person.accountUserId, userIds)),
+      or(
+        inArray(sql<string>`${person.id}::text`, userIds),
+        inArray(person.accountUserId, userIds),
+      ),
     );
   const calendar = await membershipCalendar(db);
   const month = monthOf(input.now, calendar.timeZone);
