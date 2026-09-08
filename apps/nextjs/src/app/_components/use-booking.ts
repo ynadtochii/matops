@@ -4,8 +4,8 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { isActiveMember, isStaff } from "@matops/domain";
 import { toast } from "@matops/ui/toast";
+import { useInvalidate } from "@matops/ui/use-invalidate";
 
-import { useInvalidate } from "~/trpc/invalidate";
 import { useTRPC } from "~/trpc/react";
 import { useEntity } from "./entity";
 

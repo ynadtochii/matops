@@ -1,1 +1,0 @@
-ALTER TABLE "curriculum_block_template" ADD COLUMN "category" text;

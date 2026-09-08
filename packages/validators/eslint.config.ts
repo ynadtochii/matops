@@ -1,10 +1,1 @@
-import { defineConfig } from "eslint/config";
-
-import { baseConfig } from "@matops/eslint-config/base";
-
-export default defineConfig(
-  {
-    ignores: ["dist/**"],
-  },
-  baseConfig,
-);
+export { default } from "@matops/eslint-config/package";

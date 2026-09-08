@@ -18,7 +18,6 @@
     "@better-auth/expo": "catalog:",
     "@expo-google-fonts/geist": "^0.4.2",
     "@expo-google-fonts/geist-mono": "^0.4.3",
-    "@legendapp/list": "^2.0.14",
     "@matops/domain": "workspace:*",
     "@matops/ui": "workspace:*",
     "@matops/validators": "workspace:*",

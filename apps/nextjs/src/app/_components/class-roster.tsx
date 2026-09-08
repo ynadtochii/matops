@@ -20,10 +20,10 @@ import { Input } from "@matops/ui/input";
 import { FOCUS_RING } from "@matops/ui/motion";
 import { Separator } from "@matops/ui/separator";
 import { toast } from "@matops/ui/toast";
+import { useInvalidate } from "@matops/ui/use-invalidate";
 import { AddVisitorSchema } from "@matops/validators";
 
 import { optimistic, rollback } from "~/lib/optimistic";
-import { useInvalidate } from "~/trpc/invalidate";
 import { useTRPC } from "~/trpc/react";
 import { ClassTheme } from "./class-theme";
 import { CoachSelect } from "./coach-select";
