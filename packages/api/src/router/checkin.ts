@@ -4,6 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { and, asc, eq, gte, isNull, lt, or, sql } from "@matops/db";
 import { classInstance, classParticipation } from "@matops/db/schema";
 import {
+  BOOKING_LOCKED,
   bookingTier,
   canCheckIn,
   checkInFetchWindow,
@@ -78,7 +79,7 @@ export const checkinRouter = {
       if (gate.locked) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
-          message: gate.message ?? "Booking is locked for you.",
+          message: gate.message ?? BOOKING_LOCKED,
         });
       }
       const tier = gate.provisional

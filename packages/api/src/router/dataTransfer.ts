@@ -244,7 +244,9 @@ async function buildPreview(
     throw new TRPCError({
       code: "BAD_REQUEST",
       message:
-        error instanceof Error ? error.message : "Could not read the CSV",
+        error instanceof Error
+          ? error.message
+          : "Couldn't read that CSV. Check the file and try again.",
     });
   }
   if (parsed.length < 2) {

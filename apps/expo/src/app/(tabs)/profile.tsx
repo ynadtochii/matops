@@ -68,7 +68,7 @@ function ProfileDetails({
         setError(null);
         onSaved();
       },
-      onError: (err) => setError(err.message || "Could not save"),
+      onError: (err) => setError(err.message || "Couldn't save. Try again."),
     }),
   );
 
@@ -201,7 +201,7 @@ function MembershipNotice() {
               />
               {m.reportedAt ? (
                 <Txt size={13} tone="muted">
-                  Payment submitted — waiting for your gym to confirm.
+                  Payment submitted. Waiting for your gym to confirm.
                 </Txt>
               ) : (
                 <Button
@@ -513,9 +513,9 @@ export default function Profile() {
         <Stack gap={8}>
           <Eyebrow>Another branch</Eyebrow>
           <Muted>
-            Train somewhere else too? Ask them for their 6-digit ID and join it
-            here. Switching between the places you already train at is the
-            branch name at the top of the screen.
+            Train somewhere else too? Ask them for their 6-digit join code and
+            join it here. Switching between the places you already train at is
+            the branch name at the top of the screen.
           </Muted>
           <Button
             label="Join another branch"

@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 
 import { useEntityMaybe } from "./entity";
 
-const FEEDBACK_EMAIL = "yevhenii.tech@gmail.com";
+export const CONTACT_EMAIL = "yevhenii.tech@gmail.com";
 
 /** Report a bug from where it happened, with the context prefilled. */
 export function FeedbackLink({ className }: { className?: string }) {
@@ -24,7 +24,7 @@ export function FeedbackLink({ className }: { className?: string }) {
 
   return (
     <a
-      href={`mailto:${FEEDBACK_EMAIL}?subject=${subject}&body=${body}`}
+      href={`mailto:${CONTACT_EMAIL}?subject=${subject}&body=${body}`}
       className={
         className ??
         "text-muted-foreground hover:text-foreground flex min-h-11 items-center rounded-md px-1 py-1 text-xs transition-colors sm:min-h-0"

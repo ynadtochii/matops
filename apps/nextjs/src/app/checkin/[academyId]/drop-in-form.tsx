@@ -62,7 +62,7 @@ export function DropInForm({ academyId }: { academyId: string }) {
   const submit = useMutation(
     trpc.dropIn.submit.mutationOptions({
       onError: (err) => {
-        setError(err.message || "Could not check in");
+        setError(err.message || "Couldn't check you in. Try again.");
         // The class list is the likely reason a submit was refused, so pull a
         // fresh one: leaving a class on screen that the server just rejected
         // invites the same refusal again.
@@ -178,10 +178,11 @@ export function DropInForm({ academyId }: { academyId: string }) {
           phone,
         );
         if (hasChoice && selected === undefined) {
-          found.classId = "Pick a class, or tell us you're just visiting";
+          found.classId = "Pick a class, or tell us you're just visiting.";
         }
         if (!risk) {
-          found.risk = "Please confirm you understand the training risks";
+          found.risk =
+            "Tick the box to confirm you understand the training risks.";
         }
         if (Object.keys(found).length > 0) {
           setErrors(found);

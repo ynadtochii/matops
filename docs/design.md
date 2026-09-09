@@ -42,7 +42,7 @@ page (canonical, pure black)**. Full set in `theme.css`; key tokens:
 | `--muted` / `--accent` | `#F5F5F4` | `#1A1917` |
 | `--muted-foreground`   | `#79716B` | `#A6A09B` |
 | `--border` / `--input` | `#E7E5E4` | `#292524` |
-| `--ring`               | `#A6A09B` | `#79716B` |
+| `--ring`               | `#6A4DFF` | `#8B72FF` |
 | `--destructive`        | `#E40014` | `#82181A` |
 
 **`--destructive` is a fill, never ink.** The dark value is a maroon chosen so
@@ -52,14 +52,20 @@ an invalid input's border, a failed-state box, the quiet `destructive-outline`
 button) uses `--error` below, which is legible on both themes.
 
 **Callout accents** — the _only_ non-neutral hues, and only for meaning
-(callouts, alerts, status dots). Same in both themes:
+(callouts, alerts, status dots). **Per theme, not shared.** These are ink as
+often as fill: a form error, a drift badge, the `destructive-outline` label. The
+bright set reads at 5:1 and up on the black surface but 2.2-3.8:1 on white, so
+light carries its own darker values.
 
-| Token       | Hex       | Use                         |
-| ----------- | --------- | --------------------------- |
-| `--info`    | `#2B7FFF` | neutral notice ("Heads up") |
-| `--warning` | `#FF6900` | caution ("Careful")         |
-| `--error`   | `#FB2C36` | failure ("Broken")          |
-| `--success` | `#00C950` | confirmation ("Nice")       |
+| Token       | Light     | Dark      | Use                         |
+| ----------- | --------- | --------- | --------------------------- |
+| `--info`    | `#1257C7` | `#2B7FFF` | neutral notice ("Heads up") |
+| `--warning` | `#A34500` | `#FF6900` | caution ("Careful")         |
+| `--error`   | `#C8102B` | `#FB2C36` | failure ("Broken")          |
+| `--success` | `#0A7D3C` | `#00C950` | confirmation ("Nice")       |
+
+Each carries a matching `-foreground` for the fill role. In light that is white
+on warning and success; the dark values keep the originals.
 
 **Trend, not judgement.** A metric moving up takes `--success`, down takes
 `--warning` — never `--error`, because a quiet week is worth a look, not a
@@ -246,6 +252,13 @@ is the reference pair (`packages/ui/src/button.tsx` + `button.native.tsx` +
   `@matops/ui/button` instead of hand-copying the recipe.
 - **Inputs** — sharp, minimal. **UPPERCASE mono field labels** (`EMAIL`,
   `PASSWORD`). Focus = visible `--ring`.
+- **Focus** — one recipe, `FOCUS_RING` in `@matops/ui/motion`: a 2px `--ring`
+  ring at a 2px offset on `--background`. `--ring` **is the brand violet**, per
+  the brand rule above: no grey in the stone ramp reaches 3:1 on white, and the
+  offset keeps the ring off the button fill so it never has to contrast with
+  ink or with the red of a destructive button. Never a partial-opacity ring;
+  `ring-ring/50` renders at 1.5:1. Compose `FOCUS_RING` rather than re-typing it,
+  and `FOCUS_RING_INSET` where the control is flush to an edge.
 - **Card** — flat `--border`, **no shadow**. Meta separated by a **dashed** rule
   (`border-dashed`), not solid.
 - **Callouts** — a **dashed left stripe** colored by accent type: info / warning /

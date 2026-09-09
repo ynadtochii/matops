@@ -204,8 +204,8 @@ export function LeadsPipeline({ initialFilter }: { initialFilter?: string }) {
       />
 
       {shown.length === 0 ? (
-        <EmptyState title="Nothing here.">
-          No lead is at this stage right now.
+        <EmptyState title="No leads at this stage.">
+          Pick another stage, or wait for the next visitor.
         </EmptyState>
       ) : (
         <div key={filter} className={cn("flex flex-col gap-3", RESOLVE)}>

@@ -69,7 +69,7 @@ function ProfileDetails({
         toast.success("Profile saved");
         router.refresh();
       },
-      onError: (err) => toast.error(err.message || "Could not save"),
+      onError: (err) => toast.error(err.message || "Couldn't save. Try again."),
     }),
   );
 
@@ -145,7 +145,7 @@ function ProfileDetails({
         </fieldset>
         {update.isError && (
           <p role="alert" className="text-error text-sm">
-            {update.error.message || "Could not save your profile. Try again."}
+            {update.error.message || "Couldn't save your profile. Try again."}
           </p>
         )}
         <div className="flex flex-wrap gap-2">
@@ -312,8 +312,8 @@ export function ProfileScreen({
             <SectionHeading>More branches</SectionHeading>
             <div className="flex flex-col gap-4 pt-3">
               <p className="text-muted-foreground text-sm">
-                Enter the branch’s 6-digit ID to request access. Use the sidebar
-                picker to switch between branches you already joined.
+                Enter the branch’s 6-digit join code to request access. Use the
+                sidebar picker to switch between branches you already joined.
               </p>
               <JoinAnotherBranch />
             </div>

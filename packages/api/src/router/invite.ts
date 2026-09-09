@@ -60,7 +60,7 @@ export const inviteRouter = {
    * Resolve a token on the public join screen → academy + intended role. Public
    * (no session, no active academy): reads the base connection, since
    * `academy_invite` has no RLS. Fails loudly on an unknown/expired token so the
-   * UI can show "This invite isn't valid — ask your gym for a new link" (spec S2).
+   * UI can show "This invite isn't valid. Ask your gym for a new link." (spec S2).
    */
   resolve: publicProcedure
     .use(rateLimited(30, 60_000))
@@ -70,7 +70,7 @@ export const inviteRouter = {
       if (!resolved) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "This invite isn't valid — ask your gym for a new link.",
+          message: "This invite isn't valid. Ask your gym for a new link.",
         });
       }
       return resolved;

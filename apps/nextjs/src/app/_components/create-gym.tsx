@@ -30,7 +30,7 @@ export function CreateGym() {
         router.replace("/overview");
         router.refresh();
       },
-      onError: () => toast.error("Could not create the gym"),
+      onError: () => toast.error("Couldn't create the gym. Try again."),
     }),
   );
 

@@ -140,8 +140,8 @@ export function NotificationsScreen() {
           onRetry={() => void feed.refetch()}
         />
       ) : feed.data.length === 0 ? (
-        <EmptyState title="Nothing yet.">
-          Class changes and membership updates land here.
+        <EmptyState title="No notifications yet.">
+          Class changes and membership updates show up here.
         </EmptyState>
       ) : (
         <Feed items={feed.data} />

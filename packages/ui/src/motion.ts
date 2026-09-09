@@ -9,6 +9,8 @@ export const PRESS =
   "active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100";
 
 export const FOCUS_RING =
-  "focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none";
+  "focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-offset-2 " +
+  "focus-visible:ring-offset-background focus-visible:outline-none";
 
-export const FOCUS_RING_INSET = `${FOCUS_RING} focus-visible:ring-inset`;
+export const FOCUS_RING_INSET =
+  "focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-inset focus-visible:outline-none";

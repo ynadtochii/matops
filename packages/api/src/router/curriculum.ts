@@ -400,7 +400,7 @@ export const curriculumRouter = {
       if (!created) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: "Could not add the track",
+          message: "Couldn't add the track. Try again.",
         });
       }
       return { id: created.id };
@@ -468,7 +468,7 @@ export const curriculumRouter = {
       if (!created) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: "Could not add the block",
+          message: "Couldn't add the block. Try again.",
         });
       }
       return { id: created.id };
@@ -568,7 +568,7 @@ export const curriculumRouter = {
         if (!added) {
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
-            message: "Could not add the block to the plan",
+            message: "Couldn't add the block to the plan. Try again.",
           });
         }
         return {
@@ -599,7 +599,7 @@ export const curriculumRouter = {
       if (!created) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: "Could not add the block to the plan",
+          message: "Couldn't add the block to the plan. Try again.",
         });
       }
       const placed: StoredPlacement = {

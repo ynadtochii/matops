@@ -59,17 +59,20 @@
   /* --- lines & focus --- */
   --border: #e7e5e4; /* stone-200 */
   --input: #e7e5e4;
-  --ring: #a6a09b; /* stone-400 */
+  --ring: #6a4dff; /* = --brand. A grey ring could not reach 3:1 on white. */
 
-  /* --- callout accents (functional only; theme-independent) --- */
-  --info: #2b7fff;
+  /* --- callout accents (functional only). Per theme: the bright hues below
+   * carry 5:1+ on the black surface but 2.2-3.8:1 on white, and these are ink
+   * as often as fill (form errors, drift badges, the destructive-outline
+   * label), so light gets its own darker set. --- */
+  --info: #1257c7;
   --info-foreground: #fafaf9;
-  --warning: #ff6900;
-  --warning-foreground: #1c1917;
-  --error: #fb2c36;
+  --warning: #a34500;
+  --warning-foreground: #ffffff;
+  --error: #c8102b;
   --error-foreground: #fafaf9;
-  --success: #00c950;
-  --success-foreground: #052e16;
+  --success: #0a7d3c;
+  --success-foreground: #ffffff;
 
   /* --- data viz: monochrome ramp (dark -> light) --- */
   --chart-1: #1c1917;
@@ -86,7 +89,7 @@
   --sidebar-accent: #f5f5f4;
   --sidebar-accent-foreground: #1c1917;
   --sidebar-border: #e7e5e4;
-  --sidebar-ring: #a6a09b;
+  --sidebar-ring: #6a4dff;
 
   /* --- shape: base 0.2rem, deliberately tight (code/callouts break to 0) --- */
   --radius: 0.2rem;
@@ -148,7 +151,17 @@
 
     --border: #292524;
     --input: #292524;
-    --ring: #79716b; /* stone-500 */
+    --ring: #8b72ff; /* = --brand */
+
+    /* callout accents, the bright set — legible on the black surface */
+    --info: #2b7fff;
+    --info-foreground: #fafaf9;
+    --warning: #ff6900;
+    --warning-foreground: #1c1917;
+    --error: #fb2c36;
+    --error-foreground: #fafaf9;
+    --success: #00c950;
+    --success-foreground: #052e16;
 
     /* data viz: monochrome ramp (light -> dark) */
     --chart-1: #fafaf9;
@@ -164,7 +177,7 @@
     --sidebar-accent: #1a1917;
     --sidebar-accent-foreground: #fafaf9;
     --sidebar-border: #292524;
-    --sidebar-ring: #79716b;
+    --sidebar-ring: #8b72ff;
 
     --shadow-2xs: 0px 1px 2px 0px hsl(0 0% 0% / 0.16);
     --shadow-xs: 0px 1px 2px 0px hsl(0 0% 0% / 0.16);

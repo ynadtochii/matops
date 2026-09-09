@@ -282,7 +282,7 @@ export const attendanceRouter = {
       if (!before) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "This person hasn't booked — add them as a walk-in instead",
+          message: "This person hasn't booked. Add them as a walk-in instead.",
         });
       }
       const [row] = await ctx.db
@@ -297,7 +297,7 @@ export const attendanceRouter = {
       if (!row) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "This person hasn't booked — add them as a walk-in instead",
+          message: "This person hasn't booked. Add them as a walk-in instead.",
         });
       }
       if (before.status !== input.status) {

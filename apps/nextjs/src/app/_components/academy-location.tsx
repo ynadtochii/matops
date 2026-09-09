@@ -49,7 +49,7 @@ export function AcademyLocation({
         await queryClient.invalidateQueries(trpc.academy.pathFilter());
         setEditingAddress(false);
       },
-      onError: () => toast.error("Could not save"),
+      onError: () => toast.error("Couldn't save. Try again."),
     }),
   );
 

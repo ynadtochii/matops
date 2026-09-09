@@ -265,6 +265,12 @@ export function ShellFrame({
 
   return (
     <div className="flex h-dvh overflow-hidden">
+      <a
+        href="#main"
+        className="bg-background text-foreground focus:ring-ring sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:border focus:px-3 focus:py-2 focus:text-sm focus:ring-2 focus:outline-none"
+      >
+        Skip to content
+      </a>
       {/* Desktop sidebar — the logo, the branch picker and the footer are pinned;
           only the nav list scrolls, so the picker cannot move under the pointer. */}
       <aside className="bg-sidebar border-sidebar-border hidden h-full w-60 shrink-0 flex-col overflow-hidden border-r p-3 md:flex">
@@ -350,7 +356,7 @@ export function ShellFrame({
 
         {banners}
 
-        <main className="min-h-0 flex-1 overflow-y-auto">
+        <main id="main" className="min-h-0 flex-1 overflow-y-auto">
           <div
             className={`${columnClass} pt-6 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pt-8 md:pb-8`}
           >

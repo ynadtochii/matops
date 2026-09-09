@@ -256,7 +256,7 @@ async function resolveOrganization<U extends { id: string }>(ctx: {
   if (!organizationId) {
     throw new TRPCError({
       code: "FORBIDDEN",
-      message: "No active organization selected",
+      message: "No gym selected",
     });
   }
   const user = ctx.session.user;
@@ -268,7 +268,7 @@ async function resolveOrganization<U extends { id: string }>(ctx: {
   if (!orgMembership) {
     throw new TRPCError({
       code: "FORBIDDEN",
-      message: "You are not a member of this organization",
+      message: "You are not a member of this gym",
     });
   }
   return { organizationId, orgMembership, user };
@@ -380,7 +380,7 @@ async function resolveEntity<U extends { id: string }>(ctx: {
     throw new TRPCError({
       code: "FORBIDDEN",
       message: isSuspended(membership)
-        ? "Your membership is suspended — contact your gym to restore access."
+        ? "Your membership is paused. Ask your gym to restore your access."
         : "Your access to this academy has been removed",
     });
   }

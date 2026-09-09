@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Alert, Pressable } from "react-native";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
-import { capacityDisplay } from "@matops/domain";
+import { BOOKING_LOCKED, capacityDisplay } from "@matops/domain";
 import { useInvalidate } from "@matops/ui/use-invalidate";
 
 import { useToast } from "~/components/toast";
@@ -60,7 +60,7 @@ export function useBookClass(
         onBooked?.();
       },
       onError: (err) => {
-        const message = err.message || "Could not book";
+        const message = err.message || "Couldn't book that class. Try again.";
         setError(message);
         // The inline schedule pill has no room to show the error text, so it
         // opts into a toast; the detail screen renders `error` inline instead.
@@ -71,7 +71,7 @@ export function useBookClass(
   /** Send the booking; a per-call success toast names the class (slice 6). */
   const doBook = (c: BookableClass) => {
     const start = new Date(c.startsAt);
-    const label = `Booked — ${dayFmt.format(start)} · ${timeFmt.format(start)}`;
+    const label = `Booked for ${dayFmt.format(start)} · ${timeFmt.format(start)}`;
     const options = {
       onSuccess: () => {
         toast.show(label);
@@ -85,7 +85,7 @@ export function useBookClass(
   const onBook = (c: BookableClass) => {
     setError(null);
     if (gate.data?.locked) {
-      const message = gate.data.message ?? "Booking is locked for you.";
+      const message = gate.data.message ?? BOOKING_LOCKED;
       setError(message);
       if (opts?.toastError) toast.show(message);
       return;
@@ -123,7 +123,8 @@ export function useCancelBooking() {
         void cancelClassReminder(variables.classId);
         await invalidateFor("booking");
       },
-      onError: (err) => toast.show(err.message || "Could not cancel"),
+      onError: (err) =>
+        toast.show(err.message || "Couldn't cancel that booking. Try again."),
     }),
   );
   const onCancel = (classId: string) =>

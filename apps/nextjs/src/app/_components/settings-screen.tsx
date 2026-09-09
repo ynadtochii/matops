@@ -21,8 +21,8 @@ export function SettingsScreen() {
         title="Settings"
         subtitle={
           bjj
-            ? "Your academy: name, code, time zone, where you train, the booking rule, and public booking."
-            : "Your branch: name, code, time zone and where it is."
+            ? "This academy: name, join code, time zone, where you train, the booking rule, and public booking."
+            : "This space: name, join code, time zone and where it is."
         }
       />
       <div className={cn("flex flex-col gap-8", ENTER)}>

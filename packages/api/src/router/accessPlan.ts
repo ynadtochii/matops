@@ -275,7 +275,7 @@ export async function assignOne(
     if (!made) {
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
-        message: "Could not add the membership",
+        message: "Couldn't add the membership. Try again.",
       });
     }
     assignmentId = made.id;
@@ -808,7 +808,9 @@ async function reconcilePlanHolders(
       done.failed.push({
         ...holder,
         reason:
-          error instanceof Error ? error.message : "Could not update them",
+          error instanceof Error
+            ? error.message
+            : "Couldn't update them. Try again.",
       });
     }
   }
@@ -1066,7 +1068,7 @@ export const accessPlanRouter = {
       if (!made) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: "Could not add the plan",
+          message: "Couldn't add the plan. Try again.",
         });
       }
       if (input.entityIds.length > 0) {
@@ -1364,7 +1366,9 @@ export const accessPlanRouter = {
             userId,
             outcome: "failed",
             reason:
-              error instanceof TRPCError ? error.message : "Could not add it",
+              error instanceof TRPCError
+                ? error.message
+                : "Couldn't add it. Try again.",
           });
         }
       }
@@ -1692,7 +1696,7 @@ export const accessPlanRouter = {
       if (!successor) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: "Could not schedule the change",
+          message: "Couldn't schedule the change. Try again.",
         });
       }
 

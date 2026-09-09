@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { env } from "~/env";
+
 /**
  * The policy prose, in one place. The privacy page renders it as a page and the
  * public forms render it in a dialog, so a stranger reading it before they
@@ -21,12 +23,13 @@ function Heading({ children }: { children: React.ReactNode }) {
 
 export function PrivacyText() {
   return (
-    <div className="text-muted-foreground text-sm">
+    <div className="text-muted-foreground max-w-[58ch] text-sm">
       <Heading>Who is responsible</Heading>
       <p>
-        MatOps is run by <strong>[ENTITY]</strong>, [ADDRESS]. Write to{" "}
-        <strong>[CONTACT EMAIL]</strong> for a copy of your data or to have it
-        deleted. We answer within 30 days.
+        MatOps is run by <strong>{env.NEXT_PUBLIC_LEGAL_ENTITY}</strong>,{" "}
+        {env.NEXT_PUBLIC_LEGAL_ADDRESS}. Write to{" "}
+        <strong>{env.NEXT_PUBLIC_PRIVACY_CONTACT}</strong> for a copy of your
+        data or to have it deleted. We answer within 30 days.
       </p>
       <p className="mt-2">
         Your academy decides what happens to its members&apos; data. MatOps
@@ -36,7 +39,7 @@ export function PrivacyText() {
       <Heading>What we store</Heading>
       <ul className="list-disc space-y-1 pl-5">
         <li>Your name, email and phone. The email is how you sign in.</li>
-        <li>Your academy, your role there, your rank, and when you joined.</li>
+        <li>Your gym, your role there, your rank, and when you joined.</li>
         <li>
           The classes you book, cancel and attend, and notes your coaches write
           about your training.
@@ -80,8 +83,8 @@ export function PrivacyText() {
       <Heading>Your rights</Heading>
       <p>
         Ask for a copy, a correction or a deletion:{" "}
-        <strong>[CONTACT EMAIL]</strong>. In the EU or the UK you can also
-        complain to your national data protection authority.
+        <strong>{env.NEXT_PUBLIC_PRIVACY_CONTACT}</strong>. In the EU or the UK
+        you can also complain to your national data protection authority.
       </p>
 
       <Heading>Cookies</Heading>
@@ -99,7 +102,7 @@ export function PrivacyText() {
 export function RiskText({ academyName }: { academyName: string }) {
   const gym = academyName.trim() === "" ? "The academy" : academyName;
   return (
-    <div className="text-muted-foreground flex flex-col gap-3 text-sm">
+    <div className="text-muted-foreground flex max-w-[58ch] flex-col gap-3 text-sm">
       <p>
         Brazilian Jiu-Jitsu is a full-contact martial art involving physical
         contact, grappling and sparring. Participation carries an inherent risk

@@ -63,7 +63,7 @@ export default function Index() {
         </Screen>
       );
     }
-    if (!mine.data) return <Loading label="Finding your academy" />;
+    if (!mine.data) return <Loading label="Finding your gym" />;
     if (!pickEntity(mine.data)) return <Redirect href="/onboarding" />;
     return <Redirect href="/schedule" />;
   };

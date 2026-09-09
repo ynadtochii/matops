@@ -6,6 +6,7 @@ import { AlertDialog as AlertDialogPrimitive } from "radix-ui";
 import { cn } from "@matops/ui";
 
 import { Button, buttonClass } from "./button";
+import { FOCUS_RING } from "./motion";
 
 /**
  * Confirmation modal for actions that can't be undone — remove a member, cancel
@@ -228,7 +229,10 @@ export function ConfirmDialog({
             </span>
             <input
               autoComplete="off"
-              className="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-3 text-base focus-visible:ring-2 focus-visible:outline-none md:text-sm"
+              className={cn(
+                "border-input bg-background h-9 rounded-md border px-3 text-base md:text-sm",
+                FOCUS_RING,
+              )}
               disabled={busy}
               onChange={(e) => setTyped(e.target.value)}
               value={typed}

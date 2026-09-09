@@ -42,7 +42,7 @@ import { ErrorState, NoAccessState } from "./states";
 
 const NARROW_ROUTES = ["/class", "/profile"];
 
-const GYM_GROUP = "Organization";
+const GYM_GROUP = "Gym";
 
 export const PlusIcon = () => (
   <svg
@@ -348,7 +348,7 @@ function ShellChrome({
   const gymItems: NavItem[] = [
     {
       path: "/overview",
-      label: "Organization overview",
+      label: "Gym overview",
       icon: <DashboardIcon />,
     },
     {
@@ -365,7 +365,7 @@ function ShellChrome({
     },
     {
       path: "/settings",
-      label: "Organization settings",
+      label: "Gym settings",
       icon: <SettingsIcon />,
     },
   ].map((item) => ({

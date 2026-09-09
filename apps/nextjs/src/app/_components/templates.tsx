@@ -20,8 +20,10 @@ import {
   DialogDescription,
   DialogTitle,
 } from "@matops/ui/dialog";
+import { FieldError } from "@matops/ui/field";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
+import { FOCUS_RING } from "@matops/ui/motion";
 import { Select } from "@matops/ui/select";
 import { Spinner } from "@matops/ui/spinner";
 import { Textarea } from "@matops/ui/textarea";
@@ -123,6 +125,7 @@ export function Templates({
 
   const [form, setForm] = useState<FormState | null>(null);
   const [daysError, setDaysError] = useState(false);
+  const [titleError, setTitleError] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const academyTz = me.timeZone ?? browserTz();
   const owner = runsBranch(me);
@@ -130,7 +133,10 @@ export function Templates({
   const invalidate = () =>
     queryClient.invalidateQueries(trpc.template.list.pathFilter());
   const onError = (err: { message: string }) =>
-    toast.error(err.message || "Action failed");
+    toast.error(
+      err.message ||
+        "Couldn't finish that. Check your connection and try again.",
+    );
 
   const closeForm = () => {
     setForm(null);
@@ -190,9 +196,11 @@ export function Templates({
   const submit = () => {
     if (!shown) return;
     if (shown.title.trim().length < 1) {
-      toast.error("Add a class name");
+      setTitleError(true);
+      document.getElementById("tpl-title")?.focus();
       return;
     }
+    setTitleError(false);
     if (shown.daysOfWeek.length === 0) {
       setDaysError(true);
       document.getElementById("tpl-day-0")?.focus();
@@ -360,13 +368,23 @@ export function Templates({
                   <Input
                     id="tpl-title"
                     value={shown.title}
-                    onChange={(e) =>
-                      setForm({ ...shown, title: e.target.value })
-                    }
+                    onChange={(e) => {
+                      setForm({ ...shown, title: e.target.value });
+                      setTitleError(false);
+                    }}
                     placeholder="Evening No-Gi"
                     maxLength={80}
                     required
+                    aria-invalid={titleError ? true : undefined}
+                    aria-describedby={
+                      titleError ? "tpl-title-error" : undefined
+                    }
                   />
+                  {titleError && (
+                    <FieldError id="tpl-title-error">
+                      Give the class a name.
+                    </FieldError>
+                  )}
                 </div>
                 <section
                   aria-labelledby="tpl-schedule-heading"
@@ -621,7 +639,10 @@ export function Templates({
                   <label className="hover:bg-muted/50 flex cursor-pointer items-start gap-3 rounded-md border p-3 transition-colors">
                     <input
                       type="checkbox"
-                      className="accent-primary focus-visible:ring-ring/50 mt-0.5 size-5 shrink-0 rounded-sm focus-visible:ring-[3px]"
+                      className={cn(
+                        "accent-primary mt-0.5 size-5 shrink-0 rounded-sm",
+                        FOCUS_RING,
+                      )}
                       checked={shown.publicBookable}
                       aria-describedby="tpl-public-help"
                       onChange={(e) =>
@@ -689,7 +710,8 @@ function RebuildSchedule() {
             : `Generated ${res.created} ${res.created === 1 ? "class" : "classes"}`,
         );
       },
-      onError: (e) => toast.error(e.message || "Could not extend the schedule"),
+      onError: (e) =>
+        toast.error(e.message || "Couldn't extend the schedule. Try again."),
     }),
   );
 
@@ -704,7 +726,7 @@ function RebuildSchedule() {
         );
       },
       onError: (e) =>
-        toast.error(e.message || "Could not rebuild the schedule"),
+        toast.error(e.message || "Couldn't rebuild the schedule. Try again."),
     }),
   );
 

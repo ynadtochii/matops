@@ -221,7 +221,10 @@ export function Members() {
   };
 
   const onError = (err: { message: string }) =>
-    toast.error(err.message || "Action failed");
+    toast.error(
+      err.message ||
+        "Couldn't finish that. Check your connection and try again.",
+    );
 
   const approve = useMutation(
     trpc.membership.approve.mutationOptions({
@@ -353,7 +356,7 @@ export function Members() {
             {listState ??
               (pending.length === 0 ? (
                 <EmptyState title="No one is waiting.">
-                  New sign-ups land here for you to approve.
+                  New sign-ups show up here for you to approve.
                 </EmptyState>
               ) : (
                 pending.map((m) => {
@@ -375,7 +378,7 @@ export function Members() {
                       </Button>
                       <ConfirmDialog
                         title={`Decline ${m.name}?`}
-                        description="They won't join the academy. You can invite them again later with an invite link."
+                        description="They won't join the gym. You can invite them again later with an invite link."
                         confirmLabel="Decline request"
                         variant="destructive"
                         onConfirm={async () => {

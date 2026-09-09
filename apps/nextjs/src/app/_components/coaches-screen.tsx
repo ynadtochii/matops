@@ -320,7 +320,10 @@ function PendingCoaches() {
       queryClient.invalidateQueries(trpc.stats.navigationSummary.pathFilter()),
     ]);
   const onError = (err: { message: string }) =>
-    toast.error(err.message || "Action failed");
+    toast.error(
+      err.message ||
+        "Couldn't finish that. Check your connection and try again.",
+    );
 
   const approve = useMutation(
     trpc.membership.approve.mutationOptions({
@@ -380,7 +383,7 @@ function PendingCoaches() {
               </Button>
               <ConfirmDialog
                 title={`Decline ${m.name}?`}
-                description="They won't join the academy. You can send them the instructor link again later."
+                description="They won't join the gym. You can send them the instructor link again later."
                 confirmLabel="Decline request"
                 variant="destructive"
                 onConfirm={async () => {
@@ -436,7 +439,7 @@ export function CoachesScreen() {
   const stale = isOwner ? roster.isPlaceholderData : mine.isPlaceholderData;
   const range = isOwner ? roster.data?.range : mine.data?.range;
   const rangeLabel = range
-    ? `${monthDayFmt.format(new Date(range.from))} – ${monthDayFmt.format(
+    ? `${monthDayFmt.format(new Date(range.from))} - ${monthDayFmt.format(
         new Date(new Date(range.to).getTime() - 1),
       )}`
     : undefined;

@@ -78,8 +78,8 @@ export default function Notifications() {
             />
           ) : days.length === 0 ? (
             <EmptyState
-              title="Nothing yet."
-              body="Class changes, payment reminders and gym news land here."
+              title="No notifications yet."
+              body="Class changes, payment reminders and gym news show up here."
             />
           ) : (
             days.map(([key, rows]) => (

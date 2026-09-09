@@ -15,7 +15,12 @@ import {
   sql,
 } from "@matops/db";
 import { classInstance, classParticipation } from "@matops/db/schema";
-import { bookingTier, canBook, notBookableMessage } from "@matops/domain";
+import {
+  BOOKING_LOCKED,
+  bookingTier,
+  canBook,
+  notBookableMessage,
+} from "@matops/domain";
 import { BookClassSchema, CancelBookingSchema } from "@matops/validators";
 
 import { academyContext } from "../academy-tz";
@@ -125,7 +130,7 @@ export const bookingRouter = {
       if (gate.locked) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
-          message: gate.message ?? "Booking is locked for you.",
+          message: gate.message ?? BOOKING_LOCKED,
         });
       }
       const tier = gate.provisional

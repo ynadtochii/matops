@@ -400,7 +400,7 @@ function CreateStudentDialog({
         onOpenChange(false);
       },
       onError: (error) =>
-        toast.error(error.message || "Could not add the student"),
+        toast.error(error.message || "Couldn't add the student. Try again."),
     }),
   );
   const resetReview = () => setReviewed(false);
@@ -611,7 +611,8 @@ function BulkAssign({
             .join("; ")}`,
         );
       },
-      onError: (e) => toast.error(e.message || "Could not put them on it"),
+      onError: (e) =>
+        toast.error(e.message || "Couldn't put them on it. Try again."),
     }),
   );
 

@@ -99,7 +99,8 @@ function BookingRow({ isOwner }: { isOwner: boolean }) {
         ]);
         toast.success("Public booking is on");
       },
-      onError: (err) => toast.error(err.message || "Could not turn it on"),
+      onError: (err) =>
+        toast.error(err.message || "Couldn't turn it on. Try again."),
     }),
   );
 
@@ -172,7 +173,7 @@ function CheckInRow() {
   return (
     <LinkCard
       title="Drop in at the gym"
-      hint="For someone already on the mat. A first-time visitor leaves their details, a member checks in. This is the wall poster, as a link."
+      hint="For someone already at the gym. A first-time visitor leaves their details, a member checks in. This is the wall poster, as a link."
     >
       <LinkActions
         url={absolute(`/checkin/${academyId}`)}
@@ -198,12 +199,12 @@ function JoinRow({ isOwner }: { isOwner: boolean }) {
     trpc.invite.create.mutationOptions({
       onSuccess: () =>
         queryClient.invalidateQueries(trpc.invite.list.pathFilter()),
-      onError: () => toast.error("Could not create the link"),
+      onError: () => toast.error("Couldn't create the link. Try again."),
     }),
   );
 
   const hint =
-    "For someone who has decided to sign up. They land pending until an owner approves them.";
+    "For someone who has decided to sign up. They wait for an owner to approve them before they can book.";
 
   if (invites.isPending) {
     return (

@@ -268,7 +268,7 @@ export default function Schedule() {
       {isPending && (
         <View style={{ marginBottom: 16 }}>
           <Banner tone="brand">
-            Pending approval — you can browse and book; your gym will confirm
+            Waiting for approval. You can browse and book; your gym will confirm
             you soon.
           </Banner>
         </View>
@@ -291,7 +291,7 @@ export default function Schedule() {
           ) : byDay.length === 0 ? (
             <EmptyState
               title="No classes this week."
-              body="Check back soon — your gym adds classes here as they schedule them."
+              body="Check back soon. Your gym adds classes here as they schedule them."
             />
           ) : (
             <View style={{ gap: 20 }}>

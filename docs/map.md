@@ -2,6 +2,8 @@
 
 # Map: matops — MVP rebuild (product spec + architecture)
 
+- [137: Interface writing review](/Users/kuna/projects/matops/docs/issues/137-interface-writing-review.md): one word per thing (a **gym** is the business, a **branch** is one place, `organization` never reaches a screen), the six digits are a **join code** on every screen, every blocked state names the way out through one `accessReason`, form validation moves from toasts to the field, and the em dash leaves user-facing copy.
+- [136: Interface review fixes](/Users/kuna/projects/matops/docs/issues/136-interface-review-fixes.md): a visible focus ring (`--ring` becomes the brand violet, 2px at a 2px offset), callout accents split per theme so light-mode error/warning/success text clears 4.5:1, the privacy policy's identity read from required env vars, a skip link, error toasts that wait, and error copy that names a next step.
 - [135: First academy fresh install contract](/Users/kuna/projects/matops/docs/issues/135-first-academy-fresh-install-contract.md): seven-day access grace, required owner assignment, branch-scoped rejection holds, configurable booking windows, manual schedule rebuild, request-driven email, hosted booking without an external API, and one fresh database baseline.
 - [134: First academy release](/Users/kuna/projects/matops/docs/issues/134-first-academy-release.md): superseded staged migration and worker design. ADR 135 is the current release contract.
 - [133: Explicit attendance review](/Users/kuna/projects/matops/docs/issues/133-explicit-attendance-review.md): all past classes, explicit completion, and review after roster changes. Implementation in progress.

@@ -62,9 +62,9 @@ export function JoinByCode({ compact = false }: { compact?: boolean }) {
   });
 
   const lookupError = lookup.isError
-    ? "Could not look up your gym. Try again."
+    ? "Couldn't look up your gym. Try again."
     : lookup.isSuccess && !lookup.data
-      ? "No gym found with that ID. Check the number and try again."
+      ? "No gym found with that join code. Check the six digits and try again."
       : null;
 
   const join = useMutation(
@@ -75,7 +75,7 @@ export function JoinByCode({ compact = false }: { compact?: boolean }) {
         router.replace("/");
         router.refresh();
       },
-      onError: (err) => toast.error(err.message || "Could not join"),
+      onError: (err) => toast.error(err.message || "Couldn't join. Try again."),
     }),
   );
 
@@ -95,7 +95,7 @@ export function JoinByCode({ compact = false }: { compact?: boolean }) {
               Join your gym
             </h1>
             <p className="text-muted-foreground text-sm">
-              Enter the 6-digit ID your gym gave you. Your gym confirms you
+              Enter the 6-digit join code your gym gave you. They confirm you
               after you join.
             </p>
           </div>
@@ -112,7 +112,7 @@ export function JoinByCode({ compact = false }: { compact?: boolean }) {
           }}
         >
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="code">Gym ID</Label>
+            <Label htmlFor="code">Join code</Label>
             <Input
               id="code"
               value={code}
@@ -221,7 +221,7 @@ export function JoinByCode({ compact = false }: { compact?: boolean }) {
           {join.isError && (
             <p role="alert" className="text-error text-sm">
               {join.error.message ||
-                "Could not send your join request. Try again."}
+                "Couldn't send your join request. Try again."}
             </p>
           )}
           <Button
@@ -262,8 +262,8 @@ export function JoinAnotherBranch() {
       <DialogContent className="max-w-sm">
         <DialogTitle>Join another branch</DialogTitle>
         <DialogDescription>
-          Enter the 6-digit ID that branch gave you. They confirm you after you
-          join.
+          Enter the 6-digit join code that branch gave you. They confirm you
+          after you join.
         </DialogDescription>
         <JoinByCode compact />
       </DialogContent>

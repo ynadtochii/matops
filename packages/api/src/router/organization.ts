@@ -79,7 +79,7 @@ export const organizationRouter = {
       if (!org) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: "Could not create the gym",
+          message: "Couldn't create the gym. Try again.",
         });
       }
       await recordMilestone(

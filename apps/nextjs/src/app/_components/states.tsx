@@ -58,7 +58,7 @@ export function NoAccessState() {
         </Button>
       }
     >
-      Ask your academy owner if you think you should have it.
+      Ask the owner of your gym if you think you should have it.
     </EmptyState>
   );
 }

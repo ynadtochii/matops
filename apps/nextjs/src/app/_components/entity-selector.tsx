@@ -219,7 +219,8 @@ export function AddBranchDialog({
         await queryClient.invalidateQueries();
         router.push(entityHref(made.entityId));
       },
-      onError: (e) => toast.error(e.message || "Could not add that branch"),
+      onError: (e) =>
+        toast.error(e.message || "Couldn't add that branch. Try again."),
     }),
   );
 

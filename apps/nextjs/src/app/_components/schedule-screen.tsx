@@ -31,7 +31,7 @@ export function ScheduleScreen() {
     <>
       <PageHeader
         title="Schedule"
-        subtitle="Run the week — concrete classes and the recurring engine behind them."
+        subtitle="Run the week: the classes on the calendar, and the weekly templates behind them."
       />
       <Tabs
         label="Schedule view"

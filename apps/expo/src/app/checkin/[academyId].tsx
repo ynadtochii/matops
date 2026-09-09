@@ -88,7 +88,8 @@ export default function WalkInCheckin() {
         await queryClient.invalidateQueries(trpc.booking.pathFilter());
         await queryClient.invalidateQueries(trpc.checkin.pathFilter());
       },
-      onError: (err) => setError(err.message || "Could not check in"),
+      onError: (err) =>
+        setError(err.message || "Couldn't check you in. Try again."),
     }),
   );
 
@@ -122,7 +123,7 @@ export default function WalkInCheckin() {
         {notMember ? (
           <Muted>
             You&apos;re not a member of this gym. Ask the front desk to add you
-            — they can also mark you present.
+            They can also mark you present.
           </Muted>
         ) : !scoped || today.isPending ? (
           <CheckinSkeleton />

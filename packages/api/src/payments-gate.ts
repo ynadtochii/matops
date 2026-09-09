@@ -40,7 +40,7 @@ export async function bookingGate(
     return {
       locked: true,
       provisional: false,
-      message: `${input.entity.name} has not approved you yet. You can browse classes while you wait.`,
+      message: accessReason("pending-approval", input.entity.name),
     };
   }
 

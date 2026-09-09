@@ -39,7 +39,7 @@ export function PublicBooking({ academyName }: { academyName: string }) {
   const refresh = () =>
     queryClient.invalidateQueries(trpc.academy.publicApi.pathFilter());
   const onError = (err: { message: string }) =>
-    toast.error(err.message || "Could not save");
+    toast.error(err.message || "Couldn't save. Try again.");
 
   const setEnabled = useMutation(
     trpc.academy.setPublicApi.mutationOptions({

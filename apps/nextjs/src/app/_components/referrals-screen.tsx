@@ -430,7 +430,7 @@ function ReferralDialog({
   const [showHistory, setShowHistory] = useState(false);
 
   const onError = (error: { message: string }) =>
-    toast.error(error.message || "Could not save the referral");
+    toast.error(error.message || "Couldn't save the referral. Try again.");
   const assign = useMutation(
     trpc.referral.assign.mutationOptions({
       onSuccess: async () => {

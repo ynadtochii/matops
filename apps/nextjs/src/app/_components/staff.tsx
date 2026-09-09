@@ -60,7 +60,7 @@ const COPY: Record<
   promote: {
     title: (name) => `Make ${name} a co-owner?`,
     description:
-      "Owners have full control — schedule, members, payments, and settings. You can step them back down here later.",
+      "Owners get full control: schedule, members, payments and settings. You can step them back down here later.",
     confirmLabel: "Make co-owner",
     variant: "primary",
   },
@@ -313,7 +313,7 @@ export function Staff() {
       <InviteLinkCard
         role="instructor"
         label="Add an instructor"
-        hint="For coaches. Approval grants staff access, schedule and attendance tools."
+        hint="For coaches. Once you approve them they get the schedule and attendance tools."
       />
 
       {staff.isPending ? (
@@ -322,7 +322,7 @@ export function Staff() {
         <ErrorState label="your staff" onRetry={() => void staff.refetch()} />
       ) : members.length === 0 ? (
         <EmptyState title="No staff yet.">
-          You&apos;re the only one running this academy so far.
+          You&apos;re the only one running this branch so far.
         </EmptyState>
       ) : (
         <div className={cn("flex flex-col gap-2", RESOLVE)}>

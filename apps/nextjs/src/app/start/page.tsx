@@ -39,7 +39,7 @@ export default function StartPage() {
           </p>
         </div>
 
-        <Eyebrow className="relative">Owner &amp; instructor console</Eyebrow>
+        <Eyebrow className="relative">For owners and instructors</Eyebrow>
       </aside>
 
       {/* Form side */}

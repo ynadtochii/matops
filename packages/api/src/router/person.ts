@@ -102,7 +102,7 @@ export async function enrollStudent(
   if (!created) {
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
-      message: "Could not enroll the student",
+      message: "Couldn't enrol the student. Try again.",
     });
   }
   return { enrollmentId: created.id, createdEnrollment: true };
@@ -255,7 +255,7 @@ export const personRouter = {
         if (!created) {
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
-            message: "Could not create the student",
+            message: "Couldn't create the student. Try again.",
           });
         }
         return {

@@ -102,6 +102,7 @@ export function Curriculum() {
   } = board;
 
   const [form, setForm] = useState<BlockForm | null>(null);
+  const [themeError, setThemeError] = useState<string | null>(null);
   const [runForm, setRunForm] = useState<RunNoteForm | null>(null);
   const [trackForm, setTrackForm] = useState<TrackForm | null>(null);
   const [trackDelete, setTrackDelete] = useState<{
@@ -184,9 +185,11 @@ export function Curriculum() {
     if (!form) return;
     const theme = form.theme.trim();
     if (!theme) {
-      toast.error("Give the block a theme");
+      setThemeError("Give the block a theme.");
+      document.getElementById("block-theme")?.focus();
       return;
     }
+    setThemeError(null);
     const draft = {
       theme,
       notes: form.notes.trim(),
@@ -543,9 +546,16 @@ export function Curriculum() {
         form={form}
         categories={categories}
         saving={board.savingBlock}
-        onChange={setForm}
-        onClose={() => setForm(null)}
+        onChange={(next) => {
+          setForm(next);
+          setThemeError(null);
+        }}
+        onClose={() => {
+          setForm(null);
+          setThemeError(null);
+        }}
         onSubmit={submitBlock}
+        themeError={themeError ?? undefined}
       />
 
       <RunNoteDialog
@@ -596,7 +606,7 @@ function StudentVisibility() {
         );
       },
       onError: (err: { message: string }) =>
-        toast.error(err.message || "Could not save that"),
+        toast.error(err.message || "Couldn't save that. Try again."),
     }),
   );
 
@@ -741,7 +751,7 @@ function PlacedCard({
         settled ? "text-muted-foreground/70" : "text-muted-foreground",
       )}
     >
-      {dayLabel(placed.startsOn)} – {dayLabel(placed.endsOn)} ·{" "}
+      {dayLabel(placed.startsOn)} - {dayLabel(placed.endsOn)} ·{" "}
       {weeksLabel(placed.weeks)}
       {placed.themes.length > 1 && ` · ${placed.themes.length} blocks`}
     </p>

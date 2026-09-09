@@ -45,7 +45,7 @@ export default function JoinScreen() {
         await queryClient.invalidateQueries();
         router.replace("/");
       },
-      onError: (err) => setError(err.message || "Could not join"),
+      onError: (err) => setError(err.message || "Couldn't join. Try again."),
     }),
   );
 
@@ -66,8 +66,8 @@ export default function JoinScreen() {
           <UIStack gap={8}>
             <Heading>Invite not valid</Heading>
             <Muted>
-              This invite isn&apos;t valid or has expired — ask your gym for a
-              new link, or enter their 6-digit ID instead.
+              This invite isn&apos;t valid or has expired. Ask your gym for a
+              new link, or enter their 6-digit join code instead.
             </Muted>
           </UIStack>
           <Button
@@ -137,7 +137,7 @@ export default function JoinScreen() {
           </UIStack>
         ) : (
           <UIStack gap={12}>
-            <Muted>Sign in to join — it takes one tap.</Muted>
+            <Muted>Sign in to join. It takes one tap.</Muted>
             <Button
               label="Sign in to join"
               onPress={() =>

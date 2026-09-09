@@ -94,7 +94,7 @@ function OpenGym({
         router.replace("/overview");
         router.refresh();
       },
-      onError: () => toast.error("Could not open your gym"),
+      onError: () => toast.error("Couldn't open your gym. Try again."),
     }),
   );
 
@@ -128,7 +128,7 @@ function OpenActive({ academyId, name }: { academyId: string; name: string }) {
         await queryClient.invalidateQueries();
         router.refresh();
       },
-      onError: () => toast.error("Could not open your branch"),
+      onError: () => toast.error("Couldn't open your branch. Try again."),
     }),
   );
 
@@ -161,7 +161,7 @@ function PickAcademy({ academies }: { academies: BranchChoice[] }) {
         await queryClient.invalidateQueries();
         router.refresh();
       },
-      onError: () => toast.error("Could not open the branch"),
+      onError: () => toast.error("Couldn't open the branch. Try again."),
     }),
   );
 

@@ -51,7 +51,7 @@ export function buildClassChangeMessage(input: {
   const { academyName, className, whenLabel } = input;
   return {
     title: "Class updated",
-    body: `${className} at ${academyName} changed — now ${whenLabel}.`,
+    body: `${className} at ${academyName} moved to ${whenLabel}.`,
   };
 }
 

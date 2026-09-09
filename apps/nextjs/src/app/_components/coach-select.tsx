@@ -88,7 +88,7 @@ export function CoachSelect({
         );
       },
       onError: (err: { message: string }) =>
-        toast.error(err.message || "Could not change the coach"),
+        toast.error(err.message || "Couldn't change the coach. Try again."),
     }),
   );
 

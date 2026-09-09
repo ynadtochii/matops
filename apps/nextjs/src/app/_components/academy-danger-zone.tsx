@@ -44,7 +44,8 @@ export function AcademyDangerZone({ name }: { name: string }) {
         await queryClient.invalidateQueries();
         router.replace("/");
       },
-      onError: (e) => toast.error(e.message || "Could not delete the academy"),
+      onError: (e) =>
+        toast.error(e.message || "Couldn't delete the academy. Try again."),
     }),
   );
 

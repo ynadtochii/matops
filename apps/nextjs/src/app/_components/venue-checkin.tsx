@@ -45,7 +45,7 @@ export function VenueCheckin({
       <SectionHeading>Venue check-in QR</SectionHeading>
       <p className="text-muted-foreground text-sm">
         Print this poster for your gym. First-time visitors scan it to check in
-        and leave their details — no app needed.
+        and leave their details. No app needed.
       </p>
 
       <QrPoster

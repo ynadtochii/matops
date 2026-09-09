@@ -60,37 +60,40 @@ export function OrganizationPersonScreen({ personId }: { personId: string }) {
         await after("Membership given");
       },
       onError: (e) =>
-        toast.error(e.message || "Could not give that membership"),
+        toast.error(e.message || "Couldn't give that membership. Try again."),
     }),
   );
   const suspend = useMutation(
     trpc.accessPlan.suspend.mutationOptions({
       onSuccess: () => after("Membership paused"),
-      onError: (e) => toast.error(e.message || "Could not pause it"),
+      onError: (e) => toast.error(e.message || "Couldn't pause it. Try again."),
     }),
   );
   const cancel = useMutation(
     trpc.accessPlan.cancel.mutationOptions({
       onSuccess: () => after("Membership ended"),
-      onError: (e) => toast.error(e.message || "Could not end it"),
+      onError: (e) => toast.error(e.message || "Couldn't end it. Try again."),
     }),
   );
   const addStudentToBranch = useMutation(
     trpc.entity.addStudentToBranch.mutationOptions({
       onSuccess: () => after("Student added to branch"),
-      onError: (e) => toast.error(e.message || "Could not add that student"),
+      onError: (e) =>
+        toast.error(e.message || "Couldn't add that student. Try again."),
     }),
   );
   const decide = useMutation(
     trpc.entity.decideAtBranch.mutationOptions({
       onSuccess: () => after("Decision saved"),
-      onError: (e) => toast.error(e.message || "Could not save that"),
+      onError: (e) =>
+        toast.error(e.message || "Couldn't save that. Try again."),
     }),
   );
   const cancelChange = useMutation(
     trpc.accessPlan.cancelScheduledChange.mutationOptions({
       onSuccess: () => after("Plan change cancelled"),
-      onError: (e) => toast.error(e.message || "Could not cancel it"),
+      onError: (e) =>
+        toast.error(e.message || "Couldn't cancel it. Try again."),
     }),
   );
   const [changing, setChanging] = useState<{
@@ -300,7 +303,7 @@ export function OrganizationPersonScreen({ personId }: { personId: string }) {
                   (c) => c.assignmentId === h.id && c.personId === personId,
                 ) && (
                   <span className="text-brand-strong text-xs font-medium">
-                    Said they paid — waiting for you to confirm
+                    Said they paid. Waiting for you to confirm
                   </span>
                 )}
                 {h.pendingChange && (
@@ -481,13 +484,15 @@ function PersonAccess({
   const archive = useMutation(
     trpc.person.archive.mutationOptions({
       onSuccess: () => refresh("Person archived"),
-      onError: (error) => toast.error(error.message || "Could not archive"),
+      onError: (error) =>
+        toast.error(error.message || "Couldn't archive. Try again."),
     }),
   );
   const restore = useMutation(
     trpc.person.restore.mutationOptions({
       onSuccess: () => refresh("Person restored"),
-      onError: (error) => toast.error(error.message || "Could not restore"),
+      onError: (error) =>
+        toast.error(error.message || "Couldn't restore. Try again."),
     }),
   );
   const busy = archive.isPending || restore.isPending;
@@ -627,7 +632,8 @@ function PlanChangeDialog({
   const schedule = useMutation(
     trpc.accessPlan.scheduleChange.mutationOptions({
       onSuccess: onDone,
-      onError: (e) => toast.error(e.message || "Could not schedule it"),
+      onError: (e) =>
+        toast.error(e.message || "Couldn't schedule it. Try again."),
     }),
   );
 

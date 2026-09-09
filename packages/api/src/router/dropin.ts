@@ -388,7 +388,7 @@ export const dropInRouter = {
       if (!membership) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: "Could not create that membership. Try again.",
+          message: "Couldn't create that membership. Try again.",
         });
       }
 

@@ -48,12 +48,12 @@ export function JoinFlow({
         toast.success(
           res.alreadyMember && res.status === "active"
             ? "You're already a member of this gym. Ask an owner to change your role."
-            : "You're in — pending approval",
+            : "You're in. Waiting for approval",
         );
         router.replace("/");
         router.refresh();
       },
-      onError: (err) => toast.error(err.message || "Could not join"),
+      onError: (err) => toast.error(err.message || "Couldn't join. Try again."),
     }),
   );
 
@@ -73,7 +73,7 @@ export function JoinFlow({
           Invite not valid
         </h1>
         <p className="text-muted-foreground text-sm">
-          This invite isn&apos;t valid — ask your gym for a new link.
+          This invite isn&apos;t valid. Ask your gym for a new link.
         </p>
       </div>
     );

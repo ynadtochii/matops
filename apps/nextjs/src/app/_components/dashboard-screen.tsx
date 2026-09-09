@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
 import {
+  branchWords,
   capacityDisplay,
   classEndsAt,
   dashboardWeekWindow,
@@ -83,6 +84,7 @@ export function DashboardScreen() {
   const isOwner = runsBranch(c);
   const isStaff = isStaffOf(c);
   const bjj = isBjjAcademy(c.type);
+  const words = branchWords(c.type);
 
   const { today, tomorrow } = useMemo(() => {
     const at = new Date();
@@ -239,11 +241,9 @@ export function DashboardScreen() {
           <Panel className={RESOLVE} cols={Math.max(queue.length, 1)}>
             {firstRun ? (
               <PanelNotice
-                title={
-                  bjj
-                    ? "Your academy is empty. Three steps to open it."
-                    : "This space is empty. Two steps to open it."
-                }
+                title={`This ${words.branch} is empty. ${
+                  bjj ? "Three" : "Two"
+                } steps to open it.`}
               >
                 <Link
                   href={href("/schedule")}

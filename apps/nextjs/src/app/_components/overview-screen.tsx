@@ -70,7 +70,7 @@ export function OverviewScreen() {
     <div className="flex min-w-0 flex-col gap-8">
       <div className="border-border flex flex-wrap items-center justify-between gap-4 border-b pb-6">
         <div>
-          <Eyebrow>Organization overview</Eyebrow>
+          <Eyebrow>Gym overview</Eyebrow>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight wrap-anywhere">
             {organizationName}
           </h1>

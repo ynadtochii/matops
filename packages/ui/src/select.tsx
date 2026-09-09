@@ -1,5 +1,7 @@
 import { cn } from "@matops/ui";
 
+import { FOCUS_RING } from "./motion";
+
 /**
  * Web Select — a native `<select>` restyled to match `Input` (same height,
  * border, focus ring, radius) with a custom chevron so it stops reading as a
@@ -28,7 +30,7 @@ export function Select({
       className={cn(
         "border-input text-foreground h-11 max-w-full appearance-none rounded-md border bg-transparent bg-no-repeat py-1 pr-8 pl-3 text-base shadow-xs transition-[color,box-shadow] outline-none sm:h-9 md:text-sm",
         "bg-[length:1rem] bg-[position:right_0.55rem_center]",
-        "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
+        `focus-visible:border-ring ${FOCUS_RING}`,
         "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
         className,
       )}

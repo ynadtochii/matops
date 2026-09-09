@@ -32,7 +32,7 @@ export async function shareLink(opts: {
     await navigator.clipboard.writeText(url);
     toast.success("Link copied");
   } catch {
-    toast.error("Could not share the link");
+    toast.error("Couldn't share the link. Try again.");
   }
 }
 

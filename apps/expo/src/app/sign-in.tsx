@@ -46,12 +46,12 @@ export default function SignIn() {
         callbackURL,
       });
       if (res.error) {
-        setError(res.error.message ?? "Could not send the link. Try again.");
+        setError(res.error.message ?? "Couldn't send the link. Try again.");
         return;
       }
       setSent(true);
     } catch {
-      setError("Could not send the link. Check your connection and try again.");
+      setError("Couldn't send the link. Check your connection and try again.");
     } finally {
       setPending(false);
     }
@@ -75,7 +75,7 @@ export default function SignIn() {
         <Stack gap={8}>
           <Heading>Run the mat.</Heading>
           <Muted>
-            We&apos;ll email you a one-tap sign-in link — no password to
+            We&apos;ll email you a one-tap sign-in link. No password to
             remember.
           </Muted>
         </Stack>
@@ -86,7 +86,7 @@ export default function SignIn() {
               <Title>Check your email</Title>
               <Muted>
                 Open the sign-in link we sent to {email.trim()}. The link
-                expires soon — if it doesn&apos;t arrive, resend it.
+                expires soon. If it doesn&apos;t arrive, resend it.
                 {__DEV__
                   ? " In development, copy the “[auth] magic link …” line from the Next.js terminal and open it."
                   : ""}

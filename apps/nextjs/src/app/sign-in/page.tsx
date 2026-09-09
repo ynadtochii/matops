@@ -48,7 +48,7 @@ async function SignInGate() {
           </h1>
           <p className="text-muted-foreground mt-4 max-w-sm text-[15px] leading-relaxed">
             Schedule classes, keep your member list straight, and take
-            attendance in seconds — one console for the whole academy.
+            attendance in seconds. One place to run the whole gym.
           </p>
           <div className="mt-10 flex flex-wrap gap-x-6 gap-y-2">
             {ANCHORS.map((a) => (
@@ -60,7 +60,7 @@ async function SignInGate() {
           </div>
         </div>
 
-        <Eyebrow className="relative">Owner &amp; instructor console</Eyebrow>
+        <Eyebrow className="relative">For owners and instructors</Eyebrow>
       </aside>
 
       {/* Form side */}
@@ -76,7 +76,7 @@ async function SignInGate() {
           <div className="mb-6 hidden lg:block">
             <h2 className="text-2xl font-semibold tracking-tight">Sign in</h2>
             <p className="text-muted-foreground mt-1 text-sm">
-              Welcome back. Pick up where your academy left off.
+              Welcome back. Pick up where your gym left off.
             </p>
           </div>
           <SignIn callbackURL="/" />

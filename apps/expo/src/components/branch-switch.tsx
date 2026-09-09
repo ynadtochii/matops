@@ -57,7 +57,7 @@ function useBranchSwitch() {
       toast.show(
         error instanceof Error
           ? error.message
-          : "Could not open that branch. You are still at the last one.",
+          : "Couldn't open that branch. You are still at the last one.",
       );
     }
   };

@@ -24,7 +24,8 @@ export function MembershipNotice() {
         await queryClient.invalidateQueries(trpc.accessPlan.pathFilter());
         toast.success("Payment submitted. Your gym will confirm it.");
       },
-      onError: (e) => toast.error(e.message || "Could not submit your payment"),
+      onError: (e) =>
+        toast.error(e.message || "Couldn't submit your payment. Try again."),
     }),
   );
   const warned = (standing.data?.memberships ?? []).filter((m) => m.warning);

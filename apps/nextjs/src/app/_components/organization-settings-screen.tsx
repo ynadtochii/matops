@@ -17,6 +17,7 @@ import { MembershipPolicySchema } from "@matops/validators";
 import { dateYearFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { useOrganization } from "./entity";
+import { CONTACT_EMAIL } from "./feedback-link";
 import { PageHeader } from "./page-header";
 import { cardClass, ENTER, Eyebrow } from "./primitives";
 import { SkeletonRows } from "./skeletons";
@@ -36,8 +37,8 @@ export function OrganizationSettingsScreen() {
 
   if (!canRunOrganization) {
     return (
-      <EmptyState title="Only an owner can change the organization's settings.">
-        Ask whoever runs it.
+      <EmptyState title="Only an owner can change the gym's settings.">
+        Ask whoever runs the gym.
       </EmptyState>
     );
   }
@@ -46,7 +47,7 @@ export function OrganizationSettingsScreen() {
     <div className={`${ENTER} flex flex-col gap-8`}>
       <PageHeader
         title="Settings"
-        subtitle="Your organization: its name, where members pay, and any branch still to move onto memberships."
+        subtitle="Your gym: its name, where members pay, and any branch still to move onto memberships."
       />
       <GymName />
       <Modules />
@@ -70,10 +71,10 @@ function Modules() {
       onSuccess: async () => {
         await queryClient.invalidateQueries();
         setDraft(null);
-        toast.success("Modules saved");
+        toast.success("Features saved");
       },
       onError: (error) =>
-        toast.error(error.message || "Could not save the modules"),
+        toast.error(error.message || "Couldn't save the features. Try again."),
     }),
   );
 
@@ -81,7 +82,7 @@ function Modules() {
   if (modules.isError) {
     return (
       <ErrorState
-        label="optional modules"
+        label="optional features"
         onRetry={() => void modules.refetch()}
       />
     );
@@ -91,7 +92,7 @@ function Modules() {
   return (
     <section className={`${cardClass()} flex flex-col gap-4`}>
       <div>
-        <Eyebrow>Optional modules</Eyebrow>
+        <Eyebrow>Optional features</Eyebrow>
         <p className="text-muted-foreground mt-1 text-sm">
           Turn on only the tools your gym uses. Curriculum and referrals are
           available at BJJ branches.
@@ -140,7 +141,7 @@ function Modules() {
         disabled={save.isPending || draft === null}
         onClick={() => save.mutate(shown)}
       >
-        {save.isPending ? "Saving…" : "Save modules"}
+        {save.isPending ? "Saving…" : "Save"}
       </Button>
     </section>
   );
@@ -234,8 +235,17 @@ function Account() {
         <p className="text-muted-foreground text-sm">
           {ends && !over
             ? "You pay nothing until then. We will talk to you before anything changes."
-            : "There is no card on file. We invoice you and you pay by transfer."}{" "}
-          To change any of this, reply to us by email.
+            : ends && over
+              ? "That date has passed. Nothing stops working: we invoice you and you pay by transfer."
+              : "There is no card on file. We invoice you and you pay by transfer."}{" "}
+          To change any of this, email us at{" "}
+          <a
+            href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent("MatOps account")}`}
+            className="underline underline-offset-4"
+          >
+            {CONTACT_EMAIL}
+          </a>
+          .
         </p>
       </div>
     </section>
@@ -248,25 +258,27 @@ function GymName() {
   const { organizationName } = useOrganization();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(organizationName);
+  const [nameError, setNameError] = useState<string | null>(null);
 
   const rename = useMutation(
     trpc.organization.rename.mutationOptions({
       onSuccess: async () => {
         await queryClient.invalidateQueries(trpc.entity.pathFilter());
-        toast.success("Organization renamed");
+        toast.success("Gym renamed");
         setEditing(false);
       },
       onError: (e) =>
-        toast.error(e.message || "Could not rename the organization"),
+        toast.error(e.message || "Couldn't rename the gym. Try again."),
     }),
   );
 
   const save = () => {
     const next = draft.trim();
     if (next.length < 2) {
-      toast.error("Name must be at least 2 characters");
+      setNameError("Use at least 2 characters.");
       return;
     }
+    setNameError(null);
     if (next === organizationName) {
       setEditing(false);
       return;
@@ -281,11 +293,16 @@ function GymName() {
           <div className="flex flex-1 flex-wrap items-center gap-2">
             <Input
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={(e) => {
+                setDraft(e.target.value);
+                setNameError(null);
+              }}
               maxLength={80}
               autoFocus
               className="max-w-xs"
-              aria-label="Organization name"
+              aria-label="Gym name"
+              aria-invalid={nameError ? true : undefined}
+              aria-describedby={nameError ? "gym-name-error" : undefined}
             />
             <Button size="sm" onClick={save} disabled={rename.isPending}>
               {rename.isPending ? "Saving…" : "Save"}
@@ -300,11 +317,16 @@ function GymName() {
             >
               Cancel
             </Button>
+            {nameError && (
+              <FieldError id="gym-name-error" className="basis-full">
+                {nameError}
+              </FieldError>
+            )}
           </div>
         ) : (
           <>
             <div>
-              <Eyebrow>Organization name</Eyebrow>
+              <Eyebrow>Gym name</Eyebrow>
               <p className="mt-1 text-base font-medium">{organizationName}</p>
             </div>
             <Button
@@ -321,7 +343,7 @@ function GymName() {
         )}
       </div>
       <p className="text-muted-foreground text-sm">
-        This is the organization as a whole. Each branch keeps its own name.
+        This is your gym as a whole. Each branch keeps its own name.
       </p>
     </section>
   );
@@ -363,7 +385,8 @@ function MembershipSettings() {
         setDraft(null);
         toast.success("Membership settings saved");
       },
-      onError: (e) => toast.error(e.message || "Could not save that"),
+      onError: (e) =>
+        toast.error(e.message || "Couldn't save that. Try again."),
     }),
   );
 
@@ -407,7 +430,7 @@ function MembershipSettings() {
       >
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex w-28 flex-col gap-1.5">
-            <Label htmlFor="grace-days">Grace days</Label>
+            <Label htmlFor="grace-days">Days to pay</Label>
             <Input
               id="grace-days"
               type="number"
@@ -462,9 +485,11 @@ function MembershipSettings() {
         </div>
       </form>
       <p className="text-muted-foreground text-sm">
-        With {saved.graceDays} {saved.graceDays === 1 ? "day" : "days"}, an
-        unpaid September lets somebody in until the {saved.graceDays + 1}th at
-        midnight in {saved.effective}.
+        {saved.graceDays === 0
+          ? `An unpaid month blocks booking from the first day of the month, ${saved.effective} time.`
+          : `An unpaid month lets somebody train for the first ${saved.graceDays} ${
+              saved.graceDays === 1 ? "day" : "days"
+            }. Booking stops at 00:00 on the next day, ${saved.effective} time.`}
         {saved.calendarTimeZone === null &&
           " That zone comes from your main branch until you pick one here."}
       </p>
@@ -477,13 +502,21 @@ function Branches() {
   if (entities.length === 0) return null;
   if (!canCreateBranches) return null;
   return (
-    <ul className="flex flex-col gap-2">
-      {entities.map((e) => (
-        <li key={e.id}>
-          <BranchRow entityId={e.id} name={e.name} />
-        </li>
-      ))}
-    </ul>
+    <section className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1">
+        <Eyebrow>Payment rules per branch</Eyebrow>
+        <p className="text-muted-foreground text-sm">
+          Choose whether an unpaid member can still book at each branch.
+        </p>
+      </div>
+      <ul className="flex flex-col gap-2">
+        {entities.map((e) => (
+          <li key={e.id}>
+            <BranchRow entityId={e.id} name={e.name} />
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -500,11 +533,12 @@ function BranchRow({ entityId, name }: { entityId: string; name: string }) {
         await queryClient.invalidateQueries();
         toast.success(
           result.enforced
-            ? `${name} now enforces membership payments`
-            : `${name} no longer enforces membership payments`,
+            ? `${name} now requires payment to book`
+            : `${name} no longer requires payment to book`,
         );
       },
-      onError: (e) => toast.error(e.message || "Could not switch that branch"),
+      onError: (e) =>
+        toast.error(e.message || "Couldn't change that branch. Try again."),
     }),
   );
 
@@ -527,12 +561,12 @@ function BranchRow({ entityId, name }: { entityId: string; name: string }) {
           readiness.unpricedPlans === 1 ? "plan has" : "plans have"
         } no price`
       : "",
-    readiness && !readiness.bankDetails
-      ? "no bank details for the organization"
-      : "",
+    readiness && !readiness.bankDetails ? "no bank details for the gym" : "",
     readiness?.pendingEnrolment
-      ? `${readiness.pendingEnrolment} covered ${
-          readiness.pendingEnrolment === 1 ? "person is" : "people are"
+      ? `${readiness.pendingEnrolment} ${
+          readiness.pendingEnrolment === 1
+            ? "person on a covering plan is"
+            : "people on a covering plan are"
         } not enrolled here yet`
       : "",
   ].filter(Boolean);
@@ -545,21 +579,21 @@ function BranchRow({ entityId, name }: { entityId: string; name: string }) {
         <p className="truncate font-medium">{name}</p>
         <p className="text-muted-foreground text-sm">
           {enforced
-            ? "Membership payment rules can block booking at this branch."
-            : "Memberships remain available, but payment state does not block booking."}
+            ? "Unpaid members can't book classes here."
+            : "Unpaid members can still book classes here."}
         </p>
       </div>
       {enforced ? (
         <ConfirmDialog
-          title="Stop enforcing membership payments?"
-          description="Members keep their memberships. Payment state will no longer block booking at this branch."
-          confirmLabel="Switch off"
+          title={`Let unpaid members book at ${name}?`}
+          description="Everyone keeps their membership. An unpaid month will no longer stop anyone booking here."
+          confirmLabel="Stop requiring payment"
           onConfirm={async () => {
             await flip.mutateAsync({ entityId, enforced: false });
           }}
           trigger={
             <Button size="sm" variant="outline" busy={flip.isPending}>
-              Switch off
+              Stop requiring payment
             </Button>
           }
         />
@@ -567,7 +601,7 @@ function BranchRow({ entityId, name }: { entityId: string; name: string }) {
         <ConfirmDialog
           title={
             uncovered.length === 0
-              ? `Enforce membership payments at ${name}?`
+              ? `Require payment to book at ${name}?`
               : `${uncovered.length} ${
                   uncovered.length === 1 ? "member" : "members"
                 } would stop being able to book`
@@ -576,18 +610,18 @@ function BranchRow({ entityId, name }: { entityId: string; name: string }) {
             uncovered.length === 0
               ? `Every active member there is covered by a membership.${
                   blockers.length > 0
-                    ? ` Still to sort out: ${blockers.join(", ")}.`
+                    ? ` Still to sort out: ${blockers.join("; ")}.`
                     : ""
                 }`
               : `${named}${rest > 0 ? ` and ${rest} more` : ""} ${
                   uncovered.length === 1 ? "is" : "are"
-                } active at ${name} and hold no membership covering it. Enforcement stops them booking until you give them one.${bookingsLine}${
+                } active at ${name} and hold no membership covering it. They cannot book here until you give them one.${bookingsLine}${
                   blockers.length > 0
-                    ? ` Also still to sort out: ${blockers.join(", ")}.`
+                    ? ` Also still to sort out: ${blockers.join("; ")}.`
                     : ""
-                } You can stop enforcement at any time.`
+                } You can turn this off at any time.`
           }
-          confirmLabel="Switch on"
+          confirmLabel="Require payment"
           variant={uncovered.length === 0 ? "primary" : "destructive"}
           onConfirm={async () => {
             await flip.mutateAsync({ entityId, enforced: true });
@@ -599,7 +633,7 @@ function BranchRow({ entityId, name }: { entityId: string; name: string }) {
               busy={flip.isPending}
               disabled={preview.isPending}
             >
-              Switch on
+              Require payment to book
             </Button>
           }
         />

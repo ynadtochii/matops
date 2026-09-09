@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased: interface writing review
+
+- **One word per thing.** The product used seven nouns for two things (`gym`, `academy`, `branch`, `organization`, `space`, `room`, `mat`). A **gym** is the whole business, a **branch** is one place, and `organization` never reaches a screen: the sidebar group, `Gym overview`, `Gym settings` and the rename toast all say gym. `branchWords()` is the source wherever a screen holds the entity type (ADR 137).
+- **The six digits are a join code.** The owner's screen said `Academy code` while both student clients said `Gym ID`, for the number one person reads aloud to the other. It is `Join code` everywhere, including the validator message and both lookup errors.
+- **Blocked states name the way out.** `No membership of yours covers X.` and `X has not approved you yet.` now say what to do. `accessReason` is the one place all six live; the two duplicate copies of the pending-approval sentence call it instead. `BOOKING_LOCKED` moved to `@matops/domain`, so the fallback is one string and not three.
+- **`This class is outside your attendance editing window.`** became the rule plus the way round it: an owner can change an older class with a reason, and the copy never said so.
+- **The grace-days explainer hard-coded September** and said `midnight` without a side. It is month-neutral and says `00:00 on the next day`, with the zone.
+- **The account panel said "reply to us by email"** with no address. It links a `mailto:`, and says what a passed trial date means instead of going quiet.
+- Form validation moved from **toasts to the field** at five call sites (gym name, branch name, class name, one-off title, block theme), with `aria-invalid` and focus.
+- Payment rules per branch got a heading and real labels: `Require payment to book` instead of an unlabelled `Switch on`, and `Unpaid members can't book classes here.` instead of "payment state".
+- Verb-first buttons (`Change price`, `Choose branches`), `Optional features` instead of `Optional modules`, informative empty-state titles instead of `Nothing here.`, and the em dash gone from user-facing copy.
+- The Expo app and 20 server messages join ADR 136's `Couldn't <x>. Try again.` shape.
+
+## Unreleased: interface review fixes
+
+- **The focus ring is visible.** `FOCUS_RING` rendered at 1.54:1 on white (`ring-ring/50`, a half-transparent stone grey). `--ring` is now the brand violet per theme and the recipe is a 2px ring at a 2px offset on the background, so it clears 3:1 against the page and never has to fight a button fill. Five files that hand-copied the ring string now compose it (ADR 136).
+- **Callout accents split per theme.** `--info` / `--warning` / `--error` / `--success` were one set tuned for the black surface, and as text on white they ran 2.22:1 to 3.81:1: every form error, every `destructive-outline` label, the drift badges and the stat deltas. Light gets a darker set, dark keeps the originals, and warning and success take a white foreground in light.
+- **The privacy policy stops shipping placeholders.** `[ENTITY]`, `[ADDRESS]` and `[CONTACT EMAIL]` were served on the public `/privacy` page and in the consent dialog on the booking form. They read from three required `NEXT_PUBLIC_` env vars now, so an unset value fails the boot. **A deploy needs them set.**
+- `Skip to content` is the first focusable element in `ShellFrame`, and `<main>` carries `id="main"`.
+- Error toasts wait to be dismissed instead of leaving after four seconds, and the toaster gains a close button. One wrapper in `@matops/ui/toast`, not an option at 80 call sites.
+- 61 error messages gained a next step: `Could not save` became `Couldn't save. Try again.`, and the generic ones on shared `onError` handlers became `Couldn't finish that. Check your connection and try again.`
+- The policy prose caps its measure at `58ch`; it ran to about 95 characters a line.
+
 ## Unreleased: dead-code sweep
 
 - Removed twelve tRPC procedures no client called: `class.update`, `accessPlan.get`, `accessPlan.rename`, `accessPlan.resolveHold`, `person.accountCandidate`, `person.linkAccount`, `person.unlinkAccount`, `dropIn.markJoined`, `curriculum.forDate`, `invite.revoke`, `notification.status`, `auth.getSecretMessage`, and the whole `system` router. Their tests move to the live procedure that carries the same rule.

@@ -300,7 +300,7 @@ export const AcademyCodeSchema = z.object({
     .string()
     .trim()
     .max(20)
-    .regex(/^\d{6}$/, "Enter your gym's 6-digit ID"),
+    .regex(/^\d{6}$/, "Enter your gym's 6-digit join code"),
 });
 
 /**

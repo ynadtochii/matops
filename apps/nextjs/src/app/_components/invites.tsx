@@ -21,14 +21,15 @@ export function Invites() {
       <div className="flex flex-col gap-1">
         <SectionHeading>How students join</SectionHeading>
         <p className="text-muted-foreground text-sm">
-          Share this link with members who train. They land pending until you
-          approve them — a forwarded link never grants access on its own.
+          Share this link with members who train. They wait for your approval
+          before they can book, so a forwarded link never opens access on its
+          own.
         </p>
       </div>
       <InviteLinkCard
         role="student"
         label="Student link"
-        hint="For members who train. They land pending until you approve them."
+        hint="For members who train. They wait for your approval before they can book."
       />
     </section>
   );

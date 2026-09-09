@@ -1,7 +1,7 @@
 "use client";
 
 import type { ToasterProps } from "sonner";
-import { Toaster as Sonner, toast } from "sonner";
+import { Toaster as Sonner, toast as sonnerToast } from "sonner";
 
 import { useTheme } from "./theme";
 
@@ -12,6 +12,7 @@ export const Toaster = ({ ...props }: ToasterProps) => {
     <Sonner
       theme={themeMode === "auto" ? "system" : themeMode}
       className="toaster group"
+      closeButton
       style={
         {
           "--normal-bg": "var(--popover)",
@@ -24,4 +25,15 @@ export const Toaster = ({ ...props }: ToasterProps) => {
   );
 };
 
-export { toast };
+/**
+ * Sonner's toast with one change: an error waits to be dismissed. It is the
+ * only account of what went wrong, and four seconds is not long enough to read
+ * it, act on it, or have a screen reader finish it. Pass `duration` to override.
+ */
+export const toast = {
+  ...sonnerToast,
+  error: (
+    message: Parameters<typeof sonnerToast.error>[0],
+    options?: Parameters<typeof sonnerToast.error>[1],
+  ) => sonnerToast.error(message, { duration: Infinity, ...options }),
+};

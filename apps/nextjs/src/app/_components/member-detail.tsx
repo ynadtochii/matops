@@ -243,7 +243,8 @@ function MembershipTab({ personId, name }: { personId: string; name: string }) {
               : `${name} already has that one`,
         );
       },
-      onError: (e) => toast.error(e.message || "Could not assign that"),
+      onError: (e) =>
+        toast.error(e.message || "Couldn't assign that. Try again."),
     }),
   );
 
@@ -265,7 +266,8 @@ function MembershipTab({ personId, name }: { personId: string; name: string }) {
     trpc.accessPlan.markMonth.mutationOptions({
       onSuccess: () =>
         queryClient.invalidateQueries(trpc.accessPlan.forUser.pathFilter()),
-      onError: (e) => toast.error(e.message || "Could not record that"),
+      onError: (e) =>
+        toast.error(e.message || "Couldn't record that. Try again."),
     }),
   );
 
@@ -476,7 +478,8 @@ function RankTab({ memberId }: { memberId: string }) {
         await invalidate();
         toast.success(r.changed ? "Rank updated" : "No change");
       },
-      onError: (err) => toast.error(err.message || "Could not set rank"),
+      onError: (err) =>
+        toast.error(err.message || "Couldn't set rank. Try again."),
     }),
   );
 
@@ -486,7 +489,8 @@ function RankTab({ memberId }: { memberId: string }) {
         await invalidate();
         toast.success("Rank cleared");
       },
-      onError: (err) => toast.error(err.message || "Could not clear rank"),
+      onError: (err) =>
+        toast.error(err.message || "Couldn't clear rank. Try again."),
     }),
   );
 
@@ -514,7 +518,7 @@ function RankTab({ memberId }: { memberId: string }) {
                 <span className="ml-auto font-medium">{formatRank(r)}</span>
                 <ConfirmDialog
                   title={`Clear ${disciplineLabel(r.discipline)} rank?`}
-                  description="This removes the rank so you can set it fresh — use it to fix a mistake. The promotion history is kept."
+                  description="This removes the rank so you can set it fresh. Use it to fix a mistake. The promotion history is kept."
                   confirmLabel="Clear rank"
                   onConfirm={async () => {
                     await clear.mutateAsync({
@@ -669,7 +673,10 @@ function NotesTab({ memberId }: { memberId: string }) {
   const invalidate = () =>
     queryClient.invalidateQueries(trpc.note.forMember.pathFilter());
   const onError = (err: { message: string }) =>
-    toast.error(err.message || "Action failed");
+    toast.error(
+      err.message ||
+        "Couldn't finish that. Check your connection and try again.",
+    );
 
   const add = useMutation(
     trpc.note.add.mutationOptions({
@@ -693,7 +700,7 @@ function NotesTab({ memberId }: { memberId: string }) {
           rows={2}
           maxLength={2000}
           aria-label="New staff note"
-          placeholder="Private note for staff — injuries, goals, readiness…"
+          placeholder="Private note for staff: injuries, goals, readiness…"
         />
         <Button
           size="sm"

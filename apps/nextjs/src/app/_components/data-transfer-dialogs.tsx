@@ -86,7 +86,9 @@ export function StudentImportDialog({
       setDecisions([]);
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Could not preview the import",
+        error instanceof Error
+          ? error.message
+          : "Couldn't preview the import. Check the file and try again.",
       );
     } finally {
       setReviewing(false);
@@ -302,7 +304,9 @@ export function OrganizationExportDialog({
       );
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Could not prepare the export",
+        error instanceof Error
+          ? error.message
+          : "Couldn't prepare the export. Try again.",
       );
     } finally {
       setBusy(null);
@@ -340,7 +344,9 @@ export function OrganizationExportDialog({
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Could not export the data",
+        error instanceof Error
+          ? error.message
+          : "Couldn't export the data. Try again.",
       );
     } finally {
       setBusy(null);
@@ -350,7 +356,7 @@ export function OrganizationExportDialog({
   return (
     <Dialog open onOpenChange={onOpenChange}>
       <DialogContent>
-        <DialogTitle>Export organization data</DialogTitle>
+        <DialogTitle>Export gym data</DialogTitle>
         <p className="text-muted-foreground text-sm">
           These files include archived people, attendance, and payment history.
           Current filters do not change them.

@@ -166,7 +166,7 @@ export function MembershipsScreen() {
                 href={organizationHref("/settings", branchId)}
                 className="underline underline-offset-4"
               >
-                Organization settings
+                Gym settings
               </Link>
               .
             </p>
@@ -204,7 +204,9 @@ function ClaimsWaiting() {
     );
   };
   const onError = (e: { message: string }) =>
-    toast.error(e.message || "Could not do that");
+    toast.error(
+      e.message || "Couldn't finish that. Check your connection and try again.",
+    );
 
   const confirm = useMutation(
     trpc.accessPlan.markMonth.mutationOptions({
@@ -338,7 +340,8 @@ function MonthBoard({ nameOf }: { nameOf: (id: string) => string }) {
           trpc.stats.navigationSummary.pathFilter(),
         );
       },
-      onError: (e) => toast.error(e.message || "Could not record that"),
+      onError: (e) =>
+        toast.error(e.message || "Couldn't record that. Try again."),
     }),
   );
 
@@ -440,21 +443,23 @@ function BookingAccessQueue() {
   if (review.isError)
     return (
       <ErrorState
-        label="bookings with access issues"
+        label="bookings that need attention"
         onRetry={() => void review.refetch()}
       />
     );
   return (
     <section className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <h2 className="text-base font-semibold">Bookings without access</h2>
+        <h2 className="text-base font-semibold">
+          Bookings that need attention
+        </h2>
         <p className="text-muted-foreground text-sm">
-          Review upcoming bookings whose membership no longer allows access.
+          These people have booked a class their membership no longer covers.
         </p>
       </div>
       {review.data.items.length === 0 ? (
         <p className="text-muted-foreground text-sm">
-          No bookings need an access review.
+          Every upcoming booking is covered by a membership.
         </p>
       ) : (
         <ul className="divide-border divide-y">
@@ -512,7 +517,7 @@ function BookingAccessQueue() {
       )}
       {review.data.more && (
         <p className="text-muted-foreground text-sm">
-          Showing up to 50 bookings. Resolve these issues to reveal more.
+          Showing the first 50. Fix these to see the rest.
         </p>
       )}
     </section>
@@ -573,12 +578,12 @@ function PlanCard({
         )}
         {!plan.archived && (
           <Button size="sm" variant="outline" onClick={() => setPricing(true)}>
-            {plan.priceMinor === null ? "Set price" : "Price"}
+            {plan.priceMinor === null ? "Set price" : "Change price"}
           </Button>
         )}
         {!plan.archived && (
           <Button size="sm" variant="outline" onClick={onEdit}>
-            Branches
+            Choose branches
           </Button>
         )}
         <Button
@@ -637,7 +642,8 @@ function PriceDialog({
         onOpenChange(false);
         toast.success("Price saved");
       },
-      onError: (e) => toast.error(e.message || "Could not save that price"),
+      onError: (e) =>
+        toast.error(e.message || "Couldn't save that price. Try again."),
     }),
   );
 
@@ -737,7 +743,8 @@ function NewPlanDialog({
         setError(null);
         onOpenChange(false);
       },
-      onError: (e) => toast.error(e.message || "Could not add that plan"),
+      onError: (e) =>
+        toast.error(e.message || "Couldn't add that plan. Try again."),
     }),
   );
 
@@ -881,7 +888,8 @@ function CoverageDialog({
         toast.success(coverageResultMessage(result));
         onOpenChange(false);
       },
-      onError: (e) => toast.error(e.message || "Could not save that"),
+      onError: (e) =>
+        toast.error(e.message || "Couldn't save that. Try again."),
     }),
   );
 
@@ -962,15 +970,15 @@ function AffectedNotice({
   if (loading) {
     return (
       <p className="text-muted-foreground text-sm">
-        Working out who this hits…
+        Checking who this affects…
       </p>
     );
   }
   if (!affected || affected.length === 0) {
     return (
       <p className="text-muted-foreground text-sm">
-        Nobody's access changes. Members holding this plan keep what they reach
-        through their other memberships.
+        Nothing changes for anyone. Members holding this plan keep what they
+        reach through their other memberships.
       </p>
     );
   }
@@ -1129,9 +1137,9 @@ function Reconcile({ planId, missing }: { planId: string; missing: number }) {
         await queryClient.invalidateQueries();
         if (result.failed.length > 0) {
           toast.error(
-            `Could not update ${result.failed
+            `Couldn't update ${result.failed
               .map((f) => f.name)
-              .join(", ")}. Press again to retry them.`,
+              .join(", ")}. Try again.`,
           );
           return;
         }
@@ -1141,7 +1149,8 @@ function Reconcile({ planId, missing }: { planId: string; missing: number }) {
             : `${result.enrolled.length} people enrolled at branches they were missing`,
         );
       },
-      onError: (e) => toast.error(e.message || "Could not finish it"),
+      onError: (e) =>
+        toast.error(e.message || "Couldn't finish it. Try again."),
     }),
   );
 

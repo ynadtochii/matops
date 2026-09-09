@@ -114,7 +114,7 @@ export function SignIn({ callbackURL = "/" }: { callbackURL?: string }) {
       >
         {state.status === "sent" ? (
           <span className="text-foreground font-medium">
-            Check your email — we sent a sign-in link to {state.email}.
+            Check your email. We sent a sign-in link to {state.email}.
           </span>
         ) : state.status === "error" ? (
           <span className="text-error">

@@ -23,7 +23,7 @@ const CODE_RE = /^\d{6}$/;
 /**
  * "Join a gym" (spec S2, docs/issues/32) — shown when a signed-in user has no
  * active academy. Mobile v1 is a plain code lookup: the student types the gym's
- * 6-digit ID → we find the academy → they confirm + fill the minimal profile →
+ * 6-digit join code → we find the academy → they confirm + fill the minimal profile →
  * a PENDING membership → they land on the schedule with the S3 banner.
  *
  * The same screen serves a member who already trains somewhere and wants to add
@@ -59,14 +59,14 @@ export default function Onboarding() {
         await queryClient.invalidateQueries();
         router.replace("/");
       },
-      onError: (err) => setError(err.message || "Could not join"),
+      onError: (err) => setError(err.message || "Couldn't join. Try again."),
     }),
   );
 
   const search = () => {
     const trimmed = code.trim();
     if (!CODE_RE.test(trimmed)) {
-      setError("Enter your gym's 6-digit ID.");
+      setError("Enter your gym's 6-digit join code.");
       return;
     }
     setError(null);
@@ -149,7 +149,7 @@ export default function Onboarding() {
             </UIStack>
           </UIStack>
         ) : (
-          /* Phase 1 — enter the gym's ID. */
+          /* Phase 1: enter the gym's join code. */
           <UIStack key="code" gap={24}>
             <UIStack gap={8}>
               <Heading>
@@ -157,14 +157,14 @@ export default function Onboarding() {
               </Heading>
               <Muted>
                 {another
-                  ? "Ask that branch for its ID — a 6-digit number — and enter it here."
-                  : "Ask your gym for its ID — a 6-digit number — and enter it here."}
+                  ? "Ask that branch for its 6-digit join code, then enter it here."
+                  : "Ask your gym for its 6-digit join code, then enter it here."}
               </Muted>
             </UIStack>
 
             <UIStack gap={16}>
               <TextField
-                label="Gym ID"
+                label="Join code"
                 value={code}
                 onChangeText={(next) => {
                   setCode(next.replace(/\D/g, ""));
@@ -180,10 +180,10 @@ export default function Onboarding() {
                 !academy &&
                 !found.isError &&
                 errText(
-                  "No gym found with that ID — check the number with your gym.",
+                  "No gym found with that join code. Check the six digits with your gym.",
                 )}
               {found.isError &&
-                errText("Could not search right now — try again.")}
+                errText("Couldn't search right now. Try again.")}
               {error && errText(error)}
               <Button
                 label="Find gym"

@@ -111,6 +111,9 @@ export function accessAdmits(verdict: AccessVerdict): boolean {
   return verdict === "ok" || verdict === "provisional";
 }
 
+/** The fallback when a gate says locked without naming a reason. */
+export const BOOKING_LOCKED = "Booking is closed for you. Ask your gym why.";
+
 /** What to tell someone, in the words both clients use. */
 export function accessReason(
   verdict: AccessVerdict,
@@ -122,14 +125,14 @@ export function accessReason(
     case "provisional":
       return "Payment reported. You can book while the gym checks your payment. If payment is declined, booking and check-in access will pause.";
     case "expired":
-      return "Your membership month is unpaid, so booking is closed. Pay at the desk and your gym will open it again.";
+      return "You haven't paid for this month yet, so booking is closed. Pay at the desk and your gym will open it again.";
     case "pending-approval":
-      return `${branchName} has not approved you yet.`;
+      return `${branchName} has not approved you yet. You can browse classes while you wait.`;
     case "payment-declined":
       return `Your payment for ${branchName} was declined. An owner must approve it before you can book or check in.`;
     case "suspended":
       return `Your place at ${branchName} is paused. Ask the gym to restore it.`;
     case "not-covered":
-      return `No membership of yours covers ${branchName}.`;
+      return `No membership of yours covers ${branchName}. Ask the gym to put you on a plan that covers it.`;
   }
 }

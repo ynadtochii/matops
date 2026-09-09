@@ -119,7 +119,7 @@ export function ConsentChecks({
         id="consent-contact"
         checked={contact}
         onChange={onContact}
-        label="OK for the gym to contact me about training."
+        label="The gym can contact me about training."
         error={contactError}
       >
         <PolicyDialog

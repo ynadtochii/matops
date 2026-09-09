@@ -224,7 +224,10 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
     await queryClient.invalidateQueries(trpc.attendance.pathFilter());
   };
   const onError = (err: { message: string }) =>
-    toast.error(err.message || "Action failed");
+    toast.error(
+      err.message ||
+        "Couldn't finish that. Check your connection and try again.",
+    );
 
   const listKey = (id: string) => trpc.attendance.list.queryKey({ id });
 
@@ -263,7 +266,7 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
         toast.success(
           firstVisit
             ? "Visitor added to your drop-in leads"
-            : `Visitor added — visit ${visitCount}`,
+            : `Visitor added. Visit ${visitCount}`,
         );
       },
       onError,
@@ -442,7 +445,8 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
           )}
           {!review.reviewed && !canMark && (
             <p className="text-muted-foreground text-sm">
-              This class is outside your attendance editing window.
+              You can mark attendance for today and the last 14 days. For an
+              older class, ask an owner to change it.
             </p>
           )}
           {finish.isError && (

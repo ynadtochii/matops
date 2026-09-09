@@ -262,7 +262,7 @@ async function requireBranchLifecycleChange(
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
       message:
-        "Change this person's organization role before changing their branch access.",
+        "Change this person's gym role before changing their branch access.",
     });
   }
 }
@@ -283,7 +283,7 @@ export const membershipRouter = {
       if (!invite) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "This invite isn't valid — ask your gym for a new link.",
+          message: "This invite isn't valid. Ask your gym for a new link.",
         });
       }
       return joinPending(ctx, {
@@ -310,7 +310,7 @@ export const membershipRouter = {
         throw new TRPCError({
           code: "NOT_FOUND",
           message:
-            "No gym found with that ID — check the number with your gym.",
+            "No gym found with that join code. Check the six digits with your gym.",
         });
       }
       return joinPending(ctx, {

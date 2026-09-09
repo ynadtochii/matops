@@ -144,7 +144,7 @@ export function ClassDetail({ classId }: { classId: string }) {
                 ) : cap.isOver ? (
                   <ConfirmDialog
                     title="This class looks full"
-                    description="Your gym manages the room, so you can still book it."
+                    description="Your gym decides the real limit, so you can still book. Ask them if you are not sure."
                     confirmLabel="Book anyway"
                     variant="primary"
                     onConfirm={() => book.mutate({ classId })}

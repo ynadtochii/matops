@@ -22,10 +22,7 @@ export function OrganizationBoundary({ children }: { children: ReactNode }) {
   if (mine.isError) {
     return (
       <div className="mx-auto w-full max-w-md p-8">
-        <ErrorState
-          label="your academies"
-          onRetry={() => void mine.refetch()}
-        />
+        <ErrorState label="your branches" onRetry={() => void mine.refetch()} />
       </div>
     );
   }

@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 
-import { isActiveMember, isStaff } from "@matops/domain";
+import { accessReason, isActiveMember, isStaff } from "@matops/domain";
 import { toast } from "@matops/ui/toast";
 import { useInvalidate } from "@matops/ui/use-invalidate";
 
@@ -32,18 +32,18 @@ export function useBooking() {
     refetchInterval: (query) => (query.state.data?.locked ? 10000 : false),
   });
   const lockedMessage = !isActiveMember(academy)
-    ? "Your gym has not approved you yet. You can browse classes while you wait."
+    ? accessReason("pending-approval", academy.name)
     : !isStaff(academy) && gate.isPending
       ? "Checking your booking access…"
       : gate.isError
-        ? "Could not check booking access. Refresh this page to try again."
+        ? "Couldn't check your booking access. Refresh this page to try again."
         : gate.data?.locked
           ? gate.data.message
           : null;
 
   const invalidate = () => invalidateFor("booking");
   const onError = (err: { message: string }) =>
-    toast.error(err.message || "Could not update your booking");
+    toast.error(err.message || "Couldn't update your booking. Try again.");
 
   const book = useMutation(
     trpc.booking.book.mutationOptions({

@@ -237,7 +237,7 @@ export const entityRouter = {
             throw new TRPCError({
               code: "PRECONDITION_FAILED",
               message:
-                "This person already has organization staff access. Change their organization role before assigning a branch role.",
+                "This person already runs the whole gym. Change their gym role before giving them a branch role.",
             });
           }
           const [held] = await db

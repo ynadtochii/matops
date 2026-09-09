@@ -10,8 +10,10 @@ import {
   DialogDescription,
   DialogTitle,
 } from "@matops/ui/dialog";
+import { FieldError } from "@matops/ui/field";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
+import { FOCUS_RING } from "@matops/ui/motion";
 import { Select } from "@matops/ui/select";
 
 import { chipClass, weeksLabel } from "./curriculum-shared";
@@ -70,9 +72,11 @@ export function BlockDialog({
   onChange,
   onClose,
   onSubmit,
+  themeError,
 }: DialogProps<BlockForm> & {
   categories: string[];
   onSubmit: () => void;
+  themeError?: string;
 }) {
   return (
     <FormDialog form={state} onClose={onClose}>
@@ -100,7 +104,12 @@ export function BlockDialog({
               placeholder="Closed guard: attacks and retention"
               maxLength={80}
               required
+              aria-invalid={themeError ? true : undefined}
+              aria-describedby={themeError ? "block-theme-error" : undefined}
             />
+            {themeError && (
+              <FieldError id="block-theme-error">{themeError}</FieldError>
+            )}
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -174,7 +183,7 @@ export function BlockDialog({
               placeholder="What this block covers, week by week."
               maxLength={2000}
               rows={4}
-              className="border-input bg-background focus-visible:ring-ring rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
+              className={`border-input bg-background rounded-md border px-3 py-2 text-sm ${FOCUS_RING}`}
             />
           </div>
 
@@ -225,7 +234,7 @@ export function RunNoteDialog({
             maxLength={2000}
             rows={5}
             autoFocus
-            className="border-input bg-background focus-visible:ring-ring rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
+            className={`border-input bg-background rounded-md border px-3 py-2 text-sm ${FOCUS_RING}`}
           />
 
           <div className="flex gap-2">

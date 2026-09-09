@@ -28,6 +28,7 @@ import {
   DialogDescription,
   DialogTitle,
 } from "@matops/ui/dialog";
+import { FieldError } from "@matops/ui/field";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
 import { Select } from "@matops/ui/select";
@@ -162,6 +163,7 @@ export function Schedule({
   const queryClient = useQueryClient();
   const [offset, setOffset] = useState(0);
   const [form, setForm] = useState<OneOffForm | null>(null);
+  const [titleError, setTitleError] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
 
   const weekWindow = useMemo(
@@ -179,7 +181,10 @@ export function Schedule({
   const invalidate = () =>
     queryClient.invalidateQueries(trpc.class.week.pathFilter());
   const onError = (err: { message: string }) =>
-    toast.error(err.message || "Action failed");
+    toast.error(
+      err.message ||
+        "Couldn't finish that. Check your connection and try again.",
+    );
 
   const create = useMutation(
     trpc.class.create.mutationOptions({
@@ -232,9 +237,11 @@ export function Schedule({
   const submitOneOff = () => {
     if (!form) return;
     if (form.title.trim().length < 1) {
-      toast.error("Add a title");
+      setTitleError(true);
+      document.getElementById("cl-title")?.focus();
       return;
     }
+    setTitleError(false);
     create.mutate({
       title: form.title.trim(),
       instructorId: form.instructorId || undefined,
@@ -251,7 +258,7 @@ export function Schedule({
   const start = weekStart(offset);
   const end = new Date(start);
   end.setDate(end.getDate() + 6);
-  const rangeLabel = `${monthDayFmt.format(start)} – ${
+  const rangeLabel = `${monthDayFmt.format(start)} - ${
     start.getMonth() === end.getMonth()
       ? dayNumFmt.format(end)
       : monthDayFmt.format(end)
@@ -379,11 +386,21 @@ export function Schedule({
                 <Input
                   id="cl-title"
                   value={form.title}
-                  onChange={(e) => setForm({ ...form, title: e.target.value })}
+                  onChange={(e) => {
+                    setForm({ ...form, title: e.target.value });
+                    setTitleError(false);
+                  }}
                   placeholder="Open mat"
                   maxLength={80}
                   required
+                  aria-invalid={titleError ? true : undefined}
+                  aria-describedby={titleError ? "cl-title-error" : undefined}
                 />
+                {titleError && (
+                  <FieldError id="cl-title-error">
+                    Give the class a title.
+                  </FieldError>
+                )}
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="flex flex-col gap-1.5">
