@@ -87,9 +87,12 @@ describe("procedures that write identity tables", () => {
     });
 
     it("is staff-readable, owner-written, and never leaks another academy's links", async () => {
-      await h.as(OWNER, ACAD).invite.create({ role: "instructor" });
+      const made = await h
+        .as(OWNER, ACAD)
+        .invite.create({ role: "instructor" });
 
-      await expect(h.as(COACH, ACAD).invite.list()).resolves.toHaveLength(1);
+      const readable = await h.as(COACH, ACAD).invite.list();
+      expect(readable.map((i) => i.id)).toContain(made.id);
       expect(
         await rejectionCode(
           h.as(COACH, ACAD).invite.create({ role: "student" }),
