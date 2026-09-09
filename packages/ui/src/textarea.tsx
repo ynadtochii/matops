@@ -16,7 +16,7 @@ export function Textarea({
       data-slot="textarea"
       className={cn(
         "border-input placeholder:text-muted-foreground dark:bg-input/30 field-sizing-content w-full min-w-0 rounded-md border bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
-        `focus-visible:border-ring ${FOCUS_RING}`,
+        FOCUS_RING,
         "aria-invalid:ring-error/20 dark:aria-invalid:ring-error/40 aria-invalid:border-error",
         className,
       )}

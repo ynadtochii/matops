@@ -7,6 +7,9 @@ node_modules
 
 # testing
 coverage
+playwright-report
+test-results
+**/playwright/.auth/
 
 # next.js
 .next/
@@ -56,3 +59,6 @@ dist/
 # local scratch / planning workspace
 .scratch/
 .env*
+
+# Playwright CLI output (may contain credentials)
+.playwright-cli/

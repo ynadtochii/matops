@@ -4,7 +4,13 @@ import { eq } from "@matops/db";
 import { accessAssignment, entity } from "@matops/db/schema";
 
 import type { Harness } from "./helpers";
-import { harness, memberId, rejectionCode, seedClasses } from "./helpers";
+import {
+  harness,
+  memberId,
+  rejectionCode,
+  seedClasses,
+  storedBookingCount,
+} from "./helpers";
 
 const ACAD = "acad_gate";
 const OWNER = "u_gate_owner";
@@ -123,9 +129,12 @@ describe("shared membership booking gate", () => {
       month: "2026-09-01",
       paid: true,
     });
+    expect((await student().booking.mine())[0]?.bookingTier).toBe("confirmed");
+    expect(await storedBookingCount(h.pg, CLASS)).toBe(1);
     expect((await student().booking.book({ classId: CLASS })).tier).toBe(
       "confirmed",
     );
+    expect(await storedBookingCount(h.pg, CLASS)).toBe(1);
   });
 
   it("lets a locked member cancel an existing booking", async () => {

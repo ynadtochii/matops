@@ -20,7 +20,7 @@ export type { ButtonVariant, ButtonVariants } from "./button-variants";
 const webAdornments =
   "inline-flex shrink-0 whitespace-nowrap outline-none " +
   "transition-[background-color,border-color,color,box-shadow,scale] duration-150 " +
-  `${PRESS} ${FOCUS_RING} focus-visible:border-ring ` +
+  `${PRESS} ${FOCUS_RING} ` +
   "disabled:pointer-events-none " +
   "disabled:bg-muted disabled:text-muted-foreground disabled:border-transparent " +
   "aria-invalid:border-error aria-invalid:ring-error/20 " +

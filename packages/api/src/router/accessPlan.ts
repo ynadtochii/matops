@@ -9,8 +9,11 @@ import {
   desc,
   eq,
   eventRole,
+  gt,
+  gte,
   inArray,
   isNull,
+  lt,
   or,
   recordActivity,
   recordMilestone,
@@ -23,6 +26,8 @@ import {
   accessPlan,
   accessPlanEntity,
   accessPlanPrice,
+  classInstance,
+  classParticipation,
   entity,
   entityMembership,
   member,
@@ -40,6 +45,7 @@ import {
   changeIsPending,
   formatDeadline,
   formatMonth,
+  instantFromLocalDate,
   isFreeMembershipMonth,
   isStaffRole,
   localDateISO,
@@ -73,6 +79,7 @@ import {
 } from "@matops/validators";
 
 import type { BookingToReview } from "../membership-access";
+import { claimSeat } from "../classes";
 import { studentRosterOf } from "../members";
 import {
   bookingsNeedingReview,
@@ -116,6 +123,55 @@ const COVERAGE_MOVED =
 const DEFAULT_MEMBERSHIP_GRACE_DAYS = 7;
 
 type PlanRow = typeof accessPlan.$inferSelect;
+
+async function promotePaidBookings(
+  db: TenantTx,
+  assignment: Pick<typeof accessAssignment.$inferSelect, "personId" | "planId">,
+  month: string,
+  timeZone: string,
+): Promise<number> {
+  const coverage = await db
+    .select({ entityId: accessPlanEntity.entityId })
+    .from(accessPlanEntity)
+    .where(eq(accessPlanEntity.planId, assignment.planId));
+  if (coverage.length === 0) return 0;
+
+  const bookings = await db
+    .select({ id: classParticipation.id, classId: classParticipation.classId })
+    .from(classParticipation)
+    .innerJoin(classInstance, eq(classInstance.id, classParticipation.classId))
+    .where(
+      and(
+        eq(classParticipation.personId, assignment.personId),
+        eq(classParticipation.bookingStatus, "booked"),
+        eq(classParticipation.bookingTier, "provisional"),
+        inArray(
+          classInstance.academyId,
+          coverage.map((row) => row.entityId),
+        ),
+        eq(classInstance.status, "scheduled"),
+        isNull(classInstance.deletedAt),
+        gt(classInstance.startsAt, new Date()),
+        gte(classInstance.startsAt, instantFromLocalDate(month, 0, timeZone)),
+        lt(
+          classInstance.startsAt,
+          instantFromLocalDate(nextMonth(month), 0, timeZone),
+        ),
+      ),
+    )
+    .for("update");
+
+  let promoted = 0;
+  for (const booking of bookings) {
+    if (!(await claimSeat(db, booking.classId))) continue;
+    await db
+      .update(classParticipation)
+      .set({ bookingTier: "confirmed" })
+      .where(eq(classParticipation.id, booking.id));
+    promoted += 1;
+  }
+  return promoted;
+}
 
 /**
  * What the caller last saw the plan's coverage as (ADR 129). Every coverage
@@ -1949,6 +2005,14 @@ export const accessPlanRouter = {
         evidence,
         actorId: ctx.session.user.id,
       });
+      if (input.paid) {
+        await promotePaidBookings(
+          ctx.db,
+          assignment,
+          input.month,
+          evidence.calendarTimeZone,
+        );
+      }
       if (input.paid && input.resolveHoldReason && held) {
         await ctx.db
           .update(membershipAccessHold)
