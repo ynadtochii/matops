@@ -2,6 +2,7 @@
 
 ## Unreleased: interface writing review
 
+- **A self-join now writes the gym-level person.** Somebody who scanned the student link got an `entity_membership` and nothing else, so the branch roster showed them and `People` showed nobody. `ensureAccountPerson` makes (or claims by email) the `person` row on every join and at gym creation, and the membership carries its id.
 - **One word per thing.** The product used seven nouns for two things (`gym`, `academy`, `branch`, `organization`, `space`, `room`, `mat`). A **gym** is the whole business, a **branch** is one place, and `organization` never reaches a screen: the sidebar group, `Gym overview`, `Gym settings` and the rename toast all say gym. `branchWords()` is the source wherever a screen holds the entity type (ADR 137).
 - **The six digits are a join code.** The owner's screen said `Academy code` while both student clients said `Gym ID`, for the number one person reads aloud to the other. It is `Join code` everywhere, including the validator message and both lookup errors.
 - **Blocked states name the way out.** `No membership of yours covers X.` and `X has not approved you yet.` now say what to do. `accessReason` is the one place all six live; the two duplicate copies of the pending-approval sentence call it instead. `BOOKING_LOCKED` moved to `@matops/domain`, so the fallback is one string and not three.

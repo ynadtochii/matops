@@ -93,6 +93,13 @@ describe("joining through an invite link", () => {
     expect(rows[0]?.invitedRole).toBe("student");
   });
 
+  it("shows the joiner on the gym directory, not only the branch roster", async () => {
+    const directory = await h.as(OWNER, ORG).person.directory({});
+    const row = directory.find((p) => p.accountUserId === JOINER);
+    expect(row?.email).toBe("joiner@test.local");
+    expect(row?.branches.map((b) => b.entityId)).toEqual([ORG]);
+  });
+
   it("is idempotent, so a second tap adds no second row", async () => {
     const again = await h
       .as(JOINER, ORG)

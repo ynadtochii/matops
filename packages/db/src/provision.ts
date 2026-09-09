@@ -10,6 +10,7 @@ import { organization } from "./auth-schema";
 import { DEFAULT_TRACK_NAME } from "./curriculum";
 import { curriculumTrack } from "./curriculum-schema";
 import { academyProfile, entity, entityMembership } from "./entity-schema";
+import { ensureAccountPerson } from "./person";
 import { classTemplate } from "./scheduling";
 
 interface ProvisionResult {
@@ -107,6 +108,11 @@ async function provisionEntityRows(
   }
 
   if (input.ownerUserId) {
+    const ownerPersonId = await ensureAccountPerson(
+      exec,
+      input.organizationId,
+      input.ownerUserId,
+    );
     mark(
       "entity_membership",
       await exec
@@ -115,6 +121,7 @@ async function provisionEntityRows(
           organizationId: input.organizationId,
           entityId: input.entityId,
           userId: input.ownerUserId,
+          personId: ownerPersonId,
           role: "owner",
           status: "active",
           joinedAt: new Date(),
@@ -249,7 +256,11 @@ async function copyBranchSetup(
   }
 
   const staff = await exec
-    .select({ userId: entityMembership.userId, role: entityMembership.role })
+    .select({
+      userId: entityMembership.userId,
+      personId: entityMembership.personId,
+      role: entityMembership.role,
+    })
     .from(entityMembership)
     .where(
       and(
@@ -267,6 +278,7 @@ async function copyBranchSetup(
           organizationId: input.organizationId,
           entityId: input.toEntityId,
           userId: m.userId,
+          personId: m.personId,
           role: m.role,
           status: "active",
           joinedAt: new Date(),

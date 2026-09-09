@@ -7,6 +7,7 @@ import type { DbExec } from "./client";
 import type { DbReader, TenantTx } from "./tenant";
 import { member, organization, user } from "./auth-schema";
 import { academyProfile, entity, entityMembership } from "./entity-schema";
+import { ensureAccountPerson } from "./person";
 import { person } from "./person-schema";
 
 /** The statuses `canEnroll` admits, as a SQL filter (docs/issues/23). */
@@ -711,11 +712,16 @@ async function upsertPendingEntityMembership(
     organizationId: string;
     entityId: string;
     invitedRole: string;
+    personId: string | null;
   },
   exec: DbExec,
 ): Promise<{ status: string; alreadyMember: boolean }> {
   const existing = await exec
-    .select({ id: entityMembership.id, status: entityMembership.status })
+    .select({
+      id: entityMembership.id,
+      status: entityMembership.status,
+      personId: entityMembership.personId,
+    })
     .from(entityMembership)
     .where(
       and(
@@ -727,6 +733,12 @@ async function upsertPendingEntityMembership(
 
   const row = existing[0];
   if (row) {
+    if (input.personId && !row.personId) {
+      await exec
+        .update(entityMembership)
+        .set({ personId: input.personId })
+        .where(eq(entityMembership.id, row.id));
+    }
     if (row.status === "pending") {
       await exec
         .update(entityMembership)
@@ -753,6 +765,7 @@ async function upsertPendingEntityMembership(
     organizationId: input.organizationId,
     entityId: input.entityId,
     userId: input.userId,
+    personId: input.personId,
     role: "member",
     status: "pending",
     invitedRole: input.invitedRole,
@@ -785,7 +798,13 @@ export async function createPendingMembership(
       target: [member.organizationId, member.userId],
     });
 
-  return upsertPendingEntityMembership(input, exec);
+  const personId = await ensureAccountPerson(
+    exec,
+    input.organizationId,
+    input.userId,
+  );
+
+  return upsertPendingEntityMembership({ ...input, personId }, exec);
 }
 
 interface ResolvedAccount {
