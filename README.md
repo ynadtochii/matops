@@ -4,6 +4,8 @@ Multi-academy admin SaaS for grappling gyms. It has a **Next.js** owner and inst
 
 Scaffolded from [`create-t3-turbo`](https://github.com/t3-oss/create-t3-turbo).
 
+##
+
 ## Stack
 
 Turborepo · pnpm · tRPC v11 · Better Auth (Organization + magic-link) · Drizzle + Postgres (Neon) · Next.js (Vercel) · Expo (EAS) · Tailwind / NativeWind · TanStack Query.

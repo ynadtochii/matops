@@ -73,9 +73,15 @@ describe their ON state. The em dash is gone from user-facing copy.
 
 ## Consequences
 
-No migration, no procedure signature changed, no test asserted a string this
-touched. `accessReason`'s tests check substrings and length, and every router
-test asserts a TRPC code.
+No migration, no procedure signature changed. Two assertions in
+`tenant-seam.test.ts` matched a message by regex and moved with it: the
+no-gym error, and the paused-member one, which now asserts `/paused.*restore/`
+so it checks the reversibility the test name promises rather than the word
+`suspended`. `accessReason`'s own tests check substrings and length, and every
+other router test asserts a TRPC code.
+
+**Suite green after the change:** 1446 tests across 125 files (domain 637,
+api 556, db 209, validators 41, notifications 3).
 
 ## Out
 
