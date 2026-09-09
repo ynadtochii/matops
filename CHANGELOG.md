@@ -12,6 +12,7 @@
 - Payment rules per branch got a heading and real labels: `Require payment to book` instead of an unlabelled `Switch on`, and `Unpaid members can't book classes here.` instead of "payment state".
 - Verb-first buttons (`Change price`, `Choose branches`), `Optional features` instead of `Optional modules`, informative empty-state titles instead of `Nothing here.`, and the em dash gone from user-facing copy.
 - The Expo app and 20 server messages join ADR 136's `Couldn't <x>. Try again.` shape.
+- Suite green: **1446 tests across 125 files** (domain 637, api 556, db 209, validators 41, notifications 3). Two `tenant-seam.test.ts` assertions matched a message by regex and moved with the copy.
 
 ## Unreleased: interface review fixes
 

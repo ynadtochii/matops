@@ -59,7 +59,7 @@ describe("tenant seam", () => {
 
   it("rejects a caller with no active academy", async () => {
     await expect(h.as(STUDENT_A, null).class.mine(WEEK)).rejects.toThrow(
-      /No active organization/,
+      /No gym selected/,
     );
   });
 
@@ -71,7 +71,7 @@ describe("tenant seam", () => {
 
   it("rejects a suspended member and says it is reversible", async () => {
     await expect(h.as(SUSPENDED_A, A).class.mine(WEEK)).rejects.toThrow(
-      /suspended/,
+      /paused.*restore/,
     );
   });
 
