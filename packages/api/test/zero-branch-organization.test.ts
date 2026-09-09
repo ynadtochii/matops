@@ -69,6 +69,28 @@ describe("a gym with no branch", () => {
     ).resolves.toMatchObject({ entities: [], rows: [] });
   });
 
+  it("returns confirmed organization badge zeroes without a selected branch", async () => {
+    const { h, organizationId } = await gymWithNoBranch();
+
+    await expect(
+      h.as(OWNER, null).stats.navigationSummary({
+        organizationId,
+        branchId: null,
+      }),
+    ).resolves.toEqual({
+      organizationId,
+      branch: null,
+      counts: {
+        people: { state: "ready", count: 0 },
+        memberships: { state: "ready", count: 0 },
+        roster: { state: "unavailable" },
+        coaches: { state: "unavailable" },
+        branchClaims: { state: "unavailable" },
+        unread: { state: "unavailable" },
+      },
+    });
+  });
+
   it("answers the membership catalog with no plans", async () => {
     const { h } = await gymWithNoBranch();
 
@@ -127,7 +149,7 @@ describe("a gym with no branch", () => {
 
     const setup = await h.as(OWNER, null).organization.setup();
 
-    expect(setup.progress).toEqual({ done: 1, total: 10, complete: false });
+    expect(setup.progress).toEqual({ done: 1, total: 9, complete: false });
     expect(setup.items.filter((i) => i.done).map((i) => i.key)).toEqual([
       "gym",
     ]);

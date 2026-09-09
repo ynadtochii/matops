@@ -12,7 +12,7 @@ import { academyInvite } from "./invite-schema";
  * `academyId` names the `bjj_academy` entity the link joins (ADR 124).
  */
 
-export interface InviteRow {
+interface InviteRow {
   id: string;
   academyId: string;
   role: string;
@@ -112,24 +112,6 @@ export async function getOrCreateInvite(
     .limit(1);
 
   return live[0] ?? rotateInvite(input, exec);
-}
-
-/** Revoke one link by id, scoped to the academy (defense — no RLS here). */
-export async function revokeInvite(
-  academyId: string,
-  inviteId: string,
-  exec: DbExec,
-): Promise<void> {
-  await exec
-    .update(academyInvite)
-    .set({ revokedAt: new Date() })
-    .where(
-      and(
-        eq(academyInvite.id, inviteId),
-        eq(academyInvite.academyId, academyId),
-        isNull(academyInvite.revokedAt),
-      ),
-    );
 }
 
 /**

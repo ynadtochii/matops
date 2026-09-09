@@ -16,14 +16,11 @@ export * from "./dropin";
 export * from "./materialize";
 // Push-token helpers (Expo push registration / target resolution) — ./push-token.ts.
 export * from "./push-token";
-// Class-reminder claim (base-connection cron helper) — see ./reminder.ts.
-export * from "./reminder";
 // Notification-center writes (base-connection) — see ./notification.ts.
 export * from "./notification";
+export * from "./notification-notice";
 // Academy settings (time zone, address, soft delete) — see ./academy-settings.ts.
 export * from "./academy-settings";
-// Dues-reminder claim (base-connection cron helper, R.1) — see ./dues-reminder.ts.
-export * from "./dues-reminder";
 // Permanent erasure of one member (spec O4) — see ./erase.ts.
 export * from "./erase";
 // Public booking API (key resolution, published classes) — see ./public-api.ts.
@@ -35,3 +32,5 @@ export * from "./provision";
 export * from "./schedule-guard";
 export * from "./product-event";
 export * from "./product-report";
+export * from "./attendance-review";
+export * from "./person";

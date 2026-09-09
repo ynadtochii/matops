@@ -4,7 +4,13 @@ import { createEntity, eq } from "@matops/db";
 import { classInstance, classParticipation } from "@matops/db/schema";
 
 import type { Harness } from "./helpers";
-import { harness, rejectionCode, seedAcademies, seedClasses } from "./helpers";
+import {
+  harness,
+  personId,
+  rejectionCode,
+  seedAcademies,
+  seedClasses,
+} from "./helpers";
 
 const ORG = "acad_strict";
 const BOSS = "u_strict_owner";
@@ -247,15 +253,12 @@ describe("one place, one booking", () => {
     expect(await countOf(now.id)).toBe(1);
   });
 
-  it("answers for whichever gate the branch runs on", async () => {
-    // The gym is activated, and Chris holds a membership covering it.
+  it("answers whether each branch enforces payment", async () => {
     const covered = await at(gym, CHRIS).booking.access();
     expect([covered.locked, covered.message]).toEqual([false, null]);
 
-    // The mat is NOT activated and has no dues enforcement, so the legacy gate
-    // lets everyone through. Same query, different gate, one shape.
-    const legacy = await at(ORG, ALEX).booking.access();
-    expect([legacy.locked, legacy.message]).toEqual([false, null]);
+    const open = await at(ORG, ALEX).booking.access();
+    expect([open.locked, open.message]).toEqual([false, null]);
   });
 
   it("names the branch when the branch is the reason", async () => {
@@ -294,8 +297,6 @@ describe("one place, one booking", () => {
   });
 
   it("never gates staff on a membership, at either door", async () => {
-    // The owner holds no plan covering the gym, and runs the place rather than
-    // buying access to it. The same rule the legacy dues gate has always had.
     const seen = await at(gym, BOSS).booking.access();
     expect([seen.locked, seen.message]).toEqual([false, null]);
 
@@ -354,6 +355,8 @@ describe("one place, one booking", () => {
       academyId: gym,
       classId: past.id,
       studentId: ALEX,
+      personOrganizationId: ORG,
+      personId: personId(ORG, ALEX),
       bookingStatus: "cancelled",
       bookingTier: "confirmed",
     });
@@ -386,24 +389,25 @@ describe("one place, one booking", () => {
     const roster = await at(gym, BOSS).membership.members();
     // By user id: the gym membership was created by the assignment, so its
     // `member_id` is a generated uuid rather than the seeded `emem_` shape.
-    const bea = roster.find((r) => r.userId === BEA);
+    const bea = roster.find((r) => r.userId === personId(ORG, BEA));
     expect(bea?.membership?.covered).toBe(true);
     expect(bea?.membership?.planNames).toEqual(["Gym"]);
     expect(bea?.membership?.verdict).toBe("ok");
   });
 
-  it("says nothing about memberships at a branch on the legacy gate", async () => {
+  it("says nothing about memberships when enforcement is off", async () => {
     const roster = await at(ORG, BOSS).membership.members();
     expect(roster.every((r) => r.membership === null)).toBe(true);
   });
 
   it("gives the owner one directory row per person across branches", async () => {
     const directory = await owner().stats.organizationMembers();
-    const alex = directory.rows.find((r) => r.userId === ALEX);
+    const alexId = personId(ORG, ALEX);
+    const alex = directory.rows.find((r) => r.userId === alexId);
     expect(alex?.branches.map((b) => b.entityId).sort()).toEqual(
       [ORG, gym].sort(),
     );
-    expect(directory.rows.filter((r) => r.userId === ALEX)).toHaveLength(1);
+    expect(directory.rows.filter((r) => r.userId === alexId)).toHaveLength(1);
     expect(directory.entities.map((e) => e.id).sort()).toEqual(
       [ORG, gym].sort(),
     );

@@ -5,7 +5,7 @@ import { createEntity } from "@matops/db";
 import { entityMembership } from "@matops/db/schema";
 
 import type { Harness } from "./helpers";
-import { harness, memberId, rejectionCode, seedClasses } from "./helpers";
+import { harness, personId, rejectionCode, seedClasses } from "./helpers";
 
 const ORG_A = "org_a";
 const ORG_B = "org_b";
@@ -13,13 +13,6 @@ const OWNER = "u_owner";
 const COACH = "u_coach";
 const NOMAD = "u_nomad";
 const RIVAL = "u_rival";
-const PLAN = "11111111-1111-4111-8111-000000000001";
-
-function withEntity(id: string): Headers {
-  const headers = new Headers();
-  headers.set("x-matops-entity", id);
-  return headers;
-}
 
 describe("the organization dashboard", () => {
   let h: Harness;
@@ -63,6 +56,7 @@ describe("the organization dashboard", () => {
         id: "emem_south_nomad",
         organizationId: ORG_A,
         entityId: south,
+        personId: personId(ORG_A, NOMAD),
         userId: NOMAD,
         role: "student",
         status: "active",
@@ -72,6 +66,7 @@ describe("the organization dashboard", () => {
         id: "emem_south_coach",
         organizationId: ORG_A,
         entityId: south,
+        personId: personId(ORG_A, COACH),
         userId: COACH,
         role: "member",
         status: "pending",
@@ -101,17 +96,6 @@ describe("the organization dashboard", () => {
     ]);
 
     await pg.exec(`
-      INSERT INTO "membership_plan" (id, academy_id, name, price_minor, currency)
-        VALUES ('${PLAN}', '${north}', 'Unlimited', 8000, 'EUR');
-      INSERT INTO "payment_claim"
-        (academy_id, member_id, plan_id, amount_minor, currency, period, status)
-        VALUES ('${north}', '${memberId(ORG_A, NOMAD)}', '${PLAN}',
-                8000, 'EUR', '2026-09', 'pending');
-      INSERT INTO "payment_claim"
-        (academy_id, member_id, plan_id, amount_minor, currency, period,
-         status, confirmed_by, confirmed_at)
-        VALUES ('${north}', '${memberId(ORG_A, COACH)}', '${PLAN}',
-                8000, 'EUR', '2026-08', 'confirmed', '${OWNER}', now());
       INSERT INTO "drop_in"
         (academy_id, first_name, last_name, phone, consent, stage)
         VALUES ('${south}', 'Dana', 'Reis', '+351900000001', true, 'new');
@@ -142,19 +126,19 @@ describe("the organization dashboard", () => {
     expect(perMat).toBe(2);
     expect(total.members).toBe(1);
     expect(total.entities.flatMap((e) => e.memberUserIds)).toEqual([
-      NOMAD,
-      NOMAD,
+      personId(ORG_A, NOMAD),
+      personId(ORG_A, NOMAD),
     ]);
   });
 
   it("groups the work by academy", async () => {
     const total = await h.as(OWNER, ORG_A).stats.organization();
     const byId = new Map(total.entities.map((e) => [e.entityId, e]));
-    expect(byId.get(north)?.openClaims).toBe(1);
+    expect(byId.get(north)?.openClaims).toBe(0);
     expect(byId.get(south)?.newLeads).toBe(1);
     expect(byId.get(south)?.pendingMembers).toBe(1);
     expect([total.openClaims, total.newLeads, total.pendingMembers]).toEqual([
-      1, 1, 1,
+      0, 1, 1,
     ]);
   });
 
@@ -167,12 +151,5 @@ describe("the organization dashboard", () => {
   it("refuses the owner of another organization", async () => {
     const total = await h.as(RIVAL, ORG_B).stats.organization();
     expect(total.entities.map((e) => e.entityId)).toEqual([ORG_B]);
-  });
-
-  it("leaves the per-academy dashboard entity-only", async () => {
-    const here = await h.as(OWNER, ORG_A, withEntity(north)).stats.dashboard();
-    const there = await h.as(OWNER, ORG_A, withEntity(south)).stats.dashboard();
-    expect(here.revenue?.map((r) => r.currency)).toEqual(["EUR"]);
-    expect(there.revenue).toEqual([]);
   });
 });

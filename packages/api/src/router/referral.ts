@@ -1,11 +1,14 @@
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
-import { desc, eq } from "@matops/db";
+import { and, desc, eq } from "@matops/db";
 import {
+  accessAssignment,
+  accessPlanEntity,
+  entityMembership,
   memberReferral,
   memberReferralAudit,
-  paymentClaim,
+  membershipMonth,
 } from "@matops/db/schema";
 import {
   academyMonthKey,
@@ -28,7 +31,7 @@ import type { MemberRecord, MemberScope } from "../members";
 import { academyTimeZone } from "../academy-tz";
 import { nameByMember, nameByUser, requireMember, rosterOf } from "../members";
 import { isUniqueViolation } from "../pg-error";
-import { branchManagerProcedure } from "../trpc";
+import { referralsBranchManagerProcedure } from "../trpc";
 
 function referralMember(member: MemberRecord) {
   return {
@@ -85,18 +88,42 @@ export const referralRouter = {
    * student. The screen groups and totals the students itself, so this returns
    * the rows and nothing pre-aggregated (ADR 60 deleted the unread half).
    */
-  dashboard: branchManagerProcedure.query(async ({ ctx }) => {
+  dashboard: referralsBranchManagerProcedure.query(async ({ ctx }) => {
     const members = await rosterOf(ctx);
     const referrals = await ctx.db.select().from(memberReferral);
     const confirmedClaims = await ctx.db
       .select({
-        memberId: paymentClaim.memberId,
-        amountMinor: paymentClaim.amountMinor,
-        currency: paymentClaim.currency,
-        confirmedAt: paymentClaim.confirmedAt,
+        id: membershipMonth.id,
+        assignmentId: membershipMonth.assignmentId,
+        memberId: entityMembership.id,
+        month: membershipMonth.month,
+        amountMinor: membershipMonth.priceMinor,
+        currency: membershipMonth.currency,
+        confirmedBy: membershipMonth.reviewedBy,
+        confirmedAt: membershipMonth.reviewedAt,
       })
-      .from(paymentClaim)
-      .where(eq(paymentClaim.status, "confirmed"));
+      .from(membershipMonth)
+      .innerJoin(
+        accessAssignment,
+        eq(accessAssignment.id, membershipMonth.assignmentId),
+      )
+      .innerJoin(
+        accessPlanEntity,
+        eq(accessPlanEntity.planId, accessAssignment.planId),
+      )
+      .innerJoin(
+        entityMembership,
+        and(
+          eq(entityMembership.entityId, ctx.entityId),
+          eq(entityMembership.personId, accessAssignment.personId),
+        ),
+      )
+      .where(
+        and(
+          eq(accessPlanEntity.entityId, ctx.entityId),
+          eq(membershipMonth.status, "confirmed"),
+        ),
+      );
     const timeZone = await academyTimeZone(ctx);
 
     const currentMonth = academyMonthKey(new Date(), timeZone);
@@ -108,14 +135,34 @@ export const referralRouter = {
     );
     const claimsByMember = new Map<
       string,
-      { amountMinor: number; currency: string; confirmedAt: Date }[]
+      {
+        id: string;
+        assignmentId: string;
+        month: string;
+        amountMinor: number;
+        currency: string;
+        confirmedBy: string | null;
+        confirmedAt: Date;
+      }[]
     >();
+    const seenClaims = new Set<string>();
     for (const claim of confirmedClaims) {
-      if (!claim.confirmedAt) continue;
+      if (
+        !claim.confirmedAt ||
+        claim.amountMinor === null ||
+        claim.currency === null
+      )
+        continue;
+      if (seenClaims.has(claim.id)) continue;
+      seenClaims.add(claim.id);
       const claims = claimsByMember.get(claim.memberId) ?? [];
       claims.push({
         amountMinor: claim.amountMinor,
         currency: claim.currency,
+        id: claim.id,
+        assignmentId: claim.assignmentId,
+        month: claim.month,
+        confirmedBy: claim.confirmedBy,
         confirmedAt: claim.confirmedAt,
       });
       claimsByMember.set(claim.memberId, claims);
@@ -139,6 +186,7 @@ export const referralRouter = {
       return {
         memberId: member.memberId,
         name: member.name,
+        joinedAt: member.createdAt,
         status: member.status,
         removed: !isOnRoster(member),
         assignmentState: referralAssignmentState(referral),
@@ -146,12 +194,22 @@ export const referralRouter = {
           ? { memberId: referrer.memberId, name: referrer.name }
           : null,
         monthRevenue: groupMoneyByCurrency(
-          claims.filter(
-            (claim) =>
-              academyMonthKey(claim.confirmedAt, timeZone) === currentMonth,
-          ),
+          claims.filter((claim) => claim.month === currentMonth),
         ),
         lifetimeRevenue: groupMoneyByCurrency(claims),
+        confirmedMonths: claims
+          .map((claim) => ({
+            id: claim.id,
+            assignmentId: claim.assignmentId,
+            month: claim.month,
+            amountMinor: claim.amountMinor,
+            currency: claim.currency,
+            confirmedAt: claim.confirmedAt,
+            confirmedByName: claim.confirmedBy
+              ? (nameByUser(members).get(claim.confirmedBy) ?? "Staff")
+              : "Staff",
+          }))
+          .sort((a, b) => b.month.localeCompare(a.month)),
       };
     });
 
@@ -169,7 +227,7 @@ export const referralRouter = {
   }),
 
   /** Permanent one-time initial assignment. */
-  assign: branchManagerProcedure
+  assign: referralsBranchManagerProcedure
     .input(AssignReferralSchema)
     .mutation(async ({ ctx, input }) => {
       await requireReferralPair(
@@ -222,7 +280,7 @@ export const referralRouter = {
     }),
 
   /** Owner-only replacement or clearing, atomically appended to the audit. */
-  correct: branchManagerProcedure
+  correct: referralsBranchManagerProcedure
     .input(CorrectReferralSchema)
     .mutation(async ({ ctx, input }) => {
       const student = await requireMember(ctx, input.studentMemberId);
@@ -278,7 +336,7 @@ export const referralRouter = {
     }),
 
   /** Owner-only attribution audit history for one student. */
-  history: branchManagerProcedure
+  history: referralsBranchManagerProcedure
     .input(ReferralHistorySchema)
     .query(async ({ ctx, input }) => {
       const student = await requireMember(ctx, input.studentMemberId);

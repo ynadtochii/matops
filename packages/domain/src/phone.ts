@@ -9,7 +9,7 @@
  * With the country picked explicitly, the E.164 shape carries the weight.
  */
 
-export interface DialCountry {
+interface DialCountry {
   /** ISO 3166-1 alpha-2. */
   iso: string;
   name: string;
@@ -224,11 +224,6 @@ export function academyCountry(
 
 export function dialForCountry(iso: string): string {
   return DIAL_COUNTRIES.find((c) => c.iso === iso)?.dial ?? "+1";
-}
-
-/** E.164: a plus, a non-zero country digit, then 8 to 15 digits in total. */
-export function isE164(value: string): boolean {
-  return /^\+[1-9]\d{7,14}$/.test(value);
 }
 
 /**

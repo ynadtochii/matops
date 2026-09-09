@@ -3,20 +3,18 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod/v4";
 
 import {
+  eq,
   findAcademyByCode,
   getAcademyCode,
   getAcademySettings,
   getPublicApiSettings,
-  hasLegacyDuesAt,
   listMembershipsForUser,
   listPublicClasses,
-  rotatePublicApiKey,
   setPublicApiEnabled,
-  setPublicApiOrigins,
   softDeleteAcademy,
   updateAcademySettings,
 } from "@matops/db";
-import { classTemplate } from "@matops/db/schema";
+import { classTemplate, organization } from "@matops/db/schema";
 import {
   canEnroll,
   DAY_MS,
@@ -32,7 +30,6 @@ import {
   CreateAcademySchema,
   DeleteAcademySchema,
   IdSchema,
-  PublicApiOriginsSchema,
   PublicBookingEnabledSchema,
   UpdateAcademySettingsSchema,
 } from "@matops/validators";
@@ -116,6 +113,14 @@ export const academyRouter = {
         canEnroll(a),
     );
     if (!academy) return null;
+    const [modules] = await ctx.baseDb
+      .select({
+        curriculumEnabled: organization.curriculumEnabled,
+        referralsEnabled: organization.referralsEnabled,
+      })
+      .from(organization)
+      .where(eq(organization.id, activeOrganizationId))
+      .limit(1);
     return {
       academyId: academy.academyId,
       organizationId: academy.organizationId,
@@ -129,27 +134,28 @@ export const academyRouter = {
       country: academy.country,
       address: academy.address,
       mapUrl: academy.mapUrl,
+      bookingWindowDays: academy.bookingWindowDays,
       // Which gate this branch runs on, so a screen never offers a setting the
       // server no longer consults (ADR 126).
       membershipEnforced: academy.membershipEnforcedAt !== null,
-      // Does this branch have a legacy dues history at all? A branch opened
-      // after ADR 128 is born on memberships and never had plans or dues, so
-      // switching it off must not reveal an empty Payments screen for a product
-      // it never ran. Only a branch that predates the cutover has these rows.
-      hasLegacyDues: await hasLegacyDuesAt(academyId, ctx.baseDb),
       curriculumForStudents: academy.curriculumForStudents,
+      curriculumEnabled: modules?.curriculumEnabled ?? false,
+      referralsEnabled: modules?.referralsEnabled ?? false,
       code: await getAcademyCode(academyId, ctx.baseDb),
     };
   }),
 
   settings: branchManagerProcedure.query(async ({ ctx }) => {
-    const { timeZone, country } = await academyContext(ctx);
+    const { timeZone, country, bookingWindowDays, scheduleRevision } =
+      await academyContext(ctx);
     const zones = await ctx.db
       .selectDistinct({ timeZone: classTemplate.timeZone })
       .from(classTemplate);
     return {
       timeZone,
       country,
+      bookingWindowDays,
+      scheduleRevision,
       drifting: driftingTemplateZones(
         timeZone,
         zones.map((z) => z.timeZone),
@@ -242,27 +248,6 @@ export const academyRouter = {
         });
       }
       return settings;
-    }),
-
-  /** Rotate the key: the old one stops working the moment this commits. */
-  rotatePublicApiKey: branchManagerIdentityProcedure.mutation(
-    async ({ ctx }) => {
-      return {
-        apiKey: await ctx.withScope((db) =>
-          rotatePublicApiKey(ctx.academyId, db),
-        ),
-      };
-    },
-  ),
-
-  /** The websites allowed to call the API from a browser. Empty means any. */
-  setPublicApiOrigins: branchManagerIdentityProcedure
-    .input(PublicApiOriginsSchema)
-    .mutation(async ({ ctx, input }) => {
-      await ctx.withScope((db) =>
-        setPublicApiOrigins(ctx.academyId, input.origins, db),
-      );
-      return { ok: true as const };
     }),
 
   /**

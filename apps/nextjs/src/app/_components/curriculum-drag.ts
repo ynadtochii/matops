@@ -31,7 +31,7 @@ type Held =
  *  stretches stays reachable when a block could also join the one above. */
 const EDGE_BAND = 12;
 
-export interface TimelineDragOptions {
+interface TimelineDragOptions {
   plan: Placed[];
   today: string;
   anchor: string;

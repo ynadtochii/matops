@@ -1,14 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { and, eq } from "@matops/db";
-import {
-  accessAssignment,
-  classParticipation,
-  member,
-} from "@matops/db/schema";
+import { classParticipation, member } from "@matops/db/schema";
 
 import type { Harness } from "./helpers";
-import { runMembershipCancellationSweep } from "../src/membership-sweep";
 import { harness, seedAcademies, seedClasses } from "./helpers";
 
 const ORG = "acad_review";
@@ -20,6 +15,7 @@ describe("bookings that need a review, not a cancellation", () => {
   let h: Harness;
   let plan: string;
   let held: string;
+  let alexPersonId: string;
 
   const owner = () => h.as(BOSS, ORG);
 
@@ -50,6 +46,13 @@ describe("bookings that need a review, not a cancellation", () => {
         ],
       },
     ]);
+    const people = await h.pg.query<{ id: string }>(
+      `SELECT id FROM "person" WHERE organization_id = $1 AND account_user_id = $2`,
+      [ORG, ALEX],
+    );
+    const alex = people.rows[0];
+    if (!alex) throw new Error("expected Alex's person row");
+    alexPersonId = alex.id;
     await owner().accessPlan.setPolicy({
       graceDays: 7,
       calendarTimeZone: "UTC",
@@ -70,7 +73,7 @@ describe("bookings that need a review, not a cancellation", () => {
         id: NEXT_WEEK,
         academyId: ORG,
         instructorId: BOSS,
-        startsInMinutes: 60 * 24 * 7,
+        startsInMinutes: 60 * 24 * 6,
       },
     ]);
     await h.as(ALEX, ORG).booking.book({ classId: NEXT_WEEK });
@@ -91,7 +94,7 @@ describe("bookings that need a review, not a cancellation", () => {
   it("names the booking instead, with the reason", async () => {
     const seen = await owner().accessPlan.bookingsToReview({ limit: 50 });
     expect(seen.items.map((b) => [b.userId, b.classId, b.reason])).toEqual([
-      [ALEX, NEXT_WEEK, "not-covered"],
+      [alexPersonId, NEXT_WEEK, "membership-inactive"],
     ]);
   });
 
@@ -102,18 +105,6 @@ describe("bookings that need a review, not a cancellation", () => {
     expect(await bookingStatus()).toBe("booked");
   });
 
-  it("does not cancel a booking because an assignment period ended", async () => {
-    await h.exec
-      .update(accessAssignment)
-      .set({ endMonth: "2026-02-01", startMonth: "2026-01-01" })
-      .where(eq(accessAssignment.userId, ALEX));
-
-    const swept = await runMembershipCancellationSweep(h.exec, {
-      now: new Date("2026-03-20T12:00:00Z"),
-    });
-    expect(swept.cancelled).toBe(0);
-    expect(await bookingStatus()).toBe("booked");
-  });
   it("excludes an active instructor booking without coverage", async () => {
     await h.exec.insert(classParticipation).values({
       academyId: ORG,

@@ -465,9 +465,11 @@ describe("the default cap every public procedure carries", () => {
     const h = await base();
     const caller = h.as("nobody", null, from("6.6.6.6"));
     for (let i = 0; i < PUBLIC_DEFAULT_MAX; i++) {
-      await expect(caller.system.health()).resolves.toEqual({ ok: true });
+      await expect(caller.auth.getSession()).resolves.toMatchObject({
+        user: { id: "nobody" },
+      });
     }
-    expect(await rejectionCode(caller.system.health())).toBe(
+    expect(await rejectionCode(caller.auth.getSession())).toBe(
       "TOO_MANY_REQUESTS",
     );
   });
@@ -477,7 +479,7 @@ describe("the default cap every public procedure carries", () => {
     const ip = from("5.5.5.5");
     const caller = h.as("nobody", null, ip);
     for (let i = 0; i < PUBLIC_DEFAULT_MAX; i++) {
-      await caller.system.health();
+      await caller.auth.getSession();
     }
 
     await expect(

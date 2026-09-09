@@ -4,15 +4,15 @@ import type { DbExec } from "./client";
 import type { DbReader, DbWriter } from "./tenant";
 import { organization } from "./auth-schema";
 import { academyProfile, entity } from "./entity-schema";
-import { memberDues, membershipPlan } from "./payments-schema";
 
-export interface AcademySettings {
+interface AcademySettings {
   academyId: string;
   name: string;
   code: string;
   timeZone: string | null;
   address: string | null;
   mapUrl: string | null;
+  bookingWindowDays: number;
   curriculumForStudents: boolean;
 }
 
@@ -28,6 +28,7 @@ export async function getAcademySettings(
       timeZone: entity.timeZone,
       address: entity.address,
       mapUrl: entity.mapUrl,
+      bookingWindowDays: entity.bookingWindowDays,
       curriculumForStudents: sql<boolean>`coalesce(${academyProfile.curriculumForStudents}, false)`,
     })
     .from(entity)
@@ -45,6 +46,7 @@ export async function updateAcademySettings(
     country?: string;
     address?: string;
     mapUrl?: string;
+    bookingWindowDays?: number;
     curriculumForStudents?: boolean;
   },
   exec: DbWriter,
@@ -55,6 +57,7 @@ export async function updateAcademySettings(
     country?: string | null;
     address?: string | null;
     mapUrl?: string | null;
+    bookingWindowDays?: number;
     curriculumForStudents?: boolean;
   } = {};
   if (patch.name !== undefined) next.name = patch.name;
@@ -62,6 +65,8 @@ export async function updateAcademySettings(
   if (patch.country !== undefined) next.country = patch.country || null;
   if (patch.address !== undefined) next.address = patch.address || null;
   if (patch.mapUrl !== undefined) next.mapUrl = patch.mapUrl.trim() || null;
+  if (patch.bookingWindowDays !== undefined)
+    next.bookingWindowDays = patch.bookingWindowDays;
   if (patch.curriculumForStudents !== undefined)
     next.curriculumForStudents = patch.curriculumForStudents;
   const { curriculumForStudents, ...place } = next;
@@ -150,39 +155,4 @@ export async function softDeleteAcademy(
     }
     return true;
   });
-}
-
-/**
- * Does this branch have a legacy dues history (ADR 128, spec FP5)?
- *
- * A branch opened after the cutover is born on shared memberships and never
- * had a plan or a dues row, so switching it back must not reveal an empty
- * Payments screen for a product it never ran. A branch that predates the
- * cutover has these rows and keeps its screen until it migrates.
- *
- * Read on the BASE connection beside the other settings reads: it answers a
- * question about the branch, not about the caller.
- */
-export async function hasLegacyDuesAt(
-  academyId: string,
-  exec: DbReader,
-): Promise<boolean> {
-  const [plan] = await exec
-    .select({ id: membershipPlan.id })
-    .from(membershipPlan)
-    .where(
-      and(
-        eq(membershipPlan.academyId, academyId),
-        isNull(membershipPlan.deletedAt),
-      ),
-    )
-    .limit(1);
-  if (plan) return true;
-
-  const [dues] = await exec
-    .select({ id: memberDues.id })
-    .from(memberDues)
-    .where(eq(memberDues.academyId, academyId))
-    .limit(1);
-  return dues !== undefined;
 }

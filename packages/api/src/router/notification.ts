@@ -1,65 +1,31 @@
 import type { TRPCRouterRecord } from "@trpc/server";
+import { TRPCError } from "@trpc/server";
+import { z } from "zod/v4";
 
-import type { DbExec } from "@matops/db";
-import type { AnnouncementAudience } from "@matops/domain";
-import { and, desc, eq, isNull, sql, withScope } from "@matops/db";
-import { notification } from "@matops/db/schema";
-import { announcementFanOut, announcementRecipients } from "@matops/domain";
+import type { DbReader } from "@matops/db";
+import { and, deliverNoticeBatch, desc, eq, isNull, sql } from "@matops/db";
 import {
-  AnnounceAllSchema,
-  AnnounceSchema,
-  BranchSelectionSchema,
-} from "@matops/validators";
+  notification,
+  notificationNotice,
+  notificationRecipient,
+} from "@matops/db/schema";
+import { sendEmail } from "@matops/notifications";
+import { IdSchema } from "@matops/validators";
 
-import type { MemberScope } from "../members";
-import { rosterOf } from "../members";
-import { notifyAnnouncement, notifyAnnouncementAcross } from "../notify";
-import { readOrganizationEntities } from "../organization-read";
-import {
-  memberProcedure,
-  organizationManagerIdentityProcedure,
-  staffProcedure,
-} from "../trpc";
-
-/** The user ids one audience resolves to, using the pure domain rule. */
-async function announcementTargets(
-  ctx: MemberScope,
-  audience: AnnouncementAudience,
-): Promise<string[]> {
-  const roster = await rosterOf(ctx);
-  return announcementRecipients(roster, audience);
-}
-
-/**
- * The recipients of one audience at each chosen branch, one scoped read per
- * branch (ADR 124). The branch list comes from the server's own read, so an
- * entity id the caller made up simply matches nothing.
- */
-async function recipientsPerBranch(
-  ctx: { organizationId: string; baseDb: DbExec },
-  input: { audience: AnnouncementAudience; entityIds?: string[] },
-): Promise<{ entityId: string; userIds: string[] }[]> {
-  const branches = await readOrganizationEntities(
-    ctx.organizationId,
-    ctx.baseDb,
-  );
-  const chosen = input.entityIds
-    ? branches.filter((b) => input.entityIds?.includes(b.id))
-    : branches;
-
-  const perEntity: { entityId: string; userIds: string[] }[] = [];
-  for (const branch of chosen) {
-    const userIds = await withScope(
-      { organizationId: ctx.organizationId, entityId: branch.id },
-      (db) => announcementTargets({ academyId: branch.id, db }, input.audience),
-      ctx.baseDb,
-    );
-    perEntity.push({ entityId: branch.id, userIds });
-  }
-  return perEntity;
-}
+import { memberProcedure, staffProcedure } from "../trpc";
 
 const FEED_LIMIT = 50;
+const NoticeIdSchema = z.object({ noticeId: IdSchema });
+
+async function requireNotice(db: DbReader, noticeId: string) {
+  const [row] = await db
+    .select({ id: notificationNotice.id })
+    .from(notificationNotice)
+    .where(eq(notificationNotice.id, noticeId))
+    .limit(1);
+  if (!row)
+    throw new TRPCError({ code: "NOT_FOUND", message: "Notice not found" });
+}
 
 /**
  * The notification center (v3.7, spec S13/O12; docs/issues/77). Every message
@@ -120,88 +86,102 @@ export const notificationRouter = {
     return { ok: true as const };
   }),
 
-  /**
-   * How many people each audience reaches right now (staff only). The compose
-   * form labels its button with this, so nobody posts blind.
-   */
-  audienceCounts: staffProcedure.query(async ({ ctx }) => {
-    const roster = await rosterOf(ctx);
-    return {
-      all: announcementRecipients(roster, "all").length,
-      students: announcementRecipients(roster, "students").length,
-      staff: announcementRecipients(roster, "staff").length,
-    };
+  deliveryIssues: staffProcedure.query(async ({ ctx }) => {
+    const rows = await ctx.db
+      .select({
+        noticeId: notificationNotice.id,
+        kind: notificationNotice.kind,
+        subject: notificationNotice.subject,
+        createdAt: notificationNotice.createdAt,
+        status: notificationRecipient.status,
+      })
+      .from(notificationNotice)
+      .innerJoin(
+        notificationRecipient,
+        eq(notificationRecipient.noticeId, notificationNotice.id),
+      )
+      .where(
+        sql`${notificationRecipient.status} in ('pending','failed','unknown','no_email')`,
+      )
+      .orderBy(desc(notificationNotice.createdAt));
+    const notices = new Map<
+      string,
+      {
+        noticeId: string;
+        kind: string;
+        subject: string;
+        createdAt: Date;
+        pending: number;
+        failed: number;
+        unknown: number;
+        noEmail: number;
+      }
+    >();
+    for (const row of rows) {
+      const item = notices.get(row.noticeId) ?? {
+        noticeId: row.noticeId,
+        kind: row.kind,
+        subject: row.subject,
+        createdAt: row.createdAt,
+        pending: 0,
+        failed: 0,
+        unknown: 0,
+        noEmail: 0,
+      };
+      if (row.status === "pending") item.pending += 1;
+      if (row.status === "failed") item.failed += 1;
+      if (row.status === "unknown") item.unknown += 1;
+      if (row.status === "no_email") item.noEmail += 1;
+      notices.set(row.noticeId, item);
+    }
+    return [...notices.values()].slice(0, 50);
   }),
 
-  /** Post gym news to an audience (owner or instructor, spec O12). */
-  announce: staffProcedure
-    .input(AnnounceSchema)
+  sendRemaining: staffProcedure
+    .input(NoticeIdSchema)
     .mutation(async ({ ctx, input }) => {
-      const recipients = await announcementTargets(ctx, input.audience);
-      if (recipients.length === 0) return { ok: true as const, sent: 0 };
-      ctx.afterCommit((exec) =>
-        notifyAnnouncement(
-          {
-            academyId: ctx.academyId,
-            userIds: recipients,
-            title: input.title,
-            body: input.body,
-            sentBy: ctx.session.user.name,
-          },
-          exec,
-        ),
-      );
-      return { ok: true as const, sent: recipients.length };
-    }),
-
-  /**
-   * Post to several branches at once (ADR 127). Owner only, where the
-   * per-branch `announce` is staff: an instructor runs one mat, and posting to
-   * every branch is not that job.
-   *
-   * Every branch is read in its OWN scope, one transaction each, exactly as the
-   * organization dashboard reads are. No organization-wide query over the
-   * tenant tables, and an entity id that is not this gym's is dropped rather
-   * than honoured, because the list comes from the server's own read.
-   */
-  announceAll: organizationManagerIdentityProcedure
-    .input(AnnounceAllSchema)
-    .mutation(async ({ ctx, input }) => {
-      const perEntity = await recipientsPerBranch(ctx, {
-        audience: input.audience,
-        entityIds: input.entityIds,
+      await requireNotice(ctx.db, input.noticeId);
+      const delivery = {
+        claimed: 0,
+        accepted: 0,
+        failed: 0,
+        unknown: 0,
+        noEmail: 0,
+        remaining: 0,
+      };
+      ctx.afterCommit(async (exec) => {
+        Object.assign(
+          delivery,
+          await deliverNoticeBatch(exec, sendEmail, {
+            noticeId: input.noticeId,
+            mode: "remaining",
+          }),
+        );
       });
-      const { rows, push } = announcementFanOut(perEntity);
-      if (rows.length === 0) return { ok: true as const, rows: 0, pushed: 0 };
-
-      await notifyAnnouncementAcross(
-        {
-          rows,
-          push,
-          title: input.title,
-          body: input.body,
-          sentBy: ctx.session.user.name,
-        },
-        ctx.baseDb,
-      );
-      return { ok: true as const, rows: rows.length, pushed: push.length };
+      return { noticeId: input.noticeId, delivery };
     }),
 
-  /**
-   * How many PEOPLE each audience reaches across the chosen branches, counted
-   * once each. The button labels itself with this, so nobody posts blind.
-   */
-  audienceCountsAll: organizationManagerIdentityProcedure
-    .input(BranchSelectionSchema.optional())
-    .query(async ({ ctx, input }) => {
-      const counts = { all: 0, students: 0, staff: 0 };
-      for (const audience of ["all", "students", "staff"] as const) {
-        const perEntity = await recipientsPerBranch(ctx, {
-          audience,
-          entityIds: input?.entityIds,
-        });
-        counts[audience] = announcementFanOut(perEntity).push.length;
-      }
-      return counts;
+  retryFailed: staffProcedure
+    .input(NoticeIdSchema)
+    .mutation(async ({ ctx, input }) => {
+      await requireNotice(ctx.db, input.noticeId);
+      const delivery = {
+        claimed: 0,
+        accepted: 0,
+        failed: 0,
+        unknown: 0,
+        noEmail: 0,
+        remaining: 0,
+      };
+      ctx.afterCommit(async (exec) => {
+        Object.assign(
+          delivery,
+          await deliverNoticeBatch(exec, sendEmail, {
+            noticeId: input.noticeId,
+            mode: "failed",
+          }),
+        );
+      });
+      return { noticeId: input.noticeId, delivery };
     }),
 } satisfies TRPCRouterRecord;

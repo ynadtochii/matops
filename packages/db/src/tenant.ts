@@ -51,7 +51,7 @@ export type DbReader = DbExec | TenantTx;
 export type DbWriter = DbExec | TenantTx;
 
 /** What a request transaction is scoped to. An organization read omits the entity. */
-export interface Scope {
+interface Scope {
   organizationId: string;
   entityId?: string;
 }

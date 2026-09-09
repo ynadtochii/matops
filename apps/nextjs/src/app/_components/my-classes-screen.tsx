@@ -5,12 +5,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
-import {
-  DAY_LABELS,
-  lastClassLabel,
-  nextClass,
-  splitMyClasses,
-} from "@matops/domain";
+import { nextClass, splitMyClasses } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { Button } from "@matops/ui/button";
 
@@ -18,8 +13,8 @@ import { dayMediumFmt, timeFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { useEntity, useEntityHref } from "./entity";
 import { PageHeader } from "./page-header";
-import { cardClass, ENTER, SectionHeading, Stat } from "./primitives";
-import { SkeletonMyClassesBody, SkeletonStats } from "./skeletons";
+import { cardClass, ENTER, SectionHeading } from "./primitives";
+import { SkeletonMyClassesBody } from "./skeletons";
 import { EmptyState, ErrorState, SuspendedState } from "./states";
 import { Tabs } from "./tabs";
 import { useBooking } from "./use-booking";
@@ -146,7 +141,6 @@ export function MyClassesScreen() {
           </section>
           <aside className="min-w-0 space-y-4 xl:border-l xl:pl-8">
             <SectionHeading>My training</SectionHeading>
-            <TrainingStats />
           </aside>
         </div>
       )}
@@ -205,67 +199,6 @@ function ClassRow({
         </p>
       </Link>
       {action}
-    </div>
-  );
-}
-
-function TrainingStats() {
-  const trpc = useTRPC();
-  const stats = useQuery(trpc.stats.me.queryOptions());
-
-  if (stats.isPending) {
-    return (
-      <div className={cardClass()}>
-        <SkeletonStats n={3} />
-      </div>
-    );
-  }
-  if (stats.isError) {
-    return (
-      <ErrorState
-        label="your training stats"
-        onRetry={() => void stats.refetch()}
-      />
-    );
-  }
-
-  const s = stats.data;
-  if (s.total === 0) {
-    return (
-      <EmptyState title="Your training starts here">
-        Your totals update when your gym records your attendance.
-      </EmptyState>
-    );
-  }
-
-  const favorite = [
-    s.favoriteDiscipline?.toUpperCase(),
-    s.favoriteWeekday != null ? DAY_LABELS[s.favoriteWeekday] : undefined,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-
-  return (
-    <div className={cardClass()}>
-      <div className="grid grid-cols-3 gap-4">
-        <Stat value={s.total} label="Sessions" />
-        <Stat value={s.thisMonth} label="This month" />
-        <Stat value={s.streakWeeks} label="Week streak" />
-      </div>
-      {(favorite || s.daysSinceLastClass != null) && (
-        <div className="mt-5 flex flex-col gap-1 text-sm">
-          {favorite && (
-            <p>
-              Favorite: <span className="font-medium">{favorite}</span>
-            </p>
-          )}
-          {s.daysSinceLastClass != null && (
-            <p className="text-muted-foreground">
-              Last class: {lastClassLabel(s.daysSinceLastClass)}
-            </p>
-          )}
-        </div>
-      )}
     </div>
   );
 }

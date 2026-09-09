@@ -1,6 +1,6 @@
 import type { NotificationKind } from "@matops/domain";
 
-import type { DbExec } from "./client";
+import type { DbWriter } from "./tenant";
 import { notification } from "./notification-schema";
 
 /**
@@ -15,7 +15,7 @@ import { notification } from "./notification-schema";
  * lean on `app.academy_id` being set.
  */
 
-export interface NewNotification {
+interface NewNotification {
   academyId: string;
   userId: string;
   kind: NotificationKind;
@@ -30,7 +30,7 @@ export interface NewNotification {
 /** Write one inbox row per recipient. One statement; no-op on an empty list. */
 export async function insertNotifications(
   rows: NewNotification[],
-  exec: DbExec,
+  exec: DbWriter,
 ): Promise<number> {
   if (rows.length === 0) return 0;
   const written = await exec

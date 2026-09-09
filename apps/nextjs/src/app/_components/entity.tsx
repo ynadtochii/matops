@@ -1,12 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useSyncExternalStore,
-} from "react";
+import { createContext, useContext } from "react";
 
 import type { RouterOutputs } from "@matops/api";
 import { entityHref } from "@matops/domain";
@@ -80,38 +75,4 @@ export function useOrganization(): Organization {
     );
   }
   return organization;
-}
-
-const LAST_BRANCH_KEY = "matops:last-branch";
-
-/**
- * Which branch the sidebar points at above the branches. The organization
- * screens open no entity, so the only honest answer is the last one this
- * browser was in; the caller falls back to the first branch when there is none.
- * Read in an effect so the server and the first client render agree.
- */
-const noSubscribe = () => () => undefined;
-
-export function useLastBranch(): string | null {
-  return useSyncExternalStore(
-    noSubscribe,
-    () => {
-      try {
-        return localStorage.getItem(LAST_BRANCH_KEY);
-      } catch {
-        return null;
-      }
-    },
-    () => null,
-  );
-}
-
-export function useRememberBranch(entityId: string): void {
-  useEffect(() => {
-    try {
-      localStorage.setItem(LAST_BRANCH_KEY, entityId);
-    } catch {
-      // Private-mode Safari refuses to write. The fallback branch still works.
-    }
-  }, [entityId]);
 }

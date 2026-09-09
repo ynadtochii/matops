@@ -4,34 +4,50 @@ import { TRPCError } from "@trpc/server";
 import type { DbExec, TenantTx } from "@matops/db";
 import {
   and,
+  asc,
+  attendanceReviewSnapshot,
   createDropIn,
+  desc,
   eq,
   eventRole,
+  getTableColumns,
   inArray,
+  isNull,
   ne,
+  or,
   recordActivity,
   recordMilestone,
+  sql,
 } from "@matops/db";
 import {
+  attendanceCorrection,
+  classInstance,
   classParticipation,
-  dropIn,
   dropInVisit,
   user,
 } from "@matops/db/schema";
 import {
   attendanceCounts,
+  attendanceReview,
+  attendanceReviewError,
+  attendanceWriteAccess,
   bulkMarkTargets,
-  canMarkAttendance,
   normalizePhone,
+  runsBranch,
 } from "@matops/domain";
 import {
   AddVisitorSchema,
   AddWalkInSchema,
+  AttendanceReviewQueueSchema,
   ClassIdSchema,
+  FinishAttendanceSchema,
+  MarkAllAttendanceSchema,
   MarkAttendanceSchema,
   MarkVisitorSchema,
 } from "@matops/validators";
 
+import { academyTimeZone } from "../academy-tz";
+import { loadAttendanceRoster } from "../attendance-review";
 import { claimSeatIfStrict, requireClassFacts, SESSION_FULL } from "../classes";
 import { directoryRosterOf } from "../members";
 import { staffIdentityProcedure, staffProcedure } from "../trpc";
@@ -50,7 +66,7 @@ export const attendanceRouter = {
     const members = await directoryRosterOf(ctx);
     return members
       .filter((m) => m.status === "active")
-      .map((m) => ({ id: m.userId, name: m.name, role: m.role }));
+      .map((m) => ({ id: m.personId, name: m.name, role: m.role }));
   }),
 
   /**
@@ -59,40 +75,29 @@ export const attendanceRouter = {
    * with names and marks. Plus the summary counts for the header.
    */
   list: staffProcedure.input(ClassIdSchema).query(async ({ ctx, input }) => {
-    const rows = await ctx.db
-      .select({
-        studentId: classParticipation.studentId,
-        name: user.name,
-        bookingStatus: classParticipation.bookingStatus,
-        bookingTier: classParticipation.bookingTier,
-        attendanceStatus: classParticipation.attendanceStatus,
-        attendedAt: classParticipation.attendedAt,
-      })
-      .from(classParticipation)
-      .leftJoin(user, eq(user.id, classParticipation.studentId))
-      .where(eq(classParticipation.classId, input.id));
-    const dropIns = await ctx.db
-      .select({
-        id: dropInVisit.id,
-        leadId: dropIn.id,
-        firstName: dropIn.firstName,
-        lastName: dropIn.lastName,
-        phone: dropIn.phone,
-        bookingStatus: dropInVisit.bookingStatus,
-        attendanceStatus: dropInVisit.attendanceStatus,
-      })
-      .from(dropInVisit)
-      .innerJoin(dropIn, eq(dropIn.id, dropInVisit.dropInId))
-      .where(
-        and(
-          eq(dropInVisit.classId, input.id),
-          ne(dropInVisit.bookingStatus, "cancelled"),
-        ),
-      );
+    const data = await loadAttendanceRoster(ctx.db, input.id);
+    if (!data)
+      throw new TRPCError({ code: "NOT_FOUND", message: "Class not found." });
+    const { rows, dropIns, review } = data;
     const roster = await directoryRosterOf(ctx);
     const roleByUser = new Map(
       roster.map((person) => [person.userId, person.role]),
     );
+    const corrections = await ctx.db
+      .select({
+        id: attendanceCorrection.id,
+        kind: attendanceCorrection.kind,
+        subjectId: attendanceCorrection.subjectId,
+        beforeValue: attendanceCorrection.beforeValue,
+        afterValue: attendanceCorrection.afterValue,
+        reason: attendanceCorrection.reason,
+        actorName: user.name,
+        createdAt: attendanceCorrection.createdAt,
+      })
+      .from(attendanceCorrection)
+      .leftJoin(user, eq(user.id, attendanceCorrection.actorId))
+      .where(eq(attendanceCorrection.classId, input.id))
+      .orderBy(desc(attendanceCorrection.createdAt));
     return {
       rows: rows.map((row) => ({
         ...row,
@@ -100,15 +105,186 @@ export const attendanceRouter = {
       })),
       dropIns,
       counts: attendanceCounts(rows),
+      review,
+      corrections,
     };
   }),
+
+  reviewQueue: staffProcedure
+    .input(AttendanceReviewQueueSchema)
+    .query(async ({ ctx, input }) => {
+      const now = new Date();
+      const zone = await academyTimeZone(ctx);
+      const classes = ctx.db.$with("attendance_review_classes").as(
+        ctx.db
+          .select({
+            ...getTableColumns(classInstance),
+            instructorName: user.name,
+            snapshot: attendanceReviewSnapshot().as("snapshot"),
+            pendingCount:
+              sql<number>`(SELECT count(*)::int FROM ${classParticipation}
+          WHERE ${classParticipation.classId} = ${classInstance.id}
+          AND ${classParticipation.bookingStatus} = 'booked'
+          AND ${classParticipation.bookingTier} = 'provisional')`.as(
+                "pending_count",
+              ),
+          })
+          .from(classInstance)
+          .leftJoin(user, eq(user.id, classInstance.instructorId))
+          .where(
+            and(
+              isNull(classInstance.deletedAt),
+              eq(classInstance.status, "scheduled"),
+              sql`${classInstance.startsAt} + ${classInstance.durationMinutes} * interval '1 minute' <= ${now}`,
+            ),
+          ),
+      );
+      const reviewed = sql<boolean>`${classes.attendanceReviewedAt} IS NOT NULL AND ${classes.attendanceReviewFingerprint} = ${classes.snapshot}->>'fingerprint'`;
+      const needsReview = sql<boolean>`NOT coalesce((${reviewed}), false)`;
+      const filters = and(
+        input.status === "needs_review" ? needsReview : undefined,
+        input.from
+          ? sql`(${classes.startsAt} AT TIME ZONE ${zone})::date >= ${input.from}::date`
+          : undefined,
+        input.to
+          ? sql`(${classes.startsAt} AT TIME ZONE ${zone})::date <= ${input.to}::date`
+          : undefined,
+      );
+      const [counts] = await ctx.db
+        .with(classes)
+        .select({
+          total: sql<number>`count(*) FILTER (WHERE ${filters ?? sql`true`})::int`,
+          needsReview: sql<number>`count(*) FILTER (WHERE ${needsReview})::int`,
+        })
+        .from(classes);
+      const rows = await ctx.db
+        .with(classes)
+        .select()
+        .from(classes)
+        .where(filters)
+        .orderBy(asc(classes.startsAt), asc(classes.id))
+        .limit(50)
+        .offset(input.offset);
+      return {
+        rows: rows.map(({ snapshot, ...row }) => ({
+          ...row,
+          markedCount: snapshot.present + snapshot.absent,
+          review: attendanceReview(
+            snapshot,
+            row.attendanceReviewFingerprint,
+            row.attendanceReviewedAt,
+          ),
+        })),
+        timeZone: zone,
+        total: counts?.total ?? 0,
+        needsReview: counts?.needsReview ?? 0,
+      };
+    }),
+
+  finish: staffProcedure
+    .input(FinishAttendanceSchema)
+    .mutation(async ({ ctx, input }) => {
+      const correction = await assertMarkable(ctx, input.id, input.reason);
+      const data = await loadAttendanceRoster(ctx.db, input.id);
+      if (!data)
+        throw new TRPCError({ code: "NOT_FOUND", message: "Class not found." });
+      const now = new Date();
+      if (
+        data.deletedAt ||
+        data.status === "cancelled" ||
+        data.startsAt.getTime() + data.durationMinutes * 60000 > now.getTime()
+      ) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Attendance can only be finished after a live class ends.",
+        });
+      }
+      const error = attendanceReviewError(
+        data.snapshot,
+        input.fingerprint,
+        input.nobodyAttended,
+      );
+      if (error) throw new TRPCError({ code: "CONFLICT", message: error });
+      const [saved] = await ctx.db
+        .update(classInstance)
+        .set({
+          attendanceReviewedAt: now,
+          attendanceReviewedBy: ctx.session.user.id,
+          attendanceReviewFingerprint: input.fingerprint,
+        })
+        .where(
+          and(
+            eq(classInstance.id, input.id),
+            isNull(classInstance.deletedAt),
+            eq(classInstance.status, "scheduled"),
+            sql`${classInstance.startsAt} + ${classInstance.durationMinutes} * interval '1 minute' <= ${now}`,
+            sql`${attendanceReviewSnapshot()}->>'fingerprint' = ${input.fingerprint}`,
+          ),
+        )
+        .returning({ id: classInstance.id });
+      if (!saved)
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Attendance changed. Review the latest list and try again.",
+        });
+      await recordHistoricalCorrection(
+        ctx.db,
+        ctx.academyId,
+        input.id,
+        correction,
+        {
+          kind: "review",
+          subjectId: null,
+          beforeValue: data.savedFingerprint,
+          afterValue: input.fingerprint,
+          actorId: ctx.session.user.id,
+        },
+      );
+      return { ok: true as const };
+    }),
 
   /** Mark an existing participant present/absent/unmarked (spec O5). */
   mark: staffProcedure
     .input(MarkAttendanceSchema)
     .mutation(async ({ ctx, input }) => {
-      await assertMarkable(ctx.db, input.classId);
+      const correction = await assertMarkable(ctx, input.classId, input.reason);
       const present = input.status === "present";
+      const roster = await directoryRosterOf(ctx);
+      const subject = roster.find(
+        (row) =>
+          row.personId === input.personId ||
+          row.accountUserId === input.personId,
+      );
+      if (!subject) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Person not found" });
+      }
+      const subjectPersonId =
+        subject.personId === subject.accountUserId ? null : subject.personId;
+      const subjectWhere = or(
+        subjectPersonId
+          ? eq(classParticipation.personId, subjectPersonId)
+          : undefined,
+        subject.accountUserId
+          ? and(
+              isNull(classParticipation.personId),
+              eq(classParticipation.studentId, subject.accountUserId),
+            )
+          : undefined,
+      );
+      const [before] = await ctx.db
+        .select({
+          id: classParticipation.id,
+          status: classParticipation.attendanceStatus,
+        })
+        .from(classParticipation)
+        .where(and(eq(classParticipation.classId, input.classId), subjectWhere))
+        .for("update");
+      if (!before) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "This person hasn't booked — add them as a walk-in instead",
+        });
+      }
       const [row] = await ctx.db
         .update(classParticipation)
         .set({
@@ -116,18 +292,28 @@ export const attendanceRouter = {
           attendedAt: present ? new Date() : null,
           markedBy: ctx.session.user.id,
         })
-        .where(
-          and(
-            eq(classParticipation.classId, input.classId),
-            eq(classParticipation.studentId, input.studentId),
-          ),
-        )
+        .where(and(eq(classParticipation.classId, input.classId), subjectWhere))
         .returning({ id: classParticipation.id });
       if (!row) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "This person hasn't booked — add them as a walk-in instead",
         });
+      }
+      if (before.status !== input.status) {
+        await recordHistoricalCorrection(
+          ctx.db,
+          ctx.academyId,
+          input.classId,
+          correction,
+          {
+            kind: "member",
+            subjectId: row.id,
+            beforeValue: before.status,
+            afterValue: input.status,
+            actorId: ctx.session.user.id,
+          },
+        );
       }
       if (present) recordAttendance(ctx);
       return { ok: true as const };
@@ -141,12 +327,13 @@ export const attendanceRouter = {
    * many were flipped so the client can toast it.
    */
   markAll: staffProcedure
-    .input(ClassIdSchema)
+    .input(MarkAllAttendanceSchema)
     .mutation(async ({ ctx, input }) => {
-      await assertMarkable(ctx.db, input.id);
+      const correction = await assertMarkable(ctx, input.id, input.reason);
       const rows = await ctx.db
         .select({
-          studentId: classParticipation.studentId,
+          id: classParticipation.id,
+          studentId: sql<string>`coalesce(${classParticipation.personId}::text, ${classParticipation.studentId})`,
           bookingStatus: classParticipation.bookingStatus,
           attendanceStatus: classParticipation.attendanceStatus,
         })
@@ -154,7 +341,7 @@ export const attendanceRouter = {
         .where(eq(classParticipation.classId, input.id));
       const targets = bulkMarkTargets(rows);
       if (targets.length === 0) return { marked: 0 };
-      await ctx.db
+      const changed = await ctx.db
         .update(classParticipation)
         .set({
           attendanceStatus: "present",
@@ -165,11 +352,32 @@ export const attendanceRouter = {
           and(
             eq(classParticipation.classId, input.id),
             eq(classParticipation.attendanceStatus, "unmarked"),
-            inArray(classParticipation.studentId, targets),
+            inArray(
+              sql<string>`coalesce(${classParticipation.personId}::text, ${classParticipation.studentId})`,
+              targets,
+            ),
           ),
-        );
-      recordAttendance(ctx);
-      return { marked: targets.length };
+        )
+        .returning({ id: classParticipation.id });
+      await Promise.all(
+        changed.map((row) =>
+          recordHistoricalCorrection(
+            ctx.db,
+            ctx.academyId,
+            input.id,
+            correction,
+            {
+              kind: "member",
+              subjectId: row.id,
+              beforeValue: "unmarked",
+              afterValue: "present",
+              actorId: ctx.session.user.id,
+            },
+          ),
+        ),
+      );
+      if (changed.length > 0) recordAttendance(ctx);
+      return { marked: changed.length };
     }),
 
   /**
@@ -180,21 +388,24 @@ export const attendanceRouter = {
   addWalkIn: staffProcedure
     .input(AddWalkInSchema)
     .mutation(async ({ ctx, input }) => {
-      await assertMarkable(ctx.db, input.classId);
+      const correction = await assertMarkable(ctx, input.classId, input.reason);
       // Defense-in-depth: the RLS WITH CHECK only scopes academy_id, not that the
       // student is a member — so verify membership before recording a walk-in.
       const roster = await directoryRosterOf(ctx);
-      if (
-        !roster.some(
-          (person) =>
-            person.userId === input.studentId && person.status === "active",
-        )
-      ) {
+      const subject = roster.find(
+        (person) =>
+          (person.personId === input.personId ||
+            person.accountUserId === input.personId) &&
+          person.status === "active",
+      );
+      if (!subject) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "That person does not have active access to this academy",
         });
       }
+      const subjectPersonId =
+        subject.personId === subject.accountUserId ? null : subject.personId;
       const now = new Date();
       // Admitting somebody at the desk takes a place in a STRICT room, the same
       // as booking one, unless they already hold one. Two rules meet here and
@@ -203,14 +414,26 @@ export const attendanceRouter = {
       // at all, which `booking-count.test.ts` holds (ADR 126).
       const [held] = await ctx.db
         .select({
+          id: classParticipation.id,
           status: classParticipation.bookingStatus,
           tier: classParticipation.bookingTier,
+          attendanceStatus: classParticipation.attendanceStatus,
         })
         .from(classParticipation)
         .where(
           and(
             eq(classParticipation.classId, input.classId),
-            eq(classParticipation.studentId, input.studentId),
+            or(
+              subjectPersonId
+                ? eq(classParticipation.personId, subjectPersonId)
+                : undefined,
+              subject.accountUserId
+                ? and(
+                    isNull(classParticipation.personId),
+                    eq(classParticipation.studentId, subject.accountUserId),
+                  )
+                : undefined,
+            ),
           ),
         );
       // A row only protects a place when it actually holds one. A cancelled
@@ -228,40 +451,62 @@ export const attendanceRouter = {
         }
         claimed = seat.strict;
       }
-      await ctx.db
-        .insert(classParticipation)
-        .values({
-          academyId: ctx.academyId,
-          classId: input.classId,
-          studentId: input.studentId,
-          bookingStatus: "none",
-          bookingTier: "confirmed",
-          attendanceStatus: "present",
-          attendedAt: now,
-          markedBy: ctx.session.user.id,
-        })
-        .onConflictDoUpdate({
-          // If they DID book, keep booking_status — just mark them present. A
-          // place this admission just claimed is written onto the row, or the
-          // next admission of the same person would take a second one.
-          target: [classParticipation.classId, classParticipation.studentId],
-          set: claimed
-            ? {
-                bookingStatus:
-                  held?.status === "cancelled"
-                    ? "none"
-                    : (held?.status ?? "none"),
-                bookingTier: "confirmed",
-                attendanceStatus: "present",
-                attendedAt: now,
-                markedBy: ctx.session.user.id,
-              }
-            : {
-                attendanceStatus: "present",
-                attendedAt: now,
-                markedBy: ctx.session.user.id,
-              },
-        });
+      const values = {
+        personOrganizationId: subjectPersonId ? ctx.organizationId : null,
+        personId: subjectPersonId,
+        studentId: subject.accountUserId,
+        bookingStatus:
+          claimed && held?.status === "cancelled"
+            ? ("none" as const)
+            : held?.status,
+        bookingTier: claimed ? ("confirmed" as const) : held?.tier,
+        attendanceStatus: "present" as const,
+        attendedAt: now,
+        markedBy: ctx.session.user.id,
+      };
+      const [saved] = held
+        ? await ctx.db
+            .update(classParticipation)
+            .set(values)
+            .where(eq(classParticipation.id, held.id))
+            .returning({ id: classParticipation.id })
+        : await ctx.db
+            .insert(classParticipation)
+            .values({
+              academyId: ctx.academyId,
+              classId: input.classId,
+              ...values,
+              bookingStatus: "none",
+              bookingTier: "confirmed",
+            })
+            .onConflictDoUpdate({
+              target: subjectPersonId
+                ? [classParticipation.classId, classParticipation.personId]
+                : [classParticipation.classId, classParticipation.studentId],
+              targetWhere: subjectPersonId
+                ? sql`person_id is not null`
+                : undefined,
+              set: values,
+            })
+            .returning({ id: classParticipation.id });
+      if (!saved) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      }
+      if (held?.attendanceStatus !== "present") {
+        await recordHistoricalCorrection(
+          ctx.db,
+          ctx.academyId,
+          input.classId,
+          correction,
+          {
+            kind: "member",
+            subjectId: saved.id,
+            beforeValue: held?.attendanceStatus ?? null,
+            afterValue: "present",
+            actorId: ctx.session.user.id,
+          },
+        );
+      }
       return { ok: true as const };
     }),
 
@@ -276,20 +521,38 @@ export const attendanceRouter = {
   addVisitor: staffIdentityProcedure
     .input(AddVisitorSchema)
     .mutation(async ({ ctx, input }) => {
-      await ctx.withScope((db) => assertMarkable(db, input.classId));
-      const { visitCount } = await createDropIn(
-        {
-          academyId: ctx.academyId,
-          firstName: input.firstName,
-          lastName: input.lastName,
-          phone: normalizePhone(input.phone),
-          email: null,
-          classId: input.classId,
-          consent: false,
-          source: "staff",
-        },
-        ctx.baseDb,
+      const correction = await ctx.withScope((db) =>
+        assertMarkable({ ...ctx, db }, input.classId, input.reason),
       );
+      const { visitCount } = await ctx.baseDb.transaction(async (tx) => {
+        const result = await createDropIn(
+          {
+            academyId: ctx.academyId,
+            firstName: input.firstName,
+            lastName: input.lastName,
+            phone: normalizePhone(input.phone),
+            email: null,
+            classId: input.classId,
+            consent: false,
+            source: "staff",
+          },
+          tx,
+        );
+        await recordHistoricalCorrection(
+          tx,
+          ctx.academyId,
+          input.classId,
+          correction,
+          {
+            kind: "visitor",
+            subjectId: result.dropInId,
+            beforeValue: null,
+            afterValue: "present",
+            actorId: ctx.session.user.id,
+          },
+        );
+        return result;
+      });
       return { firstVisit: visitCount <= 1, visitCount };
     }),
 
@@ -301,8 +564,18 @@ export const attendanceRouter = {
   markVisitor: staffProcedure
     .input(MarkVisitorSchema)
     .mutation(async ({ ctx, input }) => {
-      await assertMarkable(ctx.db, input.classId);
+      const correction = await assertMarkable(ctx, input.classId, input.reason);
       const present = input.status === "present";
+      const [before] = await ctx.db
+        .select({ status: dropInVisit.attendanceStatus })
+        .from(dropInVisit)
+        .where(
+          and(
+            eq(dropInVisit.id, input.visitId),
+            eq(dropInVisit.classId, input.classId),
+          ),
+        )
+        .for("update");
       const [row] = await ctx.db
         .update(dropInVisit)
         .set({
@@ -314,7 +587,10 @@ export const attendanceRouter = {
           and(
             eq(dropInVisit.id, input.visitId),
             eq(dropInVisit.classId, input.classId),
-            ne(dropInVisit.bookingStatus, "cancelled"),
+            or(
+              ne(dropInVisit.bookingStatus, "cancelled"),
+              ne(dropInVisit.attendanceStatus, "unmarked"),
+            ),
           ),
         )
         .returning({ id: dropInVisit.id });
@@ -323,6 +599,21 @@ export const attendanceRouter = {
           code: "NOT_FOUND",
           message: "That visitor is not on this class",
         });
+      }
+      if (before && before.status !== input.status) {
+        await recordHistoricalCorrection(
+          ctx.db,
+          ctx.academyId,
+          input.classId,
+          correction,
+          {
+            kind: "visitor",
+            subjectId: row.id,
+            beforeValue: before.status,
+            afterValue: input.status,
+            actorId: ctx.session.user.id,
+          },
+        );
       }
       return { ok: true as const };
     }),
@@ -346,13 +637,50 @@ function recordAttendance(ctx: {
   });
 }
 
-/** Load the class and assert it is inside the attendance backfill window (O5). */
-async function assertMarkable(db: TenantTx, classId: string) {
-  const cls = await requireClassFacts(db, classId);
-  if (!canMarkAttendance(cls, new Date())) {
+async function assertMarkable(
+  ctx: { db: TenantTx; membership: { role: string; status: string } },
+  classId: string,
+  reason?: string,
+) {
+  const cls = await requireClassFacts(ctx.db, classId);
+  const access = attendanceWriteAccess(
+    cls,
+    new Date(),
+    runsBranch(ctx.membership),
+  );
+  if (access === "closed") {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
       message: "Attendance can only be marked for today or the last 14 days",
     });
   }
+  if (access === "reason-required" && !reason) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Enter a reason for changing attendance older than 14 days",
+    });
+  }
+  return access === "reason-required" ? reason : undefined;
+}
+
+async function recordHistoricalCorrection(
+  db: DbExec | TenantTx,
+  academyId: string,
+  classId: string,
+  reason: string | undefined,
+  change: {
+    kind: "member" | "visitor" | "review";
+    subjectId: string | null;
+    beforeValue: string | null;
+    afterValue: string | null;
+    actorId: string;
+  },
+) {
+  if (!reason) return;
+  await db.insert(attendanceCorrection).values({
+    academyId,
+    classId,
+    reason,
+    ...change,
+  });
 }

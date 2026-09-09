@@ -7,21 +7,21 @@ import { bookingRouter } from "./router/booking";
 import { checkinRouter } from "./router/checkin";
 import { classRouter } from "./router/class";
 import { curriculumRouter } from "./router/curriculum";
+import { dataTransferRouter } from "./router/dataTransfer";
 import { dropInRouter } from "./router/dropin";
 import { entityRouter } from "./router/entity";
 import { inviteRouter } from "./router/invite";
 import { membershipRouter } from "./router/membership";
-import { membershipPurchaseRouter } from "./router/membershipPurchase";
 import { noteRouter } from "./router/note";
 import { notificationRouter } from "./router/notification";
 import { organizationRouter } from "./router/organization";
-import { paymentsRouter } from "./router/payments";
+import { personRouter } from "./router/person";
 import { pushTokenRouter } from "./router/pushToken";
 import { rankRouter } from "./router/rank";
 import { referralRouter } from "./router/referral";
 import { statsRouter } from "./router/stats";
-import { systemRouter } from "./router/system";
 import { templateRouter } from "./router/template";
+import { visitorRouter } from "./router/visitor";
 import { createTRPCRouter } from "./trpc";
 
 export const appRouter = createTRPCRouter({
@@ -33,14 +33,14 @@ export const appRouter = createTRPCRouter({
   account: accountRouter,
   invite: inviteRouter,
   membership: membershipRouter,
-  membershipPurchase: membershipPurchaseRouter,
   template: templateRouter,
   class: classRouter,
   curriculum: curriculumRouter,
+  dataTransfer: dataTransferRouter,
   booking: bookingRouter,
   attendance: attendanceRouter,
   checkin: checkinRouter,
-  payments: paymentsRouter,
+  person: personRouter,
   rank: rankRouter,
   referral: referralRouter,
   note: noteRouter,
@@ -48,7 +48,7 @@ export const appRouter = createTRPCRouter({
   dropIn: dropInRouter,
   pushToken: pushTokenRouter,
   stats: statsRouter,
-  system: systemRouter,
+  visitor: visitorRouter,
 });
 
 // export type definition of API

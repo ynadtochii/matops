@@ -4,6 +4,7 @@ import {
   canVisit,
   entityFromPath,
   entityHref,
+  organizationHref,
   pathWithinEntity,
 } from "../src/entity";
 
@@ -27,6 +28,12 @@ describe("entity routes", () => {
   it("builds the home path without a trailing slash", () => {
     expect(entityHref("acad_a")).toBe("/entities/acad_a");
     expect(entityHref("acad_a", "/members")).toBe("/entities/acad_a/members");
+  });
+
+  it("keeps organization query parameters with the selected branch", () => {
+    expect(organizationHref("/memberships?tab=payments", "branch a")).toBe(
+      "/memberships?tab=payments&branch=branch%20a",
+    );
   });
 
   it("strips the entity for the route table", () => {
@@ -104,6 +111,16 @@ describe("who may open which screen", () => {
     const mat = { ...owner, type: "bjj_academy" };
     expect(canVisit("/entities/acad_a/schedule", mat)).toBe(true);
     expect(canVisit("/entities/acad_a/referrals", mat)).toBe(true);
+  });
+
+  it("hides referrals when the gym has not enabled them", () => {
+    const mat = {
+      ...owner,
+      type: "bjj_academy",
+      referralsEnabled: false,
+    };
+    expect(canVisit("/entities/acad_a/referrals", mat)).toBe(false);
+    expect(canVisit("/entities/acad_a/schedule", mat)).toBe(true);
   });
 
   it("keeps the role check on a general space", () => {

@@ -11,18 +11,37 @@ import { DAY_MS } from "./local-date";
  */
 
 /** How far back an owner may still fill in attendance (spec O5). */
-export const ATTENDANCE_BACKFILL_DAYS = 14;
+const ATTENDANCE_BACKFILL_DAYS = 14;
 
 /** Attendance axis — mirrors the `attendance_status` DB enum. */
-export type AttendanceStatus = "unmarked" | "present" | "absent";
+type AttendanceStatus = "unmarked" | "present" | "absent";
 
 /** Booking axis — mirrors the `booking_status` DB enum. */
-export type BookingStatus = "booked" | "cancelled" | "none";
+type BookingStatus = "booked" | "cancelled" | "none";
 
-export interface MarkableClass {
+interface MarkableClass {
   status: string; // "scheduled" | "cancelled"
   startsAt: Date; // resolved UTC instant
   deletedAt: Date | null;
+}
+
+type AttendanceWriteAccess = "allowed" | "reason-required" | "closed";
+
+export function attendanceWriteAccess(
+  c: MarkableClass,
+  now: Date,
+  mayCorrectHistory: boolean,
+): AttendanceWriteAccess {
+  if (c.deletedAt || c.status === "cancelled") return "closed";
+  const delta = c.startsAt.getTime() - now.getTime();
+  if (delta > DAY_MS) return "closed";
+  if (
+    now.getTime() - c.startsAt.getTime() <=
+    ATTENDANCE_BACKFILL_DAYS * DAY_MS
+  ) {
+    return "allowed";
+  }
+  return mayCorrectHistory ? "reason-required" : "closed";
 }
 
 /**
@@ -33,17 +52,7 @@ export interface MarkableClass {
  * out is not "today / recent past". Cancelled/deleted classes are never markable.
  */
 export function canMarkAttendance(c: MarkableClass, now: Date): boolean {
-  if (c.deletedAt) return false;
-  if (c.status === "cancelled") return false;
-  const delta = c.startsAt.getTime() - now.getTime();
-  if (delta > DAY_MS) return false; // too far in the future
-  if (
-    now.getTime() - c.startsAt.getTime() >
-    ATTENDANCE_BACKFILL_DAYS * DAY_MS
-  ) {
-    return false; // older than the backfill window
-  }
-  return true;
+  return attendanceWriteAccess(c, now, false) === "allowed";
 }
 
 /** How far back the dashboard hunts for classes nobody ever marked. */
@@ -114,7 +123,7 @@ export function bulkMarkTargets(rows: BulkMarkRow[]): string[] {
   return [...ids];
 }
 
-export interface AttendanceCounts {
+interface AttendanceCounts {
   present: number;
   absent: number;
   unmarked: number;
@@ -152,48 +161,36 @@ export function attendanceCounts(rows: ParticipationRow[]): AttendanceCounts {
   return c;
 }
 
-export interface ClassAttendee {
-  studentId: string;
-  name: string | null;
-  bookingStatus: string;
+export interface AttendanceReviewSnapshot {
+  fingerprint: string;
+  unmarked: number;
+  present: number;
+  absent: number;
+  total: number;
 }
 
-export interface AttendeeView {
-  names: string[];
-  othersCount: number;
-  namesHidden: boolean;
+export function attendanceReview(
+  snapshot: AttendanceReviewSnapshot,
+  savedFingerprint: string | null,
+  reviewedAt: Date | null,
+) {
+  const reviewed =
+    reviewedAt !== null && savedFingerprint === snapshot.fingerprint;
+  return { ...snapshot, reviewed, reviewedAt: reviewed ? reviewedAt : null };
 }
 
-/**
- * Who a student may see on a class (spec S5, §4 schedule privacy, ADR 55). Only
- * an APPROVED viewer sees names; they then see every booked member by name,
- * pending ones included, because a pending member trains on the same mat. What
- * stays a count is the people who are not members: drop-in leads, plus anyone
- * with no name on file. A pending viewer sees counts alone, with `namesHidden`
- * set so the UI can say why. The viewer is never listed to themselves.
- */
-export function visibleAttendees(
-  attendees: ClassAttendee[],
-  dropInCount: number,
-  viewer: { id: string; approved: boolean },
-): AttendeeView {
-  const booked = attendees.filter(
-    (a) => a.bookingStatus === "booked" && a.studentId !== viewer.id,
-  );
-  if (!viewer.approved) {
-    return {
-      names: [],
-      othersCount: booked.length + dropInCount,
-      namesHidden: booked.length > 0,
-    };
-  }
-  const names = booked
-    .map((a) => a.name?.trim())
-    .filter((n): n is string => !!n)
-    .sort((a, b) => a.localeCompare(b));
-  return {
-    names,
-    othersCount: booked.length - names.length + dropInCount,
-    namesHidden: false,
-  };
+export function attendanceReviewError(
+  snapshot: AttendanceReviewSnapshot,
+  expectedFingerprint: string,
+  nobodyAttended: boolean,
+): string | null {
+  if (snapshot.fingerprint !== expectedFingerprint)
+    return "Attendance changed. Review the latest list and try again.";
+  if (snapshot.unmarked > 0)
+    return "Mark everyone present or absent before finishing attendance.";
+  if (nobodyAttended && snapshot.present > 0)
+    return "Someone is marked present. Correct their attendance first.";
+  if (!nobodyAttended && snapshot.present === 0)
+    return "Confirm that nobody attended this class.";
+  return null;
 }

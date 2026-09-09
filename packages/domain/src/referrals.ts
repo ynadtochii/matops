@@ -1,6 +1,6 @@
 /** Pure referral-attribution rules (spec O9, ADR 52). */
 
-export interface ReferralMembership {
+interface ReferralMembership {
   memberId: string;
   role: string;
   status: string;
@@ -78,7 +78,7 @@ export function groupMoneyByCurrency(
  * a row with a null referrer means an owner deliberately removed the credit, and
  * only an owner may set it again (ADR 52).
  */
-export type ReferralAssignmentState = "assigned" | "cleared" | "never_assigned";
+type ReferralAssignmentState = "assigned" | "cleared" | "never_assigned";
 
 export function referralAssignmentState(
   referral: { referrerMemberId: string | null } | undefined,

@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 
-import { attendanceWindow, isStaff } from "@matops/domain";
+import { isStaff } from "@matops/domain";
 
 import type { EntityPageProps } from "~/trpc/server";
 import { Attendance } from "~/app/_components/attendance";
@@ -18,14 +18,19 @@ async function AttendanceData() {
   const academy = await currentAcademy();
 
   if (academy && isStaff(academy)) {
-    prefetch(trpc.class.week.queryOptions(attendanceWindow(new Date())));
+    prefetch(
+      trpc.attendance.reviewQueue.queryOptions({
+        status: "needs_review",
+        offset: 0,
+      }),
+    );
   }
 
   return (
     <HydrateClient>
       <PageHeader
         title="Attendance"
-        subtitle="Mark who trained — pick a class from the last two weeks."
+        subtitle="Review past classes and confirm who attended."
       />
       <Attendance />
     </HydrateClient>

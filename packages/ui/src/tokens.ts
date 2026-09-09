@@ -74,6 +74,3 @@ export const tokens = {
     success: "#00c950",
   },
 } as const;
-
-export type ThemeName = keyof typeof tokens;
-export type TokenName = keyof (typeof tokens)["light"];

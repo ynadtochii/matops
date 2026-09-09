@@ -11,16 +11,18 @@ import superjson from "superjson";
 import { z, ZodError } from "zod/v4";
 
 import type { Auth } from "@matops/auth";
-import type { TenantTx } from "@matops/db";
+import type { DbReader, TenantTx } from "@matops/db";
 import type { DbExec } from "@matops/db/client";
 import type { Membership } from "@matops/domain";
 import {
+  eq,
   getEntityInOrganization,
   getEntityMembership,
   getMembership,
   withScope,
 } from "@matops/db";
 import { db } from "@matops/db/client";
+import { organization } from "@matops/db/schema";
 import {
   canEnroll,
   isActiveMember,
@@ -201,7 +203,7 @@ export function rateLimited(max: number, windowMs: number) {
  * room is one caller here.
  */
 export const PUBLIC_DEFAULT_MAX = 120;
-export const PUBLIC_DEFAULT_WINDOW_MS = 60_000;
+const PUBLIC_DEFAULT_WINDOW_MS = 60_000;
 
 /**
  * Public (unauthed) procedure
@@ -273,7 +275,8 @@ async function resolveOrganization<U extends { id: string }>(ctx: {
 }
 
 /** The caller's standing at the entity this request named. */
-export interface EntityMembershipContext {
+interface EntityMembershipContext {
+  personId: string | null;
   role: string;
   status: string;
   joinedAt: Date;
@@ -357,6 +360,7 @@ async function resolveEntity<U extends { id: string }>(ctx: {
   const membership: EntityMembershipContext = entityMembership
     ? {
         memberId: entityMembership.id,
+        personId: entityMembership.personId,
         joinedAt: entityMembership.joinedAt ?? entityMembership.createdAt,
         role:
           entityMembership.role === "owner"
@@ -366,6 +370,7 @@ async function resolveEntity<U extends { id: string }>(ctx: {
       }
     : {
         memberId: null,
+        personId: null,
         joinedAt: orgMembership.joinedAt,
         role: organizationRole ?? "student",
         status: "active",
@@ -458,24 +463,14 @@ export const organizationMemberProcedure = t.procedure
   .use(timingMiddleware)
   .use(enforceOrganization);
 
-/** Active owner of the organization: adds entities, sees every entity summary. */
-export const organizationOwnerProcedure = organizationMemberProcedure.use(
-  ({ ctx, next }) => {
-    if (!isActiveMember(ctx.orgMembership) || !isOwner(ctx.orgMembership)) {
-      throw new TRPCError({ code: "FORBIDDEN", message: "Owner only" });
-    }
-    return next();
-  },
-);
-
 /**
  * Somebody who RUNS the gym: an owner, or a manager (spec FP7, ADR 128).
  *
  * The tier for the gym's daily work, reading its people, plans, payments,
  * staff and reports, and the ordinary writes that go with them. Owner-only
- * actions keep `organizationOwnerProcedure`, and that difference is the whole
- * permission model: it is spelled in the tier, not in a check somebody has to
- * remember at the top of a resolver.
+ * actions keep `organizationOwnerIdentityProcedure`, and that difference is the
+ * whole permission model: it is spelled in the tier, not in a check somebody
+ * has to remember at the top of a resolver.
  */
 export const organizationManagerProcedure = organizationMemberProcedure.use(
   ({ ctx, next }) => {
@@ -520,19 +515,6 @@ export const staffProcedure = memberProcedure.use(({ ctx, next }) => {
 });
 
 /**
- * Owner — active owner of this branch. Four actions only (ADR 129): making or
- * removing an owner, permanent erase, deleting the branch, and the commercial
- * account. Everything else an owner does at a branch is
- * {@link branchManagerProcedure}, which a gym's manager also reaches.
- */
-export const ownerProcedure = memberProcedure.use(({ ctx, next }) => {
-  if (!isOwner(ctx.membership)) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Owner only" });
-  }
-  return next();
-});
-
-/**
  * Runs this branch: an active owner, or a manager of the gym (ADR 129).
  *
  * The branch tier for the ordinary work — local members and their approvals,
@@ -570,6 +552,49 @@ export const bjjStaffProcedure = staffProcedure.use(({ ctx, next }) => {
   }
   return next();
 });
+
+const MODULE_DISABLED = "This module is not enabled for this gym";
+
+async function requireOrganizationModule(
+  database: DbReader,
+  organizationId: string,
+  module: "curriculum" | "referrals",
+) {
+  const [row] = await database
+    .select({
+      enabled:
+        module === "curriculum"
+          ? organization.curriculumEnabled
+          : organization.referralsEnabled,
+    })
+    .from(organization)
+    .where(eq(organization.id, organizationId))
+    .limit(1);
+  if (!row?.enabled) {
+    throw new TRPCError({ code: "FORBIDDEN", message: MODULE_DISABLED });
+  }
+}
+
+export const curriculumEnrolledProcedure = bjjEnrolledProcedure.use(
+  async ({ ctx, next }) => {
+    await requireOrganizationModule(ctx.db, ctx.organizationId, "curriculum");
+    return next();
+  },
+);
+
+export const curriculumStaffProcedure = bjjStaffProcedure.use(
+  async ({ ctx, next }) => {
+    await requireOrganizationModule(ctx.db, ctx.organizationId, "curriculum");
+    return next();
+  },
+);
+
+export const referralsBranchManagerProcedure = branchManagerProcedure.use(
+  async ({ ctx, next }) => {
+    await requireOrganizationModule(ctx.db, ctx.organizationId, "referrals");
+    return next();
+  },
+);
 
 /**
  * Identity procedures: same authorization as the tenant tiers, but NO ambient
@@ -642,6 +667,21 @@ export const organizationManagerIdentityProcedure = protectedProcedure.use(
     }
     return next({
       ctx: { organizationId, orgMembership, session: { ...ctx.session, user } },
+    });
+  },
+);
+
+export const organizationMemberIdentityProcedure = protectedProcedure.use(
+  async ({ ctx, next }) => {
+    const { organizationId, orgMembership, user } =
+      await resolveOrganization(ctx);
+    return next({
+      ctx: {
+        organizationId,
+        orgMembership,
+        baseDb: ctx.baseDb,
+        session: { ...ctx.session, user },
+      },
     });
   },
 );

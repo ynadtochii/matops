@@ -40,6 +40,7 @@ export interface CoachClass {
   title: string;
   discipline: string | null;
   cancelled: boolean;
+  reviewed: boolean;
 }
 
 /** One attendance-marked participation, joined to its class. */
@@ -59,7 +60,7 @@ export interface DateRange {
  * The window the O10 screen offers. Calendar months are resolved in the academy
  * zone; rolling days are a plain instant subtraction and need no zone.
  */
-export type CoachWindow =
+type CoachWindow =
   { kind: "month"; monthsBack: number } | { kind: "rollingDays"; days: number };
 
 /** The three windows the O10 screen offers, as stable keys both clients use. */
@@ -76,7 +77,7 @@ export const COACH_WINDOWS: Record<CoachWindowKey, CoachWindow> = {
 };
 
 /** The rows and window every aggregate reads. */
-export interface CoachInput {
+interface CoachInput {
   classes: CoachClass[];
   marks: ClassMark[];
   now: Date;
@@ -84,7 +85,7 @@ export interface CoachInput {
 }
 
 /** `CoachInput` plus the staff roster the whole-gym roster view needs. */
-export interface CoachRosterInput extends CoachInput {
+interface CoachRosterInput extends CoachInput {
   /**
    * Active staff, in the order the caller wants them back. Every id gets a row
    * even with no classes, so the screen shows a coach who taught nothing.
@@ -93,9 +94,10 @@ export interface CoachRosterInput extends CoachInput {
 }
 
 /** One coach's totals over the window (O10 roster card). */
-export interface CoachWorkload {
+interface CoachWorkload {
   instructorId: string;
   classesLed: number;
+  unresolvedEnded: number;
   minutesLed: number;
   markedClasses: number;
   visitsTaught: number;
@@ -109,7 +111,7 @@ export interface CoachWorkload {
 }
 
 /** One class title a coach taught, in the per-coach breakdown. */
-export interface CoachClassGroup {
+interface CoachClassGroup {
   title: string;
   /** First discipline seen for this title, matching the `gymInsights` rule. */
   discipline: string | null;
@@ -120,7 +122,7 @@ export interface CoachClassGroup {
 }
 
 /** One led class in the per-coach recent list. */
-export interface CoachClassSummary {
+interface CoachClassSummary {
   classId: string;
   startsAt: Date;
   title: string;
@@ -131,7 +133,7 @@ export interface CoachClassSummary {
 }
 
 /** The per-coach detail behind a roster card. */
-export interface CoachBreakdown {
+interface CoachBreakdown {
   byClass: CoachClassGroup[];
   /** Classes led per weekday, index 0 = Sun … 6 = Sat (`DAY_LABELS`). */
   byWeekday: number[];
@@ -139,6 +141,8 @@ export interface CoachBreakdown {
   byWeek: { weekBucket: number; classesLed: number }[];
   /** Led classes, most recent first. */
   recent: CoachClassSummary[];
+  unresolved: CoachClassSummary[];
+  cancelled: CoachClassSummary[];
 }
 
 const pad = (n: number, width: number) => String(n).padStart(width, "0");
@@ -207,7 +211,9 @@ function hasEnded(c: CoachClass, now: Date): boolean {
 
 /** A class that counts as led: in window, not cancelled, already finished. */
 function isLed(c: CoachClass, now: Date, range: DateRange): boolean {
-  return inRange(c.startsAt, range) && !c.cancelled && hasEnded(c, now);
+  return (
+    inRange(c.startsAt, range) && !c.cancelled && c.reviewed && hasEnded(c, now)
+  );
 }
 
 const ratio = (numerator: number, denominator: number) =>
@@ -227,6 +233,7 @@ function summarize(
   let markedClasses = 0;
   let visitsTaught = 0;
   let cancelled = 0;
+  let unresolvedEnded = 0;
 
   for (const c of classes) {
     if (c.instructorId !== instructorId) continue;
@@ -236,6 +243,10 @@ function summarize(
       continue;
     }
     if (!hasEnded(c, now)) continue;
+    if (!c.reviewed) {
+      unresolvedEnded += 1;
+      continue;
+    }
     classesLed += 1;
     minutesLed += c.durationMinutes;
     const summary = markSummary.get(c.id);
@@ -248,6 +259,7 @@ function summarize(
   return {
     instructorId,
     classesLed,
+    unresolvedEnded,
     minutesLed,
     markedClasses,
     visitsTaught,
@@ -318,6 +330,18 @@ export function coachBreakdown(
   const byWeekday = [0, 0, 0, 0, 0, 0, 0];
   const weekCounts = new Map<number, number>();
   const recent: CoachClassSummary[] = [];
+  const sourceSummary = (c: CoachClass): CoachClassSummary => {
+    const summary = markSummary.get(c.id);
+    return {
+      classId: c.id,
+      startsAt: c.startsAt,
+      title: c.title,
+      discipline: c.discipline,
+      durationMinutes: c.durationMinutes,
+      headcount: summary?.present ?? 0,
+      marked: c.reviewed,
+    };
+  };
 
   for (const c of led) {
     const summary = markSummary.get(c.id);
@@ -380,16 +404,28 @@ export function coachBreakdown(
     byWeekday,
     byWeek,
     recent,
+    unresolved: classes
+      .filter(
+        (c) =>
+          c.instructorId === instructorId &&
+          inRange(c.startsAt, range) &&
+          !c.cancelled &&
+          !c.reviewed &&
+          hasEnded(c, now),
+      )
+      .sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime())
+      .map(sourceSummary),
+    cancelled: classes
+      .filter(
+        (c) =>
+          c.instructorId === instructorId &&
+          inRange(c.startsAt, range) &&
+          c.cancelled &&
+          c.startsAt.getTime() < now.getTime(),
+      )
+      .sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime())
+      .map(sourceSummary),
   };
-}
-
-/** Minutes on the mat as "3h 30m" / "2h" / "45m". Zero reads as "0m". */
-export function formatMatTime(minutes: number): string {
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  if (hours === 0) return `${rest}m`;
-  if (rest === 0) return `${hours}h`;
-  return `${hours}h ${rest}m`;
 }
 
 /**

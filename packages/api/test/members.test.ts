@@ -6,7 +6,9 @@ import { nameByMember, nameByUser } from "../src/members";
 
 const row = (memberId: string, userId: string, name: string): MemberRow => ({
   memberId,
+  personId: `person_${userId}`,
   userId,
+  accountUserId: userId,
   role: "member",
   status: "active",
   invitedRole: null,

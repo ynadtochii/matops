@@ -4,7 +4,6 @@ import type { DirectoryEntry } from "../src/member-directory";
 import {
   combineDirectory,
   matchesDirectoryFilter,
-  pendingCoachCount,
   staffRows,
 } from "../src/member-directory";
 
@@ -161,28 +160,6 @@ describe("staffRows", () => {
   it("gives one row two branch badges for one person", () => {
     const boss = staffRows(rows()).find((r) => r.userId === "u_boss");
     expect(boss?.branches).toHaveLength(2);
-  });
-
-  it("counts one badge per waiting branch, not per person", () => {
-    const waiting = combineDirectory([
-      entry({
-        entityId: "e_mat",
-        userId: "u_lee",
-        status: "pending",
-        invitedRole: "instructor",
-      }),
-      entry({
-        entityId: "e_gym",
-        userId: "u_lee",
-        status: "pending",
-        invitedRole: "instructor",
-      }),
-    ]);
-    expect(pendingCoachCount(waiting)).toBe(2);
-  });
-
-  it("counts the coach seats and never the student ones", () => {
-    expect(pendingCoachCount(rows())).toBe(1);
   });
 });
 

@@ -34,17 +34,11 @@ export function StudentScreen() {
   const trpc = useTRPC();
   const href = useEntityHref();
   const { book, cancel, busyFor, lockedMessage } = useBooking();
-  const suspended = useEntity().status === "suspended";
+  const academy = useEntity();
+  const suspended = academy.status === "suspended";
 
   const now = useMinuteClock();
-  const currentDay = dayKey(now);
-  const { todayKey, windowStart, windowEnd } = useMemo(() => {
-    const start = new Date(`${currentDay}T00:00:00`);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(start);
-    end.setDate(end.getDate() + 7);
-    return { todayKey: dayKey(start), windowStart: start, windowEnd: end };
-  }, [currentDay]);
+  const todayKey = dayKey(now);
 
   const week = useQuery(
     trpc.class.mine.queryOptions(studentWeekWindow(now), {
@@ -54,16 +48,7 @@ export function StudentScreen() {
 
   // The window is snapped to a UTC day so the server and the browser build the
   // same cache key. Filtering here is what keeps the list to seven local days.
-  const byDay = useMemo(
-    () =>
-      groupByDay(
-        (week.data ?? []).filter((r) => {
-          const t = new Date(r.startsAt).getTime();
-          return t >= windowStart.getTime() && t < windowEnd.getTime();
-        }),
-      ),
-    [week.data, windowStart, windowEnd],
-  );
+  const byDay = useMemo(() => groupByDay(week.data ?? []), [week.data]);
 
   if (suspended) {
     return (
@@ -78,7 +63,7 @@ export function StudentScreen() {
     <>
       <PageHeader
         title="Schedule"
-        subtitle="Find and book a class for the next seven days."
+        subtitle={`Find and book a class for the next ${academy.bookingWindowDays} days.`}
         action={
           <Button asChild variant="outline">
             <Link href={href("/training")}>My bookings</Link>

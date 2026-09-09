@@ -10,7 +10,6 @@ import {
   formatMoney,
   formatRank,
   isStaffRole,
-  PAYMENT_STATUS_LABEL,
   RANK_SYSTEMS,
   rankDisciplines,
   runsBranch,
@@ -19,6 +18,7 @@ import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
 import { CopyButton } from "@matops/ui/copy-button";
+import { Input } from "@matops/ui/input";
 import { Select } from "@matops/ui/select";
 import { Spinner } from "@matops/ui/spinner";
 import { Textarea } from "@matops/ui/textarea";
@@ -28,14 +28,7 @@ import type { Member, MemberHistory } from "./members";
 import { dateFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { useEntity, useOrganization } from "./entity";
-import {
-  cardClass,
-  DriftBadge,
-  DUES_TONE,
-  RESOLVE,
-  Stat,
-  TAP,
-} from "./primitives";
+import { cardClass, DriftBadge, RESOLVE, Stat, TAP } from "./primitives";
 import { SkeletonLines, SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 import { Tabs } from "./tabs";
@@ -45,8 +38,6 @@ import { Tabs } from "./tabs";
  * Notes and Attendance. Split out of `members.tsx`, which keeps the list and
  * its three tabs.
  */
-
-type Dues = NonNullable<Member["dues"]>;
 
 /** The short tag on a member whose access is not clear, in the roster's words. */
 const MEMBERSHIP_TAG: Record<string, string> = {
@@ -77,12 +68,6 @@ export function MemberRow({
         {m.status === "suspended" && (
           <span className="text-muted-foreground ml-2 text-xs uppercase">
             suspended
-          </span>
-        )}
-        {m.dues && <DuesDot dues={m.dues} />}
-        {m.access?.state === "locked" && (
-          <span className="text-error ml-2 text-xs font-medium uppercase">
-            booking locked
           </span>
         )}
         {!isStaffRole(m) && m.membership && m.membership.verdict !== "ok" && (
@@ -196,7 +181,7 @@ export function MemberDetail({ m }: { m: Member }) {
         ) : tab === "notes" ? (
           <NotesTab memberId={m.memberId} />
         ) : tab === "membership" ? (
-          <MembershipTab userId={m.userId} name={m.name} />
+          <MembershipTab personId={m.personId} name={m.name} />
         ) : detail.isPending ? (
           <SkeletonLines n={5} />
         ) : detail.isError ? (
@@ -223,7 +208,7 @@ export function MemberDetail({ m }: { m: Member }) {
  * from here records THIS branch as where it happened, which is bookkeeping and
  * never a limit on what the plan covers.
  */
-function MembershipTab({ userId, name }: { userId: string; name: string }) {
+function MembershipTab({ personId, name }: { personId: string; name: string }) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const { entities } = useOrganization();
@@ -234,7 +219,7 @@ function MembershipTab({ userId, name }: { userId: string; name: string }) {
     needsDecision: { entityId: string; status: string }[];
   } | null>(null);
 
-  const held = useQuery(trpc.accessPlan.forUser.queryOptions({ userId }));
+  const held = useQuery(trpc.accessPlan.forUser.queryOptions({ personId }));
   const plans = useQuery(trpc.accessPlan.list.queryOptions());
   const nameOf = (id: string) =>
     entities.find((e) => e.id === id)?.name ?? "a closed branch";
@@ -402,13 +387,13 @@ function MembershipTab({ userId, name }: { userId: string; name: string }) {
       <div className="flex flex-wrap items-end gap-2">
         <div className="flex min-w-48 flex-1 flex-col gap-1.5">
           <label
-            htmlFor={`assign-${userId}`}
+            htmlFor={`assign-${personId}`}
             className="text-muted-foreground font-mono text-[10px] tracking-wide uppercase"
           >
             Give a membership
           </label>
           <Select
-            id={`assign-${userId}`}
+            id={`assign-${personId}`}
             value={picked}
             disabled={busy || offerable.length === 0}
             onChange={(e) => setPicked(e.target.value)}
@@ -432,7 +417,7 @@ function MembershipTab({ userId, name }: { userId: string; name: string }) {
           disabled={busy || picked === ""}
           onClick={() =>
             assign.mutate({
-              userId,
+              personId,
               planId: picked,
               assigningEntityId: here,
             })
@@ -460,6 +445,7 @@ function RankTab({ memberId }: { memberId: string }) {
   const system = RANK_SYSTEMS[discipline];
   const [belt, setBelt] = useState(system?.belts[0] ?? "");
   const [stripes, setStripes] = useState(0);
+  const [correctionReason, setCorrectionReason] = useState("");
 
   // The member's current rank in the selected discipline (rank only goes up).
   const current = ranks.data?.ranks.find((r) => r.discipline === discipline);
@@ -534,6 +520,7 @@ function RankTab({ memberId }: { memberId: string }) {
                     await clear.mutateAsync({
                       memberId,
                       discipline: r.discipline,
+                      reason: correctionReason,
                     });
                   }}
                   trigger={
@@ -541,7 +528,7 @@ function RankTab({ memberId }: { memberId: string }) {
                       type="button"
                       size="sm"
                       variant="destructive-outline"
-                      disabled={clear.isPending}
+                      disabled={clear.isPending || !correctionReason.trim()}
                     >
                       Clear
                     </Button>
@@ -551,6 +538,13 @@ function RankTab({ memberId }: { memberId: string }) {
             ))}
           </ul>
         )}
+        {ranks.data?.ranks.length ? (
+          <Input
+            value={correctionReason}
+            onChange={(event) => setCorrectionReason(event.target.value)}
+            placeholder="Reason required to clear a rank"
+          />
+        ) : null}
       </div>
 
       <div className="border-border flex flex-col gap-3 border-t pt-4">
@@ -790,83 +784,18 @@ function Overview({ m, data }: { m: Member; data: MemberHistory }) {
       </div>
 
       <dl className="text-sm">
-        <RoleControl m={m} />
-        <Detail term="Email" value={m.email} copy={m.email} />
+        <Detail term="Role" value={m.role} />
+        <Detail
+          term="Email"
+          value={m.email ?? "No email"}
+          copy={m.email ?? undefined}
+        />
         {m.phone ? (
           <Detail term="Phone" value={m.phone} copy={m.phone} />
         ) : null}
         {favorite ? <Detail term="Favorite" value={favorite} /> : null}
-        {m.dues ? (
-          <>
-            <Detail
-              term="Plan"
-              value={`${m.dues.planName} · ${formatMoney(m.dues.priceMinor, m.dues.currency)}`}
-            />
-            <Detail
-              term="Next due"
-              value={`${dateFmt.format(new Date(m.dues.nextDueAt))} · ${PAYMENT_STATUS_LABEL[m.dues.status]}`}
-            />
-            {m.dues.lastConfirmedAt ? (
-              <Detail
-                term="Last payment"
-                value={dateFmt.format(new Date(m.dues.lastConfirmedAt))}
-              />
-            ) : null}
-          </>
-        ) : null}
         <Detail term="Joined" value={dateFmt.format(new Date(m.joinedAt))} />
       </dl>
-    </div>
-  );
-}
-
-/**
- * The member's academy role, switchable between student and instructor (spec
- * O6). An owner's role is not editable here: promoting and stepping down live
- * on the Coaches screen, Staff section, behind the never-ownerless guard.
- * Owner-only: `membership.setRole` is, and an instructor who could mint
- * instructors could also demote every owner but one (ADR 75).
- */
-function RoleControl({ m }: { m: Member }) {
-  const academy = useEntity();
-  const trpc = useTRPC();
-  const queryClient = useQueryClient();
-  const setRole = useMutation(
-    trpc.membership.setRole.mutationOptions({
-      onSuccess: async () => {
-        await queryClient.invalidateQueries(
-          trpc.membership.members.pathFilter(),
-        );
-        toast.success("Role updated");
-      },
-      onError: (err) => toast.error(err.message || "Could not update the role"),
-    }),
-  );
-
-  if (!runsBranch(academy) || m.role === "owner" || m.status !== "active") {
-    return <Detail term="Role" value={m.role} />;
-  }
-
-  return (
-    <div className="border-border flex items-center justify-between gap-2 border-b py-1.5 last:border-0">
-      <dt className="text-muted-foreground">Role</dt>
-      <dd className="flex items-center gap-2">
-        <Select
-          value={m.role === "instructor" ? "instructor" : "student"}
-          aria-label={`Role for ${m.name}`}
-          disabled={setRole.isPending}
-          onChange={(e) =>
-            setRole.mutate({
-              memberId: m.memberId,
-              role: e.target.value as "student" | "instructor",
-            })
-          }
-        >
-          <option value="student">Student</option>
-          <option value="instructor">Instructor</option>
-        </Select>
-        {setRole.isPending && <Spinner size="sm" />}
-      </dd>
     </div>
   );
 }
@@ -939,19 +868,3 @@ function AttendanceHistory({ history }: { history: MemberHistory["history"] }) {
 }
 
 /** A small payment-status dot + label next to a member's name (spec O7). */
-function DuesDot({ dues }: { dues: Dues }) {
-  return (
-    <span
-      className="ml-2 inline-flex items-center gap-1 align-middle text-xs font-normal"
-      title={`${PAYMENT_STATUS_LABEL[dues.status]} · ${formatMoney(dues.priceMinor, dues.currency)}`}
-    >
-      <span
-        className={`inline-block size-2 rounded-full ${DUES_TONE[dues.status]}`}
-        aria-hidden
-      />
-      <span className="text-muted-foreground">
-        {PAYMENT_STATUS_LABEL[dues.status]}
-      </span>
-    </span>
-  );
-}

@@ -81,4 +81,42 @@ describe("RLS — notification center", () => {
     );
     expect(stillUnread).toBe(1);
   });
+
+  it("keeps delivery work inside its academy", async () => {
+    await asTenant(pg, "academy_A", (tx) =>
+      tx.query(`
+        WITH notice AS (
+          INSERT INTO notification_notice
+            (academy_id, event_key, kind, subject, body, template_version)
+          VALUES
+            ('academy_A', 'event_a', 'class_changed', 'A', 'Body', '1')
+          RETURNING id
+        )
+        INSERT INTO notification_recipient
+          (notice_id, academy_id, recipient_key, email)
+        SELECT id, 'academy_A', 'user:a', 'a@example.com' FROM notice
+      `),
+    );
+    const seen = await asTenant(
+      pg,
+      "academy_B",
+      async (tx) =>
+        (
+          await tx.query<{ recipient_key: string }>(
+            "SELECT recipient_key FROM notification_recipient",
+          )
+        ).rows,
+    );
+    expect(seen).toEqual([]);
+    await expect(
+      asTenant(pg, "academy_A", (tx) =>
+        tx.query(`
+          INSERT INTO notification_notice
+            (academy_id, event_key, kind, subject, body, template_version)
+          VALUES
+            ('academy_B', 'event_b', 'class_changed', 'B', 'Body', '1')
+        `),
+      ),
+    ).rejects.toThrow();
+  });
 });

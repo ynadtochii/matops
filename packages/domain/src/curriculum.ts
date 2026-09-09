@@ -7,7 +7,7 @@ export interface Placement {
   weeks: number;
 }
 
-export type PlacementState = "settled" | "running" | "draft";
+type PlacementState = "settled" | "running" | "draft";
 
 export const BLOCK_WEEK_CHOICES = [1, 2, 3, 4, 6, 8] as const;
 
@@ -51,7 +51,7 @@ export function endOfBlock(startsOn: string, weeks: number): string {
   return addDays(startsOn, weeks * 7 - 1);
 }
 
-export interface LibraryBlock {
+interface LibraryBlock {
   category: string | null;
   theme: string;
 }
@@ -106,10 +106,6 @@ export function groupByCategory<T extends LibraryBlock>(
     });
 }
 
-export function sortPlacements<T extends Placement>(placements: T[]): T[] {
-  return [...placements].sort((a, b) => a.startsOn.localeCompare(b.startsOn));
-}
-
 export function placementState(
   placement: Placement,
   today: string,
@@ -129,16 +125,6 @@ export function firstEditableIndex(
 export function editableFloor(placements: Placement[], today: string): number {
   const at = firstEditableIndex(placements, today);
   return at === -1 ? placements.length : at;
-}
-
-export function firstDraftIndex(
-  placements: Placement[],
-  today: string,
-): number {
-  const editable = firstEditableIndex(placements, today);
-  const at = placements[editable];
-  if (!at) return placements.length;
-  return placementState(at, today) === "running" ? editable + 1 : editable;
 }
 
 export function nextStart(placements: Placement[], today: string): string {
@@ -233,13 +219,4 @@ export function placementForDate<T extends Placement>(
     }
   }
   return null;
-}
-
-export function describeRipple(
-  before: Placement[],
-  after: Placement[],
-): { moved: number; endsOn: string | null } {
-  const was = new Map(before.map((p) => [p.id, p.startsOn]));
-  const moved = after.filter((p) => was.get(p.id) !== p.startsOn).length;
-  return { moved, endsOn: after.at(-1)?.endsOn ?? null };
 }

@@ -156,12 +156,12 @@ describe("template.rebuild", () => {
   it("is owner-only, because it regenerates everyone's calendar", async () => {
     const h = await base();
     await seedTemplate(h.pg);
-    expect(await rejectionCode(h.as(COACH, A).template.rebuild())).toBe(
-      "FORBIDDEN",
-    );
-    expect(await rejectionCode(h.as(ANA, A).template.rebuild())).toBe(
-      "FORBIDDEN",
-    );
+    expect(
+      await rejectionCode(h.as(COACH, A).template.rebuild({ version: 0 })),
+    ).toBe("FORBIDDEN");
+    expect(
+      await rejectionCode(h.as(ANA, A).template.rebuild({ version: 0 })),
+    ).toBe("FORBIDDEN");
   });
 
   it("names the damage before it is done, and the count matches", async () => {
@@ -176,8 +176,10 @@ describe("template.rebuild", () => {
     ]);
 
     const preview = await h.as(OWNER, A).template.rebuildPreview();
-    expect(preview.toDelete).toBeGreaterThan(0);
-    expect(preview.bookingsAffected).toBe(1);
+    expect(preview.affected.length).toBeGreaterThan(0);
+    expect(
+      preview.affected.reduce((sum, row) => sum + row.activeParticipants, 0),
+    ).toBe(1);
   });
 
   it("never touches a past class or a one-off", async () => {
@@ -189,7 +191,8 @@ describe("template.rebuild", () => {
     ]);
     await attach(h.pg, PAST);
 
-    await h.as(OWNER, A).template.rebuild();
+    const preview = await h.as(OWNER, A).template.rebuildPreview();
+    await h.as(OWNER, A).template.rebuild({ version: preview.version });
 
     expect(await statusOf(h.pg, PAST)).toBe("scheduled");
     expect(await statusOf(h.pg, ONE_OFF)).toBe("scheduled");
@@ -198,7 +201,8 @@ describe("template.rebuild", () => {
   it("fills the horizon from the active templates", async () => {
     const h = await base();
     await seedTemplate(h.pg);
-    await h.as(OWNER, A).template.rebuild();
+    const preview = await h.as(OWNER, A).template.rebuildPreview();
+    await h.as(OWNER, A).template.rebuild({ version: preview.version });
 
     const res = await h.pg.query<{ n: number }>(
       `SELECT count(*)::int AS n FROM "class"
@@ -341,55 +345,6 @@ describe("one bookable room per general branch", () => {
       startsAtMinutes: 615,
     });
     expect([first?.id, second?.id].every(Boolean)).toBe(true);
-  });
-
-  it("never trips a session over its own old row when rescheduling", async () => {
-    const row = await at(gym).class.create({
-      ...session,
-      date: "2026-09-16",
-      startsAtMinutes: 600,
-    });
-    if (!row) throw new Error("expected a class");
-    const moved = await at(gym).class.update({
-      id: row.id,
-      title: "Open gym",
-      instructorId: null,
-      durationMinutes: 60,
-      capacity: 20,
-      date: "2026-09-16",
-      startsAtMinutes: 605,
-      timeZone: "UTC",
-    });
-    expect(moved.id).toBe(row.id);
-  });
-
-  it("refuses a reschedule onto another session", async () => {
-    const row = await at(gym).class.create({
-      ...session,
-      date: "2026-09-17",
-      startsAtMinutes: 600,
-    });
-    await at(gym).class.create({
-      ...session,
-      date: "2026-09-17",
-      startsAtMinutes: 720,
-    });
-    if (!row) throw new Error("expected a class");
-
-    expect(
-      await rejectionCode(
-        at(gym).class.update({
-          id: row.id,
-          title: "Open gym",
-          instructorId: null,
-          durationMinutes: 60,
-          capacity: 20,
-          date: "2026-09-17",
-          startsAtMinutes: 730,
-          timeZone: "UTC",
-        }),
-      ),
-    ).toBe("CONFLICT");
   });
 
   it("frees the room again once a session is cancelled", async () => {

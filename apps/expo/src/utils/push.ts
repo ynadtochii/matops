@@ -16,7 +16,7 @@ import * as SecureStore from "expo-secure-store";
 const STORED_TOKEN_KEY = "matops.pushToken";
 const ENABLED_KEY = "matops.pushEnabled";
 
-export interface PushRegistration {
+interface PushRegistration {
   token: string;
   platform: "ios" | "android";
 }

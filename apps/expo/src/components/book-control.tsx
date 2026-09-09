@@ -3,12 +3,12 @@ import { Alert, Pressable } from "react-native";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { capacityDisplay } from "@matops/domain";
+import { useInvalidate } from "@matops/ui/use-invalidate";
 
 import { useToast } from "~/components/toast";
 import { confirm, Txt, useTheme } from "~/components/ui";
 import { trpc } from "~/utils/api";
 import { dayFmt, timeFmt } from "~/utils/format";
-import { useInvalidate } from "~/utils/invalidate";
 import { cancelClassReminder, scheduleClassReminder } from "~/utils/reminders";
 
 /**
@@ -47,7 +47,9 @@ export function useBookClass(
   // situation (ADR 126). Cancel is never gated: somebody whose month ran out
   // must still be able to give their place back.
   const gate = useQuery(
-    trpc.booking.access.queryOptions(undefined, { enabled: approved }),
+    trpc.booking.access.queryOptions(undefined, {
+      enabled: approved,
+    }),
   );
 
   const book = useMutation(
@@ -66,20 +68,17 @@ export function useBookClass(
       },
     }),
   );
-
   /** Send the booking; a per-call success toast names the class (slice 6). */
   const doBook = (c: BookableClass) => {
     const start = new Date(c.startsAt);
     const label = `Booked — ${dayFmt.format(start)} · ${timeFmt.format(start)}`;
-    book.mutate(
-      { classId: c.id },
-      {
-        onSuccess: () => {
-          toast.show(label);
-          void scheduleClassReminder(c);
-        },
+    const options = {
+      onSuccess: () => {
+        toast.show(label);
+        void scheduleClassReminder(c);
       },
-    );
+    };
+    book.mutate({ classId: c.id }, options);
   };
 
   /** Book `c`, asking to confirm first when it is at/over capacity. */
@@ -102,7 +101,11 @@ export function useBookClass(
     }
   };
 
-  return { onBook, isPending: book.isPending, error };
+  return {
+    onBook,
+    isPending: book.isPending,
+    error,
+  };
 }
 
 /**
@@ -123,7 +126,6 @@ export function useCancelBooking() {
       onError: (err) => toast.show(err.message || "Could not cancel"),
     }),
   );
-
   const onCancel = (classId: string) =>
     confirm({
       title: "Cancel this booking?",
@@ -149,7 +151,9 @@ export function useCancelBooking() {
  */
 export function BookButton({ c }: { c: BookableClass }) {
   const t = useTheme();
-  const { onBook, isPending } = useBookClass(undefined, { toastError: true });
+  const { onBook, isPending } = useBookClass(undefined, {
+    toastError: true,
+  });
   return (
     <Pressable
       accessibilityRole="button"

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
 import {
@@ -16,19 +17,22 @@ import { Button } from "@matops/ui/button";
 import { dayLongFmt, timeFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { ClassTheme } from "./class-theme";
-import { useEntity, useEntityHref } from "./entity";
+import { useEntity, useEntityHref, useOrganization } from "./entity";
 import { PageHeader } from "./page-header";
 import { cardClass, ENTER, SectionHeading } from "./primitives";
-import { ClassDetailSkeleton, SkeletonCard } from "./skeletons";
-import { EmptyState, ErrorState } from "./states";
+import { ClassDetailSkeleton } from "./skeletons";
+import { ErrorState } from "./states";
 import { useBooking } from "./use-booking";
 import { useMinuteClock } from "./use-clock";
 
 export function ClassDetail({ classId }: { classId: string }) {
   const href = useEntityHref();
-  const bjj = isBjjAcademy(useEntity().type);
+  const academy = useEntity();
+  const bjj = isBjjAcademy(academy.type);
   const trpc = useTRPC();
   const { book, cancel, busy, lockedMessage } = useBooking();
+  const { canRunOrganization } = useOrganization();
+  const searchParams = useSearchParams();
   const now = useMinuteClock();
 
   const cls = useQuery({
@@ -58,10 +62,14 @@ export function ClassDetail({ classId }: { classId: string }) {
   const bookable = canBook(
     { status: c.status, startsAt: start, deletedAt: null },
     now,
+    {
+      bookingWindowDays: academy.bookingWindowDays,
+      timeZone: academy.timeZone ?? "UTC",
+    },
   );
   const refusal =
     bookable.reason && bookable.reason !== "deleted"
-      ? notBookableMessage(bookable.reason)
+      ? notBookableMessage(bookable.reason, academy.bookingWindowDays)
       : null;
   const cap = capacityDisplay(c.bookingCount, c.capacity);
 
@@ -78,78 +86,95 @@ export function ClassDetail({ classId }: { classId: string }) {
         subtitle={`${dayLongFmt.format(start)} · ${timeFmt.format(start)}`}
       />
       <div className="flex flex-col gap-8">
-        <section className={cn(cardClass(), ENTER, "space-y-4")}>
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="space-y-1">
-              <h2 className="text-lg font-semibold">
-                {cancelled
-                  ? "Class cancelled"
-                  : past
-                    ? "Booking closed"
-                    : booked
-                      ? provisional
-                        ? "Waiting for approval"
-                        : "You're booked"
-                      : "Book your place"}
-              </h2>
-              <p className="text-muted-foreground text-sm">
-                {cancelled
-                  ? "This class will not take place. Choose another session from the schedule."
-                  : past
-                    ? `${refusal ?? "This class has started"}.`
-                    : provisional
-                      ? "Your booking is saved. Your gym still needs to approve it."
-                      : booked
-                        ? "Cancel your booking if your plans change."
-                        : cap.isOver
-                          ? "This class looks full. Your gym still allows bookings."
-                          : `${cap.label} · ${c.durationMinutes} min`}
-              </p>
-            </div>
-            {!cancelled &&
-              !past &&
-              (booked ? (
-                <Button
-                  variant="outline"
-                  busy={busy}
-                  disabled={busy}
-                  onClick={() => cancel.mutate({ classId })}
-                >
-                  Cancel booking
-                </Button>
-              ) : cap.isOver ? (
-                <ConfirmDialog
-                  title="This class looks full"
-                  description="Your gym manages the room, so you can still book it."
-                  confirmLabel="Book anyway"
-                  variant="primary"
-                  onConfirm={() => book.mutate({ classId })}
-                  trigger={
-                    <Button
-                      variant="secondary"
-                      busy={busy}
-                      disabled={busy || !!lockedMessage || !bookable.ok}
-                    >
-                      Book class
-                    </Button>
-                  }
-                />
-              ) : (
-                <Button
-                  busy={busy}
-                  disabled={busy || !!lockedMessage || !bookable.ok}
-                  onClick={() => book.mutate({ classId })}
-                >
-                  Book class
-                </Button>
-              ))}
-          </div>
-          {!cancelled && !past && !booked && lockedMessage && (
-            <p role="status" className="border-border border-t pt-4 text-sm">
-              {lockedMessage}
+        {canRunOrganization && searchParams.get("accessPerson") && (
+          <section className={cn(cardClass(), ENTER, "space-y-2")}>
+            <h2 className="font-semibold">Access needs action</h2>
+            <p className="text-sm">
+              {searchParams.get("accessPerson")}:{" "}
+              {searchParams.get("accessReason") === "payment-declined"
+                ? "Their payment was declined. Confirm it from Needs action to restore access."
+                : searchParams.get("accessReason") === "suspended"
+                  ? "Access is paused. Restore it from the person profile."
+                  : searchParams.get("accessReason") === "membership-inactive"
+                    ? "Their membership is paused or ended. Restore it from the person profile."
+                    : "No active membership covers this branch. Give them a covering membership from the person profile."}
             </p>
-          )}
-        </section>
+          </section>
+        )}
+        {!canRunOrganization && (
+          <section className={cn(cardClass(), ENTER, "space-y-4")}>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="space-y-1">
+                <h2 className="text-lg font-semibold">
+                  {cancelled
+                    ? "Class cancelled"
+                    : past
+                      ? "Booking closed"
+                      : booked
+                        ? provisional
+                          ? "Waiting for approval"
+                          : "You're booked"
+                        : "Book your place"}
+                </h2>
+                <p className="text-muted-foreground text-sm">
+                  {cancelled
+                    ? "This class will not take place. Choose another session from the schedule."
+                    : past
+                      ? `${refusal ?? "This class has started"}.`
+                      : provisional
+                        ? "Your booking is saved. Your gym still needs to approve it."
+                        : booked
+                          ? "Cancel your booking if your plans change."
+                          : cap.isOver
+                            ? "This class looks full. Your gym still allows bookings."
+                            : `${cap.label} · ${c.durationMinutes} min`}
+                </p>
+              </div>
+              {!cancelled &&
+                !past &&
+                (booked ? (
+                  <Button
+                    variant="outline"
+                    busy={busy}
+                    disabled={busy}
+                    onClick={() => cancel.mutate({ classId })}
+                  >
+                    Cancel booking
+                  </Button>
+                ) : cap.isOver ? (
+                  <ConfirmDialog
+                    title="This class looks full"
+                    description="Your gym manages the room, so you can still book it."
+                    confirmLabel="Book anyway"
+                    variant="primary"
+                    onConfirm={() => book.mutate({ classId })}
+                    trigger={
+                      <Button
+                        variant="secondary"
+                        busy={busy}
+                        disabled={busy || !!lockedMessage || !bookable.ok}
+                      >
+                        Book class
+                      </Button>
+                    }
+                  />
+                ) : (
+                  <Button
+                    busy={busy}
+                    disabled={busy || !!lockedMessage || !bookable.ok}
+                    onClick={() => book.mutate({ classId })}
+                  >
+                    Book class
+                  </Button>
+                ))}
+            </div>
+            {!cancelled && !past && !booked && lockedMessage && (
+              <p role="status" className="border-border border-t pt-4 text-sm">
+                {lockedMessage}
+              </p>
+            )}
+          </section>
+        )}
 
         <section className={cn(ENTER, "space-y-4 delay-100")}>
           <SectionHeading>Class details</SectionHeading>
@@ -193,7 +218,6 @@ export function ClassDetail({ classId }: { classId: string }) {
 
         <section className={cn(ENTER, "space-y-4 delay-200")}>
           <SectionHeading>Who's booked</SectionHeading>
-          <Attendees classId={classId} booked={booked && !cancelled} />
         </section>
       </div>
     </>
@@ -227,41 +251,6 @@ function Detail({
           </span>
         )}
       </dd>
-    </div>
-  );
-}
-
-function Attendees({ classId, booked }: { classId: string; booked: boolean }) {
-  const trpc = useTRPC();
-  const view = useQuery(trpc.class.attendees.queryOptions({ id: classId }));
-
-  if (view.isPending) return <SkeletonCard lines={2} />;
-  if (view.isError) {
-    return <ErrorState label="who's in" onRetry={() => void view.refetch()} />;
-  }
-
-  const { names, othersCount, namesHidden } = view.data;
-  if (names.length === 0 && othersCount === 0) {
-    return (
-      <EmptyState title={booked ? "Just you so far" : "No bookings yet"} />
-    );
-  }
-
-  return (
-    <div className={cardClass()}>
-      {names.length > 0 && <p className="text-sm">{names.join(", ")}</p>}
-      {othersCount > 0 && (
-        <p className="text-muted-foreground mt-1 text-sm">
-          {names.length > 0
-            ? `+${othersCount} others`
-            : `${othersCount} booked`}
-        </p>
-      )}
-      {namesHidden && (
-        <p className="text-muted-foreground mt-1 text-sm">
-          Names show once your gym approves you.
-        </p>
-      )}
     </div>
   );
 }

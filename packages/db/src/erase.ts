@@ -1,32 +1,34 @@
-import { and, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
 
 import type { DbExec } from "./client";
 import type { TenantTx } from "./tenant";
 import {
   accessAssignment,
   accessAssignmentChange,
+  attendanceCorrection,
   classInstance,
   classParticipation,
   entityMembership,
   member,
-  memberDues,
   memberNote,
   memberRank,
   memberReferral,
   memberReferralAudit,
+  membershipAccessHold,
   membershipMonth,
-  membershipPurchase,
   notification,
-  paymentClaim,
+  notificationRecipient,
+  person,
+  rankCorrection,
   rankPromotion,
   user,
 } from "./schema";
 
-export type EraseExec = DbExec | TenantTx;
+type EraseExec = DbExec | TenantTx;
 
-export type EraseReport = Record<string, number>;
+type EraseReport = Record<string, number>;
 
-export interface EraseMemberInput {
+interface EraseMemberInput {
   academyId: string;
   memberId: string;
   userId: string;
@@ -66,6 +68,36 @@ export async function eraseMemberData(
     report[label] = (await run()).rowCount ?? 0;
   };
 
+  const linkedPeople = await exec
+    .select({ id: person.id })
+    .from(person)
+    .where(eq(person.accountUserId, userId));
+  const subjectIds = [userId, ...linkedPeople.map((row) => row.id)];
+  const notificationRecipientIdentity =
+    linkedPeople.length === 0
+      ? eq(notificationRecipient.userId, userId)
+      : or(
+          eq(notificationRecipient.userId, userId),
+          inArray(
+            notificationRecipient.personId,
+            linkedPeople.map((row) => row.id),
+          ),
+        );
+
+  await del("attendance_correction", () =>
+    exec
+      .delete(attendanceCorrection)
+      .where(
+        and(
+          eq(attendanceCorrection.academyId, academyId),
+          or(
+            eq(attendanceCorrection.actorId, userId),
+            inArray(attendanceCorrection.subjectId, subjectIds),
+          ),
+        ),
+      ),
+  );
+
   await del("class_participation", () =>
     exec
       .delete(classParticipation)
@@ -73,16 +105,6 @@ export async function eraseMemberData(
         and(
           eq(classParticipation.academyId, academyId),
           eq(classParticipation.studentId, userId),
-        ),
-      ),
-  );
-  await del("payment_claim", () =>
-    exec
-      .delete(paymentClaim)
-      .where(
-        and(
-          eq(paymentClaim.academyId, academyId),
-          eq(paymentClaim.memberId, memberId),
         ),
       ),
   );
@@ -106,16 +128,6 @@ export async function eraseMemberData(
         ),
       ),
   );
-  await del("member_dues", () =>
-    exec
-      .delete(memberDues)
-      .where(
-        and(
-          eq(memberDues.academyId, academyId),
-          eq(memberDues.memberId, memberId),
-        ),
-      ),
-  );
   await del("rank_promotion", () =>
     exec
       .delete(rankPromotion)
@@ -123,6 +135,16 @@ export async function eraseMemberData(
         and(
           eq(rankPromotion.academyId, academyId),
           eq(rankPromotion.memberId, memberId),
+        ),
+      ),
+  );
+  await del("rank_correction", () =>
+    exec
+      .delete(rankCorrection)
+      .where(
+        and(
+          eq(rankCorrection.academyId, academyId),
+          eq(rankCorrection.memberId, memberId),
         ),
       ),
   );
@@ -153,6 +175,16 @@ export async function eraseMemberData(
         and(
           eq(notification.academyId, academyId),
           eq(notification.userId, userId),
+        ),
+      ),
+  );
+  await del("notification_recipient", () =>
+    exec
+      .delete(notificationRecipient)
+      .where(
+        and(
+          eq(notificationRecipient.academyId, academyId),
+          notificationRecipientIdentity,
         ),
       ),
   );
@@ -244,17 +276,25 @@ export async function deleteEntityMembership(
 export async function deleteOrganizationAssignments(
   exec: DbExec,
   organizationId: string,
-  userId: string,
+  personId: string,
 ): Promise<number> {
-  await exec
-    .delete(membershipPurchase)
-    .where(
-      and(
-        eq(membershipPurchase.organizationId, organizationId),
-        eq(membershipPurchase.userId, userId),
+  await exec.delete(membershipAccessHold).where(
+    and(
+      eq(membershipAccessHold.organizationId, organizationId),
+      inArray(
+        membershipAccessHold.assignmentId,
+        exec
+          .select({ id: accessAssignment.id })
+          .from(accessAssignment)
+          .where(
+            and(
+              eq(accessAssignment.organizationId, organizationId),
+              eq(accessAssignment.personId, personId),
+            ),
+          ),
       ),
-    );
-
+    ),
+  );
   // The months hang off the assignment with a foreign key, so they go first or
   // the delete below is refused. `membership_month_audit` deliberately has no
   // such key and is NOT deleted: who marked which month paid outlives the
@@ -270,7 +310,7 @@ export async function deleteOrganizationAssignments(
           .where(
             and(
               eq(accessAssignment.organizationId, organizationId),
-              eq(accessAssignment.userId, userId),
+              eq(accessAssignment.personId, personId),
             ),
           ),
       ),
@@ -285,7 +325,7 @@ export async function deleteOrganizationAssignments(
     .where(
       and(
         eq(accessAssignmentChange.organizationId, organizationId),
-        eq(accessAssignmentChange.userId, userId),
+        eq(accessAssignmentChange.personId, personId),
       ),
     );
 
@@ -294,7 +334,7 @@ export async function deleteOrganizationAssignments(
     .where(
       and(
         eq(accessAssignment.organizationId, organizationId),
-        eq(accessAssignment.userId, userId),
+        eq(accessAssignment.personId, personId),
       ),
     )
     .returning({ id: accessAssignment.id });
@@ -306,6 +346,15 @@ export async function deleteMemberRow(
   organizationId: string,
   userId: string,
 ): Promise<void> {
+  await exec
+    .update(person)
+    .set({ accountUserId: null })
+    .where(
+      and(
+        eq(person.organizationId, organizationId),
+        eq(person.accountUserId, userId),
+      ),
+    );
   await exec
     .delete(member)
     .where(

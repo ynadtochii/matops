@@ -4,12 +4,15 @@ import { TRPCError } from "@trpc/server";
 import type { SQL, TenantTx } from "@matops/db";
 import {
   and,
+  bumpScheduleRevision,
   desc,
   eq,
   eventRole,
   getTableColumns,
   gt,
+  inArray,
   isNull,
+  lockAndReadScheduleRevision,
   lockBranchSchedule,
   materializeTemplate,
   overlappingSessions,
@@ -31,6 +34,7 @@ import {
 } from "@matops/domain";
 import {
   CreateClassTemplateSchema,
+  RebuildScheduleSchema,
   TemplateIdSchema,
   TemplateStatusSchema,
   UpdateClassTemplateSchema,
@@ -38,7 +42,9 @@ import {
 
 import { requireInstructor } from "../members";
 import { ROOM_TAKEN, TEMPLATE_NOT_FOUND } from "../messages";
+import { notifyClassCancelled, notifyClassChanged } from "../notify";
 import { branchManagerProcedure, staffProcedure } from "../trpc";
+import { notifyBooked } from "./class";
 
 /**
  * Recurring class templates (spec O3, docs/issues/08, 16). Staff-only CRUD.
@@ -132,6 +138,7 @@ export const templateRouter = {
   create: staffProcedure
     .input(CreateClassTemplateSchema)
     .mutation(async ({ ctx, input }) => {
+      await lockAndReadScheduleRevision(ctx.db, ctx.academyId);
       const instructorId = instructorForNewSession(
         ctx.entity.type,
         input.instructorId,
@@ -161,7 +168,10 @@ export const templateRouter = {
         .returning();
       // Lazy materialization (docs/issues/16): fill the near-term classes in the
       // same request/tx (RLS-scoped to this academy) so they appear immediately.
-      if (row) await fillOrRefuse(ctx.db, row);
+      if (row) {
+        await fillOrRefuse(ctx.db, row);
+        await bumpScheduleRevision(ctx.db, ctx.academyId);
+      }
       ctx.afterCommit(async (exec) => {
         const event = {
           organizationId: ctx.organizationId,
@@ -186,6 +196,7 @@ export const templateRouter = {
   update: staffProcedure
     .input(UpdateClassTemplateSchema)
     .mutation(async ({ ctx, input }) => {
+      await lockAndReadScheduleRevision(ctx.db, ctx.academyId);
       const [prev] = await ctx.db
         .select()
         .from(classTemplate)
@@ -252,15 +263,43 @@ export const templateRouter = {
         // with ON DELETE no action, so a hard delete fails the moment one
         // student has booked, and the owner could never move that template
         // again.
-        await ctx.db
+        const affected = await ctx.db
           .update(classInstance)
           .set({ status: "cancelled" })
-          .where(futureScheduled);
+          .where(futureScheduled)
+          .returning({ id: classInstance.id });
         await fillOrRefuse(
           ctx.db,
           { ...row, generatedUntil: null },
           { now, reviveCancelled: true },
         );
+        if (affected.length > 0) {
+          const cancelled = await ctx.db
+            .select({
+              id: classInstance.id,
+              title: classInstance.title,
+              startsAt: classInstance.startsAt,
+              updatedAt: classInstance.updatedAt,
+            })
+            .from(classInstance)
+            .where(
+              and(
+                inArray(
+                  classInstance.id,
+                  affected.map((item) => item.id),
+                ),
+                eq(classInstance.status, "cancelled"),
+              ),
+            );
+          for (const item of cancelled) {
+            await notifyBooked(
+              ctx,
+              item,
+              "class_cancelled",
+              notifyClassCancelled,
+            );
+          }
+        }
       } else if (strategy === "update-in-place") {
         if (row.durationMinutes !== prev.durationMinutes) {
           await assertRoomFreeAfterEdit(
@@ -269,7 +308,7 @@ export const templateRouter = {
             futureScheduled,
           );
         }
-        await ctx.db
+        const affected = await ctx.db
           .update(classInstance)
           .set({
             title: row.title,
@@ -280,8 +319,20 @@ export const templateRouter = {
             capacity: row.capacity,
             publicBookable: row.publicBookable,
           })
-          .where(futureScheduled);
+          .where(futureScheduled)
+          .returning({
+            id: classInstance.id,
+            title: classInstance.title,
+            startsAt: classInstance.startsAt,
+            updatedAt: classInstance.updatedAt,
+          });
+        if (row.instructorId !== prev.instructorId) {
+          for (const item of affected) {
+            await notifyBooked(ctx, item, "class_changed", notifyClassChanged);
+          }
+        }
       }
+      await bumpScheduleRevision(ctx.db, ctx.academyId);
       return row;
     }),
 
@@ -289,6 +340,7 @@ export const templateRouter = {
   setStatus: staffProcedure
     .input(TemplateStatusSchema)
     .mutation(async ({ ctx, input }) => {
+      await lockAndReadScheduleRevision(ctx.db, ctx.academyId);
       const [row] = await ctx.db
         .update(classTemplate)
         .set({ status: input.status })
@@ -304,6 +356,7 @@ export const templateRouter = {
       }
       // Resuming fills the horizon at once so classes reappear immediately (O2).
       if (row.status === "active") await fillOrRefuse(ctx.db, row);
+      await bumpScheduleRevision(ctx.db, ctx.academyId);
       return row;
     }),
 
@@ -315,6 +368,7 @@ export const templateRouter = {
   delete: staffProcedure
     .input(TemplateIdSchema)
     .mutation(async ({ ctx, input }) => {
+      await lockAndReadScheduleRevision(ctx.db, ctx.academyId);
       const now = new Date();
       const [row] = await ctx.db
         .update(classTemplate)
@@ -329,7 +383,7 @@ export const templateRouter = {
           message: TEMPLATE_NOT_FOUND,
         });
       }
-      await ctx.db
+      const cancelled = await ctx.db
         .update(classInstance)
         .set({ status: "cancelled" })
         .where(
@@ -339,8 +393,17 @@ export const templateRouter = {
             isNull(classInstance.deletedAt),
             gt(classInstance.startsAt, now),
           ),
-        );
-      // TODO(phase 4): notify booked students of each cancelled class.
+        )
+        .returning({
+          id: classInstance.id,
+          title: classInstance.title,
+          startsAt: classInstance.startsAt,
+          updatedAt: classInstance.updatedAt,
+        });
+      for (const item of cancelled) {
+        await notifyBooked(ctx, item, "class_cancelled", notifyClassCancelled);
+      }
+      await bumpScheduleRevision(ctx.db, ctx.academyId);
       return { ok: true as const };
     }),
 
@@ -349,8 +412,31 @@ export const templateRouter = {
    * before the owner commits to it. Reads only.
    */
   rebuildPreview: branchManagerProcedure.query(async ({ ctx }) => {
-    const { ids, bookings } = await planRebuild(ctx.db);
-    return { toDelete: ids.length, bookingsAffected: bookings };
+    const version = await lockAndReadScheduleRevision(ctx.db, ctx.academyId);
+    const plan = await planRebuild(ctx.db);
+    return { ...plan, version };
+  }),
+
+  extend: branchManagerProcedure.mutation(async ({ ctx }) => {
+    await lockAndReadScheduleRevision(ctx.db, ctx.academyId);
+    const templates = await ctx.db
+      .select()
+      .from(classTemplate)
+      .where(
+        and(
+          eq(classTemplate.status, "active"),
+          isNull(classTemplate.deletedAt),
+        ),
+      );
+    let created = 0;
+    for (const template of templates) {
+      created += await fillOrRefuse(ctx.db, template);
+    }
+    if (templates.length > 0) {
+      await bumpScheduleRevision(ctx.db, ctx.academyId);
+    }
+    const plan = await planRebuild(ctx.db);
+    return { created, generatedThrough: plan.generatedThrough };
   }),
 
   /**
@@ -359,7 +445,30 @@ export const templateRouter = {
    * everyone's calendar. Past classes and their attendance are never touched,
    * and a one-off the owner entered by hand survives.
    */
-  rebuild: branchManagerProcedure.mutation(({ ctx }) =>
-    rebuildSchedule(ctx.db),
-  ),
+  rebuild: branchManagerProcedure
+    .input(RebuildScheduleSchema)
+    .mutation(async ({ ctx, input }) => {
+      const version = await lockAndReadScheduleRevision(ctx.db, ctx.academyId);
+      if (version !== input.version) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "The schedule changed. Review the rebuild again.",
+        });
+      }
+      try {
+        const result = await rebuildSchedule(ctx.db);
+        if (result.cancelled + result.created > 0 || result.generatedThrough) {
+          await bumpScheduleRevision(ctx.db, ctx.academyId);
+        }
+        return result;
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message.includes("active bookings")
+        ) {
+          throw new TRPCError({ code: "CONFLICT", message: error.message });
+        }
+        throw error;
+      }
+    }),
 } satisfies TRPCRouterRecord;

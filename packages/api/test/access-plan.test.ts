@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createEntity } from "@matops/db";
 
 import type { Harness } from "./helpers";
-import { harness, rejectionCode, seedAcademies } from "./helpers";
+import { harness, personId, rejectionCode, seedAcademies } from "./helpers";
 
 const ORG = "acad_plans";
 const OTHER = "acad_plans_other";
@@ -18,6 +18,12 @@ describe("the membership plan catalog", () => {
   let foreignEntity: string;
 
   const owner = () => h.as(OWNER, ORG);
+
+  const planById = async (id: string) => {
+    const found = (await owner().accessPlan.list()).find((p) => p.id === id);
+    if (!found) throw new Error(`no plan ${id}`);
+    return found;
+  };
 
   beforeAll(async () => {
     h = await harness();
@@ -66,7 +72,7 @@ describe("the membership plan catalog", () => {
       name: "BJJ + Gym",
       entityIds: [ORG, gym],
     });
-    const one = await owner().accessPlan.get({ id: made.id });
+    const one = await planById(made.id);
     expect([one.name, one.entityIds.sort(), one.archived]).toEqual([
       "BJJ + Gym",
       [ORG, gym].sort(),
@@ -104,7 +110,7 @@ describe("the membership plan catalog", () => {
     });
     expect([seen.before, seen.after]).toEqual([[ORG], [ORG, gym].sort()]);
 
-    const unchanged = await owner().accessPlan.get({ id: made.id });
+    const unchanged = await planById(made.id);
     expect(unchanged.entityIds).toEqual([ORG]);
   });
 
@@ -114,9 +120,7 @@ describe("the membership plan catalog", () => {
       entityIds: [ORG, gym],
     });
     await owner().accessPlan.setCoverage({ id: made.id, entityIds: [gym] });
-    expect((await owner().accessPlan.get({ id: made.id })).entityIds).toEqual([
-      gym,
-    ]);
+    expect((await planById(made.id)).entityIds).toEqual([gym]);
   });
 
   it("freezes an archived plan rather than only hiding it", async () => {
@@ -126,12 +130,7 @@ describe("the membership plan catalog", () => {
     });
     await owner().accessPlan.archive({ id: made.id, archived: true });
 
-    expect((await owner().accessPlan.get({ id: made.id })).archived).toBe(true);
-    expect(
-      await rejectionCode(
-        owner().accessPlan.rename({ id: made.id, name: "Renamed" }),
-      ),
-    ).toBe("CONFLICT");
+    expect((await planById(made.id)).archived).toBe(true);
     expect(
       await rejectionCode(
         owner().accessPlan.setCoverage({ id: made.id, entityIds: [gym] }),
@@ -146,19 +145,19 @@ describe("the membership plan catalog", () => {
     });
     await owner().accessPlan.archive({ id: made.id, archived: true });
     await owner().accessPlan.archive({ id: made.id, archived: false });
-    await owner().accessPlan.rename({ id: made.id, name: "Renamed" });
-    expect((await owner().accessPlan.get({ id: made.id })).name).toBe(
-      "Renamed",
-    );
+    await owner().accessPlan.setCoverage({ id: made.id, entityIds: [gym] });
+    expect((await planById(made.id)).entityIds).toEqual([gym]);
   });
 
   it("gives a foreign plan id the same answer as a missing one", async () => {
     const theirs = await h
       .as(OUTSIDER, OTHER)
       .accessPlan.create({ name: "Not yours", entityIds: [OTHER] });
-    expect(await rejectionCode(owner().accessPlan.get({ id: theirs.id }))).toBe(
-      "NOT_FOUND",
-    );
+    expect(
+      await rejectionCode(
+        owner().accessPlan.setCoverage({ id: theirs.id, entityIds: [ORG] }),
+      ),
+    ).toBe("NOT_FOUND");
   });
 
   it("refuses the same branch twice in one plan", async () => {
@@ -316,7 +315,7 @@ describe("what a plan costs, and what it cost", () => {
     // it names, and this month still says what they were asked for.
     const board = await owner().accessPlan.monthBoard();
     const row = board.rows.find(
-      (r) => r.userId === MEMBER && r.planName === "Rising",
+      (r) => r.userId === personId(PRICED, MEMBER) && r.planName === "Rising",
     );
     expect(row?.amount).toEqual({ priceMinor: 5000, currency: "EUR" });
 
@@ -432,7 +431,7 @@ describe("moving several people at once", () => {
     });
     expect(saved.checked).toBe(2);
     expect(saved.enrolled.map((e) => e.userId).sort()).toEqual(
-      [ANA, BEA].sort(),
+      [personId(BULK, ANA), personId(BULK, BEA)].sort(),
     );
     expect([saved.failed, saved.incomplete]).toEqual([[], false]);
 
@@ -450,8 +449,12 @@ describe("moving several people at once", () => {
     });
   });
 
+  const coverageOf = async () =>
+    (await owner().accessPlan.list()).find((p) => p.id === planId)?.entityIds ??
+    [];
+
   it("refuses a save computed against a coverage that has since moved", async () => {
-    const held = (await owner().accessPlan.get({ id: planId })).entityIds;
+    const held = await coverageOf();
     const seen = await owner().accessPlan.coveragePreview({
       id: planId,
       entityIds: [BULK],
@@ -468,9 +471,7 @@ describe("moving several people at once", () => {
         }),
       ),
     ).toBe("CONFLICT");
-    expect((await owner().accessPlan.get({ id: planId })).entityIds).toEqual(
-      held,
-    );
+    expect(await coverageOf()).toEqual(held);
   });
 
   it("reports nobody uncovered once a branch runs on memberships", async () => {

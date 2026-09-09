@@ -343,8 +343,8 @@ function Summary({
       <Num>{board.length}</Num>{" "}
       {board.length === 1 ? "member has" : "members have"} brought{" "}
       <Num>{credited}</Num> {credited === 1 ? "student" : "students"} in. Those
-      students have paid <Num>{moneyText(month)}</Num> this month,{" "}
-      <Num>{moneyText(lifetime)}</Num> in total.
+      students have <Num>{moneyText(month)}</Num> confirmed for this agreement
+      month, <Num>{moneyText(lifetime)}</Num> across all confirmed months.
     </p>
   );
 }
@@ -373,13 +373,15 @@ function ReferrerCard({
             <span className="text-muted-foreground text-xs">{entry.role}</span>
           )}
           <span className="text-muted-foreground ml-auto font-mono text-xs tabular-nums">
-            {moneyText(entry.monthRevenue)} this month ·{" "}
-            {moneyText(entry.lifetimeRevenue)} total
+            {moneyText(entry.monthRevenue)} confirmed this month
           </span>
         </div>
-        <ul className="flex flex-wrap gap-1.5">
+        <ul className="flex flex-col gap-2">
           {entry.students.map((student) => (
-            <li key={student.memberId}>
+            <li
+              key={student.memberId}
+              className="flex flex-wrap items-center gap-2"
+            >
               <button
                 type="button"
                 onClick={() => onEdit(student.memberId)}
@@ -392,6 +394,17 @@ function ReferrerCard({
               >
                 <PersonLabel student={student} />
               </button>
+              <span className="text-muted-foreground text-xs">
+                Joined {dateTimeMediumFmt.format(new Date(student.joinedAt))}
+              </span>
+              {student.confirmedMonths.map((month) => (
+                <span key={month.id} className="text-muted-foreground text-xs">
+                  {month.month}:{" "}
+                  {formatMoney(month.amountMinor, month.currency)} confirmed by{" "}
+                  {month.confirmedByName} on{" "}
+                  {dateTimeMediumFmt.format(new Date(month.confirmedAt))}
+                </span>
+              ))}
             </li>
           ))}
         </ul>

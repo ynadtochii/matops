@@ -18,30 +18,5 @@ export const PublicBookingSchema = z.object({
   consent: z.literal(true, "Consent is required to take a booking"),
   source: z.enum(LEAD_SOURCES).default("api"),
 });
-export type PublicBookingInput = z.infer<typeof PublicBookingSchema>;
-
-/** The owner's optional CORS allowlist (spec O6). Empty means any origin. */
-export const PublicApiOriginsSchema = z.object({
-  origins: z
-    .array(
-      z
-        .string()
-        .trim()
-        .max(200)
-        .refine((v) => {
-          try {
-            const url = new URL(v);
-            return (
-              (url.protocol === "https:" || url.protocol === "http:") &&
-              url.origin === v
-            );
-          } catch {
-            return false;
-          }
-        }, "Use a full origin, like https://yourgym.com"),
-    )
-    .max(10),
-});
-export type PublicApiOriginsInput = z.infer<typeof PublicApiOriginsSchema>;
 
 export const PublicBookingEnabledSchema = z.object({ enabled: z.boolean() });

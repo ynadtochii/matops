@@ -1,7 +1,7 @@
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
-import { and, asc, eq, gte, isNull, lt } from "@matops/db";
+import { and, asc, eq, gte, isNull, lt, or, sql } from "@matops/db";
 import { classInstance, classParticipation } from "@matops/db/schema";
 import {
   bookingTier,
@@ -66,14 +66,13 @@ export const checkinRouter = {
         });
       }
 
-      const tier = bookingTier(ctx.membership);
       const me = ctx.session.user.id;
       const now = new Date();
 
       const gate = await bookingGate(ctx.db, {
         entity: ctx.entity,
         membership: ctx.membership,
-        userId: me,
+        accountUserId: me,
         sessionAt: cls.startsAt,
       });
       if (gate.locked) {
@@ -82,7 +81,9 @@ export const checkinRouter = {
           message: gate.message ?? "Booking is locked for you.",
         });
       }
-
+      const tier = gate.provisional
+        ? ("provisional" as const)
+        : bookingTier(ctx.membership);
       // Read the caller's current row (if any) to know whether this check-in is a
       // NEW booking transition — that decides the confirmed-count increment. A
       // single user tapping once; a rare double-tap self-race is corrected by the
@@ -93,7 +94,15 @@ export const checkinRouter = {
         .where(
           and(
             eq(classParticipation.classId, input.classId),
-            eq(classParticipation.studentId, me),
+            or(
+              ctx.membership.personId
+                ? eq(classParticipation.personId, ctx.membership.personId)
+                : undefined,
+              and(
+                isNull(classParticipation.personId),
+                eq(classParticipation.studentId, me),
+              ),
+            ),
           ),
         );
       const willBook = !existing || existing.bookingStatus === "cancelled";
@@ -103,6 +112,10 @@ export const checkinRouter = {
         .values({
           academyId: ctx.academyId,
           classId: input.classId,
+          personOrganizationId: ctx.membership.personId
+            ? ctx.organizationId
+            : null,
+          personId: ctx.membership.personId,
           studentId: me,
           bookingStatus: "booked",
           bookingTier: tier,
@@ -111,7 +124,12 @@ export const checkinRouter = {
           cancelledAt: null,
         })
         .onConflictDoUpdate({
-          target: [classParticipation.classId, classParticipation.studentId],
+          target: ctx.membership.personId
+            ? [classParticipation.classId, classParticipation.personId]
+            : [classParticipation.classId, classParticipation.studentId],
+          targetWhere: ctx.membership.personId
+            ? sql`person_id is not null`
+            : undefined,
           // Always mark present; only (re)book when they weren't already booked
           // (a cancelled row flips back; a walk-in `none` / active `booked` stays).
           set: willBook

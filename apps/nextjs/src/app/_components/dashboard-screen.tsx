@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
-import type { DisciplineTone } from "@matops/domain";
 import {
   capacityDisplay,
   classEndsAt,
@@ -13,14 +12,10 @@ import {
   dayPlan,
   daysSince,
   dayWindow,
-  disciplineTone,
-  formatMoney,
-  groupMoneyByCurrency,
   isBjjAcademy,
   isFirstRun,
   isStaff as isStaffOf,
   leadQueues,
-  needsAttendance,
   rosterSummary,
   runsBranch,
   startOfDay,
@@ -45,21 +40,13 @@ import {
   disciplineDot,
   DriftBadge,
   ENTER,
-  Eyebrow,
   Panel,
   panelCell,
   PanelNotice,
   RESOLVE,
   Section,
-  Stat,
 } from "./primitives";
-import {
-  Bar,
-  SkeletonDayRail,
-  SkeletonInsights,
-  SkeletonQueue,
-  SkeletonRows,
-} from "./skeletons";
+import { Bar, SkeletonDayRail, SkeletonQueue, SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 import { StudentScreen } from "./student-screen";
 import { useMinuteClock } from "./use-clock";
@@ -81,20 +68,6 @@ interface QueueItem {
  * What the overdue members owe in total, but only when a single currency is in
  * play. Two currencies are never added together (the rule spec O9 already sets).
  */
-function outstanding(
-  rows: { dues: { priceMinor: number; currency: string } | null }[],
-): string | null {
-  const totals = groupMoneyByCurrency(
-    rows.flatMap((r) =>
-      r.dues
-        ? [{ amountMinor: r.dues.priceMinor, currency: r.dues.currency }]
-        : [],
-    ),
-  );
-  const only = totals.length === 1 ? totals[0] : undefined;
-  return only ? `${formatMoney(only.amountMinor, only.currency)} owed` : null;
-}
-
 /**
  * O1 Dashboard — the "run the week" command center (ticket 03). A "needs you"
  * action queue (every item is a blocker that can be driven to zero), a couple of
@@ -126,16 +99,20 @@ export function DashboardScreen() {
     ...trpc.class.week.queryOptions(dashboardWeekWindow(now)),
     enabled: isStaff,
   });
+  const attendance = useQuery({
+    ...trpc.attendance.reviewQueue.queryOptions({
+      status: "needs_review",
+      offset: 0,
+    }),
+    enabled: isStaff,
+    refetchInterval: 60_000,
+  });
   const memberList = useQuery({
     ...trpc.membership.members.queryOptions({ audience: "all" }),
     enabled: isStaff,
   });
   const leads = useQuery({
     ...trpc.dropIn.list.queryOptions(),
-    enabled: isOwner,
-  });
-  const claims = useQuery({
-    ...trpc.payments.claims.queryOptions(),
     enabled: isOwner,
   });
   const dash = useQuery({
@@ -159,10 +136,14 @@ export function DashboardScreen() {
     pendingStudents: pendingCount,
     pendingCoaches,
     active: activeCount,
-    overdue,
   } = rosterSummary(members);
   const weekCount = upcomingClassCount(weekRows, today);
-  const unmarked = weekRows.filter((r) => needsAttendance(r, now));
+  const unmarked = weekRows.filter(
+    (r) =>
+      r.status !== "cancelled" &&
+      classEndsAt(r) <= now.getTime() &&
+      !r.attendanceReviewed,
+  );
   const unmarkedIds = new Set(unmarked.map((r) => r.id));
   const { newLeads, trainedNotJoined } = leadQueues(
     (leads.data ?? []).map((l) => ({
@@ -179,8 +160,8 @@ export function DashboardScreen() {
     {
       key: "attendance",
       href: href("/attendance"),
-      count: unmarked.length,
-      label: "Classes to mark",
+      count: attendance.data?.needsReview ?? 0,
+      label: "Classes to review",
     },
     {
       key: "approvals",
@@ -192,23 +173,10 @@ export function DashboardScreen() {
       ? []
       : [
           {
-            key: "claims",
-            href: href("/payments"),
-            count: claims.data?.length ?? 0,
-            label: "Payments to confirm",
-          },
-          {
             key: "coach-requests",
             href: href("/coaches"),
             count: pendingCoaches,
             label: "Coach requests",
-          },
-          {
-            key: "overdue",
-            href: href("/members?tab=members&filter=overdue"),
-            count: overdue.length,
-            label: "Overdue members",
-            sub: outstanding(overdue),
           },
           {
             key: "leads",
@@ -229,8 +197,9 @@ export function DashboardScreen() {
   // "counting", a bare 0 reads as "nothing to do".
   const queueLoading =
     week.isPending ||
+    attendance.isPending ||
     memberList.isPending ||
-    (isOwner && (leads.isPending || claims.isPending));
+    (isOwner && leads.isPending);
   const numbersLoading = week.isPending || memberList.isPending;
   const firstRun = isOwner && isFirstRun(activeCount, weekCount);
 
@@ -307,10 +276,18 @@ export function DashboardScreen() {
                 )}
               </PanelNotice>
             ) : queue.length === 0 ? (
-              <PanelNotice title="All clear.">
-                {isOwner
-                  ? "Every class is marked, everyone is approved, every payment is settled."
-                  : "Every class is marked and everyone is approved."}
+              <PanelNotice
+                title={
+                  attendance.isError
+                    ? "Attendance could not be checked."
+                    : "All clear."
+                }
+              >
+                {attendance.isError
+                  ? "Retry below to check past classes."
+                  : isOwner
+                    ? "All past classes reviewed, everyone approved, and no payments waiting for confirmation."
+                    : "All past classes reviewed and everyone approved."}
               </PanelNotice>
             ) : (
               queue.map((i) => (
@@ -325,6 +302,20 @@ export function DashboardScreen() {
             )}
           </Panel>
         )}
+
+        {attendance.isError ? (
+          <ErrorState
+            label="attendance reviews"
+            onRetry={() => void attendance.refetch()}
+          />
+        ) : attendance.data?.needsReview === 0 ? (
+          <Link
+            href={href("/attendance")}
+            className="text-success mt-3 inline-block text-sm underline underline-offset-4"
+          >
+            All past classes reviewed
+          </Link>
+        ) : null}
 
         {/* Context, not readings — a caption under the panel, so the counts
             that need an action stay the only numbers competing for the eye. */}
@@ -417,32 +408,13 @@ export function DashboardScreen() {
                 </EmptyState>
               ) : (
                 <div className={cn("flex flex-col gap-2", RESOLVE)}>
-                  {dash.data.drifting.slice(0, 6).map((m) => (
+                  {dash.data.drifting.map((m) => (
                     <DriftRow key={m.memberId} m={m} today={today} />
                   ))}
                 </div>
               )}
             </Section>
           )}
-        </div>
-
-        <div className={cn("flex flex-col gap-10", ENTER, "delay-200")}>
-          {/* Insights — gym activity over the last 30 days */}
-          <Section label="Insights">
-            {dash.isPending ? (
-              <SkeletonInsights />
-            ) : dash.isError ? (
-              <ErrorState
-                label="gym insights"
-                onRetry={() => void dash.refetch()}
-              />
-            ) : (
-              <Insights
-                data={dash.data.insights}
-                revenue={dash.data.revenue ?? []}
-              />
-            )}
-          </Section>
         </div>
       </div>
     </div>
@@ -545,7 +517,7 @@ function DayRow({
       </span>
       {unmarked && (
         <span className="text-warning border-warning/40 shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium">
-          Unmarked
+          Needs review
         </span>
       )}
       {mine ? (
@@ -570,106 +542,7 @@ function DayRow({
 }
 
 type Dashboard = RouterOutputs["stats"]["dashboard"];
-type GymInsights = Dashboard["insights"];
-type BusiestClass = GymInsights["busiest"][number];
 type DriftMember = NonNullable<Dashboard["drifting"]>[number];
-
-/**
- * The health block: a handful of numbers, each carrying the baseline that gives
- * it meaning. Money leads for an owner and is absent for an instructor, who is
- * never shown payments. "Visits this month" is gone — a part-month count says
- * less than the weekly pulse, and its own baseline (last month) sits outside the
- * 30-day read this block is built on. The rate keeps no comparison because a
- * 30-day window has nothing to compare itself against. A currency shows up only
- * once the gym has confirmed money in it, so a gym that takes no payments here
- * sees no money row rather than a zero.
- */
-function Insights({
-  data,
-  revenue,
-}: {
-  data: GymInsights;
-  revenue: NonNullable<Dashboard["revenue"]>;
-}) {
-  return (
-    <div className={cn("flex flex-col gap-4", RESOLVE)}>
-      <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-1">
-        {revenue.map((m) => (
-          <Stat
-            key={m.currency}
-            value={formatMoney(m.amountMinor, m.currency)}
-            label="Confirmed this month"
-            delta={m.amountMinor - m.previousMinor}
-            deltaLabel="last month"
-            formatDelta={(size) => formatMoney(size, m.currency)}
-          />
-        ))}
-        <Stat
-          value={data.visitsThisWeek}
-          label="Visits this week"
-          delta={data.visitsThisWeek - data.visitsLastWeek}
-          deltaLabel="last week"
-        />
-        {data.newMembers && (
-          <Stat
-            value={data.newMembers.thisMonth}
-            label="New members this month"
-            delta={data.newMembers.thisMonth - data.newMembers.lastMonth}
-            deltaLabel="last month"
-          />
-        )}
-        {data.attendanceRate !== null && (
-          <Stat
-            value={`${Math.round(data.attendanceRate * 100)}%`}
-            label="Attendance rate · 30d"
-          />
-        )}
-      </div>
-      {data.busiest.length > 0 && (
-        <div className="flex flex-col gap-1">
-          <Eyebrow>Busiest classes · 30d</Eyebrow>
-          {data.busiest.slice(0, 3).map((b) => (
-            <BusiestRow
-              key={b.title}
-              row={b}
-              top={data.busiest[0]?.count ?? b.count}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/**
- * A class in the busiest list is drawn as a bar of its own share. Three bare
- * numbers made the reader do the arithmetic; the length says it at a glance.
- */
-const BAR_SKIN: Record<DisciplineTone, string> = {
-  gi: "bg-gi/20",
-  nogi: "bg-nogi/20",
-  other: "bg-muted",
-};
-
-function BusiestRow({ row, top }: { row: BusiestClass; top: number }) {
-  const share = top > 0 ? Math.max(row.count / top, 0.04) : 0;
-  return (
-    <div className="relative flex items-center justify-between gap-3 px-2.5 py-1.5 text-sm">
-      <span
-        aria-hidden
-        className={cn(
-          "absolute inset-y-0 left-0 rounded-[2px]",
-          BAR_SKIN[disciplineTone(row.discipline)],
-        )}
-        style={{ width: `${share * 100}%` }}
-      />
-      <span className="relative font-medium">{row.title}</span>
-      <span className="text-muted-foreground relative font-mono text-xs tabular-nums">
-        {row.count}
-      </span>
-    </div>
-  );
-}
 
 /** One "who's drifting" row — links to the member's detail (C.2). */
 function DriftRow({ m, today }: { m: DriftMember; today: Date }) {

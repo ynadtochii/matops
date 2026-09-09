@@ -65,7 +65,7 @@ describe("canBook", () => {
   const inDays = (n: number) =>
     new Date(now.getTime() + n * 24 * 60 * 60 * 1000);
 
-  it("allows anything inside the seven-day window the clients render", () => {
+  it("allows classes on the seven local dates the clients render", () => {
     expect(
       canBook(
         {
@@ -76,6 +76,9 @@ describe("canBook", () => {
         now,
       ),
     ).toEqual({ ok: true });
+  });
+
+  it("rejects a class further ahead than the window", () => {
     expect(
       canBook(
         {
@@ -85,10 +88,7 @@ describe("canBook", () => {
         },
         now,
       ),
-    ).toEqual({ ok: true });
-  });
-
-  it("rejects a class further ahead than the window", () => {
+    ).toEqual({ ok: false, reason: "too-far-ahead" });
     expect(
       canBook(
         {

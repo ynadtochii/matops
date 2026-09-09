@@ -13,6 +13,7 @@ const NO_ENTITY_KEY_BY_DESIGN = ["tenant_probe"];
 const SCOPE_GUC: Record<string, string> = {
   entity: "app.organization_id",
   entity_membership: "app.organization_id",
+  person: "app.organization_id",
   academy_profile: "app.academy_id",
   // One membership can cover a mat and a gym at once, so the four access tables
   // belong to the organization and none of them carries an academy_id (ADR 126).
@@ -57,7 +58,7 @@ describe("every tenant-scoped table is covered by RLS", () => {
                            AND a.attnum > 0 AND NOT a.attisdropped))
       ORDER BY c.relname
     `,
-      [Object.keys(SCOPE_GUC)],
+      [[...Object.keys(SCOPE_GUC), ...Object.keys(NO_RLS_BY_DESIGN)]],
     );
     tables = res.rows;
   });

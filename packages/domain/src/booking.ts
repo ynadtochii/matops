@@ -14,7 +14,7 @@
 
 import type { Membership } from "./access";
 import { isActiveMember } from "./access";
-import { DAY_MS } from "./local-date";
+import { selfServiceWindow } from "./query-window";
 
 /** Booking tier — mirrors the `booking_tier` DB enum. */
 export type BookingTier = "confirmed" | "provisional";
@@ -43,13 +43,23 @@ export interface BookableClass {
  * `/class/<id>` left open. Classes exist six months out for the owner's planning;
  * booking one of them is noise, because the gym's plans change first.
  */
-export const BOOKING_WINDOW_DAYS = 7;
+const DEFAULT_BOOKING_WINDOW_DAYS = 7;
+export const BOOKING_WINDOW_DAYS = DEFAULT_BOOKING_WINDOW_DAYS;
+
+interface BookingRule {
+  bookingWindowDays: number;
+  timeZone: string;
+}
+
+const DEFAULT_BOOKING_RULE: BookingRule = {
+  bookingWindowDays: DEFAULT_BOOKING_WINDOW_DAYS,
+  timeZone: "UTC",
+};
 
 /** Why a class cannot be booked (drives a precise, friendly error). */
-export type NotBookableReason =
-  "deleted" | "cancelled" | "past" | "too-far-ahead";
+type NotBookableReason = "deleted" | "cancelled" | "past" | "too-far-ahead";
 
-export interface BookableResult {
+interface BookableResult {
   ok: boolean;
   reason?: NotBookableReason;
 }
@@ -62,14 +72,18 @@ export interface BookableResult {
  * deliberately NOT checked here — booking is never blocked by a full room
  * (soft cap, §4).
  */
-export function canBook(c: BookableClass, now: Date): BookableResult {
+export function canBook(
+  c: BookableClass,
+  now: Date,
+  rule: BookingRule = DEFAULT_BOOKING_RULE,
+): BookableResult {
   if (c.deletedAt) return { ok: false, reason: "deleted" };
   if (c.status === "cancelled") return { ok: false, reason: "cancelled" };
   if (c.startsAt.getTime() <= now.getTime())
     return { ok: false, reason: "past" };
-  // Measured from `now`, not from midnight, so the guard is never stricter than
-  // the seven-day list both clients render off the start of today.
-  if (c.startsAt.getTime() > now.getTime() + BOOKING_WINDOW_DAYS * DAY_MS)
+  if (
+    c.startsAt.getTime() >= new Date(selfServiceWindow(now, rule).to).getTime()
+  )
     return { ok: false, reason: "too-far-ahead" };
   return { ok: true };
 }
@@ -81,6 +95,7 @@ export function canBook(c: BookableClass, now: Date): BookableResult {
  */
 export function notBookableMessage(
   reason: Exclude<NotBookableReason, "deleted">,
+  bookingWindowDays = DEFAULT_BOOKING_WINDOW_DAYS,
 ): string {
   switch (reason) {
     case "cancelled":
@@ -88,11 +103,11 @@ export function notBookableMessage(
     case "past":
       return "This class has already started";
     case "too-far-ahead":
-      return `You can book up to ${BOOKING_WINDOW_DAYS} days ahead`;
+      return `You can book up to ${bookingWindowDays} days ahead`;
   }
 }
 
-export interface CapacityDisplay {
+interface CapacityDisplay {
   /** "N / M", or "No limit" when capacity is 0/unset. */
   label: string;
   /** At or over capacity → show red + a "book anyway?" confirm (spec S5). */

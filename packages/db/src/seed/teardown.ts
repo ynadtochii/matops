@@ -17,7 +17,9 @@ import {
   accessAssignmentChange,
   accessPlan,
   accessPlanEntity,
+  accessPlanPrice,
   account,
+  attendanceCorrection,
   classInstance,
   classParticipation,
   classTemplate,
@@ -29,18 +31,18 @@ import {
   entity,
   entityMembership,
   member,
-  memberDues,
   memberNote,
   memberRank,
   memberReferral,
   memberReferralAudit,
   membershipMonth,
   membershipMonthAudit,
-  membershipPlan,
   membershipPolicy,
+  notification,
+  notificationNotice,
   organization,
-  paymentClaim,
-  paymentSettings,
+  person,
+  productEvent,
   rankPromotion,
   session,
   user,
@@ -48,7 +50,7 @@ import {
 import { SEED_MARKER, seedAcademyIds, seedAcademyList } from "./registry";
 
 /** Row counts deleted, per table. */
-export type TeardownReport = Record<string, number>;
+type TeardownReport = Record<string, number>;
 
 const SEED_ID_LIKE = `${SEED_MARKER}%`;
 
@@ -85,6 +87,11 @@ export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
       .delete(classParticipation)
       .where(inArray(classParticipation.academyId, ids)),
   );
+  await del("attendance_correction", () =>
+    exec
+      .delete(attendanceCorrection)
+      .where(inArray(attendanceCorrection.academyId, ids)),
+  );
   await del("member_referral_audit", () =>
     exec
       .delete(memberReferralAudit)
@@ -99,12 +106,6 @@ export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
   await del("drop_in", () =>
     exec.delete(dropIn).where(inArray(dropIn.academyId, ids)),
   );
-  await del("payment_claim", () =>
-    exec.delete(paymentClaim).where(inArray(paymentClaim.academyId, ids)),
-  );
-  await del("member_dues", () =>
-    exec.delete(memberDues).where(inArray(memberDues.academyId, ids)),
-  );
   await del("rank_promotion", () =>
     exec.delete(rankPromotion).where(inArray(rankPromotion.academyId, ids)),
   );
@@ -114,14 +115,8 @@ export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
   await del("member_rank", () =>
     exec.delete(memberRank).where(inArray(memberRank.academyId, ids)),
   );
-  await del("payment_settings", () =>
-    exec.delete(paymentSettings).where(inArray(paymentSettings.academyId, ids)),
-  );
   await del("class", () =>
     exec.delete(classInstance).where(inArray(classInstance.academyId, ids)),
-  );
-  await del("membership_plan", () =>
-    exec.delete(membershipPlan).where(inArray(membershipPlan.academyId, ids)),
   );
   await del("class_template", () =>
     exec.delete(classTemplate).where(inArray(classTemplate.academyId, ids)),
@@ -139,6 +134,24 @@ export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
   );
   await del("curriculum_track", () =>
     exec.delete(curriculumTrack).where(inArray(curriculumTrack.academyId, ids)),
+  );
+
+  // What the demo gym wrote while it was being USED: the notification centre
+  // and the product event log. Neither is ever seeded, and both hold a foreign
+  // key to the entity or the organization, so `seed down` on a gym somebody
+  // actually clicked around in fails without them.
+  await del("notification", () =>
+    exec.delete(notification).where(inArray(notification.academyId, ids)),
+  );
+  await del("notification_notice", () =>
+    exec
+      .delete(notificationNotice)
+      .where(inArray(notificationNotice.academyId, ids)),
+  );
+  await del("product_event", () =>
+    exec
+      .delete(productEvent)
+      .where(inArray(productEvent.organizationId, orgIds)),
   );
 
   // Shared memberships, scoped by the seed org id (ADR 126). Children first:
@@ -174,6 +187,11 @@ export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
       .delete(membershipPolicy)
       .where(inArray(membershipPolicy.organizationId, orgIds)),
   );
+  await del("access_plan_price", () =>
+    exec
+      .delete(accessPlanPrice)
+      .where(inArray(accessPlanPrice.organizationId, orgIds)),
+  );
   await del("access_plan", () =>
     exec.delete(accessPlan).where(inArray(accessPlan.organizationId, orgIds)),
   );
@@ -190,6 +208,9 @@ export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
   );
   await del("entity", () =>
     exec.delete(entity).where(inArray(entity.organizationId, orgIds)),
+  );
+  await del("person", () =>
+    exec.delete(person).where(inArray(person.organizationId, orgIds)),
   );
 
   // Better Auth membership rows, scoped by the seed org id.
@@ -216,14 +237,14 @@ export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
 }
 
 /** Per-academy presence + a few row counts, for `seed status`. */
-export interface SeedAcademyStatus {
+interface SeedAcademyStatus {
   key: string;
   academyId: string;
   name: string;
   present: boolean;
   members: number;
   classes: number;
-  dues: number;
+  memberships: number;
 }
 
 /** Report which seed academies exist and roughly how much data each holds. */
@@ -243,10 +264,10 @@ export async function seedStatus(exec: SeedExec): Promise<SeedAcademyStatus[]> {
       .select({ n: count() })
       .from(classInstance)
       .where(eq(classInstance.academyId, a.id));
-    const dues = await exec
+    const memberships = await exec
       .select({ n: count() })
-      .from(memberDues)
-      .where(eq(memberDues.academyId, a.id));
+      .from(accessAssignment)
+      .where(eq(accessAssignment.organizationId, a.id));
     result.push({
       key: a.key,
       academyId: a.id,
@@ -254,7 +275,7 @@ export async function seedStatus(exec: SeedExec): Promise<SeedAcademyStatus[]> {
       present: org.length > 0,
       members: members[0]?.n ?? 0,
       classes: classes[0]?.n ?? 0,
-      dues: dues[0]?.n ?? 0,
+      memberships: memberships[0]?.n ?? 0,
     });
   }
   return result;

@@ -147,13 +147,6 @@ export const MapUrlSchema = HttpUrlSchema.refine((v) => {
   return host === "google.com" && url.pathname.startsWith("/maps");
 }, "Paste a link from Google Maps, Apple Maps, OpenStreetMap, or Waze");
 
-/**
- * Money, spelled once (the rule ADR 119 set for phones and emails). An amount is
- * an integer in the currency's MINOR unit, never a float, beside a 3-letter
- * ISO-4217 code upper-cased at the boundary. Two products ask for a price now,
- * the legacy branch plan and the shared membership plan, and they must not
- * disagree about what a valid one looks like.
- */
 export const PriceMinorSchema = z.number().int().min(0).max(100_000_000);
 export const CurrencySchema = z
   .string()
@@ -189,7 +182,6 @@ export const personFields = {
 export const CreateAcademySchema = z.object({
   name: lineText(2, 80),
 });
-export type CreateAcademyInput = z.infer<typeof CreateAcademySchema>;
 
 export const CreateEntitySchema = z.object({
   name: lineText(2, 80),
@@ -201,16 +193,11 @@ export type CreateEntityInput = z.infer<typeof CreateEntitySchema>;
 
 /** One branch of the caller's own gym, named from an organization screen. */
 export const EntityIdSchema = z.object({ entityId: IdSchema });
-export type EntityIdInput = z.infer<typeof EntityIdSchema>;
 
-/** Move one branch between the two payment gates (ADR 127). */
 export const SetMembershipEnforcedSchema = z.object({
   entityId: IdSchema,
   enforced: z.boolean(),
 });
-export type SetMembershipEnforcedInput = z.infer<
-  typeof SetMembershipEnforcedSchema
->;
 
 export const UpdateAcademySettingsSchema = z.object({
   timeZone: lineText(1, 64)
@@ -227,40 +214,57 @@ export const UpdateAcademySettingsSchema = z.object({
     .optional(),
   address: blockText(0, 200).optional(),
   mapUrl: z.union([MapUrlSchema, z.literal("")]).optional(),
+  bookingWindowDays: z.number().int().min(1).max(90).optional(),
   curriculumForStudents: z.boolean().optional(),
 });
-export type UpdateAcademySettingsInput = z.infer<
-  typeof UpdateAcademySettingsSchema
->;
+
+export const OrganizationModulesSchema = z.object({
+  curriculumEnabled: z.boolean(),
+  referralsEnabled: z.boolean(),
+});
 
 export const DeleteAcademySchema = z.object({
   confirm: lineText(1, 120),
 });
-export type DeleteAcademyInput = z.infer<typeof DeleteAcademySchema>;
 
 /** Roles a shareable invite link may carry — never "owner" (docs/issues/20). */
 export const InviteRoleSchema = z.enum(["student", "instructor"]);
 export type InviteRole = z.infer<typeof InviteRoleSchema>;
 
-/**
- * Put somebody on one branch, or change what they are there, from the gym's
- * person profile (ADR 129). ORDINARY roles only: owner grants stay on the
- * branch's own Coaches page, so nothing here can mint an owner.
- */
-export const SetBranchRoleSchema = z.object({
-  entityId: IdSchema,
-  userId: IdSchema,
-  role: InviteRoleSchema,
-});
-export type SetBranchRoleInput = z.infer<typeof SetBranchRoleSchema>;
+export const AddStudentToBranchSchema = z
+  .union([
+    z.object({
+      entityId: IdSchema,
+      personId: IdSchema,
+    }),
+    z.object({
+      entityId: IdSchema,
+      userId: IdSchema,
+    }),
+  ])
+  .transform((input) => ({
+    ...input,
+    userId: "personId" in input ? input.personId : input.userId,
+  }));
 
 /** Approve or decline one person's place at one branch (ADR 129). */
-export const BranchDecisionSchema = z.object({
-  entityId: IdSchema,
-  userId: IdSchema,
-  decision: z.enum(["approve", "decline"]),
-});
-export type BranchDecisionInput = z.infer<typeof BranchDecisionSchema>;
+export const BranchDecisionSchema = z
+  .union([
+    z.object({
+      entityId: IdSchema,
+      personId: IdSchema,
+      decision: z.enum(["approve", "decline"]),
+    }),
+    z.object({
+      entityId: IdSchema,
+      userId: IdSchema,
+      decision: z.enum(["approve", "decline"]),
+    }),
+  ])
+  .transform((input) => ({
+    ...input,
+    userId: "personId" in input ? input.personId : input.userId,
+  }));
 
 /**
  * Student/instructor self-join via an invite link (spec S1/S2, docs/issues/26).
@@ -271,7 +275,6 @@ export const JoinAcademySchema = z.object({
   token: OpaqueTokenSchema,
   ...personFields,
 });
-export type JoinAcademyInput = z.infer<typeof JoinAcademySchema>;
 
 /**
  * Edit the signed-in user's own profile (spec S7, slice B.3). Name + phone are
@@ -279,13 +282,11 @@ export type JoinAcademyInput = z.infer<typeof JoinAcademySchema>;
  * channel). Same field shapes as the join schemas.
  */
 export const UpdateProfileSchema = z.object(personFields);
-export type UpdateProfileInput = z.infer<typeof UpdateProfileSchema>;
 
 /** A single member action (approve / reject / remove / suspend / promote). */
 export const MemberActionSchema = z.object({
   memberId: IdSchema,
 });
-export type MemberActionInput = z.infer<typeof MemberActionSchema>;
 
 /** Resolve an invite token on the public join screen. */
 export const InviteTokenSchema = z.object({
@@ -301,7 +302,6 @@ export const AcademyCodeSchema = z.object({
     .max(20)
     .regex(/^\d{6}$/, "Enter your gym's 6-digit ID"),
 });
-export type AcademyCodeInput = z.infer<typeof AcademyCodeSchema>;
 
 /**
  * Student self-join by academy code (mobile v1, docs/issues/32). Same minimal
@@ -309,4 +309,3 @@ export type AcademyCodeInput = z.infer<typeof AcademyCodeSchema>;
  * so there is no role field here. Email is already verified via magic-link.
  */
 export const JoinByCodeSchema = AcademyCodeSchema.extend(personFields);
-export type JoinByCodeInput = z.infer<typeof JoinByCodeSchema>;

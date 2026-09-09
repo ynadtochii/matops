@@ -9,10 +9,9 @@ import {
   desc,
   eq,
   eventRole,
-  getEntityInOrganization,
   inArray,
-  isNotNull,
   isNull,
+  or,
   recordActivity,
   recordMilestone,
   sql,
@@ -27,17 +26,15 @@ import {
   entity,
   entityMembership,
   member,
-  memberDues,
+  membershipAccessHold,
   membershipMonth,
   membershipMonthAudit,
-  membershipPlan,
   membershipPolicy,
-  user,
+  person,
 } from "@matops/db/schema";
 import {
   affectedByCoverageChange,
   appliesInMonth,
-  canClaimMonth,
   canEditPlan,
   canPriceFrom,
   changeIsPending,
@@ -45,6 +42,7 @@ import {
   formatMonth,
   isFreeMembershipMonth,
   isStaffRole,
+  localDateISO,
   monthOf,
   nextMonth,
   payDeadline,
@@ -64,14 +62,12 @@ import {
   CancelPlanChangeSchema,
   ClaimMembershipMonthSchema,
   CreateAccessPlanSchema,
-  LegacyPlanMembersSchema,
   MarkMembershipMonthSchema,
   MemberAssignmentsSchema,
   MembershipMonthsSchema,
   MembershipPolicySchema,
   PlanChangeSchema,
   RejectMembershipClaimSchema,
-  RenameAccessPlanSchema,
   SetAccessPlanCoverageSchema,
   SetAccessPlanPriceSchema,
 } from "@matops/validators";
@@ -117,11 +113,6 @@ const TARGET_ARCHIVED_DEPENDENCY =
 const COVERAGE_MOVED =
   "Somebody changed this plan's branches while you were looking. Check the list again and save.";
 
-/**
- * The column's own default, repeated here for the read that runs before any
- * row exists. `payments.ts` exports a `DEFAULT_GRACE_DAYS` for the LEGACY
- * branch dues gate, which is a different gate and must not be borrowed.
- */
 const DEFAULT_MEMBERSHIP_GRACE_DAYS = 7;
 
 type PlanRow = typeof accessPlan.$inferSelect;
@@ -185,7 +176,7 @@ function recordFirstAssignment(ctx: {
   });
 }
 
-async function assignOne(
+export async function assignOne(
   ctx: {
     db: TenantTx;
     organizationId: string;
@@ -196,22 +187,37 @@ async function assignOne(
     planId: string;
     assigningEntityId?: string | null;
     startMonth?: string | null;
+    startsOn?: string | null;
   },
 ) {
   const plan = await loadPlan(ctx.db, input.planId);
-  await requireOrganizationMember(ctx.db, ctx.organizationId, input.userId);
+  const subject = await requireOrganizationPerson(
+    ctx.db,
+    ctx.organizationId,
+    input.userId,
+  );
 
   // The gym's own calendar decides which month "now" is. Just after midnight
   // on 1 October in Lisbon, UTC is still September, and an assignment starting
   // in a month that is already over carries a deadline that has passed.
-  const { month } = await currentMonthOf(ctx.db);
+  const { month, timeZone } = await currentMonthOf(ctx.db);
   const startMonth = input.startMonth
     ? `${input.startMonth.slice(0, 7)}-01`
     : month;
+  const startsOn =
+    input.startsOn ??
+    (startMonth === month ? localDateISO(new Date(), timeZone) : startMonth);
+  if (startsOn.slice(0, 7) !== startMonth.slice(0, 7)) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "The start date must be inside the start month.",
+    });
+  }
 
   const periods = await lockAssignmentsOf(
     ctx.db,
-    input.userId,
+    subject.id,
+    subject.accountUserId,
     ctx.organizationId,
   );
   // The membership they hold on this plan over the month being assigned,
@@ -230,11 +236,12 @@ async function assignOne(
   }
 
   const entityIds = await coverageOf(ctx.db, plan.id);
-  if (held?.status !== "active") {
+  if (!held) {
     await requireStudentCoverage(
       ctx.db,
       ctx.organizationId,
-      input.userId,
+      subject.id,
+      subject.accountUserId,
       entityIds,
     );
   }
@@ -245,11 +252,11 @@ async function assignOne(
   if (held) {
     assignmentId = held.id;
     if (held.status !== "active") {
-      restored = true;
       await ctx.db
         .update(accessAssignment)
-        .set({ status: "active", startMonth })
+        .set({ status: "active" })
         .where(eq(accessAssignment.id, held.id));
+      restored = true;
     }
   } else {
     requireNoOverlap(periods, plan.id, { startMonth, endMonth: null });
@@ -257,10 +264,11 @@ async function assignOne(
       .insert(accessAssignment)
       .values({
         organizationId: ctx.organizationId,
-        userId: input.userId,
+        personId: subject.id,
         planId: plan.id,
         assigningEntityId: input.assigningEntityId ?? null,
         startMonth,
+        startsOn,
         assignedBy: ctx.session.user.id,
       })
       .returning({ id: accessAssignment.id });
@@ -277,7 +285,8 @@ async function assignOne(
   const reconciliation = await enrolInCoveredBranches(
     ctx.db,
     ctx.organizationId,
-    input.userId,
+    subject.id,
+    subject.accountUserId,
     entityIds,
   );
   return { id: assignmentId, created, restored, ...reconciliation };
@@ -293,11 +302,14 @@ async function assignOne(
  */
 async function lockAssignmentsOf(
   db: TenantTx,
-  userId: string,
-  organizationId: string,
+  personId: string | null,
+  accountUserIdOrOrganizationId: string | null,
+  organizationIdInput?: string,
 ) {
+  const organizationId =
+    organizationIdInput ?? accountUserIdOrOrganizationId ?? "";
   await db.execute(
-    sql`select pg_advisory_xact_lock(hashtext(${organizationId}), hashtext(${userId}))`,
+    sql`select pg_advisory_xact_lock(hashtext(${organizationId}), hashtext(${personId ?? ""}))`,
   );
   return db
     .select({
@@ -305,11 +317,12 @@ async function lockAssignmentsOf(
       planId: accessAssignment.planId,
       status: accessAssignment.status,
       startMonth: accessAssignment.startMonth,
+      startsOn: accessAssignment.startsOn,
       endMonth: accessAssignment.endMonth,
       assigningEntityId: accessAssignment.assigningEntityId,
     })
     .from(accessAssignment)
-    .where(eq(accessAssignment.userId, userId))
+    .where(personId ? eq(accessAssignment.personId, personId) : sql`false`)
     .for("update");
 }
 
@@ -345,12 +358,12 @@ function requireNoOverlap(
 async function pendingChanges(
   db: TenantTx,
   currentMonth: string,
-  userId?: string,
+  subject?: { personId: string | null; accountUserId: string | null },
 ) {
   const rows = await db
     .select({
       id: accessAssignmentChange.id,
-      userId: accessAssignmentChange.userId,
+      userId: accessAssignmentChange.personId,
       sourceAssignmentId: accessAssignmentChange.sourceAssignmentId,
       targetAssignmentId: accessAssignmentChange.targetAssignmentId,
       effectiveMonth: accessAssignmentChange.effectiveMonth,
@@ -358,10 +371,12 @@ async function pendingChanges(
     })
     .from(accessAssignmentChange)
     .where(
-      userId
+      subject
         ? and(
             isNull(accessAssignmentChange.cancelledAt),
-            eq(accessAssignmentChange.userId, userId),
+            subject.personId
+              ? eq(accessAssignmentChange.personId, subject.personId)
+              : sql`false`,
           )
         : isNull(accessAssignmentChange.cancelledAt),
     );
@@ -384,14 +399,18 @@ async function loadAssignment(db: TenantTx, id: string) {
   const [row] = await db
     .select({
       id: accessAssignment.id,
-      userId: accessAssignment.userId,
+      userId: accessAssignment.personId,
+      personId: accessAssignment.personId,
+      accountUserId: person.accountUserId,
       planId: accessAssignment.planId,
       status: accessAssignment.status,
       startMonth: accessAssignment.startMonth,
+      startsOn: accessAssignment.startsOn,
       endMonth: accessAssignment.endMonth,
       assigningEntityId: accessAssignment.assigningEntityId,
     })
     .from(accessAssignment)
+    .innerJoin(person, eq(person.id, accessAssignment.personId))
     .where(eq(accessAssignment.id, id));
   if (!row) {
     throw new TRPCError({ code: "NOT_FOUND", message: ASSIGNMENT_NOT_FOUND });
@@ -423,7 +442,7 @@ async function coverageElsewhere(
       accessPlanEntity,
       eq(accessPlanEntity.planId, accessAssignment.planId),
     )
-    .where(eq(accessAssignment.userId, userId));
+    .where(eq(accessAssignment.personId, userId));
   return new Set(
     rows
       .filter(
@@ -492,12 +511,14 @@ async function assignmentCoverage(
   const rows = await db
     .select({
       id: accessAssignment.id,
-      userId: accessAssignment.userId,
+      userId: accessAssignment.personId,
+      accountUserId: person.accountUserId,
       planId: accessAssignment.planId,
       status: accessAssignment.status,
       entityId: accessPlanEntity.entityId,
     })
     .from(accessAssignment)
+    .innerJoin(person, eq(person.id, accessAssignment.personId))
     .leftJoin(
       accessPlanEntity,
       eq(accessPlanEntity.planId, accessAssignment.planId),
@@ -542,40 +563,47 @@ async function preview(db: TenantTx, planId: string, next: string[]) {
     .filter((a) => a.gains.length > 0 || a.loses.length > 0);
 }
 
-/**
- * Make sure the person can actually be given a membership here: they must
- * already belong to the organization. `member` carries no RLS, so this filters
- * by organization itself, unlike every other read in this file.
- */
-async function requireOrganizationMember(
+async function requireOrganizationPerson(
   db: TenantTx,
   organizationId: string,
-  userId: string,
-): Promise<void> {
-  const rows = await db
-    .select({ id: member.id })
-    .from(member)
+  personId: string,
+) {
+  const [row] = await db
+    .select({ id: person.id, accountUserId: person.accountUserId })
+    .from(person)
     .where(
-      and(eq(member.organizationId, organizationId), eq(member.userId, userId)),
+      and(
+        eq(person.organizationId, organizationId),
+        or(
+          eq(sql`${person.id}::text`, personId),
+          eq(person.accountUserId, personId),
+        ),
+        isNull(person.archivedAt),
+      ),
     )
     .limit(1);
-  if (rows.length === 0) {
-    throw new TRPCError({ code: "NOT_FOUND", message: NOT_A_MEMBER });
-  }
+  if (row) return row;
+  throw new TRPCError({ code: "NOT_FOUND", message: NOT_A_MEMBER });
 }
 
 async function requireStudentCoverage(
   db: TenantTx,
   organizationId: string,
-  userId: string,
+  personId: string | null,
+  accountUserId: string | null,
   entityIds: string[],
 ): Promise<void> {
-  const [organizationMember] = await db
-    .select({ role: member.role })
-    .from(member)
-    .where(
-      and(eq(member.organizationId, organizationId), eq(member.userId, userId)),
-    );
+  const [organizationMember] = accountUserId
+    ? await db
+        .select({ role: member.role })
+        .from(member)
+        .where(
+          and(
+            eq(member.organizationId, organizationId),
+            eq(member.userId, accountUserId),
+          ),
+        )
+    : [];
   const branches = await db
     .select({
       entityId: entityMembership.entityId,
@@ -587,7 +615,15 @@ async function requireStudentCoverage(
     .where(
       and(
         eq(entityMembership.organizationId, organizationId),
-        eq(entityMembership.userId, userId),
+        or(
+          personId ? eq(entityMembership.personId, personId) : undefined,
+          accountUserId
+            ? and(
+                isNull(entityMembership.personId),
+                eq(entityMembership.userId, accountUserId),
+              )
+            : undefined,
+        ),
       ),
     )
     .for("update");
@@ -607,7 +643,7 @@ async function requireStudentCoverage(
   }
 }
 
-export interface Reconciliation {
+interface Reconciliation {
   /** Branches where a student membership was created for them. */
   enrolled: string[];
   /**
@@ -628,7 +664,8 @@ export interface Reconciliation {
 async function enrolInCoveredBranches(
   db: TenantTx,
   organizationId: string,
-  userId: string,
+  personId: string | null,
+  accountUserId: string | null,
   entityIds: string[],
 ): Promise<Reconciliation> {
   if (entityIds.length === 0) return { enrolled: [], needsDecision: [] };
@@ -641,18 +678,27 @@ async function enrolInCoveredBranches(
     .from(entityMembership)
     .where(
       and(
-        eq(entityMembership.userId, userId),
+        or(
+          personId ? eq(entityMembership.personId, personId) : undefined,
+          accountUserId
+            ? and(
+                isNull(entityMembership.personId),
+                eq(entityMembership.userId, accountUserId),
+              )
+            : undefined,
+        ),
         inArray(entityMembership.entityId, entityIds),
       ),
     );
   const byEntity = new Map(held.map((h) => [h.entityId, h.status]));
 
-  const staffAccess = await loadStaffAccess(db, {
-    entityIds,
-    userIds: [userId],
-  });
+  const staffAccess = accountUserId
+    ? await loadStaffAccess(db, { entityIds, userIds: [accountUserId] })
+    : new Map<string, Set<string>>();
   const missing = entityIds.filter(
-    (id) => !byEntity.has(id) && !staffAccess.get(id)?.has(userId),
+    (id) =>
+      !byEntity.has(id) &&
+      (!accountUserId || !staffAccess.get(id)?.has(accountUserId)),
   );
   if (missing.length > 0) {
     await db
@@ -661,7 +707,8 @@ async function enrolInCoveredBranches(
         missing.map((entityId) => ({
           organizationId,
           entityId,
-          userId,
+          personId,
+          userId: accountUserId,
           role: "student",
           status: "active",
           joinedAt: new Date(),
@@ -681,7 +728,7 @@ async function enrolInCoveredBranches(
   };
 }
 
-export interface PlanReconciliation {
+interface PlanReconciliation {
   checked: number;
   enrolled: { userId: string; name: string; entityIds: string[] }[];
   needsDecision: {
@@ -717,9 +764,14 @@ async function reconcilePlanHolders(
 ): Promise<PlanReconciliation> {
   const { month } = await currentMonthOf(db);
   const holders = await db
-    .select({ userId: accessAssignment.userId, name: user.name })
+    .select({
+      userId: accessAssignment.personId,
+      personId: accessAssignment.personId,
+      accountUserId: person.accountUserId,
+      name: person.name,
+    })
     .from(accessAssignment)
-    .innerJoin(user, eq(user.id, accessAssignment.userId))
+    .innerJoin(person, eq(person.id, accessAssignment.personId))
     .where(
       and(
         eq(accessAssignment.planId, planId),
@@ -742,7 +794,8 @@ async function reconcilePlanHolders(
       const one = await enrolInCoveredBranches(
         db,
         organizationId,
-        holder.userId,
+        holder.personId,
+        holder.accountUserId,
         entityIds,
       );
       if (one.enrolled.length > 0) {
@@ -795,7 +848,7 @@ async function coverageGaps(
     .leftJoin(
       entityMembership,
       and(
-        eq(entityMembership.userId, accessAssignment.userId),
+        eq(entityMembership.personId, accessAssignment.personId),
         eq(entityMembership.entityId, accessPlanEntity.entityId),
       ),
     )
@@ -817,7 +870,7 @@ async function coverageGaps(
 }
 
 /** Is there work the last coverage run could not finish? */
-export function reconciliationIncomplete(r: PlanReconciliation): boolean {
+function reconciliationIncomplete(r: PlanReconciliation): boolean {
   return r.failed.length > 0 || r.needsDecision.length > 0;
 }
 
@@ -851,6 +904,110 @@ async function setAssignmentStatus(
   return { id, status };
 }
 
+type MonthStatus = "unpaid" | "reported" | "confirmed" | "rejected";
+
+async function lockMembershipMonth(
+  db: TenantTx,
+  assignmentId: string,
+  month: string,
+) {
+  await db.execute(
+    sql`select pg_advisory_xact_lock(hashtext(${assignmentId}), hashtext(${month}))`,
+  );
+  const [row] = await db
+    .select()
+    .from(membershipMonth)
+    .where(
+      and(
+        eq(membershipMonth.assignmentId, assignmentId),
+        eq(membershipMonth.month, month),
+      ),
+    )
+    .for("update");
+  return row;
+}
+
+function requireMonthVersion(
+  current: { version: number } | undefined,
+  expectedVersion: number | undefined,
+) {
+  if (expectedVersion !== undefined && expectedVersion !== current?.version) {
+    throw new TRPCError({
+      code: "CONFLICT",
+      message:
+        "This payment changed while you were looking. Refresh and try again.",
+    });
+  }
+}
+
+async function monthEvidence(
+  db: TenantTx,
+  assignment: Awaited<ReturnType<typeof loadAssignment>>,
+  month: string,
+) {
+  if (!appliesInMonth(assignment, month)) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "This membership does not apply in that month.",
+    });
+  }
+  const calendar = await membershipCalendar(db);
+  const prices = await db
+    .select({
+      effectiveMonth: accessPlanPrice.effectiveMonth,
+      priceMinor: accessPlanPrice.priceMinor,
+      currency: accessPlanPrice.currency,
+    })
+    .from(accessPlanPrice)
+    .where(eq(accessPlanPrice.planId, assignment.planId));
+  const amount = priceForMonth(prices, month);
+  if (!amount) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "This membership has no price for that month.",
+    });
+  }
+  return {
+    ...amount,
+    deadline: payDeadline({
+      month,
+      startMonth: assignment.startMonth,
+      policy: calendar,
+    }),
+    calendarTimeZone: calendar.timeZone,
+  };
+}
+
+async function appendMonthAudit(
+  db: TenantTx,
+  input: {
+    organizationId: string;
+    assignmentId: string;
+    month: string;
+    event: string;
+    beforeStatus: MonthStatus | null;
+    afterStatus: MonthStatus;
+    reason?: string;
+    evidence: Awaited<ReturnType<typeof monthEvidence>>;
+    actorId: string;
+  },
+) {
+  await db.insert(membershipMonthAudit).values({
+    organizationId: input.organizationId,
+    assignmentId: input.assignmentId,
+    month: input.month,
+    event: input.event,
+    beforeStatus: input.beforeStatus,
+    afterStatus: input.afterStatus,
+    reason: input.reason,
+    priceMinor: input.evidence.priceMinor,
+    currency: input.evidence.currency,
+    deadline: input.evidence.deadline,
+    calendarTimeZone: input.evidence.calendarTimeZone,
+    actorId: input.actorId,
+  });
+}
+
 export const accessPlanRouter = {
   /** The whole catalog, archived plans included, with their coverage. */
   list: organizationManagerProcedure.query(async ({ ctx }) => {
@@ -881,7 +1038,6 @@ export const accessPlanRouter = {
       priceMinor: p.priceMinor,
       currency: p.currency,
       archived: p.archivedAt !== null,
-      studentSelectable: p.studentSelectable,
       entityIds: coverage
         .filter((c) => c.planId === p.id)
         .map((c) => c.entityId)
@@ -1017,17 +1173,6 @@ export const accessPlanRouter = {
         .set({ priceMinor: input.priceMinor, currency: input.currency })
         .where(eq(accessPlan.id, input.id));
 
-      return { ok: true as const };
-    }),
-
-  rename: organizationManagerProcedure
-    .input(RenameAccessPlanSchema)
-    .mutation(async ({ ctx, input }) => {
-      await requireEditable(ctx.db, input.id);
-      await ctx.db
-        .update(accessPlan)
-        .set({ name: input.name, description: input.description })
-        .where(eq(accessPlan.id, input.id));
       return { ok: true as const };
     }),
 
@@ -1293,7 +1438,7 @@ export const accessPlanRouter = {
             bookingsNeedingReview(db, {
               entityId: branch.id,
               now,
-              userId: input.userId ?? undefined,
+              personId: input.personId ?? undefined,
               limit: input.limit - items.length,
             }),
           ctx.baseDb,
@@ -1316,11 +1461,6 @@ export const accessPlanRouter = {
    * Everybody a membership should cover and does not, branch by branch
    * (ADR 128, spec FP8).
    *
-   * This is the work queue behind activation: a branch cannot be switched onto
-   * memberships while active members hold nothing, so an owner needs the names
-   * rather than a count. Only branches that already RUN on memberships are
-   * asked, because at one still on branch dues the question has no meaning.
-   *
    * Coverage comes from `loadRosterStanding`, the same rule the booking gate
    * and the activation preview run, so this queue and the gate cannot disagree
    * about who is covered.
@@ -1334,17 +1474,13 @@ export const accessPlanRouter = {
     const groups: {
       entityId: string;
       entityName: string;
-      people: { userId: string; name: string }[];
+      people: { personId: string; userId: string; name: string }[];
     }[] = [];
 
     for (const branch of branches) {
-      if (!branch.membershipEnforcedAt) continue;
       const people = await withScope(
         { organizationId: ctx.organizationId, entityId: branch.id },
         async (db) => {
-          // Staff are not counted. An owner or a coach runs the mat rather
-          // than buying access to it, and listing them here made the queue
-          // permanently non-empty and activation permanently "not ready".
           const active = (
             await studentRosterOf({ academyId: branch.id, db })
           ).filter((m) => m.status === "active");
@@ -1360,7 +1496,11 @@ export const accessPlanRouter = {
           });
           return active
             .filter((m) => !standing.get(m.userId)?.covered)
-            .map((m) => ({ userId: m.userId, name: m.name }));
+            .map((m) => ({
+              personId: m.personId,
+              userId: m.userId,
+              name: m.name,
+            }));
         },
         ctx.baseDb,
       );
@@ -1379,65 +1519,6 @@ export const accessPlanRouter = {
       total: groups.reduce((n, g) => n + g.people.length, 0),
     };
   }),
-
-  /**
-   * Who is on one branch's LEGACY dues plan (ADR 128, spec FP8).
-   *
-   * The migration question in the owner's own words: "everybody who was on the
-   * old Adults plan at the mat should go onto the new one." Reading it is the
-   * only way to answer that without them ticking forty boxes from memory.
-   *
-   * Entity-scoped on purpose: `member_dues` and `membership_plan` are branch
-   * tables, so this opens ONE branch's scope rather than widening anything, and
-   * refuses a branch outside the caller's gym before it opens.
-   */
-  legacyPlanMembers: organizationManagerIdentityProcedure
-    .input(LegacyPlanMembersSchema)
-    .query(async ({ ctx, input }) => {
-      const branch = await getEntityInOrganization(
-        input.entityId,
-        ctx.organizationId,
-        ctx.baseDb,
-      );
-      if (!branch) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Not your branch" });
-      }
-
-      return withScope(
-        { organizationId: ctx.organizationId, entityId: branch.id },
-        async (db) => {
-          const plans = await db
-            .select({
-              id: membershipPlan.id,
-              name: membershipPlan.name,
-              priceMinor: membershipPlan.priceMinor,
-              currency: membershipPlan.currency,
-            })
-            .from(membershipPlan)
-            .where(isNull(membershipPlan.deletedAt));
-
-          const rows = await db
-            .select({
-              userId: entityMembership.userId,
-              planId: memberDues.planId,
-            })
-            .from(memberDues)
-            .innerJoin(
-              entityMembership,
-              eq(entityMembership.id, memberDues.memberId),
-            )
-            .where(eq(entityMembership.status, "active"));
-
-          return {
-            plans,
-            members: input.planId
-              ? rows.filter((r) => r.planId === input.planId)
-              : rows,
-          };
-        },
-        ctx.baseDb,
-      );
-    }),
 
   /**
    * Pause one membership. It stops covering every branch it covered at once,
@@ -1494,13 +1575,13 @@ export const accessPlanRouter = {
 
       const staff = await loadStaffAccess(ctx.db, {
         entityIds: [...new Set([...from, ...to])],
-        userIds: [source.userId],
+        userIds: source.accountUserId ? [source.accountUserId] : [],
       });
       const losing = from.filter(
         (id) =>
           !to.includes(id) &&
           !elsewhere.has(id) &&
-          !staff.get(id)?.has(source.userId),
+          (!source.accountUserId || !staff.get(id)?.has(source.accountUserId)),
       );
       return {
         effectiveMonth: next,
@@ -1513,7 +1594,10 @@ export const accessPlanRouter = {
         amount: priceForMonth(prices, next),
         gains: to
           .filter(
-            (id) => !from.includes(id) && !staff.get(id)?.has(source.userId),
+            (id) =>
+              !from.includes(id) &&
+              (!source.accountUserId ||
+                !staff.get(id)?.has(source.accountUserId)),
           )
           .sort(),
         loses: losing.sort(),
@@ -1542,7 +1626,8 @@ export const accessPlanRouter = {
       const source = await loadAssignment(ctx.db, input.assignmentId);
       const periods = await lockAssignmentsOf(
         ctx.db,
-        source.userId,
+        source.personId,
+        source.accountUserId,
         ctx.organizationId,
       );
       if (source.status !== "active") {
@@ -1565,16 +1650,20 @@ export const accessPlanRouter = {
       await requireStudentCoverage(
         ctx.db,
         ctx.organizationId,
-        source.userId,
+        source.personId,
+        source.accountUserId,
         await coverageOf(ctx.db, target.id),
       );
       if (target.archivedAt !== null) {
         throw new TRPCError({ code: "CONFLICT", message: PLAN_CLOSED });
       }
       if (
-        (await pendingChanges(ctx.db, month, source.userId)).some(
-          (c) => c.sourceAssignmentId === source.id,
-        )
+        (
+          await pendingChanges(ctx.db, month, {
+            personId: source.personId,
+            accountUserId: source.accountUserId,
+          })
+        ).some((c) => c.sourceAssignmentId === source.id)
       ) {
         throw new TRPCError({ code: "CONFLICT", message: CHANGE_PENDING });
       }
@@ -1592,10 +1681,11 @@ export const accessPlanRouter = {
         .insert(accessAssignment)
         .values({
           organizationId: ctx.organizationId,
-          userId: source.userId,
+          personId: source.personId,
           planId: target.id,
           assigningEntityId: source.assigningEntityId,
           startMonth: next,
+          startsOn: next,
           assignedBy: ctx.session.user.id,
         })
         .returning({ id: accessAssignment.id });
@@ -1610,7 +1700,7 @@ export const accessPlanRouter = {
         .insert(accessAssignmentChange)
         .values({
           organizationId: ctx.organizationId,
-          userId: source.userId,
+          personId: source.personId,
           sourceAssignmentId: source.id,
           targetAssignmentId: successor.id,
           effectiveMonth: next,
@@ -1625,7 +1715,8 @@ export const accessPlanRouter = {
       const enrolment = await enrolInCoveredBranches(
         ctx.db,
         ctx.organizationId,
-        source.userId,
+        source.personId,
+        source.accountUserId,
         await coverageOf(ctx.db, target.id),
       );
 
@@ -1660,7 +1751,12 @@ export const accessPlanRouter = {
           message: CHANGE_NOT_FOUND,
         });
       }
-      await lockAssignmentsOf(ctx.db, change.userId, ctx.organizationId);
+      await lockAssignmentsOf(
+        ctx.db,
+        change.personId,
+        null,
+        ctx.organizationId,
+      );
       if (!changeIsPending(change, month)) {
         throw new TRPCError({
           code: "CONFLICT",
@@ -1688,6 +1784,11 @@ export const accessPlanRouter = {
   forUser: organizationManagerProcedure
     .input(MemberAssignmentsSchema)
     .query(async ({ ctx, input }) => {
+      const subject = await requireOrganizationPerson(
+        ctx.db,
+        ctx.organizationId,
+        input.userId,
+      );
       const rows = await ctx.db
         .select({
           id: accessAssignment.id,
@@ -1696,12 +1797,13 @@ export const accessPlanRouter = {
           archived: accessPlan.archivedAt,
           status: accessAssignment.status,
           startMonth: accessAssignment.startMonth,
+          startsOn: accessAssignment.startsOn,
           endMonth: accessAssignment.endMonth,
           assigningEntityId: accessAssignment.assigningEntityId,
         })
         .from(accessAssignment)
         .innerJoin(accessPlan, eq(accessPlan.id, accessAssignment.planId))
-        .where(eq(accessAssignment.userId, input.userId))
+        .where(eq(accessAssignment.personId, subject.id))
         .orderBy(asc(accessPlan.name));
 
       const coverage = await ctx.db
@@ -1715,10 +1817,13 @@ export const accessPlanRouter = {
       const month = monthOf(new Date(), calendar.timeZone);
       const standing = await membershipStanding(
         ctx.db,
-        input.userId,
+        { personId: subject.id, accountUserId: subject.accountUserId },
         new Date(),
       );
-      const waiting = await pendingChanges(ctx.db, month, input.userId);
+      const waiting = await pendingChanges(ctx.db, month, {
+        personId: subject.id,
+        accountUserId: subject.accountUserId,
+      });
       const planNameOf = new Map(rows.map((r) => [r.id, r.planName]));
 
       return rows.map((r) => {
@@ -1778,65 +1883,90 @@ export const accessPlanRouter = {
   markMonth: organizationManagerProcedure
     .input(MarkMembershipMonthSchema)
     .mutation(async ({ ctx, input }) => {
-      const [assignment] = await ctx.db
-        .select({ id: accessAssignment.id })
-        .from(accessAssignment)
-        .where(eq(accessAssignment.id, input.assignmentId));
-      if (!assignment) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: ASSIGNMENT_NOT_FOUND,
-        });
+      const assignment = await loadAssignment(ctx.db, input.assignmentId);
+      const held = await lockMembershipMonth(
+        ctx.db,
+        input.assignmentId,
+        input.month,
+      );
+      requireMonthVersion(held, input.expectedVersion);
+      const nextStatus: MonthStatus = input.paid ? "confirmed" : "unpaid";
+      const currentStatus = (held?.status ?? "unpaid") as MonthStatus;
+      if (currentStatus === nextStatus) {
+        return {
+          changed: false,
+          paid: input.paid,
+          status: nextStatus,
+          version: held?.version ?? 0,
+        };
       }
-
-      const [held] = await ctx.db
-        .select({ paid: membershipMonth.paid })
-        .from(membershipMonth)
-        .where(
-          and(
-            eq(membershipMonth.assignmentId, input.assignmentId),
-            eq(membershipMonth.month, input.month),
-          ),
-        );
-      const wasPaid = held?.paid ?? null;
-      if (wasPaid === input.paid) {
-        return { changed: false, paid: input.paid };
-      }
-
+      const evidence = await monthEvidence(ctx.db, assignment, input.month);
       const now = new Date();
-      await ctx.db
+      const [saved] = await ctx.db
         .insert(membershipMonth)
         .values({
           organizationId: ctx.organizationId,
           assignmentId: input.assignmentId,
           month: input.month,
-          paid: input.paid,
-          recordedBy: ctx.session.user.id,
-          recordedAt: now,
-          claimedAt: null,
+          status: nextStatus,
+          version: 1,
+          reviewedBy: ctx.session.user.id,
+          reviewedAt: now,
+          priceMinor: evidence.priceMinor,
+          currency: evidence.currency,
+          deadline: evidence.deadline,
+          calendarTimeZone: evidence.calendarTimeZone,
+          reportedAt: null,
         })
         .onConflictDoUpdate({
           target: [membershipMonth.assignmentId, membershipMonth.month],
           set: {
-            paid: input.paid,
-            recordedBy: ctx.session.user.id,
-            recordedAt: now,
-            // Answering a claim closes it, whichever way the answer goes: a
-            // month corrected back to unpaid has no claim left to restore.
-            claimedAt: null,
+            status: nextStatus,
+            version: sql`${membershipMonth.version} + 1`,
+            reviewedBy: ctx.session.user.id,
+            reviewedAt: now,
+            priceMinor: held?.priceMinor ?? evidence.priceMinor,
+            currency: held?.currency ?? evidence.currency,
+            deadline: held?.deadline ?? evidence.deadline,
+            calendarTimeZone:
+              held?.calendarTimeZone ?? evidence.calendarTimeZone,
+            reportedAt: null,
           },
-        });
-
-      await ctx.db.insert(membershipMonthAudit).values({
+        })
+        .returning({ version: membershipMonth.version });
+      await appendMonthAudit(ctx.db, {
         organizationId: ctx.organizationId,
         assignmentId: input.assignmentId,
         month: input.month,
-        wasPaid,
-        paid: input.paid,
+        event: input.paid ? "confirmed" : "corrected",
+        beforeStatus: held ? currentStatus : null,
+        afterStatus: nextStatus,
+        reason: input.reason,
+        evidence,
         actorId: ctx.session.user.id,
       });
-
-      return { changed: true, paid: input.paid };
+      if (input.paid && input.resolveHoldReason && held) {
+        await ctx.db
+          .update(membershipAccessHold)
+          .set({
+            resolvedBy: ctx.session.user.id,
+            resolutionReason: input.resolveHoldReason,
+            resolvedAt: now,
+          })
+          .where(
+            and(
+              eq(membershipAccessHold.assignmentId, input.assignmentId),
+              eq(membershipAccessHold.membershipMonthId, held.id),
+              isNull(membershipAccessHold.resolvedAt),
+            ),
+          );
+      }
+      return {
+        changed: true,
+        paid: input.paid,
+        status: nextStatus,
+        version: saved?.version ?? 1,
+      };
     }),
 
   /**
@@ -1858,18 +1988,19 @@ export const accessPlanRouter = {
     const held = await ctx.db
       .select({
         id: accessAssignment.id,
-        userId: accessAssignment.userId,
-        name: user.name,
-        email: user.email,
+        userId: accessAssignment.personId,
+        name: person.name,
+        email: person.email,
         planId: accessAssignment.planId,
         planName: accessPlan.name,
         startMonth: accessAssignment.startMonth,
+        startsOn: accessAssignment.startsOn,
         endMonth: accessAssignment.endMonth,
         createdAt: accessAssignment.createdAt,
       })
       .from(accessAssignment)
       .innerJoin(accessPlan, eq(accessPlan.id, accessAssignment.planId))
-      .innerJoin(user, eq(user.id, accessAssignment.userId))
+      .innerJoin(person, eq(person.id, accessAssignment.personId))
       .where(
         and(
           eq(accessAssignment.status, "active"),
@@ -1878,7 +2009,7 @@ export const accessPlanRouter = {
           assignmentAppliesInMonth(month),
         ),
       )
-      .orderBy(asc(user.name));
+      .orderBy(asc(person.name));
 
     const coverage = held.length
       ? await ctx.db
@@ -1892,7 +2023,7 @@ export const accessPlanRouter = {
       ? await ctx.db
           .select({
             assignmentId: membershipMonth.assignmentId,
-            paid: membershipMonth.paid,
+            status: membershipMonth.status,
           })
           .from(membershipMonth)
           .where(
@@ -1926,7 +2057,7 @@ export const accessPlanRouter = {
       const deadline = payDeadline({
         month,
         startMonth: a.startMonth,
-        joinedOn: a.createdAt.toISOString().slice(0, 10),
+        joinedOn: a.startsOn,
         policy: calendar,
       });
       return {
@@ -1939,7 +2070,8 @@ export const accessPlanRouter = {
           .filter((c) => c.planId === a.planId)
           .map((c) => c.entityId)
           .sort(),
-        paid: months.find((m) => m.assignmentId === a.id)?.paid ?? false,
+        paid:
+          months.find((m) => m.assignmentId === a.id)?.status === "confirmed",
         // What THIS month cost, which a later price change must not rewrite.
         amount,
         paymentRequired,
@@ -1973,9 +2105,11 @@ export const accessPlanRouter = {
       const rows = await ctx.db
         .select({
           month: membershipMonth.month,
-          paid: membershipMonth.paid,
-          recordedAt: membershipMonth.recordedAt,
-          recordedBy: membershipMonth.recordedBy,
+          status: membershipMonth.status,
+          version: membershipMonth.version,
+          reportedAt: membershipMonth.reportedAt,
+          reviewedAt: membershipMonth.reviewedAt,
+          reviewedBy: membershipMonth.reviewedBy,
         })
         .from(membershipMonth)
         .where(eq(membershipMonth.assignmentId, input.assignmentId))
@@ -2077,19 +2211,31 @@ export const accessPlanRouter = {
   claimMonth: enrolledProcedure
     .input(ClaimMembershipMonthSchema)
     .mutation(async ({ ctx, input }) => {
-      // The user-id filter is the guard, not decoration: RLS scopes this table
-      // to the organization, so another member's assignment is visible through
-      // the policy alone and only this makes it unreachable (ADR 126 §8).
+      if (!ctx.membership.personId) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Your account is not linked to a person record.",
+        });
+      }
       const [assignment] = await ctx.db
         .select({
           id: accessAssignment.id,
+          personId: accessAssignment.personId,
+          planId: accessAssignment.planId,
           status: accessAssignment.status,
+          startMonth: accessAssignment.startMonth,
+          startsOn: accessAssignment.startsOn,
+          endMonth: accessAssignment.endMonth,
+          assigningEntityId: accessAssignment.assigningEntityId,
+          accountUserId: person.accountUserId,
+          userId: accessAssignment.personId,
         })
         .from(accessAssignment)
+        .innerJoin(person, eq(person.id, accessAssignment.personId))
         .where(
           and(
             eq(accessAssignment.id, input.assignmentId),
-            eq(accessAssignment.userId, ctx.session.user.id),
+            eq(accessAssignment.personId, ctx.membership.personId),
           ),
         );
       if (!assignment) {
@@ -2107,50 +2253,96 @@ export const accessPlanRouter = {
 
       const calendar = await membershipCalendar(ctx.db);
       const month = monthOf(new Date(), calendar.timeZone);
-      const standing = await membershipStanding(
-        ctx.db,
-        ctx.session.user.id,
-        new Date(),
-      );
-      const current = standing.find(
-        (m) => m.assignmentId === input.assignmentId,
-      );
-      if (!current)
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: "This membership does not apply this month.",
-        });
-      if (!current.paymentRequired) return { claimed: false, month };
-      const [held] = await ctx.db
-        .select({
-          paid: membershipMonth.paid,
-          claimedAt: membershipMonth.claimedAt,
-        })
-        .from(membershipMonth)
+      const held = await lockMembershipMonth(ctx.db, assignment.id, month);
+      requireMonthVersion(held, input.expectedVersion);
+      const currentStatus = (held?.status ?? "unpaid") as MonthStatus;
+      if (currentStatus !== "unpaid") {
+        return {
+          claimed: false,
+          month,
+          status: currentStatus,
+          version: held?.version ?? 0,
+        };
+      }
+      const [openHold] = await ctx.db
+        .select({ id: membershipAccessHold.id })
+        .from(membershipAccessHold)
         .where(
           and(
-            eq(membershipMonth.assignmentId, input.assignmentId),
-            eq(membershipMonth.month, month),
+            eq(membershipAccessHold.assignmentId, assignment.id),
+            isNull(membershipAccessHold.resolvedAt),
           ),
-        );
-      if (held && !canClaimMonth(held)) return { claimed: false, month };
-
+        )
+        .limit(1);
+      if (openHold) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "An owner must resolve the rejected payment before you can report again.",
+        });
+      }
+      const evidence = await monthEvidence(ctx.db, assignment, month);
+      if (evidence.priceMinor === 0) {
+        return { claimed: false, month, status: "unpaid" as const, version: 0 };
+      }
+      if (
+        input.priceMinor !== undefined &&
+        (input.priceMinor !== evidence.priceMinor ||
+          input.currency !== evidence.currency)
+      ) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message:
+            "The membership price changed. Refresh before reporting payment.",
+        });
+      }
       const now = new Date();
-      await ctx.db
+      const [saved] = await ctx.db
         .insert(membershipMonth)
         .values({
           organizationId: ctx.organizationId,
           assignmentId: input.assignmentId,
           month,
-          paid: false,
-          claimedAt: now,
+          status: "reported",
+          version: 1,
+          claimedBy: ctx.session.user.id,
+          priceMinor: evidence.priceMinor,
+          currency: evidence.currency,
+          deadline: evidence.deadline,
+          calendarTimeZone: evidence.calendarTimeZone,
+          reportedAt: now,
         })
         .onConflictDoUpdate({
           target: [membershipMonth.assignmentId, membershipMonth.month],
-          // Never touches `paid`. A claim is a message, not a payment.
-          set: { claimedAt: now },
-        });
-      return { claimed: true, month };
+          set: {
+            status: "reported",
+            version: sql`${membershipMonth.version} + 1`,
+            claimedBy: ctx.session.user.id,
+            reportedAt: now,
+            priceMinor: held?.priceMinor ?? evidence.priceMinor,
+            currency: held?.currency ?? evidence.currency,
+            deadline: held?.deadline ?? evidence.deadline,
+            calendarTimeZone:
+              held?.calendarTimeZone ?? evidence.calendarTimeZone,
+          },
+        })
+        .returning({ version: membershipMonth.version });
+      await appendMonthAudit(ctx.db, {
+        organizationId: ctx.organizationId,
+        assignmentId: input.assignmentId,
+        month,
+        event: "reported",
+        beforeStatus: held ? currentStatus : null,
+        afterStatus: "reported",
+        evidence,
+        actorId: ctx.session.user.id,
+      });
+      return {
+        claimed: true,
+        month,
+        status: "reported" as const,
+        version: saved?.version ?? 1,
+      };
     }),
 
   /**
@@ -2163,10 +2355,11 @@ export const accessPlanRouter = {
       .select({
         assignmentId: membershipMonth.assignmentId,
         month: membershipMonth.month,
-        claimedAt: membershipMonth.claimedAt,
-        userId: accessAssignment.userId,
-        name: user.name,
-        email: user.email,
+        reportedAt: membershipMonth.reportedAt,
+        personId: accessAssignment.personId,
+        userId: accessAssignment.personId,
+        name: person.name,
+        email: person.email,
         planName: accessPlan.name,
       })
       .from(membershipMonth)
@@ -2175,14 +2368,9 @@ export const accessPlanRouter = {
         eq(accessAssignment.id, membershipMonth.assignmentId),
       )
       .innerJoin(accessPlan, eq(accessPlan.id, accessAssignment.planId))
-      .innerJoin(user, eq(user.id, accessAssignment.userId))
-      .where(
-        and(
-          isNotNull(membershipMonth.claimedAt),
-          eq(membershipMonth.paid, false),
-        ),
-      )
-      .orderBy(asc(membershipMonth.claimedAt));
+      .innerJoin(person, eq(person.id, accessAssignment.personId))
+      .where(eq(membershipMonth.status, "reported"))
+      .orderBy(asc(membershipMonth.reportedAt));
     return rows.map((r) => ({
       ...r,
       monthLabel: formatMonth(r.month, calendar.timeZone),
@@ -2197,18 +2385,69 @@ export const accessPlanRouter = {
   rejectClaim: organizationManagerProcedure
     .input(RejectMembershipClaimSchema)
     .mutation(async ({ ctx, input }) => {
-      const cleared = await ctx.db
+      const assignment = await loadAssignment(ctx.db, input.assignmentId);
+      const held = await lockMembershipMonth(
+        ctx.db,
+        input.assignmentId,
+        input.month,
+      );
+      requireMonthVersion(held, input.expectedVersion);
+      if (held?.status !== "reported") {
+        return { cleared: false, status: held?.status ?? "unpaid" };
+      }
+      if (!assignment.personId) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "This membership must belong to a person before its payment can be rejected.",
+        });
+      }
+      const personId = assignment.personId;
+      const evidence = await monthEvidence(ctx.db, assignment, input.month);
+      const now = new Date();
+      const [saved] = await ctx.db
         .update(membershipMonth)
-        .set({ claimedAt: null })
-        .where(
-          and(
-            eq(membershipMonth.assignmentId, input.assignmentId),
-            eq(membershipMonth.month, input.month),
-            isNotNull(membershipMonth.claimedAt),
-          ),
-        )
-        .returning({ id: membershipMonth.id });
-      return { cleared: cleared.length > 0 };
+        .set({
+          status: "rejected",
+          version: sql`${membershipMonth.version} + 1`,
+          reviewedBy: ctx.session.user.id,
+          reviewedAt: now,
+        })
+        .where(eq(membershipMonth.id, held.id))
+        .returning({ version: membershipMonth.version });
+      const coverage = await coverageOf(ctx.db, assignment.planId);
+      if (coverage.length > 0) {
+        await ctx.db
+          .insert(membershipAccessHold)
+          .values(
+            coverage.map((entityId) => ({
+              organizationId: ctx.organizationId,
+              personId,
+              assignmentId: assignment.id,
+              membershipMonthId: held.id,
+              entityId,
+              rejectedBy: ctx.session.user.id,
+              rejectionReason: input.reason,
+            })),
+          )
+          .onConflictDoNothing();
+      }
+      await appendMonthAudit(ctx.db, {
+        organizationId: ctx.organizationId,
+        assignmentId: input.assignmentId,
+        month: input.month,
+        event: "rejected",
+        beforeStatus: "reported",
+        afterStatus: "rejected",
+        reason: input.reason,
+        evidence,
+        actorId: ctx.session.user.id,
+      });
+      return {
+        cleared: true,
+        status: "rejected" as const,
+        version: saved?.version ?? held.version + 1,
+      };
     }),
 
   /**
@@ -2221,13 +2460,19 @@ export const accessPlanRouter = {
   mine: enrolledProcedure.query(async ({ ctx }) => {
     const memberships = await membershipStanding(
       ctx.db,
-      ctx.session.user.id,
+      {
+        personId: ctx.membership.personId,
+        accountUserId: ctx.session.user.id,
+      },
       new Date(),
     );
     const { month, timeZone } = await currentMonthOf(ctx.db);
     // A change waiting for the 1st is the member's business too: they should
     // read what they will be on and what it costs before it happens (ADR 129).
-    const waiting = await pendingChanges(ctx.db, month, ctx.session.user.id);
+    const waiting = await pendingChanges(ctx.db, month, {
+      personId: ctx.membership.personId,
+      accountUserId: ctx.session.user.id,
+    });
     const successors = waiting.length
       ? await ctx.db
           .select({
@@ -2300,18 +2545,4 @@ export const accessPlanRouter = {
       }),
     };
   }),
-
-  /** One plan with its coverage, for the edit form. */
-  get: organizationManagerProcedure
-    .input(AccessPlanIdSchema)
-    .query(async ({ ctx, input }) => {
-      const plan = await loadPlan(ctx.db, input.id);
-      return {
-        id: plan.id,
-        name: plan.name,
-        description: plan.description,
-        archived: plan.archivedAt !== null,
-        entityIds: await coverageOf(ctx.db, plan.id),
-      };
-    }),
 } satisfies TRPCRouterRecord;

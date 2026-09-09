@@ -40,13 +40,13 @@ export interface PaymentTally {
   blocked: number;
 }
 
-export interface BranchCount {
+interface BranchCount {
   entityId: string;
   entityName: string;
   count: number;
 }
 
-export interface OrganizationMetrics {
+interface OrganizationMetrics {
   /** Distinct people with an active student place at one branch or more. */
   enrolledMembers: number;
   /** Distinct people at least one activated branch currently admits. */

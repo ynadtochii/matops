@@ -1,12 +1,12 @@
 import {
   and,
-  asc,
   eq,
   gt,
   inArray,
   isNotNull,
   isNull,
   lt,
+  min,
   sql,
 } from "drizzle-orm";
 
@@ -69,7 +69,7 @@ type Executor = DbExec | TenantTx;
 
 type Template = typeof classTemplate.$inferSelect;
 
-export interface MaterializeOptions {
+interface MaterializeOptions {
   /** "Now" — injected so callers/tests control the clock (default: real now). */
   now?: Date;
   horizonDays?: number;
@@ -179,104 +179,12 @@ export async function materializeTemplate(
   return inserted;
 }
 
-export interface SweepOptions {
-  /** Max templates to touch this run (bounds work under the serverless limit). */
-  limit?: number;
-  /** Soft wall-clock budget; stop starting new templates past it (resumable). */
-  softBudgetMs?: number;
-  now?: Date;
-  horizonDays?: number;
-  /** The drizzle handle to sweep on. Defaults to the base `db`; tests inject. */
-  exec: Executor;
-}
-
-export interface SweepResult {
-  processed: number;
-  created: number;
-  /** True if the limit/budget stopped us — more work remains for the next tick. */
-  hasMore: boolean;
-}
-
-/**
- * The daily cron body (docs/issues/16). Processes active templates STALE-FIRST
- * (oldest `generated_until` — NULLs first via the pre-filter), bounded by a row
- * `limit` and a soft time budget so a run always finishes fast; leftovers resume
- * next tick. Runs on the base `db` (service role) across all academies.
- */
-export async function runMaterializationSweep({
-  limit = 200,
-  softBudgetMs = 55_000,
-  now = new Date(),
-  horizonDays = MATERIALIZATION_HORIZON_DAYS,
-  exec,
-}: SweepOptions): Promise<SweepResult> {
-  const startedAt = Date.now();
-  // Target horizon end for THIS run. A template is "stale" when its cursor does
-  // not yet reach here — so every active template is nudged ~+1 day each day.
-  const horizonEnd = new Date(now.getTime() + horizonDays * DAY_MS);
-
-  // Stale = cursor behind the horizon end. Oldest cursor first so the most-behind
-  // templates catch up first under the row limit.
-  const stale = await exec
-    .select()
-    .from(classTemplate)
-    .where(
-      and(
-        eq(classTemplate.status, "active"),
-        isNull(classTemplate.deletedAt),
-        lt(classTemplate.generatedUntil, horizonEnd),
-      ),
-    )
-    .orderBy(asc(classTemplate.generatedUntil))
-    .limit(limit + 1);
-
-  // Templates with a NULL cursor are excluded by `lt(NULL)`; fetch those too.
-  const fresh = await exec
-    .select()
-    .from(classTemplate)
-    .where(
-      and(
-        eq(classTemplate.status, "active"),
-        isNull(classTemplate.deletedAt),
-        isNull(classTemplate.generatedUntil),
-      ),
-    )
-    .limit(limit + 1);
-
-  const queue = [...fresh, ...stale].slice(0, limit + 1);
-  const hasMore = queue.length > limit;
-  const batch = queue.slice(0, limit);
-
-  let created = 0;
-  let processed = 0;
-  for (const template of batch) {
-    if (Date.now() - startedAt > softBudgetMs) {
-      return { processed, created, hasMore: true };
-    }
-    try {
-      created += await materializeTemplate(exec, template, {
-        now,
-        horizonDays,
-      });
-    } catch (error) {
-      // One general branch whose timetable has grown a clash must not stop the
-      // sweep filling every other gym's horizon. It is left behind, and the
-      // owner meets the refusal next time they save that template.
-      if (!(error instanceof ScheduleOverlapError)) throw error;
-    }
-    processed += 1;
-  }
-
-  return { processed, created, hasMore };
-}
-
-export interface RebuildResult {
-  /** Future classes removed because no active template still produces them. */
+interface RebuildResult {
   deleted: number;
-  /** Bookings that went with them. Zero when nobody had booked. */
   bookingsRemoved: number;
-  /** Classes generated to refill the horizon. */
+  cancelled: number;
   created: number;
+  generatedThrough: Date | null;
 }
 
 /** The active, non-deleted templates of the academy the caller is scoped to. */
@@ -297,7 +205,19 @@ async function activeTemplates(exec: Executor): Promise<Template[]> {
 export async function planRebuild(
   exec: Executor,
   { now = new Date(), horizonDays = MATERIALIZATION_HORIZON_DAYS } = {},
-): Promise<{ ids: string[]; bookings: number }> {
+): Promise<{
+  affected: {
+    id: string;
+    title: string;
+    startsAt: Date;
+    action: "cancel";
+    activeParticipants: number;
+    otherParticipations: number;
+    activeVisitors: number;
+    otherVisits: number;
+  }[];
+  generatedThrough: Date | null;
+}> {
   const to = new Date(now.getTime() + horizonDays * DAY_MS);
   const templates = await activeTemplates(exec);
 
@@ -319,6 +239,7 @@ export async function planRebuild(
   const existing = await exec
     .select({
       id: classInstance.id,
+      title: classInstance.title,
       templateId: classInstance.templateId,
       startsAt: classInstance.startsAt,
     })
@@ -326,20 +247,62 @@ export async function planRebuild(
     .where(
       and(
         gt(classInstance.startsAt, now),
+        lt(classInstance.startsAt, to),
         isNotNull(classInstance.templateId),
         isNull(classInstance.deletedAt),
+        eq(classInstance.status, "scheduled"),
       ),
     );
 
   const ids = staleClassIds(existing, wanted);
-  if (ids.length === 0) return { ids, bookings: 0 };
+  const [cursor] = await exec
+    .select({ value: min(classTemplate.generatedUntil) })
+    .from(classTemplate)
+    .where(
+      and(eq(classTemplate.status, "active"), isNull(classTemplate.deletedAt)),
+    );
+  if (ids.length === 0) {
+    return { affected: [], generatedThrough: cursor?.value ?? null };
+  }
 
-  const [booked] = await exec
-    .select({ n: sql<number>`count(*)::int` })
+  const participations = await exec
+    .select({
+      classId: classParticipation.classId,
+      active: sql<number>`count(*) filter (where ${classParticipation.bookingStatus} = 'booked')::int`,
+      other: sql<number>`count(*) filter (where ${classParticipation.bookingStatus} <> 'booked')::int`,
+    })
     .from(classParticipation)
-    .where(inArray(classParticipation.classId, ids));
-
-  return { ids, bookings: booked?.n ?? 0 };
+    .where(inArray(classParticipation.classId, ids))
+    .groupBy(classParticipation.classId);
+  const visits = await exec
+    .select({
+      classId: dropInVisit.classId,
+      active: sql<number>`count(*) filter (where ${dropInVisit.bookingStatus} = 'booked')::int`,
+      other: sql<number>`count(*) filter (where ${dropInVisit.bookingStatus} <> 'booked')::int`,
+    })
+    .from(dropInVisit)
+    .where(inArray(dropInVisit.classId, ids))
+    .groupBy(dropInVisit.classId);
+  const participationByClass = new Map(
+    participations.map((row) => [row.classId, row]),
+  );
+  const visitsByClass = new Map(visits.map((row) => [row.classId, row]));
+  const stale = new Set(ids);
+  return {
+    affected: existing
+      .filter((row) => stale.has(row.id))
+      .map((row) => ({
+        id: row.id,
+        title: row.title,
+        startsAt: row.startsAt,
+        action: "cancel" as const,
+        activeParticipants: participationByClass.get(row.id)?.active ?? 0,
+        otherParticipations: participationByClass.get(row.id)?.other ?? 0,
+        activeVisitors: visitsByClass.get(row.id)?.active ?? 0,
+        otherVisits: visitsByClass.get(row.id)?.other ?? 0,
+      })),
+    generatedThrough: cursor?.value ?? null,
+  };
 }
 
 /**
@@ -359,18 +322,21 @@ export async function rebuildSchedule(
   exec: Executor,
   { now = new Date(), horizonDays = MATERIALIZATION_HORIZON_DAYS } = {},
 ): Promise<RebuildResult> {
-  const { ids, bookings } = await planRebuild(exec, { now, horizonDays });
-
+  const plan = await planRebuild(exec, { now, horizonDays });
+  const blocked = plan.affected.filter(
+    (item) => item.activeParticipants + item.activeVisitors > 0,
+  );
+  if (blocked.length > 0) {
+    throw new Error(
+      `${blocked.length} stale ${blocked.length === 1 ? "class has" : "classes have"} active bookings`,
+    );
+  }
+  const ids = plan.affected.map((item) => item.id);
   if (ids.length > 0) {
-    // ponytail: one statement per table, no chunking. Six months of a normal
-    // gym is low thousands of ids; chunk at ~10k if a franchise ever appears.
     await exec
-      .delete(classParticipation)
-      .where(inArray(classParticipation.classId, ids));
-    // A visitor's visits die with the class; the LEAD outlives it and stays in
-    // the owner's follow-up queue (ADR 115).
-    await exec.delete(dropInVisit).where(inArray(dropInVisit.classId, ids));
-    await exec.delete(classInstance).where(inArray(classInstance.id, ids));
+      .update(classInstance)
+      .set({ status: "cancelled" })
+      .where(inArray(classInstance.id, ids));
   }
 
   const templates = await activeTemplates(exec);
@@ -387,5 +353,12 @@ export async function rebuildSchedule(
     );
   }
 
-  return { deleted: ids.length, bookingsRemoved: bookings, created };
+  const refreshed = await planRebuild(exec, { now, horizonDays });
+  return {
+    deleted: 0,
+    bookingsRemoved: 0,
+    cancelled: ids.length,
+    created,
+    generatedThrough: refreshed.generatedThrough,
+  };
 }

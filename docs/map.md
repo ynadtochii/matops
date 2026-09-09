@@ -2,6 +2,9 @@
 
 # Map: matops — MVP rebuild (product spec + architecture)
 
+- [135: First academy fresh install contract](/Users/kuna/projects/matops/docs/issues/135-first-academy-fresh-install-contract.md): seven-day access grace, required owner assignment, branch-scoped rejection holds, configurable booking windows, manual schedule rebuild, request-driven email, hosted booking without an external API, and one fresh database baseline.
+- [134: First academy release](/Users/kuna/projects/matops/docs/issues/134-first-academy-release.md): superseded staged migration and worker design. ADR 135 is the current release contract.
+- [133: Explicit attendance review](/Users/kuna/projects/matops/docs/issues/133-explicit-attendance-review.md): all past classes, explicit completion, and review after roster changes. Implementation in progress.
 - [132: Staff roster isolation](/Users/kuna/projects/matops/docs/issues/132-staff-roster-isolation.md): staff access, student-only Members, and preserved billing history.
 
 **Planned feature documents**

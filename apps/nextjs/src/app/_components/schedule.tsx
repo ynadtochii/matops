@@ -203,7 +203,15 @@ export function Schedule({
         rollback(queryClient, ctx);
         onError(err);
       },
-      onSuccess: () => toast.success("Class cancelled"),
+      onSuccess: (result) => {
+        const sent = result.notice.delivery.accepted;
+        const pending = result.notice.delivery.remaining;
+        const failed =
+          result.notice.delivery.failed + result.notice.delivery.unknown;
+        toast.success(
+          `Class cancelled. Email: ${sent} accepted, ${pending} remaining, ${failed} need attention.`,
+        );
+      },
       onSettled: () => invalidate(),
     }),
   );

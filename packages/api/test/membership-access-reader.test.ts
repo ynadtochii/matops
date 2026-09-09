@@ -7,7 +7,7 @@ import {
   loadMembershipAccess,
   loadRosterStanding,
 } from "../src/membership-access";
-import { harness, seedAcademies } from "./helpers";
+import { harness, personId, seedAcademies } from "./helpers";
 
 const ORG = "acad_reader";
 const BOSS = "u_reader_owner";
@@ -35,6 +35,7 @@ describe("the scoped membership access reader", () => {
       { organizationId: ORG, entityId: input.entityId ?? ORG },
       (tx) =>
         loadMembershipAccess(tx, {
+          personId: personId(ORG, SAM),
           userId: SAM,
           entityId: input.entityId ?? ORG,
           membership:
@@ -78,6 +79,8 @@ describe("the scoped membership access reader", () => {
     const plan = await owner().accessPlan.create({
       name: "Mat only",
       entityIds: [ORG],
+      priceMinor: 5000,
+      currency: "EUR",
     });
     assignment = (
       await owner().accessPlan.assign({
@@ -180,6 +183,31 @@ describe("the scoped membership access reader", () => {
       verdict: "suspended",
       accessSource: null,
     });
+  });
+
+  it("finds a student assignment by person id", async () => {
+    const [student] = await h.exec.query.person.findMany({
+      where: (person, { eq }) => eq(person.accountUserId, SAM),
+      limit: 1,
+    });
+    expect(student).toBeDefined();
+    const seen = await withScope(
+      { organizationId: ORG, entityId: ORG },
+      (tx) =>
+        loadRosterStanding(tx, {
+          entityId: ORG,
+          people: [
+            {
+              userId: student?.id ?? "missing",
+              role: "student",
+              status: "active",
+            },
+          ],
+          now: IN_GRACE,
+        }),
+      h.exec,
+    );
+    expect(seen.get(student?.id ?? "missing")?.covered).toBe(true);
   });
 
   it("inherits owner access at another branch without coverage", async () => {

@@ -18,6 +18,11 @@ import { materializeTemplate } from "../materialize";
 import {
   academyInvite,
   academyProfile,
+  accessAssignment,
+  accessAssignmentChange,
+  accessPlan,
+  accessPlanEntity,
+  accessPlanPrice,
   classInstance,
   classParticipation,
   classTemplate,
@@ -27,22 +32,22 @@ import {
   entity,
   entityMembership,
   member,
-  memberDues,
   memberNote,
   memberRank,
   memberReferral,
   memberReferralAudit,
-  membershipPlan,
+  membershipMonth,
+  membershipMonthAudit,
+  membershipPolicy,
   organization,
-  paymentClaim,
-  paymentSettings,
+  person,
   rankPromotion,
   user,
 } from "../schema";
 import { buildSeedGraph } from "./data";
 import { seedAcademyList } from "./registry";
 
-export interface SeedOptions {
+interface SeedOptions {
   /** The real, already-registered user you sign in as (looked up by the CLI). */
   realUser: { id: string; name: string };
   now?: Date;
@@ -50,7 +55,7 @@ export interface SeedOptions {
 }
 
 /** Row counts written, per table — returned so the CLI can report the run. */
-export type SeedReport = Record<string, number>;
+type SeedReport = Record<string, number>;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -105,13 +110,14 @@ export async function seedAll(
     "curriculum_track",
     exec,
     curriculumTrack,
-    graph.organizations.map((org) => ({
-      academyId: org.id,
+    graph.entities.map((e) => ({
+      academyId: e.id,
       name: DEFAULT_TRACK_NAME,
       isDefault: true,
     })),
   );
   await insert(report, "member", exec, member, graph.members);
+  await insert(report, "person", exec, person, graph.people);
   await insert(
     report,
     "entity_membership",
@@ -121,9 +127,45 @@ export async function seedAll(
   );
   await insert(report, "academy_invite", exec, academyInvite, graph.invites);
 
-  // 2. Payments price list first (dues + claims FK the plan).
-  await insert(report, "membership_plan", exec, membershipPlan, graph.plans);
-
+  const m = graph.memberships;
+  await insert(report, "membership_policy", exec, membershipPolicy, m.policies);
+  await insert(report, "access_plan", exec, accessPlan, m.plans);
+  await insert(
+    report,
+    "access_plan_price",
+    exec,
+    accessPlanPrice,
+    m.planPrices,
+  );
+  await insert(
+    report,
+    "access_plan_entity",
+    exec,
+    accessPlanEntity,
+    m.planEntities,
+  );
+  await insert(
+    report,
+    "access_assignment",
+    exec,
+    accessAssignment,
+    m.assignments,
+  );
+  await insert(
+    report,
+    "access_assignment_change",
+    exec,
+    accessAssignmentChange,
+    m.changes,
+  );
+  await insert(report, "membership_month", exec, membershipMonth, m.months);
+  await insert(
+    report,
+    "membership_month_audit",
+    exec,
+    membershipMonthAudit,
+    m.monthAudits,
+  );
   // 3. Templates → past classes → their participations.
   await insert(report, "class_template", exec, classTemplate, graph.templates);
   await insert(report, "class(past)", exec, classInstance, graph.pastClasses);
@@ -136,15 +178,6 @@ export async function seedAll(
   );
 
   // 4. The rest of the payments + rank + notes + leads.
-  await insert(report, "member_dues", exec, memberDues, graph.dues);
-  await insert(report, "payment_claim", exec, paymentClaim, graph.claims);
-  await insert(
-    report,
-    "payment_settings",
-    exec,
-    paymentSettings,
-    graph.settings,
-  );
   await insert(report, "member_rank", exec, memberRank, graph.ranks);
   await insert(report, "rank_promotion", exec, rankPromotion, graph.promotions);
   await insert(report, "member_note", exec, memberNote, graph.notes);
@@ -242,16 +275,14 @@ async function bookFutureClasses(
   const pendingByAcademy = new Map<string, string[]>();
   for (const m of graph.entityMemberships) {
     const acad = m.entityId;
-    if (quiet.has(m.userId)) continue;
+    const userId = m.userId;
+    if (!userId || quiet.has(userId)) continue;
     if (m.role === "student" && m.status === "active") {
-      activeByAcademy.set(acad, [
-        ...(activeByAcademy.get(acad) ?? []),
-        m.userId,
-      ]);
+      activeByAcademy.set(acad, [...(activeByAcademy.get(acad) ?? []), userId]);
     } else if (m.status === "pending" && m.invitedRole === "student") {
       pendingByAcademy.set(acad, [
         ...(pendingByAcademy.get(acad) ?? []),
-        m.userId,
+        userId,
       ]);
     }
   }

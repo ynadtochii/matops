@@ -20,11 +20,13 @@ import { Templates } from "./templates";
  * teaching plan, and the router refuses it there anyway (ADR 126).
  */
 export function ScheduleScreen() {
-  const bjj = isBjjAcademy(useEntity().type);
+  const academy = useEntity();
+  const bjj = isBjjAcademy(academy.type);
+  const curriculum = bjj && academy.curriculumEnabled;
   const [tab, setTab] = useState<"week" | "templates" | "curriculum">("week");
   const [openTemplateId, setOpenTemplateId] = useState<string | null>(null);
   const onOpened = useCallback(() => setOpenTemplateId(null), []);
-  const showCurriculum = bjj && tab === "curriculum";
+  const showCurriculum = curriculum && tab === "curriculum";
   return (
     <>
       <PageHeader
@@ -36,7 +38,7 @@ export function ScheduleScreen() {
         value={tab}
         onChange={setTab}
         tabs={
-          bjj
+          curriculum
             ? [
                 { id: "week", label: "This week" },
                 { id: "templates", label: "Templates" },

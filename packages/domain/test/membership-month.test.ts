@@ -2,10 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import type { MembershipPolicy } from "../src/membership-month";
 import {
-  canClaimMonth,
   JOIN_GRACE_DAYS,
   membershipWarning,
-  monthAdmits,
   monthOf,
   monthVerdict,
   nextMonth,
@@ -181,12 +179,6 @@ describe("monthVerdict", () => {
     expect(monthVerdict({ ...month, paid: null, now: late })).toBe("blocked");
     expect(monthVerdict({ ...month, paid: false, now: late })).toBe("blocked");
   });
-
-  it("admits everything but a blocked month", () => {
-    expect(monthAdmits("paid")).toBe(true);
-    expect(monthAdmits("within-grace")).toBe(true);
-    expect(monthAdmits("blocked")).toBe(false);
-  });
 });
 
 describe("membershipWarning", () => {
@@ -227,19 +219,5 @@ describe("membershipWarning", () => {
       verdict: "within-grace",
     });
     expect(warning?.headline).toContain("December 2026");
-  });
-});
-
-describe("claiming a month", () => {
-  it("takes a claim on an unpaid month nobody has claimed", () => {
-    expect(canClaimMonth({ paid: false, claimedAt: null })).toBe(true);
-  });
-
-  it("refuses a second claim", () => {
-    expect(canClaimMonth({ paid: false, claimedAt: new Date() })).toBe(false);
-  });
-
-  it("refuses a claim on a month already ticked paid", () => {
-    expect(canClaimMonth({ paid: true, claimedAt: null })).toBe(false);
   });
 });

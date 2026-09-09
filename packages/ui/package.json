@@ -6,15 +6,13 @@
     ".": "./src/index.ts",
     "./tokens": "./src/tokens.ts",
     "./button-variants": "./src/button-variants.ts",
-    "./button": {
-      "react-native": "./src/button.native.tsx",
-      "default": "./src/button.tsx"
-    },
+    "./button": "./src/button.tsx",
     "./logo": {
       "react-native": "./src/logo.native.tsx",
       "default": "./src/logo.tsx"
     },
     "./motion": "./src/motion.ts",
+    "./use-invalidate": "./src/use-invalidate.ts",
     "./alert-dialog": "./src/alert-dialog.tsx",
     "./dialog": "./src/dialog.tsx",
     "./collapsible": "./src/collapsible.tsx",
@@ -39,7 +37,9 @@
     "ui-add": "pnpm dlx shadcn@latest add && prettier src --write --list-different"
   },
   "dependencies": {
+    "@matops/domain": "workspace:*",
     "@radix-ui/react-icons": "^1.3.2",
+    "@tanstack/react-query": "catalog:",
     "class-variance-authority": "^0.7.1",
     "radix-ui": "^1.4.3",
     "sonner": "^2.0.7",

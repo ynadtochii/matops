@@ -5,7 +5,7 @@ import { DAY_MS } from "./local-date";
 import { isPendingCoach } from "./membership";
 import { groupMoneyByCurrency } from "./referrals";
 
-export interface DashClass {
+interface DashClass {
   startsAt: Date;
   durationMinutes: number;
   status: string;
@@ -18,7 +18,7 @@ export function classEndsAt(c: {
   return c.startsAt.getTime() + c.durationMinutes * 60 * 1000;
 }
 
-export interface DayPlan<T> {
+interface DayPlan<T> {
   list: T[];
   showTomorrow: boolean;
   nowIndex: number | null;
@@ -52,14 +52,14 @@ export function dayPlan<T extends DashClass>(
   };
 }
 
-export interface DashMember {
+interface DashMember {
   role?: string;
   status: string;
   invitedRole?: string | null;
   dues?: { status: string } | null;
 }
 
-export interface RosterSummary<T> {
+interface RosterSummary<T> {
   pendingStudents: number;
   pendingCoaches: number;
   active: number;
@@ -121,7 +121,7 @@ export interface EntitySummary {
   revenue: MoneyAmount[];
 }
 
-export interface OrganizationSummary {
+interface OrganizationSummary {
   members: number;
   pendingMembers: number;
   newLeads: number;

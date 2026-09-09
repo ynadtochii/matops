@@ -3,17 +3,22 @@ import { TRPCError } from "@trpc/server";
 
 import {
   and,
+  bumpScheduleRevision,
   desc,
   eq,
   isNull,
+  lockAndReadScheduleRevision,
   ne,
+  or,
   recordActivity,
   recordMilestone,
+  sql,
 } from "@matops/db";
 import { classInstance, classParticipation } from "@matops/db/schema";
 import { bookingTier, canBook, notBookableMessage } from "@matops/domain";
 import { BookClassSchema, CancelBookingSchema } from "@matops/validators";
 
+import { academyContext } from "../academy-tz";
 import {
   claimSeat,
   releaseSeats,
@@ -24,29 +29,14 @@ import { CLASS_NOT_FOUND } from "../messages";
 import { bookingGate } from "../payments-gate";
 import { enrolledProcedure, memberProcedure } from "../trpc";
 
-// ponytail: newest 300 by start time. A student who trains daily loses past rows
-// past ~10 months; `stats.me` is the lifetime figure, not this list. Paginate if
-// the Past list ever needs to go further back.
 const MINE_LIMIT = 300;
 
 export const bookingRouter = {
-  /**
-   * May the caller book at this branch right now, and if not, why?
-   *
-   * ONE answer for both clients, through the same `bookingGate` the booking
-   * mutation itself uses, so what a screen shows and what the server does can
-   * never disagree. It covers whichever gate the branch runs on, so neither
-   * client needs to know that the legacy dues path exists.
-   *
-   * Deliberately about NOW and not about a particular class: a screen showing a
-   * week of classes wants one line at the top, and the mutation still checks the
-   * individual class's own start before it books.
-   */
   access: enrolledProcedure.query(async ({ ctx }) => {
     const gate = await bookingGate(ctx.db, {
       entity: ctx.entity,
       membership: ctx.membership,
-      userId: ctx.session.user.id,
+      accountUserId: ctx.session.user.id,
     });
     return { locked: gate.locked, message: gate.message };
   }),
@@ -79,7 +69,15 @@ export const bookingRouter = {
       )
       .where(
         and(
-          eq(classParticipation.studentId, ctx.session.user.id),
+          or(
+            ctx.membership.personId
+              ? eq(classParticipation.personId, ctx.membership.personId)
+              : undefined,
+            and(
+              isNull(classParticipation.personId),
+              eq(classParticipation.studentId, ctx.session.user.id),
+            ),
+          ),
           isNull(classInstance.deletedAt),
         ),
       )
@@ -95,26 +93,33 @@ export const bookingRouter = {
   book: memberProcedure
     .input(BookClassSchema)
     .mutation(async ({ ctx, input }) => {
+      await lockAndReadScheduleRevision(ctx.db, ctx.academyId);
       // 1. Pre-read for a precise, friendly error (NOT the race guard — that is
       //    the atomic upsert + increment below). RLS scopes this to the academy.
       const cls = await requireClassFacts(ctx.db, input.classId);
-      const bookable = canBook(cls, new Date());
+      const academy = await academyContext(ctx);
+      const bookingRule = {
+        bookingWindowDays: academy.bookingWindowDays,
+        timeZone: academy.timeZone,
+      };
+      const bookable = canBook(cls, new Date(), bookingRule);
       if (bookable.reason === "deleted") {
         throw new TRPCError({ code: "NOT_FOUND", message: CLASS_NOT_FOUND });
       }
       if (bookable.reason) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
-          message: notBookableMessage(bookable.reason),
+          message: notBookableMessage(
+            bookable.reason,
+            academy.bookingWindowDays,
+          ),
         });
       }
-
-      const tier = bookingTier(ctx.membership);
 
       const gate = await bookingGate(ctx.db, {
         entity: ctx.entity,
         membership: ctx.membership,
-        userId: ctx.session.user.id,
+        accountUserId: ctx.session.user.id,
         sessionAt: cls.startsAt,
       });
       if (gate.locked) {
@@ -123,7 +128,9 @@ export const bookingRouter = {
           message: gate.message ?? "Booking is locked for you.",
         });
       }
-
+      const tier = gate.provisional
+        ? ("provisional" as const)
+        : bookingTier(ctx.membership);
       // 3. Transition the participation to booked, only if not already booked
       //    (idempotent). A returned row ⇒ a real transition (new insert OR
       //    cancelled → booked); no row ⇒ already booked, leave the count alone.
@@ -132,13 +139,22 @@ export const bookingRouter = {
         .values({
           academyId: ctx.academyId,
           classId: input.classId,
+          personOrganizationId: ctx.membership.personId
+            ? ctx.organizationId
+            : null,
+          personId: ctx.membership.personId,
           studentId: ctx.session.user.id,
           bookingStatus: "booked",
           bookingTier: tier,
           cancelledAt: null,
         })
         .onConflictDoUpdate({
-          target: [classParticipation.classId, classParticipation.studentId],
+          target: ctx.membership.personId
+            ? [classParticipation.classId, classParticipation.personId]
+            : [classParticipation.classId, classParticipation.studentId],
+          targetWhere: ctx.membership.personId
+            ? sql`person_id is not null`
+            : undefined,
           set: {
             bookingStatus: "booked",
             bookingTier: tier,
@@ -159,6 +175,7 @@ export const bookingRouter = {
           throw new TRPCError({ code: "CONFLICT", message: SESSION_FULL });
         }
       }
+      if (transition) await bumpScheduleRevision(ctx.db, ctx.academyId);
 
       if (ctx.membership.role === "student") {
         ctx.afterCommit(async (exec) => {
@@ -183,13 +200,22 @@ export const bookingRouter = {
   cancel: enrolledProcedure
     .input(CancelBookingSchema)
     .mutation(async ({ ctx, input }) => {
+      await lockAndReadScheduleRevision(ctx.db, ctx.academyId);
       const [cancelled] = await ctx.db
         .update(classParticipation)
         .set({ bookingStatus: "cancelled", cancelledAt: new Date() })
         .where(
           and(
             eq(classParticipation.classId, input.classId),
-            eq(classParticipation.studentId, ctx.session.user.id),
+            or(
+              ctx.membership.personId
+                ? eq(classParticipation.personId, ctx.membership.personId)
+                : undefined,
+              and(
+                isNull(classParticipation.personId),
+                eq(classParticipation.studentId, ctx.session.user.id),
+              ),
+            ),
             eq(classParticipation.bookingStatus, "booked"),
           ),
         )
@@ -198,6 +224,7 @@ export const bookingRouter = {
       if (cancelled?.tier === "confirmed") {
         await releaseSeats(ctx.db, [input.classId]);
       }
+      if (cancelled) await bumpScheduleRevision(ctx.db, ctx.academyId);
 
       return { ok: true as const };
     }),

@@ -20,12 +20,6 @@ export const ACADEMY_CODE_LENGTH = 6;
  */
 export const CODE_JOIN_ROLE = "student";
 
-/** Strip surrounding whitespace so a code typed with stray spaces still matches.
- * Inner characters are left as-is — a non-digit still fails validation below. */
-export function normalizeAcademyCode(raw: string): string {
-  return raw.trim();
-}
-
 /** True only for exactly ACADEMY_CODE_LENGTH digits (0-9), nothing else. */
 export function isValidAcademyCode(code: string): boolean {
   return code.length === ACADEMY_CODE_LENGTH && /^\d+$/.test(code);

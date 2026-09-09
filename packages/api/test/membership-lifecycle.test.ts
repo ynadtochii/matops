@@ -48,7 +48,6 @@ const memberStatus = async (h: Harness, id: string) => {
 
 describe("member archive and permanent erase (docs/issues/84)", () => {
   let h: Harness;
-  let planId: string;
 
   beforeEach(async () => {
     h = await harness([
@@ -99,13 +98,6 @@ describe("member archive and permanent erase (docs/issues/84)", () => {
         status: "cancelled",
       },
     ]);
-    const plan = await h.as(OWNER, ACAD).payments.createPlan({
-      name: "Unlimited",
-      priceMinor: 8000,
-      currency: "EUR",
-      cycle: "monthly",
-    });
-    planId = plan.id;
   });
 
   afterEach(() => h.close());
@@ -172,20 +164,6 @@ describe("member archive and permanent erase (docs/issues/84)", () => {
         await rejectionCode(
           h.as(OWNER, ACAD).membership.archive({
             memberId: memberId(ACAD, OWNER),
-          }),
-        ),
-      ).toBe("PRECONDITION_FAILED");
-    });
-
-    it("refuses to step the last owner down to instructor", async () => {
-      await h
-        .as(OWNER, ACAD)
-        .membership.archive({ memberId: memberId(ACAD, COOWNER) });
-      expect(
-        await rejectionCode(
-          h.as(OWNER, ACAD).membership.setRole({
-            memberId: memberId(ACAD, OWNER),
-            role: "instructor",
           }),
         ),
       ).toBe("PRECONDITION_FAILED");
@@ -273,11 +251,6 @@ describe("member archive and permanent erase (docs/issues/84)", () => {
       await h.pg.exec(
         `UPDATE "class" SET booking_count = 1 WHERE id = '${FUTURE}';`,
       );
-      await h.as(OWNER, ACAD).payments.setMemberDues({
-        memberId: LEAVER_MEMBER,
-        planId,
-        nextDueAt: new Date().toISOString().slice(0, 10),
-      });
       await h.as(OWNER, ACAD).rank.set({
         memberId: LEAVER_MEMBER,
         discipline: "bjj",
@@ -315,13 +288,7 @@ describe("member archive and permanent erase (docs/issues/84)", () => {
           LEAVER,
         ),
       ).toBe(0);
-      for (const table of [
-        "member_dues",
-        "member_rank",
-        "rank_promotion",
-        "member_note",
-        "payment_claim",
-      ]) {
+      for (const table of ["member_rank", "rank_promotion", "member_note"]) {
         expect(
           await countRows(
             h,

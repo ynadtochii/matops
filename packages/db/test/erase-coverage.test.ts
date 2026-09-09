@@ -9,8 +9,6 @@ const NOT_MEMBER_DATA: Record<string, string> = {
   class:
     "The gym's own schedule. A class outlives the members who attended it; erasing a member removes their participation rows, not the class.",
   class_template: "The gym's own recurring schedule, not member data.",
-  membership_plan: "The gym's price list, not member data.",
-  payment_settings: "The gym's bank details, not member data.",
   drop_in:
     "A lead is not a member. It carries no member_id and is erased with the academy, not with a member (spec O4).",
   drop_in_visit:
@@ -31,6 +29,10 @@ const NOT_MEMBER_DATA: Record<string, string> = {
     "Which branches one of the gym's membership plans covers. It is the plan's own shape, not anybody's membership of it (ADR 126).",
   product_event:
     "A count of what happened, naming the gym, the branch and a role. It holds no user id and no personal field, so a member has nothing in it to erase (ADR 128).",
+  notification_notice:
+    "A notice belongs to the academy. Member erasure removes its recipient rows while retaining the operational record.",
+  notification_attempt:
+    "A delivery attempt is removed through its recipient foreign key during member erasure.",
 };
 
 const ERASE_SOURCE = fileURLToPath(new URL("../src/erase.ts", import.meta.url));

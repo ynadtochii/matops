@@ -10,7 +10,7 @@ export function liveClass(classId: string): SQL | undefined {
   return and(eq(classInstance.id, classId), isNull(classInstance.deletedAt));
 }
 
-export interface ClassFacts {
+interface ClassFacts {
   id: string;
   status: string;
   startsAt: Date;

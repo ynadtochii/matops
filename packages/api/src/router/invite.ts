@@ -6,14 +6,9 @@ import {
   getOrCreateInvite,
   listInvites,
   resolveInviteToken,
-  revokeInvite,
   rotateInvite,
 } from "@matops/db";
-import {
-  IdSchema,
-  InviteRoleSchema,
-  InviteTokenSchema,
-} from "@matops/validators";
+import { InviteRoleSchema, InviteTokenSchema } from "@matops/validators";
 
 import {
   branchManagerIdentityProcedure,
@@ -60,14 +55,6 @@ export const inviteRouter = {
         ctx.baseDb,
       ),
     ),
-
-  /** Revoke a specific link (kills it without minting a replacement). */
-  revoke: branchManagerIdentityProcedure
-    .input(z.object({ inviteId: IdSchema }))
-    .mutation(async ({ ctx, input }) => {
-      await revokeInvite(ctx.academyId, input.inviteId, ctx.baseDb);
-      return { ok: true as const };
-    }),
 
   /**
    * Resolve a token on the public join screen → academy + intended role. Public

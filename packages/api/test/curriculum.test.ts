@@ -308,25 +308,6 @@ describe("curriculum blocks and the plan", () => {
     expect(board.plan[0]?.weeks).toBe(1);
   });
 
-  it("names the block covering a date", async () => {
-    await reset();
-    const made = await block("Closed guard");
-    await h
-      .as(OWNER, ACAD)
-      .curriculum.place({ trackId: mainTrack, blockId: made.id, atIndex: 0 });
-    const board = await h.as(OWNER, ACAD).curriculum.board();
-
-    expect(
-      (await h.as(COACH, ACAD).curriculum.forDate({ date: board.today }))
-        ?.themes[0]?.theme,
-    ).toBe("Closed guard");
-    expect(
-      await h
-        .as(COACH, ACAD)
-        .curriculum.forDate({ date: addDays(board.today, 90) }),
-    ).toBeNull();
-  });
-
   describe("the theme on a class (ADR 110)", () => {
     const TODAY_CLASS = "33333333-3333-4333-8333-000000000001";
     const setOn = (on: boolean) =>

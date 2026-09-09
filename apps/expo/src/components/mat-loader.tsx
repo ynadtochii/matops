@@ -99,7 +99,7 @@ void AccessibilityInfo.isReduceMotionEnabled().then(setReducedMotion);
 AccessibilityInfo.addEventListener("reduceMotionChanged", setReducedMotion);
 
 /** The device's "reduce motion" switch, live. */
-export function useReducedMotion(): boolean {
+function useReducedMotion(): boolean {
   return useSyncExternalStore(
     (onChange) => {
       motionListeners.add(onChange);

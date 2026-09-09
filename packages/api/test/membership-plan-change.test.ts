@@ -1,11 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { and, eq } from "@matops/db";
+import { eq } from "@matops/db";
 import { accessAssignment } from "@matops/db/schema";
 import { monthOf, nextMonth } from "@matops/domain";
 
 import type { Harness } from "./helpers";
-import { harness, rejectionCode, seedAcademies } from "./helpers";
+import { harness, personId, rejectionCode, seedAcademies } from "./helpers";
 
 const ORG = "acad_change";
 const OWNER = "u_change_owner";
@@ -111,7 +111,7 @@ describe("changing somebody's plan at the month boundary", () => {
 
   it("leaves this month on the old plan and off the new one", async () => {
     const board = await owner().accessPlan.monthBoard();
-    const mine = board.rows.filter((r) => r.userId === ALEX);
+    const mine = board.rows.filter((r) => r.userId === personId(ORG, ALEX));
     expect(mine.map((r) => r.planName)).toEqual(["Basic"]);
     expect(mine[0]?.amount?.priceMinor).toBe(5000);
   });
@@ -192,12 +192,7 @@ describe("changing somebody's plan at the month boundary", () => {
     const [past] = await h.exec
       .select({ id: accessAssignment.id })
       .from(accessAssignment)
-      .where(
-        and(
-          eq(accessAssignment.userId, ALEX),
-          eq(accessAssignment.planId, basic),
-        ),
-      );
+      .where(eq(accessAssignment.planId, basic));
     expect(past?.id).toBe(held);
   });
 });

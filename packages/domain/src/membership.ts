@@ -12,7 +12,7 @@ export interface MemberRow extends Membership {
 
 // --- Approval (pending → active) ---------------------------------------------
 
-export interface PendingMembership {
+interface PendingMembership {
   status: string;
   /** The role to grant at approval; set from the invite at join time. */
   invitedRole: string | null;
@@ -52,8 +52,7 @@ export function isPendingCoach(m: {
  * Whether `actor` may approve or decline this pending seat (ADR 75). An
  * instructor runs the student desk, but the coach queue stays the owner's:
  * approving grants `invitedRole`, so a staff caller clearing a pending
- * INSTRUCTOR would mint instructors — the same escalation `setRole` is
- * owner-gated against — and could also decline a coach the owner invited.
+ * INSTRUCTOR would mint instructors and could decline a coach the owner invited.
  */
 export function canDecideSeat(
   actor: Membership,

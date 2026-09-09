@@ -91,6 +91,8 @@ export async function myEntities() {
       canCreateBranches: false,
       canCreateGeneralBranches: false,
       canRunOrganization: false,
+      curriculumEnabled: false,
+      referralsEnabled: false,
       role: "member",
       entities: [],
     }

@@ -63,15 +63,12 @@ describe("gym-level permissions", () => {
     await expect(as(MANAGER).organization.setup()).resolves.toBeDefined();
   });
 
-  it("lets a manager do the daily work: assign, confirm, announce, set up", async () => {
+  it("lets a manager do the daily work: assign, confirm, and set up", async () => {
     await expect(
       as(MANAGER).accessPlan.assign({ userId: STUDENT, planId }),
     ).resolves.toBeDefined();
     await expect(
       as(MANAGER).accessPlan.setPolicy({ graceDays: 7, bankDetails: "IBAN" }),
-    ).resolves.toBeDefined();
-    await expect(
-      as(MANAGER).notification.audienceCountsAll(),
     ).resolves.toBeDefined();
     await expect(
       as(MANAGER).organization.rename({ name: "Renamed gym" }),

@@ -16,6 +16,8 @@
 
 // Type-only import — erased at runtime, so this file (and teardown) stay free of
 // the `./client` connection side effect and remain unit-testable without a DB.
+import { createHash } from "node:crypto";
+
 import type { db } from "../client";
 import { assertDevDatabase } from "../env-guard";
 
@@ -37,6 +39,9 @@ export interface SeedAcademy {
   publicCode: string;
   timeZone: string;
   currency: string;
+  country?: string;
+  address?: string;
+  mapUrl?: string;
 }
 
 /**
@@ -51,6 +56,9 @@ export const SEED_ACADEMY: SeedAcademy = {
   publicCode: "990001",
   timeZone: "Europe/Kyiv",
   currency: "EUR",
+  country: "UA",
+  address: "vul. Velyka Vasylkivska 100, Kyiv",
+  mapUrl: "https://maps.google.com/?q=50.4262,30.5196",
 };
 
 /**
@@ -58,7 +66,7 @@ export const SEED_ACADEMY: SeedAcademy = {
  * with everything else: teardown resolves each org's entities itself, so the
  * gym and the sauna go with it without being named again.
  */
-export const PILOT_ACADEMY: SeedAcademy = {
+const PILOT_ACADEMY: SeedAcademy = {
   key: "pilot",
   id: "seed_org_pilot",
   name: "Pilot Gym",
@@ -91,13 +99,15 @@ export const seedMemberId = (academyKey: string, handle: string): string =>
 export const seedEntityMembershipId = (memberId: string): string =>
   memberId.replace(`${SEED_MARKER}mem_`, `${SEED_MARKER}emem_`);
 
+export function seedPersonId(memberId: string): string {
+  const hex = createHash("sha256").update(memberId).digest("hex").slice(0, 32);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20)}`;
+}
+
 /** The seed `entity_membership.id` for one academy + persona. Dues, claims,
  * ranks, notes and referrals key on this, not on `member.id` (ADR 124). */
 export const seedMembershipId = (academyKey: string, handle: string): string =>
   seedEntityMembershipId(seedMemberId(academyKey, handle));
-
-/** True if an id was created by the seed (used by teardown to spare real rows). */
-export const isSeedId = (id: string): boolean => id.startsWith(SEED_MARKER);
 
 /**
  * Refuse to run against a production database unless explicitly allowed. This is

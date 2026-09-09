@@ -6,7 +6,6 @@ import {
   DIAL_COUNTRIES,
   dialForCountry,
   FALLBACK_COUNTRY,
-  isE164,
   splitE164,
   toE164,
 } from "../src/phone";
@@ -62,23 +61,6 @@ describe("toE164", () => {
     expect(toE164("+351", "  -  ")).toBe("");
   });
 });
-
-describe("isE164", () => {
-  it("accepts a full international number", () => {
-    expect(isE164("+351912345678")).toBe(true);
-  });
-
-  it("rejects a number with no country, too few digits, or too many", () => {
-    expect(isE164("912345678")).toBe(false);
-    expect(isE164("+3519")).toBe(false);
-    expect(isE164(`+${"9".repeat(16)}`)).toBe(false);
-  });
-
-  it("rejects a country code starting at zero", () => {
-    expect(isE164("+0351912345")).toBe(false);
-  });
-});
-
 describe("splitE164", () => {
   it("takes the longest matching prefix, not the first", () => {
     expect(splitE164("+351912345678", "US")).toEqual({

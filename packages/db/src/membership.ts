@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 
 import { canRemoveOrDemote } from "@matops/domain";
 
@@ -7,6 +7,7 @@ import type { DbExec } from "./client";
 import type { DbReader, TenantTx } from "./tenant";
 import { member, organization, user } from "./auth-schema";
 import { academyProfile, entity, entityMembership } from "./entity-schema";
+import { person } from "./person-schema";
 
 /** The statuses `canEnroll` admits, as a SQL filter (docs/issues/23). */
 const ENROLLABLE_STATUSES = ["pending", "active"];
@@ -68,8 +69,9 @@ export async function getMembership(
 }
 
 /** One entity the caller may act in, and how (ADR 124). */
-export interface EntityMembership {
+interface EntityMembership {
   id: string;
+  personId: string | null;
   organizationId: string;
   entityId: string;
   role: string;
@@ -93,6 +95,9 @@ export async function getEntityMembership(
   const rows = await exec
     .select({
       id: entityMembership.id,
+      personId: sql<
+        string | null
+      >`coalesce(${entityMembership.personId}, ${person.id})`,
       organizationId: entityMembership.organizationId,
       entityId: entityMembership.entityId,
       role: entityMembership.role,
@@ -101,9 +106,19 @@ export async function getEntityMembership(
       createdAt: entityMembership.createdAt,
     })
     .from(entityMembership)
+    .leftJoin(
+      person,
+      and(
+        eq(person.organizationId, entityMembership.organizationId),
+        eq(person.accountUserId, userId),
+      ),
+    )
     .where(
       and(
-        eq(entityMembership.userId, userId),
+        or(
+          eq(entityMembership.userId, userId),
+          eq(entityMembership.personId, person.id),
+        ),
         eq(entityMembership.entityId, entityId),
       ),
     )
@@ -133,6 +148,13 @@ export async function getAcademyMembership(
       createdAt: entityMembership.createdAt,
     })
     .from(entityMembership)
+    .leftJoin(
+      person,
+      and(
+        eq(person.organizationId, entityMembership.organizationId),
+        eq(person.accountUserId, userId),
+      ),
+    )
     .innerJoin(entity, eq(entity.id, entityMembership.entityId))
     .innerJoin(
       organization,
@@ -140,7 +162,10 @@ export async function getAcademyMembership(
     )
     .where(
       and(
-        eq(entityMembership.userId, userId),
+        or(
+          eq(entityMembership.userId, userId),
+          eq(entityMembership.personId, person.id),
+        ),
         eq(entityMembership.entityId, entityId),
         isNull(entity.deletedAt),
         isNull(organization.deletedAt),
@@ -164,11 +189,6 @@ export interface ScopedEntity {
   organizationId: string;
   type: string;
   name: string;
-  /**
-   * Set once shared memberships decide access here. Null keeps the LEGACY
-   * branch dues gate, and the two never both apply (ADR 126). Carried on the
-   * request's own entity read so no gate has to fetch it again.
-   */
   membershipEnforcedAt: Date | null;
 }
 
@@ -329,7 +349,7 @@ export async function getMemberIdForUser(
 }
 
 /** One academy the user belongs to, with the caller's role/status there. */
-export interface UserAcademy {
+interface UserAcademy {
   academyId: string;
   organizationId: string;
   type: string;
@@ -339,6 +359,7 @@ export interface UserAcademy {
   country: string | null;
   address: string | null;
   mapUrl: string | null;
+  bookingWindowDays: number;
   curriculumForStudents: boolean;
   /** Set once shared memberships decide access here (ADR 126). */
   membershipEnforcedAt: Date | null;
@@ -378,6 +399,7 @@ export async function listMembershipsForUser(
     country: entity.country,
     address: entity.address,
     mapUrl: entity.mapUrl,
+    bookingWindowDays: entity.bookingWindowDays,
     curriculumForStudents: sql<boolean>`coalesce(${academyProfile.curriculumForStudents}, false)`,
     membershipEnforcedAt: entity.membershipEnforcedAt,
   };
@@ -452,12 +474,14 @@ export async function updateUserProfile(
 /** A full member row plus the joined user profile, for the member list (spec O4). */
 export interface MemberRow {
   memberId: string;
+  personId: string;
   userId: string;
+  accountUserId: string | null;
   role: string;
   status: string;
   invitedRole: string | null;
   name: string;
-  email: string;
+  email: string | null;
   phone: string | null;
   createdAt: Date;
 }
@@ -470,17 +494,22 @@ export async function listMembersOf(
   const rows = await exec
     .select({
       memberId: entityMembership.id,
-      userId: entityMembership.userId,
+      personId: sql<string>`coalesce(${person.id}::text, ${entityMembership.userId})`,
+      userId: sql<string>`coalesce(${person.id}::text, ${entityMembership.personId}::text, ${entityMembership.userId})`,
+      accountUserId: sql<
+        string | null
+      >`coalesce(${person.accountUserId}, ${entityMembership.userId})`,
       role: entityMembership.role,
       status: entityMembership.status,
       invitedRole: entityMembership.invitedRole,
-      name: user.name,
-      email: user.email,
-      phone: user.phone,
+      name: sql<string>`coalesce(${person.name}, ${user.name})`,
+      email: sql<string | null>`coalesce(${person.email}, ${user.email})`,
+      phone: sql<string | null>`coalesce(${person.phone}, ${user.phone})`,
       createdAt: entityMembership.createdAt,
     })
     .from(entityMembership)
-    .innerJoin(user, eq(entityMembership.userId, user.id))
+    .leftJoin(person, eq(entityMembership.personId, person.id))
+    .leftJoin(user, eq(entityMembership.userId, user.id))
     .where(eq(entityMembership.entityId, entityId));
 
   return rows.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
@@ -494,7 +523,9 @@ export async function getMemberById(
 ): Promise<{
   id: string;
   academyId: string;
+  personId: string;
   userId: string;
+  accountUserId: string | null;
   role: string;
   status: string;
   invitedRole: string | null;
@@ -503,12 +534,18 @@ export async function getMemberById(
     .select({
       id: entityMembership.id,
       academyId: entityMembership.entityId,
-      userId: entityMembership.userId,
+      personId: sql<string>`coalesce(${person.id}::text, ${entityMembership.userId})`,
+      userId: sql<string>`coalesce(${person.id}::text, ${entityMembership.personId}::text, ${entityMembership.userId})`,
+      accountUserId: sql<
+        string | null
+      >`coalesce(${person.accountUserId}, ${entityMembership.userId})`,
       role: entityMembership.role,
       status: entityMembership.status,
       invitedRole: entityMembership.invitedRole,
     })
     .from(entityMembership)
+    .leftJoin(person, eq(entityMembership.personId, person.id))
+    .leftJoin(user, eq(entityMembership.userId, user.id))
     .where(eq(entityMembership.id, memberId))
     .limit(1);
 
@@ -630,7 +667,11 @@ async function mayChangeEntityMembership(
     .for("update");
 
   return canRemoveOrDemote(
-    rows.map((r) => ({ id: r.userId, role: r.role, status: r.status })),
+    rows.flatMap((r) =>
+      r.userId === null
+        ? []
+        : [{ id: r.userId, role: r.role, status: r.status }],
+    ),
     targetUserId,
   );
 }
@@ -646,29 +687,6 @@ export async function setMemberStatusIfNotLastOwner(
       return { ok: false };
     }
     await writeMembership({ entityId, memberId, next: { status } }, tx);
-    return { ok: true };
-  });
-}
-
-/**
- * Set a member's ROLE (demote an owner → instructor) ATOMICALLY with the "never
- * ownerless" check (spec §4). The sibling of `setMemberStatusIfNotLastOwner`:
- * same locked transaction, same `canRemoveOrDemote` re-check on the freshly
- * locked rows — so two owners stepping each other down at the same time cannot
- * both pass and strand the gym. Writes the role only when the change keeps at
- * least one active owner; returns `{ ok: false }` (no write) otherwise.
- */
-export async function setMemberRoleIfNotLastOwner(
-  entityId: string,
-  memberId: string,
-  role: string,
-  exec: DbExec,
-): Promise<{ ok: boolean }> {
-  return exec.transaction(async (tx) => {
-    if (!(await mayChangeEntityMembership(tx, entityId, memberId))) {
-      return { ok: false };
-    }
-    await writeMembership({ entityId, memberId, next: { role } }, tx);
     return { ok: true };
   });
 }
@@ -770,7 +788,7 @@ export async function createPendingMembership(
   return upsertPendingEntityMembership(input, exec);
 }
 
-export interface ResolvedAccount {
+interface ResolvedAccount {
   userId: string;
   /** True when the address already had an account before this call. */
   existed: boolean;

@@ -37,7 +37,7 @@ import { EmptyState, ErrorState } from "./states";
  * its own, so arriving from the list costs nothing and the two screens cannot
  * disagree about somebody's branches.
  */
-export function OrganizationPersonScreen({ userId }: { userId: string }) {
+export function OrganizationPersonScreen({ personId }: { personId: string }) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const { canRunOrganization, entities } = useOrganization();
@@ -75,10 +75,10 @@ export function OrganizationPersonScreen({ userId }: { userId: string }) {
       onError: (e) => toast.error(e.message || "Could not end it"),
     }),
   );
-  const setBranchRole = useMutation(
-    trpc.entity.setBranchRole.mutationOptions({
-      onSuccess: () => after("Branch updated"),
-      onError: (e) => toast.error(e.message || "Could not change that"),
+  const addStudentToBranch = useMutation(
+    trpc.entity.addStudentToBranch.mutationOptions({
+      onSuccess: () => after("Student added to branch"),
+      onError: (e) => toast.error(e.message || "Could not add that student"),
     }),
   );
   const decide = useMutation(
@@ -102,14 +102,18 @@ export function OrganizationPersonScreen({ userId }: { userId: string }) {
     suspend.isPending ||
     cancel.isPending ||
     cancelChange.isPending ||
-    setBranchRole.isPending ||
+    addStudentToBranch.isPending ||
     decide.isPending;
+  const personQuery = useQuery({
+    ...trpc.person.get.queryOptions({ personId, includeArchived: true }),
+    enabled: canRunOrganization,
+  });
   const directory = useQuery({
     ...trpc.stats.organizationMembers.queryOptions(),
     enabled: canRunOrganization,
   });
   const held = useQuery({
-    ...trpc.accessPlan.forUser.queryOptions({ userId }),
+    ...trpc.accessPlan.forUser.queryOptions({ personId }),
     enabled: canRunOrganization,
   });
   // The gym's open claims, narrowed to this person. One read the Memberships
@@ -127,12 +131,14 @@ export function OrganizationPersonScreen({ userId }: { userId: string }) {
       <EmptyState title="Only the people who run this gym can open this." />
     );
   }
-  if (directory.isPending || held.isPending) return <SkeletonRows rows={4} />;
-  if (directory.isError || held.isError) {
+  if (personQuery.isPending || directory.isPending || held.isPending)
+    return <SkeletonRows rows={4} />;
+  if (personQuery.isError || directory.isError || held.isError) {
     return (
       <ErrorState
         label="this person"
         onRetry={() => {
+          void personQuery.refetch();
           void directory.refetch();
           void held.refetch();
         }}
@@ -140,20 +146,32 @@ export function OrganizationPersonScreen({ userId }: { userId: string }) {
     );
   }
 
-  const person = directory.data.rows.find((r) => r.userId === userId);
-  if (!person) {
-    return (
-      <EmptyState title="Nobody here by that link.">
-        They may have been removed from every branch of this gym.
-      </EmptyState>
-    );
-  }
+  const legacyPerson = directory.data.rows.find(
+    (row) => row.userId === personId,
+  );
+  const person = {
+    ...personQuery.data,
+    branches: personQuery.data.branches.map((branch) => {
+      const legacyBranch = legacyPerson?.branches.find(
+        (row) => row.entityId === branch.entityId,
+      );
+      return {
+        ...branch,
+        memberId: legacyBranch?.memberId ?? branch.enrollmentId,
+        covered: legacyBranch?.covered ?? false,
+        verdict: legacyBranch?.verdict ?? null,
+      };
+    }),
+  };
 
   const hasStudentBranch = person.branches.some(isStudentMember);
 
   return (
     <div className={`${ENTER} flex flex-col gap-6`}>
-      <PageHeader title={person.name} subtitle={person.email} />
+      <PageHeader
+        title={person.name}
+        subtitle={person.email ?? "No email address"}
+      />
 
       <section className="flex flex-col gap-3">
         <Eyebrow>Branches</Eyebrow>
@@ -189,7 +207,7 @@ export function OrganizationPersonScreen({ userId }: { userId: string }) {
                     onClick={() =>
                       decide.mutate({
                         entityId: b.entityId,
-                        userId,
+                        personId,
                         decision: "approve",
                       })
                     }
@@ -203,7 +221,7 @@ export function OrganizationPersonScreen({ userId }: { userId: string }) {
                     onClick={() =>
                       decide.mutate({
                         entityId: b.entityId,
-                        userId,
+                        personId,
                         decision: "decline",
                       })
                     }
@@ -212,25 +230,6 @@ export function OrganizationPersonScreen({ userId }: { userId: string }) {
                   </Button>
                 </>
               )}
-              {b.role !== "owner" &&
-                b.role !== "manager" &&
-                b.status === "active" && (
-                  <Select
-                    aria-label={`Role at ${b.entityName}`}
-                    value={b.role === "instructor" ? "instructor" : "student"}
-                    disabled={busy}
-                    onChange={(e) =>
-                      setBranchRole.mutate({
-                        entityId: b.entityId,
-                        userId,
-                        role: e.target.value as "student" | "instructor",
-                      })
-                    }
-                  >
-                    <option value="student">Student</option>
-                    <option value="instructor">Instructor</option>
-                  </Select>
-                )}
               {/* Rank, notes and attendance stay that branch's business
                   (ADR 128). */}
               <Button asChild size="sm" variant="outline">
@@ -251,8 +250,8 @@ export function OrganizationPersonScreen({ userId }: { userId: string }) {
         <BranchAssign
           held={person.branches.map((b) => b.entityId)}
           busy={busy}
-          onAssign={(entityId, role) =>
-            setBranchRole.mutate({ entityId, userId, role })
+          onAssign={(entityId) =>
+            addStudentToBranch.mutate({ entityId, personId })
           }
         />
       </section>
@@ -298,7 +297,7 @@ export function OrganizationPersonScreen({ userId }: { userId: string }) {
                   </span>
                 )}
                 {(claims.data ?? []).some(
-                  (c) => c.assignmentId === h.id && c.userId === userId,
+                  (c) => c.assignmentId === h.id && c.personId === personId,
                 ) && (
                   <span className="text-brand-strong text-xs font-medium">
                     Said they paid — waiting for you to confirm
@@ -375,7 +374,7 @@ export function OrganizationPersonScreen({ userId }: { userId: string }) {
                       variant="outline"
                       disabled={busy}
                       onClick={() =>
-                        assign.mutate({ userId, planId: h.planId })
+                        assign.mutate({ personId, planId: h.planId })
                       }
                     >
                       Resume
@@ -406,7 +405,7 @@ export function OrganizationPersonScreen({ userId }: { userId: string }) {
           <PlanChangeDialog
             assignmentId={changing.assignmentId}
             currentPlanName={changing.planName}
-            userId={userId}
+            personId={personId}
             plans={(plans.data ?? []).filter((p) => !p.archived)}
             nameOf={nameOf}
             onOpenChange={(open) => {
@@ -445,14 +444,94 @@ export function OrganizationPersonScreen({ userId }: { userId: string }) {
             <Button
               size="sm"
               disabled={busy || picked === ""}
-              onClick={() => assign.mutate({ userId, planId: picked })}
+              onClick={() => assign.mutate({ personId, planId: picked })}
             >
               {assign.isPending ? "Adding…" : "Add"}
             </Button>
           </div>
         )}
       </section>
+
+      <PersonAccess
+        person={{
+          personId: person.id,
+          account: person.account,
+          archivedAt: person.archivedAt,
+        }}
+      />
     </div>
+  );
+}
+
+function PersonAccess({
+  person,
+}: {
+  person: {
+    personId: string;
+    account: { email: string } | null;
+    archivedAt: Date | null;
+  };
+}) {
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  const refresh = async (message: string) => {
+    await queryClient.invalidateQueries(trpc.person.pathFilter());
+    toast.success(message);
+  };
+  const archive = useMutation(
+    trpc.person.archive.mutationOptions({
+      onSuccess: () => refresh("Person archived"),
+      onError: (error) => toast.error(error.message || "Could not archive"),
+    }),
+  );
+  const restore = useMutation(
+    trpc.person.restore.mutationOptions({
+      onSuccess: () => refresh("Person restored"),
+      onError: (error) => toast.error(error.message || "Could not restore"),
+    }),
+  );
+  const busy = archive.isPending || restore.isPending;
+
+  return (
+    <section className="flex flex-col gap-3">
+      <Eyebrow>Access</Eyebrow>
+      <div className={`${cardClass()} flex flex-col gap-1`}>
+        <p className="font-medium">Sign-in email</p>
+        <p className="text-muted-foreground text-sm">
+          {person.account?.email ?? "No sign-in account"}
+        </p>
+      </div>
+      {person.archivedAt ? (
+        <Button
+          className="self-start"
+          size="sm"
+          variant="outline"
+          disabled={busy}
+          onClick={() => restore.mutate({ personId: person.personId })}
+        >
+          Restore person
+        </Button>
+      ) : (
+        <ConfirmDialog
+          title="Archive this person?"
+          description="Their history stays. Restore them before changing branches or memberships."
+          confirmLabel="Archive person"
+          onConfirm={async () => {
+            await archive.mutateAsync({ personId: person.personId });
+          }}
+          trigger={
+            <Button
+              className="self-start"
+              size="sm"
+              variant="outline"
+              disabled={busy}
+            >
+              Archive person
+            </Button>
+          }
+        />
+      )}
+    </section>
   );
 }
 
@@ -469,11 +548,10 @@ function BranchAssign({
 }: {
   held: string[];
   busy: boolean;
-  onAssign: (entityId: string, role: "student" | "instructor") => void;
+  onAssign: (entityId: string) => void;
 }) {
   const { entities } = useOrganization();
   const [entityId, setEntityId] = useState("");
-  const [role, setRole] = useState<"student" | "instructor">("instructor");
   const free = entities.filter((e) => !held.includes(e.id));
   if (free.length === 0) return null;
 
@@ -494,23 +572,15 @@ function BranchAssign({
           ))}
         </Select>
       </div>
-      <Select
-        aria-label="Role at that branch"
-        value={role}
-        onChange={(e) => setRole(e.target.value as "student" | "instructor")}
-      >
-        <option value="instructor">Instructor</option>
-        <option value="student">Student</option>
-      </Select>
       <Button
         size="sm"
         disabled={busy || entityId === ""}
         onClick={() => {
-          onAssign(entityId, role);
+          onAssign(entityId);
           setEntityId("");
         }}
       >
-        Add
+        Add student
       </Button>
     </div>
   );
@@ -526,7 +596,7 @@ function BranchAssign({
 function PlanChangeDialog({
   assignmentId,
   currentPlanName,
-  userId,
+  personId,
   plans,
   nameOf,
   onOpenChange,
@@ -534,7 +604,7 @@ function PlanChangeDialog({
 }: {
   assignmentId: string;
   currentPlanName: string;
-  userId: string;
+  personId: string;
   plans: { id: string; name: string }[];
   nameOf: (id: string) => string;
   onOpenChange: (open: boolean) => void;
@@ -551,7 +621,7 @@ function PlanChangeDialog({
     enabled: targetPlanId !== "",
   });
   const review = useQuery({
-    ...trpc.accessPlan.bookingsToReview.queryOptions({ userId, limit: 20 }),
+    ...trpc.accessPlan.bookingsToReview.queryOptions({ personId, limit: 20 }),
     enabled: targetPlanId !== "" && (preview.data?.loses.length ?? 0) > 0,
   });
   const schedule = useMutation(
@@ -674,7 +744,7 @@ function PaymentHistory({ assignmentId }: { assignmentId: string }) {
             {m.amount
               ? ` · ${formatMoney(m.amount.priceMinor, m.amount.currency)}`
               : ""}{" "}
-            · {m.paid ? "paid" : "not paid"}
+            · {m.status}
           </li>
         ))}
       </ul>

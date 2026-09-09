@@ -5,7 +5,6 @@ import {
   classifyDrift,
   DRIFT_THRESHOLDS,
   gymInsights,
-  lastClassLabel,
   monthBucket,
   nextClass,
   splitMyClasses,
@@ -369,14 +368,5 @@ describe("gymInsights — the last-week baseline is a like-for-like slice", () =
     );
     expect(insights.visitsThisWeek).toBe(2);
     expect(insights.visitsLastWeek).toBe(2);
-  });
-});
-
-describe("lastClassLabel", () => {
-  it("names today, yesterday, then counts days", () => {
-    expect(lastClassLabel(0)).toBe("Today");
-    expect(lastClassLabel(-1)).toBe("Today");
-    expect(lastClassLabel(1)).toBe("Yesterday");
-    expect(lastClassLabel(5)).toBe("5 days ago");
   });
 });

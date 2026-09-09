@@ -80,10 +80,11 @@ const Plus = () => (
 export function EntitySelector({
   organization,
   activeId,
+  organizationRoute = false,
 }: {
   organization: Organization;
-  /** Left out above the branches, where "All branches" is the current place. */
   activeId?: string;
+  organizationRoute?: boolean;
 }) {
   const [adding, setAdding] = useState(false);
   const pathname = usePathname();
@@ -106,30 +107,22 @@ export function EntitySelector({
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="sm" className="max-w-full">
             <span className="truncate">
-              {active?.name ?? "Organization overview"}
+              {active?.name ?? "No branches yet"}
             </span>
             <ChevronDown />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="min-w-52">
-          <DropdownMenuItem asChild>
-            <Link
-              href="/overview"
-              aria-current={activeId === undefined ? "true" : undefined}
-            >
-              <span className="flex-1">Organization overview</span>
-              {activeId === undefined && <Check />}
-            </Link>
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
           {entities.map((e) => {
             const current = e.id === activeId;
+            const organizationSearch = new URLSearchParams(search);
+            organizationSearch.set("branch", e.id);
             return (
               <DropdownMenuItem key={e.id} asChild>
                 <Link
                   href={
-                    activeId === undefined
-                      ? entityHref(e.id)
+                    organizationRoute
+                      ? `${pathname}?${organizationSearch}`
                       : switchEntityHref(pathname, search, {
                           id: e.id,
                           type: e.type,

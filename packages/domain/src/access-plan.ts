@@ -14,10 +14,10 @@
 export type AssignmentStatus = "active" | "suspended" | "cancelled";
 
 /** A calendar month written as its first day: "2026-09-01". */
-export type AssignmentMonth = string;
+type AssignmentMonth = string;
 
 /** The period one assignment covers: from `startMonth`, up to but not including `endMonth`. */
-export interface AssignmentPeriod {
+interface AssignmentPeriod {
   startMonth: AssignmentMonth;
   /** The first month it no longer applies. Null means it runs on. */
   endMonth: AssignmentMonth | null;
@@ -106,7 +106,7 @@ export function canEditPlan(plan: Plan): boolean {
   return !plan.archived;
 }
 
-export interface CoverageChange {
+interface CoverageChange {
   added: string[];
   removed: string[];
 }
@@ -125,7 +125,7 @@ export function coverageChange(
 }
 
 /** One person a coverage edit reaches, and what it does to them. */
-export interface AffectedMember {
+interface AffectedMember {
   userId: string;
   assignmentId: string;
   /** Entities this edit opens to them, where they may need an access decision. */

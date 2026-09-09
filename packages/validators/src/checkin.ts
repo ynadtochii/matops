@@ -8,7 +8,6 @@ import { EmailSchema, IdSchema, personFields } from "./fields";
 
 /** Check in to a class (book-if-needed + mark present), spec S8. */
 export const CheckInSchema = z.object({ classId: z.uuid() });
-export type CheckInInput = z.infer<typeof CheckInSchema>;
 
 // ─── Public drop-in / lead (Phase 3, slice 3.5) ──────────────────────────────
 
@@ -31,13 +30,11 @@ export const DropInSchema = z.object({
   consent: z.literal(true, "Please tick the consent box to continue"),
   classId: z.uuid().optional(),
 });
-export type DropInInput = z.infer<typeof DropInSchema>;
 
 // ─── Lead pipeline (ADR 115) ─────────────────────────────────────────────────
 
 /** Address one lead in the owner's list. */
 export const LeadIdSchema = z.object({ id: z.uuid() });
-export type LeadIdInput = z.infer<typeof LeadIdSchema>;
 
 /**
  * Move a lead to a stage the owner decides. `invited` and `joined` are absent:
@@ -47,7 +44,6 @@ export type LeadIdInput = z.infer<typeof LeadIdSchema>;
 export const SetLeadStageSchema = LeadIdSchema.extend({
   stage: z.enum(OWNER_SETTABLE_STAGES),
 });
-export type SetLeadStageInput = z.infer<typeof SetLeadStageSchema>;
 
 /**
  * Set the email a lead can be promoted on (ADR 118). Its own mutation, not part
@@ -55,7 +51,6 @@ export type SetLeadStageInput = z.infer<typeof SetLeadStageSchema>;
  * field an owner changes on purpose.
  */
 export const SetLeadEmailSchema = LeadIdSchema.extend({ email: EmailSchema });
-export type SetLeadEmailInput = z.infer<typeof SetLeadEmailSchema>;
 
 /**
  * Turn a lead into a member (ADR 118). The email rides along and must match the
@@ -63,8 +58,3 @@ export type SetLeadEmailInput = z.infer<typeof SetLeadEmailSchema>;
  * address the account is made with.
  */
 export const PromoteLeadSchema = LeadIdSchema.extend({ email: EmailSchema });
-export type PromoteLeadInput = z.infer<typeof PromoteLeadSchema>;
-
-/** Link a lead to the member they became, by hand (spec O4). */
-export const LinkLeadSchema = LeadIdSchema.extend({ userId: IdSchema });
-export type LinkLeadInput = z.infer<typeof LinkLeadSchema>;

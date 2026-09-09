@@ -52,7 +52,7 @@ describe("procedures that write identity tables", () => {
   afterAll(() => h.close());
 
   describe("invite links", () => {
-    it("creates, lists, rotates and revokes without hanging", async () => {
+    it("creates, lists and rotates without hanging", async () => {
       const created = await h
         .as(OWNER, ACAD)
         .invite.create({ role: "student" });
@@ -66,19 +66,19 @@ describe("procedures that write identity tables", () => {
         .invite.rotate({ role: "student" });
       expect(rotated.token).not.toBe(created.token);
 
-      await h.as(OWNER, ACAD).invite.revoke({ inviteId: rotated.id });
       const after = await h.as(OWNER, ACAD).invite.list();
-      expect(after.map((i) => i.id)).not.toContain(rotated.id);
+      expect(after.map((i) => i.id)).toContain(rotated.id);
+      expect(after.map((i) => i.id)).not.toContain(created.id);
     });
 
-    it("resolves a live token and refuses a revoked one", async () => {
+    it("resolves a live token and refuses a rotated one", async () => {
       const link = await h.as(OWNER, ACAD).invite.create({ role: "student" });
       const resolved = await h.as(STUDENT, ACAD).invite.resolve({
         token: link.token,
       });
       expect(resolved.academyId).toBe(ACAD);
 
-      await h.as(OWNER, ACAD).invite.revoke({ inviteId: link.id });
+      await h.as(OWNER, ACAD).invite.rotate({ role: "student" });
       expect(
         await rejectionCode(
           h.as(STUDENT, ACAD).invite.resolve({ token: link.token }),
@@ -87,9 +87,12 @@ describe("procedures that write identity tables", () => {
     });
 
     it("is staff-readable, owner-written, and never leaks another academy's links", async () => {
-      await h.as(OWNER, ACAD).invite.create({ role: "instructor" });
+      const made = await h
+        .as(OWNER, ACAD)
+        .invite.create({ role: "instructor" });
 
-      await expect(h.as(COACH, ACAD).invite.list()).resolves.toHaveLength(1);
+      const readable = await h.as(COACH, ACAD).invite.list();
+      expect(readable.map((i) => i.id)).toContain(made.id);
       expect(
         await rejectionCode(
           h.as(COACH, ACAD).invite.create({ role: "student" }),

@@ -49,10 +49,100 @@ export function OrganizationSettingsScreen() {
         subtitle="Your organization: its name, where members pay, and any branch still to move onto memberships."
       />
       <GymName />
+      <Modules />
       <Account />
       <MembershipSettings />
       <Branches />
     </div>
+  );
+}
+
+function Modules() {
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  const modules = useQuery(trpc.organization.modules.queryOptions());
+  const [draft, setDraft] = useState<{
+    curriculumEnabled: boolean;
+    referralsEnabled: boolean;
+  } | null>(null);
+  const save = useMutation(
+    trpc.organization.setModules.mutationOptions({
+      onSuccess: async () => {
+        await queryClient.invalidateQueries();
+        setDraft(null);
+        toast.success("Modules saved");
+      },
+      onError: (error) =>
+        toast.error(error.message || "Could not save the modules"),
+    }),
+  );
+
+  if (modules.isPending) return <SkeletonRows rows={1} />;
+  if (modules.isError) {
+    return (
+      <ErrorState
+        label="optional modules"
+        onRetry={() => void modules.refetch()}
+      />
+    );
+  }
+
+  const shown = draft ?? modules.data;
+  return (
+    <section className={`${cardClass()} flex flex-col gap-4`}>
+      <div>
+        <Eyebrow>Optional modules</Eyebrow>
+        <p className="text-muted-foreground mt-1 text-sm">
+          Turn on only the tools your gym uses. Curriculum and referrals are
+          available at BJJ branches.
+        </p>
+      </div>
+      <label className="flex items-start gap-3">
+        <input
+          type="checkbox"
+          className="mt-1 size-4"
+          checked={shown.curriculumEnabled}
+          onChange={(event) =>
+            setDraft({
+              ...shown,
+              curriculumEnabled: event.target.checked,
+            })
+          }
+        />
+        <span>
+          <span className="block font-medium">Curriculum</span>
+          <span className="text-muted-foreground block text-sm">
+            Plan teaching blocks and show class themes.
+          </span>
+        </span>
+      </label>
+      <label className="flex items-start gap-3">
+        <input
+          type="checkbox"
+          className="mt-1 size-4"
+          checked={shown.referralsEnabled}
+          onChange={(event) =>
+            setDraft({
+              ...shown,
+              referralsEnabled: event.target.checked,
+            })
+          }
+        />
+        <span>
+          <span className="block font-medium">Referrals</span>
+          <span className="text-muted-foreground block text-sm">
+            Record who referred each student.
+          </span>
+        </span>
+      </label>
+      <Button
+        className="self-start"
+        disabled={save.isPending || draft === null}
+        onClick={() => save.mutate(shown)}
+      >
+        {save.isPending ? "Saving…" : "Save modules"}
+      </Button>
+    </section>
   );
 }
 
@@ -382,24 +472,9 @@ function MembershipSettings() {
   );
 }
 
-/**
- * Moving a branch off its old dues, one branch at a time (ADR 127, spec FP5).
- *
- * NOT a permanent switch board. A branch is listed only while it is part of
- * the migration: one still on branch dues, which is the move, or one already
- * moved that still has its old dues history, which is the rollback the pilot
- * depends on. A branch opened after the cutover has neither and is never
- * listed, because for it there is nothing to move and nothing to go back to.
- *
- * Turning it ON is the one action here that can stop a paying member booking
- * tomorrow, so it opens a preview naming who that would be, what it would
- * cancel, and what is still unfinished.
- */
 function Branches() {
   const { entities, canCreateBranches } = useOrganization();
   if (entities.length === 0) return null;
-  // Switching a branch between the two payment gates is owner-only (spec FP7),
-  // so a manager is not shown a switch the server would refuse.
   if (!canCreateBranches) return null;
   return (
     <ul className="flex flex-col gap-2">
@@ -422,13 +497,11 @@ function BranchRow({ entityId, name }: { entityId: string; name: string }) {
   const flip = useMutation(
     trpc.entity.setMembershipEnforced.mutationOptions({
       onSuccess: async (result) => {
-        // The gate is carried on `academy.current`, which every branch screen
-        // reads, so nothing narrower would leave the other tabs honest.
         await queryClient.invalidateQueries();
         toast.success(
           result.enforced
-            ? `${name} runs on memberships`
-            : `${name} is back on branch dues`,
+            ? `${name} now enforces membership payments`
+            : `${name} no longer enforces membership payments`,
         );
       },
       onError: (e) => toast.error(e.message || "Could not switch that branch"),
@@ -436,24 +509,17 @@ function BranchRow({ entityId, name }: { entityId: string; name: string }) {
   );
 
   const enforced = preview.data?.enforced ?? false;
-  // Nothing to move and nothing to roll back to: a branch born on memberships
-  // is not part of the migration and gets no row at all (spec FP5).
-  if (preview.data && enforced && !preview.data.hasLegacyDues) return null;
   const uncovered = preview.data?.uncovered ?? [];
   const named = uncovered
     .slice(0, 5)
     .map((m) => m.name)
     .join(", ");
   const rest = uncovered.length - Math.min(uncovered.length, 5);
-  // What switching on takes away, not just who it takes it from: a member who
-  // turns up to a class they had booked is the failure this warns about.
   const futureBookings = preview.data?.futureBookings ?? 0;
   const bookingsLine =
     futureBookings === 0
       ? ""
-      : ` ${futureBookings === 1 ? "1 booked class" : `${futureBookings} booked classes`} still to come would be cancelled.`;
-  // The blockers an owner can drive to zero, each named so "not ready" says
-  // what to do about it (spec FP8).
+      : ` ${futureBookings === 1 ? "1 existing booked class stays booked" : `${futureBookings} existing booked classes stay booked`}.`;
   const readiness = preview.data?.readiness;
   const blockers = [
     readiness?.unpricedPlans
@@ -479,14 +545,14 @@ function BranchRow({ entityId, name }: { entityId: string; name: string }) {
         <p className="truncate font-medium">{name}</p>
         <p className="text-muted-foreground text-sm">
           {enforced
-            ? "Moved to memberships. Its old dues are still here if you need to go back."
-            : "Still on its own dues. Moving it puts every member on the organization's memberships."}
+            ? "Membership payment rules can block booking at this branch."
+            : "Memberships remain available, but payment state does not block booking."}
         </p>
       </div>
       {enforced ? (
         <ConfirmDialog
-          title="Hand this branch back to branch dues?"
-          description="Its own dues, plans and claims decide access again. Nothing about the memberships covering it is deleted."
+          title="Stop enforcing membership payments?"
+          description="Members keep their memberships. Payment state will no longer block booking at this branch."
           confirmLabel="Switch off"
           onConfirm={async () => {
             await flip.mutateAsync({ entityId, enforced: false });
@@ -501,25 +567,25 @@ function BranchRow({ entityId, name }: { entityId: string; name: string }) {
         <ConfirmDialog
           title={
             uncovered.length === 0
-              ? `Switch ${name} onto memberships?`
+              ? `Enforce membership payments at ${name}?`
               : `${uncovered.length} ${
                   uncovered.length === 1 ? "member" : "members"
                 } would stop being able to book`
           }
           description={
             uncovered.length === 0
-              ? `Every active member there is covered by a membership. Their branch dues stop deciding access from now on, and the Payments screen for this branch goes away.${
+              ? `Every active member there is covered by a membership.${
                   blockers.length > 0
                     ? ` Still to sort out: ${blockers.join(", ")}.`
                     : ""
                 }`
               : `${named}${rest > 0 ? ` and ${rest} more` : ""} ${
                   uncovered.length === 1 ? "is" : "are"
-                } active at ${name} and hold no membership covering it. Switching on stops them booking until you give them one.${bookingsLine}${
+                } active at ${name} and hold no membership covering it. Enforcement stops them booking until you give them one.${bookingsLine}${
                   blockers.length > 0
                     ? ` Also still to sort out: ${blockers.join(", ")}.`
                     : ""
-                } You can switch back at any time.`
+                } You can stop enforcement at any time.`
           }
           confirmLabel="Switch on"
           variant={uncovered.length === 0 ? "primary" : "destructive"}

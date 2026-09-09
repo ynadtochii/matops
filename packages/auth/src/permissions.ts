@@ -37,6 +37,3 @@ export const instructor = ac.newRole(memberAc.statements);
 export const student = ac.newRole(memberAc.statements);
 
 export const roles = { owner, manager, instructor, student };
-
-/** The role names, as stored on the Better Auth `member` row. */
-export type AcademyRole = keyof typeof roles;

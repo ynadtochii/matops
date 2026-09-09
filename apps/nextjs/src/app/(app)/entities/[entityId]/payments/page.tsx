@@ -1,28 +1,12 @@
 import { Suspense } from "react";
 
-import { runsBranch } from "@matops/domain";
-
 import type { EntityPageProps } from "~/trpc/server";
 import { PaymentsScreen } from "~/app/_components/payments-screen";
 import { PaymentsSkeleton } from "~/app/_components/skeletons";
-import {
-  currentAcademy,
-  HydrateClient,
-  prefetch,
-  setRequestEntity,
-  trpc,
-} from "~/trpc/server";
+import { HydrateClient, prefetch, setRequestEntity, trpc } from "~/trpc/server";
 
-async function PaymentsData() {
-  const academy = await currentAcademy();
-
-  if (academy && runsBranch(academy)) {
-    prefetch(trpc.payments.claims.queryOptions());
-    prefetch(trpc.payments.plans.queryOptions());
-    prefetch(trpc.membership.members.queryOptions());
-  } else {
-    prefetch(trpc.payments.myDues.queryOptions());
-  }
+function PaymentsData() {
+  prefetch(trpc.accessPlan.mine.queryOptions());
 
   return (
     <HydrateClient>

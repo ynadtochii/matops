@@ -5,7 +5,13 @@ import { createEntity, eq, provisionOrganization } from "@matops/db";
 import { entityMembership } from "@matops/db/schema";
 
 import type { Harness } from "./helpers";
-import { harness, memberId, rejectionCode, seedAcademies } from "./helpers";
+import {
+  harness,
+  memberId,
+  personId,
+  rejectionCode,
+  seedAcademies,
+} from "./helpers";
 
 const GYM = "org_mgr_branch";
 const OTHER = "org_mgr_other";
@@ -86,7 +92,6 @@ describe("a gym manager at a branch", () => {
   it("runs the schedule, the roster and the money at that branch", async () => {
     await expect(at(MANAGER, second).stats.dashboard()).resolves.toBeDefined();
     await expect(at(MANAGER, second).membership.staff()).resolves.toBeDefined();
-    await expect(at(MANAGER, second).payments.plans()).resolves.toBeDefined();
     await expect(at(MANAGER, second).academy.settings()).resolves.toBeDefined();
     await expect(at(MANAGER, second).dropIn.list()).resolves.toBeDefined();
   });
@@ -116,33 +121,12 @@ describe("a gym manager at a branch", () => {
         }),
       ),
     ).toBe("FORBIDDEN");
-    expect(
-      await rejectionCode(
-        at(MANAGER, GYM).membership.setRole({
-          memberId: memberId(GYM, OWNER),
-          role: "instructor",
-        }),
-      ),
-    ).toBe("FORBIDDEN");
-  });
-
-  it("may still assign an instructor, which is ordinary work", async () => {
-    await expect(
-      at(MANAGER, GYM).membership.setRole({
-        memberId: memberId(GYM, STUDENT),
-        role: "instructor",
-      }),
-    ).resolves.toBeDefined();
   });
 
   it("adds somebody at one branch without touching their role at another", async () => {
-    // STUDENT is an instructor at GYM after the test above. Putting them on
-    // the second mat as a student must write a row THERE, not overwrite the
-    // one they hold at GYM: the two branches are separate decisions (ADR 129).
-    await at(MANAGER, GYM).entity.setBranchRole({
+    await at(MANAGER, GYM).entity.addStudentToBranch({
       entityId: second,
       userId: STUDENT,
-      role: "student",
     });
 
     const rows = await h.exec
@@ -153,7 +137,7 @@ describe("a gym manager at a branch", () => {
       .from(entityMembership)
       .where(eq(entityMembership.userId, STUDENT));
     const roleAt = (id: string) => rows.find((r) => r.entityId === id)?.role;
-    expect([roleAt(GYM), roleAt(second)]).toEqual(["instructor", "student"]);
+    expect([roleAt(GYM), roleAt(second)]).toEqual(["student", "student"]);
   });
 
   it("reaches nothing in another gym", async () => {
@@ -186,20 +170,14 @@ describe("a gym manager at a branch", () => {
     expect(await rejectionCode(at(OWNER, GYM).membership.archive(input))).toBe(
       "PRECONDITION_FAILED",
     );
-    expect(
-      await rejectionCode(
-        at(OWNER, GYM).membership.setRole({ ...input, role: "student" }),
-      ),
-    ).toBe("PRECONDITION_FAILED");
   });
 
   it("does not create a student branch record for organization staff", async () => {
     expect(
       await rejectionCode(
-        at(OWNER, GYM).entity.setBranchRole({
+        at(OWNER, GYM).entity.addStudentToBranch({
           entityId: second,
           userId: MANAGER,
-          role: "student",
         }),
       ),
     ).toBe("PRECONDITION_FAILED");
@@ -213,7 +191,9 @@ describe("a gym manager at a branch", () => {
       const current = await at(OWNER, GYM).entity.current();
       const staff = await at(OWNER, GYM).membership.staff();
       expect(current.role).toBe("owner");
-      expect(staff.find((row) => row.userId === OWNER)?.role).toBe("owner");
+      expect(
+        staff.find((row) => row.userId === personId(GYM, OWNER))?.role,
+      ).toBe("owner");
     } finally {
       await pg.exec(
         `UPDATE "member" SET role = 'owner' WHERE user_id = '${OWNER}' AND organization_id = '${GYM}';`,

@@ -28,50 +28,6 @@ import {
 import { trpc } from "~/utils/api";
 import { dayLongFmt, timeFmt } from "~/utils/format";
 
-function WhoIsIn({
-  classId,
-  viewerBooked,
-}: {
-  classId: string;
-  viewerBooked: boolean;
-}) {
-  const q = useQuery(trpc.class.attendees.queryOptions({ id: classId }));
-
-  if (q.isPending || q.isError) return null;
-
-  const { names, othersCount, namesHidden } = q.data;
-
-  if (names.length === 0 && othersCount === 0) {
-    return (
-      <Field label="Who's in">
-        <Muted>
-          {viewerBooked ? "Just you so far." : "No one booked yet."}
-        </Muted>
-      </Field>
-    );
-  }
-
-  return (
-    <Field label="Who's in">
-      <UIStack gap={4}>
-        {names.length > 0 ? <Txt size={16}>{names.join(", ")}</Txt> : null}
-        {othersCount > 0 ? (
-          <Txt
-            size={names.length > 0 ? 14 : 16}
-            tone={names.length > 0 ? "muted" : "default"}
-          >
-            {names.length > 0 ? "+" : ""}
-            {othersCount} {othersCount === 1 ? "other" : "others"}
-          </Txt>
-        ) : null}
-        {namesHidden ? (
-          <Muted>Names show once your gym approves you.</Muted>
-        ) : null}
-      </UIStack>
-    </Field>
-  );
-}
-
 /**
  * Class detail (spec S5) — title, discipline, day/time, duration, instructor,
  * capacity, and Book / Cancel. Enrolled tier, so a PENDING member may book too
@@ -82,16 +38,22 @@ function WhoIsIn({
  */
 export default function ClassDetail() {
   const t = useTheme();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id } = useLocalSearchParams<{
+    id: string;
+  }>();
   const q = useQuery(trpc.class.get.queryOptions({ id }, { retry: false }));
+  const academy = useQuery(trpc.academy.current.queryOptions());
   // Same key as WhoIsIn, which renders below the `q.isPending` gate and so
   // would not start fetching until the class itself lands.
-  useQuery(trpc.class.attendees.queryOptions({ id }));
   const current = useQuery(trpc.academy.current.queryOptions());
   const theme = useQuery(
     trpc.curriculum.forClass.queryOptions(
       { id },
-      { enabled: isBjjAcademy(current.data?.type ?? "") },
+      {
+        enabled:
+          current.data?.curriculumEnabled === true &&
+          isBjjAcademy(current.data.type),
+      },
     ),
   );
 
@@ -130,10 +92,17 @@ export default function ClassDetail() {
   const bookable = canBook(
     { status: c.status, startsAt: start, deletedAt: null },
     new Date(),
+    {
+      bookingWindowDays: academy.data?.bookingWindowDays ?? 7,
+      timeZone: academy.data?.timeZone ?? "UTC",
+    },
   );
   const refusal =
     bookable.reason && bookable.reason !== "deleted"
-      ? notBookableMessage(bookable.reason)
+      ? notBookableMessage(
+          bookable.reason,
+          academy.data?.bookingWindowDays ?? 7,
+        )
       : null;
 
   const action =
@@ -220,7 +189,6 @@ export default function ClassDetail() {
                 {over ? " · may be busy" : ""}
               </Mono>
             </Field>
-            <WhoIsIn classId={c.id} viewerBooked={booked} />
           </UIStack>
 
           {bookError && (

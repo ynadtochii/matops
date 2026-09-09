@@ -1,6 +1,6 @@
 import type { DataTag, QueryClient, QueryKey } from "@tanstack/react-query";
 
-export interface Rollback<TData> {
+interface Rollback<TData> {
   key: QueryKey;
   prev: TData | undefined;
 }

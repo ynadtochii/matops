@@ -1,5 +1,47 @@
 <!-- matops — live implementation plan + scope matrix. Rules for this file live in delivery.md. -->
 
+**First academy fresh install, 2026-09-08**
+
+The active release scope is in [PLAN.md](/Users/kuna/projects/matops/PLAN.md), [ADR 135](/Users/kuna/projects/matops/docs/issues/135-first-academy-fresh-install-contract.md), and the [technical plan](/Users/kuna/projects/matops/docs/first-academy-technical-plan.md). Implementation is in final static verification. Focused tests were written but did not run. Browser, device, privacy, and restore checks still gate release.
+
+| Slice                                     | DB   | API  | Web  | Mobile     | Shared | Infra      |
+| ----------------------------------------- | ---- | ---- | ---- | ---------- | ------ | ---------- |
+| S0 contract and removal map               | done | done | done | done       | done   | done       |
+| S1 adult person identity                  | done | done | done | done       | done   | not needed |
+| S2 staff-assigned membership evidence     | done | done | done | done       | done   | not needed |
+| S3 saved notices and manual delivery      | done | done | done | not needed | done   | done       |
+| S4 branch booking window and safe rebuild | done | done | done | done       | done   | done       |
+| S5 hosted visitor booking                 | done | done | done | not needed | done   | done       |
+| S6 focused owner evidence                 | done | done | done | not needed | done   | not needed |
+| S7 release surface cleanup                | done | done | done | done       | done   | done       |
+| S8 fresh baseline and active docs         | wip  | wip  | done | done       | done   | wip        |
+
+S8 finishes when the fresh migration baseline and workspace static checks pass. Application jobs, student shopping, guardian access, announcements, broad Insights, student training statistics, and the external booking API are removed from the release.
+
+**Superseded release records**
+
+**Explicit attendance review, ADR 133**
+
+Status: built with the existing editing limit. The new correction policy is approved in PLAN.md but not implemented. Owners and managers may correct older attendance with a reason and history; instructors retain the current window. Product rules: O1 and O5. [Earlier decision](/Users/kuna/projects/matops/docs/issues/133-explicit-attendance-review.md).
+
+| Slice                                     | DB  | API | Web | Mobile | Shared | Infra |
+| ----------------------------------------- | --- | --- | --- | ------ | ------ | ----- |
+| Saved review and changed-roster detection | wip | wip | wip | out    | wip    | n/a   |
+| All past classes, filters and pagination  | wip | wip | wip | out    | wip    | n/a   |
+| Dashboard review count and zero state     | wip | wip | wip | out    | wip    | n/a   |
+
+- [x] Define explicit completion and the all-time review list.
+- [x] Record the product rules and architecture decision.
+- [x] Set historical correction permissions in the approved release plan.
+- [ ] Implement the approved historical correction permissions and history.
+- [x] Complete the review flow and inspect the final diff.
+- [x] Run workspace lint and typecheck.
+- [x] Apply the additive migration to dev and verify its schema.
+- [ ] Run focused regression tests only when the user requests them.
+- [ ] Check the workflow in a browser, including empty, partial, stale and historical classes.
+
+Workspace typecheck passed 17/17 and lint passed 15/15. Migration 0068 is applied to dev, with 67/67 migration entries verified. Tests are written but not run. Browser acceptance remains open. The matrix stays wip until the remaining checks and policy decision are complete.
+
 **Staff and student separation, ADR 132**
 
 Status: implemented. Workspace typecheck passed 17/17 and lint passed 15/15. Tests written but not run under the user's session rule.
@@ -13,7 +55,6 @@ Status: implemented. Workspace typecheck passed 17/17 and lint passed 15/15. Tes
 - [ ] User-run regression tests and browser acceptance.
 
 No migration. Existing billing records remain unchanged. [Plan](/Users/kuna/projects/matops/docs/staff-roster-isolation-plan.md).
-
 
 # matops — Roadmap (live plan + scope matrix)
 
@@ -348,7 +389,7 @@ One row per slice. This is the single answer to _"what's left, on which surface?
 | **v2.7** | **The instructor link grants the instructor role** _(O4 / O6 / O10; ADR 64)_ | | | | | | |
 | M.1 | Newest link wins on a pending row; active row untouched; honest join toast | done | done | done | — | — | — |
 | M.2 | `isPendingCoach` splits the Members queue, the Coaches queue and the two O1 counts | — | — | done | — | done | — |
-| M.3 | `membership.demote` → `setRole` (both directions, never `owner`) + member-detail role picker | — | done | done | — | — | — |
+| M.3 | Instructor invite and approval flow; roles stay read-only after approval | — | done | done | — | — | — |
 | **v2.8** | **A web Profile** _(O11; sidebar-footer route, ADR 67)_ | | | | | | |
 | T.1 | `/profile` screen: name + phone edit, academy standing, appearance, sign out | — | — | done | — | — | — |
 | T.2 | Sidebar footer + mobile top-bar avatar link; `academy.current` gains `joinedAt` | done | done | done | — | — | — |
@@ -660,12 +701,12 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 
 **Exit test:** an owner sends the instructor link to someone already waiting as a student, and approves them as a coach from the Coaches queue. A member who joined by academy code is switched to instructor from their member detail. **No migration.**
 
-- **M.1 Newest link wins, while pending.** **DONE.** The idempotent branch of `createPendingMembership` returned early and kept the stale `invitedRole`, so an invited coach was approved as a student. A **pending** row now takes the role of the link just opened; an **active** row is still left alone, because re-roling an approved member is `membership.setRole`, not a link. `membership.join` already returned `{ status, alreadyMember }` and the join screen now reads it, so an already-active member is told to ask an owner instead of being promised an approval that is not coming. Spec: S1-S3, §4.
+- **M.1 Newest link wins, while pending.** **DONE.** The idempotent branch of `createPendingMembership` returned early and kept the stale `invitedRole`, so an invited coach was approved as a student. A **pending** row now takes the role of the link just opened; an **active** row is still left alone. `membership.join` already returned `{ status, alreadyMember }` and the join screen now reads it, so an already-active member is told to contact the gym instead of being promised an approval that is not coming. Spec: S1-S3, §4.
 - **M.2 Two queues, two decisions.** **DONE.** One pure rule, `isPendingCoach` (pending **and** `invitedRole === "instructor"`), splits the list in the three places it appears: the Members requests tab is the student queue, pending coaches wait at the top of Coaches (owner-only), and the O1 dashboard carries "Pending approvals" and "Coach requests" as separate items pointing at the two screens. Approving a coach grants schedule and attendance tools, which is a staffing call, not a student one. Spec: O1, O4, O10.
 - **T.1 The person, not the gym.** **DONE.** `/profile` reuses `account.updateProfile` unchanged — the same three fields, the same `UpdateProfileSchema`, the same read-only email the mobile S7 screen has always had. The route's `page.tsx` is a server component that reads the session and passes name / email / phone down, so there is no second session fetch and the web auth client still needs no `inferAdditionalFields`; a save calls `router.refresh()` so the sidebar name changes with the screen. Appearance and sign out sit here too and stay in the sidebar as well, because both are used from every screen. Spec: O11, S7.
 - **T.2 Reached from the footer, not the nav.** **DONE.** The sidebar footer block (avatar, name, role) becomes the link, and the mobile top bar gains the same avatar — the phone tab bar already carries seven items for an owner. A route with no nav item, the O5 Attendance pattern. `listMembershipsForUser` selects Better Auth's own `member.created_at` and `academy.current` returns it as `joinedAt`, the one fact the "member since" line needed; no write, no migration. Not role-gated: a student on the web (ADR 57) has the same footer. Spec: O11, O6.
 
-- **M.3 A role can be changed both ways.** **DONE.** `membership.demote` only stepped an owner down, so anyone who joined by code or by the student link was a student for good. It becomes **`setRole`**: same `ownerProcedure`, same locked never-ownerless transaction, input `InviteRoleSchema` so it sets `student` or `instructor` and can never grant `owner` (that stays `promote`). The member detail Overview gains the picker; Coaches → Staff calls the same procedure for "step down". Spec: O6.
+- **M.3 Instructors join through an invite.** **DONE.** The instructor link creates a pending coach request. Owner approval grants the instructor role. Approved roles are read-only, and direct student promotion is unavailable. Spec: O6.
 
 **Series verify:** typecheck 17/17 · lint 15/15. `next build` **not run** (no `AUTH_SECRET` here). Domain tests cover `isPendingCoach`; the never-ownerless guard over the wider role set is covered by the existing `membership.test.ts` cases.
 

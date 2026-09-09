@@ -3,7 +3,7 @@ import { busyHours, disciplineTone, hourSlots } from "@matops/domain";
 
 import { POSTER_H, POSTER_W } from "./poster-size";
 
-export interface PosterClass {
+interface PosterClass {
   title: string;
   discipline: string | null;
   daysOfWeek: number[];
@@ -12,7 +12,7 @@ export interface PosterClass {
   instructorName: string | null;
 }
 
-export interface PosterData {
+interface PosterData {
   academyName: string;
   joinCode: string;
   updatedLabel: string;
@@ -20,7 +20,7 @@ export interface PosterData {
 }
 
 export { POSTER_H, POSTER_W };
-export const POSTER_SCALE = 2;
+const POSTER_SCALE = 2;
 
 const PAD = 64;
 const GRID_TOP = 208;
@@ -71,14 +71,14 @@ interface Slot {
   h: number;
 }
 
-export interface PosterLayout {
+interface PosterLayout {
   days: number[];
   slots: Slot[];
   hourH: number;
   offsetOf: (hour: number) => number;
 }
 
-export function layoutPoster(classes: PosterClass[]): PosterLayout {
+function layoutPoster(classes: PosterClass[]): PosterLayout {
   const used = new Set<number>();
   for (const c of classes) for (const d of c.daysOfWeek) used.add(d);
   const busy = busyHours(

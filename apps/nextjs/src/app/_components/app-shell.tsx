@@ -1,31 +1,26 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
+import type { RouterOutputs } from "@matops/api";
 import {
-  bookingAccessMessage,
   canVisit,
   entityFromPath,
   entityHref,
   isActiveMember,
-  isPendingCoach,
   isStaff as isStaffOf,
+  organizationHref,
   pathWithinEntity,
   runsBranch,
 } from "@matops/domain";
 
-import type { NavItem } from "./shell-frame";
+import type { NavBadge, NavItem } from "./shell-frame";
 import { useTRPC } from "~/trpc/react";
-import {
-  EntityProvider,
-  useEntity,
-  useOrganization,
-  useRememberBranch,
-} from "./entity";
+import { EntityProvider, useOrganization } from "./entity";
 import { AddBranchDialog, EntitySelector } from "./entity-selector";
 import { PageLoader } from "./mat-loader";
 import { ShareLinksDialog } from "./share-links-dialog";
@@ -47,7 +42,7 @@ import { ErrorState, NoAccessState } from "./states";
 
 const NARROW_ROUTES = ["/class", "/profile"];
 
-export const GYM_GROUP = "Organization";
+const GYM_GROUP = "Organization";
 
 export const PlusIcon = () => (
   <svg
@@ -77,13 +72,12 @@ function contentWidth(pathname: string, isStaff: boolean): string {
   return "max-w-6xl";
 }
 
-export interface BranchNav {
+interface BranchNav {
   id: string;
   type: string;
   role: string;
   status: string;
-  membershipEnforced?: boolean;
-  hasLegacyDues?: boolean;
+  referralsEnabled?: boolean;
 }
 
 /**
@@ -92,13 +86,13 @@ export interface BranchNav {
  * swaps the whole menu out. They pass no badges: a count needs the branch
  * scope those screens never open.
  */
-export function branchNavItems(
+function branchNavItems(
   branch: BranchNav,
   badges: {
-    students?: number;
-    coaches?: number;
-    claims?: number;
-    unread?: number;
+    students?: NavBadge;
+    coaches?: NavBadge;
+    claims?: NavBadge;
+    unread?: NavBadge;
   } = {},
 ): NavItem[] {
   const isOwner = runsBranch(branch);
@@ -128,14 +122,14 @@ export function branchNavItems(
       label: "Roster",
       icon: <MembersIcon />,
       show: canVisit("/members", branch),
-      badge: badges.students ?? 0,
+      badge: badges.students,
     },
     {
       path: "/coaches",
       label: "Coaches",
       icon: <CoachesIcon />,
       show: canVisit("/coaches", branch),
-      badge: isOwner ? (badges.coaches ?? 0) : 0,
+      badge: isOwner ? badges.coaches : undefined,
     },
     {
       path: "/referrals",
@@ -145,23 +139,9 @@ export function branchNavItems(
     },
     {
       path: "/payments",
-      label: isOwner
-        ? "Payments"
-        : branch.membershipEnforced
-          ? "Membership"
-          : "Dues",
+      label: "Membership",
       icon: <PaymentsIcon />,
-      // An activated branch has no owner Payments screen: its plans, dues and
-      // claims belong to the gym, and Memberships is where they live (ADR 127).
-      // A branch opened after the cutover never ran branch dues at all, so it
-      // has no Payments screen even switched off (ADR 128): `hasLegacyDues`
-      // says whether there is a history to show.
-      show:
-        (isOwner &&
-          !branch.membershipEnforced &&
-          branch.hasLegacyDues === true) ||
-        !isStaff,
-      badge: isOwner ? (badges.claims ?? 0) : 0,
+      show: !isStaff,
     },
     {
       path: "/settings",
@@ -174,7 +154,7 @@ export function branchNavItems(
       label: "Notifications",
       icon: <NotificationsIcon />,
       show: !isPending,
-      badge: badges.unread ?? 0,
+      badge: badges.unread,
     },
     {
       path: "/profile",
@@ -200,196 +180,265 @@ export function branchNavItems(
  * (ADR 127). Everything academy-shaped stays here: the badges, the dues strip
  * and the route guard.
  */
+type NavigationSummary = RouterOutputs["stats"]["navigationSummary"];
+type NavigationCount =
+  NavigationSummary["counts"][keyof NavigationSummary["counts"]];
+
+function badgeFor(
+  status: "pending" | "error" | "success",
+  count: NavigationCount | undefined,
+): NavBadge {
+  if (status === "pending") return { state: "loading" };
+  if (status === "error") return { state: "error" };
+  return count ?? { state: "unavailable" };
+}
+
 export function AppShell({
-  entityId: fromLayout,
   user,
   children,
 }: {
-  entityId: string;
   user: { name: string; email: string };
   children: ReactNode;
 }) {
   const trpc = useTRPC();
   const pathname = usePathname();
-  // The URL wins over the prop: a soft navigation can reuse this layout, and
-  // then the prop still names the branch you left while the router has moved on.
-  const entityId = entityFromPath(pathname) ?? fromLayout;
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const organization = useOrganization();
+  const routeEntityId = entityFromPath(pathname);
+  const organizationRoute = routeEntityId === null;
+  const queryBranchId = searchParams.get("branch");
+  const routeBranch = routeEntityId
+    ? organization.entities.find((entity) => entity.id === routeEntityId)
+    : undefined;
+  const selectedBranch = organizationRoute
+    ? (organization.entities.find((entity) => entity.id === queryBranchId) ??
+      organization.entities[0])
+    : routeBranch;
+
+  useEffect(() => {
+    if (!organizationRoute) return;
+    const next = new URLSearchParams(searchParams.toString());
+    if (selectedBranch) next.set("branch", selectedBranch.id);
+    else next.delete("branch");
+    if (next.toString() === searchParams.toString()) return;
+    router.replace(`${pathname}${next.size > 0 ? `?${next}` : ""}`);
+  }, [organizationRoute, pathname, router, searchParams, selectedBranch]);
+
   const current = useQuery({
     ...trpc.academy.current.queryOptions(),
+    enabled: routeEntityId !== null,
     refetchInterval: (query) =>
       query.state.data?.status === "pending" ? 10000 : false,
   });
-
-  // Boot: no chrome to mirror yet, and the answer may be the shell or the gate,
-  // so a skeleton would draw a layout that half the time never arrives (ADR 80).
-  if (current.isPending) {
-    return <PageLoader label="Opening your branch" />;
+  const summary = useQuery(
+    trpc.stats.navigationSummary.queryOptions({
+      organizationId: organization.organizationId,
+      branchId: selectedBranch?.id ?? null,
+    }),
+  );
+  const summaryStatus = summary.isPending
+    ? "pending"
+    : summary.isError
+      ? "error"
+      : "success";
+  let content = children;
+  if (routeEntityId) {
+    if (current.isPending) {
+      content = <PageLoader label="Opening your branch" />;
+    } else if (current.isError) {
+      content = (
+        <div className="mx-auto w-full max-w-md p-8">
+          <ErrorState
+            label="your branch"
+            onRetry={() => void current.refetch()}
+          />
+        </div>
+      );
+    } else if (!current.data) {
+      content = (
+        <div className="mx-auto w-full max-w-md p-8">
+          <NoAccessState />
+        </div>
+      );
+    }
   }
 
-  if (current.isError) {
-    return (
-      <div className="mx-auto w-full max-w-md p-8">
-        <ErrorState
-          label="your branch"
-          onRetry={() => void current.refetch()}
-        />
-      </div>
-    );
-  }
+  const chrome = (
+    <ShellChrome
+      user={user}
+      pathname={pathname}
+      organizationRoute={organizationRoute}
+      selectedBranch={selectedBranch}
+      academy={routeEntityId ? current.data : undefined}
+      summary={summary.data}
+      summaryStatus={summaryStatus}
+    >
+      {content}
+    </ShellChrome>
+  );
 
-  // The URL names an academy this person cannot open. The tRPC tier refuses it
-  // anyway; this is the readable version of the same answer.
-  if (!current.data) {
-    return (
-      <div className="mx-auto w-full max-w-md p-8">
-        <NoAccessState />
-      </div>
-    );
-  }
-
-  return (
-    <EntityProvider entity={current.data}>
-      <ShellChrome entityId={entityId} user={user} pathname={pathname}>
-        {children}
-      </ShellChrome>
-    </EntityProvider>
+  return routeEntityId && current.data ? (
+    <EntityProvider entity={current.data}>{chrome}</EntityProvider>
+  ) : (
+    chrome
   );
 }
 
 function ShellChrome({
-  entityId,
   user,
   pathname,
+  organizationRoute,
+  selectedBranch,
+  academy,
+  summary,
+  summaryStatus,
   children,
 }: {
-  entityId: string;
   user: { name: string; email: string };
   pathname: string;
+  organizationRoute: boolean;
+  selectedBranch:
+    ReturnType<typeof useOrganization>["entities"][number] | undefined;
+  academy: RouterOutputs["academy"]["current"] | undefined;
+  summary: NavigationSummary | undefined;
+  summaryStatus: "pending" | "error" | "success";
   children: ReactNode;
 }) {
   const trpc = useTRPC();
-  const academy = useEntity();
   const organization = useOrganization();
   const [addingBranch, setAddingBranch] = useState(false);
-  useRememberBranch(entityId);
-  const href = (path: string) => entityHref(entityId, path);
-  const within = pathWithinEntity(pathname);
-  const { academyId: activeId, role, status } = academy;
-  const isOwner = runsBranch(academy);
-  const isStaff = isStaffOf(academy);
-  const isPending = status === "pending";
-  // Staff badges: student requests sit on the Roster, coach requests on Coaches —
-  // same split as the two screens (ADR 64). Dedupes with their own queries.
-  // An instructor sees the student queue (ADR 75), never the coach one.
-  const memberList = useQuery({
-    ...trpc.membership.members.queryOptions({ audience: "all" }),
-    enabled: isStaff,
+  const activeBranch = academy ?? selectedBranch;
+  const entityId = academy?.academyId ?? selectedBranch?.id;
+  const within = organizationRoute ? pathname : pathWithinEntity(pathname);
+  const isStaff = activeBranch ? isStaffOf(activeBranch) : false;
+  const isPending = activeBranch?.status === "pending";
+  const branch = activeBranch
+    ? {
+        ...activeBranch,
+        id: entityId ?? "",
+        referralsEnabled: organization.referralsEnabled,
+      }
+    : undefined;
+  const counts = summary?.counts;
+  const unreadBadge = badgeFor(summaryStatus, counts?.unread);
+  const unreadCount =
+    unreadBadge.state === "ready" ? unreadBadge.count : undefined;
+  const memberships = useQuery({
+    ...trpc.accessPlan.mine.queryOptions(),
+    enabled:
+      !!academy && !isStaff && isActiveMember({ status: academy.status }),
   });
-  const waiting = memberList.data?.filter((m) => m.status === "pending") ?? [];
-  const pendingCoachCount = waiting.filter(isPendingCoach).length;
-  const pendingStudentCount = waiting.length - pendingCoachCount;
-
-  // Payments badge: how many "I paid" claims are waiting for the owner (ADR 40).
-  // Only on a branch still running its own dues: an activated one has no
-  // Payments screen and its claims live at the organization level (ADR 127).
-  const claims = useQuery({
-    ...trpc.payments.claims.queryOptions(),
-    enabled: isOwner && !academy.membershipEnforced && academy.hasLegacyDues,
-  });
-  const claimsCount = claims.data?.length ?? 0;
-
-  // Inbox badge: unread notifications for this member in this academy (ADR 77).
-  const unread = useQuery({
-    ...trpc.notification.unreadCount.queryOptions(),
-    enabled: !isPending,
-  });
-  const unreadCount = unread.data ?? 0;
-
-  const myDues = useQuery({
-    ...trpc.payments.myDues.queryOptions(),
-    enabled: !isStaff && isActiveMember({ status }),
-  });
-  const access = myDues.data?.access;
-  const gateMessage = access ? bookingAccessMessage(access) : null;
-  const overdue = myDues.data?.dues?.status === "overdue";
-  const duesStrip =
-    gateMessage ??
-    (overdue ? "Membership payment overdue — tap to pay." : null);
-  const duesStripLocked = access?.state === "locked";
-
-  const items = branchNavItems(
-    { ...academy, id: entityId },
-    {
-      students: pendingStudentCount,
-      coaches: pendingCoachCount,
-      claims: claimsCount,
-      unread: unreadCount,
-    },
-  );
-
-  // The gym's own screens, beside the branch rather than behind a second menu
-  // (ADR 129). Same paths the organization shell draws, so a link is a link
-  // and nothing here sends `x-matops-entity`.
+  const warning = memberships.data?.memberships.find(
+    (item) => item.warning,
+  )?.warning;
+  const duesStrip = warning?.detail ?? null;
+  const duesStripLocked = warning?.verdict === "blocked";
+  const branchItems = branch
+    ? branchNavItems(branch, {
+        students: badgeFor(summaryStatus, counts?.roster),
+        coaches: badgeFor(summaryStatus, counts?.coaches),
+        claims: badgeFor(summaryStatus, counts?.branchClaims),
+        unread: unreadBadge,
+      }).map((item) => ({
+        ...item,
+        path: `branch:${item.path}`,
+      }))
+    : [];
   const gymItems: NavItem[] = [
     {
       path: "/overview",
       label: "Organization overview",
       icon: <DashboardIcon />,
     },
-    { path: "/people", label: "People", icon: <MembersIcon /> },
-    { path: "/memberships", label: "Memberships", icon: <PaymentsIcon /> },
+    {
+      path: "/people",
+      label: "People",
+      icon: <MembersIcon />,
+      badge: badgeFor(summaryStatus, counts?.people),
+    },
+    {
+      path: "/memberships",
+      label: "Memberships",
+      icon: <PaymentsIcon />,
+      badge: badgeFor(summaryStatus, counts?.memberships),
+    },
     {
       path: "/settings",
       label: "Organization settings",
       icon: <SettingsIcon />,
     },
-  ].map((i) => ({
-    ...i,
+  ].map((item) => ({
+    ...item,
     show: organization.canRunOrganization,
-    group: GYM_GROUP,
-    href: i.path,
-    // Namespaced so `isCurrent`, which reads the path within the branch, can
-    // never light up "Organization settings" because you are on the branch's own.
-    path: `gym:${i.path}`,
+    group: branchItems.length > 0 ? GYM_GROUP : undefined,
+    href: organizationHref(item.path, selectedBranch?.id),
+    path: `gym:${item.path}`,
   }));
-
-  const isCurrent = (path: string) =>
-    path === "/" ? within === "/" : within.startsWith(path);
-
-  const columnClass = `mx-auto w-full ${contentWidth(within, isStaff)} px-6 md:px-8`;
+  const items = [
+    ...branchItems,
+    ...gymItems.filter((item) => item.show),
+    ...(organization.canCreateBranches
+      ? [
+          {
+            path: "gym:add-branch",
+            href: "#add-branch",
+            label: "Add branch",
+            icon: <PlusIcon />,
+            show: true,
+            group: GYM_GROUP,
+            onSelect: () => setAddingBranch(true),
+          },
+        ]
+      : []),
+  ];
+  const isCurrent = (path: string) => {
+    if (path.startsWith("gym:")) {
+      const target = path.slice(4);
+      return (
+        organizationRoute &&
+        (pathname === target || pathname.startsWith(`${target}/`))
+      );
+    }
+    if (path.startsWith("branch:")) {
+      if (organizationRoute) return false;
+      const target = path.slice(7);
+      return target === "/"
+        ? within === "/"
+        : within === target || within.startsWith(`${target}/`);
+    }
+    return false;
+  };
+  const columnClass = `mx-auto w-full ${
+    organizationRoute ? "max-w-6xl" : contentWidth(within, isStaff)
+  } px-6 md:px-8`;
+  const href = (path: string) =>
+    entityId ? entityHref(entityId, path) : organizationHref("/overview");
 
   return (
     <ShellFrame
-      items={[
-        ...items,
-        ...gymItems.filter((i) => i.show),
-        // The selector hides itself at a gym with one branch, so this is the
-        // only way an owner opens a second one (ADR 129).
-        ...(organization.canCreateBranches
-          ? [
-              {
-                path: "gym:add-branch",
-                href: "#add-branch",
-                label: "Add branch",
-                icon: <PlusIcon />,
-                show: true,
-                group: GYM_GROUP,
-                onSelect: () => setAddingBranch(true),
-              },
-            ]
-          : []),
-      ]}
+      items={items}
       isCurrent={isCurrent}
-      homeHref={href("/")}
-      profileHref={href("/profile")}
+      homeHref={
+        organizationRoute
+          ? organizationHref("/overview", selectedBranch?.id)
+          : href("/")
+      }
+      profileHref={entityId ? href("/profile") : "/profile"}
       selector={
-        <EntitySelector organization={organization} activeId={activeId} />
+        <EntitySelector
+          organization={organization}
+          activeId={selectedBranch?.id}
+          organizationRoute={organizationRoute}
+        />
       }
       user={user}
-      roleLabel={isPending ? "pending" : role}
+      roleLabel={
+        isPending ? "pending" : (activeBranch?.role ?? organization.role)
+      }
       columnClass={columnClass}
       sidebarExtra={
-        isStaff && (
+        academy && isStaff ? (
           <ShareLinksDialog
             trigger={
               <button
@@ -401,74 +450,82 @@ function ShellChrome({
               </button>
             }
           />
-        )
+        ) : undefined
       }
       headerExtra={
-        <>
-          {isStaff && (
-            <ShareLinksDialog
-              trigger={
-                <button
-                  type="button"
-                  aria-label="Send someone a link"
-                  className="text-muted-foreground hover:text-foreground flex size-11 shrink-0 items-center justify-center rounded-md transition-colors"
-                >
-                  <ShareIcon />
-                </button>
-              }
-            />
-          )}
-          {!isPending && (
-            <Link
-              href={href("/notifications")}
-              aria-label={
-                unreadCount > 0
-                  ? `Notifications, ${unreadCount} unread`
-                  : "Notifications"
-              }
-              aria-current={isCurrent("/notifications") ? "page" : undefined}
-              className={`relative flex size-11 shrink-0 items-center justify-center rounded-md transition-colors ${
-                isCurrent("/notifications")
-                  ? "text-brand-strong"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <NotificationsIcon />
-              {unreadCount > 0 && (
-                <span className="bg-error absolute top-1 right-1 size-2 rounded-full" />
-              )}
-            </Link>
-          )}
-        </>
+        academy ? (
+          <>
+            {isStaff && (
+              <ShareLinksDialog
+                trigger={
+                  <button
+                    type="button"
+                    aria-label="Send someone a link"
+                    className="text-muted-foreground hover:text-foreground flex size-11 shrink-0 items-center justify-center rounded-md transition-colors"
+                  >
+                    <ShareIcon />
+                  </button>
+                }
+              />
+            )}
+            {!isPending && (
+              <Link
+                href={href("/notifications")}
+                aria-label={
+                  unreadCount === undefined
+                    ? "Notifications, count unavailable"
+                    : unreadCount > 0
+                      ? `Notifications, ${unreadCount} unread`
+                      : "Notifications"
+                }
+                aria-current={
+                  isCurrent("branch:/notifications") ? "page" : undefined
+                }
+                className={`relative flex size-11 shrink-0 items-center justify-center rounded-md transition-colors ${
+                  isCurrent("branch:/notifications")
+                    ? "text-brand-strong"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <NotificationsIcon />
+                {unreadCount !== undefined && unreadCount > 0 && (
+                  <span className="bg-error absolute top-1 right-1 size-2 rounded-full" />
+                )}
+              </Link>
+            )}
+          </>
+        ) : undefined
       }
       banners={
-        <>
-          {isPending && (
-            <div className="border-brand/25 bg-brand-wash text-brand-strong border-b">
-              <p className={`${columnClass} py-2.5 text-sm`}>
-                Waiting for branch approval. You can browse classes and
-                memberships, but booking is not available yet.
-              </p>
-            </div>
-          )}
-          {duesStrip && (
-            <Link
-              href={href("/payments")}
-              className={`block border-b transition-colors ${
-                duesStripLocked
-                  ? "border-error/25 bg-error/10 hover:bg-error/15"
-                  : "border-warning/25 bg-warning/10 hover:bg-warning/15"
-              }`}
-            >
-              <span className={`${columnClass} block py-2.5 text-sm`}>
-                {duesStrip}
-              </span>
-            </Link>
-          )}
-        </>
+        academy ? (
+          <>
+            {isPending && (
+              <div className="border-brand/25 bg-brand-wash text-brand-strong border-b">
+                <p className={`${columnClass} py-2.5 text-sm`}>
+                  Waiting for branch approval. You can browse classes and
+                  memberships, but booking is not available yet.
+                </p>
+              </div>
+            )}
+            {duesStrip && (
+              <Link
+                href={href("/payments")}
+                className={`block border-b transition-colors ${
+                  duesStripLocked
+                    ? "border-error/25 bg-error/10 hover:bg-error/15"
+                    : "border-warning/25 bg-warning/10 hover:bg-warning/15"
+                }`}
+              >
+                <span className={`${columnClass} block py-2.5 text-sm`}>
+                  {duesStrip}
+                </span>
+              </Link>
+            )}
+          </>
+        ) : undefined
       }
     >
-      {canVisit(within, academy) ? children : <NoAccessState />}
+      {academy && !canVisit(within, academy) ? <NoAccessState /> : children}
       <AddBranchDialog
         open={addingBranch}
         onOpenChange={setAddingBranch}

@@ -11,6 +11,7 @@ import {
   formatMoney,
   formatMonth,
   nextMonth,
+  organizationHref,
 } from "@matops/domain";
 import { Button } from "@matops/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@matops/ui/dialog";
@@ -27,7 +28,6 @@ import {
 import { dateFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { useOrganization } from "./entity";
-import { MembershipPurchaseReview } from "./membership-purchase-review";
 import { cardClass, ENTER, Eyebrow, Section, stagger } from "./primitives";
 import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
@@ -47,7 +47,9 @@ type Affected = RouterOutputs["accessPlan"]["coveragePreview"]["affected"];
 export function MembershipsScreen() {
   const { entities, canRunOrganization, role } = useOrganization();
   const trpc = useTRPC();
-  const tabParam = useSearchParams().get("tab");
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const branchId = searchParams.get("branch") ?? undefined;
   const tab =
     tabParam === "access" || tabParam === "plans" ? tabParam : "payments";
   const plans = useQuery({
@@ -76,7 +78,8 @@ export function MembershipsScreen() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Memberships</h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            Track payments, resolve access issues, and manage your plans.
+            Track payments, resolve work that needs action, and manage your
+            plans.
           </p>
         </div>
         {tab === "plans" && (
@@ -92,7 +95,7 @@ export function MembershipsScreen() {
       >
         {[
           { id: "payments", label: "Payments" },
-          { id: "access", label: "Access issues" },
+          { id: "access", label: "Needs action" },
           { id: "plans", label: "Plans" },
         ].map((view) => (
           <Link
@@ -109,7 +112,6 @@ export function MembershipsScreen() {
 
       {tab === "payments" && (
         <div className="flex min-w-0 flex-col gap-8">
-          <MembershipPurchaseReview />
           <ClaimsWaiting />
           <MonthBoard nameOf={nameOf} />
         </div>
@@ -123,8 +125,7 @@ export function MembershipsScreen() {
       {tab === "plans" && (
         <div className="flex min-w-0 flex-col gap-6">
           <p className="text-muted-foreground text-sm">
-            Set prices and covered branches, then make plans available for
-            students to choose. You can also assign plans from a person’s
+            Set prices and covered branches. Assign plans from a person’s
             profile.
           </p>
           {plans.isPending ? (
@@ -161,7 +162,10 @@ export function MembershipsScreen() {
           {role === "owner" && (
             <p className="text-muted-foreground border-border border-t pt-4 text-sm">
               Manage payment deadlines, time zone, and bank details in{" "}
-              <Link href="/settings" className="underline underline-offset-4">
+              <Link
+                href={organizationHref("/settings", branchId)}
+                className="underline underline-offset-4"
+              >
                 Organization settings
               </Link>
               .
@@ -195,6 +199,9 @@ function ClaimsWaiting() {
 
   const invalidate = async () => {
     await queryClient.invalidateQueries(trpc.accessPlan.pathFilter());
+    await queryClient.invalidateQueries(
+      trpc.stats.navigationSummary.pathFilter(),
+    );
   };
   const onError = (e: { message: string }) =>
     toast.error(e.message || "Could not do that");
@@ -268,9 +275,9 @@ function ClaimsWaiting() {
                 <span className="text-muted-foreground truncate text-sm">
                   {c.planName} · {c.monthLabel}
                 </span>
-                {c.claimedAt && (
+                {c.reportedAt && (
                   <span className="text-muted-foreground text-xs">
-                    Said they paid on {dateFmt.format(new Date(c.claimedAt))}
+                    Said they paid on {dateFmt.format(new Date(c.reportedAt))}
                   </span>
                 )}
               </div>
@@ -327,6 +334,9 @@ function MonthBoard({ nameOf }: { nameOf: (id: string) => string }) {
     trpc.accessPlan.markMonth.mutationOptions({
       onSuccess: async () => {
         await queryClient.invalidateQueries(trpc.accessPlan.pathFilter());
+        await queryClient.invalidateQueries(
+          trpc.stats.navigationSummary.pathFilter(),
+        );
       },
       onError: (e) => toast.error(e.message || "Could not record that"),
     }),
@@ -455,7 +465,7 @@ function BookingAccessQueue() {
             >
               <div className="flex min-w-0 flex-col gap-1">
                 <Link
-                  href={`/people/${booking.userId}`}
+                  href={`/people/${booking.personId}`}
                   className="w-fit text-sm font-medium underline underline-offset-4"
                 >
                   {booking.name}
@@ -464,13 +474,38 @@ function BookingAccessQueue() {
                   {booking.title} · {booking.entityName} ·{" "}
                   {dateFmt.format(new Date(booking.startsAt))}
                 </span>
+                <span className="text-sm">
+                  {booking.reason === "payment-declined"
+                    ? "Payment declined. Owner approval is required."
+                    : booking.reason === "suspended"
+                      ? "Branch access is paused."
+                      : booking.reason === "membership-inactive"
+                        ? "Membership is paused or ended."
+                        : "No active membership covers this branch."}
+                </span>
               </div>
-              <Link
-                href={entityHref(booking.entityId, `/class/${booking.classId}`)}
-                className="text-brand-strong inline-flex min-h-11 items-center text-sm underline underline-offset-4"
-              >
-                Review booking
-              </Link>
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href={`/people/${booking.personId}`}
+                  className="text-brand-strong inline-flex min-h-11 items-center text-sm underline underline-offset-4"
+                >
+                  {booking.reason === "suspended" ||
+                  booking.reason === "membership-inactive"
+                    ? "Restore access"
+                    : booking.reason === "payment-declined"
+                      ? "Confirm payment"
+                      : "Give membership"}
+                </Link>
+                <Link
+                  href={entityHref(
+                    booking.entityId,
+                    `/class/${booking.classId}?accessPerson=${encodeURIComponent(booking.name)}&accessReason=${booking.reason}`,
+                  )}
+                  className="text-muted-foreground inline-flex min-h-11 items-center text-sm underline underline-offset-4"
+                >
+                  Open roster
+                </Link>
+              </div>
             </li>
           ))}
         </ul>
@@ -504,16 +539,6 @@ function PlanCard({
     }),
   );
   const [pricing, setPricing] = useState(false);
-  const availability = useMutation(
-    trpc.membershipPurchase.setAvailability.mutationOptions({
-      onSuccess: async () => {
-        await Promise.all([
-          invalidate(),
-          queryClient.invalidateQueries(trpc.membershipPurchase.pathFilter()),
-        ]);
-      },
-    }),
-  );
 
   return (
     <div className={`${cardClass()} flex flex-wrap gap-3`}>
@@ -567,34 +592,6 @@ function PlanCard({
           {plan.archived ? "Restore" : "Archive"}
         </Button>
       </div>
-      {!plan.archived && (
-        <div className="border-border flex w-full flex-col gap-2 border-t pt-3">
-          <label className="flex min-h-11 cursor-pointer items-start gap-3 text-sm">
-            <input
-              type="checkbox"
-              className="accent-brand mt-1 size-4 shrink-0"
-              checked={plan.studentSelectable}
-              disabled={availability.isPending}
-              onChange={(event) =>
-                availability.mutate({
-                  planId: plan.id,
-                  available: event.target.checked,
-                })
-              }
-            />
-            <span>
-              <span className="block font-medium">Available to students</span>
-              <span className="text-muted-foreground block">
-                Students can choose this plan. Access starts after you approve
-                it.
-              </span>
-            </span>
-          </label>
-          {availability.isError && (
-            <FieldError>{availability.error.message}</FieldError>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -1090,10 +1087,10 @@ function UncoveredQueue() {
             <span className="text-sm font-medium">{g.entityName}</span>
             <span className="text-muted-foreground text-sm">
               {g.people.map((p, i) => (
-                <span key={p.userId}>
+                <span key={p.personId}>
                   {i > 0 && ", "}
                   <Link
-                    href={`/people/${p.userId}`}
+                    href={`/people/${p.personId}`}
                     className="hover:underline"
                   >
                     {p.name}

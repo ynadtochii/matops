@@ -35,14 +35,6 @@ export const CreateAccessPlanSchema = z
     (v) => (v.priceMinor === undefined) === (v.currency === undefined),
     "Give a price and its currency together, or neither",
   );
-export type CreateAccessPlanInput = z.infer<typeof CreateAccessPlanSchema>;
-
-export const RenameAccessPlanSchema = z.object({
-  id: z.uuid(),
-  name: lineText(1, 80),
-  description: blockText(0, 500).nullish(),
-});
-export type RenameAccessPlanInput = z.infer<typeof RenameAccessPlanSchema>;
 
 /**
  * The exact branches the plan covers after this call. Not a patch.
@@ -57,15 +49,11 @@ export const SetAccessPlanCoverageSchema = z.object({
   entityIds: EntityIdsSchema,
   version: z.iso.datetime().nullish(),
 });
-export type SetAccessPlanCoverageInput = z.infer<
-  typeof SetAccessPlanCoverageSchema
->;
 
 export const ArchiveAccessPlanSchema = z.object({
   id: z.uuid(),
   archived: z.boolean(),
 });
-export type ArchiveAccessPlanInput = z.infer<typeof ArchiveAccessPlanSchema>;
 
 export const AccessPlanIdSchema = z.object({ id: z.uuid() });
 
@@ -73,34 +61,44 @@ export const AccessPlanIdSchema = z.object({ id: z.uuid() });
  * Give a person a membership. `startMonth` is the first day of a calendar
  * month; leave it out and the server uses the month it is in.
  */
-export const AssignMembershipSchema = z.object({
-  userId: IdSchema,
+const AssignmentFieldsSchema = z.object({
   planId: z.uuid(),
-  /** Where the owner was standing. Recorded, never a limit on coverage. */
   assigningEntityId: IdSchema.nullish(),
   startMonth: z.iso.date().nullish(),
+  startsOn: z.iso.date().nullish(),
 });
-export type AssignMembershipInput = z.infer<typeof AssignMembershipSchema>;
+
+export const AssignMembershipSchema = z
+  .union([
+    AssignmentFieldsSchema.extend({ personId: IdSchema }),
+    AssignmentFieldsSchema.extend({ userId: IdSchema }),
+  ])
+  .transform((input) => ({
+    ...input,
+    userId: "personId" in input ? input.personId : input.userId,
+  }));
 
 /** How many people one bulk run may touch. Past this it is an import, not a click. */
 const MAX_BULK_ASSIGN = 500;
 
 /** Give the same plan to several people at once (ADR 128). */
-export const BulkAssignMembershipSchema = z.object({
-  userIds: z.array(IdSchema).min(1).max(MAX_BULK_ASSIGN),
-  planId: z.uuid(),
-  startMonth: z.iso.date().nullish(),
-});
-export type BulkAssignMembershipInput = z.infer<
-  typeof BulkAssignMembershipSchema
->;
-
-/** Who is on one branch's legacy dues plan, for migration (ADR 128). */
-export const LegacyPlanMembersSchema = z.object({
-  entityId: IdSchema,
-  planId: z.uuid().nullish(),
-});
-export type LegacyPlanMembersInput = z.infer<typeof LegacyPlanMembersSchema>;
+export const BulkAssignMembershipSchema = z
+  .union([
+    z.object({
+      personIds: z.array(IdSchema).min(1).max(MAX_BULK_ASSIGN),
+      planId: z.uuid(),
+      startMonth: z.iso.date().nullish(),
+    }),
+    z.object({
+      userIds: z.array(IdSchema).min(1).max(MAX_BULK_ASSIGN),
+      planId: z.uuid(),
+      startMonth: z.iso.date().nullish(),
+    }),
+  ])
+  .transform((input) => ({
+    ...input,
+    userIds: "personIds" in input ? input.personIds : input.userIds,
+  }));
 
 export const AssignmentIdSchema = z.object({ id: z.uuid() });
 
@@ -113,7 +111,6 @@ export const PlanChangeSchema = z.object({
   assignmentId: z.uuid(),
   targetPlanId: z.uuid(),
 });
-export type PlanChangeInput = z.infer<typeof PlanChangeSchema>;
 
 export const CancelPlanChangeSchema = z.object({ changeId: z.uuid() });
 
@@ -122,13 +119,36 @@ export const CancelPlanChangeSchema = z.object({ changeId: z.uuid() });
  * Bounded rather than paged by cursor: the list is work to clear, and a gym
  * with more than a screenful has a bigger problem than pagination.
  */
-export const BookingReviewSchema = z.object({
-  userId: IdSchema.nullish(),
-  limit: z.number().int().min(1).max(200).default(50),
-});
-export type BookingReviewInput = z.infer<typeof BookingReviewSchema>;
+export const BookingReviewSchema = z
+  .union([
+    z
+      .object({
+        personId: IdSchema.nullish(),
+        limit: z.number().int().min(1).max(200).default(50),
+      })
+      .strict(),
+    z
+      .object({
+        userId: IdSchema.nullish(),
+        limit: z.number().int().min(1).max(200).default(50),
+      })
+      .strict(),
+  ])
+  .transform((input) => ({
+    personId:
+      "userId" in input
+        ? input.userId
+        : "personId" in input
+          ? input.personId
+          : null,
+    limit: input.limit,
+  }));
 
-export const MemberAssignmentsSchema = z.object({ userId: IdSchema });
+export const MemberAssignmentsSchema = z
+  .union([z.object({ personId: IdSchema }), z.object({ userId: IdSchema })])
+  .transform((input) => ({
+    userId: "personId" in input ? input.personId : input.userId,
+  }));
 
 /** The first day of a calendar month, which is how a month is addressed. */
 const MonthSchema = z.iso
@@ -148,17 +168,16 @@ export const SetAccessPlanPriceSchema = z.object({
   currency: CurrencySchema,
   effectiveMonth: MonthSchema,
 });
-export type SetAccessPlanPriceInput = z.infer<typeof SetAccessPlanPriceSchema>;
 
 /** Tick one month of one shared membership paid or unpaid. */
 export const MarkMembershipMonthSchema = z.object({
   assignmentId: z.uuid(),
   month: MonthSchema,
   paid: z.boolean(),
+  expectedVersion: z.number().int().positive().optional(),
+  reason: blockText(1, 500).optional(),
+  resolveHoldReason: blockText(1, 500).optional(),
 });
-export type MarkMembershipMonthInput = z.infer<
-  typeof MarkMembershipMonthSchema
->;
 
 export const MembershipMonthsSchema = z.object({ assignmentId: z.uuid() });
 
@@ -166,18 +185,18 @@ export const MembershipMonthsSchema = z.object({ assignmentId: z.uuid() });
  * A member says they sent the transfer. No month: the server uses the one they
  * are being judged on, which is the only month they are ever shown (ADR 127).
  */
-export const ClaimMembershipMonthSchema = z.object({ assignmentId: z.uuid() });
-export type ClaimMembershipMonthInput = z.infer<
-  typeof ClaimMembershipMonthSchema
->;
+export const ClaimMembershipMonthSchema = z.object({
+  assignmentId: z.uuid(),
+  expectedVersion: z.number().int().positive().optional(),
+  priceMinor: PriceMinorSchema.optional(),
+  currency: CurrencySchema.optional(),
+});
 
 /** Clear a claim without marking the month paid. */
 export const RejectMembershipClaimSchema = MarkMembershipMonthSchema.omit({
   paid: true,
-});
-export type RejectMembershipClaimInput = z.infer<
-  typeof RejectMembershipClaimSchema
->;
+  resolveHoldReason: true,
+}).extend({ reason: blockText(1, 500).default("Payment report rejected") });
 
 /**
  * The organization's membership settings. Grace is bounded the same way the
@@ -199,27 +218,9 @@ export const MembershipPolicySchema = z.object({
    */
   bankDetails: blockText(0, 2000),
 });
-export type MembershipPolicyInput = z.infer<typeof MembershipPolicySchema>;
 
 /** The window the organization overview reports on. Both ends, or neither. */
 export const OrganizationWindowSchema = z.object({
   from: z.iso.datetime(),
   to: z.iso.datetime(),
-});
-export type OrganizationWindowInput = z.infer<typeof OrganizationWindowSchema>;
-
-export const PurchaseCatalogSchema = z.object({
-  start: z.enum(["current", "next"]).default("current"),
-});
-export const SelectMembershipPurchaseSchema = PurchaseCatalogSchema.extend({
-  planId: z.uuid(),
-  version: z.string().min(1).max(5000),
-});
-export const MembershipPurchaseIdSchema = z.object({ id: z.uuid() });
-export const RejectMembershipPurchaseSchema = MembershipPurchaseIdSchema.extend(
-  { reason: blockText(1, 500) },
-);
-export const MembershipAvailabilitySchema = z.object({
-  planId: z.uuid(),
-  available: z.boolean(),
 });

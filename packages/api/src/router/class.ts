@@ -6,14 +6,20 @@ import type { Membership } from "@matops/domain";
 import {
   and,
   asc,
+  attendanceReviewSnapshot,
+  bumpScheduleRevision,
+  createNotice,
+  deliverNoticeBatch,
   eq,
   eventRole,
   getTableColumns,
   gte,
+  insertNotifications,
   isNull,
+  lockAndReadScheduleRevision,
   lockBranchSchedule,
   lt,
-  ne,
+  or,
   overlappingSessions,
   recordActivity,
   recordMilestone,
@@ -22,30 +28,35 @@ import {
 import {
   classInstance,
   classParticipation,
+  dropIn,
   dropInVisit,
+  entity,
+  person,
   user,
 } from "@matops/db/schema";
 import {
+  buildCancelledMessage,
+  buildClassChangeMessage,
   canReassignCoach,
   capacityPolicyFor,
   classChange,
   findOverlap,
+  formatWhen,
   instantFromLocalDate,
   instructorForNewSession,
-  isActiveMember,
   isGeneralSpace,
-  visibleAttendees,
+  selfServiceWindow,
 } from "@matops/domain";
+import { sendEmail } from "@matops/notifications";
 import {
   ClassIdSchema,
   CreateClassSchema,
   SetClassInstructorSchema,
-  UpdateClassSchema,
   WeekWindowSchema,
 } from "@matops/validators";
 
 import type { TimeZoneCtx } from "../academy-tz";
-import { academyTimeZone } from "../academy-tz";
+import { academyContext, academyTimeZone } from "../academy-tz";
 import { liveClass } from "../classes";
 import { requireInstructor } from "../members";
 import { CLASS_NOT_FOUND, ROOM_TAKEN } from "../messages";
@@ -93,26 +104,135 @@ interface NotifyScope {
  */
 type ClassNotifier = typeof notifyClassChanged;
 
-async function notifyBooked(
+export async function notifyBooked(
   ctx: NotifyScope,
-  row: { id: string; title: string; startsAt: Date },
+  row: { id: string; title: string; startsAt: Date; updatedAt: Date },
+  kind: "class_changed" | "class_cancelled",
   send: ClassNotifier,
-): Promise<void> {
+): Promise<{
+  noticeId: string;
+  delivery: {
+    claimed: number;
+    accepted: number;
+    failed: number;
+    unknown: number;
+    noEmail: number;
+    remaining: number;
+  };
+}> {
   const booked = await ctx.db
-    .select({ studentId: classParticipation.studentId })
+    .select({
+      studentId: classParticipation.studentId,
+      personId: classParticipation.personId,
+      userEmail: user.email,
+      personEmail: person.email,
+    })
     .from(classParticipation)
+    .leftJoin(user, eq(user.id, classParticipation.studentId))
+    .leftJoin(person, eq(person.id, classParticipation.personId))
     .where(
       and(
         eq(classParticipation.classId, row.id),
         eq(classParticipation.bookingStatus, "booked"),
       ),
     );
-  // Without a zone `formatWhen` labels the new time in UTC, so students would be
-  // told the wrong hour. The reminder sweep already resolves one.
+  const visitors = await ctx.db
+    .select({ visitId: dropInVisit.id, email: dropIn.email })
+    .from(dropInVisit)
+    .innerJoin(dropIn, eq(dropIn.id, dropInVisit.dropInId))
+    .where(
+      and(
+        eq(dropInVisit.classId, row.id),
+        eq(dropInVisit.bookingStatus, "booked"),
+      ),
+    );
   const timeZone = await academyTimeZone(ctx);
-  const studentIds = booked.map((b) => b.studentId);
-  ctx.afterCommit((exec) =>
-    send(
+  const [academy] = await ctx.db
+    .select({ name: entity.name })
+    .from(entity)
+    .where(eq(entity.id, ctx.academyId))
+    .limit(1);
+  const messageInput = {
+    academyName: academy?.name ?? "your gym",
+    className: row.title,
+    whenLabel: formatWhen(row.startsAt, timeZone),
+  };
+  const message =
+    kind === "class_cancelled"
+      ? buildCancelledMessage(messageInput)
+      : buildClassChangeMessage(messageInput);
+  const eventKey = `${kind}:${row.id}:${row.updatedAt.toISOString()}`;
+  const recipients = [
+    ...booked.flatMap((recipient) => {
+      if (!recipient.personId && !recipient.studentId) return [];
+      return [
+        {
+          recipientKey: recipient.personId
+            ? `person:${recipient.personId}`
+            : `user:${recipient.studentId}`,
+          ...(recipient.personId ? { personId: recipient.personId } : {}),
+          ...(recipient.studentId ? { userId: recipient.studentId } : {}),
+          email: recipient.personEmail ?? recipient.userEmail ?? undefined,
+        },
+      ];
+    }),
+    ...visitors.map((recipient) => ({
+      recipientKey: `visitor:${recipient.visitId}`,
+      visitId: recipient.visitId,
+      email: recipient.email ?? undefined,
+    })),
+  ];
+  const notice = await createNotice(
+    {
+      academyId: ctx.academyId,
+      eventKey,
+      kind,
+      subject: message.title,
+      body: message.body,
+      templateVersion: "1",
+      recipients,
+    },
+    ctx.db,
+  );
+  await insertNotifications(
+    booked.flatMap((recipient) =>
+      recipient.studentId
+        ? [
+            {
+              academyId: ctx.academyId,
+              userId: recipient.studentId,
+              kind,
+              title: message.title,
+              body: message.body,
+              link: `/class/${row.id}`,
+            },
+          ]
+        : [],
+    ),
+    ctx.db,
+  );
+  const studentIds = booked.flatMap((recipient) =>
+    recipient.studentId ? [recipient.studentId] : [],
+  );
+  const delivery = {
+    claimed: 0,
+    accepted: 0,
+    failed: 0,
+    unknown: 0,
+    noEmail: notice.recipients.filter(
+      (recipient) => recipient.status === "no_email",
+    ).length,
+    remaining: notice.recipients.filter(
+      (recipient) => recipient.status === "pending",
+    ).length,
+  };
+  ctx.afterCommit(async (exec) => {
+    const result = await deliverNoticeBatch(exec, sendEmail, {
+      noticeId: notice.noticeId,
+      mode: "remaining",
+    });
+    Object.assign(delivery, result);
+    await send(
       {
         academyId: ctx.academyId,
         className: row.title,
@@ -122,8 +242,9 @@ async function notifyBooked(
         studentIds,
       },
       exec,
-    ),
-  );
+    );
+  });
+  return { noticeId: notice.noticeId, delivery };
 }
 
 /**
@@ -135,16 +256,10 @@ async function notifyBooked(
 async function assertRoomFree(
   ctx: { db: TenantTx; academyId: string; entity: { type: string } },
   span: { startsAt: Date; durationMinutes: number },
-  ignoreClassId?: string,
 ): Promise<void> {
   if (!isGeneralSpace(ctx.entity.type)) return;
   await lockBranchSchedule(ctx.db, ctx.academyId);
-  const taken = await overlappingSessions(
-    ctx.db,
-    ctx.academyId,
-    [span],
-    ignoreClassId,
-  );
+  const taken = await overlappingSessions(ctx.db, ctx.academyId, [span]);
   if (findOverlap(span, taken)) {
     throw new TRPCError({ code: "CONFLICT", message: ROOM_TAKEN });
   }
@@ -165,6 +280,7 @@ export const classRouter = {
       .select({
         ...getTableColumns(classInstance),
         instructorName: user.name,
+        attendanceReviewed: sql<boolean>`coalesce(${classInstance.attendanceReviewedAt} IS NOT NULL AND ${classInstance.attendanceReviewFingerprint} = ${attendanceReviewSnapshot()}->>'fingerprint', false)`,
         pendingCount: sql<number>`(
           SELECT count(*)::int FROM ${classParticipation}
           WHERE ${classParticipation.classId} = ${classInstance.id}
@@ -197,7 +313,12 @@ export const classRouter = {
    * (title/time/duration/capacity/booking_count) are all a student may see —
    * attendee names are a Phase-3 booking concern, not returned here.
    */
-  mine: enrolledProcedure.input(WeekWindowSchema).query(({ ctx, input }) => {
+  mine: enrolledProcedure.input(WeekWindowSchema).query(async ({ ctx }) => {
+    const academy = await academyContext(ctx);
+    const window = selfServiceWindow(new Date(), {
+      bookingWindowDays: academy.bookingWindowDays,
+      timeZone: academy.timeZone,
+    });
     return ctx.db
       .select({
         id: classInstance.id,
@@ -222,14 +343,22 @@ export const classRouter = {
         classParticipation,
         and(
           eq(classParticipation.classId, classInstance.id),
-          eq(classParticipation.studentId, ctx.session.user.id),
+          or(
+            ctx.membership.personId
+              ? eq(classParticipation.personId, ctx.membership.personId)
+              : undefined,
+            and(
+              isNull(classParticipation.personId),
+              eq(classParticipation.studentId, ctx.session.user.id),
+            ),
+          ),
         ),
       )
       .where(
         and(
           isNull(classInstance.deletedAt),
-          gte(classInstance.startsAt, new Date(input.from)),
-          lt(classInstance.startsAt, new Date(input.to)),
+          gte(classInstance.startsAt, new Date(window.from)),
+          lt(classInstance.startsAt, new Date(window.to)),
         ),
       )
       .orderBy(asc(classInstance.startsAt));
@@ -266,7 +395,15 @@ export const classRouter = {
         classParticipation,
         and(
           eq(classParticipation.classId, classInstance.id),
-          eq(classParticipation.studentId, ctx.session.user.id),
+          or(
+            ctx.membership.personId
+              ? eq(classParticipation.personId, ctx.membership.personId)
+              : undefined,
+            and(
+              isNull(classParticipation.personId),
+              eq(classParticipation.studentId, ctx.session.user.id),
+            ),
+          ),
         ),
       )
       .where(liveClass(input.id));
@@ -280,39 +417,11 @@ export const classRouter = {
    * Who else is on a class (spec S5, §4 schedule privacy, ADR 55). Enrolled tier,
    * so a pending member may call it — they just get counts back.
    */
-  attendees: enrolledProcedure
-    .input(ClassIdSchema)
-    .query(async ({ ctx, input }) => {
-      const rows = await ctx.db
-        .select({
-          studentId: classParticipation.studentId,
-          name: user.name,
-          bookingStatus: classParticipation.bookingStatus,
-        })
-        .from(classParticipation)
-        .leftJoin(user, eq(user.id, classParticipation.studentId))
-        .where(eq(classParticipation.classId, input.id));
-
-      const [dropIns] = await ctx.db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(dropInVisit)
-        .where(
-          and(
-            eq(dropInVisit.classId, input.id),
-            ne(dropInVisit.bookingStatus, "cancelled"),
-          ),
-        );
-
-      return visibleAttendees(rows, dropIns?.count ?? 0, {
-        id: ctx.session.user.id,
-        approved: isActiveMember(ctx.membership),
-      });
-    }),
-
   /** Create a one-off class (`template_id` null). Local date+time → UTC instant. */
   create: staffProcedure
     .input(CreateClassSchema)
     .mutation(async ({ ctx, input }) => {
+      await lockAndReadScheduleRevision(ctx.db, ctx.academyId);
       const startsAt = instantFromLocalDate(
         input.date,
         input.startsAtMinutes,
@@ -346,6 +455,7 @@ export const classRouter = {
           publicBookable: input.publicBookable,
         })
         .returning();
+      if (row) await bumpScheduleRevision(ctx.db, ctx.academyId);
       ctx.afterCommit(async (exec) => {
         const event = {
           organizationId: ctx.organizationId,
@@ -355,67 +465,6 @@ export const classRouter = {
         await recordMilestone({ ...event, name: "first_schedule" }, exec);
         await recordActivity({ ...event, name: "staff_action" }, exec);
       });
-      return row;
-    }),
-
-  /** Edit one class. Optional reschedule; notifies booked students on time/instructor change (§4). */
-  update: staffProcedure
-    .input(UpdateClassSchema)
-    .mutation(async ({ ctx, input }) => {
-      const [before] = await ctx.db
-        .select()
-        .from(classInstance)
-        .where(liveClass(input.id));
-      if (!before) {
-        throw new TRPCError({ code: "NOT_FOUND", message: CLASS_NOT_FOUND });
-      }
-
-      const now = new Date();
-      if (input.instructorId !== before.instructorId) {
-        assertCanReassignCoach(ctx.membership, before.startsAt, now);
-        if (input.instructorId !== null) {
-          await requireInstructor(ctx, input.instructorId);
-        }
-      }
-
-      const startsAt =
-        input.date && input.startsAtMinutes !== undefined && input.timeZone
-          ? instantFromLocalDate(
-              input.date,
-              input.startsAtMinutes,
-              input.timeZone,
-            )
-          : before.startsAt;
-
-      await assertRoomFree(
-        ctx,
-        { startsAt, durationMinutes: input.durationMinutes },
-        input.id,
-      );
-      const [row] = await ctx.db
-        .update(classInstance)
-        .set({
-          title: input.title,
-          description: input.description,
-          discipline: input.discipline ?? null,
-          instructorId: input.instructorId,
-          durationMinutes: input.durationMinutes,
-          capacity: input.capacity,
-          publicBookable: input.publicBookable,
-          startsAt,
-        })
-        .where(liveClass(input.id))
-        .returning();
-      if (!row) {
-        throw new TRPCError({ code: "NOT_FOUND", message: CLASS_NOT_FOUND });
-      }
-
-      const change = classChange(
-        { startsAt: before.startsAt, instructorId: before.instructorId },
-        { startsAt: row.startsAt, instructorId: row.instructorId },
-        now,
-      );
-      if (change.shouldNotify) await notifyBooked(ctx, row, notifyClassChanged);
       return row;
     }),
 
@@ -430,6 +479,7 @@ export const classRouter = {
   setInstructor: staffProcedure
     .input(SetClassInstructorSchema)
     .mutation(async ({ ctx, input }) => {
+      await lockAndReadScheduleRevision(ctx.db, ctx.academyId);
       const [before] = await ctx.db
         .select()
         .from(classInstance)
@@ -439,7 +489,9 @@ export const classRouter = {
       }
       const now = new Date();
       assertCanReassignCoach(ctx.membership, before.startsAt, now);
-      if (before.instructorId === input.instructorId) return before;
+      if (before.instructorId === input.instructorId) {
+        return { ...before, notice: null };
+      }
       await requireInstructor(ctx, input.instructorId);
 
       const [row] = await ctx.db
@@ -450,20 +502,24 @@ export const classRouter = {
       if (!row) {
         throw new TRPCError({ code: "NOT_FOUND", message: CLASS_NOT_FOUND });
       }
+      await bumpScheduleRevision(ctx.db, ctx.academyId);
 
       const change = classChange(
         { startsAt: before.startsAt, instructorId: before.instructorId },
         { startsAt: row.startsAt, instructorId: row.instructorId },
         now,
       );
-      if (change.shouldNotify) await notifyBooked(ctx, row, notifyClassChanged);
-      return row;
+      const notice = change.shouldNotify
+        ? await notifyBooked(ctx, row, "class_changed", notifyClassChanged)
+        : null;
+      return { ...row, notice };
     }),
 
   /** Cancel a class (soft — status only; bookings kept). Notifies booked students (§4). */
   cancel: staffProcedure
     .input(ClassIdSchema)
     .mutation(async ({ ctx, input }) => {
+      await lockAndReadScheduleRevision(ctx.db, ctx.academyId);
       const [row] = await ctx.db
         .update(classInstance)
         .set({ status: "cancelled" })
@@ -478,6 +534,7 @@ export const classRouter = {
           id: classInstance.id,
           title: classInstance.title,
           startsAt: classInstance.startsAt,
+          updatedAt: classInstance.updatedAt,
         });
       if (!row) {
         throw new TRPCError({
@@ -485,7 +542,13 @@ export const classRouter = {
           message: "Class not found or already cancelled",
         });
       }
-      await notifyBooked(ctx, row, notifyClassCancelled);
-      return { ok: true as const };
+      await bumpScheduleRevision(ctx.db, ctx.academyId);
+      const notice = await notifyBooked(
+        ctx,
+        row,
+        "class_cancelled",
+        notifyClassCancelled,
+      );
+      return { ok: true as const, notice };
     }),
 } satisfies TRPCRouterRecord;

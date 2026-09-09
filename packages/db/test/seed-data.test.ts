@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { classifyDrift, paymentStatus } from "@matops/domain";
+import { appliesInMonth, classifyDrift, monthOf } from "@matops/domain";
 
 import { buildSeedGraph } from "../src/seed/data";
 import { SEED_ACADEMY, seedMemberId } from "../src/seed/registry";
@@ -51,7 +51,7 @@ describe("buildSeedGraph — pure dataset", () => {
   it("covers every member status on the member list", () => {
     const g = build();
     const statuses = new Set(g.entityMemberships.map((m) => m.status));
-    for (const s of ["active", "pending", "suspended", "removed"]) {
+    for (const s of ["active", "pending", "suspended", "archived", "removed"]) {
       expect(statuses).toContain(s);
     }
     // A pending instructor exists (web-lens approval queue).
@@ -62,28 +62,66 @@ describe("buildSeedGraph — pure dataset", () => {
     ).toBe(true);
   });
 
-  it("spreads dues across paid / due_soon / overdue", () => {
+  it("runs the academy with membership payment enforcement", () => {
     const g = build();
-    const statuses = new Set(
-      g.dues.map((d) => paymentStatus(d.nextDueAt, now)),
-    );
-    expect(statuses).toContain("paid");
-    expect(statuses).toContain("due_soon");
-    expect(statuses).toContain("overdue");
+    expect(g.entities[0]?.membershipEnforcedAt).toBeInstanceOf(Date);
+    expect(g.memberships.policies).toHaveLength(1);
+    expect(g.memberships.plans.length).toBeGreaterThan(0);
+    expect(g.memberships.assignments.length).toBeGreaterThan(0);
+    // Every membership row belongs to the organization, never to a branch.
+    const orgScoped = [
+      ...g.memberships.policies,
+      ...g.memberships.plans,
+      ...g.memberships.planPrices,
+      ...g.memberships.planEntities,
+      ...g.memberships.assignments,
+      ...g.memberships.changes,
+      ...g.memberships.months,
+      ...g.memberships.monthAudits,
+    ];
+    expect(
+      orgScoped.every((row) => row.organizationId === SEED_ACADEMY.id),
+    ).toBe(true);
   });
 
-  it("covers every claim state without blocking YOUR own 'I paid'", () => {
+  it("seeds explicit month states and settles last month", () => {
     const g = build();
-    const yourMember = seedMemberId(SEED_ACADEMY.key, "you");
-    // Only a PENDING claim blocks the button (pc_uniq_open_claim is partial on
-    // status = 'pending'), so YOU may hold confirmed history and still tap it.
+    const month = monthOf(now, SEED_ACADEMY.timeZone);
+    const live = g.memberships.assignments.filter((a) =>
+      appliesInMonth(
+        { startMonth: a.startMonth, endMonth: a.endMonth ?? null },
+        month,
+      ),
+    );
+    expect(live.length).toBeGreaterThan(0);
+    const thisMonth = g.memberships.months.filter((m) => m.month === month);
+    expect(thisMonth.some((m) => m.status === "confirmed")).toBe(true);
+    expect(thisMonth.some((m) => m.status === "reported")).toBe(true);
+    // Silence is a state too: somebody who owes has no row for this month.
+    const told = new Set(thisMonth.map((m) => m.assignmentId));
+    expect(live.some((a) => !told.has(a.id ?? ""))).toBe(true);
     expect(
-      g.claims.some((c) => c.memberId === yourMember && c.status === "pending"),
-    ).toBe(false);
-    expect(g.claims.length).toBeGreaterThan(0);
-    expect(g.claims.some((c) => c.status === "pending")).toBe(true);
-    expect(g.claims.some((c) => c.status === "confirmed")).toBe(true);
-    expect(g.claims.some((c) => c.status === "rejected")).toBe(true);
+      g.memberships.months.some(
+        (m) => m.month !== month && m.status === "confirmed",
+      ),
+    ).toBe(true);
+  });
+
+  it("seeds a plan change that waits for the 1st, and a claimed purchase", () => {
+    const g = build();
+    const change = g.memberships.changes[0];
+    expect(change).toBeDefined();
+    const source = g.memberships.assignments.find(
+      (a) => a.id === change?.sourceAssignmentId,
+    );
+    const target = g.memberships.assignments.find(
+      (a) => a.id === change?.targetAssignmentId,
+    );
+    expect(source?.endMonth).toBe(change?.effectiveMonth);
+    expect(target?.startMonth).toBe(change?.effectiveMonth);
+    expect(g.memberships.months.some((row) => row.status === "reported")).toBe(
+      true,
+    );
   });
 
   it("covers the remaining demo states: unmarked, cancelled booking, paused, no plan", () => {
@@ -101,11 +139,37 @@ describe("buildSeedGraph — pure dataset", () => {
       true,
     );
     expect(g.templates.some((t) => t.status === "paused")).toBe(true);
-    const withDues = new Set(g.dues.map((d) => d.memberId));
+    const holding = new Set(
+      g.memberships.assignments.map((assignment) => assignment.personId),
+    );
     const activeStudents = g.entityMemberships.filter(
       (m) => m.role === "student" && m.status === "active",
     );
-    expect(activeStudents.some((m) => !withDues.has(m.id ?? ""))).toBe(true);
+    expect(
+      activeStudents.some((m) => {
+        return m.personId ? !holding.has(m.personId) : false;
+      }),
+    ).toBe(true);
+  });
+
+  it("seeds a manager who runs the gym without training at it", () => {
+    const g = build();
+    const manager = g.members.find((m) => m.role === "manager");
+    expect(manager).toBeDefined();
+    // No entity membership: managing a branch must never enrol them as a
+    // student of it (ADR 129).
+    expect(g.entityMemberships.some((m) => m.userId === manager?.userId)).toBe(
+      false,
+    );
+    // Staff hold no membership — an active one trains free (ADR 132).
+    const managerPerson = g.people.find(
+      (candidate) => candidate.accountUserId === manager?.userId,
+    );
+    expect(
+      g.memberships.assignments.some(
+        (assignment) => assignment.personId === managerPerson?.id,
+      ),
+    ).toBe(false);
   });
 
   it("seeds attendance history with both present and absent marks", () => {
@@ -138,9 +202,6 @@ describe("buildSeedGraph — pure dataset", () => {
       ...g.templates,
       ...g.pastClasses,
       ...g.participations,
-      ...g.plans,
-      ...g.dues,
-      ...g.claims,
       ...g.ranks,
       ...g.promotions,
       ...g.notes,
@@ -189,13 +250,20 @@ describe("buildSeedGraph — pure dataset", () => {
       if (p.attendanceStatus !== "present") continue;
       const startsAt = started.get(p.classId);
       if (!startsAt) continue;
-      const seen = lastPresent.get(p.studentId);
-      if (!seen || startsAt > seen) lastPresent.set(p.studentId, startsAt);
+      const subjectId = p.personId ?? p.studentId;
+      if (!subjectId) continue;
+      const seen = lastPresent.get(subjectId);
+      if (!seen || startsAt > seen) lastPresent.set(subjectId, startsAt);
     }
     const bands = new Set(
       g.entityMemberships
         .filter((m) => m.role === "student" && m.status === "active")
-        .map((m) => classifyDrift(lastPresent.get(m.userId) ?? null, now)),
+        .flatMap((m) => {
+          const subjectId = m.personId ?? m.userId;
+          return subjectId
+            ? [classifyDrift(lastPresent.get(subjectId) ?? null, now)]
+            : [];
+        }),
     );
     for (const band of ["active", "cooling", "at_risk", "dormant"]) {
       expect(bands).toContain(band);
@@ -212,11 +280,13 @@ describe("buildSeedGraph — pure dataset", () => {
     }
   });
 
-  it("seeds an archived plan that a member is still on", () => {
+  it("seeds an archived membership plan with no assignments", () => {
     const g = build();
-    const archived = g.plans.find((p) => p.deletedAt != null);
+    const archived = g.memberships.plans.find((p) => p.archivedAt != null);
     expect(archived).toBeDefined();
-    expect(g.dues.some((d) => d.planId === archived?.id)).toBe(true);
+    expect(
+      g.memberships.assignments.some((a) => a.planId === archived?.id),
+    ).toBe(false);
   });
 
   it("seeds a coach who has taught nothing, and belts for the staff", () => {
@@ -228,7 +298,7 @@ describe("buildSeedGraph — pure dataset", () => {
     const coachUsers = new Set(coaches.map((c) => c.userId));
     const coachMemberships = new Set(
       g.entityMemberships
-        .filter((m) => coachUsers.has(m.userId))
+        .filter((m) => (m.userId ? coachUsers.has(m.userId) : false))
         .map((m) => m.id),
     );
     expect(g.ranks.some((r) => coachMemberships.has(r.memberId))).toBe(true);

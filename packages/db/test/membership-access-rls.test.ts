@@ -10,6 +10,8 @@ const ORG_B = "academy_B";
 const GYM_A = "e_gym_a";
 const ALEX = "u_alex";
 const BEA = "u_bea";
+const ALEX_PERSON = "11111111-1111-4111-8111-000000000011";
+const BEA_PERSON = "11111111-1111-4111-8111-000000000012";
 const PLAN_A = "11111111-1111-4111-8111-000000000001";
 const PLAN_B = "11111111-1111-4111-8111-000000000002";
 
@@ -59,6 +61,12 @@ describe("membership access isolation", () => {
       INSERT INTO "user" (id, name, email, email_verified, created_at, updated_at)
         VALUES ('${ALEX}', 'Alex', 'alex@test.local', true, now(), now()),
                ('${BEA}', 'Bea', 'bea@test.local', true, now(), now());
+      INSERT INTO "member" (id, organization_id, user_id, role, created_at) VALUES
+        ('m_alex', '${ORG_A}', '${ALEX}', 'member', now()),
+        ('m_bea', '${ORG_A}', '${BEA}', 'member', now());
+      INSERT INTO "person" (id, organization_id, name, account_user_id) VALUES
+        ('${ALEX_PERSON}', '${ORG_A}', 'Alex', '${ALEX}'),
+        ('${BEA_PERSON}', '${ORG_A}', 'Bea', '${BEA}');
       INSERT INTO "access_plan" (id, organization_id, name) VALUES
         ('${PLAN_A}', '${ORG_A}', 'BJJ + Gym'),
         ('${PLAN_B}', '${ORG_B}', 'Mat only');
@@ -67,9 +75,9 @@ describe("membership access isolation", () => {
         ('${ORG_A}', '${PLAN_A}', '${GYM_A}'),
         ('${ORG_B}', '${PLAN_B}', '${ORG_B}');
       INSERT INTO "access_assignment"
-        (organization_id, user_id, plan_id, start_month) VALUES
-        ('${ORG_A}', '${ALEX}', '${PLAN_A}', '2026-09-01'),
-        ('${ORG_A}', '${BEA}', '${PLAN_A}', '2026-09-01');
+        (organization_id, person_id, plan_id, start_month, starts_on) VALUES
+        ('${ORG_A}', '${ALEX_PERSON}', '${PLAN_A}', '2026-09-01', '2026-09-01'),
+        ('${ORG_A}', '${BEA_PERSON}', '${PLAN_A}', '2026-09-01', '2026-09-01');
       INSERT INTO "membership_policy" (organization_id) VALUES ('${ORG_A}');
       INSERT INTO "access_plan_price"
         (organization_id, plan_id, effective_month, price_minor, currency) VALUES
@@ -166,7 +174,7 @@ describe("membership access isolation", () => {
     expect(all).toBe(2);
 
     const mine = await asOrganization(pg, ORG_A, (tx) =>
-      count(tx, "access_assignment", `WHERE user_id = '${ALEX}'`),
+      count(tx, "access_assignment", `WHERE person_id = '${ALEX_PERSON}'`),
     );
     expect(mine).toBe(1);
   });

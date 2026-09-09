@@ -7,20 +7,26 @@
  * ONE demo academy ("Alma beta"), owned by the real user, built for the beta
  * test: an outside tester joins through the seeded instructor invite link.
  *
- * The dataset is shaped to light up EVERY UI state at least once: member statuses
- * (active / pending / suspended / removed), all four drift bands (active /
- * cooling / at risk / dormant), payment dots (paid / due_soon / overdue) + every
- * claim state + an archived plan, attendance history (present / absent /
+ * The dataset is shaped to light up EVERY UI state at least once: member
+ * statuses (active / pending / suspended / archived / removed), a manager who
+ * runs the gym without training at it, all four drift bands (active / cooling /
+ * at risk / dormant), the membership month on all four answers (paid / silent /
+ * reminded / claimed) plus somebody with no membership at all, a plan change
+ * waiting for the 1st, an archived plan, attendance history (present / absent /
  * unmarked / walk-in), one-off and cancelled classes, all five disciplines,
- * belts across disciplines with a promotion timeline, drop-in leads (general and
- * class-linked), referrals in all three audit states, and a live invite link per
- * role.
+ * belts across disciplines with a promotion timeline, drop-in leads across the
+ * funnel, referrals in all three audit states, and a live invite link per role.
  */
-import { computeOccurrences, paymentPeriod } from "@matops/domain";
+import { computeOccurrences, monthOf, nextMonth } from "@matops/domain";
 
 import type {
   academyInvite,
   academyProfile,
+  accessAssignment,
+  accessAssignmentChange,
+  accessPlan,
+  accessPlanEntity,
+  accessPlanPrice,
   classInstance,
   classParticipation,
   classTemplate,
@@ -29,15 +35,15 @@ import type {
   entity,
   entityMembership,
   member,
-  memberDues,
   memberNote,
   memberRank,
   memberReferral,
   memberReferralAudit,
-  membershipPlan,
+  membershipMonth,
+  membershipMonthAudit,
+  membershipPolicy,
   organization,
-  paymentClaim,
-  paymentSettings,
+  person,
   rankPromotion,
   user,
 } from "../schema";
@@ -47,11 +53,13 @@ import {
   seedEntityMembershipId,
   seedMemberId,
   seedMembershipId,
+  seedPersonId,
   seedUserId,
 } from "./registry";
 
 type NewUser = typeof user.$inferInsert;
 type NewOrganization = typeof organization.$inferInsert;
+type NewPerson = typeof person.$inferInsert;
 type NewMember = typeof member.$inferInsert;
 type NewEntity = typeof entity.$inferInsert;
 type NewAcademyProfile = typeof academyProfile.$inferInsert;
@@ -60,10 +68,14 @@ type NewInvite = typeof academyInvite.$inferInsert;
 type NewTemplate = typeof classTemplate.$inferInsert;
 type NewClass = typeof classInstance.$inferInsert;
 type NewParticipation = typeof classParticipation.$inferInsert;
-type NewPlan = typeof membershipPlan.$inferInsert;
-type NewDues = typeof memberDues.$inferInsert;
-type NewClaim = typeof paymentClaim.$inferInsert;
-type NewSettings = typeof paymentSettings.$inferInsert;
+type NewAccessPlan = typeof accessPlan.$inferInsert;
+type NewAccessPlanPrice = typeof accessPlanPrice.$inferInsert;
+type NewAccessPlanEntity = typeof accessPlanEntity.$inferInsert;
+type NewPolicy = typeof membershipPolicy.$inferInsert;
+type NewAssignment = typeof accessAssignment.$inferInsert;
+type NewAssignmentChange = typeof accessAssignmentChange.$inferInsert;
+type NewMembershipMonth = typeof membershipMonth.$inferInsert;
+type NewMembershipMonthAudit = typeof membershipMonthAudit.$inferInsert;
 type NewRank = typeof memberRank.$inferInsert;
 type NewPromotion = typeof rankPromotion.$inferInsert;
 type NewNote = typeof memberNote.$inferInsert;
@@ -75,10 +87,11 @@ type NewReferralAudit = typeof memberReferralAudit.$inferInsert;
 /** Everything the seed inserts, grouped by table. Future (materialized) classes
  * and their bookings are NOT here — run.ts adds those after materialization,
  * because their class ids are database-generated. */
-export interface SeedGraph {
+interface SeedGraph {
   users: NewUser[];
   organizations: NewOrganization[];
   members: NewMember[];
+  people: NewPerson[];
   entities: NewEntity[];
   academyProfiles: NewAcademyProfile[];
   entityMemberships: NewEntityMembership[];
@@ -86,10 +99,7 @@ export interface SeedGraph {
   templates: NewTemplate[];
   pastClasses: NewClass[];
   participations: NewParticipation[];
-  plans: NewPlan[];
-  dues: NewDues[];
-  claims: NewClaim[];
-  settings: NewSettings[];
+  memberships: MembershipRows;
   ranks: NewRank[];
   promotions: NewPromotion[];
   notes: NewNote[];
@@ -102,7 +112,7 @@ export interface SeedGraph {
   quietStudentIds: string[];
 }
 
-export interface SeedGraphOptions {
+interface SeedGraphOptions {
   /** The real, already-registered user you sign in as (the academy owner). */
   realUser: { id: string; name: string };
   /** Injected id generator for uuid PKs — pass a counter in tests for determinism. */
@@ -222,7 +232,7 @@ interface TemplateSpec {
  * drives the drift band — `undefined` trains right up to today, a number stops
  * attending that many days ago, `null` never attended at all.
  */
-export interface StudentDef {
+interface StudentDef {
   persona: Persona;
   status: string;
   role: string;
@@ -249,10 +259,7 @@ function buildAcademy(args: {
   templates: NewTemplate[];
   pastClasses: NewClass[];
   participations: NewParticipation[];
-  plans: NewPlan[];
-  dues: NewDues[];
-  claims: NewClaim[];
-  settings: NewSettings;
+  memberships: MembershipRows;
   ranks: NewRank[];
   promotions: NewPromotion[];
   notes: NewNote[];
@@ -322,6 +329,8 @@ function buildAcademy(args: {
           academyId: academy.id,
           classId,
           studentId: s.persona.userId,
+          personOrganizationId: academy.id,
+          personId: seedPersonId(seedMemberId(academy.key, s.persona.handle)),
           bookingStatus: "booked",
           bookingTier: "confirmed",
           bookedAt: new Date(startsAt.getTime() - DAY_MS),
@@ -342,6 +351,10 @@ function buildAcademy(args: {
           academyId: academy.id,
           classId,
           studentId: quitter.persona.userId,
+          personOrganizationId: academy.id,
+          personId: seedPersonId(
+            seedMemberId(academy.key, quitter.persona.handle),
+          ),
           bookingStatus: "cancelled",
           bookingTier: "confirmed",
           bookedAt: new Date(startsAt.getTime() - 2 * DAY_MS),
@@ -360,6 +373,10 @@ function buildAcademy(args: {
           academyId: academy.id,
           classId,
           studentId: walkIn.persona.userId,
+          personOrganizationId: academy.id,
+          personId: seedPersonId(
+            seedMemberId(academy.key, walkIn.persona.handle),
+          ),
           bookingStatus: "none",
           bookingTier: "confirmed",
           bookedAt: startsAt,
@@ -410,6 +427,8 @@ function buildAcademy(args: {
       academyId: academy.id,
       classId: pastSeminarId,
       studentId: s.persona.userId,
+      personOrganizationId: academy.id,
+      personId: seedPersonId(seedMemberId(academy.key, s.persona.handle)),
       bookingStatus: "booked",
       bookingTier: "confirmed",
       bookedAt: new Date(pastSeminarStart.getTime() - 3 * DAY_MS),
@@ -455,6 +474,8 @@ function buildAcademy(args: {
       academyId: academy.id,
       classId: cancelledPastId,
       studentId: s.persona.userId,
+      personOrganizationId: academy.id,
+      personId: seedPersonId(seedMemberId(academy.key, s.persona.handle)),
       bookingStatus: "booked",
       bookingTier: "confirmed",
       bookedAt: new Date(cancelledPastStart.getTime() - 2 * DAY_MS),
@@ -462,140 +483,13 @@ function buildAcademy(args: {
     });
   });
 
-  // --- Payments: plans, per-member dues across all three dots, one open claim. -
-  const planId = newId();
-  const planLiteId = newId();
-  const plan: NewPlan = {
-    id: planId,
-    academyId: academy.id,
-    name: "Monthly Unlimited",
-    priceMinor: 5000,
-    currency: academy.currency,
-    cycle: "monthly",
-  };
-  const planLite: NewPlan = {
-    id: planLiteId,
-    academyId: academy.id,
-    name: "Monthly · 2× / week",
-    priceMinor: 3500,
-    currency: academy.currency,
-    cycle: "monthly",
-  };
-  // An archived (soft-deleted) plan: gone from the price list, still legal on the
-  // dues of the one member who never moved off it (O7 "· archived" option).
-  const planArchivedId = newId();
-  const planArchived: NewPlan = {
-    id: planArchivedId,
-    academyId: academy.id,
-    name: "Legacy · Unlimited",
-    priceMinor: 4200,
-    currency: academy.currency,
-    cycle: "monthly",
-    deletedAt: new Date(now.getTime() - 60 * DAY_MS),
-  };
-  const plans = [plan, planLite, planArchived];
-
-  // Spread due dates so the member list shows paid / due-soon / overdue side by side.
-  // The first offset is due-soon, so the top of the list shows the amber dot.
-  const dueOffsets = [2, 22, -6, 40, -20]; // days from now
-  const duesEligible = students.filter(
-    (s) => s.status === "active" || s.status === "suspended",
-  );
-  // One active member is left with NO plan, so the "dues not set" state shows.
-  const noPlan = [...duesEligible]
-    .reverse()
-    .find((s) => s.persona.handle !== "you");
-  const dues: NewDues[] = duesEligible
-    .filter((s) => s !== noPlan)
-    .map((s, i) => ({
-      id: newId(),
-      academyId: academy.id,
-      memberId: seedMembershipId(academy.key, s.persona.handle),
-      planId: i === 4 ? planArchivedId : i % 3 === 0 ? planLiteId : planId,
-      nextDueAt: new Date(
-        now.getTime() + (dueOffsets[i % dueOffsets.length] ?? 0) * DAY_MS,
-      ),
-      duesReminderPeriod: null,
-    }));
-
-  // One FAKE student has an OPEN "I paid" claim awaiting the owner's confirm.
-  // Never YOU — so your own "I paid" button stays available to test.
-  const claims: NewClaim[] = [];
-  const claimant = students.find(
-    (s) => s.status === "active" && s.persona.handle !== "you",
-  );
-  if (claimant) {
-    const period = paymentPeriod(now);
-    claims.push({
-      id: newId(),
-      academyId: academy.id,
-      memberId: seedMembershipId(academy.key, claimant.persona.handle),
-      planId,
-      amountMinor: plan.priceMinor,
-      currency: academy.currency,
-      period,
-      status: "pending",
-    });
-  }
-  // A rejected claim (the owner dismissed it) — the third claim state.
-  const rejected = students.find(
-    (s) =>
-      s.status === "active" &&
-      s.persona.handle !== "you" &&
-      s.persona.handle !== claimant?.persona.handle,
-  );
-  if (rejected) {
-    claims.push({
-      id: newId(),
-      academyId: academy.id,
-      memberId: seedMembershipId(academy.key, rejected.persona.handle),
-      planId,
-      amountMinor: plan.priceMinor,
-      currency: academy.currency,
-      period: paymentPeriod(new Date(now.getTime() - 32 * DAY_MS)),
-      status: "rejected",
-      claimedAt: new Date(now.getTime() - 30 * DAY_MS),
-    });
-  }
-  // Confirmed history powers the referral ledger. These claims intentionally
-  // predate attribution in the seed graph: reporting is retroactive (ADR 52).
-  activeStudents.slice(0, 8).forEach((student, index) => {
-    const selectedPlan = index % 3 === 0 ? planLite : plan;
-    const memberId = seedMembershipId(academy.key, student.persona.handle);
-    claims.push(
-      {
-        id: newId(),
-        academyId: academy.id,
-        memberId,
-        planId: index % 3 === 0 ? planLiteId : planId,
-        amountMinor: selectedPlan.priceMinor,
-        currency: selectedPlan.currency,
-        period: paymentPeriod(now),
-        status: "confirmed",
-        confirmedBy: staffInstructorId,
-        confirmedAt: now,
-        claimedAt: new Date(now.getTime() - DAY_MS),
-      },
-      {
-        id: newId(),
-        academyId: academy.id,
-        memberId,
-        planId: index % 3 === 0 ? planLiteId : planId,
-        amountMinor: selectedPlan.priceMinor,
-        currency: selectedPlan.currency,
-        period: paymentPeriod(new Date(now.getTime() - 45 * DAY_MS)),
-        status: "confirmed",
-        confirmedBy: staffInstructorId,
-        confirmedAt: new Date(now.getTime() - 45 * DAY_MS),
-        claimedAt: new Date(now.getTime() - 46 * DAY_MS),
-      },
-    );
+  const memberships = buildMemberships({
+    academy,
+    students,
+    ownerUserId: staffInstructorId,
+    newId,
+    now,
   });
-
-  const settings: NewSettings = {
-    academyId: academy.id,
-    bankDetails: `${academy.name}\nIBAN: DE89 3704 0044 0532 0130 00\nBank: Demo Bank\nRef: use the code shown on your dues card`,
-  };
 
   // --- Ranks: belts across the ladder + a promotion timeline + a couple notes. -
   const belts = ["White", "White", "Blue", "Blue", "Purple", "Brown"];
@@ -724,6 +618,9 @@ function buildAcademy(args: {
       phone: "+380509998866",
       email: null,
       consent: true,
+      stage: "contacted",
+      source: "link",
+      contactedAt: new Date(now.getTime() - 4 * DAY_MS),
     },
     {
       // Walked into a specific class — shows on that class's O5 roster.
@@ -734,6 +631,9 @@ function buildAcademy(args: {
       phone: "+380509998855",
       email: "dana.guest@example.com",
       consent: true,
+      stage: "invited",
+      source: "staff",
+      contactedAt: new Date(pastSeminarStart.getTime() + DAY_MS),
       firstVisitAt: pastSeminarStart,
       lastVisitAt: pastSeminarStart,
     },
@@ -747,6 +647,8 @@ function buildAcademy(args: {
       phone: "+380509998844",
       email: null,
       consent: false,
+      stage: "ghosted",
+      source: "web",
       firstVisitAt: new Date(now.getTime() - 50 * DAY_MS),
       lastVisitAt: new Date(now.getTime() - 5 * DAY_MS),
     },
@@ -768,15 +670,277 @@ function buildAcademy(args: {
     templates,
     pastClasses,
     participations,
-    plans,
-    dues,
-    claims,
-    settings,
+    memberships,
     ranks,
     promotions,
     notes,
     dropIns,
     dropInVisits,
+  };
+}
+
+/** The organization-scoped membership rows one seeded academy carries. */
+interface MembershipRows {
+  policies: NewPolicy[];
+  plans: NewAccessPlan[];
+  planPrices: NewAccessPlanPrice[];
+  planEntities: NewAccessPlanEntity[];
+  assignments: NewAssignment[];
+  changes: NewAssignmentChange[];
+  months: NewMembershipMonth[];
+  monthAudits: NewMembershipMonthAudit[];
+}
+
+/** Move a "YYYY-MM-01" month key back by whole months. */
+export function monthsBack(month: string, by: number): string {
+  const [y, m] = month.split("-").map(Number);
+  const shifted = new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1 - by, 1));
+  const mm = String(shifted.getUTCMonth() + 1).padStart(2, "0");
+  return `${shifted.getUTCFullYear()}-${mm}-01`;
+}
+
+/**
+ * The shared membership stack for one academy (ADR 126-129): what the gym
+ * sells, who holds it, and which months are settled.
+ *
+ * Every row here is ORGANIZATION-scoped, which is why none of them carries an
+ * `academy_id`. Staff get nothing: an active owner, manager or instructor
+ * trains at their own branch without a membership (ADR 132).
+ *
+ * The month grid is what the screens read, so this month lands on all four
+ * answers — paid, silent (unpaid), reminded, and claimed but not yet confirmed
+ * — while last month is settled for everybody, giving the tracker a history.
+ */
+function buildMemberships(args: {
+  academy: SeedAcademy;
+  students: StudentDef[];
+  ownerUserId: string;
+  newId: () => string;
+  now: Date;
+}): MembershipRows {
+  const { academy, students, ownerUserId, newId, now } = args;
+  const month = monthOf(now, academy.timeZone);
+  // The price history starts one month before anybody holds a plan, so a
+  // membership never begins in a month the plan had no price for.
+  const openedMonth = monthsBack(month, 4);
+  const joinedMonth = monthsBack(month, 3);
+  const comingMonth = nextMonth(month);
+  // Fixed, because the student's saved membership choice carries a version
+  // string built from it: a purchase whose version no longer matches sends the
+  // owner down the "terms changed" path instead of a plain confirm.
+  const planUpdatedAt = new Date(now.getTime() - 30 * DAY_MS);
+
+  const plan = (
+    id: string,
+    name: string,
+    priceMinor: number,
+    extra: Partial<NewAccessPlan> = {},
+  ): NewAccessPlan => ({
+    id,
+    organizationId: academy.id,
+    name,
+    priceMinor,
+    currency: academy.currency,
+    createdAt: planUpdatedAt,
+    updatedAt: planUpdatedAt,
+    ...extra,
+  });
+
+  const unlimitedId = newId();
+  const twiceId = newId();
+  const closedId = newId();
+  const unlimited = plan(unlimitedId, "Unlimited", 5000, {
+    description: "Every class on the timetable.",
+  });
+  const twice = plan(twiceId, "2× a week", 3500, {
+    description: "Any two classes a week.",
+  });
+  const closed = plan(closedId, "Foundation", 3000, {
+    description: "The old beginners' rate.",
+    archivedAt: new Date(now.getTime() - 20 * DAY_MS),
+  });
+  const plans = [unlimited, twice, closed];
+
+  const priceRow = (
+    planId: string,
+    effectiveMonth: string,
+    priceMinor: number,
+  ): NewAccessPlanPrice => ({
+    id: newId(),
+    organizationId: academy.id,
+    planId,
+    effectiveMonth,
+    priceMinor,
+    currency: academy.currency,
+    recordedBy: ownerUserId,
+  });
+  // Unlimited went up this month, so the price history has something in it and
+  // last month still reads at the old rate.
+  const planPrices: NewAccessPlanPrice[] = [
+    priceRow(unlimitedId, openedMonth, 4500),
+    priceRow(unlimitedId, month, 5000),
+    priceRow(twiceId, openedMonth, 3500),
+    priceRow(closedId, openedMonth, 3000),
+  ];
+
+  const planEntities: NewAccessPlanEntity[] = [
+    unlimitedId,
+    twiceId,
+    closedId,
+  ].map((planId) => ({
+    organizationId: academy.id,
+    planId,
+    entityId: academy.id,
+  }));
+
+  const policies: NewPolicy[] = [
+    {
+      organizationId: academy.id,
+      graceDays: 7,
+      calendarTimeZone: academy.timeZone,
+      bankDetails: `${academy.name}\nIBAN: DE89 3704 0044 0532 0130 00\nBank: Demo Bank\nRef: the reference shown on your membership`,
+    },
+  ];
+
+  const assignments: NewAssignment[] = [];
+  const changes: NewAssignmentChange[] = [];
+  const months: NewMembershipMonth[] = [];
+  const monthAudits: NewMembershipMonthAudit[] = [];
+
+  const settle = (
+    assignmentId: string,
+    on: string,
+    row: Partial<NewMembershipMonth>,
+  ) => {
+    months.push({
+      id: newId(),
+      organizationId: academy.id,
+      assignmentId,
+      month: on,
+      ...row,
+    });
+    if (row.status === "confirmed") {
+      monthAudits.push({
+        id: newId(),
+        organizationId: academy.id,
+        assignmentId,
+        month: on,
+        event: "confirmed",
+        beforeStatus: null,
+        afterStatus: "confirmed",
+        actorId: ownerUserId,
+      });
+    }
+  };
+
+  // joinedMonth .. last month, newest first.
+  const settledMonths = [1, 2, 3].map((back) => monthsBack(month, back));
+
+  const eligible = students.filter(
+    (s) => s.status === "active" || s.status === "suspended",
+  );
+  // One active member holds no membership at all: the state the overview's
+  // "needs attention" list and the student's own "choose a membership" screen
+  // are both about. They have picked one and said they paid, so the owner has
+  // a request waiting.
+  const awaiting = eligible[eligible.length - 1];
+  const holders = eligible.filter((s) => s !== awaiting);
+
+  holders.forEach((s, i) => {
+    const heldPlanId = i % 3 === 0 ? twiceId : unlimitedId;
+    const id = newId();
+    const createdAt = new Date(now.getTime() - 120 * DAY_MS);
+    assignments.push({
+      id,
+      organizationId: academy.id,
+      personId: seedPersonId(seedMemberId(academy.key, s.persona.handle)),
+      planId: heldPlanId,
+      assigningEntityId: academy.id,
+      startMonth: joinedMonth,
+      startsOn: joinedMonth,
+      status: s.status === "suspended" ? "suspended" : "active",
+      assignedBy: ownerUserId,
+      createdAt,
+      updatedAt: createdAt,
+    });
+
+    // Every month since they joined is settled, so nobody carries invented
+    // debt from before the demo starts.
+    settledMonths.forEach((past, back) => {
+      settle(id, past, {
+        status: "confirmed",
+        reviewedBy: ownerUserId,
+        reviewedAt: new Date(now.getTime() - (25 + back * 30) * DAY_MS),
+      });
+    });
+
+    // Paid is the normal state, so the demo is a gym that mostly pays rather
+    // than one where everybody is about to be locked out on the 8th. Three
+    // people carry the other three answers, one each.
+    switch (i) {
+      case 0:
+        // Silent: owes, and no row at all. `paid` false and a missing row mean
+        // the same thing to every rule.
+        break;
+      case 1:
+        break;
+      case 2:
+        settle(id, month, {
+          status: "reported",
+          claimedBy: s.persona.userId,
+          reportedAt: new Date(now.getTime() - DAY_MS),
+        });
+        break;
+      default:
+        settle(id, month, {
+          status: "confirmed",
+          reviewedBy: ownerUserId,
+          reviewedAt: new Date(now.getTime() - 2 * DAY_MS),
+        });
+        break;
+    }
+  });
+
+  // A plan change that waits for the 1st (ADR 129): the running membership is
+  // stopped at next month and its successor starts there, so exactly one of the
+  // two applies on either side of the boundary.
+  const source = assignments[1];
+  const sourceId = source?.id;
+  if (source && sourceId) {
+    source.endMonth = comingMonth;
+    const successorId = newId();
+    assignments.push({
+      id: successorId,
+      organizationId: academy.id,
+      personId: source.personId,
+      planId: twiceId,
+      assigningEntityId: academy.id,
+      startMonth: comingMonth,
+      startsOn: comingMonth,
+      status: "active",
+      assignedBy: ownerUserId,
+    });
+    changes.push({
+      id: newId(),
+      organizationId: academy.id,
+      personId: source.personId,
+      sourceAssignmentId: sourceId,
+      targetAssignmentId: successorId,
+      effectiveMonth: comingMonth,
+      previousSourceEndMonth: null,
+      scheduledBy: ownerUserId,
+    });
+  }
+
+  return {
+    policies,
+    plans,
+    planPrices,
+    planEntities,
+    assignments,
+    changes,
+    months,
+    monthAudits,
   };
 }
 
@@ -795,6 +959,10 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
   // A third coach who has not taught yet — the O10 roster must still show them,
   // with zeros rather than a missing card.
   const coach3 = persona("coach3", 103, "Marta Lindqvist");
+  // The person hired to run the gym (ADR 129). They hold an organization seat
+  // and NO entity membership: management reaches every branch on its own, and
+  // giving them one would enrol them as a student of this mat.
+  const manager = persona("manager1", 104, "Inês Carvalho");
 
   // Students: mostly active, plus pending / pending-instructor / suspended /
   // removed so the member list shows every status, and four who stopped training
@@ -811,6 +979,7 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
     { status: "pending", role: "member", invitedRole: "instructor" },
     { status: "suspended", role: "student", invitedRole: "student" },
     { status: "removed", role: "student", invitedRole: "student" },
+    { status: "archived", role: "student", invitedRole: "student" },
     { ...ACTIVE },
   ];
   const students: StudentDef[] = studentDefs.map((d, i) => ({
@@ -823,6 +992,7 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
     userRow(coach1),
     userRow(coach2),
     userRow(coach3),
+    userRow(manager),
     ...students.map((s) => userRow(s.persona)),
   ];
 
@@ -848,6 +1018,17 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
       status: "active",
       invitedRole: null,
       createdAt: new Date(now.getTime() - 200 * DAY_MS),
+      branchMembership: true,
+    },
+    {
+      id: seedMemberId(academy.key, manager.handle),
+      organizationId: academy.id,
+      userId: manager.userId,
+      role: "manager",
+      status: "active",
+      invitedRole: null,
+      createdAt: new Date(now.getTime() - 190 * DAY_MS),
+      branchMembership: false,
     },
     ...[coach1, coach2, coach3].map((c, i) => ({
       id: seedMemberId(academy.key, c.handle),
@@ -857,6 +1038,7 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
       status: "active",
       invitedRole: "instructor",
       createdAt: new Date(now.getTime() - (180 - i * 10) * DAY_MS),
+      branchMembership: true,
     })),
     ...students.map((s, i) => ({
       id: seedMemberId(academy.key, s.persona.handle),
@@ -866,6 +1048,7 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
       status: s.status,
       invitedRole: s.invitedRole,
       createdAt: new Date(now.getTime() - (150 - i * 3) * DAY_MS),
+      branchMembership: true,
     })),
   ];
 
@@ -876,6 +1059,16 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
     role: seat.role,
     createdAt: seat.createdAt,
   }));
+  const people: NewPerson[] = seats
+    .filter((seat) => seat.branchMembership)
+    .map((seat) => ({
+      id: seedPersonId(seat.id),
+      organizationId: academy.id,
+      accountUserId: seat.userId,
+      name:
+        users.find((candidate) => candidate.id === seat.userId)?.name ??
+        opts.realUser.name,
+    }));
 
   // The default BJJ academy entity carries the organization's own id, so every
   // `academy_id` already on a seed row keeps pointing at the right place and the
@@ -889,7 +1082,11 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
       slug: academy.slug,
       isDefault: true,
       timeZone: academy.timeZone,
+      country: academy.country,
+      address: academy.address,
+      mapUrl: academy.mapUrl,
       publicCode: academy.publicCode,
+      membershipEnforcedAt: new Date(now.getTime() - 200 * DAY_MS),
       createdAt: now,
       updatedAt: now,
     },
@@ -899,18 +1096,21 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
     { entityId: academy.id, createdAt: now, updatedAt: now },
   ];
 
-  const entityMemberships: NewEntityMembership[] = seats.map((seat) => ({
-    id: seedEntityMembershipId(seat.id),
-    organizationId: academy.id,
-    entityId: academy.id,
-    userId: seat.userId,
-    role: seat.role,
-    status: seat.status,
-    invitedRole: seat.invitedRole,
-    joinedAt: seat.status === "active" ? seat.createdAt : null,
-    createdAt: seat.createdAt,
-    updatedAt: seat.createdAt,
-  }));
+  const entityMemberships: NewEntityMembership[] = seats
+    .filter((seat) => seat.branchMembership)
+    .map((seat) => ({
+      id: seedEntityMembershipId(seat.id),
+      organizationId: academy.id,
+      entityId: academy.id,
+      personId: seedPersonId(seat.id),
+      userId: seat.userId,
+      role: seat.role,
+      status: seat.status,
+      invitedRole: seat.invitedRole,
+      joinedAt: seat.status === "active" ? seat.createdAt : null,
+      createdAt: seat.createdAt,
+      updatedAt: seat.createdAt,
+    }));
 
   // One live invite link per role (drives the invite/staff cards). The tester
   // joins the beta through the instructor link.
@@ -1180,6 +1380,7 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
     users,
     organizations,
     members,
+    people,
     entities,
     academyProfiles,
     entityMemberships,
@@ -1187,10 +1388,7 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
     templates: data.templates,
     pastClasses: data.pastClasses,
     participations: data.participations,
-    plans: data.plans,
-    dues: data.dues,
-    claims: data.claims,
-    settings: [data.settings],
+    memberships: data.memberships,
     ranks: data.ranks,
     promotions: data.promotions,
     notes: data.notes,

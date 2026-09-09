@@ -1,8 +1,17 @@
 import { eq } from "drizzle-orm";
 
+import { monthOf } from "@matops/domain";
+
 import type { SeedExec } from "./registry";
 import { createEntity, provisionOrganization } from "../provision";
-import { accessPlan, accessPlanEntity, entity, organization } from "../schema";
+import {
+  accessPlan,
+  accessPlanEntity,
+  accessPlanPrice,
+  entity,
+  membershipPolicy,
+  organization,
+} from "../schema";
 import { SEED_MARKER } from "./registry";
 
 /**
@@ -18,9 +27,9 @@ import { SEED_MARKER } from "./registry";
  * conflict, so running it twice changes nothing. `seed down` removes it, since
  * its ids carry the seed marker and teardown deletes by organization.
  */
-export const PILOT_ORG_ID = `${SEED_MARKER}org_pilot`;
-export const PILOT_GYM_ID = `${SEED_MARKER}ent_pilot_gym`;
-export const PILOT_SAUNA_ID = `${SEED_MARKER}ent_pilot_sauna`;
+const PILOT_ORG_ID = `${SEED_MARKER}org_pilot`;
+const PILOT_GYM_ID = `${SEED_MARKER}ent_pilot_gym`;
+const PILOT_SAUNA_ID = `${SEED_MARKER}ent_pilot_sauna`;
 
 /**
  * `access_plan.id` is a uuid column, so the plans cannot carry the `seed_`
@@ -33,7 +42,9 @@ const PLAN_ID = {
   gym_sauna: "5eed0000-0000-4000-8000-000000000003",
 } as const;
 
-export interface PilotReport {
+const PILOT_TIME_ZONE = "Europe/Lisbon";
+
+interface PilotReport {
   organizationId: string;
   branches: { id: string; name: string; type: string }[];
   plans: { id: string; name: string; covers: string[] }[];
@@ -53,6 +64,8 @@ export async function seedPilot(
       // A general branch cannot be opened without this, so the pilot turns it
       // on for ITSELF and for nobody else (step 1.6).
       generalBranchesEnabled: true,
+      curriculumEnabled: true,
+      referralsEnabled: true,
     })
     .onConflictDoNothing();
 
@@ -64,8 +77,23 @@ export async function seedPilot(
   );
   await exec
     .update(entity)
-    .set({ name: "Pilot BJJ", timeZone: "Europe/Lisbon" })
+    .set({
+      name: "Pilot BJJ",
+      timeZone: PILOT_TIME_ZONE,
+      membershipEnforcedAt: new Date(),
+    })
     .where(eq(entity.id, PILOT_ORG_ID));
+
+  await exec
+    .insert(membershipPolicy)
+    .values({
+      organizationId: PILOT_ORG_ID,
+      graceDays: 7,
+      calendarTimeZone: PILOT_TIME_ZONE,
+      bankDetails:
+        "Pilot Gym\nIBAN: PT50 0002 0123 1234 5678 9015 4\nRef: the reference on your membership",
+    })
+    .onConflictDoNothing();
 
   for (const branch of [
     { id: PILOT_GYM_ID, name: "Pilot Gym floor" },
@@ -94,18 +122,26 @@ export async function seedPilot(
   }
 
   const plans = [
-    { id: PLAN_ID.bjj, name: "BJJ Only", covers: [PILOT_ORG_ID] },
+    {
+      id: PLAN_ID.bjj,
+      name: "BJJ Only",
+      priceMinor: 5000,
+      covers: [PILOT_ORG_ID],
+    },
     {
       id: PLAN_ID.bjj_gym,
       name: "BJJ + Gym",
+      priceMinor: 7000,
       covers: [PILOT_ORG_ID, PILOT_GYM_ID],
     },
     {
       id: PLAN_ID.gym_sauna,
       name: "Gym + Sauna",
+      priceMinor: 6000,
       covers: [PILOT_GYM_ID, PILOT_SAUNA_ID],
     },
   ];
+  const month = monthOf(new Date(), PILOT_TIME_ZONE);
   for (const plan of plans) {
     await exec
       .insert(accessPlan)
@@ -113,6 +149,21 @@ export async function seedPilot(
         id: plan.id,
         organizationId: PILOT_ORG_ID,
         name: plan.name,
+        priceMinor: plan.priceMinor,
+        currency: "EUR",
+      })
+      .onConflictDoNothing();
+    // A plan with no price for the month cannot be sold or assigned, so the
+    // pilot would otherwise be three plans nobody can hold.
+    await exec
+      .insert(accessPlanPrice)
+      .values({
+        organizationId: PILOT_ORG_ID,
+        planId: plan.id,
+        effectiveMonth: month,
+        priceMinor: plan.priceMinor,
+        currency: "EUR",
+        recordedBy: ownerUserId,
       })
       .onConflictDoNothing();
     await exec

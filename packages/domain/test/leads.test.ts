@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import type { LeadRow } from "../src/leads";
 import {
   canPromoteLead,
-  isOwnerSettableStage,
   leadFunnel,
   leadQueues,
   matchLeadByPhone,
@@ -119,20 +118,6 @@ describe("leadFunnel", () => {
     });
   });
 });
-
-describe("isOwnerSettableStage", () => {
-  it("lets the owner set the stages that are their own decision", () => {
-    expect(isOwnerSettableStage("contacted")).toBe(true);
-    expect(isOwnerSettableStage("ghosted")).toBe(true);
-    expect(isOwnerSettableStage("new")).toBe(true);
-  });
-
-  it("refuses the two stages that follow from an action", () => {
-    expect(isOwnerSettableStage("invited")).toBe(false);
-    expect(isOwnerSettableStage("joined")).toBe(false);
-  });
-});
-
 describe("canPromoteLead", () => {
   const promotable = {
     stage: "contacted" as const,

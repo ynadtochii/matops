@@ -22,12 +22,6 @@ import { instantFromLocalDate, localDateISO } from "./materialize";
  */
 export const JOIN_GRACE_DAYS = 7;
 
-// There is deliberately NO default grace constant here. `payments.ts` already
-// exports `DEFAULT_GRACE_DAYS` for the LEGACY branch dues gate, and the two
-// gates must never be applied together (ADR 126). The membership default lives
-// on `membership_policy.grace_days` instead, so a policy row is the only place
-// the number comes from.
-
 export interface MembershipPolicy {
   /** Days after the 1st that an unpaid month still admits. */
   graceDays: number;
@@ -59,11 +53,11 @@ export function nextMonth(month: MonthKey): MonthKey {
 }
 
 /** Is this the month the membership began in? */
-export function isJoinMonth(month: MonthKey, startMonth: MonthKey): boolean {
+function isJoinMonth(month: MonthKey, startMonth: MonthKey): boolean {
   return month === startMonth;
 }
 
-export interface DeadlineInput {
+interface DeadlineInput {
   /** The month being paid for. */
   month: MonthKey;
   /** The month the membership began in, from `access_assignment.start_month`. */
@@ -109,24 +103,10 @@ export function payDeadline(input: DeadlineInput): Date {
   return instantFromLocalDate(addDays(from, days), 0, policy.timeZone);
 }
 
-/**
- * Can this month take a claim (ADR 127)?
- *
- * Only one that is neither paid nor already claimed. A second claim is not an
- * error and not a new record: the member pressed a button twice, or the gym has
- * not looked yet, and both of those are the same claim.
- */
-export function canClaimMonth(month: {
-  paid: boolean;
-  claimedAt: Date | null;
-}): boolean {
-  return !month.paid && month.claimedAt === null;
-}
-
 /** Paid, still inside the grace window, or past it. */
-export type MonthVerdict = "paid" | "within-grace" | "blocked";
+type MonthVerdict = "paid" | "within-grace" | "blocked";
 
-export interface VerdictInput extends DeadlineInput {
+interface VerdictInput extends DeadlineInput {
   /** Missing means unpaid. A month record that is not there is never a yes. */
   paid?: boolean | null;
   now: Date;
@@ -143,11 +123,6 @@ export function monthVerdict(input: VerdictInput): MonthVerdict {
   return input.now.getTime() < payDeadline(input).getTime()
     ? "within-grace"
     : "blocked";
-}
-
-/** Does this verdict let them book and come in? */
-export function monthAdmits(verdict: MonthVerdict): boolean {
-  return verdict !== "blocked";
 }
 
 /** The deadline written the way both clients say it. */

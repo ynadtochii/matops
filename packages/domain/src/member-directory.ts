@@ -7,8 +7,7 @@
  * dues and attendance on another's row.
  */
 
-import { isStaffRole, isStudentMember } from "./access";
-import { isPendingCoach } from "./membership";
+import { isStaffRole } from "./access";
 
 /** One person's standing at ONE branch, as that branch's own roster reports it. */
 export interface DirectoryEntry {
@@ -18,7 +17,7 @@ export interface DirectoryEntry {
   memberId: string | null;
   userId: string;
   name: string;
-  email: string;
+  email: string | null;
   /** Their branch membership status: active, pending, suspended… */
   status: string;
   role: string;
@@ -27,12 +26,11 @@ export interface DirectoryEntry {
   /** A shared membership covers them here. */
   covered: boolean;
   planNames: string[];
-  /** Null at a branch still on the legacy gate, which has no verdict to give. */
   verdict: string | null;
   recentVisits: number;
 }
 
-export interface DirectoryBranch {
+interface DirectoryBranch {
   entityId: string;
   entityName: string;
   memberId: string | null;
@@ -44,10 +42,10 @@ export interface DirectoryBranch {
   recentVisits: number;
 }
 
-export interface DirectoryRow {
+interface DirectoryRow {
   userId: string;
   name: string;
-  email: string;
+  email: string | null;
   /** Every branch they belong to, name-ordered. */
   branches: DirectoryBranch[];
   /** Every plan covering them anywhere, deduplicated. */
@@ -124,18 +122,4 @@ export function matchesDirectoryFilter(
  */
 export function staffRows(rows: DirectoryRow[]): DirectoryRow[] {
   return rows.filter((r) => r.branches.some((b) => isStaffRole(b)));
-}
-
-/**
- * Coach requests waiting anywhere in the gym: the Staff nav badge.
- *
- * Counted per BRANCH and not per person, because two branches waiting on the
- * same person are two decisions for the owner to make.
- */
-export function pendingCoachCount(rows: DirectoryRow[]): number {
-  return rows.reduce((n, r) => n + r.branches.filter(isPendingCoach).length, 0);
-}
-
-export function studentRows(rows: DirectoryRow[]): DirectoryRow[] {
-  return rows.filter((row) => row.branches.some(isStudentMember));
 }

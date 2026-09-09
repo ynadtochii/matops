@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
-import { DAY_MS, dayKey, groupByDay, PUBLIC_API_BASE } from "@matops/domain";
+import { DAY_MS, dayKey, groupByDay } from "@matops/domain";
 import { Button } from "@matops/ui/button";
 import { FieldError } from "@matops/ui/field";
 import { Input } from "@matops/ui/input";
@@ -18,58 +18,9 @@ import {
   PhoneField,
 } from "~/app/_components/form-fields";
 import { MatLoader } from "~/app/_components/mat-loader";
-
-/**
- * The shared booking page (ADR 115). It calls the public REST API with the
- * academy's own key, exactly as a gym's website would, so the page and any
- * integrator hit the same contract and the same errors.
- */
-
-interface PublicAcademy {
-  name: string;
-  timeZone: string;
-  country: string | null;
-  address: string | null;
-  mapUrl: string | null;
-}
-
-interface PublicClass {
-  id: string;
-  title: string;
-  discipline: string | null;
-  startsAt: string;
-  durationMinutes: number;
-  bookable: boolean;
-}
-
-interface Booked {
-  bookingId: string;
-  class: { title: string; startsAt: string; durationMinutes: number };
-}
+import { useTRPC } from "~/trpc/react";
 
 const BLANK = { firstName: "", lastName: "", phone: "", email: "" };
-
-async function callApi<T>(
-  path: string,
-  apiKey: string,
-  init?: RequestInit,
-): Promise<T> {
-  const res = await fetch(`${PUBLIC_API_BASE}${path}`, {
-    ...init,
-    headers: {
-      "content-type": "application/json",
-      "x-matops-key": apiKey,
-      ...init?.headers,
-    },
-  });
-  if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as {
-      error?: { message?: string };
-    } | null;
-    throw new Error(body?.error?.message ?? "Something went wrong. Try again.");
-  }
-  return (await res.json()) as T;
-}
 
 /** How many days of classes the picker opens on. The rest are one tap away. */
 const DAYS_SHOWN = 3;
@@ -114,7 +65,15 @@ function dayLabel(key: string, timeZone: string): string {
   }).format(new Date(year ?? 0, (month ?? 1) - 1, day ?? 1));
 }
 
-export function BookingPage({ apiKey }: { apiKey: string }) {
+export function BookingPage({
+  code,
+  initialToken,
+}: {
+  code: string;
+  initialToken: string | null;
+}) {
+  const trpc = useTRPC();
+  const [bookingToken, setBookingToken] = useState(initialToken);
   const [classId, setClassId] = useState<string | null>(null);
   const [form, setForm] = useState(BLANK);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -124,31 +83,38 @@ export function BookingPage({ apiKey }: { apiKey: string }) {
   const [allDays, setAllDays] = useState(false);
   const [changing, setChanging] = useState(false);
 
-  const academy = useQuery({
-    queryKey: ["public-academy", apiKey],
-    queryFn: () => callApi<PublicAcademy>("/academy", apiKey),
+  const schedule = useQuery({
+    ...trpc.visitor.schedule.queryOptions({ code }),
     retry: false,
   });
-  const classes = useQuery({
-    queryKey: ["public-classes", apiKey],
-    queryFn: () =>
-      callApi<{ timeZone: string; classes: PublicClass[] }>("/classes", apiKey),
+  const booking = useQuery({
+    ...trpc.visitor.status.queryOptions({ code, token: bookingToken ?? "" }),
+    enabled: bookingToken !== null,
     retry: false,
   });
 
-  const book = useMutation({
-    mutationFn: (body: Record<string, unknown>) =>
-      callApi<Booked>("/bookings", apiKey, {
-        method: "POST",
-        body: JSON.stringify(body),
-      }),
-    onError: (err: Error) => setError(err.message),
-  });
+  const book = useMutation(
+    trpc.visitor.book.mutationOptions({
+      onSuccess: (data) => {
+        setBookingToken(data.token);
+        const url = new URL(window.location.href);
+        url.searchParams.set("booking", data.token);
+        window.history.replaceState(null, "", url);
+      },
+      onError: (err) => setError(err.message),
+    }),
+  );
+  const cancel = useMutation(
+    trpc.visitor.cancel.mutationOptions({
+      onSuccess: () => booking.refetch(),
+      onError: (err) => setError(err.message),
+    }),
+  );
 
-  if (academy.isPending || classes.isPending) {
+  if (schedule.isPending || (bookingToken !== null && booking.isPending)) {
     return <MatLoader label="Opening the schedule" />;
   }
-  if (academy.isError || classes.isError) {
+  if (schedule.isError) {
     return (
       <div className="flex max-w-sm flex-col gap-3 text-center">
         <h1 className="text-2xl font-semibold tracking-tight">
@@ -161,8 +127,68 @@ export function BookingPage({ apiKey }: { apiKey: string }) {
     );
   }
 
-  const gym = academy.data;
-  const timeZone = classes.data.timeZone;
+  const gym = schedule.data.academy;
+  const timeZone = gym.timeZone;
+
+  if (bookingToken && booking.isError) {
+    return (
+      <div className="flex w-full max-w-sm flex-col gap-3 text-center">
+        <h1 className="text-2xl font-semibold tracking-tight">
+          Booking link expired
+        </h1>
+        <p className="text-muted-foreground text-sm">
+          This booking link is no longer available. Contact {gym.name} if you
+          need help.
+        </p>
+      </div>
+    );
+  }
+
+  if (bookingToken && booking.data) {
+    const row = booking.data;
+    const classCancelled = row.class.status === "cancelled";
+    const bookingCancelled = row.bookingStatus === "cancelled";
+    return (
+      <div className="flex w-full max-w-sm flex-col gap-4 text-center">
+        <h1 className="text-2xl font-semibold tracking-tight">
+          {classCancelled
+            ? "This class was cancelled"
+            : bookingCancelled
+              ? "Your booking is cancelled"
+              : "You are booked"}
+        </h1>
+        {row.class.changed && !classCancelled && (
+          <p className="border-warning/40 bg-warning/10 rounded-md border p-3 text-sm">
+            The class time has changed. The current time is shown below.
+          </p>
+        )}
+        <p className="text-sm">
+          {row.class.title} · {whenLabel(row.class.startsAt, timeZone)}
+        </p>
+        {gym.address && (
+          <p className="text-muted-foreground text-sm">{gym.address}</p>
+        )}
+        {!classCancelled && !bookingCancelled && (
+          <Button
+            type="button"
+            variant="outline"
+            disabled={cancel.isPending}
+            onClick={() => {
+              setError(null);
+              cancel.mutate({ code, token: bookingToken });
+            }}
+          >
+            {cancel.isPending ? "Cancelling…" : "Cancel booking"}
+          </Button>
+        )}
+        {error && (
+          <p role="alert" className="text-error text-sm">
+            {error}
+          </p>
+        )}
+      </div>
+    );
+  }
 
   if (book.isSuccess) {
     return (
@@ -195,7 +221,7 @@ export function BookingPage({ apiKey }: { apiKey: string }) {
     );
   }
 
-  const upcoming = classes.data.classes;
+  const upcoming = schedule.data.classes;
   const chosen = upcoming.find((c) => c.id === classId) ?? null;
   const days = groupByDay(upcoming, timeZone);
   const shown = allDays ? days : days.slice(0, DAYS_SHOWN);
@@ -214,8 +240,8 @@ export function BookingPage({ apiKey }: { apiKey: string }) {
 
       {upcoming.length === 0 ? (
         <p className="text-muted-foreground text-sm">
-          No classes are open for booking in the next week. Call the gym and
-          they will fit you in.
+          No classes are open in this gym&apos;s booking window. Call the gym
+          and they will fit you in.
         </p>
       ) : chosen && !changing ? (
         <div className="border-brand/40 bg-brand-wash flex items-center gap-3 rounded-lg border p-3 text-sm">
@@ -313,7 +339,10 @@ export function BookingPage({ apiKey }: { apiKey: string }) {
               return;
             }
             setErrors({});
-            book.mutate({ ...payload, consent: true });
+            book.mutate({
+              code,
+              booking: { ...payload, consent: true },
+            });
           }}
         >
           <Field

@@ -16,7 +16,7 @@
  */
 
 /** A discipline's ordered belt ladder + its sub-level (stripe/degree) rule. */
-export interface RankSystem {
+interface RankSystem {
   /** The discipline key (matches the class `discipline` tag where it overlaps). */
   discipline: string;
   /** Human label for the discipline, e.g. "Brazilian Jiu-Jitsu". */
@@ -55,16 +55,6 @@ export const RANK_SYSTEMS: Record<string, RankSystem> = {
   },
 };
 
-/** The rank system for a discipline, or `undefined` if it has no belts. */
-export function rankSystemFor(discipline: string): RankSystem | undefined {
-  return RANK_SYSTEMS[discipline];
-}
-
-/** Does this discipline have a belt/rank ladder the owner can set? */
-export function hasRankSystem(discipline: string): boolean {
-  return discipline in RANK_SYSTEMS;
-}
-
 /** The disciplines that have a rank system — populates the owner's discipline picker. */
 export function rankDisciplines(): RankSystem[] {
   return Object.values(RANK_SYSTEMS);
@@ -89,7 +79,7 @@ export function isValidRank(
 }
 
 /** A member's rank in one discipline — the shape stored + displayed. */
-export interface RankEntry {
+interface RankEntry {
   discipline: string;
   belt: string;
   stripes: number;

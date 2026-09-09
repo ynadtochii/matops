@@ -1,11 +1,51 @@
 # Changelog
 
+## Unreleased: dead-code sweep
+
+- Removed twelve tRPC procedures no client called: `class.update`, `accessPlan.get`, `accessPlan.rename`, `accessPlan.resolveHold`, `person.accountCandidate`, `person.linkAccount`, `person.unlinkAccount`, `dropIn.markJoined`, `curriculum.forDate`, `invite.revoke`, `notification.status`, `auth.getSecretMessage`, and the whole `system` router. Their tests move to the live procedure that carries the same rule.
+- Deleted 23 domain functions and 7 types that only their own tests used, plus the db and validator helpers the removed procedures left behind.
+- `@matops/ui` keeps only the parts the app imports: `field.tsx` drops nine unused shadcn parts, `dropdown-menu.tsx` drops ten, and `button.native.tsx` goes with the `react-native` branch of the `./button` export.
+- Dropped 13 drizzle `relations()` objects. Nothing uses the relational `with:` query API.
+- Dropped 72 unused `z.infer` type aliases from `@matops/validators`, the `turbo/generators` scaffold, and the `export` keyword on 33 symbols nothing outside their file reads.
+- Removed six dependencies: `drizzle-zod`, `date-fns`, `@turbo/gen`, `react-native-reanimated`, `react-native-gesture-handler`, `react-native-worklets`. The three native modules need a dev-client rebuild.
+- `domain/invalidation.ts` folds into `ui/use-invalidate.ts`.
+
+## Unreleased: first academy release
+
+- Removed direct student-to-instructor role changes from member details, Staff, organization People, and the API. Adding an existing person to another branch now always adds them as a student. Instructors join through the instructor invite link and owner approval.
+- The release now targets one fresh database baseline. It has no legacy conversion or staged table removal.
+- Students now have organization person records that do not require login accounts. A verified account may link to one person. Guardian access is removed.
+- Shared memberships are the only payment model. Staff assign plans. Monthly records use unpaid, reported, confirmed, and rejected states with frozen price evidence and append-only audit history.
+- Rejected payment creates a branch coverage hold that survives month and plan changes until staff resolve it.
+- One application shell keeps organization and selected-branch navigation and badges visible across both route groups.
+- Owners and managers can correct old attendance with a reason and a stored change record. Instructors keep the 14-day window.
+- Class and visitor actions save notice intent with recipient snapshots. The request sends a bounded first batch. Staff can send remaining recipients and retry failures without resending accepted recipients.
+- Hosted visitor booking keeps a private return and cancellation token at `/book/<academy-code>`. External booking routes, API keys, and origin settings are removed.
+- Branch booking windows accept 1-90 local calendar days and default to 7. The same rule controls lists, direct booking, check-in, and hosted visitor booking.
+- Owners can extend the calendar or apply a versioned rebuild. Rebuild preserves history and cancellations, and refuses booked stale classes.
+- Scheduled application jobs, `CRON_SECRET`, announcements, student shopping, and the old purchase records are removed.
+- Coach reports use current attendance review evidence. Referrals use confirmed membership-month evidence. Rank corrections append an event.
+- People has reviewed CSV import and full organization export. Curriculum and referrals remain optional.
+
+## Unreleased: PR 8 review fixes
+
+Seed cleanup keeps other branches' demo memberships, payments, and organization seats. Seeded membership months use the organization's policy calendar, with the default branch as fallback. Coach cards again show students taught and expandable class breakdowns. Completed attendance shows the reviewer name beside the time. Regression coverage covers branch cleanup, month boundaries, and reviewer identity. Tests have not run.
+
+## Unreleased: explicit attendance review
+
+Fixed the attendance roster query failing with an ambiguous column error. Nested query wrappers preserve table names in member, visitor and review reads.
+
+Owners can review every past class from Attendance, with date filters and an oldest-first list. The dashboard counts unfinished reviews across all past classes. Finish attendance checks members and visitors, supports an explicit nobody-attended confirmation, and records the reviewer. A changed roster needs another review. Existing classes start unreviewed. The existing 14-day editing limit also applies to finishing, pending the historical correction decision. Migration 0068 is applied to dev. Workspace typecheck and lint passed. Tests are written but not run.
+
+## Unreleased: the seed catches up with the membership model
+
+The demo gym "Alma beta" ran on the legacy branch dues, which no branch made today uses. It now runs on shared memberships: plans with a price history, a membership policy with the bank details, an assignment per student, this month on all four answers (paid, silent, reminded, claimed), a plan change waiting for the 1st, one person with no membership and a claimed purchase for the owner to confirm. `member_dues` and `payment_settings` are gone from the seed; the confirmed `payment_claim` history stays, because the referrals ledger reads revenue off it and off nothing else. The gym also gained a manager who holds no branch membership, an archived member, an address and map link, and leads spread across the funnel. `seed fill` writes memberships when the academy it fills runs the gate, and `seed clear` takes them back out. `seed down` no longer fails on a gym somebody used: teardown was missing `notification`, `product_event`, `access_plan_price` and `membership_purchase`, all of which hold a foreign key into the seed academy. The pilot gym's three plans got prices and a policy, so they can actually be held.
+
 ## Unreleased: staff stay separate from members
 
 Workspace typecheck passed 17/17 and lint passed 15/15. Regression tests were written but not run. No migration or billing cleanup was applied.
 
 Owners, managers, and instructors appear in Staff and need no paid membership for staff access. Members and member totals count students. Attendance labels staff participants. Coverage warnings and overdue cancellation respect branch staff access. Staff lifecycle actions preserve history. Existing paid plans remain for review. See [ADR 132](/Users/kuna/projects/matops/docs/issues/132-staff-roster-isolation.md).
-
 
 One line per shipped slice (see `docs/delivery.md` §4). Newest first.
 
@@ -1069,5 +1109,3 @@ Built the deferred Expo student UI in one pass (closes Mob cells 1.3/1.4/1.6/2.4
 - **0.3 Tenant seam (RLS)** — swapped the DB to the `pg` driver so requests can run an interactive transaction; added `withTenant(academyId, fn)` (`packages/db/src/tenant.ts`) that does `SET LOCAL ROLE matops_app` + `set_config('app.academy_id', …, true)`. Migration `0001_tenant_rls.sql` creates the restricted role, grants, and a `tenant_probe` table with an RLS policy. A PGlite-based leak test (`test/rls.test.ts`, 5 cases) proves isolation with no external DB. `academy_id` is text (no `::uuid`); queries fail closed when the GUC is unset.
 - **0.2 DB package** — retargeted from `@vercel/postgres` (HTTP) to `pg` on the Neon `-pooler` endpoint; versioned migrations (`drizzle-kit generate` → `migrations/`), a `_health` table, and a `seed` script. Migrations run against Neon's direct endpoint (drizzle strips `-pooler`). Health smoke test in `test/health.test.ts`.
 - **0.1 Monorepo scaffold** — scaffolded from `create-t3-turbo`: Turborepo + pnpm, `apps/{nextjs,expo}` + `packages/{api,auth,db,validators,domain,ui}` + `tooling/*`. Renamed scope to `@matops/*`, dropped the unused `tanstack-start` app, added the framework-free `packages/domain`, and promoted the planning docs into `docs/`.
-
-#

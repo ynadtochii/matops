@@ -10,7 +10,6 @@ async function TrainingData() {
   await connection();
 
   prefetch(trpc.booking.mine.queryOptions());
-  prefetch(trpc.stats.me.queryOptions());
 
   return (
     <HydrateClient>

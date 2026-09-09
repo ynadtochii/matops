@@ -16,22 +16,19 @@ export const SetMemberRankSchema = z.object({
   belt: lineText(1, 40),
   stripes: z.number().int().min(0).max(20),
 });
-export type SetMemberRankInput = z.infer<typeof SetMemberRankSchema>;
 
 /** Clear a member's rank in one discipline (spec O4 — a correction). */
 export const ClearMemberRankSchema = z.object({
   memberId: IdSchema,
   discipline: lineText(1, 40),
+  reason: lineText(1, 500),
 });
-export type ClearMemberRankInput = z.infer<typeof ClearMemberRankSchema>;
 
 /** Staff add a private note about a member (spec O4). Never member-visible. */
 export const AddMemberNoteSchema = z.object({
   memberId: IdSchema,
   body: blockText(1, 2000),
 });
-export type AddMemberNoteInput = z.infer<typeof AddMemberNoteSchema>;
 
 /** Address a single staff note by id (delete). */
 export const NoteIdSchema = z.object({ noteId: z.uuid() });
-export type NoteIdInput = z.infer<typeof NoteIdSchema>;

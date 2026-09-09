@@ -16,7 +16,7 @@ const MIN_MS = 60 * 1000;
  */
 export const MAX_CLASS_MINUTES = 600;
 
-export interface CheckInClass {
+interface CheckInClass {
   id: string;
   startsAt: Date;
   durationMinutes: number;
@@ -59,7 +59,7 @@ export function parseCheckInLink(value: string): string | null {
   return CHECK_IN_LINK.exec(value.trim())?.[1] ?? null;
 }
 
-export interface CheckInWindow {
+interface CheckInWindow {
   from: Date;
   to: Date;
 }
@@ -82,7 +82,7 @@ export function canCheckIn(c: CheckInClass, now: Date): boolean {
   return resolveCheckInClass([c], now).length === 1;
 }
 
-export const VISITOR_LOOKAHEAD_MINUTES = 24 * 60;
+const VISITOR_LOOKAHEAD_MINUTES = 24 * 60;
 export const VISITOR_UPCOMING_LIMIT = 6;
 
 export function visitorFetchWindow(now: Date): CheckInWindow {
@@ -92,7 +92,7 @@ export function visitorFetchWindow(now: Date): CheckInWindow {
   };
 }
 
-export interface VisitorClassChoices<T extends CheckInClass> {
+interface VisitorClassChoices<T extends CheckInClass> {
   now: T[];
   upcoming: T[];
 }

@@ -1,8 +1,7 @@
 import type { DbWriter } from "./tenant";
 import { productEvent } from "./product-event-schema";
 
-export type EventRole =
-  "owner" | "manager" | "instructor" | "student" | "system";
+type EventRole = "owner" | "manager" | "instructor" | "student" | "system";
 
 const ROLES: EventRole[] = [
   "owner",
@@ -16,7 +15,7 @@ export function eventRole(role: string | null | undefined): EventRole | null {
   return ROLES.find((r) => r === role) ?? null;
 }
 
-export interface ProductEventInput {
+interface ProductEventInput {
   organizationId: string;
   entityId?: string | null;
   name: string;

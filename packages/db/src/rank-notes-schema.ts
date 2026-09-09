@@ -91,6 +91,34 @@ export const rankPromotion = pgTable(
   ],
 );
 
+export const rankCorrection = pgTable(
+  "rank_correction",
+  (t) => ({
+    id: t.uuid().notNull().primaryKey().defaultRandom(),
+    academyId: t
+      .text()
+      .notNull()
+      .references(() => entity.id),
+    memberId: t.text().notNull(),
+    discipline: t.text().notNull(),
+    fromBelt: t.text().notNull(),
+    fromStripes: t.integer().notNull(),
+    toBelt: t.text(),
+    toStripes: t.integer(),
+    reason: t.text().notNull(),
+    correctedBy: t.text().notNull(),
+    correctedAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
+  }),
+  (table) => [
+    index("rc_by_member").on(table.academyId, table.memberId),
+    foreignKey({
+      name: "rank_correction_membership",
+      columns: [table.academyId, table.memberId],
+      foreignColumns: [entityMembership.entityId, entityMembership.id],
+    }),
+  ],
+);
+
 /**
  * A staff-private note about a member (spec O4, ADR 41) — coaching memory
  * (injuries, goals, readiness). Visible to ALL staff at the academy (RLS scopes

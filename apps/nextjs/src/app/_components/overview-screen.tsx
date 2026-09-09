@@ -1,31 +1,26 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
-import type { RouterOutputs } from "@matops/api";
 import type { BranchRow } from "@matops/domain";
 import {
   branchRows,
   entityHref,
-  formatMoney,
   isPendingCoach,
+  organizationHref,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { Button } from "@matops/ui/button";
 
 import { useTRPC } from "~/trpc/react";
-import { AnnounceForm } from "./announce-form";
 import { useOrganization } from "./entity";
 import { AddBranchButton } from "./entity-selector";
 import { JoinByCode } from "./join-by-code";
 import { cardClass, ENTER, Eyebrow, stagger } from "./primitives";
 import { SetupChecklist } from "./setup-checklist";
-import { SkeletonCard } from "./skeletons";
-
-type Metrics = RouterOutputs["stats"]["organizationMetrics"];
 
 function FirstBranch({ organizationName }: { organizationName: string }) {
   return (
@@ -57,8 +52,6 @@ function FirstBranch({ organizationName }: { organizationName: string }) {
 export function OverviewScreen() {
   const { entities, canCreateBranches, canRunOrganization, organizationName } =
     useOrganization();
-  const [posting, setPosting] = useState(false);
-  const [hasOpenedUpdate, setHasOpenedUpdate] = useState(false);
 
   if (entities.length === 0) {
     // An owner here has just made the gym and has no branch yet, which is where
@@ -89,28 +82,10 @@ export function OverviewScreen() {
         </div>
         {canRunOrganization && (
           <div className="flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                setHasOpenedUpdate(true);
-                setPosting((open) => !open);
-              }}
-              aria-expanded={posting}
-              aria-controls="gym-announcement"
-            >
-              {posting ? "Hide update form" : "Post an update"}
-            </Button>
             {canCreateBranches && <AddBranchButton />}
           </div>
         )}
       </div>
-
-      {canRunOrganization && (
-        <div id="gym-announcement" hidden={!posting}>
-          {hasOpenedUpdate && <AnnounceForm scope="organization" />}
-        </div>
-      )}
 
       {canRunOrganization ? (
         <OwnerOverview />
@@ -137,8 +112,8 @@ export function OverviewScreen() {
  */
 function NeedsAttention() {
   const trpc = useTRPC();
+  const branchId = useSearchParams().get("branch") ?? undefined;
   const claims = useQuery(trpc.accessPlan.claims.queryOptions());
-  const purchases = useQuery(trpc.membershipPurchase.review.queryOptions());
   const directory = useQuery(trpc.stats.organizationMembers.queryOptions());
   const uncovered = useQuery(trpc.accessPlan.uncovered.queryOptions());
   const review = useQuery(
@@ -167,17 +142,7 @@ function NeedsAttention() {
       name: c.name,
       detail: c.planName,
       reason: "Payment claims",
-      href: `/people/${c.userId}`,
-    })),
-    ...(purchases.data ?? []).map((p) => ({
-      key: `purchase-${p.id}`,
-      name: p.studentName,
-      detail: p.planName,
-      reason:
-        p.status === "resolution"
-          ? "Membership payment issues"
-          : "New membership requests",
-      href: "/memberships?tab=payments",
+      href: `/people/${c.personId}`,
     })),
     ...waitingStudents.map(({ row, branch }) => ({
       key: `student-${branch.entityId}-${row.userId}`,
@@ -200,11 +165,11 @@ function NeedsAttention() {
     })),
     ...(uncovered.data?.groups ?? []).flatMap((g) =>
       g.people.map((p) => ({
-        key: `uncovered-${g.entityId}-${p.userId}`,
+        key: `uncovered-${g.entityId}-${p.personId}`,
         name: p.name,
         detail: g.entityName,
         reason: "Missing membership",
-        href: `/people/${p.userId}`,
+        href: `/people/${p.personId}`,
       })),
     ),
     ...(review.data?.items ?? []).map((b) => ({
@@ -222,7 +187,7 @@ function NeedsAttention() {
       items: items.filter((item) => item.reason === reason),
     }),
   );
-  const queries = [claims, purchases, directory, uncovered, review];
+  const queries = [claims, directory, uncovered, review];
   const loading = queries.some((query) => query.isPending);
   const failed = queries.some((query) => query.isError);
   const retry = () => {
@@ -362,7 +327,7 @@ function NeedsAttention() {
         <p className="text-muted-foreground text-sm">
           Showing the first 50 bookings with access issues.{" "}
           <Link
-            href="/memberships?tab=access"
+            href={organizationHref("/memberships?tab=access", branchId)}
             className="text-brand-strong underline underline-offset-4"
           >
             Review membership access
@@ -425,41 +390,6 @@ function OwnerOverview() {
               <FallbackList />
             )}
           </OverviewSection>
-          <div className="order-3 flex min-w-0 flex-col gap-4 xl:order-none">
-            {metrics.isPending && (
-              <div role="status" aria-label="Loading organization activity">
-                <SkeletonCard />
-              </div>
-            )}
-            {metrics.isError && (
-              <div
-                role="status"
-                className={`${cardClass()} flex flex-wrap items-center justify-between gap-3 text-sm`}
-              >
-                <p>
-                  Organization totals could not refresh.{" "}
-                  {m
-                    ? "Showing the last available figures."
-                    : "Branch links are still available."}
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void metrics.refetch()}
-                  disabled={metrics.isFetching}
-                >
-                  Retry totals
-                </Button>
-              </div>
-            )}
-            {m && (
-              <OrganizationReads
-                m={m}
-                classes={summary.data?.upcomingClasses}
-                paid={summary.data?.revenue}
-              />
-            )}
-          </div>
         </div>
         <aside
           aria-label="Tasks and setup"
@@ -470,89 +400,6 @@ function OwnerOverview() {
         </aside>
       </div>
     </div>
-  );
-}
-
-function OrganizationReads({
-  m,
-  classes,
-  paid,
-}: {
-  m: Metrics;
-  classes?: number;
-  paid?: { currency: string; amountMinor: number }[];
-}) {
-  const stats = [
-    {
-      label: "Active members",
-      value: m.enrolledMembers,
-      period: "Currently enrolled",
-    },
-    {
-      label: "With access",
-      value: m.membersWithAccess,
-      period: "Can train now",
-    },
-    {
-      label: "People trained",
-      value: m.membersAttended,
-      period: "Last 30 days",
-    },
-    { label: "New members", value: m.newMembers, period: "Last 30 days" },
-  ];
-  return (
-    <OverviewSection label="Organization activity">
-      <div className={`${cardClass()} flex flex-col gap-5`}>
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-6 2xl:grid-cols-4">
-          {stats.map((stat) => (
-            <div key={stat.label} className="flex flex-col gap-1">
-              <dt className="text-sm font-medium">{stat.label}</dt>
-              <dd className="font-mono text-3xl font-medium tracking-tight tabular-nums">
-                {stat.value.toLocaleString()}
-              </dd>
-              <dd className="text-muted-foreground text-xs">{stat.period}</dd>
-            </div>
-          ))}
-        </dl>
-        <p className="text-muted-foreground text-xs">
-          Each person is counted once across the organization.
-        </p>
-        <div className="border-border flex flex-col gap-2 border-t pt-4 text-sm">
-          {classes !== undefined && (
-            <p>
-              <span className="font-medium tabular-nums">{classes}</span>{" "}
-              classes in the next 7 days
-            </p>
-          )}
-          <details>
-            <summary className="focus-visible:outline-ring min-h-11 cursor-pointer content-center font-medium focus-visible:outline-2">
-              Membership payments this month
-            </summary>
-            <div className="text-muted-foreground flex flex-col gap-2 pt-2">
-              <p>
-                {m.payment.paid} marked paid · {m.payment.withinGrace} within
-                the payment grace period · {m.payment.blocked} blocked
-              </p>
-              {paid?.map((p) => (
-                <p key={p.currency}>
-                  {formatMoney(p.amountMinor, p.currency)} marked paid
-                </p>
-              ))}
-              <p>
-                These are manual payment records. Bank receipts are not
-                verified.
-              </p>
-              <Link
-                href="/memberships?tab=payments"
-                className="text-brand-strong w-fit py-2 font-medium underline underline-offset-4"
-              >
-                Manage memberships
-              </Link>
-            </div>
-          </details>
-        </div>
-      </div>
-    </OverviewSection>
   );
 }
 

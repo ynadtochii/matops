@@ -11,10 +11,11 @@ import {
   notificationKindLabel,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
+import { Button } from "@matops/ui/button";
+import { toast } from "@matops/ui/toast";
 
 import { dayLongFmt, time24Fmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
-import { AnnounceForm } from "./announce-form";
 import { useEntity, useEntityHref } from "./entity";
 import { PageHeader } from "./page-header";
 import { cardClass, ENTER, Section, stagger } from "./primitives";
@@ -36,6 +37,32 @@ export function NotificationsScreen() {
   const isStaff = isStaffOf(academy);
 
   const feed = useQuery(trpc.notification.list.queryOptions());
+  const deliveryIssues = useQuery({
+    ...trpc.notification.deliveryIssues.queryOptions(),
+    enabled: isStaff,
+  });
+  const refreshIssues = () =>
+    queryClient.invalidateQueries(
+      trpc.notification.deliveryIssues.pathFilter(),
+    );
+  const sendRemaining = useMutation(
+    trpc.notification.sendRemaining.mutationOptions({
+      onSuccess: async (result) => {
+        await refreshIssues();
+        toast.success(`${result.delivery.accepted} emails accepted`);
+      },
+      onError: (error) => toast.error(error.message),
+    }),
+  );
+  const retryFailed = useMutation(
+    trpc.notification.retryFailed.mutationOptions({
+      onSuccess: async (result) => {
+        await refreshIssues();
+        toast.success(`${result.delivery.accepted} emails accepted`);
+      },
+      onError: (error) => toast.error(error.message),
+    }),
+  );
   const markAllRead = useMutation(
     trpc.notification.markAllRead.mutationOptions({
       onSuccess: () =>
@@ -62,7 +89,48 @@ export function NotificationsScreen() {
         subtitle={`Everything ${academy.name} has sent you.`}
       />
 
-      {isStaff && <AnnounceForm scope="branch" />}
+      {isStaff && deliveryIssues.data && deliveryIssues.data.length > 0 && (
+        <section className={cardClass()} aria-label="Email delivery issues">
+          <h2 className="font-semibold">Email delivery</h2>
+          <ul className="mt-3 space-y-3">
+            {deliveryIssues.data.map((notice) => (
+              <li key={notice.noticeId} className="border-border border-t pt-3">
+                <p className="text-sm font-medium">{notice.subject}</p>
+                <p className="text-muted-foreground mt-1 text-xs">
+                  {notice.pending} remaining, {notice.failed} failed,{" "}
+                  {notice.unknown} unknown, {notice.noEmail} without email
+                </p>
+                <div className="mt-2 flex gap-2">
+                  {notice.pending > 0 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={sendRemaining.isPending}
+                      onClick={() =>
+                        sendRemaining.mutate({ noticeId: notice.noticeId })
+                      }
+                    >
+                      Send remaining
+                    </Button>
+                  )}
+                  {notice.failed + notice.unknown > 0 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={retryFailed.isPending}
+                      onClick={() =>
+                        retryFailed.mutate({ noticeId: notice.noticeId })
+                      }
+                    >
+                      Retry failed
+                    </Button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {feed.isPending ? (
         <SkeletonFeed />
@@ -73,7 +141,7 @@ export function NotificationsScreen() {
         />
       ) : feed.data.length === 0 ? (
         <EmptyState title="Nothing yet.">
-          Class changes, payment reminders and gym news land here.
+          Class changes and membership updates land here.
         </EmptyState>
       ) : (
         <Feed items={feed.data} />

@@ -95,29 +95,6 @@ describe("an instructor runs the desk", () => {
     ).resolves.toBeTruthy();
   });
 
-  it("never sees the dues figures the owner sees", async () => {
-    const plan = await owner().payments.createPlan({
-      name: "Unlimited",
-      priceMinor: 5000,
-      currency: "EUR",
-    });
-    await owner().payments.setMemberDues({
-      memberId: memberId(ACAD, STUDENT),
-      planId: plan.id,
-      nextDueAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-        .toISOString()
-        .slice(0, 10),
-    });
-
-    const forOwner = await owner().membership.members();
-    const forCoach = await coach().membership.members();
-    const pick = (rows: typeof forOwner) =>
-      rows.find((r) => r.memberId === memberId(ACAD, STUDENT));
-
-    expect(pick(forOwner)?.dues?.priceMinor).toBe(5000);
-    expect(pick(forCoach)?.dues).toBeNull();
-  });
-
   it("is still refused everything that is the owner's job", async () => {
     const target = { memberId: memberId(ACAD, STUDENT) };
 
@@ -136,11 +113,6 @@ describe("an instructor runs the desk", () => {
     expect(await rejectionCode(coach().membership.promote(target))).toBe(
       "FORBIDDEN",
     );
-    expect(
-      await rejectionCode(
-        coach().membership.setRole({ ...target, role: "instructor" }),
-      ),
-    ).toBe("FORBIDDEN");
     expect(await rejectionCode(coach().membership.staff())).toBe("FORBIDDEN");
     expect(await rejectionCode(coach().dropIn.list())).toBe("FORBIDDEN");
     expect(

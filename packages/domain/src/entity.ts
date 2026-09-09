@@ -10,7 +10,7 @@ import { isStaff, runsBranch } from "./access";
  */
 export const ENTITY_TYPES = ["bjj_academy", "general_space"] as const;
 
-export type EntityType = (typeof ENTITY_TYPES)[number];
+type EntityType = (typeof ENTITY_TYPES)[number];
 
 export function isSupportedEntityType(value: string): value is EntityType {
   return (ENTITY_TYPES as readonly string[]).includes(value);
@@ -44,7 +44,7 @@ export function capacityPolicyFor(type: string): "soft" | "strict" {
  * a URL that names its academy is what makes two browser tabs, a reload and a
  * shared link all land in the same place (ADR 124).
  */
-export const ENTITY_PREFIX = "/entities";
+const ENTITY_PREFIX = "/entities";
 
 function entitySegment(pathname: string): string | null {
   const match = /^\/entities\/([^/?#]+)/.exec(pathname);
@@ -65,6 +65,23 @@ export function entityFromPath(pathname: string): string | null {
 export function entityHref(entityId: string, path = "/"): string {
   const base = `${ENTITY_PREFIX}/${encodeURIComponent(entityId)}`;
   return path === "/" ? base : `${base}${path}`;
+}
+
+export function organizationHref(path: string, branchId?: string): string {
+  if (!branchId) return path;
+  const hashIndex = path.indexOf("#");
+  const beforeHash = hashIndex < 0 ? path : path.slice(0, hashIndex);
+  const hash = hashIndex < 0 ? "" : path.slice(hashIndex);
+  const queryIndex = beforeHash.indexOf("?");
+  const pathname =
+    queryIndex < 0 ? beforeHash : beforeHash.slice(0, queryIndex);
+  const query = queryIndex < 0 ? "" : beforeHash.slice(queryIndex + 1);
+  const params = query
+    .split("&")
+    .filter(Boolean)
+    .filter((param) => param.split("=", 1)[0] !== "branch");
+  params.push(`branch=${encodeURIComponent(branchId)}`);
+  return `${pathname}?${params.join("&")}${hash}`;
 }
 
 /**
@@ -123,26 +140,31 @@ const ROUTE_ACCESS: {
  */
 export function canVisit(
   pathname: string,
-  m: Membership & { type?: string },
+  m: Membership & { type?: string; referralsEnabled?: boolean },
 ): boolean {
   if (m.type !== undefined && !isSupportedEntityType(m.type)) return false;
   const path = pathWithinEntity(pathname);
   const rule = ROUTE_ACCESS.find(
     (r) => path === r.prefix || path.startsWith(`${r.prefix}/`),
   );
+  if (
+    (path === "/referrals" || path.startsWith("/referrals/")) &&
+    m.referralsEnabled === false
+  )
+    return false;
   if (!rule) return true;
   if (rule.types && m.type !== undefined && !rule.types.includes(m.type))
     return false;
   return rule.allowed(m);
 }
 
-export interface BranchTie {
+interface BranchTie {
   academyId: string;
   organizationId: string;
   name: string;
 }
 
-export type PostLoginTarget<T extends BranchTie = BranchTie> =
+type PostLoginTarget<T extends BranchTie = BranchTie> =
   | { kind: "join" }
   | { kind: "openGym"; organizationId: string; name: string }
   | { kind: "openBranch"; academyId: string; name: string }
@@ -220,7 +242,10 @@ const BRANCH_OWNED_PREFIXES = ["/class", "/attendance"];
 export function switchEntityHref(
   pathname: string,
   search: string,
-  target: { id: string } & Membership & { type?: string },
+  target: { id: string } & Membership & {
+      type?: string;
+      referralsEnabled?: boolean;
+    },
 ): string {
   const within = pathWithinEntity(pathname);
   const portable =

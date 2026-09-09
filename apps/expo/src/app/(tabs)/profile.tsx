@@ -1,16 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { Linking, Platform, Pressable, ScrollView, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
-import type { PaymentStatus } from "@matops/domain";
 import {
   academyMapUrl,
   disciplineLabel,
   formatMoney,
   formatRank,
   isBjjAcademy,
-  PAYMENT_STATUS_LABEL,
 } from "@matops/domain";
 import { UpdateProfileSchema } from "@matops/validators";
 
@@ -18,7 +16,7 @@ import { AppHeader } from "~/components/app-header";
 import { SettingsIcon } from "~/components/icons";
 import { OverdueBanner } from "~/components/overdue-banner";
 import { useRefreshControl } from "~/components/refresh";
-import { DuesSkeleton, RankSkeleton } from "~/components/skeletons";
+import { RankSkeleton } from "~/components/skeletons";
 import {
   Banner,
   Button,
@@ -34,7 +32,6 @@ import {
   Muted,
   Screen,
   Stack,
-  StatusPill,
   TextField,
   Txt,
   useTheme,
@@ -152,12 +149,6 @@ function ProfileDetails({
   );
 }
 
-const STATUS_TONE: Record<PaymentStatus, "success" | "warning" | "error"> = {
-  paid: "success",
-  due_soon: "warning",
-  overdue: "error",
-};
-
 /**
  * Membership dues (spec S9, ADR 40) — manual bank transfer. Shows what you owe +
  * status, the gym's requisites with a fixed reference code to copy, and an
@@ -208,7 +199,7 @@ function MembershipNotice() {
                 value={m.reference}
                 data
               />
-              {m.claimedAt ? (
+              {m.reportedAt ? (
                 <Txt size={13} tone="muted">
                   Payment submitted — waiting for your gym to confirm.
                 </Txt>
@@ -266,189 +257,6 @@ function MembershipChangeNotice() {
         </Card>
       ))}
     </Stack>
-  );
-}
-
-function MembershipDues() {
-  const [error, setError] = useState<string | null>(null);
-  const dues = useQuery(trpc.payments.myDues.queryOptions());
-  const claim = useMutation(
-    trpc.payments.claim.mutationOptions({
-      onSuccess: () => void dues.refetch(),
-      onError: (err) => setError(err.message || "Could not submit"),
-    }),
-  );
-
-  if (dues.isPending) return <DuesSkeleton />;
-  if (dues.isError) {
-    return <ErrorState label="your dues" onRetry={() => void dues.refetch()} />;
-  }
-
-  const { dues: d, requisites, openClaim, canPay, canChoosePlan } = dues.data;
-
-  if (!d && canChoosePlan) return <ChoosePlanCard />;
-
-  if (!d && !requisites.bankDetails) {
-    return (
-      <Txt size={14} tone="muted">
-        Your gym hasn’t set up membership dues yet.
-      </Txt>
-    );
-  }
-
-  return (
-    <Card variant="outline" style={{ gap: 16 }}>
-      {d ? (
-        <View style={{ gap: 4 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Mono size={18} weight={600}>
-              {formatMoney(d.amountMinor, d.currency)}
-            </Mono>
-            <StatusPill
-              tone={STATUS_TONE[d.status]}
-              label={PAYMENT_STATUS_LABEL[d.status]}
-            />
-          </View>
-          <Txt size={14} tone="muted">
-            {d.planName} · due{" "}
-            <Mono size={14} tone="muted">
-              {new Date(d.nextDueAt).toLocaleDateString()}
-            </Mono>
-          </Txt>
-        </View>
-      ) : null}
-
-      {requisites.bankDetails ? (
-        <View style={{ gap: 12 }}>
-          <CopyField label="Bank details" value={requisites.bankDetails} />
-          <CopyField
-            label="Reference (add to your transfer)"
-            value={requisites.reference}
-            data
-          />
-        </View>
-      ) : (
-        <Txt size={14} tone="muted">
-          Ask your gym for their bank details to pay.
-        </Txt>
-      )}
-
-      {error ? (
-        <Txt size={14} tone="error">
-          {error}
-        </Txt>
-      ) : null}
-
-      {d ? (
-        openClaim ? (
-          <Txt size={14} tone="muted">
-            Payment submitted — waiting for your gym to confirm.
-          </Txt>
-        ) : (
-          <Button
-            label={claim.isPending ? "Submitting…" : "I paid"}
-            loading={claim.isPending}
-            disabled={!canPay || !requisites.bankDetails}
-            onPress={() =>
-              confirm({
-                title: "Mark this as paid?",
-                message:
-                  "This tells your gym you sent the transfer. They'll confirm it once the money arrives.",
-                confirmLabel: "I paid",
-                destructive: false,
-                onConfirm: () => {
-                  setError(null);
-                  claim.mutate({});
-                },
-              })
-            }
-          />
-        )
-      ) : null}
-    </Card>
-  );
-}
-
-function ChoosePlanCard() {
-  const queryClient = useQueryClient();
-  const [error, setError] = useState<string | null>(null);
-  const plans = useQuery(trpc.payments.planOptions.queryOptions());
-  const choose = useMutation(
-    trpc.payments.choosePlan.mutationOptions({
-      onSuccess: async () => {
-        await queryClient.invalidateQueries(trpc.payments.pathFilter());
-      },
-      onError: (err) => setError(err.message || "Could not choose that"),
-    }),
-  );
-
-  if (plans.isPending) return <DuesSkeleton />;
-  if (plans.isError) {
-    return (
-      <ErrorState
-        label="the membership plans"
-        onRetry={() => void plans.refetch()}
-      />
-    );
-  }
-  if (plans.data.length === 0) {
-    return (
-      <Txt size={14} tone="muted">
-        Your gym hasn’t set up membership dues yet.
-      </Txt>
-    );
-  }
-
-  return (
-    <Card variant="outline" style={{ gap: 16 }}>
-      <Txt size={14} tone="muted">
-        Pick the plan you agreed with your gym. Your first payment is due on the
-        1st of next month.
-      </Txt>
-      {plans.data.map((p) => (
-        <View
-          key={p.id}
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
-          }}
-        >
-          <View style={{ flex: 1, gap: 2 }}>
-            <Txt size={15} weight={600}>
-              {p.name}
-            </Txt>
-            <Txt size={13} tone="muted">
-              {formatMoney(p.priceMinor, p.currency)} per month
-            </Txt>
-          </View>
-          <Button
-            label={choose.isPending ? "Choosing…" : "Choose"}
-            loading={choose.isPending && choose.variables.planId === p.id}
-            disabled={choose.isPending}
-            onPress={() =>
-              confirm({
-                title: `Choose ${p.name}?`,
-                message:
-                  "Your first payment is due on the 1st of next month. Ask your gym if you need a different plan later.",
-                confirmLabel: "Choose this plan",
-                destructive: false,
-                onConfirm: () => {
-                  setError(null);
-                  choose.mutate({ planId: p.id });
-                },
-              })
-            }
-          />
-        </View>
-      ))}
-      {error ? (
-        <Txt size={14} tone="error">
-          {error}
-        </Txt>
-      ) : null}
-    </Card>
   );
 }
 
@@ -635,7 +443,6 @@ export default function Profile() {
   const bjj = isBjjAcademy(current.data?.type ?? "");
   // Which gate this branch runs on, so no screen offers a setting the server
   // stopped reading (ADR 126, ADR 127).
-  const enforced = current.data?.membershipEnforced ?? false;
 
   return (
     <Screen
@@ -695,12 +502,9 @@ export default function Profile() {
                 style={{ gap: 8 }}
                 onLayout={(e) => (duesY.current = e.nativeEvent.layout.y)}
               >
-                <Eyebrow>{enforced ? "Membership" : "Membership dues"}</Eyebrow>
+                <Eyebrow>Membership</Eyebrow>
                 <MembershipNotice />
                 <MembershipChangeNotice />
-                {/* Where shared memberships decide, the branch's own dues line
-                    is not what anybody owes (ADR 126, ADR 127). */}
-                {!enforced && <MembershipDues />}
               </View>
             )}
           </>

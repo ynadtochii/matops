@@ -1,5 +1,66 @@
 # matops — Architecture Design Doc (v1)
 
+## First academy release architecture
+
+ADR 135 is the current architecture contract. The release uses a fresh database baseline and has no legacy conversion stage.
+
+`person` is the organization-owned adult student subject. It may link to one Better Auth account. Assignment and student self-service records use `person_id`. Actor, instructor, reviewer, and authentication fields keep account IDs. Guardian storage and delegated access are removed.
+
+Shared membership assignments and monthly records are the only membership payment model. Staff assign plans. `membership_month` stores explicit state, version, claim and review actors, frozen price evidence, deadline, and time zone. Rejection writes a branch coverage hold on the person. Only an explicit resolution clears that hold.
+
+Every branch stores `booking_window_days` from 1 to 90, with 7 as the default. One branch-local calendar helper defines the visible and accepted window for student and visitor reads, booking, and self check-in.
+
+All schedule writers lock the branch schedule revision. Extension adds future instances. Rebuild takes a preview version, checks the revision again, cancels stale scheduled rows, preserves historical and one-off records, never revives a cancellation, and refuses stale classes with active member or visitor bookings.
+
+`notification_notice`, `notification_recipient`, and `notification_attempt` keep delivery intent, recipient snapshots, leases, provider results, and safe failure codes. The business transaction creates the notice and inbox rows. An after-commit callback sends a bounded first batch with a timeout. Branch staff can send remaining recipients or retry failures. A provider-accepted recipient cannot be sent again.
+
+Hosted visitor booking is an application-owned service behind `/book/<academy-code>`. It uses rate limits, the branch booking window, capacity rules, schedule locking, saved confirmation notices, and private status and cancellation tokens. The external REST booking API, API keys, and allowed-origin settings do not exist.
+
+The application has no scheduled jobs, worker routes, job-run table, reminder sweep, or `CRON_SECRET`. Owners extend calendars manually. Notification recovery is an explicit staff action.
+
+Coach reports join ended classes to the current attendance review. Referral evidence joins attribution to confirmed membership months by agreement month. Rank correction and clear actions append events. Curriculum remains behind its organization setting.
+
+The text below predates ADR 135. Treat guardian, purchase, worker, scheduled job, outbox, and staged migration descriptions as superseded history.
+
+## Superseded ADR 134 architecture
+
+ADR 134 adds five structure-only migrations after 0068.
+
+`person` is the organization-owned student subject. It may point at one Better Auth user. `person_guardian` links a child person to a guardian account. Student-owned rows accept `person_id`, while actor, instructor, reviewer, and guardian fields remain account IDs. Two dry-run scripts move existing account subjects and old dues data after operators inspect their reports.
+
+Shared membership tables are the only live payment model. `entity.membership_enforced_at` now controls only whether membership payment can block new bookings at that branch. Migration 0074 refuses to drop old dues tables until the conversion script has emptied them.
+
+Production migration is staged when old dues rows exist. The deploy migrator applies the backward-compatible expansion through 0071 and stops. Operators run the person and dues conversion scripts before the next deployment applies 0072 and 0073. The deploy leaves the old tables in place during that application rollout. A later deployment applies 0074 only when `ALLOW_LEGACY_DUES_DROP=1` is set.
+
+The authenticated route layout mounts one `AppShell`. Organization routes keep a selected branch as `?branch=<id>`. Branch routes keep `/entities/<id>`. `stats.navigationSummary` returns organization work and selected-branch work through their existing scopes. The client represents loading, failure, and unavailable counts separately from zero.
+
+`attendance_correction` is an append-only record of historical changes. The API checks the actor's role before it accepts an old change and writes the change record with the attendance update.
+
+`notification_outbox` stores email work in the class transaction. Workers claim bounded rows with row locks, recover stale claims, retry failures, and send with stable delivery keys. Public visitor bookings keep a private expiring token for status and cancellation.
+
+`scheduled_job_run` records global worker status outside tenant access. The organization health reader returns only run timing plus an exhausted-email count joined through that organization's branches. GitHub Actions calls delivery every five minutes and calls membership and calendar jobs daily.
+
+The `dataTransfer` router uses organization manager access. Import preview and commit use the same parser and duplicate rules. Commit runs in one base transaction with explicit organization filters. Export pages use an ID cursor, a 500-row limit, and one export timestamp.
+
+Organization flags gate curriculum and referrals in navigation and API middleware. Both flags default to false.
+
+## Explicit attendance review (ADR 133)
+
+Status: implementation in progress. [ADR 133](/Users/kuna/projects/matops/docs/issues/133-explicit-attendance-review.md) records the decision.
+Each class stores a nullable review timestamp, reviewer user ID and roster signature.
+The signature is a stable value from sorted member and visitor row IDs, booking states and attendance states.
+A class needs review when it has no saved review or its current signature differs from the saved signature.
+The roster reader returns rows and their signature from the same SQL statement snapshot.
+Finishing compares the supplied signature with the current roster before saving the reviewer and timestamp.
+It rejects stale rosters, unresolved attendance, cancelled classes and classes that have not ended.
+A zero-present register requires explicit confirmation, including an empty register.
+
+Branch-scoped readers provide the all-time count and oldest-first list with 50-row pages.
+Date filters use branch-local calendar dates. The existing branch authorization and database isolation rules apply.
+No task table, trigger, background worker or historical fill is added. Existing classes remain unreviewed.
+Attendance marks still drive visits, rates and coach workload. Review completion does not change those statistics.
+The policy for corrections older than 14 days remains pending. Migration and release checks are still open.
+
 **Staff identity and access (ADR 132)**
 
 `entity_membership` remains the branch identity record for both staff and students. Its ID does not imply paid enrollment.
@@ -8,7 +69,6 @@ Student list readers use role classification. Approval status still controls per
 `loadStaffAccess` resolves active branch staff and inherited organization authority for coverage readers and background cancellation.
 Cancellation locks existing role records before its access check. Lists expose nullable member IDs for organization-only staff.
 No schema migration or billing cleanup is part of this change. See [ADR 132](/Users/kuna/projects/matops/docs/issues/132-staff-roster-isolation.md).
-
 
 _The design of record for **matops** (the from-scratch rebuild of the old app **MAT**). A build team starts here. Pairs with the product [spec.md](./spec.md); every decision below is a resolved wayfinder ticket (links go to the rationale)._
 
@@ -56,13 +116,13 @@ Sections 1–11 are the **conceptual design of record** (the "why", written befo
 
 **v7.5, the owner level** (ADR [127](issues/127-the-owner-level.md), migrations `0057`-`0058`, applied to **dev**) (ADR [127](issues/127-the-owner-level.md), migrations `0057`-`0058`). The organization level gets a shell of its own: a route group holding `/overview`, `/people`, `/memberships`, `/staff` and `/settings`, drawing the same frame the branch screens draw, so no URL changes. The gym's bank account moves from `payment_settings.bank_details`, which is per branch, to `membership_policy.bank_details`, which is one row for the organization and is read by both the shared standing and the legacy `payments.myDues`; the old column is dropped one deploy later. `membership_month.claimed_at` lets a member on shared memberships say they paid, with the month picked by the server and no amount stored. Activation stops being a hand-run script: `entity.setMembershipEnforced` is an owner-only organization procedure with a preview of who loses booking access, and an activated branch then shows no owner Payments item at all. Staff across branches and an announcement to every branch keep the organization read pattern unchanged: authorize the owner first, one entity-scoped transaction each, combine with a pure function. Run file: [owner-dashboard-plan.md](owner-dashboard-plan.md); detail: [owner-dashboard-detailed-plan.md](owner-dashboard-detailed-plan.md).
 
-**v7.7, the manager runs every branch, and a plan change waits for the 1st** (ADR [129](issues/129-the-manager-runs-every-branch.md), migration `0065`, applied to **dev**). `resolveEntity` admits an active organization **owner or manager** without a branch row. The synthesized standing names what they are: an owner reads `owner`, a manager reads `manager`, and `memberId` stays null when there is no `entity_membership`, so a manager who does not train there cannot book a class and management access enrols nobody as a student. `isStaff` accepts `manager`, and the new `runsBranch` predicate (an alias of `runsOrganization`, so the rule cannot fork) carries the ordinary branch work through `branchManagerProcedure` and `branchManagerIdentityProcedure`. `ownerProcedure` and `ownerIdentityProcedure` keep four actions: `membership.promote`, `membership.setRole` when the target is an owner, `membership.purge` and `academy.remove`.
+**v7.7, the manager runs every branch, and a plan change waits for the 1st** (ADR [129](issues/129-the-manager-runs-every-branch.md), migration `0065`, applied to **dev**). `resolveEntity` admits an active organization **owner or manager** without a branch row. The synthesized standing names what they are: an owner reads `owner`, a manager reads `manager`, and `memberId` stays null when there is no `entity_membership`, so a manager who does not train there cannot book a class and management access enrols nobody as a student. `isStaff` accepts `manager`, and the new `runsBranch` predicate (an alias of `runsOrganization`, so the rule cannot fork) carries the ordinary branch work through `branchManagerProcedure` and `branchManagerIdentityProcedure`. `ownerProcedure` and `ownerIdentityProcedure` keep four actions: `membership.promote`, `membership.purge` and `academy.remove`; instructor roles come only from instructor invite approval.
 
 **`access_assignment` carries a period.** `end_month` is nullable and **exclusive**, the lifetime unique index on `(plan_id, user_id)` is replaced by a partial unique index on `(plan_id, user_id, start_month)` for non-cancelled rows, and two live periods of one plan are refused by the writer under a `FOR UPDATE` lock on the person's rows. `access_assignment_change` records source, target, effective month, the source's previous end month, and who scheduled or cancelled it; **pending and applied are derived from the calendar**, never stored, so no job has to run for a boundary to happen. One pure `appliesInMonth` in `packages/domain/src/access-plan.ts` is called by `loadMembershipAccess`, `loadRosterStanding`, `membershipStanding`, the month board, the payment tally and both membership sweeps; `assignmentAppliesNow` / `assignmentAppliesInMonth` in `packages/api/src/membership-status.ts` are the SQL half for counts that have no month in hand. Erase and the seed teardown delete `access_assignment_change` before the assignments it points at.
 
 **Coverage and cancellation.** `accessPlan.setCoverage` enrols the plan's live holders at a branch it just added, in the same call, through the shared `reconcilePlanHolders`; `accessPlan.list` derives per-plan `gaps` so the retry button shows only while work is outstanding, and a preview carries the plan's `updated_at` as a version the save rechecks. `bookingsNeedingReview` in `packages/api/src/membership-access.ts` is a **derived** read of future bookings at a branch that will not admit the person at session time, combined across branches by `accessPlan.bookingsToReview` one entity scope at a time; there is no booking status and no task table, and an unpaid month is deliberately not a reason.
 
-**The shell.** `NavItem` gains `group` and `onSelect`, so `ShellFrame` renders grouped navigation and the branch shell draws `Gym management` beside the branch's own items, with gym paths namespaced `gym:` so the branch's `isCurrent` cannot light them up. `switchEntityHref` in `packages/domain/src/entity.ts` carries a compatible route and a small allowlist of query parameters across a branch switch and drops person, class and session ids. `postLoginTarget` now checks the gyms the caller RUNS before their branch ties, and `listOwnedOrganizations` includes managers. `/staff` redirects to `/people?tab=staff`, `DirectoryEntry` carries `memberId`, and `entity.setBranchRole` / `entity.decideAtBranch` are organization-tier writes that verify the target branch before opening its scope and refuse any path to an owner.
+**The shell.** `NavItem` gains `group` and `onSelect`, so `ShellFrame` renders grouped navigation and the branch shell draws `Gym management` beside the branch's own items, with gym paths namespaced `gym:` so the branch's `isCurrent` cannot light them up. `switchEntityHref` in `packages/domain/src/entity.ts` carries a compatible route and a small allowlist of query parameters across a branch switch and drops person, class and session ids. `postLoginTarget` now checks the gyms the caller RUNS before their branch ties, and `listOwnedOrganizations` includes managers. `/staff` redirects to `/people?tab=staff`, `DirectoryEntry` carries `memberId`, and `entity.addStudentToBranch` / `entity.decideAtBranch` are organization-tier writes that verify the target branch before opening its scope and refuse any path to an owner.
 
 **v7.6, finishing the organization pivot** (ADR [128](issues/128-registration-creates-the-organization-only.md), migration `0060` onward). **Registration writes the organization row and the owner `member` row and nothing else.** `provisionOrganization` loses both call sites, the `afterCreateOrganization` hook in `packages/auth/src/index.ts` and the second call inside `academy.create`, and is deleted with them: it existed to write an organization and a mat as one unit, which is the thing being split. Creation returns `organizationId`, refreshes the active-organization session cookie and lands the owner on `/overview`.
 
@@ -223,7 +283,7 @@ Settings had collected five unrelated controls, four of which were the setup ste
 
 A screen of per-coach figures could not be built until the column it reads was true. `class.instructor_id` has been `NOT NULL` since Phase 2, but both create paths fell back to `input.instructorId ?? ctx.session.user.id`, no client ever sent the field, and the web never called `class.update`, so the column held whoever typed the template in. It also had no FK and no RLS of its own, so any staff member could write an arbitrary user id into it. The wave therefore ships attribution first: a **coach picker** on the O3 template form and the O2 one-off form fed by a new staff-tier `membership.instructors` read (not the owner-only `membership.staff`, which carries emails and returns `member.id` where this needs `user.id`), a **`class.setInstructor`** mutation behind a narrow `SetClassInstructorSchema` so a cover night cannot overwrite the title or capacity as a side effect, and **`requireInstructor`** in `packages/api/src/members.ts` guarding all four write paths. `canReassignCoach` lets any staff set the coach on a class that has not started and restricts a finished one to owners; `classChange` now takes **`now`** (required, so the compiler forced the one call site to decide) and returns `historyOnly`, so correcting a past class notifies nobody. The notification block moved out of `class.update` into a shared `notifyBookedOfChange`.
 
-The numbers are the pure **`packages/domain/src/coach.ts`**: `coachWorkload` / `coachWorkloadFor` / `coachBreakdown` / `coachWindowRange` / `COACH_WINDOWS` / `canReassignCoach` / `formatMatTime`. `localDate` moved out of `stats.ts` into **`local-date.ts`** so both stat engines draw academy-zone boundaries with one helper. `stats.coaches` (owner) and `stats.coach` (staff, own unless owner) run two bounded reads on the RLS-scoped `ctx.db` covered by `cl_by_academy_start` / `cp_by_academy_class`, then the engine; read-time, no cache, the ADR 39 call. `/coaches` is a staff nav item. **Averages divide by marked classes, drop-ins are not visits, and cards are name-ordered and never sorted by headcount.** No migration, no new table, no scheduler. The planned O1 unmarked-classes nudge was **dropped as already built**: `needsAttendance` has driven the dashboard "Classes to mark" queue since v1.2 with a better rule.
+The numbers are the pure **`packages/domain/src/coach.ts`**: `coachWorkload` / `coachWorkloadFor` / `coachBreakdown` / `coachWindowRange` / `COACH_WINDOWS` / `canReassignCoach` / `formatMatTime`. `localDate` moved out of `stats.ts` into **`local-date.ts`** so both stat engines draw academy-zone boundaries with one helper. `stats.coaches` (owner) and `stats.coach` (staff, own unless owner) run two bounded reads on the RLS-scoped `ctx.db` covered by `cl_by_academy_start` / `cp_by_academy_class`, then the engine; read-time, no cache, the ADR 39 call. `/coaches` is a staff nav item. **Averages divide by marked classes, drop-ins are not visits, and cards are name-ordered and never sorted by headcount.** No migration, no new table, no scheduler. ADR 133 replaces the dashboard missing-attendance heuristic with explicit review. Coach statistics keep their existing attendance-based rules.
 
 **v2.4 as-built (Frontend review fixes; ADR [59](issues/59-join-link-prefills-only.md)):**
 

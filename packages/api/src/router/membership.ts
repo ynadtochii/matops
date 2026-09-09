@@ -20,24 +20,20 @@ import {
   hasOtherMemberships,
   hasSiblingEntityMemberships,
   inArray,
+  isNull,
   linkLeadOnJoin,
+  or,
   recordMilestone,
   resolveInviteToken,
-  setMemberRoleIfNotLastOwner,
   setMemberRoleStatus,
   setMemberStatus,
   setMemberStatusIfNotLastOwner,
   sql,
   updateUserProfile,
 } from "@matops/db";
-import {
-  classInstance,
-  classParticipation,
-  paymentClaim,
-} from "@matops/db/schema";
+import { classInstance, classParticipation, entity } from "@matops/db/schema";
 import {
   approveMembership,
-  bookingAccess,
   canApprove,
   canDecideSeat,
   classifyDrift,
@@ -49,12 +45,9 @@ import {
   isStaffRole,
   isStudentMember,
   isSuspended,
-  paymentStatus,
-  runsBranch,
   trainingStats,
 } from "@matops/domain";
 import {
-  InviteRoleSchema,
   JoinAcademySchema,
   JoinByCodeSchema,
   MemberActionSchema,
@@ -71,7 +64,6 @@ import {
 } from "../members";
 import { loadRosterStanding } from "../membership-access";
 import { LAST_OWNER } from "../messages";
-import { readAllDuesWithPlan, readPaymentSettings } from "../payments-read";
 import {
   branchManagerIdentityProcedure,
   branchManagerProcedure,
@@ -186,7 +178,7 @@ async function rejectIfLastOwner(
  */
 async function releaseUpcomingSeats(
   ctx: { db: TenantTx; academyId: string },
-  userId: string,
+  input: { personId: string | null; accountUserId: string | null },
 ): Promise<number> {
   const now = new Date();
   const cancelled = await ctx.db
@@ -194,7 +186,17 @@ async function releaseUpcomingSeats(
     .set({ bookingStatus: "cancelled", cancelledAt: now })
     .where(
       and(
-        eq(classParticipation.studentId, userId),
+        or(
+          input.personId
+            ? eq(classParticipation.personId, input.personId)
+            : undefined,
+          input.accountUserId
+            ? and(
+                isNull(classParticipation.personId),
+                eq(classParticipation.studentId, input.accountUserId),
+              )
+            : undefined,
+        ),
         eq(classParticipation.bookingStatus, "booked"),
         inArray(
           classParticipation.classId,
@@ -245,16 +247,14 @@ async function requireBranchLifecycleChange(
     baseDb: BaseContext["baseDb"];
     membership: Membership;
   },
-  target: { role: string; userId: string },
+  target: { role: string; accountUserId: string | null },
 ): Promise<void> {
   if (target.role === "owner" && !isOwner(ctx.membership)) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Owner only" });
   }
-  const organizationMembership = await getMembership(
-    target.userId,
-    ctx.organizationId,
-    ctx.baseDb,
-  );
+  const organizationMembership = target.accountUserId
+    ? await getMembership(target.accountUserId, ctx.organizationId, ctx.baseDb)
+    : null;
   if (
     organizationMembership?.role === "owner" ||
     organizationMembership?.role === "manager"
@@ -344,96 +344,44 @@ export const membershipRouter = {
       );
       const visits = await ctx.db
         .select({
-          studentId: classParticipation.studentId,
+          studentId: sql<string>`coalesce(${classParticipation.personId}::text, ${classParticipation.studentId})`,
           count: sql<number>`count(*)::int`,
         })
         .from(classParticipation)
         .where(eq(classParticipation.attendanceStatus, "present"))
-        .groupBy(classParticipation.studentId);
+        .groupBy(
+          sql`coalesce(${classParticipation.personId}::text, ${classParticipation.studentId})`,
+        );
       const visitByUser = new Map(visits.map((v) => [v.studentId, v.count]));
 
-      // Per-member dues + derived payment status (slice P.2, ADR 40). All three
-      // reads run on the RLS-scoped `ctx.db` (the payment tables carry academy_id
-      // policies), so no explicit academy pin is needed here. `member_dues.memberId`
-      // is the `member.id`, aligning with the member row's `memberId`.
-      const duesRows = await readAllDuesWithPlan(ctx.db);
-      const duesByMember = new Map(duesRows.map((d) => [d.memberId, d]));
-
-      const confirmed = await ctx.db
-        .select({
-          memberId: paymentClaim.memberId,
-          lastConfirmedAt: sql<Date | null>`max(${paymentClaim.confirmedAt})`,
-        })
-        .from(paymentClaim)
-        .where(eq(paymentClaim.status, "confirmed"))
-        .groupBy(paymentClaim.memberId);
-      const lastConfirmedByMember = new Map(
-        confirmed.map((c) => [c.memberId, c.lastConfirmedAt]),
-      );
-
       const now = new Date();
-      // Where each person stands on their shared memberships, in three queries
-      // for the whole roster rather than three each (ADR 126).
-      const standing = ctx.entity.membershipEnforcedAt
-        ? await loadRosterStanding(ctx.db, {
-            entityId: ctx.academyId,
-            people: rows.map((r) => ({
-              userId: r.userId,
-              status: r.status,
-              role: r.role,
-            })),
-            now,
-          })
-        : null;
-      // Money is the owner group's business, not the coach's: an instructor runs
-      // the desk (approve, rank) and gets the same roster without the dues
-      // figures.
-      const seesDues = runsBranch(ctx.membership);
-      // Never two gates on one screen (ADR 126): at an activated branch the
-      // shared membership decides, so the legacy dues state is not consulted.
-      const gate =
-        seesDues && !ctx.entity.membershipEnforcedAt
-          ? await readPaymentSettings(ctx.db)
-          : null;
-      const openClaimMembers = new Set(
-        gate?.enforcedAt
-          ? (
-              await ctx.db
-                .select({ memberId: paymentClaim.memberId })
-                .from(paymentClaim)
-                .where(eq(paymentClaim.status, "pending"))
-            ).map((c) => c.memberId)
-          : [],
-      );
+      const [academy] = await ctx.db
+        .select({ membershipEnforcedAt: entity.membershipEnforcedAt })
+        .from(entity)
+        .where(eq(entity.id, ctx.academyId));
+      const standing = await loadRosterStanding(ctx.db, {
+        entityId: ctx.academyId,
+        people: rows.map((r) => ({
+          userId: r.userId,
+          status: r.status,
+          role: r.role,
+        })),
+        now,
+      });
       return rows.filter(isOnRoster).map((r) => {
-        const d = seesDues ? duesByMember.get(r.memberId) : undefined;
-        const access =
-          gate && r.role === "student" && r.status === "active"
-            ? bookingAccess(
-                {
-                  enforcedAt: gate.enforcedAt,
-                  graceDays: gate.graceDays,
-                  memberSince: r.createdAt,
-                  nextDueAt: duesByMember.get(r.memberId)?.nextDueAt ?? null,
-                  hasOpenClaim: openClaimMembers.has(r.memberId),
-                },
-                now,
-              )
-            : null;
-        const membership = standing?.get(r.userId) ?? null;
+        const membership = standing.get(r.userId) ?? null;
         return {
-          access,
-          // Why they are on this roster and where they stand. Null at a branch
-          // still on the legacy gate, so nothing shows a half-answer there.
-          membership: membership
-            ? {
-                verdict: membership.verdict,
-                accessSource: membership.accessSource,
-                covered: membership.covered,
-                planNames: membership.planNames,
-              }
-            : null,
+          membership:
+            academy?.membershipEnforcedAt && membership
+              ? {
+                  verdict: membership.verdict,
+                  accessSource: membership.accessSource,
+                  covered: membership.covered,
+                  planNames: membership.planNames,
+                }
+              : null,
           memberId: r.memberId,
+          personId: r.personId,
           // A shared membership keys on the person, not on their standing at one
           // branch, so the member profile needs the user id to read it (ADR 126).
           userId: r.userId,
@@ -445,18 +393,6 @@ export const membershipRouter = {
           invitedRole: r.invitedRole,
           joinedAt: r.createdAt,
           visitCount: visitByUser.get(r.userId) ?? 0,
-          // null = the owner has not set up dues for this member yet (P.2).
-          dues: d
-            ? {
-                status: paymentStatus(d.nextDueAt, now),
-                planId: d.planId,
-                nextDueAt: d.nextDueAt,
-                priceMinor: d.priceMinor,
-                currency: d.currency,
-                planName: d.planName,
-                lastConfirmedAt: lastConfirmedByMember.get(r.memberId) ?? null,
-              }
-            : null,
         };
       });
     }),
@@ -539,7 +475,7 @@ export const membershipRouter = {
       }
       await activateMember(ctx, {
         memberId: input.memberId,
-        userId: m.userId,
+        userId: m.accountUserId ?? m.userId,
         granted: approveMembership(m),
       });
       return { ok: true as const };
@@ -592,7 +528,13 @@ export const membershipRouter = {
         ),
       );
       const freed = await ctx.withScope((db) =>
-        releaseUpcomingSeats({ db, academyId: ctx.academyId }, m.userId),
+        releaseUpcomingSeats(
+          { db, academyId: ctx.academyId },
+          {
+            personId: m.personId === m.accountUserId ? null : m.personId,
+            accountUserId: m.accountUserId,
+          },
+        ),
       );
       return { ok: true as const, seatsFreed: freed };
     }),
@@ -609,12 +551,25 @@ export const membershipRouter = {
     .input(MemberActionSchema)
     .mutation(async ({ ctx, input }) => {
       const m = await requireMember(identityScope(ctx), input.memberId);
-      if (m.userId === ctx.session.user.id) {
+      if (m.accountUserId === ctx.session.user.id) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
           message: "You can't erase your own membership.",
         });
       }
+      if (!m.accountUserId) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Archive this person instead of erasing an account.",
+        });
+      }
+      if (!m.personId) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "This membership has no person record.",
+        });
+      }
+      const accountUserId = m.accountUserId;
       await rejectIfLastOwner(
         setMemberStatusIfNotLastOwner(
           ctx.academyId,
@@ -627,16 +582,16 @@ export const membershipRouter = {
         eraseMemberData(db, {
           academyId: ctx.academyId,
           memberId: input.memberId,
-          userId: m.userId,
+          userId: accountUserId,
           actorId: ctx.session.user.id,
         }),
       );
-      await deleteEntityMembership(ctx.baseDb, ctx.academyId, m.userId);
+      await deleteEntityMembership(ctx.baseDb, ctx.academyId, accountUserId);
       // The organization membership is what lets them into the gym's OTHER
       // mats, so it only goes once the last entity membership has (ADR 124).
       const stillHere = await hasSiblingEntityMemberships(
         ctx.baseDb,
-        m.userId,
+        accountUserId,
         ctx.organizationId,
       );
       // `member.role = "owner"` is written once, by Better Auth, when the gym is
@@ -644,7 +599,7 @@ export const membershipRouter = {
       // above counts owners of THIS mat only, so it must not be the last thing
       // standing between an owner of one mat and the founder's whole organization.
       const orgMembership = await getMembership(
-        m.userId,
+        accountUserId,
         ctx.organizationId,
         ctx.baseDb,
       );
@@ -655,16 +610,20 @@ export const membershipRouter = {
         report.access_assignment = await deleteOrganizationAssignments(
           ctx.baseDb,
           ctx.organizationId,
-          m.userId,
+          m.personId,
         );
-        await deleteMemberRow(ctx.baseDb, ctx.organizationId, m.userId);
+        await deleteMemberRow(ctx.baseDb, ctx.organizationId, accountUserId);
       }
       const elsewhere =
         stillHere ||
         foundedOrganization ||
-        (await hasOtherMemberships(ctx.baseDb, m.userId, ctx.organizationId));
+        (await hasOtherMemberships(
+          ctx.baseDb,
+          accountUserId,
+          ctx.organizationId,
+        ));
       if (!elsewhere) {
-        await deleteUserRow(ctx.baseDb, m.userId);
+        await deleteUserRow(ctx.baseDb, accountUserId);
       }
       return { ok: true as const, accountDeleted: !elsewhere, report };
     }),
@@ -728,28 +687,6 @@ export const membershipRouter = {
     }),
 
   /**
-   * Set a member's academy role: make a student an instructor, step a coach back
-   * to student, or step an owner down to instructor (spec O6). Atomic
-   * never-ownerless check: the last active owner can't be stepped down (promote
-   * a co-owner first, §4).
-   */
-  setRole: branchManagerIdentityProcedure
-    .input(MemberActionSchema.extend({ role: InviteRoleSchema }))
-    .mutation(async ({ ctx, input }) => {
-      const target = await requireMember(identityScope(ctx), input.memberId);
-      await requireBranchLifecycleChange(ctx, target);
-      await rejectIfLastOwner(
-        setMemberRoleIfNotLastOwner(
-          ctx.academyId,
-          input.memberId,
-          input.role,
-          ctx.baseDb,
-        ),
-      );
-      return { ok: true as const };
-    }),
-
-  /**
    * Active staff as class-instructor options (spec O10, K.1). Deliberately NOT
    * `staff` above: that one is owner-only and carries emails, while this feeds a
    * picker every staff member opens. It returns `userId`, because
@@ -757,13 +694,18 @@ export const membershipRouter = {
    */
   instructors: staffProcedure.query(async ({ ctx }) => {
     const rows = await staffOf(ctx);
-    return rows.map((r) => ({ userId: r.userId, name: r.name, role: r.role }));
+    return rows.flatMap((r) =>
+      r.accountUserId
+        ? [{ userId: r.accountUserId, name: r.name, role: r.role }]
+        : [],
+    );
   }),
 
   staff: branchManagerProcedure.query(async ({ ctx }) => {
     const rows = (await directoryRosterOf(ctx)).filter(isStaffRole);
     return rows.map((r) => ({
       memberId: r.memberId,
+      personId: r.personId,
       userId: r.userId,
       inheritedRole: r.inheritedRole,
       name: r.name,

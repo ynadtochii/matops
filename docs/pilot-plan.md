@@ -1,9 +1,19 @@
 # Pilot plan — friends' gyms, remote
 
-**Status: this is the active plan.** Unlike
+**Status: active pilot guide under ADR 135.** Unlike
 [business-model.md](business-model.md), [revenue-collection.md](revenue-collection.md)
 and [card-billing-plan.md](card-billing-plan.md), which are parked reference, this
 is what happens next.
+
+The first academy release now uses a fresh database contract. The current operating facts are:
+
+- Students need branch approval and a staff-assigned plan. There is no student plan shop.
+- The payment register uses monthly unpaid, reported, confirmed, and rejected states. MatOps does not move money.
+- There are no automatic reminders, calendar sweeps, delivery workers, or job health checks.
+- Owners extend the calendar manually. A rebuild previews exact changes and refuses booked stale classes.
+- Hosted visitor booking lives at `/book/<academy-code>`. There is no external public API, API key, or allowed-origin setup.
+- Email sends a bounded first batch after a class or visitor action. Staff handle remaining and failed recipients in Notifications.
+- Each branch sets a 1-90 day booking window. The default is 7 local calendar days.
 
 Written 2026-08-22 against the working tree at v3.0 (commit `b798d2c`).
 
@@ -62,7 +72,7 @@ it.
 | 2 | ~~**Sentry**~~ **DONE** (ADR 72 + 76) | **The single most important item on this page.** You are not in the room. Without it a coach hits a bug on Tuesday, shrugs, goes back to WhatsApp, and you never learn it happened. **Free tier covers this pilot** (see below) | 1-2 h |
 | 3 | ~~**`error.tsx` + `global-error.tsx`**~~ **DONE** (ADR 72) | Right now a client exception shows a stranger's student a blank "Application error" page. Cheapest fix here and the most visible failure | 1 h |
 | 4 | ~~**Rate limiting** on `dropIn.submit`, `invite.resolve`, magic-link send~~ **DONE** (ADR 76) | The join QR goes on a public wall. Anyone can flood the lead table and burn the Resend quota, which kills sign-in for every gym at once. Better Auth ships this as one config block (roadmap 5.2) | 2 h |
-| 5 | ~~**Materialization self-heal on schedule read**~~ **DONE** (ADR 76, then ADR 78: the daily cron sweeps the horizon, the read does not) | Classes materialize only on template write, 42 days forward (`template.ts:70`). A pilot running past week 6 silently shows an **empty calendar**. ADR 46 already names this as its Option B; the sweep exists and is tested | 2-3 h |
+| 5 | ~~**Owner schedule recovery**~~ **DONE** | Templates generate future classes. The owner can extend the calendar. A versioned rebuild preview shows exact changes and refuses booked stale classes. | 2-3 h |
 | 6 | **Rotate `AUTH_SECRET`** | The old auth error hook logged it (ADR 60). Rotating kills every live session, so it happens **before** the pilot, never during | 15 min |
 | 7 | ~~**Prove Resend works in production**~~ **DONE** | `sendEmail` no-ops silently when the env vars are missing, so a missing key in Vercel looks exactly like "the magic link never arrives", with no error anywhere. Send yourself one from the live site | 15 min |
 | 8 | ~~**Privacy page + a real consent line** on the drop-in form~~ **DONE** (ADR 76; three placeholders still to fill in) | It collects a stranger's name, phone and email behind one line of copy with no link to anything. Friends' gyms in the EU means GDPR, and matops is the processor | 2-3 h |
@@ -98,7 +108,7 @@ nothing, which is worse than not running it.
 |---|---|---|
 | 10 | ~~**Feedback link in the sidebar**~~ **DONE** (ADR 76; footer + Profile) | Turns a frustrated coach into a bug report. One sidebar item |
 | 11 | ~~**First-run checklist on the empty dashboard**~~ **DONE** (ADR 76) | After **Start a gym** the owner lands on nothing. "1. Add your weekly classes · 2. Share your join link · 3. Print the QR." You are not there to say it out loud. Biggest product gap for a remote pilot |
-| 12 | ~~**Let instructors approve members and set rank**~~ **DONE** (ADR 76; approve, decline, roster, rank, notes. No dues figures, no invites, no leads, no suspend/remove, no role picker) | In most gyms the **head coach** does the admin, not the owner. Today both are owner-only (`beta-readiness.md` §3.4). At a friend's gym this bites in week one. Decide: fix it, or make sure the owner is the person you onboard |
+| 12 | ~~**Let instructors approve members and set rank**~~ **DONE** (ADR 76; approve, decline, roster, rank, notes. No payment figures, invites, leads, suspension, removal, or role picker) | Instructors can handle the daily student record while owners and managers retain membership payment decisions. |
 
 Item 12 is a judgement call, not an automatic yes. Ask each gym who actually
 handles new students before deciding.
@@ -109,12 +119,14 @@ Do not skip this. Run the whole thing yourself on the **live deployment**, not
 locally, with a throwaway academy:
 
 - [ ] Start a gym, set time zone and address.
-- [ ] Build a full week of templates. Confirm classes appear 6 weeks out.
+- [ ] Build a full week of templates. Extend the calendar and inspect the rebuild preview.
 - [ ] Print the join QR. Join as a student from a **different browser** and a
       **phone browser**, using a real email, through the real magic link.
 - [ ] Book, cancel, rebook.
 - [ ] Approve the student. Mark an attendance roster. Set a rank.
-- [ ] Set a plan price, assign dues, raise an "I paid" claim, confirm it.
+- [ ] Set a plan price, assign it to the student, report the month, and confirm it.
+- [ ] Book a visitor through `/book/<academy-code>`, reopen the private return link, and cancel safely.
+- [ ] Change a booked class. Check the saved notice, then send remaining or retry failed email if needed.
 - [ ] Break something on purpose and confirm **Sentry catches it**.
 - [ ] Delete the throwaway academy.
 

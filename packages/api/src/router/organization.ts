@@ -8,6 +8,7 @@ import {
   and,
   count,
   eq,
+  gt,
   inArray,
   isNull,
   listOwnedOrganizations,
@@ -20,6 +21,7 @@ import {
   accessAssignment,
   accessPlan,
   accessPlanEntity,
+  accessPlanPrice,
   classTemplate,
   entity,
   entityMembership,
@@ -33,7 +35,11 @@ import {
   setupProgress,
   slugify,
 } from "@matops/domain";
-import { CreateAcademySchema, IdSchema } from "@matops/validators";
+import {
+  CreateAcademySchema,
+  IdSchema,
+  OrganizationModulesSchema,
+} from "@matops/validators";
 
 import { studentRosterOf } from "../members";
 import { loadRosterStanding } from "../membership-access";
@@ -154,6 +160,16 @@ export const organizationRouter = {
           .select({ n: count() })
           .from(accessPlan)
           .where(isNull(accessPlan.archivedAt));
+        const [paidPlans] = await tx
+          .select({ n: count() })
+          .from(accessPlanPrice)
+          .innerJoin(accessPlan, eq(accessPlan.id, accessPlanPrice.planId))
+          .where(
+            and(
+              isNull(accessPlan.archivedAt),
+              gt(accessPlanPrice.priceMinor, 0),
+            ),
+          );
         const [assignments] = await tx
           .select({ n: count() })
           .from(accessAssignment)
@@ -164,6 +180,7 @@ export const organizationRouter = {
           name: org?.name ?? "",
           bankDetails: (policy?.bankDetails ?? "").trim().length > 0,
           plans: plans?.n ?? 0,
+          paidPlans: paidPlans?.n ?? 0,
           assignments: assignments?.n ?? 0,
         };
       },
@@ -242,10 +259,6 @@ export const organizationRouter = {
               ),
             );
 
-          // Only a branch that RUNS on memberships can have an uncovered
-          // member: at one still on branch dues the question has no meaning,
-          // and counting it would tell an owner to fix something the gate
-          // there does not ask about (ADR 127 §5).
           let uncovered = 0;
           if (branch.membershipEnforcedAt) {
             const active = (
@@ -317,6 +330,7 @@ export const organizationRouter = {
       branchesScheduled,
       instructors,
       bankDetails: gym.bankDetails,
+      paidPlans: gym.paidPlans,
       plans: gym.plans,
       assignments: gym.assignments,
       uncoveredMembers,
@@ -351,6 +365,29 @@ export const organizationRouter = {
     if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "No gym" });
     return row;
   }),
+
+  modules: organizationManagerIdentityProcedure.query(async ({ ctx }) => {
+    const [row] = await ctx.baseDb
+      .select({
+        curriculumEnabled: organization.curriculumEnabled,
+        referralsEnabled: organization.referralsEnabled,
+      })
+      .from(organization)
+      .where(eq(organization.id, ctx.organizationId))
+      .limit(1);
+    if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "No gym" });
+    return row;
+  }),
+
+  setModules: organizationManagerIdentityProcedure
+    .input(OrganizationModulesSchema)
+    .mutation(async ({ ctx, input }) => {
+      await ctx.baseDb
+        .update(organization)
+        .set(input)
+        .where(eq(organization.id, ctx.organizationId));
+      return input;
+    }),
 
   /**
    * Rename the gym. Writes `organization.name` and nothing else: each branch

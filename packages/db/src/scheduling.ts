@@ -1,13 +1,16 @@
 import { sql } from "drizzle-orm";
 import {
   check,
+  foreignKey,
   index,
   pgEnum,
   pgTable,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
+import { user } from "./auth-schema";
 import { entity } from "./entity-schema";
+import { person } from "./person-schema";
 
 /**
  * Scheduling domain schema (Phase 2). Owns ONLY the scheduling tables; identity
@@ -31,7 +34,7 @@ export const discipline = pgEnum("discipline", [
 ]);
 
 /** Template lifecycle: `active` generates future classes; `paused` stops (docs/issues/16). */
-export const templateStatus = pgEnum("template_status", ["active", "paused"]);
+const templateStatus = pgEnum("template_status", ["active", "paused"]);
 
 /**
  * Concrete-class lifecycle. Only two values (docs/issues/19): a class is
@@ -162,9 +165,9 @@ export const classInstance = pgTable(
     bookingCount: t.integer().notNull().default(0),
     publicBookable: t.boolean().notNull().default(false),
     status: classStatus().notNull().default("scheduled"),
-    // Phase 4 (docs/issues/17): stamped when the reminder cron has pushed this
-    // class's reminder, so a re-run never double-sends (idempotency guard).
-    reminderSentAt: t.timestamp({ withTimezone: true }),
+    attendanceReviewedAt: t.timestamp({ withTimezone: true }),
+    attendanceReviewedBy: t.text(),
+    attendanceReviewFingerprint: t.text(),
     deletedAt: t.timestamp({ withTimezone: true }),
     createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: t
@@ -184,9 +187,6 @@ export const classInstance = pgTable(
     // Idempotent materialization: a template yields at most one class per instant.
     // Postgres treats NULL template_id as distinct, so multiple one-offs are fine.
     uniqueIndex("cl_uniq_template_start").on(table.templateId, table.startsAt),
-    index("cl_reminder_due")
-      .on(table.startsAt)
-      .where(sql`reminder_sent_at IS NULL AND deleted_at IS NULL`),
     check("cl_description_bounded", sql`char_length(description) <= 500`),
     check(
       "cl_capacity_policy_supported",
@@ -221,7 +221,9 @@ export const classParticipation = pgTable(
       .uuid()
       .notNull()
       .references(() => classInstance.id),
-    studentId: t.text().notNull(), // → user.id
+    studentId: t.text(), // → user.id
+    personOrganizationId: t.text(),
+    personId: t.uuid(),
     bookingStatus: bookingStatus().notNull().default("booked"),
     bookingTier: bookingTier().notNull(),
     bookedAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -241,10 +243,64 @@ export const classParticipation = pgTable(
     // One booking per person per class → stops double-book, enables the re-book
     // upsert (ON CONFLICT flips cancelled → booked).
     uniqueIndex("cp_uniq_class_student").on(table.classId, table.studentId),
+    uniqueIndex("cp_uniq_class_person")
+      .on(table.classId, table.personId)
+      .where(sql`person_id is not null`),
     // Per-class attendee lookups (owner attendance, slice 3.3).
     index("cp_by_academy_class").on(table.academyId, table.classId),
     // "My bookings" join for the student schedule + detail reads.
     index("cp_by_academy_student").on(table.academyId, table.studentId),
+    index("cp_by_academy_person").on(table.academyId, table.personId),
+    foreignKey({
+      name: "class_participation_person_same_org",
+      columns: [table.personOrganizationId, table.personId],
+      foreignColumns: [person.organizationId, person.id],
+    }),
+    check(
+      "class_participation_has_subject",
+      sql`student_id is not null or person_id is not null`,
+    ),
+    check(
+      "class_participation_person_complete",
+      sql`(person_organization_id is null) = (person_id is null)`,
+    ),
+  ],
+);
+
+export const attendanceCorrection = pgTable(
+  "attendance_correction",
+  (t) => ({
+    id: t.uuid().notNull().primaryKey().defaultRandom(),
+    academyId: t
+      .text()
+      .notNull()
+      .references(() => entity.id),
+    classId: t
+      .uuid()
+      .notNull()
+      .references(() => classInstance.id),
+    kind: t.text().notNull(),
+    subjectId: t.text(),
+    beforeValue: t.text(),
+    afterValue: t.text(),
+    reason: t.text().notNull(),
+    actorId: t.text().references(() => user.id, { onDelete: "set null" }),
+    createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
+  }),
+  (table) => [
+    index("attendance_correction_by_class").on(
+      table.academyId,
+      table.classId,
+      table.createdAt,
+    ),
+    check(
+      "attendance_correction_kind_supported",
+      sql`kind in ('member','visitor','review')`,
+    ),
+    check(
+      "attendance_correction_reason_bounded",
+      sql`char_length(reason) between 3 and 500`,
+    ),
   ],
 );
 
@@ -252,7 +308,7 @@ export const classParticipation = pgTable(
  * Where a lead came from (ADR 115). Without it the gym cannot tell which
  * channel is working, and the channel is the point of the public API.
  */
-export const leadSource = pgEnum("lead_source", [
+const leadSource = pgEnum("lead_source", [
   "link",
   "web",
   "wall_qr",
@@ -265,7 +321,7 @@ export const leadSource = pgEnum("lead_source", [
  * did: someone who trained twice and was never followed up is still `new`, and
  * that row is the one worth showing. `ghosted` deletes nothing.
  */
-export const leadStage = pgEnum("lead_stage", [
+const leadStage = pgEnum("lead_stage", [
   "new",
   "contacted",
   "invited",
@@ -349,6 +405,8 @@ export const dropInVisit = pgTable(
     // Returned once to the public caller; the only handle that cancels a
     // visitor booking, so it is never listed by any read endpoint.
     cancelToken: t.text(),
+    cancelTokenExpiresAt: t.timestamp({ withTimezone: true }),
+    bookedClassStartsAt: t.timestamp({ withTimezone: true }),
     bookedAt: t.timestamp({ withTimezone: true }),
     cancelledAt: t.timestamp({ withTimezone: true }),
     attendedAt: t.timestamp({ withTimezone: true }),

@@ -27,16 +27,12 @@ const journal = JSON.parse(
   ),
 );
 const expected = journal.entries.length;
-
-const LOCK = 4021979;
-const client = new pg.Client({
-  connectionString: url.replace("-pooler", ""),
-});
+const client = new pg.Client({ connectionString: url.replace("-pooler", "") });
+const lock = 4021979;
 
 await client.connect();
 try {
-  await client.query("select pg_advisory_lock($1)", [LOCK]);
-
+  await client.query("select pg_advisory_lock($1)", [lock]);
   console.log(`[migrate:deploy] journal has ${expected} entries, applying`);
   execFileSync("pnpm", ["exec", "drizzle-kit", "migrate"], {
     cwd: pkgRoot,
@@ -47,19 +43,14 @@ try {
   const { rows } = await client.query(
     "select count(*)::int as n from drizzle.__drizzle_migrations",
   );
-  const applied = rows[0].n;
-
+  const applied = rows[0]?.n;
   if (applied !== expected) {
     throw new Error(
-      `[migrate:deploy] ${applied} rows in drizzle.__drizzle_migrations, journal has ${expected}.\n` +
-        `  drizzle-kit skips any entry whose "when" is not newer than the last\n` +
-        `  applied row and still reports success. Fix the "when" stamps in\n` +
-        `  packages/db/migrations/meta/_journal.json and redeploy.`,
+      `[migrate:deploy] ${applied} rows in drizzle.__drizzle_migrations, journal has ${expected}`,
     );
   }
-
   console.log(`[migrate:deploy] ok: ${applied} migrations applied`);
 } finally {
-  await client.query("select pg_advisory_unlock($1)", [LOCK]).catch(() => null);
+  await client.query("select pg_advisory_unlock($1)", [lock]).catch(() => null);
   await client.end();
 }

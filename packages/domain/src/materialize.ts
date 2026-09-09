@@ -14,7 +14,7 @@ import { MINUTES_PER_DAY } from "./schedule";
  * whether that maps to 15:00 or 16:00 UTC across a spring/autumn transition.
  */
 
-export interface RecurrenceSpec {
+interface RecurrenceSpec {
   /** 0=Sun … 6=Sat. */
   daysOfWeek: number[];
   /** Minutes from LOCAL midnight (0…1439). */
@@ -24,7 +24,7 @@ export interface RecurrenceSpec {
 }
 
 /** The calendar date (Y/M/D) seen in `timeZone` at a given UTC instant. */
-export function localDateParts(
+function localDateParts(
   instant: Date,
   timeZone: string,
 ): { year: number; month: number; day: number } {
@@ -53,7 +53,7 @@ export function localDateISO(instant: Date, timeZone: string): string {
  * the zone offset (incl. DST) for us. Exported for one-off class create/reschedule
  * (slice 2.3), which need the same local→UTC rule the recurring engine uses.
  */
-export function instantFromLocal(
+function instantFromLocal(
   local: { year: number; month: number; day: number },
   startsAtMinutes: number,
   timeZone: string,
@@ -139,7 +139,7 @@ export function computeOccurrences(
 }
 
 /** An existing concrete class, reduced to what the rebuild rule compares. */
-export interface ExistingClass {
+interface ExistingClass {
   id: string;
   /** Null for a one-off the owner entered by hand, which no template recreates. */
   templateId: string | null;
@@ -147,7 +147,7 @@ export interface ExistingClass {
 }
 
 /** An instant an active template still produces. */
-export interface WantedOccurrence {
+interface WantedOccurrence {
   templateId: string;
   startsAt: Date;
 }
