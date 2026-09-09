@@ -29,7 +29,7 @@ import { sendPush } from "@matops/notifications";
  * transaction rather than holding a pooled connection open (docs/issues/60).
  */
 
-export type PushSender = (messages: BatchPush[]) => Promise<unknown>;
+type PushSender = (messages: BatchPush[]) => Promise<unknown>;
 
 interface Delivery {
   academyId: string;
@@ -121,7 +121,7 @@ async function academyName(academyId: string, exec: DbExec): Promise<string> {
   }
 }
 
-export interface ClassEventInput {
+interface ClassEventInput {
   academyId: string;
   className: string;
   startsAt: Date;

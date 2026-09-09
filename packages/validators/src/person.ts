@@ -32,24 +32,3 @@ export const GetPersonSchema = PersonIdSchema.extend({
 export const PersonDirectorySchema = z
   .object({ includeArchived: z.boolean().default(false) })
   .optional();
-
-export const PersonAccountCandidateSchema = z.object({
-  personId: z.uuid(),
-  email: EmailSchema,
-});
-
-export const LinkPersonAccountSchema = z.object({
-  personId: z.uuid(),
-  accountUserId: IdSchema,
-  expectedUpdatedAt: z.iso.datetime(),
-});
-
-export const UnlinkPersonAccountSchema = z.object({
-  personId: z.uuid(),
-  expectedAccountUserId: IdSchema,
-  expectedUpdatedAt: z.iso.datetime(),
-});
-
-export type CreateStudentPersonInput = z.infer<
-  typeof CreateStudentPersonSchema
->;

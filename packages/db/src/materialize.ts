@@ -69,7 +69,7 @@ type Executor = DbExec | TenantTx;
 
 type Template = typeof classTemplate.$inferSelect;
 
-export interface MaterializeOptions {
+interface MaterializeOptions {
   /** "Now" — injected so callers/tests control the clock (default: real now). */
   now?: Date;
   horizonDays?: number;
@@ -179,7 +179,7 @@ export async function materializeTemplate(
   return inserted;
 }
 
-export interface RebuildResult {
+interface RebuildResult {
   deleted: number;
   bookingsRemoved: number;
   cancelled: number;

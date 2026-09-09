@@ -19,7 +19,7 @@ export function isPubliclyBookable(startsAt: Date, now: Date): boolean {
   return startsAt.getTime() - now.getTime() > BOOKING_CUTOFF_MINUTES * 60_000;
 }
 
-export interface PublicClassInput {
+interface PublicClassInput {
   id: string;
   title: string;
   discipline: string | null;
@@ -27,7 +27,7 @@ export interface PublicClassInput {
   durationMinutes: number;
 }
 
-export interface PublicClassView {
+interface PublicClassView {
   id: string;
   title: string;
   discipline: string | null;

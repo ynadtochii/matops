@@ -3,15 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod/v4";
 
 import type { DbReader } from "@matops/db";
-import {
-  and,
-  deliverNoticeBatch,
-  desc,
-  eq,
-  isNull,
-  noticeStatus,
-  sql,
-} from "@matops/db";
+import { and, deliverNoticeBatch, desc, eq, isNull, sql } from "@matops/db";
 import {
   notification,
   notificationNotice,
@@ -92,11 +84,6 @@ export const notificationRouter = {
         ),
       );
     return { ok: true as const };
-  }),
-
-  status: staffProcedure.input(NoticeIdSchema).query(async ({ ctx, input }) => {
-    await requireNotice(ctx.db, input.noticeId);
-    return noticeStatus(ctx.db, input.noticeId);
   }),
 
   deliveryIssues: staffProcedure.query(async ({ ctx }) => {

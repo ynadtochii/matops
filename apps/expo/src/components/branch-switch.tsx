@@ -34,7 +34,7 @@ interface Branch {
  * removed query leaves its observer holding the last branch's data with nothing
  * to make it ask again.
  */
-export function useBranchSwitch() {
+function useBranchSwitch() {
   const queryClient = useQueryClient();
   const toast = useToast();
   const { data: session } = authClient.useSession();
@@ -72,7 +72,7 @@ export function useBranchSwitch() {
 }
 
 /** The list itself, as a sheet. Nothing is drawn for a one-branch member. */
-export function BranchSwitchSheet({
+function BranchSwitchSheet({
   open,
   onClose,
 }: {

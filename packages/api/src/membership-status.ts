@@ -45,7 +45,7 @@ export function assignmentAppliesInMonth(month: string | SQL) {
 /** The column default, for the read that runs before a policy row exists. */
 const DEFAULT_MEMBERSHIP_GRACE_DAYS = 7;
 
-export interface MembershipStanding {
+interface MembershipStanding {
   assignmentId: string;
   planName: string;
   status: string;

@@ -1,4 +1,4 @@
-import { and, eq, gte, isNull, lt, ne, sql } from "drizzle-orm";
+import { and, eq, gte, isNull, lt, sql } from "drizzle-orm";
 
 import type { SessionSpan } from "@matops/domain";
 import { isGeneralSpace, sessionEnd } from "@matops/domain";
@@ -90,7 +90,6 @@ export async function overlappingSessions(
   exec: Executor,
   academyId: string,
   spans: SessionSpan[],
-  ignoreClassId?: string,
 ): Promise<SessionSpan[]> {
   if (spans.length === 0) return [];
   const from = new Date(Math.min(...spans.map((s) => s.startsAt.getTime())));
@@ -114,7 +113,6 @@ export async function overlappingSessions(
         isNull(classInstance.deletedAt),
         gte(classInstance.startsAt, reachBack),
         lt(classInstance.startsAt, to),
-        ignoreClassId ? ne(classInstance.id, ignoreClassId) : undefined,
       ),
     );
   return rows;

@@ -21,7 +21,7 @@ function Frame({ children }: { children: ReactNode }) {
   );
 }
 
-export function SkeletonHeader({ subtitle = true }: { subtitle?: boolean }) {
+function SkeletonHeader({ subtitle = true }: { subtitle?: boolean }) {
   return (
     <div aria-hidden className="flex flex-col gap-2">
       <Bar className="h-7 w-44" />
@@ -30,7 +30,7 @@ export function SkeletonHeader({ subtitle = true }: { subtitle?: boolean }) {
   );
 }
 
-export function SkeletonRow({
+function SkeletonRow({
   action = false,
   lines = 2,
   className,

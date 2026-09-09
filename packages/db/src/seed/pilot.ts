@@ -27,9 +27,9 @@ import { SEED_MARKER } from "./registry";
  * conflict, so running it twice changes nothing. `seed down` removes it, since
  * its ids carry the seed marker and teardown deletes by organization.
  */
-export const PILOT_ORG_ID = `${SEED_MARKER}org_pilot`;
-export const PILOT_GYM_ID = `${SEED_MARKER}ent_pilot_gym`;
-export const PILOT_SAUNA_ID = `${SEED_MARKER}ent_pilot_sauna`;
+const PILOT_ORG_ID = `${SEED_MARKER}org_pilot`;
+const PILOT_GYM_ID = `${SEED_MARKER}ent_pilot_gym`;
+const PILOT_SAUNA_ID = `${SEED_MARKER}ent_pilot_sauna`;
 
 /**
  * `access_plan.id` is a uuid column, so the plans cannot carry the `seed_`
@@ -44,7 +44,7 @@ const PLAN_ID = {
 
 const PILOT_TIME_ZONE = "Europe/Lisbon";
 
-export interface PilotReport {
+interface PilotReport {
   organizationId: string;
   branches: { id: string; name: string; type: string }[];
   plans: { id: string; name: string; covers: string[] }[];

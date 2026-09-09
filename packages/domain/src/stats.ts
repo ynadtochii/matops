@@ -51,7 +51,7 @@ export interface Session {
 }
 
 /** The student's personal training summary (B.1, C.2). */
-export interface TrainingStats {
+interface TrainingStats {
   /** Total attended sessions at this academy. */
   total: number;
   /** Attended sessions in the current calendar month (academy zone). */
@@ -133,13 +133,6 @@ export function trainingStats(
   };
 }
 
-/** N-days-since phrasing for the "last class" line. */
-export function lastClassLabel(days: number): string {
-  if (days <= 0) return "Today";
-  if (days === 1) return "Yesterday";
-  return `${days} days ago`;
-}
-
 /** Attendance-recency band for a member (C.1 "who's drifting", C.2 detail). */
 export type DriftStatus = "active" | "cooling" | "at_risk" | "dormant";
 
@@ -189,7 +182,7 @@ export interface MarkedParticipation {
 }
 
 /** A class ranked by attendance (part of `GymInsights`). */
-export interface BusiestClass {
+interface BusiestClass {
   title: string;
   /** First discipline seen for this title — the colour encoder on the O1 list. */
   discipline: string | null;
@@ -197,7 +190,7 @@ export interface BusiestClass {
 }
 
 /** The owner's gym-activity summary over the query window (C.1). */
-export interface GymInsights {
+interface GymInsights {
   /** Present marks in the current week (academy zone). */
   visitsThisWeek: number;
   /**
@@ -329,24 +322,3 @@ export function nextClass<T extends { startsAt: Date }>(
 // Re-export so clients can label `favoriteWeekday` / `byWeekday` without a
 // second import path.
 export { DAY_LABELS };
-
-export interface NewMemberCounts {
-  thisMonth: number;
-  lastMonth: number;
-}
-
-/**
- * Growth, this month against last, from the month bucket each member joined in.
- * Both sides count only retained members, so a joiner who has since been removed
- * is missing from either: the two numbers are biased the same way and stay
- * comparable.
- */
-export function newMemberCounts(
-  joinedBuckets: number[],
-  thisMonth: number,
-): NewMemberCounts {
-  return {
-    thisMonth: joinedBuckets.filter((b) => b === thisMonth).length,
-    lastMonth: joinedBuckets.filter((b) => b === thisMonth - 1).length,
-  };
-}

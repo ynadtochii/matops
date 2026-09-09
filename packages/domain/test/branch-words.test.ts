@@ -1,11 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  branchWords,
-  openingLabel,
-  sessionCount,
-  shareActions,
-} from "../src/branch-words";
+import { branchWords, shareActions } from "../src/branch-words";
 
 describe("branchWords", () => {
   it("calls a BJJ branch an academy and its sessions classes", () => {
@@ -28,26 +23,6 @@ describe("branchWords", () => {
     expect(branchWords("sauna").branch).toBe("space");
   });
 });
-
-describe("openingLabel", () => {
-  it("names the place rather than the row", () => {
-    expect(openingLabel("bjj_academy")).toBe("Opening your academy");
-    expect(openingLabel("general_space")).toBe("Opening your space");
-  });
-});
-
-describe("sessionCount", () => {
-  it("leads with the count and spells the plural", () => {
-    expect(sessionCount("bjj_academy", 3)).toBe("3 classes");
-    expect(sessionCount("general_space", 2)).toBe("2 sessions");
-  });
-
-  it("keeps the singular at one, and says zero in the plural", () => {
-    expect(sessionCount("bjj_academy", 1)).toBe("1 class");
-    expect(sessionCount("bjj_academy", 0)).toBe("0 classes");
-  });
-});
-
 describe("shareActions", () => {
   it("offers a mat the trial booking, the drop-in poster and the join link", () => {
     expect(shareActions("bjj_academy")).toEqual(["booking", "checkin", "join"]);

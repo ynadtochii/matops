@@ -89,7 +89,7 @@ export async function loadStaffAccess(
  * case that needs both, and the two moments can fall in different months, each
  * with its own paid flag and its own deadline.
  */
-export interface MembershipAccess {
+interface MembershipAccess {
   /** May they act right now? */
   now: AccessVerdict;
   /** Will the membership still cover them when the session starts? */
@@ -282,7 +282,7 @@ export async function loadMembershipAccess(
 }
 
 /** Why one person is on a branch's roster, and where they stand. */
-export interface RosterStanding {
+interface RosterStanding {
   /** They hold a membership of THIS branch: they joined it, or were added. */
   enrolled: boolean;
   /** A shared membership of theirs covers this branch. */

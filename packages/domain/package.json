@@ -29,7 +29,6 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
-    "date-fns": "catalog:",
     "date-fns-tz": "catalog:"
   },
   "prettier": "@matops/prettier-config"

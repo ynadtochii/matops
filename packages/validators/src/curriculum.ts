@@ -20,9 +20,6 @@ export const CreateCurriculumBlockSchema = z.object({
   category: CategorySchema,
   defaultWeeks: WeeksSchema,
 });
-export type CreateCurriculumBlockInput = z.infer<
-  typeof CreateCurriculumBlockSchema
->;
 
 export const UpdateCurriculumBlockSchema = z.object({
   id: IdSchema,
@@ -31,9 +28,6 @@ export const UpdateCurriculumBlockSchema = z.object({
   category: CategorySchema,
   defaultWeeks: WeeksSchema,
 });
-export type UpdateCurriculumBlockInput = z.infer<
-  typeof UpdateCurriculumBlockSchema
->;
 
 /** A block in the shared library (`curriculum_block_template`). */
 export const CurriculumBlockIdSchema = z.object({ blockId: IdSchema });
@@ -47,17 +41,11 @@ export const CurriculumPlacementIdSchema = z.object({ placementId: IdSchema });
 export const CreateCurriculumTrackSchema = z.object({
   name: lineText(1, MAX_TRACK_NAME_LENGTH),
 });
-export type CreateCurriculumTrackInput = z.infer<
-  typeof CreateCurriculumTrackSchema
->;
 
 export const RenameCurriculumTrackSchema = z.object({
   id: IdSchema,
   name: lineText(1, MAX_TRACK_NAME_LENGTH),
 });
-export type RenameCurriculumTrackInput = z.infer<
-  typeof RenameCurriculumTrackSchema
->;
 
 export const CurriculumTrackIdSchema = z.object({ id: IdSchema });
 
@@ -73,30 +61,18 @@ export const PlaceCurriculumBlockSchema = z.object({
   slotId: IdSchema.optional(),
   note: blockText(0, 2000).nullish(),
 });
-export type PlaceCurriculumBlockInput = z.infer<
-  typeof PlaceCurriculumBlockSchema
->;
 
 export const SetCurriculumRunNoteSchema = z.object({
   placementId: IdSchema,
   note: blockText(0, 2000).nullish(),
 });
-export type SetCurriculumRunNoteInput = z.infer<
-  typeof SetCurriculumRunNoteSchema
->;
 
 export const ResizeCurriculumBlockSchema = z.object({
   slotId: IdSchema,
   weeks: WeeksSchema,
 });
-export type ResizeCurriculumBlockInput = z.infer<
-  typeof ResizeCurriculumBlockSchema
->;
 
 export const MoveCurriculumBlockSchema = z.object({
   slotId: IdSchema,
   toIndex: IndexSchema,
 });
-export type MoveCurriculumBlockInput = z.infer<
-  typeof MoveCurriculumBlockSchema
->;

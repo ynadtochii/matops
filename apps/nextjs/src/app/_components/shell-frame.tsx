@@ -39,7 +39,7 @@ const MAX_TABS = 5;
 
 /** Two-letter avatar fallback: initials of the first two name words, else the
  * first two letters of the name, else the email — never blank. */
-export function initials(name: string, email: string): string {
+function initials(name: string, email: string): string {
   const words = name.trim().split(/\s+/).filter(Boolean);
   const first = words[0];
   const second = words[1];
@@ -202,7 +202,7 @@ export const ShareIcon = () => (
   </svg>
 );
 
-export interface ShellFrameProps {
+interface ShellFrameProps {
   /** Already filtered by `show` and given an `href`. */
   items: NavItem[];
   isCurrent: (path: string) => boolean;

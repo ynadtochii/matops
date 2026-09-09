@@ -1,7 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { user } from "@matops/db/schema";
-
 import type { Harness } from "./helpers";
 import { harness, rejectionCode, seedAcademies } from "./helpers";
 
@@ -12,7 +10,6 @@ const MANAGER = "u_person_manager";
 const COACH = "u_person_coach";
 const STUDENT = "u_person_student";
 const OTHER_OWNER = "u_person_other_owner";
-const LINKED = "u_person_linked";
 
 describe("person management", () => {
   let h: Harness;
@@ -36,12 +33,6 @@ describe("person management", () => {
         members: [{ userId: OTHER_OWNER, role: "owner", status: "active" }],
       },
     ]);
-    await h.exec.insert(user).values({
-      id: LINKED,
-      name: "Linked Account",
-      email: "linked@test.local",
-      emailVerified: true,
-    });
   });
 
   afterAll(() => h.close());
@@ -112,59 +103,11 @@ describe("person management", () => {
     expect(separate.createdPerson).toBe(true);
   });
 
-  it("links and unlinks a verified account with stale-write checks", async () => {
-    const created = await h
-      .as(MANAGER, GYM)
-      .person.createStudent({ entityId: GYM, name: "Linked Student" });
-    const before = await h.as(MANAGER, GYM).person.get({
-      personId: created.personId,
-      includeArchived: false,
-    });
-    await expect(
-      h.as(MANAGER, GYM).person.accountCandidate({
-        personId: created.personId,
-        email: "LINKED@test.local",
-      }),
-    ).resolves.toEqual(
-      expect.objectContaining({ userId: LINKED, linkedPersonId: null }),
-    );
-    expect(
-      await rejectionCode(
-        h.as(MANAGER, GYM).person.linkAccount({
-          personId: created.personId,
-          accountUserId: LINKED,
-          expectedUpdatedAt: new Date(0).toISOString(),
-        }),
-      ),
-    ).toBe("CONFLICT");
-    const linked = await h.as(MANAGER, GYM).person.linkAccount({
-      personId: created.personId,
-      accountUserId: LINKED,
-      expectedUpdatedAt: before.updatedAt.toISOString(),
-    });
-    await expect(
-      h.as(MANAGER, GYM).person.unlinkAccount({
-        personId: created.personId,
-        expectedAccountUserId: LINKED,
-        expectedUpdatedAt: linked.updatedAt.toISOString(),
-      }),
-    ).resolves.toEqual(expect.objectContaining({ personId: created.personId }));
-  });
-
-  it("blocks linking and enrollment while archived", async () => {
+  it("blocks enrollment while archived", async () => {
     const created = await h
       .as(OWNER, GYM)
       .person.createStudent({ entityId: GYM, name: "Archived Student" });
     await h.as(MANAGER, GYM).person.archive({ personId: created.personId });
-    expect(
-      await rejectionCode(
-        h.as(MANAGER, GYM).person.linkAccount({
-          personId: created.personId,
-          accountUserId: LINKED,
-          expectedUpdatedAt: new Date().toISOString(),
-        }),
-      ),
-    ).toBe("PRECONDITION_FAILED");
     const duplicates = await h
       .as(OWNER, GYM)
       .person.previewCreateStudent({ name: "Archived Student" });

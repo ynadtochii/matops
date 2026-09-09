@@ -69,7 +69,7 @@ export async function getMembership(
 }
 
 /** One entity the caller may act in, and how (ADR 124). */
-export interface EntityMembership {
+interface EntityMembership {
   id: string;
   personId: string | null;
   organizationId: string;
@@ -349,7 +349,7 @@ export async function getMemberIdForUser(
 }
 
 /** One academy the user belongs to, with the caller's role/status there. */
-export interface UserAcademy {
+interface UserAcademy {
   academyId: string;
   organizationId: string;
   type: string;
@@ -788,7 +788,7 @@ export async function createPendingMembership(
   return upsertPendingEntityMembership(input, exec);
 }
 
-export interface ResolvedAccount {
+interface ResolvedAccount {
   userId: string;
   /** True when the address already had an account before this call. */
   existed: boolean;

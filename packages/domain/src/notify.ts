@@ -65,38 +65,6 @@ export function buildApprovalMessage(input: {
   };
 }
 
-/** Class reminder (~lead time before start) → push to booked students. */
-export function buildReminderMessage(input: {
-  className: string;
-  whenLabel: string;
-}): PushMessage {
-  return {
-    title: "Class reminder",
-    body: `${input.className} starts ${input.whenLabel}.`,
-  };
-}
-
-/**
- * Dues reminder (v1.3, R.1 — docs/issues/40). One per billing period, sent when
- * a member is due soon or overdue. `amountLabel`/`dueLabel` are pre-formatted
- * upstream (same pattern as the class builders' `whenLabel`), keeping this pure
- * and locale-free.
- */
-export function buildDuesReminderMessage(input: {
-  academyName: string;
-  amountLabel: string;
-  dueLabel: string;
-  overdue: boolean;
-}): PushMessage {
-  const { academyName, amountLabel, dueLabel, overdue } = input;
-  return {
-    title: overdue ? "Payment overdue" : "Membership due soon",
-    body: overdue
-      ? `Your ${amountLabel} dues at ${academyName} are overdue.`
-      : `Your ${amountLabel} dues at ${academyName} are due ${dueLabel}.`,
-  };
-}
-
 /** Default reminder lead time (how long before start the reminder fires). */
 export const REMINDER_LEAD_MINUTES = 120;
 

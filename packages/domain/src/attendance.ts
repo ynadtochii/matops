@@ -11,21 +11,21 @@ import { DAY_MS } from "./local-date";
  */
 
 /** How far back an owner may still fill in attendance (spec O5). */
-export const ATTENDANCE_BACKFILL_DAYS = 14;
+const ATTENDANCE_BACKFILL_DAYS = 14;
 
 /** Attendance axis — mirrors the `attendance_status` DB enum. */
-export type AttendanceStatus = "unmarked" | "present" | "absent";
+type AttendanceStatus = "unmarked" | "present" | "absent";
 
 /** Booking axis — mirrors the `booking_status` DB enum. */
-export type BookingStatus = "booked" | "cancelled" | "none";
+type BookingStatus = "booked" | "cancelled" | "none";
 
-export interface MarkableClass {
+interface MarkableClass {
   status: string; // "scheduled" | "cancelled"
   startsAt: Date; // resolved UTC instant
   deletedAt: Date | null;
 }
 
-export type AttendanceWriteAccess = "allowed" | "reason-required" | "closed";
+type AttendanceWriteAccess = "allowed" | "reason-required" | "closed";
 
 export function attendanceWriteAccess(
   c: MarkableClass,
@@ -123,7 +123,7 @@ export function bulkMarkTargets(rows: BulkMarkRow[]): string[] {
   return [...ids];
 }
 
-export interface AttendanceCounts {
+interface AttendanceCounts {
   present: number;
   absent: number;
   unmarked: number;
@@ -159,52 +159,6 @@ export function attendanceCounts(rows: ParticipationRow[]): AttendanceCounts {
     else if (r.bookingStatus === "booked") c[r.bookingTier]++;
   }
   return c;
-}
-
-export interface ClassAttendee {
-  studentId: string;
-  name: string | null;
-  bookingStatus: string;
-}
-
-export interface AttendeeView {
-  names: string[];
-  othersCount: number;
-  namesHidden: boolean;
-}
-
-/**
- * Who a student may see on a class (spec S5, §4 schedule privacy, ADR 55). Only
- * an APPROVED viewer sees names; they then see every booked member by name,
- * pending ones included, because a pending member trains on the same mat. What
- * stays a count is the people who are not members: drop-in leads, plus anyone
- * with no name on file. A pending viewer sees counts alone, with `namesHidden`
- * set so the UI can say why. The viewer is never listed to themselves.
- */
-export function visibleAttendees(
-  attendees: ClassAttendee[],
-  dropInCount: number,
-  viewer: { id: string; approved: boolean },
-): AttendeeView {
-  const booked = attendees.filter(
-    (a) => a.bookingStatus === "booked" && a.studentId !== viewer.id,
-  );
-  if (!viewer.approved) {
-    return {
-      names: [],
-      othersCount: booked.length + dropInCount,
-      namesHidden: booked.length > 0,
-    };
-  }
-  const names = booked
-    .map((a) => a.name?.trim())
-    .filter((n): n is string => !!n)
-    .sort((a, b) => a.localeCompare(b));
-  return {
-    names,
-    othersCount: booked.length - names.length + dropInCount,
-    namesHidden: false,
-  };
 }
 
 export interface AttendanceReviewSnapshot {

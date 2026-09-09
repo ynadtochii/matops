@@ -10,7 +10,7 @@ import { isStaff, runsBranch } from "./access";
  */
 export const ENTITY_TYPES = ["bjj_academy", "general_space"] as const;
 
-export type EntityType = (typeof ENTITY_TYPES)[number];
+type EntityType = (typeof ENTITY_TYPES)[number];
 
 export function isSupportedEntityType(value: string): value is EntityType {
   return (ENTITY_TYPES as readonly string[]).includes(value);
@@ -44,7 +44,7 @@ export function capacityPolicyFor(type: string): "soft" | "strict" {
  * a URL that names its academy is what makes two browser tabs, a reload and a
  * shared link all land in the same place (ADR 124).
  */
-export const ENTITY_PREFIX = "/entities";
+const ENTITY_PREFIX = "/entities";
 
 function entitySegment(pathname: string): string | null {
   const match = /^\/entities\/([^/?#]+)/.exec(pathname);
@@ -158,13 +158,13 @@ export function canVisit(
   return rule.allowed(m);
 }
 
-export interface BranchTie {
+interface BranchTie {
   academyId: string;
   organizationId: string;
   name: string;
 }
 
-export type PostLoginTarget<T extends BranchTie = BranchTie> =
+type PostLoginTarget<T extends BranchTie = BranchTie> =
   | { kind: "join" }
   | { kind: "openGym"; organizationId: string; name: string }
   | { kind: "openBranch"; academyId: string; name: string }

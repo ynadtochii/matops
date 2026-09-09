@@ -307,19 +307,6 @@ export function Loading({ label }: { label?: string }) {
   );
 }
 
-/** A hairline dashed rule — the design's "dashed divider" for card meta. */
-export function DashedRule({ style }: { style?: StyleProp<ViewStyle> }) {
-  const t = useTheme();
-  return (
-    <View
-      style={[
-        { borderTopWidth: 1, borderStyle: "dashed", borderColor: t.border },
-        style,
-      ]}
-    />
-  );
-}
-
 /** A horizontal "or" divider (two rules + a label). */
 export function OrDivider() {
   const t = useTheme();
@@ -397,7 +384,7 @@ type CalloutTone = "info" | "warning" | "error" | "success" | "brand";
  * is the identity tone (the S3 pending banner). Kept named `Banner` too for the
  * existing call sites.
  */
-export function Callout({
+function Callout({
   children,
   tone = "info",
 }: {

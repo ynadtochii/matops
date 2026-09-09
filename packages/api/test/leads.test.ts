@@ -177,32 +177,6 @@ describe("a lead becomes a member on a phone match at self-join", () => {
       }),
     ).toBe(false);
   });
-
-  it("links a member by hand when the two phones differ", async () => {
-    const h = await base();
-    await h.as(COACH, A).attendance.addVisitor(VISITOR);
-    const [lead] = await h.as(OWNER, A).dropIn.list();
-    await h.as(OWNER, A).dropIn.markJoined({
-      id: lead?.id ?? "",
-      userId: JOINER,
-    });
-    const rows = await h.as(OWNER, A).dropIn.list();
-    expect(rows[0]).toMatchObject({ stage: "joined", convertedUserId: JOINER });
-  });
-
-  it("refuses to link somebody who is not a member of this academy", async () => {
-    const h = await base();
-    await h.as(COACH, A).attendance.addVisitor(VISITOR);
-    const [lead] = await h.as(OWNER, A).dropIn.list();
-    expect(
-      await rejectionCode(
-        h.as(OWNER, A).dropIn.markJoined({
-          id: lead?.id ?? "",
-          userId: "u_stranger",
-        }),
-      ),
-    ).toBe("NOT_FOUND");
-  });
 });
 
 /**

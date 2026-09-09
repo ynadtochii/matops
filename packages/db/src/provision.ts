@@ -12,14 +12,14 @@ import { curriculumTrack } from "./curriculum-schema";
 import { academyProfile, entity, entityMembership } from "./entity-schema";
 import { classTemplate } from "./scheduling";
 
-export interface ProvisionResult {
+interface ProvisionResult {
   organizationId: string;
   entityId: string;
   /** Which steps this run had to make. Empty means nothing was missing. */
   created: string[];
 }
 
-export interface EntityRows {
+interface EntityRows {
   organizationId: string;
   entityId: string;
   type: string;

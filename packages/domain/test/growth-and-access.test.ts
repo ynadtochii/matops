@@ -2,39 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import { canEnroll, isStaff } from "../src/access";
 import { canReadCoachFigures } from "../src/coach";
-import { newMemberCounts } from "../src/stats";
 
 const owner = { role: "owner", status: "active" };
 const instructor = { role: "instructor", status: "active" };
 const student = { role: "student", status: "active" };
-
-describe("newMemberCounts", () => {
-  it("splits the joiners into this month and last", () => {
-    expect(newMemberCounts([672, 672, 671, 670], 672)).toEqual({
-      thisMonth: 2,
-      lastMonth: 1,
-    });
-  });
-
-  it("counts nothing when nobody joined", () => {
-    expect(newMemberCounts([], 672)).toEqual({ thisMonth: 0, lastMonth: 0 });
-  });
-
-  it("ignores months older than last", () => {
-    expect(newMemberCounts([600, 601], 672)).toEqual({
-      thisMonth: 0,
-      lastMonth: 0,
-    });
-  });
-
-  it("crosses a year boundary on the bucket number, not the month name", () => {
-    expect(newMemberCounts([2026 * 12, 2026 * 12 - 1], 2026 * 12)).toEqual({
-      thisMonth: 1,
-      lastMonth: 1,
-    });
-  });
-});
-
 describe("canReadCoachFigures", () => {
   it("lets anyone open their own", () => {
     expect(canReadCoachFigures(instructor, "u2", "u2")).toBe(true);

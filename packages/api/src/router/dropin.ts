@@ -32,13 +32,12 @@ import {
   AcademyPublicSchema,
   DropInSchema,
   LeadIdSchema,
-  LinkLeadSchema,
   PromoteLeadSchema,
   SetLeadEmailSchema,
   SetLeadStageSchema,
 } from "@matops/validators";
 
-import { activateMember, requireMembership } from "../members";
+import { activateMember } from "../members";
 import {
   branchManagerIdentityProcedure,
   branchManagerProcedure,
@@ -417,28 +416,5 @@ export const dropInRouter = {
         status: activated ? ("active" as const) : ("pending" as const),
         existingAccount: account.existed,
       };
-    }),
-
-  /**
-   * Link a lead to the member they became, for the case where the phone on the
-   * two forms differs and the automatic match at self-join could not fire. A
-   * link to a member, never a free-text flag.
-   */
-  markJoined: branchManagerProcedure
-    .input(LinkLeadSchema)
-    .mutation(async ({ ctx, input }) => {
-      await requireMembership(
-        input.userId,
-        ctx.academyId,
-        ctx.db,
-        "That person is not a member of this academy",
-      );
-      const [row] = await ctx.db
-        .update(dropIn)
-        .set({ stage: "joined", convertedUserId: input.userId })
-        .where(eq(dropIn.id, input.id))
-        .returning({ id: dropIn.id });
-      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: LEAD_GONE });
-      return { ok: true as const };
     }),
 } satisfies TRPCRouterRecord;

@@ -26,7 +26,7 @@ export function instructorForNewSession(
   return isBjjAcademy(entityType) ? actingUserId : null;
 }
 
-export interface TemplateRecurrence {
+interface TemplateRecurrence {
   daysOfWeek: number[];
   startsAtMinutes: number;
   timeZone: string;
@@ -57,7 +57,7 @@ export function templateTimingChanged(
   );
 }
 
-export interface TemplateContent {
+interface TemplateContent {
   title: string;
   description: string | null;
   discipline: string | null;
@@ -74,7 +74,7 @@ export interface TemplateContent {
  * save changed nothing, which is worth knowing because both other paths write to
  * every future class the template owns.
  */
-export type TemplateEditStrategy = "regenerate" | "update-in-place" | "none";
+type TemplateEditStrategy = "regenerate" | "update-in-place" | "none";
 
 /**
  * Every field here is one the in-place update copies onto the class row, so a
@@ -108,14 +108,14 @@ export function templateEditStrategy(
   return templateContentChanged(before, after) ? "update-in-place" : "none";
 }
 
-export interface ClassNotifiable {
+interface ClassNotifiable {
   /** UTC start instant. */
   startsAt: Date;
   /** Null at a general space, where a session need not be taught (ADR 126). */
   instructorId: string | null;
 }
 
-export interface ClassChange {
+interface ClassChange {
   timeChanged: boolean;
   instructorChanged: boolean;
   /** Both the old and the new start are in the past: this edit rewrites history. */

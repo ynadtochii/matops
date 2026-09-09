@@ -47,7 +47,7 @@ import {
 import { buildSeedGraph } from "./data";
 import { seedAcademyList } from "./registry";
 
-export interface SeedOptions {
+interface SeedOptions {
   /** The real, already-registered user you sign in as (looked up by the CLI). */
   realUser: { id: string; name: string };
   now?: Date;
@@ -55,7 +55,7 @@ export interface SeedOptions {
 }
 
 /** Row counts written, per table — returned so the CLI can report the run. */
-export type SeedReport = Record<string, number>;
+type SeedReport = Record<string, number>;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

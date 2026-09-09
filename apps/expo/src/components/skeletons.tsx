@@ -43,9 +43,7 @@ export function SkeletonCard({
 }) {
   return <SkeletonRows rows={lines} />;
 }
-export function DuesSkeleton() {
-  return <SkeletonRows rows={2} />;
-}
+
 export function RankSkeleton() {
   return <SkeletonRows rows={2} />;
 }

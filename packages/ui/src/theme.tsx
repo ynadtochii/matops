@@ -72,7 +72,7 @@ const getNextTheme = (current: ThemeMode): ThemeMode => {
   return themes[(themes.indexOf(current) + 1) % themes.length]!;
 };
 
-export const themeDetectorScript = (function () {
+const themeDetectorScript = (function () {
   function themeFn() {
     const isValidTheme = (theme: string): theme is ThemeMode => {
       const validThemes = ["light", "dark", "auto"] as const;

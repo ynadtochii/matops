@@ -18,12 +18,6 @@ const PAST = "22222222-2222-4222-8222-000000000001";
 const FUTURE = "22222222-2222-4222-8222-000000000002";
 const FOREIGN = "22222222-2222-4222-8222-000000000003";
 
-const edit = {
-  title: "Gi Fundamentals",
-  durationMinutes: 60,
-  capacity: 20,
-};
-
 describe("K.2 who may be credited for a class", () => {
   let h: Harness;
 
@@ -120,43 +114,6 @@ describe("K.2 who may be credited for a class", () => {
         h
           .as(OWNER, ACAD)
           .class.setInstructor({ id: FOREIGN, instructorId: ANA }),
-      ).rejects.toThrow(/NOT_FOUND|not found/i);
-    });
-  });
-
-  describe("update applies the same rule", () => {
-    it("refuses an instructor changing the coach on a past class", async () => {
-      expect(
-        await rejectionCode(
-          h
-            .as(ANA, ACAD)
-            .class.update({ ...edit, id: PAST, instructorId: BRUNO }),
-        ),
-      ).toBe("FORBIDDEN");
-    });
-
-    it("lets an instructor change the coach on an upcoming class", async () => {
-      const row = await h
-        .as(ANA, ACAD)
-        .class.update({ ...edit, id: FUTURE, instructorId: BRUNO });
-      expect(row.instructorId).toBe(BRUNO);
-      await h
-        .as(ANA, ACAD)
-        .class.update({ ...edit, id: FUTURE, instructorId: ANA });
-    });
-
-    it("lets an instructor edit a past class it does not reassign", async () => {
-      const row = await h
-        .as(ANA, ACAD)
-        .class.update({ ...edit, id: PAST, instructorId: ANA, capacity: 30 });
-      expect(row.capacity).toBe(30);
-    });
-
-    it("refuses a non-staff user id on any class", async () => {
-      await expect(
-        h
-          .as(OWNER, ACAD)
-          .class.update({ ...edit, id: FUTURE, instructorId: STUDENT }),
       ).rejects.toThrow(/NOT_FOUND|not found/i);
     });
   });

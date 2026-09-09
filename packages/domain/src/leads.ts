@@ -8,14 +8,7 @@
  * trained twice and was never followed up.
  */
 
-export const LEAD_STAGES = [
-  "new",
-  "contacted",
-  "invited",
-  "joined",
-  "ghosted",
-] as const;
-export type LeadStage = (typeof LEAD_STAGES)[number];
+export type LeadStage = "new" | "contacted" | "invited" | "joined" | "ghosted";
 
 export const LEAD_STAGE_LABEL: Record<LeadStage, string> = {
   new: "New",
@@ -31,12 +24,6 @@ export const LEAD_STAGE_LABEL: Record<LeadStage, string> = {
  */
 export const OWNER_SETTABLE_STAGES = ["new", "contacted", "ghosted"] as const;
 export type OwnerSettableStage = (typeof OWNER_SETTABLE_STAGES)[number];
-
-export function isOwnerSettableStage(
-  stage: string,
-): stage is OwnerSettableStage {
-  return (OWNER_SETTABLE_STAGES as readonly string[]).includes(stage);
-}
 
 export const LEAD_SOURCES = ["link", "web", "wall_qr", "staff", "api"] as const;
 export type LeadSource = (typeof LEAD_SOURCES)[number];
@@ -55,7 +42,7 @@ export const LEAD_SOURCE_LABEL: Record<LeadSource, string> = {
  * "+351 912 345 678" on one form and "912 345 678" on the other. The last nine
  * digits survive that; the exact number stays the dedupe key.
  */
-export const PHONE_MATCH_DIGITS = 9;
+const PHONE_MATCH_DIGITS = 9;
 
 export function phoneMatchKey(phone: string): string {
   const digits = phone.replace(/\D/g, "");
@@ -77,7 +64,7 @@ export function matchLeadByPhone<T extends { phone: string }>(
   return hits.length === 1 ? (hits[0] ?? null) : null;
 }
 
-export interface LeadActivity {
+interface LeadActivity {
   /** Classes this person actually turned up to. */
   visits: number;
   lastVisitAt: Date | null;
@@ -91,7 +78,7 @@ export interface LeadRow {
 }
 
 /** Nobody has replied to this person yet. */
-export function isNewLead(lead: { stage: LeadStage }): boolean {
+function isNewLead(lead: { stage: LeadStage }): boolean {
   return lead.stage === "new";
 }
 
@@ -105,7 +92,7 @@ export function needsFollowUp(lead: LeadRow): boolean {
   return lead.activity.visits > 0;
 }
 
-export interface LeadQueues {
+interface LeadQueues {
   newLeads: number;
   trainedNotJoined: number;
 }
@@ -122,7 +109,7 @@ export function leadQueues(leads: LeadRow[]): LeadQueues {
   };
 }
 
-export interface LeadFunnel {
+interface LeadFunnel {
   created: number;
   booked: number;
   trained: number;
@@ -139,9 +126,9 @@ export function leadFunnel(leads: LeadRow[]): LeadFunnel {
   };
 }
 
-export type PromoteRefusal = "already-joined" | "no-email" | "no-consent";
+type PromoteRefusal = "already-joined" | "no-email" | "no-consent";
 
-export interface PromotableLead {
+interface PromotableLead {
   stage: LeadStage;
   email: string | null;
   consent: boolean;

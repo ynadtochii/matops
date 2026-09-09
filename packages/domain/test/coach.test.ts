@@ -7,7 +7,6 @@ import {
   coachWindowRange,
   coachWorkload,
   coachWorkloadFor,
-  formatMatTime,
 } from "../src/coach";
 
 const UTC = "UTC";
@@ -358,16 +357,6 @@ describe("coachBreakdown", () => {
     expect(out.recent.map((r) => r.classId)).toEqual(["mine"]);
   });
 });
-
-describe("formatMatTime", () => {
-  it("drops the empty half of the pair", () => {
-    expect(formatMatTime(0)).toBe("0m");
-    expect(formatMatTime(45)).toBe("45m");
-    expect(formatMatTime(120)).toBe("2h");
-    expect(formatMatTime(210)).toBe("3h 30m");
-  });
-});
-
 describe("canReassignCoach", () => {
   const owner = { role: "owner", status: "active" };
   const instructor = { role: "instructor", status: "active" };

@@ -66,7 +66,7 @@ export const SEED_ACADEMY: SeedAcademy = {
  * with everything else: teardown resolves each org's entities itself, so the
  * gym and the sauna go with it without being named again.
  */
-export const PILOT_ACADEMY: SeedAcademy = {
+const PILOT_ACADEMY: SeedAcademy = {
   key: "pilot",
   id: "seed_org_pilot",
   name: "Pilot Gym",
@@ -108,9 +108,6 @@ export function seedPersonId(memberId: string): string {
  * ranks, notes and referrals key on this, not on `member.id` (ADR 124). */
 export const seedMembershipId = (academyKey: string, handle: string): string =>
   seedEntityMembershipId(seedMemberId(academyKey, handle));
-
-/** True if an id was created by the seed (used by teardown to spare real rows). */
-export const isSeedId = (id: string): boolean => id.startsWith(SEED_MARKER);
 
 /**
  * Refuse to run against a production database unless explicitly allowed. This is

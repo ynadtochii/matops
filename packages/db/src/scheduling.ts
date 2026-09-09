@@ -34,7 +34,7 @@ export const discipline = pgEnum("discipline", [
 ]);
 
 /** Template lifecycle: `active` generates future classes; `paused` stops (docs/issues/16). */
-export const templateStatus = pgEnum("template_status", ["active", "paused"]);
+const templateStatus = pgEnum("template_status", ["active", "paused"]);
 
 /**
  * Concrete-class lifecycle. Only two values (docs/issues/19): a class is
@@ -308,7 +308,7 @@ export const attendanceCorrection = pgTable(
  * Where a lead came from (ADR 115). Without it the gym cannot tell which
  * channel is working, and the channel is the point of the public API.
  */
-export const leadSource = pgEnum("lead_source", [
+const leadSource = pgEnum("lead_source", [
   "link",
   "web",
   "wall_qr",
@@ -321,7 +321,7 @@ export const leadSource = pgEnum("lead_source", [
  * did: someone who trained twice and was never followed up is still `new`, and
  * that row is the one worth showing. `ghosted` deletes nothing.
  */
-export const leadStage = pgEnum("lead_stage", [
+const leadStage = pgEnum("lead_stage", [
   "new",
   "contacted",
   "invited",

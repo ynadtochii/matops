@@ -10,7 +10,7 @@ import { pushToken } from "./push-token-schema";
  * RLS). The table itself is defined in ./push-token-schema.ts.
  */
 
-export interface UpsertPushTokenInput {
+interface UpsertPushTokenInput {
   token: string;
   platform: string;
   deviceId?: string | null;
@@ -62,7 +62,7 @@ export async function deletePushToken(
 }
 
 /** A notification target: contact channels resolved for one user. */
-export interface PushTarget {
+interface PushTarget {
   userId: string;
   email: string;
   name: string;

@@ -52,7 +52,6 @@ import {
   ClassIdSchema,
   CreateClassSchema,
   SetClassInstructorSchema,
-  UpdateClassSchema,
   WeekWindowSchema,
 } from "@matops/validators";
 
@@ -257,16 +256,10 @@ export async function notifyBooked(
 async function assertRoomFree(
   ctx: { db: TenantTx; academyId: string; entity: { type: string } },
   span: { startsAt: Date; durationMinutes: number },
-  ignoreClassId?: string,
 ): Promise<void> {
   if (!isGeneralSpace(ctx.entity.type)) return;
   await lockBranchSchedule(ctx.db, ctx.academyId);
-  const taken = await overlappingSessions(
-    ctx.db,
-    ctx.academyId,
-    [span],
-    ignoreClassId,
-  );
+  const taken = await overlappingSessions(ctx.db, ctx.academyId, [span]);
   if (findOverlap(span, taken)) {
     throw new TRPCError({ code: "CONFLICT", message: ROOM_TAKEN });
   }
@@ -473,71 +466,6 @@ export const classRouter = {
         await recordActivity({ ...event, name: "staff_action" }, exec);
       });
       return row;
-    }),
-
-  /** Edit one class. Optional reschedule; notifies booked students on time/instructor change (§4). */
-  update: staffProcedure
-    .input(UpdateClassSchema)
-    .mutation(async ({ ctx, input }) => {
-      await lockAndReadScheduleRevision(ctx.db, ctx.academyId);
-      const [before] = await ctx.db
-        .select()
-        .from(classInstance)
-        .where(liveClass(input.id));
-      if (!before) {
-        throw new TRPCError({ code: "NOT_FOUND", message: CLASS_NOT_FOUND });
-      }
-
-      const now = new Date();
-      if (input.instructorId !== before.instructorId) {
-        assertCanReassignCoach(ctx.membership, before.startsAt, now);
-        if (input.instructorId !== null) {
-          await requireInstructor(ctx, input.instructorId);
-        }
-      }
-
-      const startsAt =
-        input.date && input.startsAtMinutes !== undefined && input.timeZone
-          ? instantFromLocalDate(
-              input.date,
-              input.startsAtMinutes,
-              input.timeZone,
-            )
-          : before.startsAt;
-
-      await assertRoomFree(
-        ctx,
-        { startsAt, durationMinutes: input.durationMinutes },
-        input.id,
-      );
-      const [row] = await ctx.db
-        .update(classInstance)
-        .set({
-          title: input.title,
-          description: input.description,
-          discipline: input.discipline ?? null,
-          instructorId: input.instructorId,
-          durationMinutes: input.durationMinutes,
-          capacity: input.capacity,
-          publicBookable: input.publicBookable,
-          startsAt,
-        })
-        .where(liveClass(input.id))
-        .returning();
-      if (!row) {
-        throw new TRPCError({ code: "NOT_FOUND", message: CLASS_NOT_FOUND });
-      }
-      await bumpScheduleRevision(ctx.db, ctx.academyId);
-
-      const change = classChange(
-        { startsAt: before.startsAt, instructorId: before.instructorId },
-        { startsAt: row.startsAt, instructorId: row.instructorId },
-        now,
-      );
-      const notice = change.shouldNotify
-        ? await notifyBooked(ctx, row, "class_changed", notifyClassChanged)
-        : null;
-      return { ...row, notice };
     }),
 
   /**

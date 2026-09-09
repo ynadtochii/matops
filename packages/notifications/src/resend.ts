@@ -2,7 +2,7 @@ import { notificationsEnv } from "./env";
 
 const RESEND_URL = "https://api.resend.com/emails";
 
-export interface EmailPayload {
+interface EmailPayload {
   to: string | string[];
   subject: string;
   text: string;
@@ -10,7 +10,7 @@ export interface EmailPayload {
   idempotencyKey?: string;
 }
 
-export interface SendEmailResult {
+interface SendEmailResult {
   sent: boolean;
   ok: boolean;
   outcome: "accepted" | "not_configured" | "timeout" | "rejected" | "failed";

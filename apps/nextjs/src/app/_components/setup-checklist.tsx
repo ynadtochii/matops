@@ -268,11 +268,7 @@ const ISSUES: Record<BranchIssue, string> = {
  * is not listed: the block exists to name work, so a gym where every branch is
  * ready draws nothing at all rather than a row of ticks.
  */
-export function BranchLaunchHealth({
-  embedded = false,
-}: {
-  embedded?: boolean;
-}) {
+function BranchLaunchHealth({ embedded = false }: { embedded?: boolean }) {
   const trpc = useTRPC();
   const setup = useQuery(trpc.organization.setup.queryOptions());
 

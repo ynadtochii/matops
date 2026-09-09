@@ -50,7 +50,7 @@ import {
 import { SEED_MARKER, seedAcademyIds, seedAcademyList } from "./registry";
 
 /** Row counts deleted, per table. */
-export type TeardownReport = Record<string, number>;
+type TeardownReport = Record<string, number>;
 
 const SEED_ID_LIKE = `${SEED_MARKER}%`;
 
@@ -237,7 +237,7 @@ export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
 }
 
 /** Per-academy presence + a few row counts, for `seed status`. */
-export interface SeedAcademyStatus {
+interface SeedAcademyStatus {
   key: string;
   academyId: string;
   name: string;

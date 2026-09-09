@@ -43,24 +43,23 @@ export interface BookableClass {
  * `/class/<id>` left open. Classes exist six months out for the owner's planning;
  * booking one of them is noise, because the gym's plans change first.
  */
-export const DEFAULT_BOOKING_WINDOW_DAYS = 7;
+const DEFAULT_BOOKING_WINDOW_DAYS = 7;
 export const BOOKING_WINDOW_DAYS = DEFAULT_BOOKING_WINDOW_DAYS;
 
-export interface BookingRule {
+interface BookingRule {
   bookingWindowDays: number;
   timeZone: string;
 }
 
-export const DEFAULT_BOOKING_RULE: BookingRule = {
+const DEFAULT_BOOKING_RULE: BookingRule = {
   bookingWindowDays: DEFAULT_BOOKING_WINDOW_DAYS,
   timeZone: "UTC",
 };
 
 /** Why a class cannot be booked (drives a precise, friendly error). */
-export type NotBookableReason =
-  "deleted" | "cancelled" | "past" | "too-far-ahead";
+type NotBookableReason = "deleted" | "cancelled" | "past" | "too-far-ahead";
 
-export interface BookableResult {
+interface BookableResult {
   ok: boolean;
   reason?: NotBookableReason;
 }
@@ -108,7 +107,7 @@ export function notBookableMessage(
   }
 }
 
-export interface CapacityDisplay {
+interface CapacityDisplay {
   /** "N / M", or "No limit" when capacity is 0/unset. */
   label: string;
   /** At or over capacity → show red + a "book anyway?" confirm (spec S5). */

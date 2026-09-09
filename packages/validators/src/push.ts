@@ -14,12 +14,8 @@ export const RegisterPushTokenSchema = z.object({
   platform: z.enum(["ios", "android"]),
   deviceId: lineText(0, 200).optional(),
 });
-export type RegisterPushTokenInput = z.infer<typeof RegisterPushTokenSchema>;
 
 /** Remove a device's push token (on sign-out). */
 export const UnregisterPushTokenSchema = z.object({
   token: OpaqueTokenSchema,
 });
-export type UnregisterPushTokenInput = z.infer<
-  typeof UnregisterPushTokenSchema
->;

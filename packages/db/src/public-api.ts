@@ -26,7 +26,7 @@ import { classInstance } from "./scheduling";
  * links, each with its own key, because each is its own place.
  */
 
-export interface PublicApiAcademy {
+interface PublicApiAcademy {
   academyId: string;
   name: string;
   timeZone: string | null;
@@ -96,7 +96,7 @@ export async function findPublicAcademyByCode(
   return row ? toAcademy(row) : null;
 }
 
-export interface PublicApiSettings {
+interface PublicApiSettings {
   enabled: boolean;
   publicCode: string;
 }
@@ -137,7 +137,7 @@ export async function setPublicApiEnabled(
   return { ...current, enabled };
 }
 
-export interface PublicClass {
+interface PublicClass {
   id: string;
   title: string;
   discipline: string | null;
@@ -178,7 +178,7 @@ export async function listPublicClasses(
     .limit(limit);
 }
 
-export type PublicClassLookup =
+type PublicClassLookup =
   { found: false } | { found: true; cancelled: boolean; cls: PublicClass };
 
 /**

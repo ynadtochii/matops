@@ -6,9 +6,7 @@ import {
   canonicalCategory,
   categoryNames,
   daysBetween,
-  describeRipple,
   editableFloor,
-  firstDraftIndex,
   firstEditableIndex,
   groupByCategory,
   insertPlacement,
@@ -20,7 +18,6 @@ import {
   placementState,
   removePlacement,
   rippleFrom,
-  sortPlacements,
 } from "../src/curriculum";
 
 const at = (id: string, startsOn: string, weeks: number): Placement => ({
@@ -284,22 +281,6 @@ describe("placementState", () => {
 });
 
 describe("firstEditableIndex / firstDraftIndex", () => {
-  it("finds the running one, and the first draft after it", () => {
-    expect(firstEditableIndex(plan(), TODAY)).toBe(1);
-    expect(firstDraftIndex(plan(), TODAY)).toBe(2);
-  });
-
-  it("lets a drop land on the first draft when nothing covers today", () => {
-    const gapped = [at("a", "2026-08-11", 2), at("c", "2026-09-08", 2)];
-    expect(firstDraftIndex(gapped, TODAY)).toBe(1);
-  });
-
-  it("puts the floor past the end when everything has run", () => {
-    expect(firstEditableIndex(plan(), "2027-01-01")).toBe(-1);
-    expect(editableFloor(plan(), "2027-01-01")).toBe(4);
-    expect(firstDraftIndex(plan(), "2027-01-01")).toBe(4);
-  });
-
   it("puts the editable floor on the running block, not past it", () => {
     expect(editableFloor(plan(), TODAY)).toBe(1);
     expect(editableFloor([], TODAY)).toBe(0);
@@ -343,15 +324,6 @@ describe("placementForDate", () => {
     ).toBeNull();
   });
 });
-
-describe("sortPlacements", () => {
-  it("orders by start day and copies the array", () => {
-    const input = [at("b", "2026-08-25", 2), at("a", "2026-08-11", 2)];
-    expect(sortPlacements(input).map((p) => p.id)).toEqual(["a", "b"]);
-    expect(input[0]?.id).toBe("b");
-  });
-});
-
 describe("isoWeek", () => {
   it("numbers an ordinary week", () => {
     expect(isoWeek("2026-08-28")).toBe(35);
@@ -392,20 +364,5 @@ describe("daysBetween", () => {
   it("counts whole days across a month end", () => {
     expect(daysBetween("2026-08-28", "2026-09-01")).toBe(4);
     expect(daysBetween("2026-09-01", "2026-08-28")).toBe(-4);
-  });
-});
-
-describe("describeRipple", () => {
-  it("counts what moved and reports the new plan end", () => {
-    const before = plan();
-    expect(describeRipple(before, rippleFrom(before, 1, 3))).toEqual({
-      moved: 2,
-      endsOn: "2026-10-12",
-    });
-  });
-
-  it("counts nothing when the length did not change", () => {
-    const before = plan();
-    expect(describeRipple(before, rippleFrom(before, 1, 2)).moved).toBe(0);
   });
 });

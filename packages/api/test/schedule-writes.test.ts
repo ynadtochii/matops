@@ -347,55 +347,6 @@ describe("one bookable room per general branch", () => {
     expect([first?.id, second?.id].every(Boolean)).toBe(true);
   });
 
-  it("never trips a session over its own old row when rescheduling", async () => {
-    const row = await at(gym).class.create({
-      ...session,
-      date: "2026-09-16",
-      startsAtMinutes: 600,
-    });
-    if (!row) throw new Error("expected a class");
-    const moved = await at(gym).class.update({
-      id: row.id,
-      title: "Open gym",
-      instructorId: null,
-      durationMinutes: 60,
-      capacity: 20,
-      date: "2026-09-16",
-      startsAtMinutes: 605,
-      timeZone: "UTC",
-    });
-    expect(moved.id).toBe(row.id);
-  });
-
-  it("refuses a reschedule onto another session", async () => {
-    const row = await at(gym).class.create({
-      ...session,
-      date: "2026-09-17",
-      startsAtMinutes: 600,
-    });
-    await at(gym).class.create({
-      ...session,
-      date: "2026-09-17",
-      startsAtMinutes: 720,
-    });
-    if (!row) throw new Error("expected a class");
-
-    expect(
-      await rejectionCode(
-        at(gym).class.update({
-          id: row.id,
-          title: "Open gym",
-          instructorId: null,
-          durationMinutes: 60,
-          capacity: 20,
-          date: "2026-09-17",
-          startsAtMinutes: 730,
-          timeZone: "UTC",
-        }),
-      ),
-    ).toBe("CONFLICT");
-  });
-
   it("frees the room again once a session is cancelled", async () => {
     const row = await at(gym).class.create({
       ...session,

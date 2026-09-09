@@ -50,7 +50,7 @@ async function ensurePermission(): Promise<boolean> {
   return asked.granted;
 }
 
-export interface RemindableClass {
+interface RemindableClass {
   id: string;
   title: string;
   startsAt: string | Date;

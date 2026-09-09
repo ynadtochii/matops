@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased: dead-code sweep
+
+- Removed twelve tRPC procedures no client called: `class.update`, `accessPlan.get`, `accessPlan.rename`, `accessPlan.resolveHold`, `person.accountCandidate`, `person.linkAccount`, `person.unlinkAccount`, `dropIn.markJoined`, `curriculum.forDate`, `invite.revoke`, `notification.status`, `auth.getSecretMessage`, and the whole `system` router. Their tests move to the live procedure that carries the same rule.
+- Deleted 23 domain functions and 7 types that only their own tests used, plus the db and validator helpers the removed procedures left behind.
+- `@matops/ui` keeps only the parts the app imports: `field.tsx` drops nine unused shadcn parts, `dropdown-menu.tsx` drops ten, and `button.native.tsx` goes with the `react-native` branch of the `./button` export.
+- Dropped 13 drizzle `relations()` objects. Nothing uses the relational `with:` query API.
+- Dropped 72 unused `z.infer` type aliases from `@matops/validators`, the `turbo/generators` scaffold, and the `export` keyword on 33 symbols nothing outside their file reads.
+- Removed six dependencies: `drizzle-zod`, `date-fns`, `@turbo/gen`, `react-native-reanimated`, `react-native-gesture-handler`, `react-native-worklets`. The three native modules need a dev-client rebuild.
+- `domain/invalidation.ts` folds into `ui/use-invalidate.ts`.
+
 ## Unreleased: first academy release
 
 - Removed direct student-to-instructor role changes from member details, Staff, organization People, and the API. Adding an existing person to another branch now always adds them as a student. Instructors join through the instructor invite link and owner approval.

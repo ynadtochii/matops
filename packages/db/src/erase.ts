@@ -24,11 +24,11 @@ import {
   user,
 } from "./schema";
 
-export type EraseExec = DbExec | TenantTx;
+type EraseExec = DbExec | TenantTx;
 
-export type EraseReport = Record<string, number>;
+type EraseReport = Record<string, number>;
 
-export interface EraseMemberInput {
+interface EraseMemberInput {
   academyId: string;
   memberId: string;
   userId: string;

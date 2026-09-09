@@ -5,13 +5,13 @@
  * poster on the wall stops matching the app.
  */
 
-export interface HourSpan {
+interface HourSpan {
   /** Minutes past local midnight the class starts. */
   startMinutes: number;
   durationMinutes: number;
 }
 
-export type HourSlot =
+type HourSlot =
   | { kind: "hour"; from: number; to: number }
   | { kind: "gap"; from: number; to: number };
 
@@ -27,7 +27,7 @@ export function busyHours(spans: HourSpan[]): Set<number> {
 }
 
 /** How many free hours in a row are worth collapsing into one band. */
-export const MIN_GAP_HOURS = 2;
+const MIN_GAP_HOURS = 2;
 
 /**
  * Walk `[first, last)` and emit one slot per drawn row: an hour row, or a gap

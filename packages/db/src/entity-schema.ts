@@ -1,4 +1,4 @@
-import { relations, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import {
   check,
   foreignKey,
@@ -155,45 +155,4 @@ export const entityMembership = pgTable(
       sql`user_id is not null or person_id is not null`,
     ),
   ],
-);
-
-export const entityRelations = relations(entity, ({ one, many }) => ({
-  organization: one(organization, {
-    fields: [entity.organizationId],
-    references: [organization.id],
-  }),
-  academyProfile: one(academyProfile, {
-    fields: [entity.id],
-    references: [academyProfile.entityId],
-  }),
-  memberships: many(entityMembership),
-}));
-
-export const academyProfileRelations = relations(academyProfile, ({ one }) => ({
-  entity: one(entity, {
-    fields: [academyProfile.entityId],
-    references: [entity.id],
-  }),
-}));
-
-export const entityMembershipRelations = relations(
-  entityMembership,
-  ({ one }) => ({
-    entity: one(entity, {
-      fields: [entityMembership.entityId],
-      references: [entity.id],
-    }),
-    organization: one(organization, {
-      fields: [entityMembership.organizationId],
-      references: [organization.id],
-    }),
-    user: one(user, {
-      fields: [entityMembership.userId],
-      references: [user.id],
-    }),
-    person: one(person, {
-      fields: [entityMembership.personId],
-      references: [person.id],
-    }),
-  }),
 );

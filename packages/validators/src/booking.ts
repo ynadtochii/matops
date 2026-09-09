@@ -11,17 +11,14 @@ import { blockText, IdSchema, lineText, personFields } from "./fields";
  * from the caller's membership, so it is not an input here.
  */
 export const BookClassSchema = z.object({ classId: z.uuid() });
-export type BookClassInput = z.infer<typeof BookClassSchema>;
 
 /** Cancel the caller's own booking on a class (spec S5). */
 export const CancelBookingSchema = z.object({ classId: z.uuid() });
-export type CancelBookingInput = z.infer<typeof CancelBookingSchema>;
 
 // ─── Attendance (Phase 3, slice 3.3) ─────────────────────────────────────────
 
 /** Attendance mark a staff member can set on a participant (spec O5). */
-export const AttendanceStatusSchema = z.enum(["present", "absent", "unmarked"]);
-export type AttendanceStatusInput = z.infer<typeof AttendanceStatusSchema>;
+const AttendanceStatusSchema = z.enum(["present", "absent", "unmarked"]);
 
 const attendanceReason = blockText(3, 500).optional();
 
@@ -47,7 +44,6 @@ export const MarkAttendanceSchema = z
     status: input.status,
     reason: input.reason,
   }));
-export type MarkAttendanceInput = z.infer<typeof MarkAttendanceSchema>;
 
 /** Add a walk-in: mark a member present who never booked (spec O5). */
 export const AddWalkInSchema = z
@@ -68,7 +64,6 @@ export const AddWalkInSchema = z
     personId: "personId" in input ? input.personId : input.studentId,
     reason: input.reason,
   }));
-export type AddWalkInInput = z.infer<typeof AddWalkInSchema>;
 
 /**
  * Record a visitor who is not a member, from the class roster (spec O5/O4).
@@ -83,7 +78,6 @@ export const AddVisitorSchema = z.object({
   lastName: lineText(0, 60).default(""),
   reason: attendanceReason,
 });
-export type AddVisitorInput = z.infer<typeof AddVisitorSchema>;
 
 /** Mark a visitor present or absent on the class register (spec O5, ADR 115). */
 export const MarkVisitorSchema = z.object({
@@ -92,7 +86,6 @@ export const MarkVisitorSchema = z.object({
   status: AttendanceStatusSchema,
   reason: attendanceReason,
 });
-export type MarkVisitorInput = z.infer<typeof MarkVisitorSchema>;
 
 export const MarkAllAttendanceSchema = z.object({
   id: z.uuid(),

@@ -4,7 +4,6 @@ import {
   ACADEMY_CODE_LENGTH,
   CODE_JOIN_ROLE,
   isValidAcademyCode,
-  normalizeAcademyCode,
 } from "../src/academy-code";
 
 describe("academy code", () => {
@@ -24,13 +23,6 @@ describe("academy code", () => {
     expect(isValidAcademyCode("48a913")).toBe(false);
     expect(isValidAcademyCode("48 913")).toBe(false);
     expect(isValidAcademyCode(" 482913")).toBe(false); // must normalize first
-  });
-
-  it("normalizes surrounding whitespace only", () => {
-    expect(normalizeAcademyCode("  482913 ")).toBe("482913");
-    expect(isValidAcademyCode(normalizeAcademyCode("  482913 "))).toBe(true);
-    // Inner junk is not stripped — it stays invalid.
-    expect(isValidAcademyCode(normalizeAcademyCode(" 48 913 "))).toBe(false);
   });
 
   it("code joins always grant the student role", () => {

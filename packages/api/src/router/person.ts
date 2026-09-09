@@ -4,13 +4,8 @@ import { TRPCError } from "@trpc/server";
 import type { DbExec, DbReader, DbWriter } from "@matops/db";
 import {
   and,
-  backfillLinkedPersonSubjects,
-  clearLinkedPersonAccountSubjects,
-  countLegacyOnlyPersonSubjects,
-  ensureOrganizationAccount,
   eq,
   findPersonDuplicates,
-  findVerifiedAccountByEmail,
   getOrganizationPerson,
   inArray,
   isNull,
@@ -19,12 +14,9 @@ import { entity, entityMembership, person, user } from "@matops/db/schema";
 import {
   CreateStudentPersonSchema,
   GetPersonSchema,
-  LinkPersonAccountSchema,
-  PersonAccountCandidateSchema,
   PersonDirectorySchema,
   PersonIdSchema,
   PreviewCreatePersonSchema,
-  UnlinkPersonAccountSchema,
 } from "@matops/validators";
 
 import {
@@ -34,7 +26,6 @@ import {
 
 const PERSON_NOT_FOUND = "Person not found";
 const PERSON_ARCHIVED = "Restore this person before changing them";
-const STALE_PERSON = "This person changed. Refresh and try again.";
 
 function sameIds(left: string[], right: string[]) {
   const sortedLeft = [...left].sort();
@@ -53,26 +44,6 @@ async function requirePerson(
   const row = await getOrganizationPerson(exec, organizationId, personId);
   if (!row)
     throw new TRPCError({ code: "NOT_FOUND", message: PERSON_NOT_FOUND });
-  return row;
-}
-
-async function verifiedAccountById(exec: DbReader, userId: string) {
-  const [row] = await exec
-    .select({
-      userId: user.id,
-      name: user.name,
-      email: user.email,
-      emailVerified: user.emailVerified,
-    })
-    .from(user)
-    .where(eq(user.id, userId))
-    .limit(1);
-  if (!row?.emailVerified) {
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message: "That account has not verified its email",
-    });
-  }
   return row;
 }
 
@@ -353,148 +324,6 @@ export const personRouter = {
           ctx.baseDb,
         ),
       };
-    }),
-
-  accountCandidate: organizationManagerIdentityProcedure
-    .input(PersonAccountCandidateSchema)
-    .query(async ({ ctx, input }) => {
-      await requirePerson(ctx.baseDb, ctx.organizationId, input.personId);
-      const account = await findVerifiedAccountByEmail(ctx.baseDb, input.email);
-      if (!account) return null;
-      const [linked] = await ctx.baseDb
-        .select({ personId: person.id })
-        .from(person)
-        .where(
-          and(
-            eq(person.organizationId, ctx.organizationId),
-            eq(person.accountUserId, account.userId),
-          ),
-        )
-        .limit(1);
-      return { ...account, linkedPersonId: linked?.personId ?? null };
-    }),
-
-  linkAccount: organizationManagerIdentityProcedure
-    .input(LinkPersonAccountSchema)
-    .mutation(async ({ ctx, input }) => {
-      const target = await requirePerson(
-        ctx.baseDb,
-        ctx.organizationId,
-        input.personId,
-      );
-      if (target.archivedAt) {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: PERSON_ARCHIVED,
-        });
-      }
-      if (target.updatedAt.toISOString() !== input.expectedUpdatedAt) {
-        throw new TRPCError({ code: "CONFLICT", message: STALE_PERSON });
-      }
-      await verifiedAccountById(ctx.baseDb, input.accountUserId);
-      const [linked] = await ctx.baseDb
-        .select({ personId: person.id })
-        .from(person)
-        .where(
-          and(
-            eq(person.organizationId, ctx.organizationId),
-            eq(person.accountUserId, input.accountUserId),
-          ),
-        )
-        .limit(1);
-      if (linked && linked.personId !== target.id) {
-        throw new TRPCError({
-          code: "CONFLICT",
-          message: "That account is linked to another person",
-        });
-      }
-      const saved = await ctx.baseDb.transaction(async (db) => {
-        await ensureOrganizationAccount(db, {
-          organizationId: ctx.organizationId,
-          userId: input.accountUserId,
-        });
-        const [updated] = await db
-          .update(person)
-          .set({ accountUserId: input.accountUserId })
-          .where(
-            and(
-              eq(person.organizationId, ctx.organizationId),
-              eq(person.id, target.id),
-              eq(person.updatedAt, target.updatedAt),
-            ),
-          )
-          .returning({ updatedAt: person.updatedAt });
-        if (!updated) {
-          throw new TRPCError({ code: "CONFLICT", message: STALE_PERSON });
-        }
-        const backfill = await backfillLinkedPersonSubjects(db, {
-          organizationId: ctx.organizationId,
-          personId: target.id,
-          userId: input.accountUserId,
-        });
-        if (backfill.collision) {
-          throw new TRPCError({
-            code: "CONFLICT",
-            message: "The account already has a separate branch record",
-          });
-        }
-        return updated;
-      });
-      return {
-        personId: target.id,
-        accountUserId: input.accountUserId,
-        updatedAt: saved.updatedAt,
-      };
-    }),
-
-  unlinkAccount: organizationManagerIdentityProcedure
-    .input(UnlinkPersonAccountSchema)
-    .mutation(async ({ ctx, input }) => {
-      const target = await requirePerson(
-        ctx.baseDb,
-        ctx.organizationId,
-        input.personId,
-      );
-      if (
-        target.updatedAt.toISOString() !== input.expectedUpdatedAt ||
-        target.accountUserId !== input.expectedAccountUserId
-      ) {
-        throw new TRPCError({ code: "CONFLICT", message: STALE_PERSON });
-      }
-      const legacyRows = await countLegacyOnlyPersonSubjects(ctx.baseDb, {
-        organizationId: ctx.organizationId,
-        userId: input.expectedAccountUserId,
-      });
-      if (legacyRows > 0) {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: "Historical records still need a person link",
-        });
-      }
-      const saved = await ctx.baseDb.transaction(async (db) => {
-        await clearLinkedPersonAccountSubjects(db, {
-          organizationId: ctx.organizationId,
-          personId: target.id,
-          userId: input.expectedAccountUserId,
-        });
-        const [updated] = await db
-          .update(person)
-          .set({ accountUserId: null })
-          .where(
-            and(
-              eq(person.organizationId, ctx.organizationId),
-              eq(person.id, target.id),
-              eq(person.accountUserId, input.expectedAccountUserId),
-              eq(person.updatedAt, target.updatedAt),
-            ),
-          )
-          .returning({ updatedAt: person.updatedAt });
-        if (!updated) {
-          throw new TRPCError({ code: "CONFLICT", message: STALE_PERSON });
-        }
-        return updated;
-      });
-      return { personId: target.id, updatedAt: saved.updatedAt };
     }),
 
   archive: organizationManagerIdentityProcedure

@@ -12,7 +12,7 @@ export function onSameLocalDay(a: Date, b: Date): boolean {
   );
 }
 
-export interface DayWindow {
+interface DayWindow {
   from: Date;
   to: Date;
 }
@@ -29,7 +29,7 @@ export function dayWindow(
 }
 
 /** 0 = Sunday, 1 = Monday. See ADR 96 for why the app uses both. */
-export type WeekStartsOn = 0 | 1;
+type WeekStartsOn = 0 | 1;
 
 export const GRID_WEEK_STARTS_ON: WeekStartsOn = 1;
 

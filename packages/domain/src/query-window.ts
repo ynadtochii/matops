@@ -1,12 +1,12 @@
-import { ATTENDANCE_BACKFILL_DAYS, UNMARKED_LOOKBACK_DAYS } from "./attendance";
+import { UNMARKED_LOOKBACK_DAYS } from "./attendance";
 import { academyDay, addLocalDays, DAY_MS, localMidnight } from "./local-date";
 
-export interface QueryWindow {
+interface QueryWindow {
   from: string;
   to: string;
 }
 
-export interface SelfServiceWindowRule {
+interface SelfServiceWindowRule {
   bookingWindowDays: number;
   timeZone: string;
 }
@@ -49,13 +49,6 @@ export function dashboardWeekWindow(now: Date): QueryWindow {
   return classQueryWindow(now, {
     backDays: UNMARKED_LOOKBACK_DAYS + 2,
     forwardDays: 8,
-  });
-}
-
-export function attendanceWindow(now: Date): QueryWindow {
-  return classQueryWindow(now, {
-    backDays: ATTENDANCE_BACKFILL_DAYS + 1,
-    forwardDays: 2,
   });
 }
 

@@ -11,7 +11,7 @@ import { isBjjAcademy } from "./entity";
  * Nothing here says "entity" or "organization": those are the database's words
  * (FP9).
  */
-export interface BranchWords {
+interface BranchWords {
   /** What this place is: "academy" or "space". */
   branch: string;
   branchPlural: string;
@@ -38,26 +38,8 @@ export function branchWords(type: string): BranchWords {
   return isBjjAcademy(type) ? BJJ : GENERAL;
 }
 
-/** "Opening your academy" / "Opening your space", for a loading label. */
-export function openingLabel(type: string): string {
-  return `Opening your ${branchWords(type).branch}`;
-}
-
-/**
- * A sentence that starts with the count: "3 classes", "1 session".
- *
- * The count leads because that is what the reader is looking for, and the
- * singular is spelled rather than derived, since English plurals are not a
- * suffix rule and "classs" is the kind of thing nobody notices until a member
- * does.
- */
-export function sessionCount(type: string, n: number): string {
-  const words = branchWords(type);
-  return `${n} ${n === 1 ? words.session : words.sessionPlural}`;
-}
-
 /** One of the links the share dialog can offer (spec FP9, ADR 128). */
-export type ShareAction = "booking" | "checkin" | "join";
+type ShareAction = "booking" | "checkin" | "join";
 
 /**
  * Which links exist for a branch of this type.

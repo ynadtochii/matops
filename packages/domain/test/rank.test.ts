@@ -4,36 +4,14 @@ import {
   compareRank,
   disciplineLabel,
   formatRank,
-  hasRankSystem,
   isRankChange,
   isRankRegression,
   isValidRank,
   RANK_SYSTEMS,
   rankDisciplines,
-  rankSystemFor,
 } from "../src/rank";
 
 describe("rank systems", () => {
-  it("seeds BJJ with belts + stripes", () => {
-    const bjj = rankSystemFor("bjj");
-    expect(bjj?.belts).toEqual(["White", "Blue", "Purple", "Brown", "Black"]);
-    expect(bjj?.maxStripes).toBe(4);
-  });
-
-  it("seeds a no-stripe system (Judo) to prove the model is general", () => {
-    const judo = rankSystemFor("judo");
-    expect(judo?.maxStripes).toBe(0);
-    expect(judo?.belts).toContain("Black");
-  });
-
-  it("reports which disciplines have ranks", () => {
-    expect(hasRankSystem("bjj")).toBe(true);
-    expect(hasRankSystem("judo")).toBe(true);
-    // A discipline with no belt ladder (striking arts) has no rank control.
-    expect(hasRankSystem("boxing")).toBe(false);
-    expect(hasRankSystem("mma")).toBe(false);
-  });
-
   it("lists the ranked disciplines for the owner picker", () => {
     const keys = rankDisciplines().map((s) => s.discipline);
     expect(keys).toEqual(Object.keys(RANK_SYSTEMS));

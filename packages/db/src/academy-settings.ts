@@ -5,7 +5,7 @@ import type { DbReader, DbWriter } from "./tenant";
 import { organization } from "./auth-schema";
 import { academyProfile, entity } from "./entity-schema";
 
-export interface AcademySettings {
+interface AcademySettings {
   academyId: string;
   name: string;
   code: string;

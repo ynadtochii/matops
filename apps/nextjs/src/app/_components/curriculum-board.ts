@@ -24,14 +24,14 @@ import {
   weeksLabel,
 } from "./curriculum-shared";
 
-export interface BlockDraft {
+interface BlockDraft {
   theme: string;
   notes: string;
   category: string;
   defaultWeeks: number;
 }
 
-export interface PlaceRequest {
+interface PlaceRequest {
   blockId: string;
   atIndex: number;
   weeks?: number;

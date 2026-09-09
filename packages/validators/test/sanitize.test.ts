@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   AddMemberNoteSchema,
+  CreateClassSchema,
   CreateClassTemplateSchema,
   DropInSchema,
   EmailSchema,
@@ -10,7 +11,6 @@ import {
   NameSchema,
   PhoneSchema,
   UpdateAcademySettingsSchema,
-  UpdateClassSchema,
 } from "../src";
 
 const ZWSP = "​";
@@ -240,58 +240,28 @@ describe("composed schemas still accept real input", () => {
   });
 });
 
-describe("UpdateClassSchema time zone", () => {
+describe("session description", () => {
   const base = {
-    id: "11111111-1111-4111-8111-111111111111",
-    title: "Gi fundamentals",
-    instructorId: "user_1",
-    durationMinutes: 60,
-    capacity: 20,
-  };
-
-  it("rejects a reschedule into an unknown zone", () => {
-    expect(
-      UpdateClassSchema.safeParse({
-        ...base,
-        date: "2026-09-01",
-        startsAtMinutes: 1080,
-        timeZone: "Mars/Olympus",
-      }).success,
-    ).toBe(false);
-  });
-
-  it("accepts a reschedule into a real zone", () => {
-    expect(
-      UpdateClassSchema.safeParse({
-        ...base,
-        date: "2026-09-01",
-        startsAtMinutes: 1080,
-        timeZone: "Europe/Kyiv",
-      }).success,
-    ).toBe(true);
-  });
-});
-
-describe("session description and instructor", () => {
-  const base = {
-    id: "11111111-1111-4111-8111-111111111111",
     title: "Open gym",
+    date: "2026-09-01",
+    startsAtMinutes: 600,
     durationMinutes: 60,
+    timeZone: "Europe/Kyiv",
     capacity: 20,
   };
 
-  it("says nobody teaches it out loud, and refuses silence", () => {
+  it("rejects an unknown zone and accepts a real one", () => {
     expect(
-      UpdateClassSchema.safeParse({ ...base, instructorId: null }).success,
-    ).toBe(true);
-    expect(UpdateClassSchema.safeParse(base).success).toBe(false);
+      CreateClassSchema.safeParse({ ...base, timeZone: "Mars/Olympus" })
+        .success,
+    ).toBe(false);
+    expect(CreateClassSchema.safeParse(base).success).toBe(true);
   });
 
   it("cleans a description the way other multi-line fields are cleaned", () => {
     const parsed = ok(
-      UpdateClassSchema.safeParse({
+      CreateClassSchema.safeParse({
         ...base,
-        instructorId: null,
         description: `Bring a towel.\r\n\n\n\nMats${ZWSP} open at 7  `,
       }),
     );
@@ -322,18 +292,10 @@ describe("session description and instructor", () => {
   });
 
   it("keeps an absent description absent and an empty one nothing", () => {
+    expect(ok(CreateClassSchema.safeParse(base)).description).toBeUndefined();
     expect(
-      ok(UpdateClassSchema.safeParse({ ...base, instructorId: null }))
+      ok(CreateClassSchema.safeParse({ ...base, description: "   " }))
         .description,
-    ).toBeUndefined();
-    expect(
-      ok(
-        UpdateClassSchema.safeParse({
-          ...base,
-          instructorId: null,
-          description: "   ",
-        }),
-      ).description,
     ).toBeNull();
   });
 });

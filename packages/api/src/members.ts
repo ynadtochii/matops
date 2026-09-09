@@ -4,7 +4,6 @@ import type { DbExec, DbReader, MemberRow, TenantTx } from "@matops/db";
 import {
   and,
   eq,
-  getAcademyMembership,
   getMemberById,
   inArray,
   listMembersOf,
@@ -116,30 +115,8 @@ export function nameByMember(rows: MemberRow[]): Map<string, string> {
   return new Map(rows.map((r) => [r.memberId, r.name]));
 }
 
-/**
- * Assert a user belongs to an academy, and hand back the membership row.
- *
- * The miss is NOT_FOUND, never FORBIDDEN, for the same reason `requireMember`
- * uses it: both academy id and user id arrive from the caller, and FORBIDDEN
- * would confirm the id exists somewhere. The one exception is the tenant
- * middleware in `trpc.ts`, which answers about the caller's OWN active academy
- * and has no foreign id to protect.
- */
-export async function requireMembership(
-  userId: string,
-  academyId: string,
-  exec: DbReader,
-  message: string,
-): Promise<NonNullable<Awaited<ReturnType<typeof getAcademyMembership>>>> {
-  const membership = await getAcademyMembership(userId, academyId, exec);
-  if (!membership) {
-    throw new TRPCError({ code: "NOT_FOUND", message });
-  }
-  return membership;
-}
-
 /** The tenant handles activation needs: the base connection plus an RLS tx. */
-export interface ActivateScope {
+interface ActivateScope {
   academyId: string;
   baseDb: DbExec;
   withScope: <T>(fn: (tx: TenantTx) => Promise<T>) => Promise<T>;
@@ -166,7 +143,7 @@ export async function activateMember(
   );
 }
 
-export type DirectoryMemberRow = Omit<MemberRow, "memberId"> & {
+type DirectoryMemberRow = Omit<MemberRow, "memberId"> & {
   memberId: string | null;
   inheritedRole: boolean;
 };

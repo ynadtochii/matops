@@ -11,7 +11,7 @@ export interface TimeZoneCtx {
 }
 
 /** Everything a request needs off the academy row, in one read. */
-export interface AcademyContext {
+interface AcademyContext {
   timeZone: string;
   country: string | null;
   bookingWindowDays: number;

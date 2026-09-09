@@ -62,13 +62,3 @@ export const OrganizationExportPageSchema = z.object({
   cursor: z.string().optional(),
   limit: z.number().int().min(1).max(500).default(500),
 });
-
-export type StudentImportPreviewInput = z.infer<
-  typeof StudentImportPreviewSchema
->;
-export type StudentImportCommitInput = z.infer<
-  typeof StudentImportCommitSchema
->;
-export type OrganizationExportPageInput = z.infer<
-  typeof OrganizationExportPageSchema
->;

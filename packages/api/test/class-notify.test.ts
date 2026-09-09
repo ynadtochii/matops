@@ -10,6 +10,7 @@ import {
 
 const ACAD = "acad_notify";
 const OWNER = "u_notify_owner";
+const COACH = "u_notify_coach";
 const STUDENT = "u_notify_student";
 const TO_CANCEL = "aaaaaaaa-0000-4000-8000-000000000401";
 const TO_MOVE = "aaaaaaaa-0000-4000-8000-000000000402";
@@ -32,6 +33,7 @@ beforeAll(async () => {
       code: "700050",
       members: [
         { userId: OWNER, role: "owner", status: "active" },
+        { userId: COACH, role: "instructor", status: "active" },
         { userId: STUDENT, role: "student", status: "active" },
       ],
     },
@@ -72,17 +74,10 @@ describe("the booked students hear about a class", () => {
     ]);
   });
 
-  it("tells them when it moves", async () => {
-    await h.as(OWNER, ACAD).class.update({
-      id: TO_MOVE,
-      title: "Gi Fundamentals",
-      instructorId: OWNER,
-      durationMinutes: 60,
-      capacity: 20,
-      date: "2026-12-01",
-      startsAtMinutes: 1140,
-      timeZone: "Europe/Lisbon",
-    });
+  it("tells them when the coach changes", async () => {
+    await h
+      .as(OWNER, ACAD)
+      .class.setInstructor({ id: TO_MOVE, instructorId: COACH });
     expect(await kindsFor(STUDENT)).toContain("class_changed");
   });
 });

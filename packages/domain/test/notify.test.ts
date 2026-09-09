@@ -4,8 +4,6 @@ import {
   buildApprovalMessage,
   buildCancelledMessage,
   buildClassChangeMessage,
-  buildDuesReminderMessage,
-  buildReminderMessage,
   formatWhen,
 } from "../src/notify";
 
@@ -46,40 +44,5 @@ describe("message builders", () => {
     const m = buildApprovalMessage({ academyName: "Kyiv BJJ" });
     expect(m.title).toBe("You're in!");
     expect(m.body).toContain("Kyiv BJJ");
-  });
-
-  it("reminder → push naming the class + when", () => {
-    const m = buildReminderMessage({
-      className: "Fundamentals",
-      whenLabel: "in 2 hours",
-    });
-    expect(m.body).toContain("Fundamentals");
-    expect(m.body).toContain("in 2 hours");
-  });
-});
-
-describe("buildDuesReminderMessage", () => {
-  it("due-soon message names the amount, gym, and due date", () => {
-    const m = buildDuesReminderMessage({
-      academyName: "Ronin BJJ",
-      amountLabel: "USD 50.00",
-      dueLabel: "10 Aug",
-      overdue: false,
-    });
-    expect(m.title).toBe("Membership due soon");
-    expect(m.body).toContain("USD 50.00");
-    expect(m.body).toContain("Ronin BJJ");
-    expect(m.body).toContain("10 Aug");
-  });
-
-  it("overdue message switches the title + wording", () => {
-    const m = buildDuesReminderMessage({
-      academyName: "Ronin BJJ",
-      amountLabel: "USD 50.00",
-      dueLabel: "10 Aug",
-      overdue: true,
-    });
-    expect(m.title).toBe("Payment overdue");
-    expect(m.body).toContain("overdue");
   });
 });

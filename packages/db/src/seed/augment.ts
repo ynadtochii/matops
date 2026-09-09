@@ -52,7 +52,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const FILL_TEMPLATE_MARKER = "[demo seed]";
 const FILL_PLAN_MARKER = "[demo seed]";
 
-export type FillReport = Record<string, number>;
+type FillReport = Record<string, number>;
 
 const FIRST_NAMES = [
   "Sam",

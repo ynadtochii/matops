@@ -9,7 +9,7 @@ import {
   notificationRecipient,
 } from "./notification-notice-schema";
 
-export interface NoticeRecipientInput {
+interface NoticeRecipientInput {
   recipientKey: string;
   userId?: string;
   personId?: string;
@@ -17,7 +17,7 @@ export interface NoticeRecipientInput {
   email?: string;
 }
 
-export interface CreateNoticeInput {
+interface CreateNoticeInput {
   academyId: string;
   eventKey: string;
   kind: string;
@@ -27,7 +27,7 @@ export interface CreateNoticeInput {
   recipients: NoticeRecipientInput[];
 }
 
-export type NoticeEmailSender = (payload: {
+type NoticeEmailSender = (payload: {
   to: string;
   subject: string;
   text: string;
@@ -39,9 +39,9 @@ export type NoticeEmailSender = (payload: {
   errorCode?: string;
 }>;
 
-export type NoticeDeliveryMode = "remaining" | "failed";
+type NoticeDeliveryMode = "remaining" | "failed";
 
-export interface NoticeDeliveryResult {
+interface NoticeDeliveryResult {
   claimed: number;
   accepted: number;
   failed: number;

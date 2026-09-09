@@ -12,7 +12,7 @@ export interface MemberRow extends Membership {
 
 // --- Approval (pending → active) ---------------------------------------------
 
-export interface PendingMembership {
+interface PendingMembership {
   status: string;
   /** The role to grant at approval; set from the invite at join time. */
   invitedRole: string | null;

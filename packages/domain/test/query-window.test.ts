@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  attendanceWindow,
   classQueryWindow,
   scheduleWeekWindow,
   studentWeekWindow,
@@ -78,12 +77,6 @@ describe("classQueryWindow", () => {
 });
 
 describe("named windows", () => {
-  it("attendanceWindow covers the full backfill range plus a day of slack", () => {
-    const w = attendanceWindow(new Date("2026-08-24T13:00:00Z"));
-    expect(w.from).toBe("2026-08-09T00:00:00.000Z");
-    expect(w.to).toBe("2026-08-26T00:00:00.000Z");
-  });
-
   it("studentWeekWindow covers today plus seven local days either way", () => {
     const w = studentWeekWindow(new Date("2026-08-24T13:00:00Z"));
     expect(w.from).toBe("2026-08-23T00:00:00.000Z");

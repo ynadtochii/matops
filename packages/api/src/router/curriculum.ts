@@ -1,6 +1,5 @@
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
-import { z } from "zod/v4";
 
 import type { TenantTx } from "@matops/db";
 import { asc, desc, eq, inArray, sql } from "@matops/db";
@@ -79,8 +78,6 @@ interface Track {
   name: string;
   isDefault: boolean;
 }
-
-const DaySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 const TRACK_NOT_FOUND = "Track not found";
 
@@ -347,17 +344,6 @@ export const curriculumRouter = {
           state: placementState(placement, day),
         })),
       };
-    }),
-
-  forDate: curriculumStaffProcedure
-    .input(z.object({ date: DaySchema, trackId: z.uuid().optional() }))
-    .query(async ({ ctx, input }) => {
-      const track = await resolveTrack(ctx, input.trackId);
-      const plan = await loadPlan(ctx, track.id);
-      const placement = placementForDate(plan, input.date);
-      if (!placement) return null;
-      const themes = await loadThemes(ctx, placement);
-      return themes.length ? { slotId: placement.id, themes } : null;
     }),
 
   /**

@@ -38,7 +38,7 @@ export interface ApplicableAssignment {
   deadline: Date;
 }
 
-export interface AccessInput {
+interface AccessInput {
   /** The branch being asked about. */
   entityId: string;
   /** Their standing AT that branch, or null for an owner who holds none. */

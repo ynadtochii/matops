@@ -87,7 +87,7 @@ type NewReferralAudit = typeof memberReferralAudit.$inferInsert;
 /** Everything the seed inserts, grouped by table. Future (materialized) classes
  * and their bookings are NOT here — run.ts adds those after materialization,
  * because their class ids are database-generated. */
-export interface SeedGraph {
+interface SeedGraph {
   users: NewUser[];
   organizations: NewOrganization[];
   members: NewMember[];
@@ -112,7 +112,7 @@ export interface SeedGraph {
   quietStudentIds: string[];
 }
 
-export interface SeedGraphOptions {
+interface SeedGraphOptions {
   /** The real, already-registered user you sign in as (the academy owner). */
   realUser: { id: string; name: string };
   /** Injected id generator for uuid PKs — pass a counter in tests for determinism. */
@@ -232,7 +232,7 @@ interface TemplateSpec {
  * drives the drift band — `undefined` trains right up to today, a number stops
  * attending that many days ago, `null` never attended at all.
  */
-export interface StudentDef {
+interface StudentDef {
   persona: Persona;
   status: string;
   role: string;
@@ -330,9 +330,7 @@ function buildAcademy(args: {
           classId,
           studentId: s.persona.userId,
           personOrganizationId: academy.id,
-          personId: seedPersonId(
-            seedMemberId(academy.key, s.persona.handle),
-          ),
+          personId: seedPersonId(seedMemberId(academy.key, s.persona.handle)),
           bookingStatus: "booked",
           bookingTier: "confirmed",
           bookedAt: new Date(startsAt.getTime() - DAY_MS),
@@ -682,7 +680,7 @@ function buildAcademy(args: {
 }
 
 /** The organization-scoped membership rows one seeded academy carries. */
-export interface MembershipRows {
+interface MembershipRows {
   policies: NewPolicy[];
   plans: NewAccessPlan[];
   planPrices: NewAccessPlanPrice[];

@@ -20,7 +20,6 @@ import { pushTokenRouter } from "./router/pushToken";
 import { rankRouter } from "./router/rank";
 import { referralRouter } from "./router/referral";
 import { statsRouter } from "./router/stats";
-import { systemRouter } from "./router/system";
 import { templateRouter } from "./router/template";
 import { visitorRouter } from "./router/visitor";
 import { createTRPCRouter } from "./trpc";
@@ -49,7 +48,6 @@ export const appRouter = createTRPCRouter({
   dropIn: dropInRouter,
   pushToken: pushTokenRouter,
   stats: statsRouter,
-  system: systemRouter,
   visitor: visitorRouter,
 });
 

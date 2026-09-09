@@ -60,7 +60,7 @@ export interface DateRange {
  * The window the O10 screen offers. Calendar months are resolved in the academy
  * zone; rolling days are a plain instant subtraction and need no zone.
  */
-export type CoachWindow =
+type CoachWindow =
   { kind: "month"; monthsBack: number } | { kind: "rollingDays"; days: number };
 
 /** The three windows the O10 screen offers, as stable keys both clients use. */
@@ -77,7 +77,7 @@ export const COACH_WINDOWS: Record<CoachWindowKey, CoachWindow> = {
 };
 
 /** The rows and window every aggregate reads. */
-export interface CoachInput {
+interface CoachInput {
   classes: CoachClass[];
   marks: ClassMark[];
   now: Date;
@@ -85,7 +85,7 @@ export interface CoachInput {
 }
 
 /** `CoachInput` plus the staff roster the whole-gym roster view needs. */
-export interface CoachRosterInput extends CoachInput {
+interface CoachRosterInput extends CoachInput {
   /**
    * Active staff, in the order the caller wants them back. Every id gets a row
    * even with no classes, so the screen shows a coach who taught nothing.
@@ -94,7 +94,7 @@ export interface CoachRosterInput extends CoachInput {
 }
 
 /** One coach's totals over the window (O10 roster card). */
-export interface CoachWorkload {
+interface CoachWorkload {
   instructorId: string;
   classesLed: number;
   unresolvedEnded: number;
@@ -111,7 +111,7 @@ export interface CoachWorkload {
 }
 
 /** One class title a coach taught, in the per-coach breakdown. */
-export interface CoachClassGroup {
+interface CoachClassGroup {
   title: string;
   /** First discipline seen for this title, matching the `gymInsights` rule. */
   discipline: string | null;
@@ -122,7 +122,7 @@ export interface CoachClassGroup {
 }
 
 /** One led class in the per-coach recent list. */
-export interface CoachClassSummary {
+interface CoachClassSummary {
   classId: string;
   startsAt: Date;
   title: string;
@@ -133,7 +133,7 @@ export interface CoachClassSummary {
 }
 
 /** The per-coach detail behind a roster card. */
-export interface CoachBreakdown {
+interface CoachBreakdown {
   byClass: CoachClassGroup[];
   /** Classes led per weekday, index 0 = Sun … 6 = Sat (`DAY_LABELS`). */
   byWeekday: number[];
@@ -426,15 +426,6 @@ export function coachBreakdown(
       .sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime())
       .map(sourceSummary),
   };
-}
-
-/** Minutes on the mat as "3h 30m" / "2h" / "45m". Zero reads as "0m". */
-export function formatMatTime(minutes: number): string {
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  if (hours === 0) return `${rest}m`;
-  if (rest === 0) return `${hours}h`;
-  return `${hours}h ${rest}m`;
 }
 
 /**

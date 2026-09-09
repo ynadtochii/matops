@@ -3,9 +3,9 @@ import { and, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import type { DbReader } from "./tenant";
 import { productEvent } from "./product-event-schema";
 
-export const STUDENT_ACTIVITY = ["student_booking", "student_attendance"];
+const STUDENT_ACTIVITY = ["student_booking", "student_attendance"];
 
-export interface WeeklyUseRow {
+interface WeeklyUseRow {
   weekStart: string;
   activeOrganizations: number;
   bookingOrganizations: number;
@@ -47,7 +47,7 @@ export function weeksBack(weeks: number, now: Date): Date {
   return start;
 }
 
-export interface MilestoneRow {
+interface MilestoneRow {
   organizationId: string;
   created: Date | null;
   firstBranch: Date | null;
@@ -95,7 +95,7 @@ export function organizationMilestones(
     .groupBy(productEvent.organizationId);
 }
 
-export interface FunnelSummary {
+interface FunnelSummary {
   gyms: number;
   reached: Record<string, number>;
   setupComplete: number;

@@ -18,6 +18,5 @@ export const PublicBookingSchema = z.object({
   consent: z.literal(true, "Consent is required to take a booking"),
   source: z.enum(LEAD_SOURCES).default("api"),
 });
-export type PublicBookingInput = z.infer<typeof PublicBookingSchema>;
 
 export const PublicBookingEnabledSchema = z.object({ enabled: z.boolean() });

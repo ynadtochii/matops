@@ -15,7 +15,7 @@ import { notification } from "./notification-schema";
  * lean on `app.academy_id` being set.
  */
 
-export interface NewNotification {
+interface NewNotification {
   academyId: string;
   userId: string;
   kind: NotificationKind;

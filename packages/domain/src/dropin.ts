@@ -15,7 +15,7 @@ export function normalizePhone(phone: string): string {
   return phone.trimStart().startsWith("+") ? `+${digits}` : digits;
 }
 
-export type DropInReason = "no-consent" | "no-phone" | "no-name" | "no-email";
+type DropInReason = "no-consent" | "no-phone" | "no-name" | "no-email";
 
 export interface DropInResult {
   ok: boolean;

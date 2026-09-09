@@ -6,10 +6,7 @@
     ".": "./src/index.ts",
     "./tokens": "./src/tokens.ts",
     "./button-variants": "./src/button-variants.ts",
-    "./button": {
-      "react-native": "./src/button.native.tsx",
-      "default": "./src/button.tsx"
-    },
+    "./button": "./src/button.tsx",
     "./logo": {
       "react-native": "./src/logo.native.tsx",
       "default": "./src/logo.tsx"

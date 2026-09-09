@@ -83,7 +83,7 @@ export async function listAcademyClassesInWindow(
     );
 }
 
-export interface CreateDropInInput {
+interface CreateDropInInput {
   academyId: string;
   firstName: string;
   lastName: string;
@@ -186,12 +186,12 @@ export async function createDropIn(
   return { dropInId, visitCount: await countPresentVisits(dropInId, exec) };
 }
 
-export interface BookVisitorInput extends Omit<CreateDropInInput, "classId"> {
+interface BookVisitorInput extends Omit<CreateDropInInput, "classId"> {
   classId: string;
   cancelToken: string;
 }
 
-export interface BookVisitorResult extends DropInResult {
+interface BookVisitorResult extends DropInResult {
   visitId: string;
   cancelToken: string;
 }

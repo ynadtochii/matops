@@ -4,7 +4,7 @@ const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 const CHUNK_SIZE = 100; // Expo accepts up to 100 messages per request.
 
 /** A push payload (the domain builds title/body; `data` carries deep-link hints). */
-export interface PushPayload {
+interface PushPayload {
   title: string;
   body: string;
   data?: Record<string, unknown>;
@@ -15,7 +15,7 @@ export interface BatchPush extends PushPayload {
   to: string;
 }
 
-export interface SendPushResult {
+interface SendPushResult {
   /** Messages actually POSTed (0 when no tokens or unconfigured). */
   sent: number;
   ok: boolean;

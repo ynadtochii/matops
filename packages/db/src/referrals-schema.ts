@@ -11,7 +11,7 @@ import {
 import { entity, entityMembership } from "./entity-schema";
 
 /** Audit event emitted whenever the current referral state changes. */
-export const referralAction = pgEnum("referral_action", [
+const referralAction = pgEnum("referral_action", [
   "assigned",
   "corrected",
   "cleared",

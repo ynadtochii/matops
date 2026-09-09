@@ -8,13 +8,13 @@ import {
 
 import { loadMembershipAccess } from "./membership-access";
 
-export interface GatedEntity {
+interface GatedEntity {
   id: string;
   name: string;
   membershipEnforcedAt: Date | null;
 }
 
-export interface BookingGate {
+interface BookingGate {
   locked: boolean;
   provisional: boolean;
   /** What to tell them, or null when nothing is in the way. */

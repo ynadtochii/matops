@@ -42,7 +42,7 @@ import { ErrorState, NoAccessState } from "./states";
 
 const NARROW_ROUTES = ["/class", "/profile"];
 
-export const GYM_GROUP = "Organization";
+const GYM_GROUP = "Organization";
 
 export const PlusIcon = () => (
   <svg
@@ -72,7 +72,7 @@ function contentWidth(pathname: string, isStaff: boolean): string {
   return "max-w-6xl";
 }
 
-export interface BranchNav {
+interface BranchNav {
   id: string;
   type: string;
   role: string;
@@ -86,7 +86,7 @@ export interface BranchNav {
  * swaps the whole menu out. They pass no badges: a count needs the branch
  * scope those screens never open.
  */
-export function branchNavItems(
+function branchNavItems(
   branch: BranchNav,
   badges: {
     students?: NavBadge;

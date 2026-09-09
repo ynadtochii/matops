@@ -35,14 +35,6 @@ export const CreateAccessPlanSchema = z
     (v) => (v.priceMinor === undefined) === (v.currency === undefined),
     "Give a price and its currency together, or neither",
   );
-export type CreateAccessPlanInput = z.infer<typeof CreateAccessPlanSchema>;
-
-export const RenameAccessPlanSchema = z.object({
-  id: z.uuid(),
-  name: lineText(1, 80),
-  description: blockText(0, 500).nullish(),
-});
-export type RenameAccessPlanInput = z.infer<typeof RenameAccessPlanSchema>;
 
 /**
  * The exact branches the plan covers after this call. Not a patch.
@@ -57,15 +49,11 @@ export const SetAccessPlanCoverageSchema = z.object({
   entityIds: EntityIdsSchema,
   version: z.iso.datetime().nullish(),
 });
-export type SetAccessPlanCoverageInput = z.infer<
-  typeof SetAccessPlanCoverageSchema
->;
 
 export const ArchiveAccessPlanSchema = z.object({
   id: z.uuid(),
   archived: z.boolean(),
 });
-export type ArchiveAccessPlanInput = z.infer<typeof ArchiveAccessPlanSchema>;
 
 export const AccessPlanIdSchema = z.object({ id: z.uuid() });
 
@@ -89,7 +77,6 @@ export const AssignMembershipSchema = z
     ...input,
     userId: "personId" in input ? input.personId : input.userId,
   }));
-export type AssignMembershipInput = z.infer<typeof AssignMembershipSchema>;
 
 /** How many people one bulk run may touch. Past this it is an import, not a click. */
 const MAX_BULK_ASSIGN = 500;
@@ -112,9 +99,6 @@ export const BulkAssignMembershipSchema = z
     ...input,
     userIds: "personIds" in input ? input.personIds : input.userIds,
   }));
-export type BulkAssignMembershipInput = z.infer<
-  typeof BulkAssignMembershipSchema
->;
 
 export const AssignmentIdSchema = z.object({ id: z.uuid() });
 
@@ -127,7 +111,6 @@ export const PlanChangeSchema = z.object({
   assignmentId: z.uuid(),
   targetPlanId: z.uuid(),
 });
-export type PlanChangeInput = z.infer<typeof PlanChangeSchema>;
 
 export const CancelPlanChangeSchema = z.object({ changeId: z.uuid() });
 
@@ -160,7 +143,6 @@ export const BookingReviewSchema = z
           : null,
     limit: input.limit,
   }));
-export type BookingReviewInput = z.infer<typeof BookingReviewSchema>;
 
 export const MemberAssignmentsSchema = z
   .union([z.object({ personId: IdSchema }), z.object({ userId: IdSchema })])
@@ -186,7 +168,6 @@ export const SetAccessPlanPriceSchema = z.object({
   currency: CurrencySchema,
   effectiveMonth: MonthSchema,
 });
-export type SetAccessPlanPriceInput = z.infer<typeof SetAccessPlanPriceSchema>;
 
 /** Tick one month of one shared membership paid or unpaid. */
 export const MarkMembershipMonthSchema = z.object({
@@ -197,9 +178,6 @@ export const MarkMembershipMonthSchema = z.object({
   reason: blockText(1, 500).optional(),
   resolveHoldReason: blockText(1, 500).optional(),
 });
-export type MarkMembershipMonthInput = z.infer<
-  typeof MarkMembershipMonthSchema
->;
 
 export const MembershipMonthsSchema = z.object({ assignmentId: z.uuid() });
 
@@ -213,27 +191,12 @@ export const ClaimMembershipMonthSchema = z.object({
   priceMinor: PriceMinorSchema.optional(),
   currency: CurrencySchema.optional(),
 });
-export type ClaimMembershipMonthInput = z.infer<
-  typeof ClaimMembershipMonthSchema
->;
 
 /** Clear a claim without marking the month paid. */
 export const RejectMembershipClaimSchema = MarkMembershipMonthSchema.omit({
   paid: true,
   resolveHoldReason: true,
 }).extend({ reason: blockText(1, 500).default("Payment report rejected") });
-export type RejectMembershipClaimInput = z.infer<
-  typeof RejectMembershipClaimSchema
->;
-
-export const ResolveMembershipHoldSchema = z.object({
-  holdId: z.uuid(),
-  expectedVersion: z.number().int().positive(),
-  reason: blockText(1, 500),
-});
-export type ResolveMembershipHoldInput = z.infer<
-  typeof ResolveMembershipHoldSchema
->;
 
 /**
  * The organization's membership settings. Grace is bounded the same way the
@@ -255,11 +218,9 @@ export const MembershipPolicySchema = z.object({
    */
   bankDetails: blockText(0, 2000),
 });
-export type MembershipPolicyInput = z.infer<typeof MembershipPolicySchema>;
 
 /** The window the organization overview reports on. Both ends, or neither. */
 export const OrganizationWindowSchema = z.object({
   from: z.iso.datetime(),
   to: z.iso.datetime(),
 });
-export type OrganizationWindowInput = z.infer<typeof OrganizationWindowSchema>;

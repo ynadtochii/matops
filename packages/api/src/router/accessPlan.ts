@@ -68,8 +68,6 @@ import {
   MembershipPolicySchema,
   PlanChangeSchema,
   RejectMembershipClaimSchema,
-  RenameAccessPlanSchema,
-  ResolveMembershipHoldSchema,
   SetAccessPlanCoverageSchema,
   SetAccessPlanPriceSchema,
 } from "@matops/validators";
@@ -645,7 +643,7 @@ async function requireStudentCoverage(
   }
 }
 
-export interface Reconciliation {
+interface Reconciliation {
   /** Branches where a student membership was created for them. */
   enrolled: string[];
   /**
@@ -730,7 +728,7 @@ async function enrolInCoveredBranches(
   };
 }
 
-export interface PlanReconciliation {
+interface PlanReconciliation {
   checked: number;
   enrolled: { userId: string; name: string; entityIds: string[] }[];
   needsDecision: {
@@ -872,7 +870,7 @@ async function coverageGaps(
 }
 
 /** Is there work the last coverage run could not finish? */
-export function reconciliationIncomplete(r: PlanReconciliation): boolean {
+function reconciliationIncomplete(r: PlanReconciliation): boolean {
   return r.failed.length > 0 || r.needsDecision.length > 0;
 }
 
@@ -1175,17 +1173,6 @@ export const accessPlanRouter = {
         .set({ priceMinor: input.priceMinor, currency: input.currency })
         .where(eq(accessPlan.id, input.id));
 
-      return { ok: true as const };
-    }),
-
-  rename: organizationManagerProcedure
-    .input(RenameAccessPlanSchema)
-    .mutation(async ({ ctx, input }) => {
-      await requireEditable(ctx.db, input.id);
-      await ctx.db
-        .update(accessPlan)
-        .set({ name: input.name, description: input.description })
-        .where(eq(accessPlan.id, input.id));
       return { ok: true as const };
     }),
 
@@ -2463,42 +2450,6 @@ export const accessPlanRouter = {
       };
     }),
 
-  resolveHold: organizationManagerProcedure
-    .input(ResolveMembershipHoldSchema)
-    .mutation(async ({ ctx, input }) => {
-      const [hold] = await ctx.db
-        .select({
-          id: membershipAccessHold.id,
-          membershipMonthId: membershipAccessHold.membershipMonthId,
-          resolvedAt: membershipAccessHold.resolvedAt,
-          version: membershipMonth.version,
-        })
-        .from(membershipAccessHold)
-        .innerJoin(
-          membershipMonth,
-          eq(membershipMonth.id, membershipAccessHold.membershipMonthId),
-        )
-        .where(eq(membershipAccessHold.id, input.holdId))
-        .for("update");
-      if (!hold) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "That hold is gone",
-        });
-      }
-      requireMonthVersion({ version: hold.version }, input.expectedVersion);
-      if (hold.resolvedAt) return { resolved: false };
-      await ctx.db
-        .update(membershipAccessHold)
-        .set({
-          resolvedBy: ctx.session.user.id,
-          resolutionReason: input.reason,
-          resolvedAt: new Date(),
-        })
-        .where(eq(membershipAccessHold.id, input.holdId));
-      return { resolved: true };
-    }),
-
   /**
    * Where the signed-in person stands on their own memberships.
    *
@@ -2594,18 +2545,4 @@ export const accessPlanRouter = {
       }),
     };
   }),
-
-  /** One plan with its coverage, for the edit form. */
-  get: organizationManagerProcedure
-    .input(AccessPlanIdSchema)
-    .query(async ({ ctx, input }) => {
-      const plan = await loadPlan(ctx.db, input.id);
-      return {
-        id: plan.id,
-        name: plan.name,
-        description: plan.description,
-        archived: plan.archivedAt !== null,
-        entityIds: await coverageOf(ctx.db, plan.id),
-      };
-    }),
 } satisfies TRPCRouterRecord;

@@ -1,4 +1,3 @@
-import { relations } from "drizzle-orm";
 import { foreignKey, index, pgTable, uniqueIndex } from "drizzle-orm/pg-core";
 
 import { member, organization, user } from "./auth-schema";
@@ -39,14 +38,3 @@ export const person = pgTable(
     }),
   ],
 );
-
-export const personRelations = relations(person, ({ one }) => ({
-  organization: one(organization, {
-    fields: [person.organizationId],
-    references: [organization.id],
-  }),
-  account: one(user, {
-    fields: [person.accountUserId],
-    references: [user.id],
-  }),
-}));

@@ -36,7 +36,7 @@ export type SetupKey =
   | "ready"
   | "invite";
 
-export interface SetupItem {
+interface SetupItem {
   key: SetupKey;
   done: boolean;
   /** Blocked items are not the owner's next move: their turn comes later. */

@@ -1,4 +1,4 @@
-import { relations, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import {
   check,
   foreignKey,
@@ -519,33 +519,4 @@ export const membershipAccessHold = pgTable(
       sql`(resolved_at is null and resolved_by is null and resolution_reason is null) or (resolved_at is not null and resolution_reason is not null)`,
     ),
   ],
-);
-
-export const accessPlanRelations = relations(accessPlan, ({ many }) => ({
-  entities: many(accessPlanEntity),
-  assignments: many(accessAssignment),
-}));
-
-export const accessPlanEntityRelations = relations(
-  accessPlanEntity,
-  ({ one }) => ({
-    plan: one(accessPlan, {
-      fields: [accessPlanEntity.planId],
-      references: [accessPlan.id],
-    }),
-    entity: one(entity, {
-      fields: [accessPlanEntity.entityId],
-      references: [entity.id],
-    }),
-  }),
-);
-
-export const accessAssignmentRelations = relations(
-  accessAssignment,
-  ({ one }) => ({
-    plan: one(accessPlan, {
-      fields: [accessAssignment.planId],
-      references: [accessPlan.id],
-    }),
-  }),
 );
