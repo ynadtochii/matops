@@ -71,7 +71,13 @@ describe("who may open which screen", () => {
   });
 
   it("keeps staff screens off a student", () => {
-    for (const path of ["/members", "/schedule", "/coaches", "/attendance"]) {
+    for (const path of [
+      "/members",
+      "/schedule",
+      "/coaches",
+      "/attendance",
+      "/reception",
+    ]) {
       expect([path, canVisit(path, student)]).toEqual([path, false]);
       expect([path, canVisit(path, coach)]).toEqual([path, true]);
     }
@@ -142,6 +148,7 @@ describe("a gym manager at a branch", () => {
       "/schedule",
       "/members",
       "/attendance",
+      "/reception",
       "/coaches",
       "/settings",
     ]) {

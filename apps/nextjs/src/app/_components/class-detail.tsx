@@ -13,6 +13,7 @@ import {
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
+import { FOCUS_RING } from "@matops/ui/motion";
 
 import { dayLongFmt, timeFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
@@ -77,7 +78,10 @@ export function ClassDetail({ classId }: { classId: string }) {
     <>
       <Link
         href={href("/")}
-        className="text-muted-foreground hover:text-foreground focus-visible:outline-brand mb-4 inline-flex min-h-11 items-center rounded-sm text-sm focus-visible:outline-2 focus-visible:outline-offset-4"
+        className={cn(
+          "text-muted-foreground hover:text-foreground mb-4 inline-flex min-h-11 items-center rounded-sm text-sm",
+          FOCUS_RING,
+        )}
       >
         ← Back to schedule
       </Link>
@@ -88,7 +92,7 @@ export function ClassDetail({ classId }: { classId: string }) {
       <div className="flex flex-col gap-8">
         {canRunOrganization && searchParams.get("accessPerson") && (
           <section className={cn(cardClass(), ENTER, "space-y-2")}>
-            <h2 className="font-semibold">Access needs action</h2>
+            <h2 className="text-lg font-semibold">Access needs action</h2>
             <p className="text-sm">
               {searchParams.get("accessPerson")}:{" "}
               {searchParams.get("accessReason") === "payment-declined"

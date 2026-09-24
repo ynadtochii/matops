@@ -131,6 +131,7 @@ const ROUTE_ACCESS: {
   { prefix: "/schedule", allowed: isStaff },
   { prefix: "/coaches", allowed: isStaff },
   { prefix: "/attendance", allowed: isStaff },
+  { prefix: "/reception", allowed: isStaff },
 ];
 
 /**

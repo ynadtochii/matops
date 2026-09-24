@@ -23,6 +23,15 @@ const handler = async (req: NextRequest) => {
         headers: req.headers,
       }),
     onError({ error, path, type, ctx }) {
+      if (path?.startsWith("reception.")) {
+        console.error("Reception request failed", { path, code: error.code });
+        if (error.code === "INTERNAL_SERVER_ERROR") {
+          Sentry.captureException(new Error("Reception request failed"), {
+            tags: { trpcPath: path, trpcType: type, code: error.code },
+          });
+        }
+        return;
+      }
       console.error(`>>> tRPC Error on '${path}'`, error);
       const root = rootCause(error);
       if (root !== error) console.error(`>>> caused by`, root);
@@ -44,6 +53,9 @@ const handler = async (req: NextRequest) => {
     },
   });
 
+  if (req.nextUrl.pathname.includes("reception.")) {
+    response.headers.set("Cache-Control", "private, no-store");
+  }
   return response;
 };
 

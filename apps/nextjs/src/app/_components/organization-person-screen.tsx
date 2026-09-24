@@ -12,16 +12,18 @@ import {
   isStaffRole,
   isStudentMember,
 } from "@matops/domain";
+import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@matops/ui/dialog";
+import { Label } from "@matops/ui/label";
 import { Select } from "@matops/ui/select";
 import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
 import { useOrganization } from "./entity";
 import { PageHeader } from "./page-header";
-import { cardClass, ENTER, Eyebrow } from "./primitives";
+import { cardClass, ENTER, Eyebrow, SectionHeading } from "./primitives";
 import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 
@@ -100,13 +102,6 @@ export function OrganizationPersonScreen({ personId }: { personId: string }) {
     assignmentId: string;
     planName: string;
   } | null>(null);
-  const busy =
-    assign.isPending ||
-    suspend.isPending ||
-    cancel.isPending ||
-    cancelChange.isPending ||
-    addStudentToBranch.isPending ||
-    decide.isPending;
   const personQuery = useQuery({
     ...trpc.person.get.queryOptions({ personId, includeArchived: true }),
     enabled: canRunOrganization,
@@ -170,19 +165,23 @@ export function OrganizationPersonScreen({ personId }: { personId: string }) {
   const hasStudentBranch = person.branches.some(isStudentMember);
 
   return (
-    <div className={`${ENTER} flex flex-col gap-6`}>
+    <div className={cn(ENTER, "flex flex-col gap-8")}>
       <PageHeader
         title={person.name}
         subtitle={person.email ?? "No email address"}
       />
 
-      <section className="flex flex-col gap-3">
-        <Eyebrow>Branches</Eyebrow>
+      <section className="flex flex-col gap-4">
+        <SectionHeading
+          count={person.branches.filter((b) => b.status === "pending").length}
+        >
+          Branches
+        </SectionHeading>
         <ul className="flex flex-col gap-2">
           {person.branches.map((b) => (
             <li
               key={b.entityId}
-              className={`${cardClass()} flex flex-wrap items-center gap-3`}
+              className={cn(cardClass(), "flex flex-wrap items-center gap-3")}
             >
               <div className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate font-medium">{b.entityName}</span>
@@ -206,7 +205,12 @@ export function OrganizationPersonScreen({ personId }: { personId: string }) {
                 <>
                   <Button
                     size="sm"
-                    disabled={busy}
+                    variant="secondary"
+                    busy={
+                      decide.isPending &&
+                      decide.variables.entityId === b.entityId &&
+                      decide.variables.decision === "approve"
+                    }
                     onClick={() =>
                       decide.mutate({
                         entityId: b.entityId,
@@ -220,7 +224,11 @@ export function OrganizationPersonScreen({ personId }: { personId: string }) {
                   <Button
                     size="sm"
                     variant="outline"
-                    disabled={busy}
+                    busy={
+                      decide.isPending &&
+                      decide.variables.entityId === b.entityId &&
+                      decide.variables.decision === "decline"
+                    }
                     onClick={() =>
                       decide.mutate({
                         entityId: b.entityId,
@@ -252,15 +260,15 @@ export function OrganizationPersonScreen({ personId }: { personId: string }) {
         </ul>
         <BranchAssign
           held={person.branches.map((b) => b.entityId)}
-          busy={busy}
+          busy={addStudentToBranch.isPending}
           onAssign={(entityId) =>
             addStudentToBranch.mutate({ entityId, personId })
           }
         />
       </section>
 
-      <section className="flex flex-col gap-3">
-        <Eyebrow>Memberships</Eyebrow>
+      <section className="flex flex-col gap-4">
+        <SectionHeading>Memberships</SectionHeading>
         {held.data.length === 0 ? (
           <EmptyState
             title={
@@ -276,15 +284,31 @@ export function OrganizationPersonScreen({ personId }: { personId: string }) {
         ) : (
           <ul className="flex flex-col gap-2">
             {held.data.map((h) => (
-              <li key={h.id} className={`${cardClass()} flex flex-col gap-1`}>
-                <span className="font-medium">
-                  {h.planName}
+              <li key={h.id} className={cn(cardClass(), "flex flex-col gap-1")}>
+                {/* What is waiting for an answer reads before the figures. An
+                    owner arriving from the overview's claim link was landing on
+                    a card where the claim was the fifth line down. */}
+                <span className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium">{h.planName}</span>
                   {h.status !== "active" && (
-                    <span className="text-muted-foreground ml-2 text-xs uppercase">
+                    <span className="text-muted-foreground text-xs uppercase">
                       {h.status}
                     </span>
                   )}
+                  {(claims.data ?? []).some(
+                    (c) => c.assignmentId === h.id && c.personId === personId,
+                  ) && (
+                    <span className="border-brand/40 text-brand-strong rounded-full border px-2 py-0.5 text-xs font-medium">
+                      Says they paid
+                    </span>
+                  )}
                 </span>
+                {h.pendingChange && (
+                  <span className="text-brand-strong text-xs font-medium">
+                    Moves to {h.pendingChange.targetPlanName ?? "another plan"}{" "}
+                    on 1 {h.pendingChange.effectiveMonthLabel}
+                  </span>
+                )}
                 <span className="text-muted-foreground text-sm">
                   {h.entityIds.length === 0
                     ? "Covers no branch"
@@ -297,19 +321,6 @@ export function OrganizationPersonScreen({ personId }: { personId: string }) {
                       ? ` · ${formatMoney(h.amount.priceMinor, h.amount.currency)}`
                       : ""}{" "}
                     · {h.paid ? "paid" : "not paid yet"}
-                  </span>
-                )}
-                {(claims.data ?? []).some(
-                  (c) => c.assignmentId === h.id && c.personId === personId,
-                ) && (
-                  <span className="text-brand-strong text-xs font-medium">
-                    Said they paid. Waiting for you to confirm
-                  </span>
-                )}
-                {h.pendingChange && (
-                  <span className="text-brand-strong text-xs font-medium">
-                    Moves to {h.pendingChange.targetPlanName ?? "another plan"}{" "}
-                    on 1 {h.pendingChange.effectiveMonthLabel}
                   </span>
                 )}
                 {h.status === "active" &&
@@ -335,8 +346,7 @@ export function OrganizationPersonScreen({ personId }: { personId: string }) {
                     h.appliesNow && (
                       <Button
                         size="sm"
-                        variant="outline"
-                        disabled={busy}
+                        variant="secondary"
                         onClick={() =>
                           setChanging({
                             assignmentId: h.id,
@@ -351,7 +361,10 @@ export function OrganizationPersonScreen({ personId }: { personId: string }) {
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={busy}
+                      busy={
+                        cancelChange.isPending &&
+                        cancelChange.variables.changeId === h.pendingChange.id
+                      }
                       onClick={() =>
                         cancelChange.mutate({
                           changeId: h.pendingChange?.id ?? "",
@@ -365,7 +378,7 @@ export function OrganizationPersonScreen({ personId }: { personId: string }) {
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={busy}
+                      busy={suspend.isPending && suspend.variables.id === h.id}
                       onClick={() => suspend.mutate({ id: h.id })}
                     >
                       Pause
@@ -374,8 +387,10 @@ export function OrganizationPersonScreen({ personId }: { personId: string }) {
                   {h.status === "suspended" && (
                     <Button
                       size="sm"
-                      variant="outline"
-                      disabled={busy}
+                      variant="secondary"
+                      busy={
+                        assign.isPending && assign.variables.planId === h.planId
+                      }
                       onClick={() =>
                         assign.mutate({ personId, planId: h.planId })
                       }
@@ -392,7 +407,7 @@ export function OrganizationPersonScreen({ personId }: { personId: string }) {
                         await cancel.mutateAsync({ id: h.id });
                       }}
                       trigger={
-                        <Button size="sm" variant="outline" disabled={busy}>
+                        <Button size="sm" variant="destructive-outline">
                           End
                         </Button>
                       }
@@ -425,8 +440,8 @@ export function OrganizationPersonScreen({ personId }: { personId: string }) {
             "Change plan" on that membership, which waits for the 1st. */}
         {hasStudentBranch && (
           <div className="flex flex-wrap items-end gap-2">
-            <div className="flex min-w-48 flex-1 flex-col gap-2">
-              <Eyebrow as="span">Add another membership</Eyebrow>
+            <div className="flex min-w-48 flex-1 flex-col gap-1.5">
+              <Label htmlFor="person-plan">Add another membership</Label>
               <Select
                 id="person-plan"
                 value={picked}
@@ -446,10 +461,12 @@ export function OrganizationPersonScreen({ personId }: { personId: string }) {
             </div>
             <Button
               size="sm"
-              disabled={busy || picked === ""}
+              variant="secondary"
+              busy={assign.isPending}
+              disabled={picked === ""}
               onClick={() => assign.mutate({ personId, planId: picked })}
             >
-              {assign.isPending ? "Adding…" : "Add"}
+              Add
             </Button>
           </div>
         )}
@@ -498,9 +515,9 @@ function PersonAccess({
   const busy = archive.isPending || restore.isPending;
 
   return (
-    <section className="flex flex-col gap-3">
-      <Eyebrow>Access</Eyebrow>
-      <div className={`${cardClass()} flex flex-col gap-1`}>
+    <section className="flex flex-col gap-4">
+      <SectionHeading>Access</SectionHeading>
+      <div className={cn(cardClass(), "flex flex-col gap-1")}>
         <p className="font-medium">Sign-in email</p>
         <p className="text-muted-foreground text-sm">
           {person.account?.email ?? "No sign-in account"}
@@ -511,7 +528,7 @@ function PersonAccess({
           className="self-start"
           size="sm"
           variant="outline"
-          disabled={busy}
+          busy={busy}
           onClick={() => restore.mutate({ personId: person.personId })}
         >
           Restore person
@@ -521,16 +538,12 @@ function PersonAccess({
           title="Archive this person?"
           description="Their history stays. Restore them before changing branches or memberships."
           confirmLabel="Archive person"
+          variant="primary"
           onConfirm={async () => {
             await archive.mutateAsync({ personId: person.personId });
           }}
           trigger={
-            <Button
-              className="self-start"
-              size="sm"
-              variant="outline"
-              disabled={busy}
-            >
+            <Button className="self-start" size="sm" variant="outline">
               Archive person
             </Button>
           }
@@ -562,10 +575,10 @@ function BranchAssign({
 
   return (
     <div className="flex flex-wrap items-end gap-2">
-      <div className="flex min-w-40 flex-1 flex-col gap-2">
-        <Eyebrow as="span">Add them to a branch</Eyebrow>
+      <div className="flex min-w-40 flex-1 flex-col gap-1.5">
+        <Label htmlFor="person-branch">Add them to a branch</Label>
         <Select
-          aria-label="Branch"
+          id="person-branch"
           value={entityId}
           onChange={(e) => setEntityId(e.target.value)}
         >
@@ -579,7 +592,9 @@ function BranchAssign({
       </div>
       <Button
         size="sm"
-        disabled={busy || entityId === ""}
+        variant="secondary"
+        busy={busy}
+        disabled={entityId === ""}
         onClick={() => {
           onAssign(entityId);
           setEntityId("");

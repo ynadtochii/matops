@@ -18,18 +18,18 @@ export function SettingsScreen() {
   return (
     <>
       <PageHeader
-        title="Settings"
-        subtitle={
-          bjj
-            ? "This academy: name, join code, time zone, where you train, the booking rule, and public booking."
-            : "This space: name, join code, time zone and where it is."
-        }
+        title="Branch settings"
+        subtitle={`Settings for ${academy.name} alone. Everything your whole gym shares lives in Gym settings.`}
       />
-      <div className={cn("flex flex-col gap-8", ENTER)}>
+      <div className={cn("flex flex-col gap-10", ENTER)}>
         <AcademyIdentity name={academy.name} code={academy.code} />
         <AcademyLocation address={academy.address} mapUrl={academy.mapUrl} />
         {bjj && <PublicBooking academyName={academy.name} />}
-        {isOwner(academy) && <AcademyDangerZone name={academy.name} />}
+        {isOwner(academy) && (
+          <div className="border-border border-t pt-8">
+            <AcademyDangerZone name={academy.name} />
+          </div>
+        )}
       </div>
     </>
   );

@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased: the owner screens design pass
+
+- **One pass per owner screen against `docs/design.md`**, eleven screens, inside the existing system. No token, no migration, no procedure and no query changed (ADR 140).
+- **A screen-wide `busy` was deadening every row.** Six screens ORed every mutation into one constant and disabled every button with it: marking one member paid greyed out the other 199, pausing one membership greyed out Approve on every branch, suspending one coach greyed out every other coach's menu. Pending state is now keyed on the row being acted on.
+- **A failed query no longer reads as nothing to do.** The dashboard said "All clear" when the roster read had failed, the coach requests section returned nothing at all on error, and a branch card said "Not loaded" while its figures were still loading. Each now says what could not be read, and offers a retry.
+- **Buttons stopped renaming themselves.** Around twenty controls swapped their label mid-request ("Save" to "Saving…", "Rebuild schedule" to "Rebuilding…"). They use the `Button` `busy` prop, so an action keeps its name from button to toast.
+- **Ending a membership asks first, from either door.** The member detail's End wrote immediately while the identical action on the person screen asked. They now share one confirmation (spec O4).
+- **Two screens had no `h2` at all.** Gym settings and the person screen headed every section with `Eyebrow`, which renders a paragraph. Both use real headings now, and gym settings dropped the card box around each section so it matches branch settings.
+- **Primitives are imported, not copied.** `Section`'s label classes were pasted into two Curriculum headings, `Eyebrow`'s into a Notifications label, and reception had invented a third size matching neither. `SECTION_LABEL` is exported from `primitives.tsx` and all of them use it.
+- **The people list got columns.** 200 bordered cards with no rhythm became one container of hairline rows under a header: Person, Membership, Visits 30d, Branches. Visits came out of the middle of a prose line and became the column you scan to find who stopped coming. The bulk action moved from below the list to a sticky bar above it.
+- **Setup steps moved below the day's work.** The Roster opened with "How students join" above the tabs; the leads tab opened with the check-in poster above the leads. The dashboard's 20rem right rail was empty at every width and now holds "Who's drifting".
+- **Both settings screens were called "Settings".** They are "Branch settings" and "Gym settings", matching the sidebar, and Schedule now keeps its tab in the URL like every other tabbed owner screen.
+
+## Unreleased: the signed-out door
+
+- **`/sign-in` is one screen with no scroll, at every size we checked** (1512x860 down to 375x553, phone and desktop). It was 92px over on an iPhone 14 and 203px over on an SE. The cause was the "What it costs" block, which named a monthly price and a second product that is not on sale, on the page every member passes through daily. That block is gone.
+- **One `h1` per door.** The brand headline was the `h1` and it is `hidden` below `lg`, so a phone loaded the page with no `h1` at all and started at an `h2`. The headline is now a paragraph and `Sign in` is the `h1`, present at every width.
+- **The door stopped claiming an audience it does not have.** The panel footer read `For owners and instructors`, but every web student has signed in here since v3.2. It reads `Built for BJJ academies`.
+- **The sign-in subtitle says the thing that prevents a failed sign-in:** use the email your gym has for you. Signing in with a second address makes an account with no membership.
+- **A privacy link on the page that asks for an email.** `/privacy` existed and only the invite flow linked it.
+- **`/sign-in` and `/start` share one `AuthSplit` shell** instead of two copies of the same panel, so the two doors cannot drift. Both carry a `title` now, under a `%s · MatOps` template on the root layout.
+
+## Unreleased: reception
+
+- **A branch now has one permanent reception link.** An owner creates it once in Branch settings, opens it on a tablet at the door, and bookmarks it. Nobody signs in again. The full link is shown only when it is made, because only its hash is stored; Replace link makes a new one and Disable link stops reception at that branch. This replaces ADR 138's daily activation (ADR 139, migrations `0001_reception_link` and `0002_loose_machine_man`).
+- **The entrance screen asks who you are first.** Somebody finds their own name, then picks from every class that has not ended, from today through three days ahead, grouped by day. The staff screen offers the same days and the same actions, so a gym closed on Sunday still sees Monday from the desk on Saturday. A class is **Book** until 60 minutes before it starts and **Check in** from there until it ends, so `present` still means somebody was on the mat. Both writes use the member's own admission rules and capacity accounting, and the server decides the action again before writing.
+- **Both screens pick the class for you.** After a name, reception offers the class running or about to run, and otherwise the soonest bookable one, as one button with the full list behind "Choose a different class". Two classes open at once is the exception: nothing is chosen and the screen asks, because guessing between overlapping mats is the bug ADR 117 fixed for visitors.
+- **Staff have their own reception screen.** Reception in the branch menu: search the roster, tap a name, act on the class already chosen. The class stays selected and only the search clears, so a queue keeps moving, and the register is visible before anybody is searched. It is the ordinary staff attendance write, with the same capacity rules, 14-day window and correction history.
+- `class_participation` gained a nullable `check_in_source` (`reception_self` or `staff`), written with `coalesce` so a repeat never replaces whoever recorded it first.
+
+
 ## Unreleased: interface writing review
 
 - **A self-join now writes the gym-level person.** Somebody who scanned the student link got an `entity_membership` and nothing else, so the branch roster showed them and `People` showed nobody. `ensureAccountPerson` makes (or claims by email) the `person` row on every join and at gym creation, and the membership carries its id.

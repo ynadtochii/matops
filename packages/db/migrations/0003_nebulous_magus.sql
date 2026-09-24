@@ -1,0 +1,1 @@
+ALTER TABLE "reception_link" ADD COLUMN "token_ciphertext" text;

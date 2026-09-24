@@ -14,18 +14,55 @@ import {
 } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { Button } from "@matops/ui/button";
+import { FOCUS_RING } from "@matops/ui/motion";
 
 import { useTRPC } from "~/trpc/react";
 import { useOrganization } from "./entity";
 import { AddBranchButton } from "./entity-selector";
 import { JoinByCode } from "./join-by-code";
-import { cardClass, ENTER, Eyebrow, stagger } from "./primitives";
+import {
+  cardClass,
+  CheckIcon,
+  CountBadge,
+  ENTER,
+  Eyebrow,
+  SectionHeading,
+  stagger,
+} from "./primitives";
 import { SetupChecklist } from "./setup-checklist";
+import { Bar, SkeletonLines, SkeletonRows } from "./skeletons";
+
+/**
+ * A query that failed while its neighbours succeeded. The screen still works,
+ * so this is a strip rather than `ErrorState`: the branch list below is real
+ * even when the figures on it are not.
+ */
+function PartialFailure({
+  children,
+  onRetry,
+  busy,
+}: {
+  children: ReactNode;
+  onRetry: () => void;
+  busy: boolean;
+}) {
+  return (
+    <div
+      role="status"
+      className="border-warning/40 bg-warning/5 flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm"
+    >
+      <p>{children}</p>
+      <Button variant="outline" size="sm" onClick={onRetry} disabled={busy}>
+        Try again
+      </Button>
+    </div>
+  );
+}
 
 function FirstBranch({ organizationName }: { organizationName: string }) {
   return (
     <div
-      className={`${ENTER} mx-auto flex w-full max-w-md flex-col gap-6 py-12`}
+      className={cn(ENTER, "mx-auto flex w-full max-w-md flex-col gap-6 py-12")}
     >
       <div className="flex flex-col gap-2">
         <Eyebrow>{organizationName}</Eyebrow>
@@ -40,7 +77,7 @@ function FirstBranch({ organizationName }: { organizationName: string }) {
         </p>
       </div>
       <div className="flex">
-        <AddBranchButton label="Create your first branch" primary />
+        <AddBranchButton label="Add your first branch" primary />
       </div>
       <SetupChecklist />
     </div>
@@ -197,43 +234,28 @@ function NeedsAttention() {
   };
 
   return (
-    <OverviewSection
-      label="Needs attention"
-      accentCount
-      meta={
-        items.length
-          ? `${items.length}${loading || failed || review.data?.more ? "+" : ""} tasks`
-          : undefined
-      }
-    >
+    <section className="flex min-w-0 flex-col gap-4">
+      <SectionHeading count={items.length}>Needs attention</SectionHeading>
       {loading && (
-        <p role="status" className="text-muted-foreground text-sm">
-          Checking for tasks…
-        </p>
+        <div role="status" aria-label="Loading">
+          <SkeletonLines n={5} />
+        </div>
       )}
       {failed && (
-        <div
-          role="status"
-          className="border-warning/40 bg-warning/5 flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm"
+        <PartialFailure
+          onRetry={retry}
+          busy={queries.some((query) => query.isFetching)}
         >
-          <p>Some tasks could not load. This list may be incomplete.</p>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={retry}
-            disabled={queries.some((query) => query.isFetching)}
-          >
-            Retry tasks
-          </Button>
-        </div>
+          Some tasks could not load. This list may be incomplete.
+        </PartialFailure>
       )}
       {!loading && !failed && items.length === 0 && (
         <div className="flex items-start gap-3">
           <span
             aria-hidden
-            className="bg-success text-success-foreground flex size-5 shrink-0 items-center justify-center rounded-full text-xs"
+            className="bg-success text-success-foreground flex size-5 shrink-0 items-center justify-center rounded-full"
           >
-            ✓
+            <CheckIcon className="size-3" />
           </span>
           <div>
             <p className="text-sm font-medium">All caught up</p>
@@ -282,21 +304,16 @@ function NeedsAttention() {
                 <li key={item.key}>
                   <Link
                     href={item.href}
-                    className="hover:bg-muted focus-visible:outline-ring flex items-center justify-between gap-3 rounded-md px-2 py-3 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
+                    className={cn(
+                      "hover:bg-muted flex min-h-11 flex-col justify-center gap-1 rounded-md px-2 py-2 text-sm wrap-anywhere transition-colors",
+                      FOCUS_RING,
+                    )}
                   >
-                    <span className="flex min-w-0 flex-1 flex-col gap-1 wrap-anywhere">
-                      <span className="font-medium">{item.name}</span>
-                      <span className="text-muted-foreground text-xs leading-relaxed">
-                        {item.detail}
-                      </span>
-                      <span className="sr-only">{group.reason}</span>
+                    <span className="font-medium">{item.name}</span>
+                    <span className="text-muted-foreground text-xs leading-relaxed">
+                      {item.detail}
                     </span>
-                    <span
-                      aria-hidden
-                      className="text-muted-foreground shrink-0"
-                    >
-                      →
-                    </span>
+                    <span className="sr-only">{group.reason}</span>
                   </Link>
                 </li>
               ))}
@@ -307,7 +324,12 @@ function NeedsAttention() {
               key={group.reason}
               className="group border-border border-b pb-3 last:border-b-0 last:pb-0"
             >
-              <summary className="hover:bg-muted focus-visible:outline-ring min-h-11 cursor-pointer list-none content-center rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 [&::-webkit-details-marker]:hidden">
+              <summary
+                className={cn(
+                  "hover:bg-muted min-h-11 cursor-pointer list-none content-center rounded-md [&::-webkit-details-marker]:hidden",
+                  FOCUS_RING,
+                )}
+              >
                 {heading}
               </summary>
               {people}
@@ -334,7 +356,7 @@ function NeedsAttention() {
           </Link>
         </p>
       )}
-    </OverviewSection>
+    </section>
   );
 }
 
@@ -344,132 +366,138 @@ function OwnerOverview() {
   const summary = useQuery(trpc.stats.organization.queryOptions());
   const metrics = useQuery(trpc.stats.organizationMetrics.queryOptions());
 
-  const m = metrics.data;
-  const rows = summary.data ? branchRows(summary.data.entities, m) : [];
+  const rows = summary.data
+    ? branchRows(summary.data.entities, metrics.data)
+    : [];
+  // Three states, not two: while the figures are still in flight a card must
+  // not read "Not loaded", which is what a plain `metrics.data === undefined`
+  // check said.
+  const figures = metrics.isPending
+    ? "loading"
+    : metrics.isError
+      ? "failed"
+      : "ready";
 
   return (
-    <div className={`flex min-w-0 flex-col gap-8 ${ENTER}`}>
-      <div className="grid min-w-0 items-start gap-8 xl:grid-cols-[minmax(0,1fr)_20rem]">
-        <div className="contents min-w-0 flex-col gap-8 xl:flex">
-          <OverviewSection
-            label="Branches"
-            meta={`${summary.data?.entities.length ?? entities.length} total`}
-          >
-            {summary.isPending && (
-              <p role="status" className="text-muted-foreground text-sm">
-                Loading branch activity…
-              </p>
-            )}
-            {summary.isError && (
-              <div
-                role="status"
-                className="flex flex-wrap items-center justify-between gap-2 text-sm"
-              >
-                <p>
-                  Branch activity could not load. You can still open a branch.
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void summary.refetch()}
-                  disabled={summary.isFetching}
-                >
-                  Retry activity
-                </Button>
-              </div>
-            )}
-            {summary.data ? (
-              <ul className="flex flex-col gap-3">
-                {rows.map((row, i) => (
-                  <li key={row.entityId} style={stagger(i)} className={ENTER}>
-                    <BranchCard row={row} known={m !== undefined} />
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <FallbackList />
-            )}
-          </OverviewSection>
-        </div>
-        <aside
-          aria-label="Tasks and setup"
-          className="border-border order-2 flex min-w-0 flex-col gap-6 xl:order-none xl:border-l xl:pl-6"
+    <div
+      className={cn(
+        "grid min-w-0 items-start gap-8 xl:grid-cols-[minmax(0,1fr)_20rem]",
+        ENTER,
+      )}
+    >
+      <section className="flex min-w-0 flex-col gap-4">
+        <SectionHeading
+          action={
+            <span className="text-muted-foreground shrink-0 font-mono text-xs tabular-nums">
+              {summary.data?.entities.length ?? entities.length} total
+            </span>
+          }
         >
-          <NeedsAttention />
-          <SetupChecklist compact />
-        </aside>
-      </div>
+          Branches
+        </SectionHeading>
+        {summary.isPending && (
+          <div role="status" aria-label="Loading">
+            <SkeletonRows rows={2} gap="gap-3" />
+          </div>
+        )}
+        {summary.isError && (
+          <PartialFailure
+            onRetry={() => void summary.refetch()}
+            busy={summary.isFetching}
+          >
+            Branch activity could not load. You can still open a branch.
+          </PartialFailure>
+        )}
+        {summary.data ? (
+          <ul className="flex flex-col gap-3">
+            {rows.map((row, i) => (
+              <li key={row.entityId} style={stagger(i)} className={ENTER}>
+                <BranchCard row={row} figures={figures} />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          !summary.isPending && <FallbackList />
+        )}
+      </section>
+      <aside
+        aria-label="Tasks and setup"
+        className="border-border order-2 flex min-w-0 flex-col gap-6 xl:order-none xl:border-l xl:pl-6"
+      >
+        <NeedsAttention />
+        <SetupChecklist compact />
+      </aside>
     </div>
   );
 }
 
-function BranchCard({ row, known }: { row: BranchRow; known: boolean }) {
+/**
+ * One branch, sorted by how much is waiting there. The work comes first and the
+ * figures are context under it: an owner opens this card to deal with people,
+ * not to read last month's visits.
+ */
+function BranchCard({
+  row,
+  figures,
+}: {
+  row: BranchRow;
+  figures: "loading" | "failed" | "ready";
+}) {
   const stats = [
-    {
-      label: "Enrolments",
-      value: known ? row.enrolments.toLocaleString() : "Unavailable",
-      period: "Current",
-    },
+    { label: "Enrolments", value: row.enrolments, period: "Current", m: true },
     {
       label: "Classes",
-      value: row.upcomingClasses.toLocaleString(),
+      value: row.upcomingClasses,
       period: "Next 7 days",
+      m: false,
     },
-    {
-      label: "Visits",
-      value: known ? row.visits.toLocaleString() : "Unavailable",
-      period: "Last 30 days",
-    },
+    { label: "Visits", value: row.visits, period: "Last 30 days", m: true },
   ];
   return (
     <Link
       href={entityHref(row.entityId)}
-      className={`${cardClass({ interactive: true })} group focus-visible:outline-brand flex flex-col gap-4 focus-visible:outline-2 focus-visible:outline-offset-2`}
+      className={cn(
+        cardClass({ interactive: true }),
+        "flex flex-col gap-4",
+        FOCUS_RING,
+      )}
     >
-      <span className="flex items-center justify-between gap-3">
-        <span className="min-w-0 text-lg font-semibold tracking-tight wrap-anywhere">
-          {row.name}
-        </span>
-        <span className="text-brand-strong flex shrink-0 items-center gap-2 text-xs font-medium">
-          Open branch{" "}
-          <span
-            aria-hidden
-            className="transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none"
-          >
-            →
+      <span className="flex flex-col gap-1">
+        <span className="flex items-center justify-between gap-3">
+          <span className="min-w-0 text-lg font-semibold tracking-tight wrap-anywhere">
+            {row.name}
           </span>
+          {row.waiting > 0 && <CountBadge>{row.waiting}</CountBadge>}
         </span>
+        {row.waiting > 0 && (
+          <span className="text-muted-foreground text-xs font-medium">
+            {waitingLabel(row)}
+          </span>
+        )}
       </span>
       <dl className="grid grid-cols-3 gap-3">
         {stats.map((stat) => (
           <div key={stat.label} className="flex min-w-0 flex-col gap-1">
             <dt className="text-muted-foreground text-xs">{stat.label}</dt>
-            <dd
-              className={
-                stat.value === "Unavailable"
-                  ? "text-muted-foreground text-xs"
-                  : "font-mono text-xl tabular-nums"
-              }
-            >
-              {stat.value === "Unavailable" ? (
-                <span aria-label={`${stat.label} unavailable`}>Not loaded</span>
+            <dd className="font-mono text-xl tabular-nums">
+              {!stat.m || figures === "ready" ? (
+                stat.value.toLocaleString()
+              ) : figures === "loading" ? (
+                <Bar className="h-5 w-10" />
               ) : (
-                stat.value
+                <span className="text-muted-foreground text-xs">
+                  Not loaded
+                </span>
               )}
             </dd>
             <dd className="text-muted-foreground text-[11px]">{stat.period}</dd>
           </div>
         ))}
       </dl>
-      {known && row.places > 0 && (
+      {figures === "ready" && row.places > 0 && (
         <span className="text-muted-foreground border-border border-t pt-3 text-xs leading-relaxed tabular-nums">
           {row.reserved.toLocaleString()} / {row.places.toLocaleString()} places
           booked · Last 30 days
-        </span>
-      )}
-      {row.waiting > 0 && (
-        <span className="text-muted-foreground text-xs font-medium">
-          {waitingLabel(row)}
         </span>
       )}
     </Link>
@@ -493,11 +521,15 @@ function PlainCard({ id, name }: { id: string; name: string }) {
   return (
     <Link
       href={entityHref(id)}
-      className={`${cardClass({ interactive: true })} focus-visible:outline-ring flex items-center justify-between gap-3 focus-visible:outline-2 focus-visible:outline-offset-2`}
+      className={cn(
+        cardClass({ interactive: true }),
+        "flex items-center justify-between gap-3",
+        FOCUS_RING,
+      )}
     >
       <span className="min-w-0 font-medium wrap-anywhere">{name}</span>
       <span className="text-muted-foreground shrink-0 text-xs">
-        Open branch <span aria-hidden>→</span>
+        Open branch
       </span>
     </Link>
   );
@@ -510,37 +542,4 @@ function waitingLabel(r: BranchRow): string {
     parts.push(`${r.newLeads} new lead${r.newLeads === 1 ? "" : "s"}`);
   if (r.openClaims > 0) parts.push(`${r.openClaims} to confirm`);
   return parts.join(" · ");
-}
-
-function OverviewSection({
-  label,
-  meta,
-  accentCount = false,
-  children,
-}: {
-  label: string;
-  meta?: string;
-  accentCount?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <section className="flex min-w-0 flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold tracking-tight">{label}</h2>
-        {meta && (
-          <span
-            className={cn(
-              "shrink-0 font-mono text-xs tabular-nums",
-              accentCount
-                ? "bg-brand-wash text-brand-strong rounded-full px-2.5 py-1"
-                : "text-muted-foreground",
-            )}
-          >
-            {meta}
-          </span>
-        )}
-      </div>
-      {children}
-    </section>
-  );
 }

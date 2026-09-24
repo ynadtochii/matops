@@ -2,7 +2,7 @@
 
 **Status: active pilot guide under ADR 135.** Unlike
 [business-model.md](business-model.md), [revenue-collection.md](revenue-collection.md)
-and [card-billing-plan.md](card-billing-plan.md), which are parked reference, this
+and [the automatic payments plan](2026-09-24-automatic-payments-final-plan.md), which are not started, this
 is what happens next.
 
 The first academy release now uses a fresh database contract. The current operating facts are:
@@ -193,8 +193,8 @@ are broken promises.
   Class reminders exist on the phone app, on the device (ADR 54). This is the
   first thing a gym owner asks about, so say it first.
 - **Dues are manual bank transfer.** The student taps "I paid", the owner
-  confirms by hand. No card charging (ADR 40, and
-  [card-billing-plan.md](card-billing-plan.md) is parked).
+  confirms by hand. No card charging (ADR 40; card payment is
+  planned in [the automatic payments plan](2026-09-24-automatic-payments-final-plan.md), not started).
 - **No hard capacity caps and no waitlists.** Over-capacity booking asks "book
   anyway?" and allows it.
 - **Owner-only admin**, unless item 12 above is done.

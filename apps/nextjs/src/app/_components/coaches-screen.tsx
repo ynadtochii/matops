@@ -230,7 +230,7 @@ function CoachDetail({
   return <BreakdownPanel breakdown={detail.data.breakdown} />;
 }
 
-function CoachCard({
+function CoachWorkloadRow({
   row,
   window,
   open,
@@ -253,21 +253,31 @@ function CoachCard({
     <Collapsible
       open={open}
       onOpenChange={onToggle}
-      className={cn(cardClass(), "flex flex-col gap-4")}
+      className="border-border/60 border-b last:border-b-0"
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="font-medium">
-          {row.name}
-          {!row.onStaff && (
-            <span className="text-muted-foreground ml-2 font-mono text-xs uppercase">
-              no longer staff
-            </span>
-          )}
-        </p>
+      <div className="grid items-center gap-4 p-4 sm:grid-cols-[minmax(0,1.5fr)_minmax(15rem,2fr)_auto]">
+        <div className="min-w-0">
+          <p className="truncate font-medium">{row.name}</p>
+          {!row.onStaff && <Eyebrow>No longer staff</Eyebrow>}
+        </div>
+
+        <div className="grid grid-cols-3 gap-4">
+          <Stat value={row.classesLed} label="classes led" />
+          <Stat
+            value={
+              <span className={cn(row.unresolvedEnded > 0 && "text-warning")}>
+                {row.unresolvedEnded}
+              </span>
+            }
+            label="needs review"
+          />
+          <Stat value={row.cancelled} label="cancelled" />
+        </div>
+
         {onToggle && (
           <CollapsibleTrigger asChild>
             <Button size="sm" variant="outline">
-              Breakdown
+              {open ? "Hide" : "Breakdown"}
               <ChevronDownIcon
                 className={cn(
                   "transition-[rotate] duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none",
@@ -279,21 +289,13 @@ function CoachCard({
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
-        <Stat value={row.classesLed} label="classes led" />
-        <Stat value={row.unresolvedEnded} label="needs review" />
-        <Stat value={row.cancelled} label="cancelled" />
-      </div>
-
-      {row.unresolvedEnded > 0 && (
-        <p className="text-muted-foreground text-xs">
-          {row.unresolvedEnded} ended class
-          {row.unresolvedEnded === 1 ? " needs" : "es need"} attendance review
-          before counting as taught.
-        </p>
+      {onToggle ? (
+        <CollapsibleContent className="border-border/60 border-t px-4 py-5">
+          {body}
+        </CollapsibleContent>
+      ) : (
+        <div className="border-border/60 border-t px-4 py-5">{body}</div>
       )}
-
-      {onToggle ? <CollapsibleContent>{body}</CollapsibleContent> : body}
     </Collapsible>
   );
 }
@@ -346,9 +348,16 @@ function PendingCoaches() {
   );
 
   const waiting = (memberList.data ?? []).filter(isPendingCoach);
-  if (memberList.isPending || memberList.isError || waiting.length === 0) {
-    return null;
+  if (memberList.isPending) return null;
+  if (memberList.isError) {
+    return (
+      <ErrorState
+        label="coach requests"
+        onRetry={() => void memberList.refetch()}
+      />
+    );
   }
+  if (waiting.length === 0) return null;
 
   return (
     <section className="flex flex-col gap-3">
@@ -375,7 +384,9 @@ function PendingCoaches() {
               <Button
                 size="sm"
                 variant="secondary"
-                busy={busy && approve.isPending}
+                busy={
+                  approve.isPending && approve.variables.memberId === m.memberId
+                }
                 disabled={busy}
                 onClick={() => approve.mutate({ memberId: m.memberId })}
               >
@@ -455,20 +466,32 @@ export function CoachesScreen() {
         }
       />
 
-      <div className="flex flex-col gap-10">
+      <div className="flex flex-col gap-8">
         {isOwner && (
           <div className={ENTER}>
             <PendingCoaches />
           </div>
         )}
 
-        <div className={cn(ENTER, isOwner && "delay-100")}>
-          <div
+        <div
+          className={cn(
+            "grid items-start gap-8 xl:grid-cols-[minmax(0,1fr)_20rem] xl:gap-10",
+            ENTER,
+            isOwner && "delay-100",
+          )}
+        >
+          <section
             className={cn(
-              "flex flex-col gap-4 transition-opacity duration-200 motion-reduce:transition-none",
+              "flex min-w-0 flex-col gap-4 transition-opacity duration-200 motion-reduce:transition-none",
               stale && "opacity-60",
             )}
           >
+            <SectionHeading
+              action={rangeLabel ? <Eyebrow>{rangeLabel}</Eyebrow> : undefined}
+            >
+              {isOwner ? "Coach workload" : "Your workload"}
+            </SectionHeading>
+
             <div className="flex flex-wrap items-center justify-between gap-2">
               <Tabs
                 label="Window"
@@ -476,7 +499,6 @@ export function CoachesScreen() {
                 onChange={setWindow}
                 tabs={WINDOW_TABS}
               />
-              {rangeLabel && <Eyebrow>{rangeLabel}</Eyebrow>}
             </div>
 
             {isOwner ? (
@@ -493,9 +515,11 @@ export function CoachesScreen() {
                   class.
                 </EmptyState>
               ) : (
-                <div className={cn("flex flex-col gap-4", RESOLVE)}>
+                <div
+                  className={cn(cardClass(), "overflow-hidden p-0", RESOLVE)}
+                >
                   {coaches.map((row) => (
-                    <CoachCard
+                    <CoachWorkloadRow
                       key={row.instructorId}
                       row={row}
                       window={window}
@@ -517,8 +541,8 @@ export function CoachesScreen() {
                 onRetry={() => void mine.refetch()}
               />
             ) : (
-              <div className={RESOLVE}>
-                <CoachCard
+              <div className={cn(cardClass(), "overflow-hidden p-0", RESOLVE)}>
+                <CoachWorkloadRow
                   window={window}
                   breakdown={mine.data.breakdown}
                   open
@@ -530,14 +554,14 @@ export function CoachesScreen() {
                 />
               </div>
             )}
-          </div>
-        </div>
+          </section>
 
-        {isOwner && (
-          <div className={cn(ENTER, "delay-200")}>
-            <Staff />
-          </div>
-        )}
+          {isOwner && (
+            <aside className={cn("min-w-0", ENTER, "delay-200")}>
+              <Staff />
+            </aside>
+          )}
+        </div>
       </div>
     </>
   );

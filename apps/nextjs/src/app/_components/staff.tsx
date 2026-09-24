@@ -130,20 +130,17 @@ function StaffRow({
   const copy = action ? COPY[action] : null;
 
   return (
-    <div className={cn(cardClass(), "flex items-center gap-3")}>
+    <div className="border-border/60 flex items-start gap-3 border-b p-4 last:border-b-0">
       <div className="min-w-0 flex-1">
         <p className="truncate font-medium">{m.name}</p>
-        <p className="text-muted-foreground truncate text-sm">{m.email}</p>
-        <p className="text-muted-foreground text-xs">
-          {m.status === "active"
-            ? "Staff access. No membership required."
-            : "Staff access is inactive."}
+        <p className="text-muted-foreground truncate text-xs">{m.email}</p>
+        <p className="text-muted-foreground mt-1 font-mono text-[10px] tracking-wide uppercase">
+          {roleName(
+            m.status === "pending" ? (m.invitedRole ?? m.role) : m.role,
+          )}
+          {m.status === "active" ? "" : ` · ${m.status}`}
         </p>
       </div>
-      <span className="text-muted-foreground rounded-full border px-2 py-0.5 text-xs">
-        {roleName(m.status === "pending" ? (m.invitedRole ?? m.role) : m.role)}{" "}
-        · {m.status}
-      </span>
       {canManage && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -274,11 +271,14 @@ export function Staff() {
     }),
   );
 
-  const busy =
-    promote.isPending ||
-    suspend.isPending ||
-    archive.isPending ||
-    restore.isPending;
+  // Scoped to the person being acted on, so suspending one coach does not grey
+  // out every other row's menu.
+  const rowBusy = (memberId: string | null) =>
+    memberId !== null &&
+    ((promote.isPending && promote.variables.memberId === memberId) ||
+      (suspend.isPending && suspend.variables.memberId === memberId) ||
+      (archive.isPending && archive.variables.memberId === memberId) ||
+      (restore.isPending && restore.variables.memberId === memberId));
   const onConfirm = async (action: Action, memberId: string) => {
     switch (action) {
       case "promote":
@@ -305,16 +305,9 @@ export function Staff() {
       <div className="flex flex-col gap-1">
         <SectionHeading>Staff</SectionHeading>
         <p className="text-muted-foreground text-sm">
-          Owners, managers and instructors have staff access without a paid
-          membership. New coaches wait for approval.
+          Invite coaches and manage staff access.
         </p>
       </div>
-
-      <InviteLinkCard
-        role="instructor"
-        label="Add an instructor"
-        hint="For coaches. Once you approve them they get the schedule and attendance tools."
-      />
 
       {staff.isPending ? (
         <SkeletonRows rows={2} action />
@@ -325,7 +318,7 @@ export function Staff() {
           You&apos;re the only one running this branch so far.
         </EmptyState>
       ) : (
-        <div className={cn("flex flex-col gap-2", RESOLVE)}>
+        <div className={cn(cardClass(), "overflow-hidden p-0", RESOLVE)}>
           {members.map((m) => (
             <StaffRow
               key={m.userId}
@@ -333,12 +326,18 @@ export function Staff() {
               ownerCount={ownerCount}
               owner={owner}
               manager={manager}
-              busy={busy}
+              busy={rowBusy(m.memberId)}
               onConfirm={onConfirm}
             />
           ))}
         </div>
       )}
+
+      <InviteLinkCard
+        role="instructor"
+        label="Invite a coach"
+        hint="They get staff access after you approve them."
+      />
     </section>
   );
 }

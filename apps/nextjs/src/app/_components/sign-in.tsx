@@ -110,7 +110,7 @@ export function SignIn({ callbackURL = "/" }: { callbackURL?: string }) {
 
       <p
         aria-live="polite"
-        className="text-muted-foreground text-center text-sm"
+        className="text-muted-foreground text-sm text-pretty"
       >
         {state.status === "sent" ? (
           <span className="text-foreground font-medium">

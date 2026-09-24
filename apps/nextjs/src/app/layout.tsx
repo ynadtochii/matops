@@ -16,7 +16,7 @@ export const metadata: Metadata = {
       ? "https://matops.app"
       : "http://localhost:3004",
   ),
-  title: "MatOps",
+  title: { default: "MatOps", template: "%s · MatOps" },
   description: "Schedule, members, and attendance for grappling academies.",
   openGraph: {
     title: "MatOps",

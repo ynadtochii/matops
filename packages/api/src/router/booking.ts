@@ -8,31 +8,23 @@ import {
   eq,
   isNull,
   lockAndReadScheduleRevision,
-  ne,
   or,
   recordActivity,
   recordMilestone,
-  sql,
 } from "@matops/db";
 import { classInstance, classParticipation } from "@matops/db/schema";
 import {
-  BOOKING_LOCKED,
-  bookingTier,
-  canBook,
-  notBookableMessage,
-} from "@matops/domain";
-import { BookClassSchema, CancelBookingSchema } from "@matops/validators";
+  BookClassSchema,
+  BookForSchema,
+  CancelBookingSchema,
+} from "@matops/validators";
 
 import { academyContext } from "../academy-tz";
-import {
-  claimSeat,
-  releaseSeats,
-  requireClassFacts,
-  SESSION_FULL,
-} from "../classes";
-import { CLASS_NOT_FOUND } from "../messages";
+import { findBranchPerson } from "../branch-person";
+import { releaseSeats } from "../classes";
+import { bookForMember } from "../member-booking";
 import { bookingGate } from "../payments-gate";
-import { enrolledProcedure, memberProcedure } from "../trpc";
+import { enrolledProcedure, memberProcedure, staffProcedure } from "../trpc";
 
 const MINE_LIMIT = 300;
 
@@ -98,89 +90,17 @@ export const bookingRouter = {
   book: memberProcedure
     .input(BookClassSchema)
     .mutation(async ({ ctx, input }) => {
-      await lockAndReadScheduleRevision(ctx.db, ctx.academyId);
-      // 1. Pre-read for a precise, friendly error (NOT the race guard — that is
-      //    the atomic upsert + increment below). RLS scopes this to the academy.
-      const cls = await requireClassFacts(ctx.db, input.classId);
       const academy = await academyContext(ctx);
-      const bookingRule = {
-        bookingWindowDays: academy.bookingWindowDays,
-        timeZone: academy.timeZone,
-      };
-      const bookable = canBook(cls, new Date(), bookingRule);
-      if (bookable.reason === "deleted") {
-        throw new TRPCError({ code: "NOT_FOUND", message: CLASS_NOT_FOUND });
-      }
-      if (bookable.reason) {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: notBookableMessage(
-            bookable.reason,
-            academy.bookingWindowDays,
-          ),
-        });
-      }
-
-      const gate = await bookingGate(ctx.db, {
+      const result = await bookForMember(ctx.db, {
         entity: ctx.entity,
         membership: ctx.membership,
         accountUserId: ctx.session.user.id,
-        sessionAt: cls.startsAt,
+        classId: input.classId,
+        academyId: ctx.academyId,
+        organizationId: ctx.organizationId,
+        bookingWindowDays: academy.bookingWindowDays,
+        timeZone: academy.timeZone,
       });
-      if (gate.locked) {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: gate.message ?? BOOKING_LOCKED,
-        });
-      }
-      const tier = gate.provisional
-        ? ("provisional" as const)
-        : bookingTier(ctx.membership);
-      // 3. Transition the participation to booked, only if not already booked
-      //    (idempotent). A returned row ⇒ a real transition (new insert OR
-      //    cancelled → booked); no row ⇒ already booked, leave the count alone.
-      const [transition] = await ctx.db
-        .insert(classParticipation)
-        .values({
-          academyId: ctx.academyId,
-          classId: input.classId,
-          personOrganizationId: ctx.membership.personId
-            ? ctx.organizationId
-            : null,
-          personId: ctx.membership.personId,
-          studentId: ctx.session.user.id,
-          bookingStatus: "booked",
-          bookingTier: tier,
-          cancelledAt: null,
-        })
-        .onConflictDoUpdate({
-          target: ctx.membership.personId
-            ? [classParticipation.classId, classParticipation.personId]
-            : [classParticipation.classId, classParticipation.studentId],
-          targetWhere: ctx.membership.personId
-            ? sql`person_id is not null`
-            : undefined,
-          set: {
-            bookingStatus: "booked",
-            bookingTier: tier,
-            cancelledAt: null,
-          },
-          setWhere: ne(classParticipation.bookingStatus, "booked"),
-        })
-        .returning({ id: classParticipation.id });
-
-      // 4. Claim capacity atomically — ONLY on a real transition AND only for a
-      //    confirmed booking. Provisional bookings never touch the count
-      //    (docs/issues/22). A `soft` class cannot refuse, so the BJJ rule is
-      //    unchanged; a `strict` one can, and the throw rolls the participation
-      //    row above back with it, so nobody is booked into a full session.
-      if (transition && tier === "confirmed") {
-        const took = await claimSeat(ctx.db, input.classId);
-        if (!took) {
-          throw new TRPCError({ code: "CONFLICT", message: SESSION_FULL });
-        }
-      }
-      if (transition) await bumpScheduleRevision(ctx.db, ctx.academyId);
 
       if (ctx.membership.role === "student") {
         ctx.afterCommit(async (exec) => {
@@ -194,7 +114,39 @@ export const bookingRouter = {
         });
       }
 
-      return { ok: true as const, tier };
+      return { ok: true as const, tier: result.tier };
+    }),
+
+  /**
+   * Book a named member onto a class from the staff desk (ADR 139). The desk
+   * check-in write only reaches about a day ahead, because it records
+   * attendance; this is how staff reception holds a place on a class further
+   * out. Same shared write as the member's own booking, so the admission rules,
+   * the branch booking window and the capacity accounting are theirs, not a
+   * staff override.
+   */
+  bookFor: staffProcedure
+    .input(BookForSchema)
+    .mutation(async ({ ctx, input }) => {
+      const subject = await findBranchPerson(ctx.db, ctx, input.personId);
+      if (!subject) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "That person does not have active access to this academy",
+        });
+      }
+      const academy = await academyContext(ctx);
+      const result = await bookForMember(ctx.db, {
+        entity: ctx.entity,
+        membership: subject,
+        accountUserId: subject.accountUserId,
+        classId: input.classId,
+        academyId: ctx.academyId,
+        organizationId: ctx.organizationId,
+        bookingWindowDays: academy.bookingWindowDays,
+        timeZone: academy.timeZone,
+      });
+      return { ok: true as const, tier: result.tier, booked: result.booked };
     }),
 
   /**

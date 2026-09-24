@@ -25,7 +25,6 @@ import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
 import { FOCUS_RING } from "@matops/ui/motion";
 import { Select } from "@matops/ui/select";
-import { Spinner } from "@matops/ui/spinner";
 import { Textarea } from "@matops/ui/textarea";
 import { toast } from "@matops/ui/toast";
 
@@ -229,19 +228,22 @@ export function Templates({
 
   return (
     <section className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold">Recurring classes</h2>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => {
-            setEditingId(null);
-            setForm(emptyForm(me.userId, academyTz));
-          }}
-        >
-          New template
-        </Button>
-      </div>
+      <SectionHeading
+        action={
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setEditingId(null);
+              setForm(emptyForm(me.userId, academyTz));
+            }}
+          >
+            New template
+          </Button>
+        }
+      >
+        Recurring classes
+      </SectionHeading>
 
       {list.isPending ? (
         <SkeletonRows rows={3} action />
@@ -667,13 +669,8 @@ export function Templates({
                 <Button type="button" variant="ghost" onClick={closeForm}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={busy}>
-                  {busy && <Spinner size="sm" className="text-current" />}
-                  {busy
-                    ? "Saving…"
-                    : openId
-                      ? "Save changes"
-                      : "Create template"}
+                <Button type="submit" busy={busy}>
+                  {openId ? "Save changes" : "Create template"}
                 </Button>
               </div>
             </form>
@@ -801,10 +798,10 @@ function RebuildSchedule() {
           <Button
             size="sm"
             variant="outline"
-            disabled={extend.isPending}
+            busy={extend.isPending}
             onClick={() => extend.mutate()}
           >
-            {extend.isPending ? "Extending…" : "Extend schedule"}
+            Extend schedule
           </Button>
           <ConfirmDialog
             title="Rebuild the schedule?"
@@ -820,6 +817,7 @@ function RebuildSchedule() {
               <Button
                 size="sm"
                 variant="destructive-outline"
+                busy={rebuild.isPending}
                 disabled={
                   rebuild.isPending ||
                   preview.isPending ||
@@ -827,7 +825,7 @@ function RebuildSchedule() {
                   activeBookings > 0
                 }
               >
-                {rebuild.isPending ? "Rebuilding…" : "Rebuild schedule"}
+                Rebuild schedule
               </Button>
             }
           />

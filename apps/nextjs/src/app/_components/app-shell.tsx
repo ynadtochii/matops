@@ -31,6 +31,7 @@ import {
   NotificationsIcon,
   PaymentsIcon,
   ProfileIcon,
+  ReceptionIcon,
   ReferralsIcon,
   ScheduleIcon,
   SettingsIcon,
@@ -123,6 +124,12 @@ function branchNavItems(
       icon: <MembersIcon />,
       show: canVisit("/members", branch),
       badge: badges.students,
+    },
+    {
+      path: "/reception",
+      label: "Reception",
+      icon: <ReceptionIcon />,
+      show: canVisit("/reception", branch),
     },
     {
       path: "/coaches",

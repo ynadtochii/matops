@@ -33,7 +33,7 @@
     "@trpc/server": "catalog:",
     "@trpc/tanstack-react-query": "catalog:",
     "better-auth": "catalog:",
-    "next": "^16.0.9",
+    "next": "^16.3.5",
     "qrcode.react": "^4.2.0",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",

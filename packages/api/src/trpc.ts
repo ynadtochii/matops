@@ -216,6 +216,10 @@ export const publicProcedure = t.procedure
   .use(timingMiddleware)
   .use(rateLimited(PUBLIC_DEFAULT_MAX, PUBLIC_DEFAULT_WINDOW_MS));
 
+export const receptionBaseProcedure = t.procedure
+  .use(timingMiddleware)
+  .use(rateLimited(600, PUBLIC_DEFAULT_WINDOW_MS));
+
 /**
  * Protected (authenticated) procedure
  *

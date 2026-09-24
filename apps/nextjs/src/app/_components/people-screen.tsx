@@ -14,10 +14,12 @@ import {
   matchPeopleByEmail,
   parseEmailList,
 } from "@matops/domain";
+import { cn } from "@matops/ui";
 import { Button } from "@matops/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@matops/ui/dialog";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
+import { FOCUS_RING } from "@matops/ui/motion";
 import { Select } from "@matops/ui/select";
 import { Textarea } from "@matops/ui/textarea";
 import { toast } from "@matops/ui/toast";
@@ -28,7 +30,7 @@ import {
   StudentImportDialog,
 } from "./data-transfer-dialogs";
 import { useOrganization } from "./entity";
-import { cardClass, ENTER, Eyebrow, stagger } from "./primitives";
+import { cardClass, ENTER, Eyebrow, stagger, TAP } from "./primitives";
 import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 import { Tabs } from "./tabs";
@@ -139,6 +141,13 @@ export function PeopleScreen() {
           r.email.toLowerCase().includes(needle),
       );
   }, [rows, students, tab, search, entityId, planName, status]);
+
+  // One template for the header strip and every row, so the columns line up
+  // down a list of 200.
+  const cols =
+    tab === "staff"
+      ? "sm:grid-cols-[minmax(0,2.2fr)_minmax(0,1.4fr)_5rem_minmax(0,1.8fr)]"
+      : "sm:grid-cols-[1.25rem_minmax(0,2.2fr)_minmax(0,1.4fr)_5rem_minmax(0,1.8fr)]";
 
   if (!canRunOrganization) {
     return (
@@ -254,7 +263,8 @@ export function PeopleScreen() {
             <option value="">Any status</option>
             {["active", "pending", "suspended", "archived"].map((s) => (
               <option key={s} value={s}>
-                {s}
+                {s[0]?.toUpperCase()}
+                {s.slice(1)}
               </option>
             ))}
           </Select>
@@ -273,99 +283,171 @@ export function PeopleScreen() {
           Clear a filter, or check another branch.
         </EmptyState>
       ) : (
-        <ul className="flex flex-col gap-2">
-          {shown.map((r, i) => (
-            <li
-              key={r.personId}
-              style={stagger(i)}
-              className={`${cardClass()} ${ENTER}`}
+        <div className="flex flex-col gap-3">
+          {/* The bulk action sits above the rows it acts on. Below the list it
+              was 200 rows away from the checkboxes that filled it. */}
+          {tab !== "staff" && selected.length > 0 && (
+            <div className="bg-background sticky top-0 z-10 py-1">
+              <BulkAssign selected={selected} onDone={() => setSelected([])} />
+            </div>
+          )}
+
+          <div className="flex items-center justify-between gap-3">
+            <Eyebrow>
+              {shown.length === 1 ? "1 person" : `${shown.length} people`}
+            </Eyebrow>
+            {tab !== "staff" && selected.length > 0 && (
+              <Eyebrow>{selected.length} selected</Eyebrow>
+            )}
+          </div>
+
+          <div className={cn(cardClass(), "px-4 py-0")}>
+            <div
+              aria-hidden
+              className={cn(
+                "border-border text-muted-foreground hidden border-b py-2 font-mono text-[10px] tracking-wide uppercase sm:grid",
+                cols,
+              )}
             >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                {tab !== "staff" && (
-                  <input
-                    type="checkbox"
-                    className="mt-1 size-4"
-                    aria-label={`Select ${r.name}`}
-                    checked={selected.includes(r.personId)}
-                    onChange={(e) =>
-                      setSelected((was) =>
-                        e.target.checked
-                          ? [...was, r.personId]
-                          : was.filter((id) => id !== r.personId),
-                      )
-                    }
-                  />
-                )}
-                <div className="flex min-w-0 flex-1 flex-col gap-1">
-                  <Link
-                    href={`/people/${r.personId}`}
-                    className="font-medium hover:underline"
-                  >
-                    {r.name}
-                  </Link>
-                  <span className="text-muted-foreground text-sm">
-                    {r.email}
-                    {r.recentVisits > 0
-                      ? ` · ${r.recentVisits} visits in 30 days`
-                      : " · no visits in 30 days"}
-                  </span>
-                  {r.planNames.length > 0 && (
-                    <span className="text-muted-foreground text-sm">
-                      {r.planNames.join(", ")}
-                    </span>
+              {tab !== "staff" && <span />}
+              <span>Person</span>
+              <span>Membership</span>
+              <span className="text-right">Visits 30d</span>
+              <span>Branches</span>
+            </div>
+            <ul>
+              {shown.map((r, i) => (
+                <li
+                  key={r.personId}
+                  style={stagger(i)}
+                  className={cn(
+                    "border-border/60 grid min-h-11 items-center gap-x-4 gap-y-1 border-b py-2 last:border-b-0",
+                    cols,
+                    ENTER,
                   )}
-                </div>
-                <div className="flex flex-wrap justify-end gap-2">
-                  {r.branches
-                    .filter((b) =>
-                      tab === "staff" ? isStaffRole(b) : isStudentMember(b),
-                    )
-                    .map((b) => (
-                      <Button
-                        key={b.entityId}
-                        asChild
-                        size="sm"
-                        variant="outline"
-                      >
-                        {/* Straight to this person at that branch, on the tab
-                          their standing belongs to, so nobody searches twice
-                          (ADR 129). */}
-                        <Link href={branchHref(b, tab)}>
-                          {b.entityName}
-                          {isStaffRole(b)
-                            ? ` · ${b.invitedRole === "instructor" && b.status === "pending" ? "instructor" : b.role}`
-                            : ""}
-                          {b.status !== "active" ? ` · ${b.status}` : ""}
-                          {!isStaffRole(b) && b.verdict && b.verdict !== "ok"
-                            ? " ·  ⚠"
-                            : ""}
-                        </Link>
-                      </Button>
-                    ))}
-                </div>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
+                >
+                  {tab !== "staff" && (
+                    <input
+                      type="checkbox"
+                      className="size-4 self-center"
+                      aria-label={`Select ${r.name}`}
+                      checked={selected.includes(r.personId)}
+                      onChange={(e) =>
+                        setSelected((was) =>
+                          e.target.checked
+                            ? [...was, r.personId]
+                            : was.filter((id) => id !== r.personId),
+                        )
+                      }
+                    />
+                  )}
+                  <span className="flex min-w-0 flex-col">
+                    <Link
+                      href={`/people/${r.personId}`}
+                      className={cn(
+                        "truncate rounded-sm font-medium hover:underline",
+                        FOCUS_RING,
+                      )}
+                    >
+                      {r.name}
+                    </Link>
+                    <span className="text-muted-foreground truncate text-xs">
+                      {r.email}
+                    </span>
+                  </span>
+                  <span className="text-muted-foreground truncate text-sm">
+                    {r.planNames.join(", ") || "No membership"}
+                  </span>
+                  <span
+                    className={cn(
+                      "font-mono text-sm tabular-nums sm:text-right",
+                      r.recentVisits === 0 && "text-muted-foreground",
+                    )}
+                  >
+                    <span className="sr-only">Visits in 30 days: </span>
+                    {r.recentVisits}
+                    <span aria-hidden className="ml-1 text-xs sm:hidden">
+                      visits in 30 days
+                    </span>
+                  </span>
+                  <span className="flex flex-wrap gap-1.5">
+                    {r.branches
+                      .filter((b) =>
+                        tab === "staff" ? isStaffRole(b) : isStudentMember(b),
+                      )
+                      .map((b) => (
+                        <BranchChip key={b.entityId} b={b} tab={tab} />
+                      ))}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
 
-      {tab !== "staff" && selected.length > 0 && (
-        <BulkAssign selected={selected} onDone={() => setSelected([])} />
-      )}
-
-      {tab !== "staff" && (
-        <div className="flex flex-wrap gap-2">
-          <PasteEmails
-            people={students}
-            onMatched={(ids) => setSelected(ids)}
-          />
+          {tab !== "staff" && (
+            <div className="flex flex-wrap gap-2">
+              <PasteEmails
+                people={students}
+                onMatched={(ids) => setSelected(ids)}
+              />
+            </div>
+          )}
         </div>
       )}
-
-      <Eyebrow>
-        {shown.length === 1 ? "1 person" : `${shown.length} people`}
-      </Eyebrow>
     </div>
+  );
+}
+
+/**
+ * One branch a person stands at. A chip rather than a button: a directory of
+ * 200 people carries hundreds of these, and they are all the same weight, so a
+ * row of outline buttons reads as a row of decisions when it is a row of links.
+ * Straight to this person at that branch, on the tab their standing belongs to,
+ * so nobody searches twice (ADR 129).
+ */
+function BranchChip({
+  b,
+  tab,
+}: {
+  b: Parameters<typeof branchHref>[0] & {
+    entityName: string;
+    verdict: string | null;
+  };
+  tab: PeopleTab;
+}) {
+  const staff = isStaffRole(b);
+  const flagged = !staff && b.verdict != null && b.verdict !== "ok";
+  return (
+    <Link
+      href={branchHref(b, tab)}
+      className={cn(
+        "hover:bg-muted inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors",
+        flagged
+          ? "text-warning border-warning/40"
+          : "border-border hover:border-brand/40",
+        FOCUS_RING,
+        TAP,
+      )}
+    >
+      <span className="truncate">{b.entityName}</span>
+      {staff && (
+        <span className="text-muted-foreground">
+          ·{" "}
+          {b.invitedRole === "instructor" && b.status === "pending"
+            ? "instructor"
+            : b.role}
+        </span>
+      )}
+      {b.status !== "active" && (
+        <span className="text-muted-foreground">· {b.status}</span>
+      )}
+      {flagged && (
+        <>
+          <span aria-hidden>!</span>
+          <span className="sr-only">membership needs attention</span>
+        </>
+      )}
+    </Link>
   );
 }
 

@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 
-import { runsBranch } from "@matops/domain";
+import { isBjjAcademy, runsBranch } from "@matops/domain";
 
 import type { EntityPageProps } from "~/trpc/server";
 import { SettingsScreen } from "~/app/_components/settings-screen";
@@ -18,6 +18,9 @@ async function SettingsData() {
 
   if (academy && runsBranch(academy)) {
     prefetch(trpc.academy.settings.queryOptions());
+    if (isBjjAcademy(academy.type)) {
+      prefetch(trpc.academy.publicApi.queryOptions());
+    }
   }
 
   return (

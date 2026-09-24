@@ -1,5 +1,12 @@
 <!-- wayfinder:map -->
 
+**Reception**
+
+- [140: The owner screens design pass](issues/140-the-owner-screens-design-pass.md): one pass per owner screen inside the existing design system. Found four repeating patterns, three of them bugs: a screen-wide `busy` that deadened every row, a failed query drawn as nothing to do, buttons that renamed themselves mid-request, and primitives copied instead of imported.
+- [139: Reception permanent link and staff reception](issues/139-reception-permanent-link.md): one permanent entrance link per branch, name search before class choice, Book until an hour before and Check in after, and a second reception screen for signed-in staff. Supersedes 138's daily activation.
+- [138: Reception class check-in](issues/138-reception-class-checkin.md): the first design, with a daily device token and the class chosen first. History; superseded by 139.
+
+
 # Map: matops — MVP rebuild (product spec + architecture)
 
 - [137: Interface writing review](/Users/kuna/projects/matops/docs/issues/137-interface-writing-review.md): one word per thing (a **gym** is the business, a **branch** is one place, `organization` never reaches a screen), the six digits are a **join code** on every screen, every blocked state names the way out through one `accessReason`, form validation moves from toasts to the field, and the em dash leaves user-facing copy.

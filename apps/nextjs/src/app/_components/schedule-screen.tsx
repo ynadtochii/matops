@@ -1,15 +1,22 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { isBjjAcademy } from "@matops/domain";
 
 import { Curriculum } from "./curriculum";
 import { useEntity } from "./entity";
 import { PageHeader } from "./page-header";
+import { RESOLVE } from "./primitives";
 import { Schedule } from "./schedule";
 import { Tabs } from "./tabs";
 import { Templates } from "./templates";
+
+type ScheduleTab = "week" | "templates" | "curriculum";
+
+const isScheduleTab = (v: string | null): v is ScheduleTab =>
+  v === "week" || v === "templates" || v === "curriculum";
 
 /**
  * Schedule screen (IA ticket 02) — the week of concrete classes and the
@@ -23,16 +30,18 @@ export function ScheduleScreen() {
   const academy = useEntity();
   const bjj = isBjjAcademy(academy.type);
   const curriculum = bjj && academy.curriculumEnabled;
-  const [tab, setTab] = useState<"week" | "templates" | "curriculum">("week");
+  // The tab is in the URL like every other tabbed owner screen, so a link to
+  // Templates or Curriculum lands on it.
+  const tabParam = useSearchParams().get("tab");
+  const [tab, setTab] = useState<ScheduleTab>(
+    isScheduleTab(tabParam) ? tabParam : "week",
+  );
   const [openTemplateId, setOpenTemplateId] = useState<string | null>(null);
   const onOpened = useCallback(() => setOpenTemplateId(null), []);
   const showCurriculum = curriculum && tab === "curriculum";
   return (
     <>
-      <PageHeader
-        title="Schedule"
-        subtitle="Run the week: the classes on the calendar, and the weekly templates behind them."
-      />
+      <PageHeader title="Schedule" />
       <Tabs
         label="Schedule view"
         value={tab}
@@ -51,7 +60,7 @@ export function ScheduleScreen() {
         }
         className="mb-6"
       />
-      <div>
+      <div key={tab} className={RESOLVE}>
         {tab === "week" ? (
           <Schedule
             onOpenTemplate={(id) => {

@@ -4,17 +4,20 @@ import { useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { cn } from "@matops/ui";
 import { Button } from "@matops/ui/button";
 import { CopyButton } from "@matops/ui/copy-button";
 import { toast } from "@matops/ui/toast";
 
 import { shareLink, useCanShare } from "~/lib/share";
 import { useTRPC } from "~/trpc/react";
-import { SectionHeading } from "./primitives";
+import { cardClass, SectionHeading } from "./primitives";
+import { SkeletonControlPanel } from "./skeletons";
+import { ErrorState } from "./states";
 
 const QrPoster = dynamic(() => import("./qr-poster").then((m) => m.QrPoster), {
   loading: () => (
-    <div className="border-border mx-auto h-[336px] w-full max-w-xs animate-pulse rounded-lg border bg-white" />
+    <div className="bg-muted size-64 animate-pulse rounded-lg motion-reduce:animate-none" />
   ),
 });
 
@@ -52,75 +55,109 @@ export function PublicBooking({ academyName }: { academyName: string }) {
       onError,
     }),
   );
-  if (settings.isPending || settings.isError) return null;
+  if (settings.isPending) {
+    return (
+      <section className="flex flex-col gap-4">
+        <SectionHeading>Public booking</SectionHeading>
+        <SkeletonControlPanel />
+      </section>
+    );
+  }
+
+  if (settings.isError) {
+    return (
+      <section className="flex flex-col gap-4">
+        <SectionHeading>Public booking</SectionHeading>
+        <ErrorState
+          label="public booking settings"
+          onRetry={() => void settings.refetch()}
+        />
+      </section>
+    );
+  }
 
   const { enabled, publicCode } = settings.data;
   const path = `/book/${publicCode}`;
   const url = origin ? `${origin}${path}` : path;
 
   return (
-    <section className="flex flex-col gap-3">
-      <div>
-        <SectionHeading>Public booking</SectionHeading>
-        <p className="text-muted-foreground text-sm">
-          Lets someone book a class without an account. They become a drop-in
-          lead, never a member. Only the classes you tick as shared appear, and
-          no visitor ever sees how full a class is or who is coming.
-        </p>
-      </div>
-
-      <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm sm:min-h-9">
-        <input
-          type="checkbox"
-          className="accent-brand size-4"
-          checked={enabled}
-          disabled={setEnabled.isPending}
-          onChange={(e) => setEnabled.mutate({ enabled: e.target.checked })}
-        />
-        Public booking is on
-      </label>
-
-      {enabled && (
-        <>
-          <div className="flex flex-col gap-3">
-            <p className="text-muted-foreground text-sm">
-              Send this link when someone asks about training. It works with no
-              website at all.
+    <section className="flex flex-col gap-4">
+      <SectionHeading>Public booking</SectionHeading>
+      <div
+        className={cn(
+          cardClass(),
+          "overflow-hidden p-0",
+          enabled && "grid lg:grid-cols-[minmax(0,1fr)_auto]",
+        )}
+      >
+        <div className="flex min-w-0 flex-col divide-y">
+          <div className="flex flex-col gap-4 p-4">
+            <p className="text-muted-foreground max-w-2xl text-sm text-pretty">
+              Let someone book a class without an account. They become a visitor
+              lead, never a member. Only shared classes appear. Visitors never
+              see attendance or capacity.
             </p>
+            <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm sm:min-h-9">
+              <input
+                type="checkbox"
+                className="accent-brand size-4"
+                checked={enabled}
+                disabled={setEnabled.isPending}
+                onChange={(e) =>
+                  setEnabled.mutate({ enabled: e.target.checked })
+                }
+              />
+              Allow public booking
+            </label>
+          </div>
+
+          {enabled && (
+            <div className="flex flex-col gap-3 p-4">
+              <p className="text-muted-foreground text-sm">
+                Send this link when someone asks about training. It works with
+                no website at all.
+              </p>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <code className="text-sm break-all">{url}</code>
+                <div className="flex gap-2">
+                  {shareable && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        void shareLink({
+                          url,
+                          title: `Book a class at ${academyName}`,
+                          text: "Pick a class and book here:",
+                        })
+                      }
+                    >
+                      Share
+                    </Button>
+                  )}
+                  <CopyButton
+                    value={url}
+                    label="Copy link"
+                    toastMessage="Link copied"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {enabled && (
+          <aside className="border-border flex items-center justify-center border-t p-4 lg:border-t-0 lg:border-l">
             <QrPoster
+              compact
               url={url}
               title={academyName}
               caption="Scan to book a class"
               codeLabel={`Booking QR code for ${academyName}`}
             />
-            <div className="border-border flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
-              <code className="text-sm break-all">{url}</code>
-              <div className="flex gap-2">
-                {shareable && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      void shareLink({
-                        url,
-                        title: `Book a class at ${academyName}`,
-                        text: "Pick a class and book here:",
-                      })
-                    }
-                  >
-                    Share
-                  </Button>
-                )}
-                <CopyButton
-                  value={url}
-                  label="Copy link"
-                  toastMessage="Link copied"
-                />
-              </div>
-            </div>
-          </div>
-        </>
-      )}
+          </aside>
+        )}
+      </div>
     </section>
   );
 }

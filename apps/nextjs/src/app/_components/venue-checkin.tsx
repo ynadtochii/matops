@@ -8,6 +8,7 @@ import { CopyButton } from "@matops/ui/copy-button";
 
 import { shareLink, useCanShare } from "~/lib/share";
 import { SectionHeading } from "./primitives";
+import { ReceptionSetup } from "./reception-setup";
 
 const QrPoster = dynamic(() => import("./qr-poster").then((m) => m.QrPoster), {
   loading: () => (
@@ -80,6 +81,7 @@ export function VenueCheckin({
           />
         </div>
       </div>
+      <ReceptionSetup />
     </section>
   );
 }

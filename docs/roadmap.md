@@ -1,5 +1,19 @@
 <!-- matops — live implementation plan + scope matrix. Rules for this file live in delivery.md. -->
 
+
+**Reception, ADR 139 (supersedes ADR 138)**
+
+Implementation is locally complete. The slice remains wip until focused tests pass, browser and iPad checks complete, and one branch completes the pilot. Migration `0001_reception_link` is applied to dev. Migration `0002_loose_machine_man` remains to be applied. Static verification is in [the implementation plan](reception-implementation-plan.md).
+
+| Slice | DB | API | Web | Mobile | Shared | Infra |
+| --- | --- | --- | --- | --- | --- | --- |
+| Permanent entrance link, storage and management | wip | wip | wip | not needed | not needed | not needed |
+| Link exchange and staff handover | not needed | wip | wip | not needed | not needed | not needed |
+| Name search, then the class already chosen | not needed | wip | wip | not needed | wip | not needed |
+| Book before the hour, check in after | wip | wip | wip | not needed | wip | not needed |
+| Existing walk-in form and automatic reset | reused | reused | wip | not needed | reused | not needed |
+| Staff reception screen | not needed | wip | wip | not needed | reused | not needed |
+
 **First academy fresh install, 2026-09-08**
 
 The active release scope is in [PLAN.md](/Users/kuna/projects/matops/PLAN.md), [ADR 135](/Users/kuna/projects/matops/docs/issues/135-first-academy-fresh-install-contract.md), and the [technical plan](/Users/kuna/projects/matops/docs/first-academy-technical-plan.md). Implementation is in final static verification. Focused tests were written but did not run. Browser, device, privacy, and restore checks still gate release.
@@ -78,6 +92,28 @@ Scope: SP1-SP7 in [the spec](/Users/kuna/projects/matops/docs/spec.md), [ADR 130
 - [ ] Walk the student and staff flow in a browser. Browser control timed out.
 
 Organization invitations, free trials, card processing and student plan replacement remain outside this release. Earlier release verification below does not verify this work.
+
+---
+
+**Built: the owner screens design pass (v7.8)**
+
+Status: **built, not clicked through and the suites not run here**. Static gates green (`pnpm typecheck` 17/17 after every task). Presentation only: **no migration, no procedure, no query and no token changed**, so nothing below the web layer can regress. One behaviour change, specced in O4: ending a membership from the member detail now asks first, matching the person screen. Decisions: [ADR 140](/Users/kuna/projects/matops/docs/issues/140-the-owner-screens-design-pass.md). Plan and the per screen log: [owner-screens-design-loop-handoff.md](/Users/kuna/projects/matops/docs/owner-screens-design-loop-handoff.md). Route map: [owner-screens-sitemap.md](/Users/kuna/projects/matops/docs/owner-screens-sitemap.md).
+
+| Slice                                    | DB  | API | Web  | Mob | Shared | Infra |
+| ---------------------------------------- | --- | --- | ---- | --- | ------ | ----- |
+| Branch dashboard: the rail, the honest queue | n/a | n/a | done | n/a | n/a | n/a |
+| Gym overview: one state vocabulary       | n/a | n/a | done | n/a | n/a | n/a |
+| Memberships: counts on the tabs          | n/a | n/a | done | n/a | n/a | n/a |
+| People list: columns at 200 rows         | n/a | n/a | done | n/a | n/a | n/a |
+| Person: the actions ranked               | n/a | n/a | done | n/a | n/a | n/a |
+| Roster: the day's work before setup      | n/a | n/a | done | n/a | n/a | n/a |
+| Schedule: three tabs, one screen         | n/a | n/a | done | n/a | n/a | n/a |
+| Coaches: per-row pending state           | n/a | n/a | done | n/a | n/a | n/a |
+| Both settings screens, matched           | n/a | n/a | done | n/a | n/a | n/a |
+| Reception: one eyebrow, not three        | n/a | n/a | done | n/a | n/a | n/a |
+| Referrals, Attendance, Class, Notices    | n/a | n/a | done | n/a | n/a | n/a |
+
+Not done: nothing was opened in a browser, no suite was run here, settings section navigation, and whether `CountBadge` means attention or a plain total.
 
 ---
 
@@ -1142,7 +1178,7 @@ Promote to a slice only on purpose (an ADR or a new roadmap row).
 - **Capacity hygiene:** hard caps, booking priority, waitlists, no-show tracking, cancel cut-offs. (tickets 22, 13)
 - **Home widget:** ~~parked~~ **promoted to v1.3 R.2** (S10) — still a native fast-follow, off the launch critical path. (ticket 27, ADR 40 plan)
 - **Live UI:** SSE + Postgres LISTEN/NOTIFY via a separate always-on worker. (tickets 04, 15, 17)
-- **Card billing:** payment **processor / auto-subscription / Stripe**, invoicing, multi-currency tax. _(Manual-transfer dues are **promoted to v1.3** — ADR 40; only the card/recurring layer stays parked.)_ Researched and written up as a parked, ready-to-build wave (6 slices, P.4-P.9): [card-billing-plan.md](card-billing-plan.md). Promoting it needs ADR 72 + new rows here, and the gates listed in that file.
+- **Card billing:** payment **processor / auto-subscription / Stripe**, invoicing, multi-currency tax. _(Manual-transfer dues are **promoted to v1.3**, ADR 40; only the card/recurring layer stays parked.)_ The plan is [2026-09-24-automatic-payments-final-plan.md](2026-09-24-automatic-payments-final-plan.md): 6 slices, A1-A6, not started. Promoting it needs ADR 141 + new rows here, and the prerequisites listed in that file.
 - **Deferred domains:** ~~belts/rank~~ (**promoted to v1.4** — ADR 41; only owner-defined **custom rank ladders** + **bulk** promotion stay parked), ~~announcements~~ (**promoted to v3.7** — ADR 77; **DMs, replies and per-kind preferences** stay parked), ~~curriculum~~ (**promoted to v5.2** — ADR 104, reshaped in v5.3 — ADR 105; the **block library** and the **week-grid timeline** with drag, resize and reorder are built, while the **taught line**, the **coverage report**, the **comment thread** and the **games library** stay parked), cross-academy franchise views, i18n, super-admin. (map "out of scope")
 
 Each is additive by design (new schema file + router + pure logic; the tenant seam is untouched) — architecture.md §8.

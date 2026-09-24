@@ -14,8 +14,8 @@
 > after.
 
 Scope note: here **matops is the merchant** and the **gym is the customer**. This
-is a completely separate thing from the parked
-[card-billing-plan.md](card-billing-plan.md), where each gym's own Stripe account
+is a completely separate thing from the
+[automatic payments plan](2026-09-24-automatic-payments-final-plan.md), where each gym's own Stripe account
 takes money from students. Do not let the two get conflated. **This one needs no
 code in matops at all.**
 

@@ -176,6 +176,19 @@ export const CoachesIcon = () => (
   </svg>
 );
 
+export const ReceptionIcon = () => (
+  <svg
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={1.5}
+    strokeLinecap="round"
+    className={iconClass}
+  >
+    <path d="M2 12.5h12M3.5 12.5V9a4.5 4.5 0 019 0v3.5M8 4.5V2.5" />
+  </svg>
+);
+
 const MoreIcon = () => (
   <svg
     viewBox="0 0 16 16"
