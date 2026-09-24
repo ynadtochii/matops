@@ -73,7 +73,7 @@ describe("reception class window", () => {
       1,
     );
     expect(window.from.toISOString()).toBe("2026-10-24T23:00:00.000Z");
-    expect(window.to.toISOString()).toBe("2026-10-26T00:00:00.000Z");
+    expect(window.to.toISOString()).toBe("2026-10-27T00:00:00.000Z");
   });
 });
 
