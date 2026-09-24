@@ -1,5 +1,13 @@
 import type { PGlite } from "@electric-sql/pglite";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 
 import { createEntity } from "@matops/db";
 
@@ -426,18 +434,24 @@ describe("one bookable room per general branch", () => {
     ).toBe("CONFLICT");
   });
 
-  it("refuses a recurring template that would clash with itself", async () => {
-    expect(
-      await rejectionCode(
-        at(gym).template.create({
-          title: "Every day",
-          daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
-          startsAtMinutes: 600,
-          durationMinutes: 600,
-          timeZone: "UTC",
-          capacity: 20,
-        }),
-      ),
-    ).toBe("CONFLICT");
+  it("refuses a recurring template that would clash with a booked session", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-14T00:00:00Z"));
+    try {
+      expect(
+        await rejectionCode(
+          at(gym).template.create({
+            title: "Every day",
+            daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+            startsAtMinutes: 600,
+            durationMinutes: 600,
+            timeZone: "UTC",
+            capacity: 20,
+          }),
+        ),
+      ).toBe("CONFLICT");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
