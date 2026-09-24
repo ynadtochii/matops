@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { createEntity, withScope } from "@matops/db";
+import { createEntity, eq, withScope } from "@matops/db";
+import { accessAssignment } from "@matops/db/schema";
 
 import type { Harness } from "./helpers";
 import {
@@ -89,6 +90,10 @@ describe("the scoped membership access reader", () => {
         startMonth: "2026-09-01",
       })
     ).id;
+    await h.exec
+      .update(accessAssignment)
+      .set({ startsOn: "2026-09-01" })
+      .where(eq(accessAssignment.id, assignment));
   });
 
   afterAll(() => h.close());
