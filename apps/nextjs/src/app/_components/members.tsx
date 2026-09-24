@@ -356,7 +356,8 @@ export function Members() {
             {listState ??
               (pending.length === 0 ? (
                 <EmptyState title="No one is waiting.">
-                  New sign-ups show up here for you to approve.
+                  New sign-ups land here for you to approve. Share the student
+                  link below to bring people in.
                 </EmptyState>
               ) : (
                 pending.map((m) => {
@@ -368,13 +369,11 @@ export function Members() {
                       <Button
                         size="sm"
                         variant="secondary"
+                        busy={approving}
                         disabled={rowBusy(m.memberId)}
                         onClick={() => approve.mutate({ memberId: m.memberId })}
                       >
-                        {approving && (
-                          <Spinner size="sm" className="text-current" />
-                        )}
-                        {approving ? "Approving…" : "Approve"}
+                        Approve
                       </Button>
                       <ConfirmDialog
                         title={`Decline ${m.name}?`}
@@ -513,9 +512,9 @@ export function Members() {
                 >
                   <div className="min-w-0">
                     <p className="truncate font-medium">{m.name}</p>
-                    <Eyebrow>
+                    <p className="text-muted-foreground text-sm">
                       {m.role} · joined {dateFmt.format(new Date(m.joinedAt))}
-                    </Eyebrow>
+                    </p>
                   </div>
                   <MemberActions
                     name={m.name}
@@ -534,12 +533,14 @@ export function Members() {
             )}
           </div>
         ) : (
-          <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-8">
+            {/* The leads are the tab; the poster that brings them in is how you
+                get more, so it follows them. */}
+            <LeadsPipeline initialFilter={stageParam ?? undefined} />
             <VenueCheckin
               academyId={academy.academyId}
               academyName={academy.name}
             />
-            <LeadsPipeline initialFilter={stageParam ?? undefined} />
           </div>
         )}
       </div>

@@ -45,6 +45,15 @@ export const MarkAttendanceSchema = z
     reason: input.reason,
   }));
 
+export const BookForSchema = z.object({
+  classId: z.uuid(),
+  personId: z.uuid(),
+});
+
+export const SearchMembersSchema = z.object({
+  query: z.string().trim().min(2).max(80),
+});
+
 /** Add a walk-in: mark a member present who never booked (spec O5). */
 export const AddWalkInSchema = z
   .union([

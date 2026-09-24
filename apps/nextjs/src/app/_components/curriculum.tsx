@@ -65,6 +65,7 @@ import {
   NoteIcon,
   PencilIcon,
   PlusIcon,
+  SECTION_LABEL,
   SectionHeading,
   XIcon,
 } from "./primitives";
@@ -326,9 +327,7 @@ export function Curriculum() {
       ) : (
         <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:gap-6">
           <div className={cn("order-2 lg:w-80 lg:shrink-0 xl:w-96", ENTER)}>
-            <h3 className="font-mono text-[11px] font-medium tracking-[0.16em] uppercase">
-              Blocks
-            </h3>
+            <h3 className={SECTION_LABEL}>Blocks</h3>
             {blocks.length === 0 ? (
               <p className="text-muted-foreground mt-3 text-sm">
                 No blocks yet. Add the themes your gym works through, then drag
@@ -414,9 +413,7 @@ export function Curriculum() {
           </div>
 
           <div className="order-1 min-w-0 flex-1">
-            <h3 className="mb-3 font-mono text-[11px] font-medium tracking-[0.16em] uppercase">
-              The plan
-            </h3>
+            <h3 className={cn("mb-3", SECTION_LABEL)}>The plan</h3>
             <div className="grid grid-cols-[3.25rem_minmax(0,1fr)]">
               <div aria-hidden className="relative" style={{ height: canvas }}>
                 {ticks.map((tick, w) => (

@@ -4,7 +4,12 @@ import type { QueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { createTRPCClient, httpBatchLink, loggerLink } from "@trpc/client";
+import {
+  createTRPCClient,
+  httpBatchLink,
+  loggerLink,
+  splitLink,
+} from "@trpc/client";
 import { createTRPCContext } from "@trpc/tanstack-react-query";
 import SuperJSON from "superjson";
 
@@ -70,32 +75,47 @@ export function EntityCacheBoundary() {
 export function TRPCReactProvider(props: { children: React.ReactNode }) {
   const queryClient = getQueryClient();
 
-  const [trpcClient] = useState(() =>
-    createTRPCClient<AppRouter>({
+  const [trpcClient] = useState(() => {
+    const transport = httpBatchLink<AppRouter>({
+      transformer: SuperJSON,
+      url: getBaseUrl() + "/api/trpc",
+      headers() {
+        const headers = new Headers();
+        headers.set("x-trpc-source", "nextjs-react");
+        const entityId = entityFromPath(window.location.pathname);
+        if (entityId) headers.set("x-matops-entity", entityId);
+        return headers;
+      },
+    });
+    const receptionTransport = httpBatchLink<AppRouter>({
+      transformer: SuperJSON,
+      url: getBaseUrl() + "/api/trpc",
+      methodOverride: "POST",
+      headers() {
+        const headers = new Headers();
+        headers.set("x-trpc-source", "nextjs-react");
+        const entityId = entityFromPath(window.location.pathname);
+        if (entityId) headers.set("x-matops-entity", entityId);
+        return headers;
+      },
+    });
+    return createTRPCClient<AppRouter>({
       links: [
-        loggerLink({
-          enabled: (op) =>
-            env.NODE_ENV === "development" ||
-            (op.direction === "down" && op.result instanceof Error),
-        }),
-        // NOT httpBatchStreamLink: a streamed response flushes its headers
-        // before the resolvers run, so the `Set-Cookie` that `nextCookies()`
-        // writes during a mutation is dropped and the session cookie cache
-        // (ADR 81) stays stale for five minutes. See docs/issues/83.
-        httpBatchLink({
-          transformer: SuperJSON,
-          url: getBaseUrl() + "/api/trpc",
-          headers() {
-            const headers = new Headers();
-            headers.set("x-trpc-source", "nextjs-react");
-            const entityId = entityFromPath(window.location.pathname);
-            if (entityId) headers.set("x-matops-entity", entityId);
-            return headers;
-          },
+        splitLink({
+          condition: (op) => op.path.startsWith("reception."),
+          true: receptionTransport,
+          false: [
+            loggerLink({
+              enabled: (op) =>
+                env.NODE_ENV === "development" ||
+                (op.direction === "down" && op.result instanceof Error),
+            }),
+            transport,
+          ],
         }),
       ],
-    }),
-  );
+    });
+  });
 
   return (
     <QueryClientProvider client={queryClient}>

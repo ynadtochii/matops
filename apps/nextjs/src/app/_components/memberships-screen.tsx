@@ -13,6 +13,7 @@ import {
   nextMonth,
   organizationHref,
 } from "@matops/domain";
+import { cn } from "@matops/ui";
 import { Button } from "@matops/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@matops/ui/dialog";
 import { FieldError } from "@matops/ui/field";
@@ -28,9 +29,17 @@ import {
 import { dateFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { useOrganization } from "./entity";
-import { cardClass, ENTER, Eyebrow, Section, stagger } from "./primitives";
+import { PageHeader } from "./page-header";
+import {
+  cardClass,
+  ENTER,
+  Eyebrow,
+  SectionHeading,
+  stagger,
+} from "./primitives";
 import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
+import { Tabs } from "./tabs";
 
 type Plan = RouterOutputs["accessPlan"]["list"][number];
 type Affected = RouterOutputs["accessPlan"]["coveragePreview"]["affected"];
@@ -44,17 +53,35 @@ type Affected = RouterOutputs["accessPlan"]["coveragePreview"]["affected"];
  * that person's member profile inside a branch, which is where an owner already
  * is when they think about it.
  */
+type MembershipTab = "payments" | "access" | "plans";
+
 export function MembershipsScreen() {
   const { entities, canRunOrganization, role } = useOrganization();
   const trpc = useTRPC();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
   const branchId = searchParams.get("branch") ?? undefined;
-  const tab =
-    tabParam === "access" || tabParam === "plans" ? tabParam : "payments";
+  const [tab, setTab] = useState<MembershipTab>(
+    tabParam === "access" || tabParam === "plans" ? tabParam : "payments",
+  );
   const plans = useQuery({
     ...trpc.accessPlan.list.queryOptions(),
     enabled: canRunOrganization && tab === "plans",
+  });
+  // The same three queries the sections below make, read here for the tab
+  // counts. One query key means one request, so a tab wearing its number costs
+  // nothing on the tab that is already open.
+  const claims = useQuery({
+    ...trpc.accessPlan.claims.queryOptions(),
+    enabled: canRunOrganization,
+  });
+  const uncovered = useQuery({
+    ...trpc.accessPlan.uncovered.queryOptions(),
+    enabled: canRunOrganization,
+  });
+  const review = useQuery({
+    ...trpc.accessPlan.bookingsToReview.queryOptions({ limit: 50 }),
+    enabled: canRunOrganization,
   });
   const [editing, setEditing] = useState<Plan | null>(null);
   const [adding, setAdding] = useState(false);
@@ -74,41 +101,36 @@ export function MembershipsScreen() {
 
   return (
     <div className="flex flex-col gap-8">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Memberships</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            Track payments, resolve work that needs action, and manage your
-            plans.
-          </p>
-        </div>
-        {tab === "plans" && (
-          <Button size="sm" onClick={() => setAdding(true)}>
-            New plan
-          </Button>
-        )}
-      </div>
+      <PageHeader
+        title="Memberships"
+        action={
+          tab === "plans" && (
+            <Button size="sm" onClick={() => setAdding(true)}>
+              New plan
+            </Button>
+          )
+        }
+      />
 
-      <nav
-        aria-label="Membership views"
-        className="border-border flex gap-1 overflow-x-auto border-b"
-      >
-        {[
-          { id: "payments", label: "Payments" },
-          { id: "access", label: "Needs action" },
+      <Tabs
+        label="Membership views"
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          {
+            id: "payments",
+            label: "Payments",
+            count: claims.data?.length ?? 0,
+          },
+          {
+            id: "access",
+            label: "Needs action",
+            count:
+              (uncovered.data?.total ?? 0) + (review.data?.items.length ?? 0),
+          },
           { id: "plans", label: "Plans" },
-        ].map((view) => (
-          <Link
-            key={view.id}
-            href={`/memberships?tab=${view.id}`}
-            scroll={false}
-            aria-current={tab === view.id ? "page" : undefined}
-            className={`focus-visible:outline-ring min-h-11 shrink-0 border-b-2 px-4 py-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 ${tab === view.id ? "border-brand text-foreground font-medium" : "text-muted-foreground hover:text-foreground border-transparent"}`}
-          >
-            {view.label}
-          </Link>
-        ))}
-      </nav>
+        ]}
+      />
 
       {tab === "payments" && (
         <div className="flex min-w-0 flex-col gap-8">
@@ -124,10 +146,6 @@ export function MembershipsScreen() {
       )}
       {tab === "plans" && (
         <div className="flex min-w-0 flex-col gap-6">
-          <p className="text-muted-foreground text-sm">
-            Set prices and covered branches. Assign plans from a person’s
-            profile.
-          </p>
           {plans.isPending ? (
             <SkeletonRows rows={3} />
           ) : plans.isError ? (
@@ -144,7 +162,16 @@ export function MembershipsScreen() {
               sauna.
             </EmptyState>
           ) : (
-            <Section label="Plans" meta={`${plans.data.length} total`}>
+            <section className="flex min-w-0 flex-col gap-4">
+              <SectionHeading
+                action={
+                  <span className="text-muted-foreground shrink-0 text-sm">
+                    Assign a plan from a person&apos;s profile.
+                  </span>
+                }
+              >
+                Plans
+              </SectionHeading>
               <ul className="flex flex-col gap-2">
                 {plans.data.map((p, i) => (
                   <li key={p.id} style={stagger(i)} className={ENTER}>
@@ -156,7 +183,7 @@ export function MembershipsScreen() {
                   </li>
                 ))}
               </ul>
-            </Section>
+            </section>
           )}
 
           {role === "owner" && (
@@ -236,30 +263,17 @@ function ClaimsWaiting() {
       />
     );
   const rows = claims.data;
-  if (rows.length === 0)
-    return (
-      <section className="border-border flex flex-col gap-1 border-b pb-5">
-        <h2 className="text-base font-semibold">Renewal payment claims</h2>
-        <p className="text-muted-foreground text-sm">
-          No claims to review. You can record payments in the monthly list
-          below.
-        </p>
-      </section>
-    );
+  // The usual state of this section is empty, and an empty heading above the
+  // month board would push the work down the page every day to say nothing.
+  // The tab carries the count, so silence here is the honest shape.
+  if (rows.length === 0) return null;
 
   return (
-    <div className={`${cardClass()} flex flex-col gap-3`}>
-      <div className="flex flex-col gap-1">
-        <h2 className="text-base font-semibold">
-          Renewal payment claims{" "}
-          <span className="text-muted-foreground text-sm font-normal">
-            ({rows.length})
-          </span>
-        </h2>
-        <p className="text-muted-foreground text-sm">
-          Review payments reported by members before confirming them.
-        </p>
-      </div>
+    <section className="flex min-w-0 flex-col gap-4">
+      <SectionHeading count={rows.length}>Payment claims</SectionHeading>
+      <p className="text-muted-foreground -mt-2 text-sm">
+        Members who say they have paid. Confirm each one against your bank.
+      </p>
       <ul className="flex flex-col gap-2">
         {rows.map((c) => {
           const busy =
@@ -270,7 +284,10 @@ function ClaimsWaiting() {
           return (
             <li
               key={`${c.assignmentId}:${c.month}`}
-              className="border-border/70 flex flex-wrap items-center gap-3 rounded-lg border p-3"
+              className={cn(
+                cardClass(),
+                "flex flex-wrap items-center gap-3 p-3",
+              )}
             >
               <div className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate font-medium">{c.name}</span>
@@ -285,7 +302,7 @@ function ClaimsWaiting() {
               </div>
               <Button
                 size="sm"
-                disabled={busy}
+                busy={busy}
                 onClick={() =>
                   confirm.mutate({
                     assignmentId: c.assignmentId,
@@ -313,7 +330,7 @@ function ClaimsWaiting() {
           );
         })}
       </ul>
-    </div>
+    </section>
   );
 }
 
@@ -357,23 +374,21 @@ function MonthBoard({ nameOf }: { nameOf: (id: string) => string }) {
   );
 
   return (
-    <div className={`${cardClass()} flex flex-col gap-3`}>
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-base font-semibold">Monthly payments</h2>
-          <p className="text-muted-foreground text-sm">
-            {board.data.monthLabel}
-          </p>
-        </div>
-        <span className="text-muted-foreground text-sm">
-          {rows.filter((r) => r.paymentRequired && r.paid).length} of{" "}
-          {rows.filter((r) => r.paymentRequired).length} paid
-          {rows.some((r) => !r.paymentRequired) &&
-            ` · ${rows.filter((r) => !r.paymentRequired).length} free`}
-          {board.data.unpriced > 0 &&
-            ` · ${board.data.unpriced} on a plan with no price`}
-        </span>
-      </div>
+    <section className="flex min-w-0 flex-col gap-4">
+      <SectionHeading
+        action={
+          <span className="text-muted-foreground shrink-0 font-mono text-xs tabular-nums">
+            {rows.filter((r) => r.paymentRequired && r.paid).length} of{" "}
+            {rows.filter((r) => r.paymentRequired).length} paid
+            {rows.some((r) => !r.paymentRequired) &&
+              ` · ${rows.filter((r) => !r.paymentRequired).length} free`}
+            {board.data.unpriced > 0 &&
+              ` · ${board.data.unpriced} with no price`}
+          </span>
+        }
+      >
+        {board.data.monthLabel}
+      </SectionHeading>
 
       {rows.length === 0 ? (
         <EmptyState title="Nobody holds a membership yet.">
@@ -384,7 +399,10 @@ function MonthBoard({ nameOf }: { nameOf: (id: string) => string }) {
           {rows.map((r) => (
             <li
               key={r.assignmentId}
-              className="border-border/70 flex flex-wrap items-center gap-3 rounded-lg border p-3"
+              className={cn(
+                cardClass(),
+                "flex flex-wrap items-center gap-3 p-3",
+              )}
             >
               <div className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate font-medium">{r.name}</span>
@@ -414,7 +432,10 @@ function MonthBoard({ nameOf }: { nameOf: (id: string) => string }) {
                 <Button
                   size="sm"
                   variant={r.paid ? "outline" : "primary"}
-                  disabled={mark.isPending}
+                  busy={
+                    mark.isPending &&
+                    mark.variables.assignmentId === r.assignmentId
+                  }
                   onClick={() =>
                     mark.mutate({
                       assignmentId: r.assignmentId,
@@ -430,7 +451,7 @@ function MonthBoard({ nameOf }: { nameOf: (id: string) => string }) {
           ))}
         </ul>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -448,15 +469,13 @@ function BookingAccessQueue() {
       />
     );
   return (
-    <section className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-base font-semibold">
-          Bookings that need attention
-        </h2>
-        <p className="text-muted-foreground text-sm">
-          These people have booked a class their membership no longer covers.
-        </p>
-      </div>
+    <section className="flex min-w-0 flex-col gap-4">
+      <SectionHeading count={review.data.items.length}>
+        Bookings that need attention
+      </SectionHeading>
+      <p className="text-muted-foreground -mt-2 text-sm">
+        These people have booked a class their membership no longer covers.
+      </p>
       {review.data.items.length === 0 ? (
         <p className="text-muted-foreground text-sm">
           Every upcoming booking is covered by a membership.
@@ -1077,16 +1096,11 @@ function UncoveredQueue() {
     );
 
   return (
-    <section className={`${cardClass()} flex flex-col gap-3`}>
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-base font-semibold">Missing memberships</h2>
-        <span className="text-muted-foreground text-sm">
-          {uncovered.data.total === 1
-            ? "1 person"
-            : `${uncovered.data.total} people`}
-        </span>
-      </div>
-      <p className="text-muted-foreground text-sm">
+    <section className="flex min-w-0 flex-col gap-4">
+      <SectionHeading count={uncovered.data.total}>
+        Missing memberships
+      </SectionHeading>
+      <p className="text-muted-foreground -mt-2 text-sm">
         These people need a plan that covers the branch where they train.
       </p>
       <ul className="flex flex-col gap-3">
@@ -1158,14 +1172,10 @@ function Reconcile({ planId, missing }: { planId: string; missing: number }) {
     <Button
       size="sm"
       variant="outline"
-      disabled={run.isPending}
+      busy={run.isPending}
       onClick={() => run.mutate({ id: planId })}
     >
-      {run.isPending
-        ? "Finishing…"
-        : missing === 1
-          ? "Finish 1 enrolment"
-          : `Finish ${missing} enrolments`}
+      {missing === 1 ? "Finish 1 enrolment" : `Finish ${missing} enrolments`}
     </Button>
   );
 }

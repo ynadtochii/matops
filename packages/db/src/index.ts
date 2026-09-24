@@ -25,6 +25,8 @@ export * from "./academy-settings";
 export * from "./erase";
 // Public booking API (key resolution, published classes) — see ./public-api.ts.
 export * from "./public-api";
+// Permanent reception entrance link (ADR 139) — see ./reception.ts.
+export * from "./reception";
 // Default curriculum track for a new academy — see ./curriculum.ts.
 export * from "./curriculum";
 // Idempotent organization setup (entity, profile, owner membership, track).

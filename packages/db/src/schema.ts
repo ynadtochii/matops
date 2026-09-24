@@ -23,5 +23,6 @@ export * from "./person-schema";
 export * from "./product-event-schema";
 export * from "./push-token-schema";
 export * from "./rank-notes-schema";
+export * from "./reception-schema";
 export * from "./referrals-schema";
 export * from "./scheduling";

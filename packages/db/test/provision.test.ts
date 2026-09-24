@@ -22,6 +22,8 @@ async function seedOrganization(pg: PGlite, id: string) {
       ON CONFLICT (id) DO NOTHING;
     INSERT INTO "organization" (id, name, slug, created_at)
       VALUES ('${id}', 'Alma', 'alma-${id}', now());
+    INSERT INTO "member" (id, organization_id, user_id, role, created_at)
+      VALUES ('m_${id}', '${id}', '${OWNER}', 'owner', now());
   `);
 }
 

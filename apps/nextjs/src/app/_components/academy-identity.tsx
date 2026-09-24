@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
+import { cn } from "@matops/ui";
 import { Button } from "@matops/ui/button";
 import { CopyButton } from "@matops/ui/copy-button";
 import { FieldError } from "@matops/ui/field";
@@ -10,6 +11,7 @@ import { Input } from "@matops/ui/input";
 import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
+import { cardClass, SectionHeading } from "./primitives";
 
 /**
  * Branch identity (spec O6). The **name** is a label the owner can rename; the
@@ -37,7 +39,11 @@ export function AcademyIdentity({
         toast.success("Branch renamed");
         setEditing(false);
       },
-      onError: () => toast.error("Couldn't rename the branch. Try again."),
+      onError: () => {
+        const message = "Couldn't rename the branch. Try again.";
+        setNameError(message);
+        toast.error(message);
+      },
     }),
   );
 
@@ -56,77 +62,83 @@ export function AcademyIdentity({
   };
 
   return (
-    <section className="border-border flex flex-col divide-y rounded-lg border">
-      {/* The branch name, edited in place. */}
-      <div className="flex flex-wrap items-center justify-between gap-3 p-4">
-        {editing ? (
-          <div className="flex flex-1 flex-wrap items-center gap-2">
-            <Input
-              value={draft}
-              onChange={(e) => {
-                setDraft(e.target.value);
-                setNameError(null);
-              }}
-              maxLength={80}
-              autoFocus
-              className="max-w-xs"
-              aria-label="Branch name"
-              aria-invalid={nameError ? true : undefined}
-              aria-describedby={nameError ? "branch-name-error" : undefined}
-            />
-            <Button size="sm" onClick={save} disabled={rename.isPending}>
-              {rename.isPending ? "Saving…" : "Save"}
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                setDraft(name);
-                setNameError(null);
-                setEditing(false);
-              }}
-            >
-              Cancel
-            </Button>
-            {nameError && (
-              <FieldError id="branch-name-error" className="basis-full">
-                {nameError}
-              </FieldError>
-            )}
-          </div>
-        ) : (
-          <>
-            <div>
-              <p className="text-muted-foreground text-sm">Branch name</p>
-              <p className="text-base font-medium">{name}</p>
-            </div>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                setDraft(name);
-                setEditing(true);
-              }}
-            >
-              Rename
-            </Button>
-          </>
+    <section className="flex flex-col gap-4">
+      <SectionHeading>Name and join code</SectionHeading>
+      <div
+        className={cn(
+          cardClass(),
+          "grid divide-y p-0 md:grid-cols-2 md:divide-x md:divide-y-0",
         )}
-      </div>
-
-      {/* Join code: a permanent identifier */}
-      <div className="flex flex-wrap items-center justify-between gap-3 p-4">
-        <div>
-          <p className="text-sm font-medium">Join code</p>
-          <p className="text-muted-foreground text-sm">
-            Students type this code into the app to join. It never changes.
-          </p>
+      >
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 p-4">
+          {editing ? (
+            <div className="flex flex-1 flex-wrap items-center gap-2">
+              <Input
+                value={draft}
+                onChange={(e) => {
+                  setDraft(e.target.value);
+                  setNameError(null);
+                }}
+                maxLength={80}
+                autoFocus
+                className="max-w-xs"
+                aria-label="Branch name"
+                aria-invalid={nameError ? true : undefined}
+                aria-describedby={nameError ? "branch-name-error" : undefined}
+              />
+              <Button size="sm" busy={rename.isPending} onClick={save}>
+                Save
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setDraft(name);
+                  setNameError(null);
+                  setEditing(false);
+                }}
+              >
+                Cancel
+              </Button>
+              {nameError && (
+                <FieldError id="branch-name-error" className="basis-full">
+                  {nameError}
+                </FieldError>
+              )}
+            </div>
+          ) : (
+            <>
+              <div>
+                <p className="text-muted-foreground text-sm">Branch name</p>
+                <p className="text-base font-medium">{name}</p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setDraft(name);
+                  setEditing(true);
+                }}
+              >
+                Rename
+              </Button>
+            </>
+          )}
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="font-mono text-xl tracking-[0.2em] tabular-nums sm:text-2xl">
-            {code}
-          </span>
-          {code && <CopyButton value={code} toastMessage="Code copied" />}
+
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 p-4">
+          <div>
+            <p className="text-sm font-medium">Join code</p>
+            <p className="text-muted-foreground text-sm">
+              Students type this code into the app to join. It never changes.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="font-mono text-xl tracking-[0.2em] tabular-nums sm:text-2xl">
+              {code}
+            </span>
+            {code && <CopyButton value={code} toastMessage="Code copied" />}
+          </div>
         </div>
       </div>
     </section>

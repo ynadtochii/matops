@@ -46,6 +46,7 @@ import {
   PanelNotice,
   RESOLVE,
   Section,
+  TAP,
 } from "./primitives";
 import { Bar, SkeletonDayRail, SkeletonQueue, SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
@@ -55,6 +56,13 @@ import { useMinuteClock } from "./use-clock";
 type ClassRow = Omit<RouterOutputs["class"]["week"][number], "startsAt"> & {
   startsAt: Date;
 };
+
+const listFmt = new Intl.ListFormat("en", {
+  style: "long",
+  type: "conjunction",
+});
+
+const DRIFT_SHOWN = 6;
 
 /** One row of the "needs you" queue. Rendered only while `count` is above zero. */
 interface QueueItem {
@@ -205,6 +213,27 @@ export function DashboardScreen() {
   const numbersLoading = week.isPending || memberList.isPending;
   const firstRun = isOwner && isFirstRun(activeCount, weekCount);
 
+  // A query that failed must never read as a job at zero, so the panel names
+  // what it could not check instead of claiming the queue is clear.
+  const queueErrors: { label: string; retry: () => void }[] = [];
+  if (attendance.isError)
+    queueErrors.push({
+      label: `${words.sessionPlural} to review`,
+      retry: () => void attendance.refetch(),
+    });
+  if (memberList.isError)
+    queueErrors.push({
+      label: "pending approvals",
+      retry: () => void memberList.refetch(),
+    });
+  if (isOwner && leads.isError)
+    queueErrors.push({
+      label: "drop-in leads",
+      retry: () => void leads.refetch(),
+    });
+
+  const driftList = dash.data?.drifting ?? [];
+
   const detail = (week.data ?? []).find((r) => r.id === detailId);
 
   return (
@@ -275,47 +304,48 @@ export function DashboardScreen() {
                   </>
                 )}
               </PanelNotice>
-            ) : queue.length === 0 ? (
-              <PanelNotice
-                title={
-                  attendance.isError
-                    ? "Attendance could not be checked."
-                    : "All clear."
-                }
-              >
-                {attendance.isError
-                  ? "Retry below to check past classes."
-                  : isOwner
-                    ? "All past classes reviewed, everyone approved, and no payments waiting for confirmation."
-                    : "All past classes reviewed and everyone approved."}
-              </PanelNotice>
             ) : (
-              queue.map((i) => (
-                <QueueSegment
-                  key={i.key}
-                  href={i.href}
-                  count={i.count}
-                  label={i.label}
-                  sub={i.sub}
-                />
-              ))
+              <>
+                {queue.map((i) => (
+                  <QueueSegment
+                    key={i.key}
+                    href={i.href}
+                    count={i.count}
+                    label={i.label}
+                    sub={i.sub}
+                  />
+                ))}
+                {queueErrors.length > 0 ? (
+                  <PanelNotice
+                    title={`Couldn't check ${listFmt.format(
+                      queueErrors.map((e) => e.label),
+                    )}.`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => queueErrors.forEach((e) => e.retry())}
+                      className={cn(
+                        "text-brand-strong font-medium underline underline-offset-4",
+                        FOCUS_RING,
+                        TAP,
+                      )}
+                    >
+                      Try again
+                    </button>
+                  </PanelNotice>
+                ) : (
+                  queue.length === 0 && (
+                    <PanelNotice title="All clear.">
+                      {isOwner
+                        ? `Every past ${words.session} reviewed, everyone approved, and no new leads.`
+                        : `Every past ${words.session} reviewed and everyone approved.`}
+                    </PanelNotice>
+                  )
+                )}
+              </>
             )}
           </Panel>
         )}
-
-        {attendance.isError ? (
-          <ErrorState
-            label="attendance reviews"
-            onRetry={() => void attendance.refetch()}
-          />
-        ) : attendance.data?.needsReview === 0 ? (
-          <Link
-            href={href("/attendance")}
-            className="text-success mt-3 inline-block text-sm underline underline-offset-4"
-          >
-            All past classes reviewed
-          </Link>
-        ) : null}
 
         {/* Context, not readings — a caption under the panel, so the counts
             that need an action stay the only numbers competing for the eye. */}
@@ -324,12 +354,20 @@ export function DashboardScreen() {
         ) : (
           <p className="text-muted-foreground mt-3 font-mono text-[11px] tracking-wider uppercase tabular-nums">
             {isOwner && `${activeCount} active members · `}
-            {weekCount} classes this week
+            {weekCount} {words.sessionPlural} this week
           </p>
         )}
       </div>
 
-      <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      {/* Two columns only when there is a rail to fill: an instructor has no
+          drifting list, so the day would otherwise sit in a 1fr column with
+          20rem of nothing beside it. */}
+      <div
+        className={cn(
+          "grid gap-10",
+          isOwner && "lg:grid-cols-[minmax(0,1fr)_19rem]",
+        )}
+      >
         <div className={cn("flex flex-col gap-10", ENTER, "delay-100")}>
           {/* The day's classes — today until its last class ends, then tomorrow */}
           <Section
@@ -337,7 +375,7 @@ export function DashboardScreen() {
             meta={
               week.isPending || week.isError
                 ? undefined
-                : `${dayList.length} ${dayList.length === 1 ? "class" : "classes"}`
+                : `${dayList.length} ${dayList.length === 1 ? words.session : words.sessionPlural}`
             }
           >
             {week.isPending ? (
@@ -349,13 +387,17 @@ export function DashboardScreen() {
               />
             ) : dayList.length === 0 ? (
               <EmptyState
-                title="No classes today."
+                title={`No ${words.sessionPlural} ${showTomorrow ? "tomorrow" : "today"}.`}
                 action={
                   <Link
                     href={href("/schedule")}
-                    className="text-brand-strong text-sm font-medium"
+                    className={cn(
+                      "text-brand-strong text-sm font-medium",
+                      FOCUS_RING,
+                      TAP,
+                    )}
                   >
-                    Add a class →
+                    Add a {words.session}
                   </Link>
                 }
               >
@@ -383,39 +425,55 @@ export function DashboardScreen() {
               </div>
             )}
           </Section>
+        </div>
 
-          {/* Who's drifting — members who used to train and have gone quiet */}
-          {isOwner && (
+        {/* Who's drifting — members who used to train and have gone quiet.
+            A column of names and one badge each, which is what the rail is
+            the right width for. */}
+        {isOwner && (
+          <aside className={cn(ENTER, "delay-150")}>
             <Section
               label="Who's drifting"
               meta={
-                dash.isPending || dash.isError || !dash.data.drifting?.length
+                dash.isPending || dash.isError || driftList.length === 0
                   ? undefined
-                  : `${dash.data.drifting.length} members`
+                  : `${driftList.length} members`
               }
             >
               {dash.isPending ? (
-                <SkeletonRows rows={3} action variant="outline" />
+                <SkeletonRows rows={3} />
               ) : dash.isError ? (
                 <ErrorState
                   label="the drifting list"
                   onRetry={() => void dash.refetch()}
                 />
-              ) : !dash.data.drifting?.length ? (
+              ) : driftList.length === 0 ? (
                 <EmptyState title="Everyone's showing up.">
-                  Members who used to train here but have gone quiet appear here
-                  so you can reach out.
+                  Members who trained here and went quiet appear here, so you
+                  can reach out.
                 </EmptyState>
               ) : (
                 <div className={cn("flex flex-col gap-2", RESOLVE)}>
-                  {dash.data.drifting.map((m) => (
+                  {driftList.slice(0, DRIFT_SHOWN).map((m) => (
                     <DriftRow key={m.memberId} m={m} today={today} />
                   ))}
+                  {driftList.length > DRIFT_SHOWN && (
+                    <Link
+                      href={href("/members")}
+                      className={cn(
+                        "text-brand-strong self-start text-sm font-medium",
+                        FOCUS_RING,
+                        TAP,
+                      )}
+                    >
+                      See all {driftList.length}
+                    </Link>
+                  )}
                 </div>
               )}
             </Section>
-          )}
-        </div>
+          </aside>
+        )}
       </div>
     </div>
   );
@@ -492,8 +550,9 @@ function DayRow({
       type="button"
       onClick={onOpen}
       className={cn(
-        "hover:bg-muted focus-visible:border-ring -mx-2.5 flex w-[calc(100%+1.25rem)] items-center gap-3 rounded-sm px-2.5 py-2.5 text-left text-sm",
+        "hover:bg-muted -mx-2.5 flex min-h-11 w-[calc(100%+1.25rem)] items-center gap-3 rounded-sm px-2.5 py-2 text-left text-sm",
         FOCUS_RING,
+        PRESS,
       )}
     >
       <span
@@ -532,7 +591,10 @@ function DayRow({
         )
       )}
       <span
-        className={`font-mono text-xs tabular-nums ${full ? "text-warning" : "text-muted-foreground"}`}
+        className={cn(
+          "shrink-0 font-mono text-xs tabular-nums",
+          full ? "text-warning" : "text-muted-foreground",
+        )}
       >
         {c.bookingCount}/{c.capacity}
         {c.pendingCount > 0 ? ` · +${c.pendingCount}` : ""}
@@ -556,18 +618,18 @@ function DriftRow({ m, today }: { m: DriftMember; today: Date }) {
       href={href(`/members?member=${m.memberId}`)}
       className={cn(
         cardClass({ variant: "outline", interactive: true }),
-        "flex items-center justify-between gap-3 p-3",
+        "flex min-h-11 flex-col gap-0.5 p-3",
+        FOCUS_RING,
+        PRESS,
       )}
     >
-      <div className="flex flex-col">
-        <span className="font-medium">{m.name}</span>
-        <span className="text-muted-foreground text-sm">
-          {days != null
-            ? `Last trained ${days} days ago`
-            : "No recent sessions"}
-        </span>
-      </div>
-      <DriftBadge drift={m.drift} className="shrink-0" />
+      <span className="flex items-center justify-between gap-2">
+        <span className="truncate font-medium">{m.name}</span>
+        <DriftBadge drift={m.drift} className="shrink-0" />
+      </span>
+      <span className="text-muted-foreground text-sm">
+        {days != null ? `Last trained ${days} days ago` : "Hasn't trained yet"}
+      </span>
     </Link>
   );
 }

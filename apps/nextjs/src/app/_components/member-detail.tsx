@@ -20,7 +20,6 @@ import { Button } from "@matops/ui/button";
 import { CopyButton } from "@matops/ui/copy-button";
 import { Input } from "@matops/ui/input";
 import { Select } from "@matops/ui/select";
-import { Spinner } from "@matops/ui/spinner";
 import { Textarea } from "@matops/ui/textarea";
 import { toast } from "@matops/ui/toast";
 
@@ -284,9 +283,6 @@ function MembershipTab({ personId, name }: { personId: string; name: string }) {
   const offerable = (plans.data ?? []).filter(
     (p) => !p.archived && !held.data.some((h) => h.planId === p.id),
   );
-  const busy =
-    assign.isPending || pause.isPending || end.isPending || mark.isPending;
-
   return (
     <div className="flex flex-col gap-4">
       {held.data.length === 0 ? (
@@ -296,7 +292,7 @@ function MembershipTab({ personId, name }: { personId: string; name: string }) {
       ) : (
         <ul className="flex flex-col gap-2">
           {held.data.map((h) => (
-            <li key={h.id} className={`${cardClass()} flex flex-wrap gap-3`}>
+            <li key={h.id} className={cn(cardClass(), "flex flex-wrap gap-3")}>
               <div className="flex min-w-0 flex-1 flex-col gap-1">
                 <span className="font-medium">
                   {h.planName}
@@ -331,8 +327,10 @@ function MembershipTab({ personId, name }: { personId: string; name: string }) {
                 {h.status === "active" && h.month && (
                   <Button
                     size="sm"
-                    variant={h.paid ? "outline" : "primary"}
-                    disabled={busy}
+                    variant={h.paid ? "outline" : "secondary"}
+                    busy={
+                      mark.isPending && mark.variables.assignmentId === h.id
+                    }
                     onClick={() => {
                       if (h.month) {
                         mark.mutate({
@@ -350,21 +348,26 @@ function MembershipTab({ personId, name }: { personId: string; name: string }) {
                   <Button
                     size="sm"
                     variant="outline"
-                    disabled={busy}
+                    busy={pause.isPending && pause.variables.id === h.id}
                     onClick={() => pause.mutate({ id: h.id })}
                   >
                     Pause
                   </Button>
                 )}
                 {h.status !== "cancelled" && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={busy}
-                    onClick={() => end.mutate({ id: h.id })}
-                  >
-                    End
-                  </Button>
+                  <ConfirmDialog
+                    title="End this membership?"
+                    description="It stops covering every branch it covers. Their branch memberships, history and bookings all stay."
+                    confirmLabel="End it"
+                    onConfirm={async () => {
+                      await end.mutateAsync({ id: h.id });
+                    }}
+                    trigger={
+                      <Button size="sm" variant="destructive-outline">
+                        End
+                      </Button>
+                    }
+                  />
                 )}
               </div>
             </li>
@@ -397,7 +400,7 @@ function MembershipTab({ personId, name }: { personId: string; name: string }) {
           <Select
             id={`assign-${personId}`}
             value={picked}
-            disabled={busy || offerable.length === 0}
+            disabled={assign.isPending || offerable.length === 0}
             onChange={(e) => setPicked(e.target.value)}
           >
             <option value="">
@@ -416,7 +419,9 @@ function MembershipTab({ personId, name }: { personId: string; name: string }) {
         </div>
         <Button
           size="sm"
-          disabled={busy || picked === ""}
+          variant="secondary"
+          busy={assign.isPending}
+          disabled={picked === ""}
           onClick={() =>
             assign.mutate({
               personId,
@@ -425,7 +430,7 @@ function MembershipTab({ personId, name }: { personId: string; name: string }) {
             })
           }
         >
-          {assign.isPending ? "Adding…" : "Add"}
+          Add
         </Button>
       </div>
     </div>
@@ -615,11 +620,12 @@ function RankTab({ memberId }: { memberId: string }) {
           )}
           <Button
             size="sm"
-            disabled={set.isPending || !belt || wouldRegress}
+            variant="secondary"
+            busy={set.isPending}
+            disabled={!belt || wouldRegress}
             onClick={() => set.mutate({ memberId, discipline, belt, stripes })}
           >
-            {set.isPending && <Spinner size="sm" className="text-current" />}
-            {set.isPending ? "Saving…" : "Save rank"}
+            Save rank
           </Button>
         </div>
         {current && (
@@ -704,12 +710,13 @@ function NotesTab({ memberId }: { memberId: string }) {
         />
         <Button
           size="sm"
+          variant="secondary"
           className="self-start"
-          disabled={add.isPending || body.trim().length === 0}
+          busy={add.isPending}
+          disabled={body.trim().length === 0}
           onClick={() => add.mutate({ memberId, body: body.trim() })}
         >
-          {add.isPending && <Spinner size="sm" className="text-current" />}
-          {add.isPending ? "Adding…" : "Add note"}
+          Add note
         </Button>
       </div>
 

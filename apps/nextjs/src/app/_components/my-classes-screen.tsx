@@ -13,7 +13,7 @@ import { dayMediumFmt, timeFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { useEntity, useEntityHref } from "./entity";
 import { PageHeader } from "./page-header";
-import { cardClass, ENTER, SectionHeading } from "./primitives";
+import { cardClass, ENTER } from "./primitives";
 import { SkeletonMyClassesBody } from "./skeletons";
 import { EmptyState, ErrorState, SuspendedState } from "./states";
 import { Tabs } from "./tabs";
@@ -72,77 +72,71 @@ export function MyClassesScreen() {
       ) : mine.isError ? (
         <ErrorState label="your classes" onRetry={() => void mine.refetch()} />
       ) : (
-        <div className="grid items-start gap-8 xl:grid-cols-[minmax(0,1fr)_20rem]">
-          <section className={cn(ENTER, "min-w-0 space-y-5")}>
-            <Tabs
-              label="My classes views"
-              value={view}
-              onChange={setView}
-              tabs={[
-                { id: "upcoming", label: `Upcoming (${upcoming.length})` },
-                { id: "attended", label: `Attended (${past.length})` },
-              ]}
-            />
-            <h2 className="sr-only">
-              {view === "upcoming" ? "Upcoming bookings" : "Classes attended"}
-            </h2>
-            {view === "attended" && (
-              <p className="text-muted-foreground text-sm">
-                Classes appear here after your gym records your attendance.
-              </p>
-            )}
-            {classes.length === 0 ? (
-              <EmptyState
-                title={
-                  view === "upcoming"
-                    ? "No upcoming bookings"
-                    : "No attendance recorded yet"
-                }
-                action={
-                  view === "upcoming" ? (
-                    <Button asChild size="sm">
-                      <Link href={href("/")}>Find a class</Link>
-                    </Button>
-                  ) : undefined
-                }
-              >
-                {view === "upcoming"
-                  ? "Choose your next session from the schedule."
-                  : "Your gym records attendance after each class."}
-              </EmptyState>
-            ) : (
-              <ul className="flex flex-col gap-3">
-                {classes.map((c) => (
-                  <li key={c.classId}>
-                    <ClassRow
-                      c={c}
-                      next={view === "upcoming" && c.classId === next?.classId}
-                      action={
-                        view === "upcoming" && c.status !== "cancelled" ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            aria-label={`Cancel booking for ${c.title} on ${dayMediumFmt.format(c.startsAt)}`}
-                            busy={busyFor(c.classId)}
-                            disabled={busyFor(c.classId)}
-                            onClick={() =>
-                              cancel.mutate({ classId: c.classId })
-                            }
-                          >
-                            Cancel booking
-                          </Button>
-                        ) : undefined
-                      }
-                    />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-          <aside className="min-w-0 space-y-4 xl:border-l xl:pl-8">
-            <SectionHeading>My training</SectionHeading>
-          </aside>
-        </div>
+        <section className={cn(ENTER, "min-w-0 space-y-5")}>
+          <Tabs
+            label="My classes views"
+            value={view}
+            onChange={setView}
+            tabs={[
+              { id: "upcoming", label: `Upcoming (${upcoming.length})` },
+              { id: "attended", label: `Attended (${past.length})` },
+            ]}
+          />
+          <h2 className="sr-only">
+            {view === "upcoming" ? "Upcoming bookings" : "Classes attended"}
+          </h2>
+          {view === "attended" && (
+            <p className="text-muted-foreground text-sm">
+              Classes appear here after your gym records your attendance.
+            </p>
+          )}
+          {classes.length === 0 ? (
+            <EmptyState
+              title={
+                view === "upcoming"
+                  ? "No upcoming bookings"
+                  : "No attendance recorded yet"
+              }
+              action={
+                view === "upcoming" ? (
+                  <Button asChild size="sm">
+                    <Link href={href("/")}>Find a class</Link>
+                  </Button>
+                ) : undefined
+              }
+            >
+              {view === "upcoming"
+                ? "Choose your next session from the schedule."
+                : "Your gym records attendance after each class."}
+            </EmptyState>
+          ) : (
+            <ul className="flex flex-col gap-3">
+              {classes.map((c) => (
+                <li key={c.classId}>
+                  <ClassRow
+                    c={c}
+                    next={view === "upcoming" && c.classId === next?.classId}
+                    action={
+                      view === "upcoming" && c.status !== "cancelled" ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="max-sm:w-full"
+                          aria-label={`Cancel booking for ${c.title} on ${dayMediumFmt.format(c.startsAt)}`}
+                          busy={busyFor(c.classId)}
+                          disabled={busyFor(c.classId)}
+                          onClick={() => cancel.mutate({ classId: c.classId })}
+                        >
+                          Cancel booking
+                        </Button>
+                      ) : undefined
+                    }
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       )}
     </>
   );
@@ -163,7 +157,7 @@ function ClassRow({
     <div
       className={cn(
         cardClass(),
-        "flex flex-wrap items-center justify-between gap-4",
+        "flex flex-wrap items-center justify-between gap-4 max-sm:flex-col max-sm:items-stretch",
         next && "border-brand/30 bg-brand-wash",
       )}
     >

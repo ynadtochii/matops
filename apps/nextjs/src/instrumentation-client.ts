@@ -32,8 +32,14 @@ Sentry.init({
   },
 });
 
-void import("@sentry/nextjs").then((lazy) => {
-  Sentry.addIntegration(lazy.replayIntegration());
-});
+// Reception is a shared screen showing members' names, so it is never
+// recorded. A replay is loaded once per document, and reception performs a full
+// navigation into itself, so the path test here holds for the whole session
+// (ADR 139).
+if (!window.location.pathname.startsWith("/reception")) {
+  void import("@sentry/nextjs").then((lazy) => {
+    Sentry.addIntegration(lazy.replayIntegration());
+  });
+}
 
 export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;

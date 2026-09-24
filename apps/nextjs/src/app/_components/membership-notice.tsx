@@ -112,6 +112,7 @@ export function MembershipNotice() {
                         claim.variables.assignmentId === m.assignmentId
                       }
                       disabled={claim.isPending}
+                      className="max-sm:w-full"
                     >
                       I paid
                     </Button>

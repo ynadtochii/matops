@@ -1,60 +1,41 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 
-import { Logo, Mark } from "@matops/ui/logo";
-
+import { AuthSplit } from "~/app/_components/auth-split";
 import { CreateGym } from "~/app/_components/create-gym";
 import { MatLoader } from "~/app/_components/mat-loader";
 import { SignIn } from "~/app/_components/sign-in";
 import { getSession } from "~/auth/server";
-import { Eyebrow } from "../_components/primitives";
+
+export const metadata: Metadata = {
+  title: "Start a gym",
+  description:
+    "Name your gym and start running it: classes, members, attendance and dues.",
+};
 
 /**
  * "Start a gym" (spec FP1, ADR 49). The deliberate gym-creation entry, reached
- * from the landing page. Creating a gym is a rare action, so it is NOT the
+ * from the sign-in page. Creating a gym is a rare action, so it is NOT the
  * default post-login screen. It needs a signed-in user: a signed-out visitor
  * gets sign-in here (returning to `/start` after auth), and creating drops the
  * new owner on `/overview`, where they add the first branch (ADR 128).
  */
 export default function StartPage() {
   return (
-    <main className="grid min-h-screen lg:grid-cols-[1.1fr_1fr]">
-      {/* Blueprint brand panel — desktop only; the form side carries mobile. */}
-      <aside className="bg-brand-wash relative hidden overflow-hidden lg:flex lg:flex-col lg:justify-between lg:p-14">
-        <div className="bg-grid absolute inset-0 opacity-40" aria-hidden />
-        <Mark
-          size={560}
-          className="pointer-events-none absolute -right-44 -bottom-44 opacity-[0.08]"
-        />
-
-        <Logo size={26} className="relative" />
-
-        <div className="relative max-w-md">
-          <h1 className="text-4xl font-semibold tracking-tight text-balance">
-            Open your gym in a minute.
-          </h1>
-          <p className="text-muted-foreground mt-4 max-w-sm text-[15px] leading-relaxed">
-            Name your gym and you&apos;re its owner right away. Add your first
-            branch, invite your instructors and students, and start taking
-            attendance.
-          </p>
-        </div>
-
-        <Eyebrow className="relative">For owners and instructors</Eyebrow>
-      </aside>
-
-      {/* Form side */}
-      <div className="flex flex-col items-center justify-center gap-8 p-6">
-        <div className="flex flex-col items-center gap-3 text-center lg:hidden">
-          <Logo size={32} />
-        </div>
-
-        <div className="flex w-full max-w-sm flex-col gap-6">
-          <Suspense fallback={<MatLoader label="Opening your gym" />}>
-            <StartForm />
-          </Suspense>
-        </div>
-      </div>
-    </main>
+    <AuthSplit
+      headline={
+        <>
+          Open your gym
+          <br />
+          in a minute.
+        </>
+      }
+      blurb="Name your gym and you own it right away. Add your first branch, invite your instructors and students, then start taking attendance."
+    >
+      <Suspense fallback={<MatLoader label="Opening your gym" />}>
+        <StartForm />
+      </Suspense>
+    </AuthSplit>
   );
 }
 
@@ -62,14 +43,14 @@ async function StartForm() {
   const session = await getSession();
   if (session) return <CreateGym />;
   return (
-    <>
-      <div>
-        <h2 className="text-2xl font-semibold tracking-tight">Start a gym</h2>
-        <p className="text-muted-foreground mt-1 text-sm">
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-2">
+        <h1 className="text-2xl font-semibold tracking-tight">Start a gym</h1>
+        <p className="text-muted-foreground text-sm text-pretty">
           Sign in first, then name your gym.
         </p>
       </div>
       <SignIn callbackURL="/start" />
-    </>
+    </div>
   );
 }

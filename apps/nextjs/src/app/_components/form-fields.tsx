@@ -88,6 +88,7 @@ export function PhoneField({
   disabled,
   error,
   className,
+  autoComplete,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -109,6 +110,7 @@ export function PhoneField({
   /** What is wrong with this field, shown under it. */
   error?: string;
   className?: string;
+  autoComplete?: string;
 }) {
   const id = useId();
   const errorId = `${id}-error`;
@@ -153,7 +155,7 @@ export function PhoneField({
           id={id}
           type="tel"
           inputMode="tel"
-          autoComplete="tel-national"
+          autoComplete={autoComplete ?? "tel-national"}
           value={national}
           onChange={(e) => push(iso, e.target.value.replace(NOT_PHONE, ""))}
           placeholder="912 345 678"
@@ -202,6 +204,7 @@ export function EmailField({
   error,
   hint,
   className,
+  autoComplete,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -216,6 +219,7 @@ export function EmailField({
   error?: string;
   hint?: string;
   className?: string;
+  autoComplete?: string;
 }) {
   const id = useId();
   const listId = `${id}-domains`;
@@ -238,7 +242,7 @@ export function EmailField({
         name={name}
         type="email"
         inputMode="email"
-        autoComplete="email"
+        autoComplete={autoComplete ?? "email"}
         autoCapitalize="none"
         spellCheck={false}
         list={suggestions.length > 0 ? listId : undefined}

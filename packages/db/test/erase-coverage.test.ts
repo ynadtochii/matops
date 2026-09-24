@@ -29,6 +29,8 @@ const NOT_MEMBER_DATA: Record<string, string> = {
     "Which branches one of the gym's membership plans covers. It is the plan's own shape, not anybody's membership of it (ADR 126).",
   product_event:
     "A count of what happened, naming the gym, the branch and a role. It holds no user id and no personal field, so a member has nothing in it to erase (ADR 128).",
+  reception_link:
+    "The branch's permanent entrance link. It belongs to the door, not to anybody who walks through it, and holds only a hash (ADR 139).",
   notification_notice:
     "A notice belongs to the academy. Member erasure removes its recipient rows while retaining the operational record.",
   notification_attempt:

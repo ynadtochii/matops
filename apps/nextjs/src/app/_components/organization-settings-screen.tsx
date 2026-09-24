@@ -1,9 +1,11 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { formatMoney, timeZoneOptions } from "@matops/domain";
+import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
 import { FieldError } from "@matops/ui/field";
@@ -19,8 +21,8 @@ import { useTRPC } from "~/trpc/react";
 import { useOrganization } from "./entity";
 import { CONTACT_EMAIL } from "./feedback-link";
 import { PageHeader } from "./page-header";
-import { cardClass, ENTER, Eyebrow } from "./primitives";
-import { SkeletonRows } from "./skeletons";
+import { cardClass, ENTER, SectionHeading, stagger } from "./primitives";
+import { Bar, SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 import { useMinuteClock } from "./use-clock";
 
@@ -44,10 +46,10 @@ export function OrganizationSettingsScreen() {
   }
 
   return (
-    <div className={`${ENTER} flex flex-col gap-8`}>
+    <div className="flex flex-col gap-8">
       <PageHeader
-        title="Settings"
-        subtitle="Your gym: its name, where members pay, and any branch still to move onto memberships."
+        title="Gym settings"
+        subtitle="Settings every branch shares. A single branch has its own under Branch settings."
       />
       <GymName />
       <Modules />
@@ -55,6 +57,66 @@ export function OrganizationSettingsScreen() {
       <MembershipSettings />
       <Branches />
     </div>
+  );
+}
+
+/**
+ * One settings section. The heading and its blurb stay put while the query
+ * behind the section loads, so nothing below them jumps when it lands, and
+ * `index` places the section in the page's entrance.
+ */
+function SettingsSection({
+  index,
+  title,
+  blurb,
+  children,
+}: {
+  index: number;
+  title: string;
+  blurb?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section
+      style={stagger(index)}
+      className={cn(ENTER, "flex flex-col gap-3")}
+    >
+      <div className="flex flex-col gap-1">
+        <SectionHeading>{title}</SectionHeading>
+        {blurb && <p className="text-muted-foreground text-sm">{blurb}</p>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+const MODULES_BLURB =
+  "Turn on only the tools your gym uses. Curriculum and referrals are available at BJJ branches.";
+
+function ModuleToggle({
+  label,
+  hint,
+  checked,
+  onChange,
+}: {
+  label: string;
+  hint: string;
+  checked: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <label className="hover:bg-muted/40 flex cursor-pointer items-start gap-3 p-4 transition-colors duration-150">
+      <input
+        type="checkbox"
+        className="accent-brand mt-1 size-4"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      <span>
+        <span className="block font-medium">{label}</span>
+        <span className="text-muted-foreground block text-sm">{hint}</span>
+      </span>
+    </label>
   );
 }
 
@@ -78,72 +140,66 @@ function Modules() {
     }),
   );
 
-  if (modules.isPending) return <SkeletonRows rows={1} />;
+  if (modules.isPending)
+    return (
+      <SettingsSection
+        index={1}
+        title="Optional features"
+        blurb={MODULES_BLURB}
+      >
+        <SkeletonRows rows={1} />
+      </SettingsSection>
+    );
   if (modules.isError) {
     return (
-      <ErrorState
-        label="optional features"
-        onRetry={() => void modules.refetch()}
-      />
+      <SettingsSection
+        index={1}
+        title="Optional features"
+        blurb={MODULES_BLURB}
+      >
+        <ErrorState
+          label="optional features"
+          onRetry={() => void modules.refetch()}
+        />
+      </SettingsSection>
     );
   }
 
   const shown = draft ?? modules.data;
   return (
-    <section className={`${cardClass()} flex flex-col gap-4`}>
-      <div>
-        <Eyebrow>Optional features</Eyebrow>
-        <p className="text-muted-foreground mt-1 text-sm">
-          Turn on only the tools your gym uses. Curriculum and referrals are
-          available at BJJ branches.
-        </p>
-      </div>
-      <label className="flex items-start gap-3">
-        <input
-          type="checkbox"
-          className="mt-1 size-4"
+    <SettingsSection index={1} title="Optional features" blurb={MODULES_BLURB}>
+      <div
+        className={cn(
+          cardClass(),
+          "flex flex-col divide-y overflow-hidden p-0",
+        )}
+      >
+        <ModuleToggle
+          label="Curriculum"
+          hint="Plan teaching blocks and show class themes."
           checked={shown.curriculumEnabled}
-          onChange={(event) =>
-            setDraft({
-              ...shown,
-              curriculumEnabled: event.target.checked,
-            })
+          onChange={(curriculumEnabled) =>
+            setDraft({ ...shown, curriculumEnabled })
           }
         />
-        <span>
-          <span className="block font-medium">Curriculum</span>
-          <span className="text-muted-foreground block text-sm">
-            Plan teaching blocks and show class themes.
-          </span>
-        </span>
-      </label>
-      <label className="flex items-start gap-3">
-        <input
-          type="checkbox"
-          className="mt-1 size-4"
+        <ModuleToggle
+          label="Referrals"
+          hint="Record who referred each student."
           checked={shown.referralsEnabled}
-          onChange={(event) =>
-            setDraft({
-              ...shown,
-              referralsEnabled: event.target.checked,
-            })
+          onChange={(referralsEnabled) =>
+            setDraft({ ...shown, referralsEnabled })
           }
         />
-        <span>
-          <span className="block font-medium">Referrals</span>
-          <span className="text-muted-foreground block text-sm">
-            Record who referred each student.
-          </span>
-        </span>
-      </label>
+      </div>
       <Button
         className="self-start"
-        disabled={save.isPending || draft === null}
+        busy={save.isPending}
+        disabled={draft === null}
         onClick={() => save.mutate(shown)}
       >
-        {save.isPending ? "Saving…" : "Save"}
+        Save
       </Button>
-    </section>
+    </SettingsSection>
   );
 }
 
@@ -159,6 +215,17 @@ const STATUS_LABEL: Record<string, string> = {
   closed: "Closed",
 };
 
+/**
+ * The account status wears the same pill as `DriftBadge`, for the same reason:
+ * "Payment outstanding" set in the muted colour reads as a caption, and the
+ * only line on the page that says the gym owes us money should not.
+ */
+const STATUS_TONE: Record<string, string> = {
+  active: "text-success border-success/40",
+  past_due: "text-warning border-warning/40",
+  closed: "text-error border-error/40",
+};
+
 function Account() {
   const trpc = useTRPC();
   const account = useQuery(trpc.organization.account.queryOptions());
@@ -166,21 +233,19 @@ function Account() {
 
   if (account.isPending)
     return (
-      <section className="flex flex-col gap-3">
-        <Eyebrow>Your account</Eyebrow>
+      <SettingsSection index={2} title="Your account">
         <SkeletonRows rows={1} />
-      </section>
+      </SettingsSection>
     );
 
   if (account.isError)
     return (
-      <section className="flex flex-col gap-3">
-        <Eyebrow>Your account</Eyebrow>
+      <SettingsSection index={2} title="Your account">
         <ErrorState
           label="your account"
           onRetry={() => void account.refetch()}
         />
-      </section>
+      </SettingsSection>
     );
 
   const {
@@ -196,14 +261,19 @@ function Account() {
   const dateLabel = offer === "pilot" ? "Free until" : "Trial ends";
 
   return (
-    <section className="flex flex-col gap-3">
-      <Eyebrow>Your account</Eyebrow>
-      <div className={`${cardClass()} flex flex-col gap-3`}>
-        <div className="flex flex-wrap items-baseline justify-between gap-3">
+    <SettingsSection index={2} title="Your account">
+      <div className={cn(cardClass(), "flex flex-col gap-3")}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-base font-medium">{OFFER_LABEL[offer] ?? offer}</p>
-          <p className="text-muted-foreground text-sm">
+          <span
+            className={cn(
+              "rounded-full border px-2 py-0.5 text-xs font-medium",
+              STATUS_TONE[accountStatus] ??
+                "text-muted-foreground border-border",
+            )}
+          >
             {STATUS_LABEL[accountStatus] ?? accountStatus}
-          </p>
+          </span>
         </div>
 
         <dl className="flex flex-col gap-1.5 text-sm">
@@ -248,7 +318,7 @@ function Account() {
           .
         </p>
       </div>
-    </section>
+    </SettingsSection>
   );
 }
 
@@ -287,8 +357,17 @@ function GymName() {
   };
 
   return (
-    <section className={`${cardClass()} flex flex-col gap-3`}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <SettingsSection
+      index={0}
+      title="Gym name"
+      blurb="This is your gym as a whole. Each branch keeps its own name."
+    >
+      <div
+        className={cn(
+          cardClass(),
+          "flex flex-wrap items-center justify-between gap-3",
+        )}
+      >
         {editing ? (
           <div className="flex flex-1 flex-wrap items-center gap-2">
             <Input
@@ -304,14 +383,15 @@ function GymName() {
               aria-invalid={nameError ? true : undefined}
               aria-describedby={nameError ? "gym-name-error" : undefined}
             />
-            <Button size="sm" onClick={save} disabled={rename.isPending}>
-              {rename.isPending ? "Saving…" : "Save"}
+            <Button size="sm" busy={rename.isPending} onClick={save}>
+              Save
             </Button>
             <Button
               size="sm"
               variant="ghost"
               onClick={() => {
                 setDraft(organizationName);
+                setNameError(null);
                 setEditing(false);
               }}
             >
@@ -325,15 +405,15 @@ function GymName() {
           </div>
         ) : (
           <>
-            <div>
-              <Eyebrow>Gym name</Eyebrow>
-              <p className="mt-1 text-base font-medium">{organizationName}</p>
-            </div>
+            <p className="min-w-0 truncate text-base font-medium">
+              {organizationName}
+            </p>
             <Button
               size="sm"
               variant="outline"
               onClick={() => {
                 setDraft(organizationName);
+                setNameError(null);
                 setEditing(true);
               }}
             >
@@ -342,12 +422,12 @@ function GymName() {
           </>
         )}
       </div>
-      <p className="text-muted-foreground text-sm">
-        This is your gym as a whole. Each branch keeps its own name.
-      </p>
-    </section>
+    </SettingsSection>
   );
 }
+
+const MEMBERSHIP_BLURB =
+  "A membership month runs from the 1st. An unpaid month still lets somebody train for this many days, then stops.";
 
 /**
  * Grace, the deadline zone and the bank account, in one form with one Save.
@@ -390,27 +470,27 @@ function MembershipSettings() {
     }),
   );
 
-  if (policy.isPending) return <SkeletonRows rows={2} />;
+  if (policy.isPending)
+    return (
+      <SettingsSection index={3} title="Memberships" blurb={MEMBERSHIP_BLURB}>
+        <SkeletonRows rows={2} />
+      </SettingsSection>
+    );
   if (policy.isError) {
     return (
-      <ErrorState
-        label="your membership settings"
-        onRetry={() => void policy.refetch()}
-      />
+      <SettingsSection index={3} title="Memberships" blurb={MEMBERSHIP_BLURB}>
+        <ErrorState
+          label="your membership settings"
+          onRetry={() => void policy.refetch()}
+        />
+      </SettingsSection>
     );
   }
 
   const saved = policy.data;
 
   return (
-    <section className={`${cardClass()} flex flex-col gap-4`}>
-      <div className="flex flex-col gap-1">
-        <Eyebrow>Memberships</Eyebrow>
-        <p className="text-muted-foreground text-sm">
-          A membership month runs from the 1st. An unpaid month still lets
-          somebody train for this many days, then stops.
-        </p>
-      </div>
+    <SettingsSection index={3} title="Memberships" blurb={MEMBERSHIP_BLURB}>
       <form
         className="flex flex-col gap-4"
         onSubmit={(e) => {
@@ -479,8 +559,8 @@ function MembershipSettings() {
         </div>
 
         <div>
-          <Button type="submit" disabled={save.isPending}>
-            {save.isPending ? "Saving…" : "Save"}
+          <Button type="submit" busy={save.isPending}>
+            Save
           </Button>
         </div>
       </form>
@@ -493,7 +573,7 @@ function MembershipSettings() {
         {saved.calendarTimeZone === null &&
           " That zone comes from your main branch until you pick one here."}
       </p>
-    </section>
+    </SettingsSection>
   );
 }
 
@@ -502,13 +582,11 @@ function Branches() {
   if (entities.length === 0) return null;
   if (!canCreateBranches) return null;
   return (
-    <section className="flex flex-col gap-3">
-      <div className="flex flex-col gap-1">
-        <Eyebrow>Payment rules per branch</Eyebrow>
-        <p className="text-muted-foreground text-sm">
-          Choose whether an unpaid member can still book at each branch.
-        </p>
-      </div>
+    <SettingsSection
+      index={4}
+      title="Payment rules per branch"
+      blurb="Choose whether an unpaid member can still book at each branch."
+    >
       <ul className="flex flex-col gap-2">
         {entities.map((e) => (
           <li key={e.id}>
@@ -516,7 +594,7 @@ function Branches() {
           </li>
         ))}
       </ul>
-    </section>
+    </SettingsSection>
   );
 }
 
@@ -571,9 +649,48 @@ function BranchRow({ entityId, name }: { entityId: string; name: string }) {
       : "",
   ].filter(Boolean);
 
+  // Until the preview lands, the row says nothing about the rule. `enforced`
+  // falls back to false, so stating it while the query is in flight would put
+  // "unpaid members can still book here" on a branch that requires payment.
+  if (preview.isPending || preview.isError) {
+    return (
+      <div
+        className={cn(
+          cardClass(),
+          "flex flex-wrap items-center justify-between gap-3",
+        )}
+      >
+        <div className="min-w-0">
+          <p className="truncate font-medium">{name}</p>
+          {preview.isError ? (
+            <p className="text-muted-foreground text-sm">
+              Couldn't load this branch's rule.
+            </p>
+          ) : (
+            <Bar className="mt-1.5 h-3 w-52" />
+          )}
+        </div>
+        {preview.isError ? (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => void preview.refetch()}
+          >
+            Try again
+          </Button>
+        ) : (
+          <Bar className="h-8 w-44 rounded-md" />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div
-      className={`${cardClass()} flex flex-wrap items-center justify-between gap-3`}
+      className={cn(
+        cardClass(),
+        "flex flex-wrap items-center justify-between gap-3",
+      )}
     >
       <div className="min-w-0">
         <p className="truncate font-medium">{name}</p>
@@ -627,12 +744,7 @@ function BranchRow({ entityId, name }: { entityId: string; name: string }) {
             await flip.mutateAsync({ entityId, enforced: true });
           }}
           trigger={
-            <Button
-              size="sm"
-              variant="outline"
-              busy={flip.isPending}
-              disabled={preview.isPending}
-            >
+            <Button size="sm" variant="outline" busy={flip.isPending}>
               Require payment to book
             </Button>
           }

@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 
 import { cn } from "@matops/ui";
 
+import { Panel, panelCell } from "./primitives";
+
 export function Bar({ className }: { className?: string }) {
   return (
     <span
@@ -35,11 +37,8 @@ function SkeletonRow({
   lines = 2,
   className,
 }: {
-  i?: number;
-  dot?: boolean;
   action?: boolean;
   lines?: number;
-  variant?: "filled" | "outline";
   className?: string;
 }) {
   return (
@@ -66,10 +65,8 @@ export function SkeletonRows({
   gap = "gap-2",
 }: {
   rows?: number;
-  dot?: boolean;
   action?: boolean;
   lines?: number;
-  variant?: "filled" | "outline";
   gap?: string;
 }) {
   return (
@@ -108,11 +105,46 @@ export function SkeletonCard({ lines = 3 }: { lines?: number }) {
 export function SkeletonControlPanel() {
   return <SkeletonCard lines={2} />;
 }
-export function SkeletonQueue() {
-  return <SkeletonRows rows={4} />;
+/**
+ * The dashboard's "needs you" strip, cut to the shape it resolves into: a
+ * hairline panel of equal channels, not a stack of cards that jumps into one
+ * short row when the counts land.
+ */
+export function SkeletonQueue({ cells = 3 }: { cells?: number }) {
+  return (
+    <Panel role="status" aria-label="Loading" cols={cells}>
+      {Array.from({ length: cells }, (_, i) => (
+        <div key={i} aria-hidden className={cn(panelCell, "px-2.5 py-3")}>
+          <Bar className="h-7 w-8" />
+          <Bar className="mt-2 h-2.5 w-20" />
+        </div>
+      ))}
+    </Panel>
+  );
 }
+
+/** The day's classes on their vertical rail, dot and clock column included. */
 export function SkeletonDayRail({ rows = 3 }: { rows?: number }) {
-  return <SkeletonRows rows={rows} />;
+  return (
+    <div role="status" aria-label="Loading" className="relative">
+      <span
+        aria-hidden
+        className="bg-border absolute top-4 bottom-4 left-[3.5px] w-px"
+      />
+      {Array.from({ length: rows }, (_, i) => (
+        <div
+          key={i}
+          aria-hidden
+          className="flex min-h-11 items-center gap-3 py-2"
+        >
+          <Bar className="size-2 shrink-0 rounded-full" />
+          <Bar className="h-3 w-12 shrink-0" />
+          <Bar className="h-3.5 flex-1" />
+          <Bar className="h-3 w-10 shrink-0" />
+        </div>
+      ))}
+    </div>
+  );
 }
 export function SkeletonFeed() {
   return <SkeletonRows rows={3} />;
@@ -166,10 +198,50 @@ export const HomeSkeleton = ScreenSkeleton;
 export const MyClassesSkeleton = ScreenSkeleton;
 export const ScheduleSkeleton = ScreenSkeleton;
 export const MembersSkeleton = ScreenSkeleton;
-export const CoachesSkeleton = ScreenSkeleton;
+export function CoachesSkeleton() {
+  return (
+    <Frame>
+      <SkeletonHeader />
+      <div className="grid items-start gap-8 xl:grid-cols-[minmax(0,1fr)_20rem] xl:gap-10">
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between gap-3">
+            <Bar className="h-5 w-36" />
+            <Bar className="h-3 w-24" />
+          </div>
+          <Bar className="h-8 w-64" />
+          <SkeletonRows rows={3} action />
+        </div>
+        <div className="flex flex-col gap-4">
+          <Bar className="h-5 w-16" />
+          <SkeletonRows rows={2} action />
+          <SkeletonInviteCard />
+        </div>
+      </div>
+    </Frame>
+  );
+}
 export const ReferralsSkeleton = ScreenSkeleton;
 export const PaymentsSkeleton = ScreenSkeleton;
-export const SettingsSkeleton = ScreenSkeleton;
+export function SettingsSkeleton() {
+  return (
+    <Frame>
+      <SkeletonHeader />
+      <div className="flex flex-col gap-8">
+        <div className="grid gap-4 md:grid-cols-2">
+          <SkeletonRow action />
+          <SkeletonRow action />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <SkeletonControlPanel />
+          <SkeletonControlPanel />
+          <SkeletonControlPanel />
+          <SkeletonControlPanel />
+        </div>
+        <SkeletonCard lines={3} />
+      </div>
+    </Frame>
+  );
+}
 export const NotificationsSkeleton = ScreenSkeleton;
 export const ProfileSkeleton = ScreenSkeleton;
 export const AttendanceSkeleton = ScreenSkeleton;

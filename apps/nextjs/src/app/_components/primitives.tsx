@@ -130,6 +130,13 @@ export function SectionHeading({
   );
 }
 
+/**
+ * The rule-and-label look `Section` wears, on its own, for a heading that sits
+ * inside a section and so cannot be another `Section`.
+ */
+export const SECTION_LABEL =
+  "font-mono text-[11px] font-medium tracking-[0.16em] uppercase";
+
 export function Section({
   label,
   meta,
@@ -145,9 +152,7 @@ export function Section({
     <section className={cn("flex flex-col gap-4", className)}>
       <div className="flex items-center gap-3">
         <span aria-hidden className="bg-border h-px w-5 shrink-0" />
-        <h2 className="shrink-0 font-mono text-[11px] font-medium tracking-[0.16em] uppercase">
-          {label}
-        </h2>
+        <h2 className={cn("shrink-0", SECTION_LABEL)}>{label}</h2>
         <span aria-hidden className="bg-border h-px flex-1" />
         {meta && (
           <span className="text-muted-foreground shrink-0 font-mono text-[10px] tracking-wide uppercase">
@@ -223,13 +228,16 @@ export function Eyebrow({
   as: Tag = "p",
   children,
   className,
+  style,
 }: {
   as?: "p" | "dt" | "span";
   children: ReactNode;
   className?: string;
+  style?: CSSProperties;
 }) {
   return (
     <Tag
+      style={style}
       className={cn(
         "text-muted-foreground font-mono text-[10px] tracking-wide uppercase",
         className,

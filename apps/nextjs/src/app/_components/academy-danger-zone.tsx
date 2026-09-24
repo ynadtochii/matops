@@ -74,7 +74,7 @@ export function AcademyDangerZone({ name }: { name: string }) {
           }}
         >
           <AlertDialogTrigger asChild>
-            <Button size="sm" variant="destructive">
+            <Button size="sm" variant="destructive-outline">
               Delete academy
             </Button>
           </AlertDialogTrigger>
@@ -102,13 +102,14 @@ export function AcademyDangerZone({ name }: { name: string }) {
                 Cancel
               </AlertDialogCancel>
               <AlertDialogAction
-                disabled={!confirmed || remove.isPending}
+                busy={remove.isPending}
+                disabled={!confirmed}
                 onClick={(e) => {
                   e.preventDefault();
                   remove.mutate({ confirm: typed });
                 }}
               >
-                {remove.isPending ? "Deleting…" : "Delete academy"}
+                Delete academy
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

@@ -188,7 +188,7 @@ function ClassRowCard({
     <div
       className={cn(
         cardClass({ interactive: true }),
-        "flex flex-wrap items-center justify-between gap-4 lg:flex-nowrap",
+        "flex flex-wrap items-center justify-between gap-4 max-sm:flex-col max-sm:items-stretch lg:flex-nowrap",
       )}
     >
       <Link
@@ -245,6 +245,7 @@ function ClassRowCard({
           size="sm"
           busy={busy}
           disabled={busy}
+          className="max-sm:w-full"
           aria-label={`Cancel booking for ${c.title} at ${timeFmt.format(start)}`}
           onClick={onCancel}
         >
@@ -262,6 +263,7 @@ function ClassRowCard({
               variant="secondary"
               size="sm"
               busy={busy}
+              className="max-sm:w-full"
               aria-label={`Book ${c.title} at ${timeFmt.format(start)}`}
               disabled={busy || locked}
             >
@@ -274,6 +276,7 @@ function ClassRowCard({
           size="sm"
           busy={busy}
           disabled={busy || locked}
+          className="max-sm:w-full"
           aria-label={`Book ${c.title} at ${timeFmt.format(start)}`}
           onClick={onBook}
         >

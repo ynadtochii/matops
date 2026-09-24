@@ -41,7 +41,15 @@ function classLabel(startsAt: Date, now: Date): string {
  * was a button that would not press. Submitting always does something now, and
  * anything wrong is named on the field it belongs to.
  */
-export function DropInForm({ academyId }: { academyId: string }) {
+export function DropInForm({
+  academyId,
+  reception = false,
+  onComplete,
+}: {
+  academyId: string;
+  reception?: boolean;
+  onComplete?: () => void;
+}) {
   const trpc = useTRPC();
   const academy = useQuery(
     trpc.dropIn.academyInfo.queryOptions({ academyId }, { retry: false }),
@@ -59,17 +67,19 @@ export function DropInForm({ academyId }: { academyId: string }) {
   const [picked, setPicked] = useState<string | null | undefined>(undefined);
   const formRef = useRef<HTMLFormElement>(null);
 
+  const onError = (err: { message: string }) => {
+    setError(err.message || "Couldn't check you in. Try again.");
+    void academy.refetch();
+  };
   const submit = useMutation(
-    trpc.dropIn.submit.mutationOptions({
-      onError: (err) => {
-        setError(err.message || "Couldn't check you in. Try again.");
-        // The class list is the likely reason a submit was refused, so pull a
-        // fresh one: leaving a class on screen that the server just rejected
-        // invites the same refusal again.
-        void academy.refetch();
-      },
-    }),
+    reception
+      ? trpc.reception.submitVisitor.mutationOptions({ onError, gcTime: 0 })
+      : trpc.dropIn.submit.mutationOptions({ onError }),
   );
+
+  useEffect(() => {
+    if (submit.isSuccess) onComplete?.();
+  }, [submit.isSuccess, onComplete]);
 
   useEffect(() => {
     if (Object.keys(errors).length === 0) return;
@@ -88,7 +98,7 @@ export function DropInForm({ academyId }: { academyId: string }) {
 
   if (academy.isError) {
     return (
-      <div className="flex max-w-sm flex-col gap-3 text-center">
+      <div role="status" className="flex max-w-sm flex-col gap-3 text-center">
         <h1 className="text-2xl font-semibold tracking-tight">Gym not found</h1>
         <p className="text-muted-foreground text-sm">
           This check-in link isn&apos;t valid. Please ask the front desk.
@@ -100,7 +110,7 @@ export function DropInForm({ academyId }: { academyId: string }) {
   if (submit.isSuccess) {
     const { booked, classTitle, firstVisit } = submit.data;
     return (
-      <div className="flex max-w-sm flex-col gap-3 text-center">
+      <div role="status" className="flex max-w-sm flex-col gap-3 text-center">
         <h1 className="text-2xl font-semibold tracking-tight">
           {booked ? "You're booked 🥋" : "You're checked in 🥋"}
         </h1>
@@ -158,7 +168,12 @@ export function DropInForm({ academyId }: { academyId: string }) {
     <form
       ref={formRef}
       noValidate
-      className="flex w-full max-w-sm flex-col gap-4"
+      autoComplete={reception ? "off" : undefined}
+      className={
+        reception
+          ? "flex w-full max-w-lg flex-col gap-4 [&_button]:min-h-12 [&_input:not([type=checkbox]):not([type=radio])]:min-h-12 [&_label]:min-h-6 [&_label:has(input)]:min-h-12 [&_select]:min-h-12"
+          : "flex w-full max-w-sm flex-col gap-4"
+      }
       onSubmit={(e) => {
         e.preventDefault();
         setError(null);
@@ -211,7 +226,7 @@ export function DropInForm({ academyId }: { academyId: string }) {
             setFirstName(e.target.value);
             clearError("firstName");
           }}
-          autoComplete="given-name"
+          autoComplete={reception ? "off" : "given-name"}
           maxLength={60}
           required
           aria-invalid={errors.firstName ? true : undefined}
@@ -230,7 +245,7 @@ export function DropInForm({ academyId }: { academyId: string }) {
             setLastName(e.target.value);
             clearError("lastName");
           }}
-          autoComplete="family-name"
+          autoComplete={reception ? "off" : "family-name"}
           maxLength={60}
           required
           aria-invalid={errors.lastName ? true : undefined}
@@ -241,6 +256,7 @@ export function DropInForm({ academyId }: { academyId: string }) {
         )}
       </div>
       <PhoneField
+        autoComplete={reception ? "off" : undefined}
         timeZone={timeZone}
         country={country}
         value={phone}
@@ -252,6 +268,7 @@ export function DropInForm({ academyId }: { academyId: string }) {
         error={errors.phone}
       />
       <EmailField
+        autoComplete={reception ? "off" : undefined}
         value={email}
         onChange={(v) => {
           setEmail(v);

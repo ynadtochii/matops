@@ -8,6 +8,27 @@
       "when": 1788880522804,
       "tag": "0000_baseline",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789223945231,
+      "tag": "0001_reception_link",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789331762681,
+      "tag": "0002_loose_machine_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789334931052,
+      "tag": "0003_nebulous_magus",
+      "breakpoints": true
     }
   ]
 }

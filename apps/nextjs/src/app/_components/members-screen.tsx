@@ -19,11 +19,13 @@ export function MembersScreen() {
     <>
       <PageHeader
         title="Roster"
-        subtitle={`Invite students, approve them, and manage who trains at this ${words.branch}.`}
+        subtitle={`Everyone who trains at this ${words.branch}.`}
       />
-      <div className="flex flex-col gap-8">
-        <Invites />
+      {/* The invite link is a setup step, so it sits under the day's work
+          rather than above it. */}
+      <div className="flex flex-col gap-10">
         <Members />
+        <Invites />
       </div>
     </>
   );

@@ -13,6 +13,7 @@ import {
   getTableColumns,
   inArray,
   isNull,
+  lockAndReadScheduleRevision,
   ne,
   or,
   recordActivity,
@@ -33,6 +34,7 @@ import {
   attendanceWriteAccess,
   bulkMarkTargets,
   normalizePhone,
+  receptionSearchText,
   runsBranch,
 } from "@matops/domain";
 import {
@@ -44,10 +46,12 @@ import {
   MarkAllAttendanceSchema,
   MarkAttendanceSchema,
   MarkVisitorSchema,
+  SearchMembersSchema,
 } from "@matops/validators";
 
 import { academyTimeZone } from "../academy-tz";
 import { loadAttendanceRoster } from "../attendance-review";
+import { searchBranchPeople } from "../branch-person";
 import { claimSeatIfStrict, requireClassFacts, SESSION_FULL } from "../classes";
 import { directoryRosterOf } from "../members";
 import { staffIdentityProcedure, staffProcedure } from "../trpc";
@@ -59,6 +63,8 @@ import { staffIdentityProcedure, staffProcedure } from "../trpc";
  * on the RLS-scoped `ctx.db`. Self check-ins (QR, slice 3.4) and drop-ins (3.5)
  * surface in the same list, already marked present.
  */
+const STAFF_SEARCH_LIMIT = 10;
+
 export const attendanceRouter = {
   /** Active members of the academy (id = user.id, name) for the walk-in picker. */
   members: staffProcedure.query(async ({ ctx }) => {
@@ -68,6 +74,29 @@ export const attendanceRouter = {
       .filter((m) => m.status === "active")
       .map((m) => ({ id: m.personId, name: m.name, role: m.role }));
   }),
+
+  /**
+   * The same roster, narrowed to a typed name and capped (ADR 139). The staff
+   * reception screen types instead of scrolling a long list; authority and the
+   * visible fields are `members`' own, so this adds speed and not access.
+   */
+  searchMembers: staffProcedure
+    .input(SearchMembersSchema)
+    .query(async ({ ctx, input }) => {
+      const query = receptionSearchText(input.query);
+      if (query.length < 2) return [];
+      const members = await searchBranchPeople(
+        ctx.db,
+        ctx,
+        query,
+        STAFF_SEARCH_LIMIT,
+      );
+      return members.map((m) => ({
+        id: m.personId,
+        name: m.name,
+        role: m.role,
+      }));
+    }),
 
   /**
    * Everyone on a class (spec O5): booked (confirmed + provisional) + walk-ins
@@ -291,6 +320,11 @@ export const attendanceRouter = {
           attendanceStatus: input.status,
           attendedAt: present ? new Date() : null,
           markedBy: ctx.session.user.id,
+          ...(present
+            ? {
+                checkInSource: sql`coalesce(${classParticipation.checkInSource}, 'staff')`,
+              }
+            : {}),
         })
         .where(and(eq(classParticipation.classId, input.classId), subjectWhere))
         .returning({ id: classParticipation.id });
@@ -347,6 +381,7 @@ export const attendanceRouter = {
           attendanceStatus: "present",
           attendedAt: new Date(),
           markedBy: ctx.session.user.id,
+          checkInSource: sql`coalesce(${classParticipation.checkInSource}, 'staff')`,
         })
         .where(
           and(
@@ -388,6 +423,7 @@ export const attendanceRouter = {
   addWalkIn: staffProcedure
     .input(AddWalkInSchema)
     .mutation(async ({ ctx, input }) => {
+      await lockAndReadScheduleRevision(ctx.db, ctx.academyId);
       const correction = await assertMarkable(ctx, input.classId, input.reason);
       // Defense-in-depth: the RLS WITH CHECK only scopes academy_id, not that the
       // student is a member — so verify membership before recording a walk-in.
@@ -464,10 +500,16 @@ export const attendanceRouter = {
         attendedAt: now,
         markedBy: ctx.session.user.id,
       };
+      // `coalesce` on the target column is only legal where a row already
+      // exists, so the plain INSERT below names the source outright and both
+      // update paths keep whoever recorded the attendance first.
+      const keepSource = {
+        checkInSource: sql`coalesce(${classParticipation.checkInSource}, 'staff')`,
+      };
       const [saved] = held
         ? await ctx.db
             .update(classParticipation)
-            .set(values)
+            .set({ ...values, ...keepSource })
             .where(eq(classParticipation.id, held.id))
             .returning({ id: classParticipation.id })
         : await ctx.db
@@ -476,6 +518,7 @@ export const attendanceRouter = {
               academyId: ctx.academyId,
               classId: input.classId,
               ...values,
+              checkInSource: "staff",
               bookingStatus: "none",
               bookingTier: "confirmed",
             })
@@ -486,7 +529,7 @@ export const attendanceRouter = {
               targetWhere: subjectPersonId
                 ? sql`person_id is not null`
                 : undefined,
-              set: values,
+              set: { ...values, ...keepSource },
             })
             .returning({ id: classParticipation.id });
       if (!saved) {

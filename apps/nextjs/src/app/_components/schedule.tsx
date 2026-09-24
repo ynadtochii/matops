@@ -32,7 +32,6 @@ import { FieldError } from "@matops/ui/field";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
 import { Select } from "@matops/ui/select";
-import { Spinner } from "@matops/ui/spinner";
 import { toast } from "@matops/ui/toast";
 
 import {
@@ -516,11 +515,8 @@ export function Schedule({
                 />
               </div>
               <div className="flex gap-2">
-                <Button type="submit" disabled={create.isPending}>
-                  {create.isPending && (
-                    <Spinner size="sm" className="text-current" />
-                  )}
-                  {create.isPending ? "Adding…" : "Add class"}
+                <Button type="submit" busy={create.isPending}>
+                  Add class
                 </Button>
                 <Button
                   type="button"

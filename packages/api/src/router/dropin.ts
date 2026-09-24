@@ -113,6 +113,67 @@ function requireVisitorBranch<T extends { type: string }>(
   return academy;
 }
 
+export async function submitDropIn(
+  input: ReturnType<typeof DropInSchema.parse>,
+  exec: Parameters<typeof listAcademyClassesInWindow>[3],
+) {
+  requireVisitorBranch(await getAcademyPublic(input.academyId, exec));
+  const gate = canSubmitDropIn(input);
+  if (!gate.ok) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message:
+        gate.reason === "no-consent"
+          ? "Please tick the consent box to continue"
+          : "Please enter your name, phone number and email",
+    });
+  }
+
+  const now = new Date();
+  const choices = await visitorChoices(input.academyId, exec, now);
+
+  let attend = choices.now.find((c) => c.id === input.classId) ?? null;
+  const book = attend
+    ? null
+    : (choices.upcoming.find((c) => c.id === input.classId) ?? null);
+  if (input.classId && !attend && !book) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "That class is no longer open. Please pick another.",
+    });
+  }
+  if (!input.classId && choices.now.length === 1) {
+    attend = choices.now[0] ?? null;
+  }
+
+  const lead = {
+    academyId: input.academyId,
+    firstName: input.firstName,
+    lastName: input.lastName,
+    phone: normalizePhone(input.phone),
+    email: input.email,
+    consent: input.consent,
+    source: "wall_qr" as const,
+  };
+  const { visitCount } = book
+    ? await bookVisitor(
+        {
+          ...lead,
+          classId: book.id,
+          cancelToken: randomBytes(24).toString("base64url"),
+        },
+        exec,
+      )
+    : await createDropIn({ ...lead, classId: attend?.id ?? null }, exec);
+
+  return {
+    ok: true as const,
+    firstVisit: visitCount <= 1,
+    booked: book !== null,
+    classTitle: (book ?? attend)?.title ?? null,
+  };
+}
+
 export const dropInRouter = {
   /**
    * The public drop-in page header, plus the classes to offer. 404 if the id is
@@ -164,65 +225,7 @@ export const dropInRouter = {
     .use(rateLimited(5, 10 * 60_000))
     .input(DropInSchema)
     .mutation(async ({ ctx, input }) => {
-      requireVisitorBranch(await getAcademyPublic(input.academyId, ctx.baseDb));
-      const gate = canSubmitDropIn(input);
-      if (!gate.ok) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message:
-            gate.reason === "no-consent"
-              ? "Please tick the consent box to continue"
-              : "Please enter your name, phone number and email",
-        });
-      }
-
-      const now = new Date();
-      const choices = await visitorChoices(input.academyId, ctx.baseDb, now);
-
-      let attend = choices.now.find((c) => c.id === input.classId) ?? null;
-      const book = attend
-        ? null
-        : (choices.upcoming.find((c) => c.id === input.classId) ?? null);
-      if (input.classId && !attend && !book) {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: "That class is no longer open. Please pick another.",
-        });
-      }
-      // No pick and exactly one class on: they can only be here for that one.
-      if (!input.classId && choices.now.length === 1) {
-        attend = choices.now[0] ?? null;
-      }
-
-      const lead = {
-        academyId: input.academyId,
-        firstName: input.firstName,
-        lastName: input.lastName,
-        phone: normalizePhone(input.phone),
-        email: input.email,
-        consent: input.consent,
-        source: "wall_qr" as const,
-      };
-      const { visitCount } = book
-        ? await bookVisitor(
-            {
-              ...lead,
-              classId: book.id,
-              cancelToken: randomBytes(24).toString("base64url"),
-            },
-            ctx.baseDb,
-          )
-        : await createDropIn(
-            { ...lead, classId: attend?.id ?? null },
-            ctx.baseDb,
-          );
-
-      return {
-        ok: true as const,
-        firstVisit: visitCount <= 1,
-        booked: book !== null,
-        classTitle: (book ?? attend)?.title ?? null,
-      };
+      return submitDropIn(input, ctx.baseDb);
     }),
 
   /**

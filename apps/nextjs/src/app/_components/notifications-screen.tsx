@@ -18,7 +18,14 @@ import { dayLongFmt, time24Fmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { useEntity, useEntityHref } from "./entity";
 import { PageHeader } from "./page-header";
-import { cardClass, ENTER, Section, stagger } from "./primitives";
+import {
+  cardClass,
+  ENTER,
+  Eyebrow,
+  Section,
+  SectionHeading,
+  stagger,
+} from "./primitives";
 import { SkeletonFeed } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 
@@ -91,7 +98,7 @@ export function NotificationsScreen() {
 
       {isStaff && deliveryIssues.data && deliveryIssues.data.length > 0 && (
         <section className={cardClass()} aria-label="Email delivery issues">
-          <h2 className="font-semibold">Email delivery</h2>
+          <SectionHeading>Email delivery</SectionHeading>
           <ul className="mt-3 space-y-3">
             {deliveryIssues.data.map((notice) => (
               <li key={notice.noticeId} className="border-border border-t pt-3">
@@ -191,10 +198,10 @@ function FeedRow({ item }: { item: FeedItem }) {
       <p className="text-muted-foreground mt-1 text-sm whitespace-pre-line">
         {item.body}
       </p>
-      <p className="text-muted-foreground mt-2 font-mono text-[10px] tracking-wide uppercase">
+      <Eyebrow className="mt-2">
         {notificationKindLabel(item.kind)}
         {item.sentBy && ` · ${item.sentBy}`}
-      </p>
+      </Eyebrow>
     </>
   );
 
