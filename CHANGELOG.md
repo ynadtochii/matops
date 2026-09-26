@@ -10,6 +10,7 @@
 - Step 4.1, Members and People: one divided list per screen instead of stacked cards, `Badge` status pills with no violet status, Lucide icons in the shared primitives, sans labels instead of mono uppercase, and buttons that keep their label while they work (ADR 141).
 - Step 4.2, Schedule and curriculum: Linear tabs across eight screens, today and the now line in primary instead of violet, shared checkboxes, textareas and badges, a divided mobile day list, and poster loading text that stays readable on the paper in dark (ADR 141).
 - Step 4.3, Dashboard and Overview: sans labels and token sizes, divided lists for who is drifting and for branches, warning and neutral badges instead of violet tags, and a loading skeleton that matches the list it turns into (ADR 141).
+- Step 4.4, Attendance and Reception: badges for roster and register states, shared checkbox and callouts, a kiosk screen that keeps its large targets, and two screens that now say a read failed instead of showing an empty state (ADR 141).
 
 ## Unreleased: design system reference
 

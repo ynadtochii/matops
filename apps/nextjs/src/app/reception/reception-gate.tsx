@@ -10,6 +10,9 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@matops/ui/button";
+import { Callout } from "@matops/ui/callout";
+import { Mark } from "@matops/ui/logo";
+import { Spinner } from "@matops/ui/spinner";
 
 import { ReceptionScreen } from "./reception-screen";
 
@@ -96,44 +99,35 @@ export function ReceptionGate() {
   if (phase === "ready") return <ReceptionScreen />;
 
   return (
-    <main className="bg-muted/30 relative flex min-h-dvh items-center overflow-hidden px-4 py-8">
+    <main className="bg-surface-1 relative flex min-h-dvh items-center overflow-hidden px-4 py-8">
       <div aria-hidden className="bg-grid absolute inset-0 opacity-35" />
-      <div className="bg-background relative mx-auto flex w-full max-w-lg flex-col gap-7 border p-6 sm:p-10">
-        <div className="flex items-center gap-4 border-b pb-6">
-          <span
-            className="bg-brand grid size-11 shrink-0 grid-cols-2 gap-px p-2.5"
-            aria-hidden
-          >
-            <span className="bg-brand-foreground row-span-2" />
-            <span className="bg-brand-foreground" />
-            <span className="border-brand-foreground border" />
-          </span>
+      <div className="border-border bg-background relative mx-auto flex w-full max-w-lg flex-col gap-7 rounded-xl border p-6 sm:p-10">
+        <div className="border-border flex items-center gap-4 border-b pb-6">
+          <Mark size={44} className="shrink-0" />
           <div>
-            <p className="text-muted-foreground font-mono text-[11px] tracking-wider uppercase">
-              MatOps
-            </p>
-            <h1 className="text-3xl tracking-tight">Reception</h1>
+            <p className="text-muted-foreground text-sm font-medium">MatOps</p>
+            <h1 className="text-3xl font-semibold tracking-tight">Reception</h1>
           </div>
         </div>
         {phase === "opening" && (
-          <p className="flex items-center gap-3" role="status">
-            <span className="border-brand size-5 animate-spin rounded-full border-2 border-r-transparent" />
+          <p className="text-md flex items-center gap-3" role="status">
+            <Spinner />
             Opening reception…
           </p>
         )}
         {phase === "handover" && (
           <div className="flex flex-col gap-5">
             <div className="flex flex-col gap-2">
-              <h2 className="text-xl tracking-tight">
+              <h2 className="text-xl font-semibold tracking-tight">
                 Switch to reception mode
               </h2>
-              <p className="text-muted-foreground text-sm leading-relaxed">
+              <p className="text-muted-foreground text-md leading-relaxed">
                 This browser is signed in to a staff account. Signing out is
                 required before the screen can be left at the door.
               </p>
             </div>
             <Button
-              className="min-h-14 text-base"
+              className="min-h-14 rounded-lg text-base"
               onClick={() => {
                 const key = secret.current;
                 if (key) void exchange(key, true);
@@ -144,14 +138,14 @@ export function ReceptionGate() {
           </div>
         )}
         {phase === "failed" && (
-          <div
-            className="border-error bg-muted flex flex-col gap-3 border-l-2 p-4"
-            role="alert"
+          <Callout
+            tone="error"
+            title="Reception could not open"
+            className="text-md p-4"
           >
-            <p className="font-medium">Reception could not open</p>
-            <p className="text-muted-foreground text-sm">{error}</p>
+            <p>{error}</p>
             <Button
-              className="min-h-12 self-start"
+              className="mt-2 min-h-12 self-start"
               variant="outline"
               onClick={() => {
                 const key = secret.current;
@@ -160,7 +154,7 @@ export function ReceptionGate() {
             >
               Try again
             </Button>
-          </div>
+          </Callout>
         )}
       </div>
     </main>

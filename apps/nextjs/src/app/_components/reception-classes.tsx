@@ -77,18 +77,18 @@ export function ReceptionClassList({
             {rows.map((card) => (
               <Button
                 key={card.id}
-                className="group hover:border-foreground h-auto! min-h-16! justify-between gap-4 px-4 py-3 text-left whitespace-normal sm:min-h-16!"
+                className="h-auto! min-h-16! justify-between gap-4 rounded-lg px-4 py-3 text-left whitespace-normal sm:min-h-16!"
                 variant="outline"
                 disabled={disabled || card.action === "closed"}
                 onClick={() => onPick(card)}
               >
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span>{card.title}</span>
-                  <span className="text-muted-foreground font-mono text-xs">
+                  <span className="text-base">{card.title}</span>
+                  <span className="text-muted-foreground text-sm font-normal tabular-nums">
                     {receptionTime(card, timeZone)}
                   </span>
                 </span>
-                <span className="shrink-0 text-sm font-medium">
+                <span className="text-md shrink-0 font-medium">
                   {receptionActionLabel(card.action)}
                 </span>
               </Button>

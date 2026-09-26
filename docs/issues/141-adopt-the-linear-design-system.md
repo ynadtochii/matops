@@ -227,6 +227,21 @@ The platform has no real users. So the whole app switches at once on the branch
 - `SkeletonRows` takes `inList`, so a list that loads into one divided
   container draws its skeleton the same way and the page does not jump.
 
+### Step 4.4: Attendance and Reception
+
+- Roster tags and register statuses are `Badge` (present success, absent
+  error, booked info). The walk-in picker is `Checkbox`. Error, warning and
+  success boxes are `Callout`. Four buttons use `busy`.
+- The public reception screen stays kiosk-sized: targets of 48px or more and
+  no smaller text than before. It uses the real `Mark`, a `rounded-xl` frame,
+  and `bg-active` for the current step instead of violet.
+- **Two fixes beyond styling**, both the ADR 140 rule that a failed read must
+  not look like nothing to do: staff reception showed "Nobody is checked in
+  yet." and reception setup offered "Create reception link" when their
+  queries had failed. Both now show `ErrorState`.
+- Dimmed text on the primary confirm button (`primary-foreground` at 60% and
+  70%) measures 4.93:1 or more in both themes.
+
 ## Consequences
 
 - Every new screen gets sizes, weights, edges and radii from tokens. The last
