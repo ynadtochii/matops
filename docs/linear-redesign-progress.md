@@ -36,7 +36,7 @@ stop the loop and notify the user.
 | 4.2 | Screens: Schedule and the curriculum timeline | done | `eb84ff9` | Shared `_components/tabs.tsx` restyled here |
 | 4.3 | Screens: Dashboard and Overview | done | `dc037e9` | `skeletons.tsx` and `mat-loader.tsx` restyled here |
 | 4.4 | Screens: Attendance and Reception | done | `37db665` | Two failed-read empty states fixed (ADR 140) |
-| 4.5 | Screens: Payments and Memberships | todo | | |
+| 4.5 | Screens: Payments and Memberships | done | `eefc1a6` | Student dues move to 4.8; shared `page-header.tsx` restyled here |
 | 4.6 | Screens: Coaches, Referrals, Notifications | todo | | |
 | 4.7 | Screens: both Settings screens, Profile, class detail | todo | | |
 | 4.8 | Screens: student web (schedule, training, dues) | todo | | |
@@ -62,6 +62,10 @@ stop the loop and notify the user.
   attendance and Mark all present (`!correctionReady`), Mark present
   (`walkInIds.size === 0`), Add visitor (`!visitorValid`).
 
+- Found in 4.5: Save branches is disabled while nothing changed (`!changed`),
+  and Save price until the calendar loads (`!earliest`). The month board has
+  no per-state label for paid, silent, reminded and claimed.
+
 ## Known limits
 
 - Signed-in screens stall on their loader in this Chrome setup, with or without
@@ -78,3 +82,4 @@ stop the loop and notify the user.
 - 2026-09-26: 4.2 Schedule and curriculum done (`eb84ff9`), by a subagent, reviewed; poster loading text contrast fixed in review.
 - 2026-09-26: 4.3 Dashboard and Overview done (`dc037e9`), by a subagent, reviewed; list skeleton shape fixed in review.
 - 2026-09-26: 4.4 Attendance and Reception done (`37db665`), by a subagent, reviewed.
+- 2026-09-26: 4.5 Memberships done (`eefc1a6`), by a subagent, reviewed.
