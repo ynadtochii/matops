@@ -27,7 +27,7 @@ export function FeedbackLink({ className }: { className?: string }) {
       href={`mailto:${CONTACT_EMAIL}?subject=${subject}&body=${body}`}
       className={
         className ??
-        "text-muted-foreground hover:text-foreground flex min-h-11 items-center rounded-md px-1 py-1 text-xs transition-colors sm:min-h-0"
+        "text-muted-foreground hover:text-foreground flex min-h-11 items-center rounded-md px-1.5 py-1 text-xs transition-colors sm:min-h-0"
       }
     >
       Something broken? Tell us

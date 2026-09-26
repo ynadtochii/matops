@@ -2,7 +2,28 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
+import {
+  Bell,
+  CalendarCheck,
+  CalendarDays,
+  ChartNoAxesColumn,
+  ChevronDown,
+  ConciergeBell,
+  CreditCard,
+  LayoutGrid,
+  Menu,
+  Share,
+  SlidersHorizontal,
+  User,
+  UserPlus,
+  Users,
+} from "lucide-react";
 
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@matops/ui/collapsible";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,8 +54,6 @@ export type NavBadge =
   | { state: "error" }
   | { state: "unavailable" };
 
-const iconClass = "size-[18px] shrink-0";
-
 const MAX_TABS = 5;
 
 /** Two-letter avatar fallback: initials of the first two name words, else the
@@ -50,170 +69,19 @@ function initials(name: string, email: string): string {
   return email.slice(0, 2).toUpperCase();
 }
 
-export const DashboardIcon = () => (
-  <svg
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth={1.5}
-    className={iconClass}
-  >
-    <rect x="2" y="2" width="5" height="5" rx="1" />
-    <rect x="9" y="2" width="5" height="5" rx="1" />
-    <rect x="2" y="9" width="5" height="5" rx="1" />
-    <rect x="9" y="9" width="5" height="5" rx="1" />
-  </svg>
-);
-export const ScheduleIcon = () => (
-  <svg
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth={1.5}
-    className={iconClass}
-  >
-    <rect x="2" y="3" width="12" height="11" rx="1.5" />
-    <path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3" />
-  </svg>
-);
-export const TrainingIcon = () => (
-  <svg
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth={1.5}
-    className={iconClass}
-  >
-    <rect x="2" y="3" width="12" height="11" rx="1.5" />
-    <path d="M5.5 8.5l2 2 3.5-4" />
-  </svg>
-);
-export const NotificationsIcon = () => (
-  <svg
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth={1.5}
-    className={iconClass}
-  >
-    <path d="M4 6.5a4 4 0 018 0c0 3 1 4 1 4H3s1-1 1-4z" />
-    <path d="M6.5 13a1.5 1.5 0 003 0" />
-  </svg>
-);
-export const ProfileIcon = () => (
-  <svg
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth={1.5}
-    className={iconClass}
-  >
-    <circle cx="8" cy="5.5" r="2.5" />
-    <path d="M3 13.5c0-2.2 2.2-3.5 5-3.5s5 1.3 5 3.5" />
-  </svg>
-);
-export const MembersIcon = () => (
-  <svg
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth={1.5}
-    className={iconClass}
-  >
-    <circle cx="6" cy="6" r="2.4" />
-    <path d="M2 13.5c0-2.2 1.8-3.5 4-3.5s4 1.3 4 3.5M11 5.2a2.2 2.2 0 010 4.2M12.5 13.5c0-1.7-.9-2.9-2.2-3.3" />
-  </svg>
-);
-export const SettingsIcon = () => (
-  <svg
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth={1.5}
-    className={iconClass}
-  >
-    <path d="M3 5h1.3M7.7 5h5.3M3 11h5.3M11.7 11h1.3" />
-    <circle cx="6" cy="5" r="1.7" />
-    <circle cx="10" cy="11" r="1.7" />
-  </svg>
-);
-export const PaymentsIcon = () => (
-  <svg
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth={1.5}
-    className={iconClass}
-  >
-    <rect x="2" y="4" width="12" height="8" rx="1.5" />
-    <path d="M2 7h12" />
-  </svg>
-);
-export const ReferralsIcon = () => (
-  <svg
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth={1.5}
-    className={iconClass}
-  >
-    <circle cx="4" cy="5" r="2" />
-    <circle cx="12" cy="5" r="2" />
-    <circle cx="8" cy="12" r="2" />
-    <path d="M5.7 6.2l1.2 3.6M10.3 6.2L9.1 9.8" />
-  </svg>
-);
-
-export const CoachesIcon = () => (
-  <svg
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth={1.5}
-    className={iconClass}
-  >
-    <path d="M2.5 13V9M6.5 13V5.5M10.5 13v-3M14.5 13V3" />
-  </svg>
-);
-
-export const ReceptionIcon = () => (
-  <svg
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth={1.5}
-    strokeLinecap="round"
-    className={iconClass}
-  >
-    <path d="M2 12.5h12M3.5 12.5V9a4.5 4.5 0 019 0v3.5M8 4.5V2.5" />
-  </svg>
-);
-
-const MoreIcon = () => (
-  <svg
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth={1.5}
-    strokeLinecap="round"
-    className={iconClass}
-  >
-    <path d="M3 5.5h10M3 10.5h10" />
-  </svg>
-);
-
-export const ShareIcon = () => (
-  <svg
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth={1.5}
-    className={iconClass}
-  >
-    <path d="M13 8.5V13a1 1 0 01-1 1H4a1 1 0 01-1-1V8.5" />
-    <path d="M8 10V2M5 5l3-3 3 3" />
-  </svg>
-);
+export const DashboardIcon = () => <LayoutGrid aria-hidden />;
+export const ScheduleIcon = () => <CalendarDays aria-hidden />;
+export const TrainingIcon = () => <CalendarCheck aria-hidden />;
+export const NotificationsIcon = () => <Bell aria-hidden />;
+export const ProfileIcon = () => <User aria-hidden />;
+export const MembersIcon = () => <Users aria-hidden />;
+export const SettingsIcon = () => <SlidersHorizontal aria-hidden />;
+export const PaymentsIcon = () => <CreditCard aria-hidden />;
+export const ReferralsIcon = () => <UserPlus aria-hidden />;
+export const CoachesIcon = () => <ChartNoAxesColumn aria-hidden />;
+export const ReceptionIcon = () => <ConciergeBell aria-hidden />;
+export const ShareIcon = () => <Share aria-hidden />;
+const MoreIcon = () => <Menu aria-hidden />;
 
 interface ShellFrameProps {
   /** Already filtered by `show` and given an `href`. */
@@ -223,6 +91,8 @@ interface ShellFrameProps {
   profileHref: string;
   selector: ReactNode;
   user: { name: string; email: string };
+  /** The heading over the ungrouped items: the current branch's name. */
+  branchLabel?: string;
   /** The word under the name in the footer: a role, or "pending". */
   roleLabel: string;
   columnClass: string;
@@ -251,6 +121,7 @@ export function ShellFrame({
   profileHref,
   selector,
   user,
+  branchLabel = "Branch",
   roleLabel,
   columnClass,
   sidebarExtra,
@@ -286,57 +157,76 @@ export function ShellFrame({
       </a>
       {/* Desktop sidebar — the logo, the branch picker and the footer are pinned;
           only the nav list scrolls, so the picker cannot move under the pointer. */}
-      <aside className="bg-sidebar border-sidebar-border hidden h-full w-60 shrink-0 flex-col overflow-hidden border-r p-3 md:flex">
+      <aside className="bg-sidebar border-sidebar-border hidden h-full w-60 shrink-0 flex-col overflow-hidden border-r p-2 md:flex">
         <Link
           href={homeHref}
-          className="flex items-center gap-2 px-2 pt-1 pb-4"
+          className="flex items-center gap-2 px-1.5 pt-1.5 pb-3"
         >
-          <Logo size={22} />
+          <Logo size={20} />
         </Link>
 
-        <div className="mb-3 px-1">{selector}</div>
+        <div className="mb-2">{selector}</div>
 
         {items.length > 1 && (
           <nav
             aria-label="Primary"
-            className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto"
+            className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto"
           >
-            {groupsOf(items).map(({ group, members }) => (
-              <div key={group ?? ""} className="flex flex-col gap-0.5">
-                {hasGroups && (
-                  <p className="text-muted-foreground mt-3 px-2.5 pb-1 font-mono text-[10px] tracking-wide uppercase">
-                    {group ?? "Branch"}
-                  </p>
-                )}
-                {members.map((i) => (
-                  <NavLink key={i.href} item={i} active={isCurrent(i.path)} />
-                ))}
-              </div>
-            ))}
+            {groupsOf(items).map(({ group, members }) =>
+              hasGroups ? (
+                <Collapsible
+                  key={group ?? ""}
+                  defaultOpen
+                  className="flex flex-col"
+                >
+                  <CollapsibleTrigger className="group/fold text-muted-foreground hover:text-foreground flex h-7 items-center gap-1 rounded-md px-1.5 text-xs font-medium transition-colors">
+                    <span className="truncate">{group ?? branchLabel}</span>
+                    <ChevronDown className="size-3 transition-transform group-data-[state=closed]/fold:-rotate-90 motion-reduce:transition-none" />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="flex flex-col gap-px pt-px">
+                      {members.map((i) => (
+                        <NavLink
+                          key={i.href}
+                          item={i}
+                          active={isCurrent(i.path)}
+                        />
+                      ))}
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              ) : (
+                <div key={group ?? ""} className="flex flex-col gap-px">
+                  {members.map((i) => (
+                    <NavLink key={i.href} item={i} active={isCurrent(i.path)} />
+                  ))}
+                </div>
+              ),
+            )}
           </nav>
         )}
 
-        <div className="border-sidebar-border mt-auto space-y-2 border-t pt-3">
+        <div className="border-sidebar-border mt-auto flex flex-col gap-1 border-t pt-2">
           {sidebarExtra}
           <Link
             href={profileHref}
             aria-current={isCurrent("/profile") ? "page" : undefined}
-            className={`flex items-center gap-2 rounded-md p-1 transition-colors ${
-              isCurrent("/profile") ? "bg-brand-wash" : "hover:bg-muted"
+            className={`flex items-center gap-2 rounded-md p-1.5 transition-colors ${
+              isCurrent("/profile") ? "bg-active" : "hover:bg-hover"
             }`}
           >
-            <div className="bg-muted text-muted-foreground flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold uppercase">
+            <div className="bg-active text-foreground-secondary flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold uppercase">
               {initials(user.name, user.email)}
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{user.name}</p>
-              <p className="text-muted-foreground font-mono text-[10px] capitalize">
+              <p className="text-muted-foreground text-xs capitalize">
                 {roleLabel}
               </p>
             </div>
           </Link>
           <FeedbackLink />
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 px-1.5 pb-1">
             <ThemeToggle />
             <SignOutButton />
           </div>
@@ -483,7 +373,7 @@ function BadgeFace({ badge }: { badge?: NavBadge }) {
     return (
       <span
         aria-label="Count loading"
-        className="bg-muted text-muted-foreground rounded-full px-1.5 font-mono text-[10px]"
+        className="bg-active text-muted-foreground text-2xs rounded-full px-1.5 tabular-nums"
       >
         …
       </span>
@@ -493,7 +383,7 @@ function BadgeFace({ badge }: { badge?: NavBadge }) {
     return (
       <span
         aria-label="Count unavailable"
-        className="bg-error/10 text-error rounded-full px-1.5 font-mono text-[10px]"
+        className="bg-error/10 text-error-text text-2xs rounded-full px-1.5 tabular-nums"
       >
         !
       </span>
@@ -501,7 +391,7 @@ function BadgeFace({ badge }: { badge?: NavBadge }) {
   }
   if (badge.count === 0) return null;
   return (
-    <span className="bg-brand text-brand-foreground rounded-full px-1.5 font-mono text-[10px]">
+    <span className="bg-brand text-brand-foreground text-2xs rounded-full px-1.5 font-medium tabular-nums">
       {badge.count > 9 ? "9+" : badge.count}
     </span>
   );
@@ -521,18 +411,15 @@ function TabFace({ icon, badge }: { icon: ReactNode; badge?: NavBadge }) {
 function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   const face = (
     <>
-      {active && (
-        <span className="bg-brand absolute top-1.5 bottom-1.5 -left-3 w-0.5 rounded-full" />
-      )}
       {item.icon}
-      <span className="flex-1">{item.label}</span>
+      <span className="flex-1 truncate">{item.label}</span>
       <BadgeFace badge={item.badge} />
     </>
   );
-  const className = `relative flex items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm transition-colors ${
+  const className = `flex h-7 items-center gap-2 rounded-md px-1.5 text-left text-sm font-medium transition-colors motion-reduce:transition-none [&_svg]:shrink-0 ${
     active
-      ? "bg-brand-wash text-brand-strong font-medium"
-      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+      ? "bg-active text-foreground [&_svg]:text-foreground"
+      : "text-foreground-secondary hover:bg-hover [&_svg]:text-muted-foreground"
   }`;
 
   if (item.onSelect) {

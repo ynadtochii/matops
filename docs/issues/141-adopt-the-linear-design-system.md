@@ -156,6 +156,20 @@ The platform has no real users. So the whole app switches at once on the branch
   (3.17:1 on a raised field). The light success badge passes narrowly at
   4.56:1.
 
+### Step 3a: sidebar
+
+- Level 1 surface, 28px items, 13px medium text in the secondary color with
+  tertiary icons. Hover is `--hover`, the current page is `--active` with
+  primary text. **The current page no longer uses the violet** (ADR 37 put
+  violet on active nav): the reference sidebar marks it with the active fill,
+  and violet stays for the mark, links, focus and the pending tag.
+- Each group folds on its own heading (`Collapsible`, open by default). The
+  branch group is headed by the branch's name and the gym group reads
+  `Gym management`.
+- The 13 hand-drawn shell icons are Lucide, under their old export names.
+  Count badges use `text-2xs` with tabular figures instead of mono 10px.
+- The sign-out button uses the `busy` prop and keeps its label (ADR 140).
+
 ## Consequences
 
 - Every new screen gets sizes, weights, edges and radii from tokens. The last

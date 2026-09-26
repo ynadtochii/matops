@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { Plus } from "lucide-react";
 
 import type { RouterOutputs } from "@matops/api";
 import {
@@ -43,21 +44,9 @@ import { ErrorState, NoAccessState } from "./states";
 
 const NARROW_ROUTES = ["/class", "/profile"];
 
-const GYM_GROUP = "Gym";
+const GYM_GROUP = "Gym management";
 
-export const PlusIcon = () => (
-  <svg
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth={1.5}
-    strokeLinecap="round"
-    className="size-[18px] shrink-0"
-    aria-hidden
-  >
-    <path d="M8 3.5v9M3.5 8h9" />
-  </svg>
-);
+export const PlusIcon = () => <Plus aria-hidden />;
 
 function contentWidth(pathname: string, isStaff: boolean): string {
   if (pathname.startsWith("/schedule")) return "max-w-[1600px]";
@@ -440,6 +429,7 @@ function ShellChrome({
         />
       }
       user={user}
+      branchLabel={activeBranch?.name}
       roleLabel={
         isPending ? "pending" : (activeBranch?.role ?? organization.role)
       }
@@ -450,7 +440,7 @@ function ShellChrome({
             trigger={
               <button
                 type="button"
-                className="text-sidebar-foreground hover:bg-muted flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm transition-colors"
+                className="text-foreground-secondary hover:bg-hover [&_svg]:text-muted-foreground flex h-7 w-full items-center gap-2 rounded-md px-1.5 text-sm font-medium transition-colors"
               >
                 <ShareIcon />
                 Send someone a link
