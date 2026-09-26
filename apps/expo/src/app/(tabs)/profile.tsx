@@ -122,7 +122,7 @@ function ProfileDetails({
       />
       <Field label="Email" value={email} />
       {error ? (
-        <Txt size={14} tone="error">
+        <Txt size={13} tone="error">
           {error}
         </Txt>
       ) : null}
@@ -178,15 +178,15 @@ function MembershipNotice() {
     <Stack gap={16}>
       {warned.map((m) => (
         <Stack key={m.assignmentId} gap={8}>
-          <Banner tone={m.warning?.verdict === "blocked" ? "info" : "warning"}>
-            <Txt size={14} style={{ color: t.foreground }}>
+          <Banner tone={m.warning?.verdict === "blocked" ? "error" : "warning"}>
+            <Txt size={15} weight={500} style={{ color: t.foreground }}>
               {m.warning?.headline}
             </Txt>
             <Txt size={13} tone="muted">
               {m.warning?.detail}
             </Txt>
             {m.amount ? (
-              <Txt size={14} style={{ color: t.foreground }}>
+              <Txt size={15} style={{ color: t.foreground }}>
                 {formatMoney(m.amount.priceMinor, m.amount.currency)}
               </Txt>
             ) : null}
@@ -278,7 +278,7 @@ function MyRanks() {
   const { ranks: list, history } = ranks.data;
   if (list.length === 0) {
     return (
-      <Txt size={14} tone="muted">
+      <Txt size={13} tone="muted">
         Your gym hasn’t set your rank yet.
       </Txt>
     );
@@ -296,10 +296,10 @@ function MyRanks() {
             gap: 12,
           }}
         >
-          <Txt size={14} tone="muted">
+          <Txt size={15} tone="muted">
             {disciplineLabel(r.discipline)}
           </Txt>
-          <Txt size={16} weight={600}>
+          <Txt size={15} weight={500}>
             {formatRank(r)}
           </Txt>
         </View>
@@ -309,7 +309,6 @@ function MyRanks() {
           style={{
             gap: 6,
             borderTopWidth: 1,
-            borderStyle: "dashed",
             borderTopColor: t.border,
             paddingTop: 12,
           }}
@@ -325,7 +324,7 @@ function MyRanks() {
                 gap: 8,
               }}
             >
-              <Txt size={14}>
+              <Txt size={15}>
                 {disciplineLabel(h.discipline)} ·{" "}
                 {formatRank({
                   discipline: h.discipline,
@@ -345,14 +344,14 @@ function MyRanks() {
 }
 
 /** Gear glyph for the header — opens Settings (S12). Emoji renders from the
- * system font, independent of Geist, so no icon-font dependency is added. */
+ * system font, independent of Inter, so no icon-font dependency is added. */
 function SettingsButton({ onPress }: { onPress: () => void }) {
   const t = useTheme();
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="Settings"
-      hitSlop={10}
+      hitSlop={12}
       onPress={onPress}
     >
       <SettingsIcon color={t.mutedForeground} size={20} />
@@ -378,7 +377,7 @@ function AcademyAddress({
         });
   return (
     <View style={{ gap: 2 }}>
-      <Txt size={14} tone="muted">
+      <Txt size={13} tone="muted">
         {address}
       </Txt>
       {mapUrl ? (
@@ -475,7 +474,7 @@ export default function Profile() {
         />
 
         <Field label="Current branch">
-          <Txt size={16}>{current.data?.name ?? "—"}</Txt>
+          <Txt size={15}>{current.data?.name ?? "—"}</Txt>
           {current.data?.address ? (
             <AcademyAddress
               address={current.data.address}

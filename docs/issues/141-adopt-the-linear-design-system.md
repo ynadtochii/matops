@@ -314,6 +314,25 @@ The platform has no real users. So the whole app switches at once on the branch
   not valid", "Booking is closed" and the like. When the error is not
   `NOT_FOUND` or `BAD_REQUEST`, they now show `ErrorState` with a retry.
 
+### Step 5: Mobile (Expo)
+
+- **Static gates only.** No simulator or device was available, so nothing here
+  has been seen on a phone. `docs/mobile-device-test.md` is still outstanding.
+- Inter replaces Geist (`@expo-google-fonts/inter` added,
+  `@expo-google-fonts/geist` removed), mapped to the static 400, 500, 600 and
+  700 files, since React Native cannot load 510 or 590. Geist Mono stays for
+  data. Dark was already the mobile default (`DEFAULT_MODE`).
+- A phone needs larger type than 13px, so mobile runs 15px body, 13px
+  secondary, 17px list titles and 24px headings. Radius follows nesting (12,
+  8, 6, pills), buttons are pills, fields sit on `raised`, and `ui.tsx` gained
+  `List` and `ListRow` for divided lists, tinted callouts and a badge-style
+  `StatusPill`. The active tab and the current item are primary, not violet.
+- **Icons stay in `icons.tsx`.** `lucide-react-native` needs
+  `react-native-svg`, a native module that forces a dev-client rebuild nobody
+  can check here.
+- The splash background in `app.json` is still `#000000`, since changing it
+  needs a native build.
+
 ## Consequences
 
 - Every new screen gets sizes, weights, edges and radii from tokens. The last

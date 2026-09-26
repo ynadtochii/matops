@@ -7,7 +7,7 @@ import { tokens } from "@matops/ui/tokens";
 /**
  * Mobile theme — the RN twin of the web `@matops/ui/theme` (docs/design.md §1.1).
  *
- * The app is **dark-first**: it opens on the canonical pure-black palette and
+ * The app is **dark-first**: it opens on the dark palette (ADR 141) and
  * stays there unless the student picks Light or System in Profile. The three
  * modes mirror the web toggle (light / dark / auto), and the choice persists.
  *

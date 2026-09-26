@@ -34,15 +34,15 @@ export function OverdueBanner() {
         marginBottom: 12,
         paddingVertical: 10,
         paddingHorizontal: 12,
-        borderRadius: 3,
-        borderLeftWidth: 3,
-        borderLeftColor: t.error,
-        borderStyle: "dashed",
-        backgroundColor: `${t.error}1a`,
+        minHeight: 44,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: `${t.error}4d`,
+        backgroundColor: `${t.error}14`,
         opacity: pressed ? 0.85 : 1,
       })}
     >
-      <Txt size={14} weight={500} style={{ flex: 1 }}>
+      <Txt size={13} weight={500} tone="secondary" style={{ flex: 1 }}>
         {strip}
       </Txt>
       <Txt size={16} tone="error">

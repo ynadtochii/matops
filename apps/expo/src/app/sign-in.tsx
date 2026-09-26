@@ -93,7 +93,7 @@ export default function SignIn() {
               </Muted>
             </Card>
             {error ? (
-              <Txt size={14} tone="error">
+              <Txt size={13} tone="error">
                 {error}
               </Txt>
             ) : null}
@@ -123,7 +123,7 @@ export default function SignIn() {
               keyboardType="email-address"
             />
             {error ? (
-              <Txt size={14} tone="error">
+              <Txt size={13} tone="error">
                 {error}
               </Txt>
             ) : null}

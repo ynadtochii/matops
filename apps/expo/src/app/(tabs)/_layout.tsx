@@ -1,5 +1,5 @@
 import type { ViewStyle } from "react-native";
-import { View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { Tabs } from "expo-router";
 
 import { sans } from "~/components/fonts";
@@ -19,13 +19,14 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: t.brandStrong,
+        tabBarActiveTintColor: t.foreground,
         tabBarInactiveTintColor: t.mutedForeground,
         tabBarStyle: {
           backgroundColor: t.background,
           borderTopColor: t.border,
+          borderTopWidth: StyleSheet.hairlineWidth,
         },
-        tabBarLabelStyle: { fontSize: 11, fontFamily: sans(600) },
+        tabBarLabelStyle: { fontSize: 12, fontFamily: sans(500) },
       }}
     >
       <Tabs.Screen
@@ -67,7 +68,7 @@ function ScheduleIcon({ color }: { color: string }) {
         width: 18,
         height: 18,
         borderRadius: 4,
-        borderWidth: 1.8,
+        borderWidth: 1.5,
         borderColor: color,
       }}
     >
@@ -77,7 +78,7 @@ function ScheduleIcon({ color }: { color: string }) {
           top: 3.5,
           left: 1,
           right: 1,
-          height: 1.6,
+          height: 1.5,
           backgroundColor: color,
         }}
       />
@@ -135,8 +136,8 @@ function ScanIcon({ color }: { color: string }) {
           {
             top: 0,
             left: 0,
-            borderTopWidth: 1.8,
-            borderLeftWidth: 1.8,
+            borderTopWidth: 1.5,
+            borderLeftWidth: 1.5,
             borderTopLeftRadius: 2,
           },
         ]}
@@ -147,8 +148,8 @@ function ScanIcon({ color }: { color: string }) {
           {
             top: 0,
             right: 0,
-            borderTopWidth: 1.8,
-            borderRightWidth: 1.8,
+            borderTopWidth: 1.5,
+            borderRightWidth: 1.5,
             borderTopRightRadius: 2,
           },
         ]}
@@ -159,8 +160,8 @@ function ScanIcon({ color }: { color: string }) {
           {
             bottom: 0,
             left: 0,
-            borderBottomWidth: 1.8,
-            borderLeftWidth: 1.8,
+            borderBottomWidth: 1.5,
+            borderLeftWidth: 1.5,
             borderBottomLeftRadius: 2,
           },
         ]}
@@ -171,8 +172,8 @@ function ScanIcon({ color }: { color: string }) {
           {
             bottom: 0,
             right: 0,
-            borderBottomWidth: 1.8,
-            borderRightWidth: 1.8,
+            borderBottomWidth: 1.5,
+            borderRightWidth: 1.5,
             borderBottomRightRadius: 2,
           },
         ]}
@@ -183,7 +184,7 @@ function ScanIcon({ color }: { color: string }) {
           top: 8.2,
           left: 1,
           right: 1,
-          height: 1.6,
+          height: 1.5,
           backgroundColor: color,
         }}
       />

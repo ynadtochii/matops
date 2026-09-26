@@ -184,8 +184,8 @@ Checklist for every screen:
 - Both themes pass AA on the rendered page (measure, do not assume).
 
 ### Step 5. Mobile (Expo)
-- [ ] NativeWind theme and `tokens.ts` match step 1. Fonts in `fonts.ts`.
-- [ ] Restyle the four tabs, the pushed screens, and `apps/expo/src/components`.
+- [x] NativeWind theme and `tokens.ts` match step 1. Fonts in `fonts.ts`.
+- [x] Restyle the four tabs, the pushed screens, and `apps/expo/src/components`.
 - Limit: no simulator here. This step reaches static green only until someone
   runs `docs/mobile-device-test.md` on a device. Say so in the ADR and roadmap.
 

@@ -85,12 +85,12 @@ function ToastHost({
             styles.toast,
             {
               opacity,
-              backgroundColor: t.card,
+              backgroundColor: t.floating,
               borderColor: t.border,
             },
           ]}
         >
-          <Txt size={14} weight={500} numberOfLines={2}>
+          <Txt size={15} weight={500} numberOfLines={2}>
             {message}
           </Txt>
         </Animated.View>
@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
   toast: {
     maxWidth: "100%",
     borderWidth: 1,
-    borderRadius: 3,
+    borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
