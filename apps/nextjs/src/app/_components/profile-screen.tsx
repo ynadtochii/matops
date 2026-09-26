@@ -16,6 +16,7 @@ import { Button } from "@matops/ui/button";
 import { FieldError } from "@matops/ui/field";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
+import { FOCUS_RING, FOCUS_RING_INSET } from "@matops/ui/motion";
 import { ThemeToggle } from "@matops/ui/theme";
 import { toast } from "@matops/ui/toast";
 import { UpdateProfileSchema } from "@matops/validators";
@@ -32,10 +33,12 @@ import {
   ChevronDownIcon,
   ENTER,
   Eyebrow,
+  LIST,
   SectionHeading,
+  SettingsRow,
 } from "./primitives";
 import { SignOutButton } from "./sign-out";
-import { SkeletonCard } from "./skeletons";
+import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState, SuspendedState } from "./states";
 
 function splitName(name: string): { firstName: string; lastName: string } {
@@ -144,7 +147,7 @@ function ProfileDetails({
           />
         </fieldset>
         {update.isError && (
-          <p role="alert" className="text-error text-sm">
+          <p role="alert" className="text-error-text text-sm">
             {update.error.message || "Couldn't save your profile. Try again."}
           </p>
         )}
@@ -172,13 +175,11 @@ function ProfileDetails({
   }
 
   return (
-    <section
-      className={cn(cardClass(), "divide-border flex flex-col divide-y p-0")}
-    >
+    <div className={LIST}>
       <div className="flex flex-wrap items-center justify-between gap-3 p-4">
         <div className="min-w-0">
           <Eyebrow>Name</Eyebrow>
-          <p className="mt-1 text-base font-medium">{name || "Not provided"}</p>
+          <p className="text-md mt-1 font-medium">{name || "Not provided"}</p>
         </div>
         <Button size="sm" variant="outline" onClick={startEdit}>
           Edit details
@@ -186,16 +187,16 @@ function ProfileDetails({
       </div>
       <div className="p-4">
         <Eyebrow>Phone</Eyebrow>
-        <p className="mt-1 text-base">{phone || "Not provided"}</p>
+        <p className="text-md mt-1">{phone || "Not provided"}</p>
       </div>
       <div className="p-4">
         <Eyebrow>Email</Eyebrow>
-        <p className="mt-1 text-base break-all">{email}</p>
+        <p className="text-md mt-1 break-all">{email}</p>
         <p className="text-muted-foreground mt-1 text-sm">
           This is your sign-in, so it cannot be changed here.
         </p>
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -226,23 +227,22 @@ export function ProfileScreen({
           </section>
           <section className="flex flex-col gap-4" aria-label="Preferences">
             <SectionHeading>Preferences</SectionHeading>
-            <div
-              className={cn(
-                cardClass(),
-                "flex flex-wrap items-center justify-between gap-3",
-              )}
-            >
-              <div>
-                <p className="text-base font-medium">Appearance</p>
-                <p className="text-muted-foreground text-sm">
-                  Choose light, dark, or your system setting.
-                </p>
-              </div>
-              <ThemeToggle />
+            <div className={LIST}>
+              <SettingsRow
+                title="Appearance"
+                description="Choose light, dark, or your system setting."
+              >
+                <ThemeToggle />
+              </SettingsRow>
             </div>
           </section>
           <div className="border-border flex flex-wrap items-center justify-between gap-4 border-t pt-5">
-            <FeedbackLink className="text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center text-sm underline underline-offset-2" />
+            <FeedbackLink
+              className={cn(
+                "text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center rounded-sm text-sm underline underline-offset-2",
+                FOCUS_RING,
+              )}
+            />
             <SignOutButton />
           </div>
         </div>
@@ -281,7 +281,10 @@ export function ProfileScreen({
                       href={mapUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-brand-strong inline-flex min-h-11 items-center text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-4"
+                      className={cn(
+                        "text-brand-strong inline-flex min-h-11 items-center rounded-sm text-sm underline underline-offset-4",
+                        FOCUS_RING,
+                      )}
                     >
                       Open in maps
                       <span className="sr-only"> (opens in a new tab)</span>
@@ -328,7 +331,7 @@ function MyRank() {
   const trpc = useTRPC();
   const ranks = useQuery(trpc.rank.mine.queryOptions());
 
-  if (ranks.isPending) return <SkeletonCard lines={3} />;
+  if (ranks.isPending) return <SkeletonRows rows={2} lines={1} inList />;
   if (ranks.isError) {
     return (
       <ErrorState label="your rank" onRetry={() => void ranks.refetch()} />
@@ -345,27 +348,30 @@ function MyRank() {
   }
 
   return (
-    <div className={cardClass()}>
-      <div className="flex flex-col gap-2">
-        {list.map((r) => (
-          <div
-            key={r.discipline}
-            className="flex flex-wrap items-center justify-between gap-3"
-          >
-            <span className="text-muted-foreground text-sm">
-              {disciplineLabel(r.discipline)}
-            </span>
-            <span className="font-medium">{formatRank(r)}</span>
-          </div>
-        ))}
-      </div>
+    <div className={LIST}>
+      {list.map((r) => (
+        <div
+          key={r.discipline}
+          className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+        >
+          <span className="text-muted-foreground text-sm">
+            {disciplineLabel(r.discipline)}
+          </span>
+          <span className="text-sm font-medium">{formatRank(r)}</span>
+        </div>
+      ))}
       {history.length > 0 && (
-        <details className="group border-border mt-4 border-t pt-2">
-          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-4 [&::-webkit-details-marker]:hidden">
+        <details className="group">
+          <summary
+            className={cn(
+              "text-foreground-secondary hover:bg-hover hover:text-foreground flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 text-sm font-medium transition-colors motion-reduce:transition-none [&::-webkit-details-marker]:hidden",
+              FOCUS_RING_INSET,
+            )}
+          >
             Promotion history ({history.length})
-            <ChevronDownIcon className="shrink-0 transition-transform duration-200 group-open:rotate-180 motion-reduce:transition-none" />
+            <ChevronDownIcon className="text-muted-foreground shrink-0 transition-transform duration-150 group-open:rotate-180 motion-reduce:transition-none" />
           </summary>
-          <div className="mt-2 flex flex-col gap-3">
+          <div className="flex flex-col gap-3 px-4 pt-1 pb-4">
             {history.map((h) => (
               <div
                 key={h.id}
@@ -379,7 +385,7 @@ function MyRank() {
                     stripes: h.toStripes,
                   })}
                 </span>
-                <span className="text-muted-foreground font-mono text-xs tabular-nums">
+                <span className="text-muted-foreground text-xs tabular-nums">
                   {dateYearFmt.format(new Date(h.promotedAt))}
                 </span>
               </div>

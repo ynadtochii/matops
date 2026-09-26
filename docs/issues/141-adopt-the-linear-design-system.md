@@ -270,6 +270,23 @@ The platform has no real users. So the whole app switches at once on the branch
   open" note is a warning `Callout`. The QR poster keeps its own dark-on-white
   colors so the code scans.
 
+### Step 4.7: Settings, Profile, class page
+
+- A shared `SettingsRow` in `primitives.tsx`: label and description on the
+  left, the control on the right from `sm`, stacked on phones. Branch
+  settings (its identity, location and danger-zone sections), gym settings,
+  public booking and the profile are divided lists of these rows under real
+  `h2` headings. The danger zone has an error edge.
+- The public booking master switch is `Switch`, since it saves on change.
+  The gym module ticks are `Checkbox`, since they wait for Save. The account
+  status pill is `Badge`, and the back link and external links use Lucide.
+- `PhoneField` and `EmailField` keep their API and behaviour; only a width
+  moved to a token.
+- **Found, already on `main`:** the class page draws a "Who's booked" heading
+  with an empty section under it, since `ClassRoster` is never rendered
+  there. Showing the roster decides who may see which names, so it is its own
+  slice, not a restyle.
+
 ## Consequences
 
 - Every new screen gets sizes, weights, edges and radii from tokens. The last

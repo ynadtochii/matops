@@ -59,6 +59,52 @@ export const ROSTER_ROW =
 export const LIST =
   "border-border bg-card divide-border divide-y overflow-hidden rounded-lg border";
 
+export function SettingsRow({
+  title,
+  description,
+  stacked = false,
+  className,
+  children,
+}: {
+  title?: ReactNode;
+  description?: ReactNode;
+  stacked?: boolean;
+  className?: string;
+  children?: ReactNode;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex flex-col gap-3 p-4",
+        !stacked && "sm:flex-row sm:items-center sm:justify-between sm:gap-6",
+        className,
+      )}
+    >
+      <div className="flex min-w-0 flex-col gap-1">
+        {title && (
+          <div className="text-foreground text-sm font-medium">{title}</div>
+        )}
+        {description && (
+          <div className="text-muted-foreground max-w-xl text-sm text-pretty">
+            {description}
+          </div>
+        )}
+      </div>
+      {children && (
+        <div
+          className={
+            stacked
+              ? "flex min-w-0 flex-col gap-3"
+              : "flex min-w-0 flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end"
+          }
+        >
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export const ENTER =
   "animate-in fade-in-0 slide-in-from-bottom-1 fill-mode-backwards duration-300 ease-out motion-reduce:animate-none";
 

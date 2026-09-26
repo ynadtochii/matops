@@ -13,6 +13,7 @@
 - Step 4.4, Attendance and Reception: badges for roster and register states, shared checkbox and callouts, a kiosk screen that keeps its large targets, and two screens that now say a read failed instead of showing an empty state (ADR 141).
 - Step 4.5, Memberships: a Linear page header on every screen, notices that use the error and warning edges instead of violet, divided lists for plans, claims and the month board, shared callouts and checkboxes, and buttons that keep their label while they save (ADR 141).
 - Step 4.6, Coaches, Referrals, Notifications: divided lists with matching skeletons, neutral chart bars, unread notifications marked by weight and a neutral dot instead of violet, and send buttons that show progress on the one notice being sent (ADR 141).
+- Step 4.7, Settings, Profile, class page: settings as label-and-control rows in divided sections, a switch for the public booking toggle, a badge for account status, and Lucide links (ADR 141).
 
 ## Unreleased: design system reference
 

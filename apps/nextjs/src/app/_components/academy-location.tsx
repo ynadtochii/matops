@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowUpRight } from "lucide-react";
 
 import {
   academyCountry,
@@ -14,14 +15,15 @@ import { Button } from "@matops/ui/button";
 import { FieldError } from "@matops/ui/field";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
+import { FOCUS_RING } from "@matops/ui/motion";
 import { Select } from "@matops/ui/select";
 import { Textarea } from "@matops/ui/textarea";
 import { toast } from "@matops/ui/toast";
 import { MapUrlSchema } from "@matops/validators";
 
 import { useTRPC } from "~/trpc/react";
-import { cardClass, SectionHeading } from "./primitives";
-import { SkeletonControlPanel } from "./skeletons";
+import { LIST, SectionHeading, SettingsRow } from "./primitives";
+import { Bar } from "./skeletons";
 import { ErrorState } from "./states";
 
 export function AcademyLocation({
@@ -70,170 +72,201 @@ export function AcademyLocation({
           this branch.
         </p>
       </div>
-      <div className="grid gap-4 md:grid-cols-2">
+      {settings.isError && (
+        <ErrorState
+          label="branch rules"
+          onRetry={() => void settings.refetch()}
+        />
+      )}
+      <div className={LIST}>
         {settings.isPending ? (
-          <>
-            <SkeletonControlPanel />
-            <SkeletonControlPanel />
-            <SkeletonControlPanel />
-          </>
-        ) : settings.isError ? (
-          <div className="md:col-span-2">
-            <ErrorState
-              label="branch rules"
-              onRetry={() => void settings.refetch()}
-            />
+          <div
+            role="status"
+            aria-label="Loading"
+            className="divide-border divide-y"
+          >
+            {Array.from({ length: 3 }, (_, i) => (
+              <div key={i} aria-hidden className="flex flex-col gap-2 p-4">
+                <Bar className="h-4 w-28" />
+                <Bar className="h-3 w-72" />
+              </div>
+            ))}
           </div>
-        ) : (
+        ) : settings.isError ? null : (
           <>
-            <article className={cn(cardClass(), "flex flex-col gap-3")}>
-              <div>
-                <h3 className="text-sm font-medium">Time zone</h3>
-                <p className="text-muted-foreground mt-1 text-sm text-pretty">
+            <SettingsRow
+              title={<h3>Time zone</h3>}
+              description={
+                <>
                   Class times, weeks, and stats use this zone. Existing class
                   templates keep their current zone.
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <Label htmlFor="academy-time-zone" className="sr-only">
-                  Academy time zone
-                </Label>
-                <Select
-                  id="academy-time-zone"
-                  className="max-w-xs flex-1"
-                  value={settings.data.timeZone}
-                  disabled={save.isPending}
-                  onChange={(e) => {
-                    save.mutate(
-                      { timeZone: e.target.value },
-                      { onSuccess: () => toast.success("Time zone saved") },
-                    );
-                  }}
-                >
-                  {zones.map((z) => (
-                    <option key={z} value={z}>
-                      {z}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              {settings.data.drifting.length > 0 && (
-                <p className="text-muted-foreground text-xs">
-                  Some class templates still run on{" "}
-                  {settings.data.drifting.join(", ")}. This never changes the
-                  time of a class that students have booked. Edit those
-                  templates on Schedule if they should move.
-                </p>
-              )}
-            </article>
+                  {settings.data.drifting.length > 0 && (
+                    <span className="mt-1 block text-xs">
+                      Some class templates still run on{" "}
+                      {settings.data.drifting.join(", ")}. This never changes
+                      the time of a class that students have booked. Edit those
+                      templates on Schedule if they should move.
+                    </span>
+                  )}
+                </>
+              }
+            >
+              <Label htmlFor="academy-time-zone" className="sr-only">
+                Academy time zone
+              </Label>
+              <Select
+                id="academy-time-zone"
+                className="w-full sm:w-64"
+                value={settings.data.timeZone}
+                disabled={save.isPending}
+                onChange={(e) => {
+                  save.mutate(
+                    { timeZone: e.target.value },
+                    { onSuccess: () => toast.success("Time zone saved") },
+                  );
+                }}
+              >
+                {zones.map((z) => (
+                  <option key={z} value={z}>
+                    {z}
+                  </option>
+                ))}
+              </Select>
+            </SettingsRow>
 
-            <article className={cn(cardClass(), "flex flex-col gap-3")}>
-              <div>
-                <h3 className="text-sm font-medium">Booking window</h3>
-                <p className="text-muted-foreground mt-1 text-sm text-pretty">
-                  Students can book classes on these branch calendar days.
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <Label htmlFor="booking-window-days">Days ahead</Label>
-                <Input
-                  id="booking-window-days"
-                  type="number"
-                  min={1}
-                  max={90}
-                  className="w-24"
-                  defaultValue={settings.data.bookingWindowDays}
-                  disabled={save.isPending}
-                  aria-invalid={bookingWindowError ? true : undefined}
-                  aria-describedby={
-                    bookingWindowError ? "booking-window-error" : undefined
+            <SettingsRow
+              title={<h3>Booking window</h3>}
+              description="Students can book classes on these branch calendar days."
+            >
+              <Label htmlFor="booking-window-days">Days ahead</Label>
+              <Input
+                id="booking-window-days"
+                type="number"
+                min={1}
+                max={90}
+                className="w-24"
+                defaultValue={settings.data.bookingWindowDays}
+                disabled={save.isPending}
+                aria-invalid={bookingWindowError ? true : undefined}
+                aria-describedby={
+                  bookingWindowError ? "booking-window-error" : undefined
+                }
+                onChange={() => setBookingWindowError(null)}
+                onBlur={(event) => {
+                  const bookingWindowDays = Number(event.target.value);
+                  if (
+                    !Number.isInteger(bookingWindowDays) ||
+                    bookingWindowDays < 1 ||
+                    bookingWindowDays > 90
+                  ) {
+                    setBookingWindowError(
+                      "Use a whole number from 1 to 90 days.",
+                    );
+                    return;
                   }
-                  onChange={() => setBookingWindowError(null)}
-                  onBlur={(event) => {
-                    const bookingWindowDays = Number(event.target.value);
-                    if (
-                      !Number.isInteger(bookingWindowDays) ||
-                      bookingWindowDays < 1 ||
-                      bookingWindowDays > 90
-                    ) {
-                      setBookingWindowError(
-                        "Use a whole number from 1 to 90 days.",
-                      );
-                      return;
-                    }
-                    setBookingWindowError(null);
-                    if (bookingWindowDays !== settings.data.bookingWindowDays) {
-                      save.mutate(
-                        { bookingWindowDays },
-                        {
-                          onSuccess: () =>
-                            toast.success("Booking window saved"),
-                        },
-                      );
-                    }
-                  }}
-                />
-              </div>
+                  setBookingWindowError(null);
+                  if (bookingWindowDays !== settings.data.bookingWindowDays) {
+                    save.mutate(
+                      { bookingWindowDays },
+                      {
+                        onSuccess: () => toast.success("Booking window saved"),
+                      },
+                    );
+                  }
+                }}
+              />
               {bookingWindowError && (
-                <FieldError id="booking-window-error">
+                <FieldError
+                  id="booking-window-error"
+                  className="basis-full sm:text-right"
+                >
                   {bookingWindowError}
                 </FieldError>
               )}
-            </article>
+            </SettingsRow>
 
-            <article className={cn(cardClass(), "flex flex-col gap-3")}>
-              <div>
-                <h3 className="text-sm font-medium">Phone country</h3>
-                <p className="text-muted-foreground mt-1 text-sm text-pretty">
+            <SettingsRow
+              title={<h3>Phone country</h3>}
+              description={
+                <>
                   Phone fields start with this country code. MatOps guesses from
                   the time zone until you save one.
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <Label htmlFor="academy-country" className="sr-only">
-                  Academy country
-                </Label>
-                <Select
-                  id="academy-country"
-                  className="max-w-xs flex-1"
-                  value={academyCountry(
-                    settings.data.country,
-                    settings.data.timeZone,
+                  {!settings.data.country && (
+                    <span className="mt-1 block text-xs">
+                      Guessed from {settings.data.timeZone}. Save it to make it
+                      yours.
+                    </span>
                   )}
-                  disabled={save.isPending}
-                  onChange={(e) => {
-                    save.mutate(
-                      { country: e.target.value },
-                      { onSuccess: () => toast.success("Country saved") },
-                    );
-                  }}
-                >
-                  {DIAL_COUNTRIES.map((c) => (
-                    <option key={c.iso} value={c.iso}>
-                      {c.name} ({c.dial})
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              {!settings.data.country && (
-                <p className="text-muted-foreground text-xs">
-                  Guessed from {settings.data.timeZone}. Save it to make it
-                  yours.
-                </p>
-              )}
-            </article>
+                </>
+              }
+            >
+              <Label htmlFor="academy-country" className="sr-only">
+                Academy country
+              </Label>
+              <Select
+                id="academy-country"
+                className="w-full sm:w-64"
+                value={academyCountry(
+                  settings.data.country,
+                  settings.data.timeZone,
+                )}
+                disabled={save.isPending}
+                onChange={(e) => {
+                  save.mutate(
+                    { country: e.target.value },
+                    { onSuccess: () => toast.success("Country saved") },
+                  );
+                }}
+              >
+                {DIAL_COUNTRIES.map((c) => (
+                  <option key={c.iso} value={c.iso}>
+                    {c.name} ({c.dial})
+                  </option>
+                ))}
+              </Select>
+            </SettingsRow>
           </>
         )}
 
-        <article className={cn(cardClass(), "flex flex-col gap-3")}>
-          <div>
-            <h3 className="text-sm font-medium">Address</h3>
-            <p className="text-muted-foreground mt-1 text-sm text-pretty">
-              Where the gym is. Students see it in the app and when they join.
-            </p>
-          </div>
+        <SettingsRow
+          title={<h3>Address</h3>}
+          description={
+            editingAddress ? (
+              "Where the gym is. Students see it in the app and when they join."
+            ) : (
+              <>
+                Where the gym is. Students see it in the app and when they join.
+                {address ? (
+                  <span className="mt-2 flex flex-col gap-1">
+                    <span className="text-foreground whitespace-pre-wrap">
+                      {address}
+                    </span>
+                    {savedUrl && (
+                      <a
+                        href={savedUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={cn(
+                          "text-brand-strong inline-flex min-h-11 items-center self-start rounded-sm text-xs underline underline-offset-2 sm:min-h-0",
+                          FOCUS_RING,
+                        )}
+                      >
+                        {mapUrl ? "Open the pinned map" : "Open in Maps"}
+                      </a>
+                    )}
+                  </span>
+                ) : (
+                  <span className="mt-2 block">
+                    No address yet. Students have to ask where you train.
+                  </span>
+                )}
+              </>
+            )
+          }
+          stacked={editingAddress}
+        >
           {editingAddress ? (
-            <div className="flex flex-col gap-3">
+            <>
               <Label htmlFor="academy-address" className="sr-only">
                 Academy address
               </Label>
@@ -246,10 +279,8 @@ export function AcademyLocation({
                 autoFocus
                 placeholder={"Sportyvna St 12, 2nd floor\nKyiv 01001, Ukraine"}
               />
-              <div className="flex flex-col gap-1">
-                <Label htmlFor="academy-map-url" className="text-sm">
-                  Map link (optional)
-                </Label>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="academy-map-url">Map link (optional)</Label>
                 <Input
                   id="academy-map-url"
                   value={linkDraft}
@@ -282,9 +313,13 @@ export function AcademyLocation({
                       href={draftUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-foreground underline underline-offset-2"
+                      className={cn(
+                        "text-brand-strong inline-flex items-center gap-0.5 rounded-sm underline underline-offset-2",
+                        FOCUS_RING,
+                      )}
                     >
-                      Check the pin ↗
+                      Check the pin
+                      <ArrowUpRight aria-hidden className="size-3" />
                     </a>{" "}
                     before you save. If it is wrong, add a landmark or paste a
                     map link.
@@ -323,44 +358,21 @@ export function AcademyLocation({
                   Cancel
                 </Button>
               </div>
-            </div>
+            </>
           ) : (
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              {address ? (
-                <div className="flex flex-col gap-1">
-                  <p className="text-foreground text-sm whitespace-pre-wrap">
-                    {address}
-                  </p>
-                  {savedUrl && (
-                    <a
-                      href={savedUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center text-xs underline underline-offset-2 sm:min-h-0"
-                    >
-                      {mapUrl ? "Open the pinned map" : "Open in Maps"}
-                    </a>
-                  )}
-                </div>
-              ) : (
-                <p className="text-muted-foreground text-sm">
-                  No address yet. Students have to ask where you train.
-                </p>
-              )}
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  setDraft(address ?? "");
-                  setLinkDraft(mapUrl ?? "");
-                  setEditingAddress(true);
-                }}
-              >
-                {address ? "Edit" : "Add address"}
-              </Button>
-            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setDraft(address ?? "");
+                setLinkDraft(mapUrl ?? "");
+                setEditingAddress(true);
+              }}
+            >
+              {address ? "Edit" : "Add address"}
+            </Button>
           )}
-        </article>
+        </SettingsRow>
       </div>
     </section>
   );
