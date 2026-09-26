@@ -366,6 +366,17 @@ The platform has no real users. So the whole app switches at once on the branch
   `#a52121`: 7.4:1 on white and 4.61:1 or more at the 20% hover tint on every
   light surface. Dark is unchanged (7.3:1 or more).
 
+### Cards rely on the edge (user feedback, 2026-09-26)
+
+- Dark `--card` was `#141516` (level 2), a clearly lighter block on the page.
+  Pixels sampled from Linear's own screens put its panels at `#0c0d0e` to
+  `#101112` on the same `#08090a` page, with the edge doing the work and only
+  nested items stepping up (`#161718` to `#18191a`). Dark `--card` is now
+  `#0e0f10`; the `#23252a` edge stays. Light is unchanged: white cards on a
+  white page already rely on the edge.
+- No screen used `bg-card` to mean "selected", so the change is one token in
+  `theme.css` and `tokens.ts`. Muted text on a card improves to 5.9:1.
+
 ## Consequences
 
 - Every new screen gets sizes, weights, edges and radii from tokens. The last

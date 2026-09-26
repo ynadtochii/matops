@@ -48,7 +48,7 @@ stored key `theme-mode` keeps its name.
 | `--background`               | level 0, the page                                |
 | `--surface-1`                | level 1: the sidebar, the sign-in side panel     |
 | `--surface-2`, `--surface-3` | levels 2 and 3: nested blocks, a code box        |
-| `--card`                     | a list container or a card                       |
+| `--card`                     | a list or card: within 2% of the page in dark    |
 | `--raised`                   | fields and dialogs                               |
 | `--floating`, `--popover`    | menus, tooltips, toasts                          |
 | `--backdrop`                 | behind a modal (dark 60% black, light 65% white) |
@@ -194,8 +194,13 @@ lift, `shadow-lg` to `shadow-2xl` are the float. `shadow-lift` and
 third kind of shadow.
 
 **Between blocks, use an edge, not a shadow.** A card or list sits on the page
-with a 1px `--border` and a small step in surface. Rows inside a list are split
-by the same line. A dialog is the one surface that drops its edge and uses the
+with a 1px `--border`. The edge draws the shape, not the fill: in dark,
+`--card` (`#0e0f10`) sits within 2% of the page (`#08090a`), as Linear's panels
+do (`#0c0d0e` to `#101112`, sampled 2026-09-26). Only what nests inside a card
+steps up in brightness: a field or dialog (`--raised`), a code box
+(`--surface-2`), a hover fill. Do not paint a card with `--raised` or
+`--surface-2` to make it stand out. Rows inside a list are split by the same
+line. A dialog is the one surface that drops its edge and uses the
 float shadow instead.
 
 ### 1.5 Button weight

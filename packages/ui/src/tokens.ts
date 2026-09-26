@@ -62,7 +62,7 @@ export const tokens = {
     surface1: "#0f1011",
     surface2: "#141516",
     surface3: "#191a1b",
-    card: "#141516",
+    card: "#0e0f10",
     cardForeground: "#f7f8f8",
     popover: "#191a1b",
     popoverForeground: "#f7f8f8",
