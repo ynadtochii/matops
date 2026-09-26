@@ -4,6 +4,7 @@
 
 - ADR 141 adopts the Linear design system in the product. The matops violet stays as the accent, dark becomes the default theme, and the dark theme keeps Linear's own values, including three known contrast failures. No code changed yet.
 - Step 1, tokens: the Linear surfaces, text steps and edges in both themes, Inter with a 13px interface default, a 4/6/8/12 radius scale, two shadows (lift and float), 150ms transitions, and dark as the default theme. Fields stay 16px on touch screens so iOS does not zoom. Screens are not restyled yet (ADR 141).
+- Step 2, shared components: Linear styling for every part in `@matops/ui`, with the same props, plus Tabs, Tooltip, Checkbox, RadioGroup, Switch, Kbd, Badge, Avatar, Progress, Skeleton, Callout and Table. Lucide replaces Radix icons, drawn at 16px with a 1.5px stroke. `cn` now merges the new `text-md`, `text-2xs` and shadow names correctly (ADR 141).
 
 ## Unreleased: design system reference
 

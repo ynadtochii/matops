@@ -58,6 +58,14 @@
     letter-spacing: var(--tracking-normal);
     font-feature-settings: "cv01", "ss03";
   }
+  .lucide {
+    width: 1rem;
+    height: 1rem;
+    stroke-width: 1.5;
+  }
+  .lucide * {
+    vector-effect: non-scaling-stroke;
+  }
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]),
   label[for],

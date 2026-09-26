@@ -75,9 +75,9 @@ The platform has no real users. So the whole app switches at once on the branch
 
 ### Open until later steps
 
-- **Icon set.** `@radix-ui/react-icons` has a fixed stroke and cannot meet the
-  16px, 1.5px stroke rule. The shared components step picks the set and adds a
-  line here.
+- **Icon set: Lucide** (`lucide-react`, decided with the user 2026-09-26).
+  Its stroke can change, where `@radix-ui/react-icons` has a fixed one. It
+  also has a React Native twin for the mobile step. See step 2 below.
 - **A command menu (⌘K)** is a new feature, not part of this redesign. It is
   its own slice if we want it.
 
@@ -113,6 +113,48 @@ The platform has no real users. So the whole app switches at once on the branch
   `#08090a`.
 - The Expo app imports the same `theme.css`, so its colors and text scale
   change now. Its fonts change in the mobile step.
+
+### Step 2: shared components
+
+- **Icons.** `lucide-react` replaces `@radix-ui/react-icons` in `@matops/ui`.
+  Radix icons are gone from the workspace, since the web app never imported
+  them. One base rule in `apps/nextjs/src/app/styles.css` makes every icon
+  16px and draws every stroke at 1.5px at any size
+  (`vector-effect: non-scaling-stroke`). It sits in the base layer, so a
+  `size-*` class still wins. The app's hand-drawn icons in `primitives.tsx`
+  move to Lucide screen by screen in steps 3 and 4.
+- **`cn` knows the new names.** `tailwind-merge` treated `text-md` and
+  `text-2xs` as colors and `shadow-lift` as a shadow color, so
+  `cn("text-md text-foreground")` would have dropped one class.
+  `extendTailwindMerge` in `packages/ui/src/index.ts` registers them.
+- **Three more tokens:** `--control` (checkbox, radio and switch edges, Linear's
+  `#3e3e44` in dark and `#908c93` in light), `--backdrop` (behind a modal:
+  black at 60% in dark, white at 65% in light) and `text-2xs` (11px, for key
+  hints and small initials).
+- **Button:** a pill, 32px tall (24 small, 40 large), 13px medium text. The
+  icon button keeps a 4px radius. The primary button is the inverted fill with
+  the lift shadow. Secondary and outline are a thin edge that strengthens on
+  hover. Ghost text is tertiary until hover. The quiet destructive button is a
+  red tint with `--error-text`. A disabled button is 50% opacity, and it still
+  keeps the 44px touch floor below `sm`. Props and variant names are unchanged.
+- **Fields:** one `FIELD` class in `input.tsx`, used by Input, Textarea, Select
+  and the confirm dialog's typed-phrase input. 32px, 6px radius, a raised fill
+  and `--input` edge, the field-hover edge on hover. Focus is a violet edge
+  with a 3px `--brand-wash` ring, as on the reference page.
+- **Overlays:** dialogs are the raised surface, 12px radius, the float shadow
+  and no edge. Menus and tooltips are the floating surface. Menu items are
+  32px on desktop and 44px on touch. Toasts are the floating surface with the
+  float shadow and an 8px radius.
+- **New parts:** `Tabs`, `Tooltip`, `Checkbox`, `RadioGroup`, `Switch`,
+  `Avatar` and `Progress` wrap `radix-ui`. `Kbd`, `Badge` (tones neutral,
+  brand, info, success, warning, error), `Skeleton`, `Callout` (neutral, info,
+  success, warning, error) and `Table` are plain elements. The info callout
+  uses the info blue, not the violet: violet marks identity, never a status.
+- **Contrast, checked from the tokens:** every text and icon pair on the new
+  parts passes AA in both themes. The only failures are the two you chose to
+  keep in dark: the checkbox and radio edge (1.72:1) and placeholder text
+  (3.17:1 on a raised field). The light success badge passes narrowly at
+  4.56:1.
 
 ## Consequences
 

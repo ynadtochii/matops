@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { DesktopIcon, MoonIcon, SunIcon } from "@radix-ui/react-icons";
+import { MonitorIcon, MoonIcon, SunIcon } from "lucide-react";
 import * as z from "zod/v4";
 
 import { Button } from "./button";
@@ -162,10 +162,10 @@ export function ThemeToggle() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="icon" className="[&>svg]:size-5">
+        <Button variant="outline" size="icon">
           <SunIcon className="light:block auto:hidden hidden" />
           <MoonIcon className="auto:hidden hidden dark:block" />
-          <DesktopIcon className="light:hidden auto:block dark:hidden" />
+          <MonitorIcon className="light:hidden auto:block dark:hidden" />
           <span className="sr-only">Toggle theme</span>
         </Button>
       </DropdownMenuTrigger>

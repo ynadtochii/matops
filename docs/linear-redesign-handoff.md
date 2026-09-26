@@ -147,13 +147,13 @@ at 375px, iPad and desktop, one `CHANGELOG.md` line, and one commit.
 - Expect density breakage across screens. Fix it in steps 3 and 4, not here.
 
 ### Step 2. Shared components (`packages/ui`)
-- [ ] Restyle in order of use: Button, Toast, Input, Label, Dialog, Select,
+- [x] Restyle in order of use: Button, Toast, Input, Label, Dialog, Select,
       AlertDialog, Field, Spinner, Textarea, DropdownMenu, CopyButton,
       Collapsible, Separator. Keep props and variant names so screens compile
       unchanged.
-- [ ] Add, on `radix-ui`: Tabs, Tooltip, Checkbox, RadioGroup, Switch, Kbd,
+- [x] Add, on `radix-ui`: Tabs, Tooltip, Checkbox, RadioGroup, Switch, Kbd,
       Badge, Avatar, Progress, Skeleton, Callout, Table. Specs from `/linear-ds`.
-- [ ] Pick one icon set and one rule (16px, 1.5px stroke). `react-icons` from
+- [x] Pick one icon set and one rule (16px, 1.5px stroke). `react-icons` from
       Radix has a fixed stroke and does not meet it; decide and note it in the ADR.
 
 ### Step 3. App shell
@@ -201,8 +201,10 @@ Checklist for every screen:
 
 ## Next action
 
-Step 2: shared components. Step 1 is committed; see ADR 141 "As built" for
-the token names. Browser note: signed-in app screens stall on their loader in
-this Chrome setup, with or without the redesign (checked with a stash A/B on
-2026-09-26), and `resize_window` did not change `innerWidth`. `/privacy`
-renders and passes AA in both themes.
+Step 3: the app shell. Steps 1 and 2 are committed; ADR 141 "As built" has the
+token names and the new `@matops/ui` parts. Icons are Lucide (`lucide-react`
+lives in `@matops/ui`; add it to `apps/nextjs` when the shell first imports an
+icon). Browser note: signed-in app screens stall on their loader in this Chrome
+setup, with or without the redesign (checked with a stash A/B on 2026-09-26),
+and `resize_window` did not change `innerWidth`. `/privacy` renders and passes
+AA in both themes.

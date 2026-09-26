@@ -13,7 +13,7 @@ export function FieldError({
     <div
       role="alert"
       data-slot="field-error"
-      className={cn("text-error text-sm font-normal", className)}
+      className={cn("text-error-text text-sm font-normal", className)}
       {...props}
     >
       {children}

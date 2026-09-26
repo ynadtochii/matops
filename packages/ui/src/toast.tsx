@@ -13,11 +13,13 @@ export const Toaster = ({ ...props }: ToasterProps) => {
       theme={themeMode === "auto" ? "system" : themeMode}
       className="toaster group"
       closeButton
+      toastOptions={{ className: "shadow-float! text-sm!" }}
       style={
         {
-          "--normal-bg": "var(--popover)",
-          "--normal-text": "var(--popover-foreground)",
-          "--normal-border": "var(--border)",
+          "--normal-bg": "var(--floating)",
+          "--normal-text": "var(--foreground)",
+          "--normal-border": "transparent",
+          "--border-radius": "8px",
         } as React.CSSProperties
       }
       {...props}
