@@ -1,51 +1,49 @@
 .root {
-  --bg-0: #08090a;
-  --bg-1: #0f1011;
-  --bg-2: #141516;
-  --bg-3: #191a1b;
-  --fill-1: #1c1c1f;
-  --fill-2: #232326;
-  --fill-t: #ffffff0d;
-  --fg-1: #f7f8f8;
-  --fg-2: #d0d6e0;
-  --fg-3: #8a8f98;
-  --fg-4: #62666d;
-  --line-1: #23252a;
-  --line-2: #34343a;
-  --line-3: #3e3e44;
-  --line-t: #ffffff0d;
-  --line-t-strong: #ffffff14;
-  --accent: #7170ff;
-  --accent-hover: #828fff;
-  --accent-tint: #18182f;
-  --brand: #5e6ad2;
-  --invert: #e5e5e6;
-  --invert-hover: #fff;
-  --on-invert: var(--bg-0);
-  --raised: var(--bg-2);
-  --float-bg: var(--bg-3);
-  --fill-hover: var(--fill-1);
-  --fill-active: var(--fill-2);
-  --track: var(--fill-2);
-  --skeleton: var(--fill-1);
-  --switch-thumb-off: var(--fg-2);
-  --error-text: #ff8a8a;
-  --header-bg: linear-gradient(rgb(8 9 10 / 0.85), rgb(8 9 10 / 0.6));
-  --backdrop: rgb(0 0 0 / 0.6);
-  --selection-bg: color-mix(in lch, var(--brand), black 10%);
-  --selection-fg: #fff;
-  --field-line: var(--line-1);
-  --field-line-hover: var(--line-2);
-  --av-ak: #5e6ad2;
-  --av-rm: #27a644;
-  --av-js: #d4884a;
-  --av-lt: #b25fc9;
-  --green: #27a644;
-  --yellow: #f0bf00;
-  --orange: #fc7840;
-  --red: #eb5757;
-  --blue: #6eaeff;
-  --teal: #00b8cc;
+  --bg-0: var(--background);
+  --bg-1: var(--surface-1);
+  --bg-2: var(--surface-2);
+  --bg-3: var(--surface-3);
+  --fill-1: var(--muted);
+  --fill-2: var(--active);
+  --fill-t: var(--secondary);
+  --fg-1: var(--foreground);
+  --fg-2: var(--foreground-secondary);
+  --fg-3: var(--muted-foreground);
+  --fg-4: var(--foreground-faint);
+  --line-1: var(--border);
+  --line-2: var(--field-hover);
+  --line-3: var(--border-strong);
+  --line-t: color-mix(in srgb, var(--foreground) 5%, transparent);
+  --line-t-strong: color-mix(in srgb, var(--foreground) 8%, transparent);
+  --accent: var(--brand);
+  --accent-hover: var(--brand-strong);
+  --accent-tint: var(--brand-wash);
+  --invert: var(--primary);
+  --invert-hover: color-mix(in srgb, var(--primary) 90%, transparent);
+  --on-invert: var(--primary-foreground);
+  --float-bg: var(--floating);
+  --fill-hover: var(--hover);
+  --fill-active: var(--active);
+  --skeleton: var(--muted);
+  --switch-thumb-off: var(--muted-foreground);
+  --header-bg: linear-gradient(
+    color-mix(in srgb, var(--background) 85%, transparent),
+    color-mix(in srgb, var(--background) 60%, transparent)
+  );
+  --selection-bg: color-mix(in srgb, var(--brand) 36%, transparent);
+  --selection-fg: currentColor;
+  --field-line: var(--input);
+  --field-line-hover: var(--field-hover);
+  --av-ak: color-mix(in oklab, var(--brand) 75%, black);
+  --av-rm: #1f8637;
+  --av-js: #ab6329;
+  --av-lt: #aa4dc3;
+  --green: var(--success);
+  --yellow: #a68400;
+  --orange: var(--warning);
+  --red: var(--error);
+  --blue: var(--info);
+  --teal: var(--gi);
   --r-4: 4px;
   --r-6: 6px;
   --r-8: 8px;
@@ -58,12 +56,6 @@
   --w-bold: 680;
   --ease: cubic-bezier(0.25, 0.46, 0.45, 0.94);
   --speed: 0.15s;
-  --shadow-lift:
-    0 3px 2px rgb(0 0 0 / 0.04), 0 1px 1px rgb(0 0 0 / 0.07),
-    0 0 1px rgb(0 0 0 / 0.08);
-  --shadow-float:
-    0 0 0 0.5px var(--line-t-strong), 0 8px 24px rgb(0 0 0 / 0.5),
-    0 2px 6px rgb(0 0 0 / 0.3);
 
   min-height: 100dvh;
   background: var(--bg-0);
@@ -79,63 +71,13 @@
   line-height: 1.6;
   letter-spacing: -0.011em;
   -webkit-font-smoothing: antialiased;
-  color-scheme: dark;
+  color-scheme: light;
 }
 
-.root[data-theme="light"] {
-  --bg-0: #fff;
-  --bg-1: #f8f8f8;
-  --bg-2: #f4f4f4;
-  --bg-3: #f0f0f0;
-  --fill-1: #f9f8f9;
-  --fill-2: #f4f2f4;
-  --fill-t: #00000005;
-  --fg-1: #282a30;
-  --fg-2: #3c4149;
-  --fg-3: #56555c;
-  --fg-4: #67656d;
-  --line-1: #e9e8ea;
-  --line-2: #e4e2e4;
-  --line-3: #dcdbdd;
-  --line-t: #0000000d;
-  --line-t-strong: #00000014;
-  --accent: #5958ff;
-  --accent-hover: #3d3cff;
-  --accent-tint: #f1f1ff;
-  --brand: #5e5eff;
-  --green: #259c40;
-  --yellow: #a68400;
-  --orange: #f54c04;
-  --field-line: #908c93;
-  --field-line-hover: #817d84;
-  --av-rm: #1f8637;
-  --av-js: #ab6329;
-  --av-lt: #aa4dc3;
-  --invert: #282a30;
-  --invert-hover: #1f2024;
-  --on-invert: #fff;
-  --raised: #fff;
-  --float-bg: #fff;
-  --fill-hover: #0000000a;
-  --fill-active: #00000012;
-  --track: #e4e2e4;
-  --skeleton: #ebeaec;
-  --switch-thumb-off: #fff;
-  --error-text: #c52f2f;
-  --header-bg: linear-gradient(
-    rgb(255 255 255 / 0.85),
-    rgb(255 255 255 / 0.65)
-  );
-  --backdrop: #ffffffa6;
-  --selection-bg: color-mix(in lch, #7070ff, transparent 64%);
-  --selection-fg: currentColor;
-  --shadow-lift:
-    inset 0 -1px 1px #0000001c, 0 5px 2px #00000003, 0 3px 2px #0000000a,
-    0 1px 1px #00000012, 0 0 1px #00000014;
-  --shadow-float:
-    0 0 0 0.5px var(--line-t-strong), 0 7px 24px #0000000f, 0 3px 12px #00000017;
+:global(.dark) .root {
+  --yellow: #f0bf00;
 
-  color-scheme: light;
+  color-scheme: dark;
 }
 
 .root *:focus-visible {
@@ -596,12 +538,12 @@
 .btnBrand {
   background: var(--brand);
   border-color: var(--brand);
-  color: #fff;
+  color: var(--brand-foreground);
 }
 
 .btnBrand:hover:not(:disabled) {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
 }
 
 .btnDanger {
@@ -677,7 +619,7 @@
   width: 100%;
   height: 32px;
   padding: 0 10px;
-  border: 1px solid var(--line-1);
+  border: 1px solid var(--field-line);
   border-radius: var(--r-6);
   background: var(--raised);
   color: var(--fg-1);
@@ -753,7 +695,7 @@
   border: 0;
   border-radius: var(--r-pill);
   background: var(--track);
-  box-shadow: inset 0 0 0 1px var(--line-t-strong);
+  box-shadow: inset 0 0 0 1px var(--control);
   cursor: pointer;
   transition: background-color var(--speed) var(--ease);
 }
@@ -772,10 +714,11 @@
 
 .switch[aria-checked="true"] {
   background: var(--brand);
+  box-shadow: inset 0 0 0 1px var(--brand);
 }
 
 .switch[aria-checked="true"]::after {
-  background: #fff;
+  background: var(--brand-foreground);
   transform: translateX(12px);
 }
 
@@ -1485,7 +1428,7 @@
   width: 14px;
   height: 14px;
   margin: 0;
-  border: 1px solid var(--line-3);
+  border: 1px solid var(--control);
   background: var(--raised);
   cursor: pointer;
   transition:
@@ -1520,7 +1463,7 @@
 
 .radio:checked {
   border: 4px solid var(--brand);
-  background: #fff;
+  background: var(--brand-foreground);
 }
 
 .selectList {
@@ -1678,7 +1621,7 @@
   border-radius: var(--r-4);
   background: var(--brand);
   font-size: 11px;
-  color: #fff;
+  color: var(--brand-foreground);
 }
 
 .navItem {
@@ -2007,14 +1950,14 @@
 }
 
 .composer {
-  border: 0.5px solid var(--line-t-strong);
+  border: 1px solid var(--field-line);
   border-radius: 9px;
   background: var(--raised);
   transition: border-color var(--speed) var(--ease);
 }
 
 .composer:focus-within {
-  border-color: var(--line-3);
+  border-color: var(--field-line-hover);
 }
 
 .composer textarea {
@@ -2069,33 +2012,6 @@
   height: 40px;
   padding: 0 4px;
   border-bottom: 1px solid var(--line-t);
-}
-
-/* Light-only contrast fixes: control edges reach 3:1 against the panel. */
-
-:where(.root[data-theme="light"]) .input,
-:where(.root[data-theme="light"]) .check,
-:where(.root[data-theme="light"]) .radio {
-  border-color: var(--field-line);
-}
-
-:where(.root[data-theme="light"])
-  .input:hover:not(:focus-visible, [aria-invalid="true"]),
-:where(.root[data-theme="light"]) .check:hover:not(:checked, :indeterminate),
-:where(.root[data-theme="light"]) .radio:hover:not(:checked) {
-  border-color: var(--field-line-hover);
-}
-
-:where(.root[data-theme="light"]) .switch[aria-checked="false"] {
-  box-shadow: inset 0 0 0 1px var(--field-line);
-}
-
-:where(.root[data-theme="light"]) .composer {
-  border: 1px solid var(--field-line);
-}
-
-:where(.root[data-theme="light"]) .composer:focus-within {
-  border-color: var(--field-line-hover);
 }
 
 @media (prefers-reduced-motion: reduce) {

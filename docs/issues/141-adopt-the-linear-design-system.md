@@ -343,6 +343,20 @@ The platform has no real users. So the whole app switches at once on the branch
   is not a class and stays allowed. Probed on a temporary file: both rules
   fire, and a line of tokens passes.
 
+### Step 6a: one system page
+
+- The old signed-in showcase `(app)/design-system` is deleted; nothing linked
+  to it.
+- `/linear-ds` has no private token copy. Every variable in
+  `linear-ds.module.css` is an alias of a product token, so the page shows the
+  product in both themes, with the matops violet where Linear had indigo. Its
+  own Light / Dark toggle and `linear-ds-theme` storage are gone: it uses the
+  app theme through `useTheme()`. Swatches name the product token they show,
+  and the copy says Linear's dark contrast problems are kept by choice.
+- Kept as hex, since no product token fits: three avatar colors, and a
+  yellow for the priority icon (the warning token is orange, which already
+  means urgent).
+
 ## Consequences
 
 - Every new screen gets sizes, weights, edges and radii from tokens. The last

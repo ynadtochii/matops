@@ -252,7 +252,7 @@ export function StatusIcon({ status }: { status: Status }) {
           <path
             d="M4.2 7.2 6.1 9 9.8 5.2"
             fill="none"
-            stroke="#fff"
+            stroke="var(--brand-foreground)"
             strokeWidth="1.5"
             strokeLinecap="round"
             strokeLinejoin="round"

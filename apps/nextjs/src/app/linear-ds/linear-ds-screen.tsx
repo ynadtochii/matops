@@ -4,6 +4,8 @@ import type { KeyboardEvent } from "react";
 import { useId, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 
+import { useTheme } from "@matops/ui/theme";
+
 import type { Issue, Label, Person, Priority, Status } from "./primitives";
 import s from "./linear-ds.module.css";
 import { MoreComponents } from "./more-components";
@@ -24,59 +26,38 @@ import {
   StatusIcon,
 } from "./primitives";
 
-type Theme = "dark" | "light";
-
 interface Swatch {
   name: string;
   token: string;
-  dark: string;
-  light: string;
+  source: string;
   role: string;
 }
 
-const THEME_KEY = "linear-ds-theme";
-
 const SURFACES: Swatch[] = [
-  {
-    name: "Level 0",
-    token: "--bg-0",
-    dark: "#08090a",
-    light: "#fff",
-    role: "Page",
-  },
+  { name: "Level 0", token: "--bg-0", source: "--background", role: "Page" },
   {
     name: "Level 1",
     token: "--bg-1",
-    dark: "#0f1011",
-    light: "#f8f8f8",
+    source: "--surface-1",
     role: "Panel, sidebar",
   },
   {
     name: "Level 2",
     token: "--bg-2",
-    dark: "#141516",
-    light: "#f4f4f4",
+    source: "--surface-2",
     role: "Group header, strip",
   },
   {
     name: "Level 3",
     token: "--bg-3",
-    dark: "#191a1b",
-    light: "#f0f0f0",
+    source: "--surface-3",
     role: "Row hover",
   },
-  {
-    name: "Fill",
-    token: "--fill-1",
-    dark: "#1c1c1f",
-    light: "#f9f8f9",
-    role: "Quiet fill",
-  },
+  { name: "Fill", token: "--fill-1", source: "--muted", role: "Quiet fill" },
   {
     name: "Fill strong",
     token: "--fill-2",
-    dark: "#232326",
-    light: "#f4f2f4",
+    source: "--active",
     role: "Selected item",
   },
 ];
@@ -85,36 +66,31 @@ const ROLES: Swatch[] = [
   {
     name: "Raised",
     token: "--raised",
-    dark: "#141516",
-    light: "#fff",
+    source: "--raised",
     role: "Card, input, dialog",
   },
   {
     name: "Floating",
     token: "--float-bg",
-    dark: "#191a1b",
-    light: "#fff",
+    source: "--floating",
     role: "Menu, tooltip, toast",
   },
   {
     name: "Hover",
     token: "--fill-hover",
-    dark: "#1c1c1f",
-    light: "#0000000a",
+    source: "--hover",
     role: "Nav item hover",
   },
   {
     name: "Active",
     token: "--fill-active",
-    dark: "#232326",
-    light: "#00000012",
+    source: "--active",
     role: "Selected, pressed",
   },
   {
     name: "Track",
     token: "--track",
-    dark: "#232326",
-    light: "#e4e2e4",
+    source: "--track",
     role: "Switch, progress",
   },
 ];
@@ -123,29 +99,25 @@ const INKS: Swatch[] = [
   {
     name: "Primary",
     token: "--fg-1",
-    dark: "#f7f8f8",
-    light: "#282a30",
+    source: "--foreground",
     role: "Titles, values, active text",
   },
   {
     name: "Secondary",
     token: "--fg-2",
-    dark: "#d0d6e0",
-    light: "#3c4149",
+    source: "--foreground-secondary",
     role: "Body inside cards, labels",
   },
   {
     name: "Tertiary",
     token: "--fg-3",
-    dark: "#8a8f98",
-    light: "#56555c",
+    source: "--muted-foreground",
     role: "Descriptions, nav, metadata",
   },
   {
     name: "Quaternary",
     token: "--fg-4",
-    dark: "#62666d",
-    light: "#67656d",
+    source: "--foreground-faint",
     role: "IDs, dates, placeholders. Not for reading text",
   },
 ];
@@ -154,111 +126,83 @@ const LINES: Swatch[] = [
   {
     name: "Hairline",
     token: "--line-t",
-    dark: "#ffffff0d",
-    light: "#0000000d",
-    role: "Default edge, 5%",
+    source: "--foreground at 5%",
+    role: "Default edge",
   },
   {
     name: "Hairline strong",
     token: "--line-t-strong",
-    dark: "#ffffff14",
-    light: "#00000014",
-    role: "Cards, 8%",
+    source: "--foreground at 8%",
+    role: "Cards",
   },
-  {
-    name: "Line 1",
-    token: "--line-1",
-    dark: "#23252a",
-    light: "#e9e8ea",
-    role: "Input edge",
-  },
+  { name: "Line 1", token: "--line-1", source: "--border", role: "Panel edge" },
   {
     name: "Line 2",
     token: "--line-2",
-    dark: "#34343a",
-    light: "#e4e2e4",
+    source: "--field-hover",
     role: "Input hover",
   },
   {
     name: "Line 3",
     token: "--line-3",
-    dark: "#3e3e44",
-    light: "#dcdbdd",
+    source: "--border-strong",
     role: "Strongest edge",
   },
   {
     name: "Field edge",
     token: "--field-line",
-    dark: "#23252a",
-    light: "#908c93",
-    role: "Input, checkbox, switch. 3:1 in light",
+    source: "--input",
+    role: "Input edge. 3:1 in light",
+  },
+  {
+    name: "Control edge",
+    token: "--control",
+    source: "--control",
+    role: "Checkbox, radio, switch",
   },
 ];
 
 const SIGNALS: Swatch[] = [
   {
-    name: "Accent",
-    token: "--accent",
-    dark: "#7170ff",
-    light: "#5958ff",
-    role: "Focus, links, selection",
-  },
-  {
-    name: "Accent hover",
-    token: "--accent-hover",
-    dark: "#828fff",
-    light: "#3d3cff",
-    role: "Link hover",
-  },
-  {
     name: "Brand",
     token: "--brand",
-    dark: "#5e6ad2",
-    light: "#5e5eff",
-    role: "Done, on switch, brand button",
+    source: "--brand",
+    role: "Focus, done, on switch, brand button",
+  },
+  {
+    name: "Brand strong",
+    token: "--accent-hover",
+    source: "--brand-strong",
+    role: "Link hover, brand text",
+  },
+  {
+    name: "Brand wash",
+    token: "--accent-tint",
+    source: "--brand-wash",
+    role: "Selected tint",
   },
   {
     name: "Green",
     token: "--green",
-    dark: "#27a644",
-    light: "#259c40",
+    source: "--success",
     role: "In review, success",
   },
   {
     name: "Yellow",
     token: "--yellow",
-    dark: "#f0bf00",
-    light: "#a68400",
+    source: "page only",
     role: "In progress",
   },
-  {
-    name: "Orange",
-    token: "--orange",
-    dark: "#fc7840",
-    light: "#f54c04",
-    role: "Urgent",
-  },
-  {
-    name: "Red",
-    token: "--red",
-    dark: "#eb5757",
-    light: "#eb5757",
-    role: "Bug, error",
-  },
+  { name: "Orange", token: "--orange", source: "--warning", role: "Urgent" },
+  { name: "Red", token: "--red", source: "--error", role: "Bug, error" },
+  { name: "Blue", token: "--blue", source: "--info", role: "Label" },
   {
     name: "Error text",
     token: "--error-text",
-    dark: "#ff8a8a",
-    light: "#c52f2f",
+    source: "--error-text",
     role: "Error messages",
   },
-  {
-    name: "Teal",
-    token: "--teal",
-    dark: "#00b8cc",
-    light: "#00b8cc",
-    role: "Label",
-  },
+  { name: "Teal", token: "--teal", source: "--gi", role: "Label" },
 ];
 
 const TYPE = [
@@ -378,7 +322,7 @@ const PRINCIPLES = [
   },
   {
     title: "Color carries meaning",
-    body: "The page is grey. Color shows up on status, priority and labels, plus one indigo accent for focus and selection.",
+    body: "The page is grey. Color shows up on status, priority and labels, plus one violet accent for focus and selection.",
   },
   {
     title: "Edges, not shadows",
@@ -399,19 +343,15 @@ const PRINCIPLES = [
 ];
 
 export function LinearDsScreen() {
-  const theme = useSyncExternalStore(
-    subscribeTheme,
-    readStoredTheme,
-    () => "dark" as const,
+  const { resolvedTheme, setTheme } = useTheme();
+  const mounted = useSyncExternalStore(
+    subscribeNever,
+    () => true,
+    () => false,
   );
 
   return (
-    <div
-      className={s.root}
-      data-theme={theme}
-      data-lds=""
-      suppressHydrationWarning
-    >
+    <div className={s.root}>
       <header className={s.header}>
         <div className={s.headerInner}>
           <a href="#top" className={s.wordmark}>
@@ -443,8 +383,8 @@ export function LinearDsScreen() {
                   key={option}
                   type="button"
                   className={s.segment}
-                  aria-pressed={theme === option}
-                  onClick={() => storeTheme(option)}
+                  aria-pressed={mounted && resolvedTheme === option}
+                  onClick={() => setTheme(option)}
                 >
                   {option === "light" ? "Light" : "Dark"}
                 </button>
@@ -460,12 +400,12 @@ export function LinearDsScreen() {
       <main className={s.main} id="top">
         <section className={s.hero} aria-labelledby="lds-title">
           <h1 id="lds-title" className={s.display}>
-            Linear, taken apart into a system
+            The matops design system
           </h1>
           <p className={s.lede}>
-            Colors, type, shape and components measured from the computed styles
-            of linear.app on 26 September 2026, then rebuilt here as a working
-            reference.
+            The structure of Linear's interface, painted with the matops product
+            tokens. Every color here is the one the product uses, in both
+            themes.
           </p>
           <div className={s.heroActions}>
             <a href="#components" className={cx(s.btn, s.btnPrimary, s.btnLg)}>
@@ -505,11 +445,11 @@ export function LinearDsScreen() {
           <h3 className={s.subhead}>Surfaces</h3>
           <p className={s.note}>
             Each step is about 2 to 3 points lighter than the one below. Hover
-            moves an element up one step. Dark is the default and matches
-            linear.app exactly. Light starts from the site's own light theme,
-            with some text, accent and edge colors darkened to pass WCAG AA.
+            moves an element up one step. Dark is the default and keeps Linear's
+            dark values. Light starts from Linear's light theme, with some text,
+            brand and edge colors darkened to pass WCAG AA.
           </p>
-          <Swatches items={SURFACES} theme={theme} />
+          <Swatches items={SURFACES} />
 
           <h3 className={s.subhead}>Surface roles</h3>
           <p className={s.note}>
@@ -518,14 +458,14 @@ export function LinearDsScreen() {
             turn white and hover fills turn translucent, because Linear's light
             greys are too close together to show nesting.
           </p>
-          <Swatches items={ROLES} theme={theme} />
+          <Swatches items={ROLES} />
 
           <h3 className={s.subhead}>Text</h3>
           <p className={s.note}>
-            Four levels. In dark, the quaternary grey is Linear's own and below
-            4.5:1, so it is kept for IDs, dates and placeholders that a reader
-            can skip. In light, tertiary and quaternary are darker than Linear's
-            so every level reaches 4.5:1.
+            Four levels. In dark, the quaternary grey is below 4.5:1. The
+            product keeps it on purpose, only for IDs, dates and placeholders
+            that a reader can skip. In light, tertiary and quaternary are darker
+            than Linear's so every level reaches 4.5:1.
           </p>
           <div className={s.inkRow}>
             {INKS.map((ink) => (
@@ -533,7 +473,7 @@ export function LinearDsScreen() {
                 <span style={{ color: `var(${ink.token})` }}>
                   {ink.name}: {ink.role}
                 </span>
-                <span>{ink[theme]}</span>
+                <span>{ink.source}</span>
               </div>
             ))}
           </div>
@@ -544,17 +484,17 @@ export function LinearDsScreen() {
             surface under them. Solid greys are used where an input needs a firm
             edge.
           </p>
-          <Swatches items={LINES} theme={theme} />
+          <Swatches items={LINES} />
 
           <h3 className={s.subhead}>Accent and status</h3>
           <p className={s.note}>
-            One indigo family for focus, links and selection. Status colors
-            never appear as large fills, only as icons, dots and thin tints. In
-            light, accent and brand are darker so text on and in them reaches
-            4.5:1, and green, yellow and orange are darker so status icons reach
-            3:1.
+            One matops violet for focus, links and selection. Status colors
+            never appear as large fills, only as icons, dots and thin tints.
+            Each theme has its own set, so status icons reach 3:1 in light as
+            well as dark. Yellow has no product token and lives on this page
+            only.
           </p>
-          <Swatches items={SIGNALS} theme={theme} />
+          <Swatches items={SIGNALS} />
         </section>
 
         <section className={s.section} id="type" aria-labelledby="h-type">
@@ -707,40 +647,19 @@ export function LinearDsScreen() {
           >
             linear.app
           </a>
-          . Not affiliated with Linear. The matops product keeps its own tokens.
+          . Not affiliated with Linear. The colors are the matops product
+          tokens.
         </footer>
       </main>
     </div>
   );
 }
 
-const themeListeners = new Set<() => void>();
-let fallbackTheme: Theme = "dark";
-
-function subscribeTheme(listener: () => void) {
-  themeListeners.add(listener);
-  return () => themeListeners.delete(listener);
+function subscribeNever() {
+  return () => undefined;
 }
 
-function readStoredTheme(): Theme {
-  try {
-    return localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark";
-  } catch {
-    return fallbackTheme;
-  }
-}
-
-function storeTheme(next: Theme) {
-  fallbackTheme = next;
-  try {
-    localStorage.setItem(THEME_KEY, next);
-  } catch {
-    // Storage can be blocked; the in-memory value still switches the page.
-  }
-  themeListeners.forEach((listener) => listener());
-}
-
-function Swatches({ items, theme }: { items: Swatch[]; theme: Theme }) {
+function Swatches({ items }: { items: Swatch[] }) {
   return (
     <div className={s.ramp}>
       {items.map((c) => (
@@ -752,7 +671,7 @@ function Swatches({ items, theme }: { items: Swatch[]; theme: Theme }) {
           <div className={s.swatchMeta}>
             <div className={s.swatchName}>{c.name}</div>
             <div className={s.swatchValue}>
-              {c.token} {c[theme]}
+              {c.token} {c.source}
             </div>
             <div className={s.swatchRole}>{c.role}</div>
           </div>
@@ -893,7 +812,7 @@ function SwitchSpecimen() {
   return (
     <Specimen
       title="Switches"
-      note="Off is a dark track. On is the brand indigo. The whole row is clickable."
+      note="Off is a grey track. On is the brand violet. The whole row is clickable."
       stack
     >
       {rows.map((row) => (
