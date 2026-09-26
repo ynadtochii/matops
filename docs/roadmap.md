@@ -13,7 +13,7 @@
 | Slice | Web | Shared | Mobile |
 | --- | --- | --- | --- |
 | Step 0: decisions and ADR | done | done | done |
-| Step 1: tokens, Inter, radius, shadows | todo | todo | todo |
+| Step 1: tokens, Inter, radius, shadows | done | done | wip |
 | Step 2: shared components and new primitives | — | todo | — |
 | Step 3: app shell | todo | — | — |
 | Step 4: screens, nine groups | todo | — | — |

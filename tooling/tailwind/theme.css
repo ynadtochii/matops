@@ -1,12 +1,11 @@
 /* ===========================================================================
- * matops design system — base tokens
+ * matops design system: base tokens (ADR 141)
  *
- * Values mirror the Better Auth brand system (better-auth.com/brand) closely:
- *   - light theme  = Better Auth :root (warm stone)
- *   - dark theme   = Better Auth brand page (canonical: pure-black surface)
- *   - callout accents (info / warning / error / success) = their exact hues
- *   - radius base 0.2rem, deliberately tight; code & callouts break to 0
- *   - Geist for UI, Geist Mono for code & metadata
+ * Structure measured from linear.app on 2026-09-26, the spec page is /linear-ds:
+ *   - dark  = Linear's dark values, kept as measured (ADR 141 choice 3)
+ *   - light = Linear's light values, darkened where needed to pass WCAG AA
+ *   - the matops violet and mark stay (ADR 37); callouts keep their meaning
+ *   - Inter for UI, Geist Mono for code and data
  *
  * One source of truth for BOTH platforms:
  *   - web    apps/nextjs/src/app/styles.css   @import "@matops/tailwind-config/theme"
@@ -17,130 +16,140 @@
  * ======================================================================== */
 
 :root {
-  /* --- surfaces & text (light = warm stone) --- */
+  /* --- surfaces, level 0 to 3 --- */
   --background: #ffffff;
-  --foreground: #0c0a09; /* stone-950 */
-  --card: #fafaf9; /* stone-50 — a whisper off the page, read with the hairline */
-  --card-foreground: #0c0a09;
+  --foreground: #282a30;
+  --surface-1: #f8f8f8;
+  --surface-2: #f4f4f4;
+  --surface-3: #f0f0f0;
+  --card: #ffffff;
+  --card-foreground: #282a30;
   --popover: #ffffff;
-  --popover-foreground: #0c0a09;
+  --popover-foreground: #282a30;
+  --raised: #ffffff;
+  --floating: #ffffff;
 
-  /* --- primary = ink --- */
-  --primary: #1c1917; /* stone-900 */
-  --primary-foreground: #fafaf9; /* stone-50 */
+  /* --- text steps: primary, secondary, tertiary, faint --- */
+  --foreground-secondary: #3c4149;
+  --muted-foreground: #56555c;
+  --foreground-faint: #67656d;
 
-  /* --- quiet surfaces --- */
-  --secondary: #f5f5f4; /* stone-100 */
-  --secondary-foreground: #1c1917;
-  --muted: #f5f5f4;
-  --muted-foreground: #79716b; /* stone-500 */
-  --accent: #f5f5f4;
-  --accent-foreground: #1c1917;
+  /* --- primary = the inverted button --- */
+  --primary: #282a30;
+  --primary-foreground: #ffffff;
+
+  /* --- quiet fills --- */
+  --secondary: #00000005;
+  --secondary-foreground: #282a30;
+  --muted: #f9f8f9;
+  --accent: #00000012;
+  --accent-foreground: #282a30;
+  --hover: #0000000a;
+  --active: #00000012;
+  --track: #e4e2e4;
 
   /* --- destructive --- */
   --destructive: #e40014;
-  --destructive-foreground: #fafaf9;
+  --destructive-foreground: #ffffff;
+  --error-text: #c52f2f;
 
-  /* --- brand: the one signature identity hue (violet). Restrained — mark,
+  /* --- brand: the one signature identity hue (violet). Restrained: mark,
    * active nav, links, focus, pending tag. NEVER a status (statuses ride the
-   * functional callouts below). See docs/design.md §1.1 + ADR 37. --- */
+   * functional callouts below). Text uses --brand-strong: plain --brand is
+   * 4.47:1 on surface 3. See docs/design.md §1.1 + ADR 37, 141. --- */
   --brand: #6a4dff;
-  --brand-strong: #5a3cf0; /* text-on-light / links */
-  --brand-foreground: #ffffff; /* text + seams on a brand fill */
-  --brand-wash: #f1eeff; /* tint surface: pending banner, active nav */
+  --brand-strong: #5a3cf0;
+  --brand-foreground: #ffffff;
+  --brand-wash: #f1eeff;
 
   /* --- discipline hues: a CATEGORY encoder (gi vs no-gi on the schedule
-   * grid), never a status. Cool vs warm reads at a glance, sits clear of the
-   * brand violet and of the callout hues below, and separates for red-green
-   * color blindness. See ADR 53. --- */
+   * grid), never a status. See ADR 53. --- */
   --gi: #0f766e;
   --nogi: #b45309;
 
   /* --- lines & focus --- */
-  --border: #e7e5e4; /* stone-200 */
-  --input: #e7e5e4;
+  --border: #e9e8ea;
+  --border-strong: #dcdbdd;
+  --input: #908c93;
+  --field-hover: #817d84;
   --ring: #6a4dff; /* = --brand. A grey ring could not reach 3:1 on white. */
 
-  /* --- callout accents (functional only). Per theme: the bright hues below
-   * carry 5:1+ on the black surface but 2.2-3.8:1 on white, and these are ink
-   * as often as fill (form errors, drift badges, the destructive-outline
-   * label), so light gets its own darker set. --- */
+  /* --- callout accents (functional only). Per theme: the bright hues carry
+   * 5:1+ on the dark surface but 2.2-3.8:1 on white, and these are ink as
+   * often as fill, so light gets its own darker set. --- */
   --info: #1257c7;
-  --info-foreground: #fafaf9;
+  --info-foreground: #ffffff;
   --warning: #a34500;
   --warning-foreground: #ffffff;
   --error: #c8102b;
-  --error-foreground: #fafaf9;
+  --error-foreground: #ffffff;
   --success: #0a7d3c;
   --success-foreground: #ffffff;
 
-  /* --- data viz: monochrome ramp (dark -> light) --- */
-  --chart-1: #1c1917;
-  --chart-2: #44403c; /* stone-700 */
-  --chart-3: #79716b; /* stone-500 */
-  --chart-4: #a6a09b; /* stone-400 */
-  --chart-5: #d6d3d1; /* stone-300 */
+  /* --- data viz: monochrome ramp (strong -> faint) --- */
+  --chart-1: #282a30;
+  --chart-2: #3c4149;
+  --chart-3: #56555c;
+  --chart-4: #908c93;
+  --chart-5: #dcdbdd;
 
-  /* --- sidebar --- */
-  --sidebar: #fafaf9;
-  --sidebar-foreground: #44403c;
-  --sidebar-primary: #1c1917;
-  --sidebar-primary-foreground: #fafaf9;
-  --sidebar-accent: #f5f5f4;
-  --sidebar-accent-foreground: #1c1917;
-  --sidebar-border: #e7e5e4;
+  /* --- sidebar: level 1 --- */
+  --sidebar: #f8f8f8;
+  --sidebar-foreground: #3c4149;
+  --sidebar-primary: #282a30;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #00000012;
+  --sidebar-accent-foreground: #282a30;
+  --sidebar-border: #e9e8ea;
   --sidebar-ring: #6a4dff;
 
-  /* --- shape: base 0.2rem, deliberately tight (code/callouts break to 0) --- */
-  --radius: 0.2rem;
+  /* --- shape: 6px base, the scale lands on 4 / 6 / 8 / 12 --- */
+  --radius: 0.375rem;
 
-  /* --- elevation: sparingly; lift interactive affordances only --- */
-  --shadow-2xs: 0px 1px 2px 0px hsl(24 6% 10% / 0.04);
-  --shadow-xs: 0px 1px 2px 0px hsl(24 6% 10% / 0.04);
-  --shadow-sm:
-    0px 1px 2px 0px hsl(24 6% 10% / 0.06),
-    0px 1px 2px -1px hsl(24 6% 10% / 0.06);
-  --shadow:
-    0px 1px 3px 0px hsl(24 6% 10% / 0.07),
-    0px 1px 2px -1px hsl(24 6% 10% / 0.06);
-  --shadow-md:
-    0px 2px 4px 0px hsl(24 6% 10% / 0.07),
-    0px 2px 4px -1px hsl(24 6% 10% / 0.06);
-  --shadow-lg:
-    0px 4px 6px 0px hsl(24 6% 10% / 0.07),
-    0px 4px 6px -1px hsl(24 6% 10% / 0.06);
-  --shadow-xl:
-    0px 8px 10px 0px hsl(24 6% 10% / 0.08),
-    0px 8px 10px -1px hsl(24 6% 10% / 0.07);
-  --shadow-2xl: 0px 12px 24px 0px hsl(24 6% 10% / 0.14);
+  /* --- elevation: lift for controls and cards, float for menus and dialogs --- */
+  --shadow-lift:
+    inset 0 -1px 1px #0000001c, 0 5px 2px #00000003, 0 3px 2px #0000000a,
+    0 1px 1px #00000012, 0 0 1px #00000014;
+  --shadow-float:
+    0 0 0 0.5px #00000014, 0 7px 24px #0000000f, 0 3px 12px #00000017;
 
   /* --- typography rhythm --- */
-  --tracking-normal: 0rem;
+  --tracking-normal: -0.01em;
   --spacing: 0.25rem;
 
   @variant dark {
-    /* --- canonical Better Auth dark: pure-black surface --- */
-    --background: #000000;
-    --foreground: #fafaf9;
-    --card: #0f0d0c; /* warm near-black: lifts off pure black, edge does the work */
-    --card-foreground: #fafaf9;
-    --popover: #0f0d0c;
-    --popover-foreground: #fafaf9;
+    --background: #08090a;
+    --foreground: #f7f8f8;
+    --surface-1: #0f1011;
+    --surface-2: #141516;
+    --surface-3: #191a1b;
+    --card: #141516;
+    --card-foreground: #f7f8f8;
+    --popover: #191a1b;
+    --popover-foreground: #f7f8f8;
+    --raised: #141516;
+    --floating: #191a1b;
 
-    --primary: #fafaf9;
-    --primary-foreground: #1c1917;
+    --foreground-secondary: #d0d6e0;
+    --muted-foreground: #8a8f98;
+    --foreground-faint: #62666d;
 
-    --secondary: #292524; /* stone-800 — button fill, not a surface */
-    --secondary-foreground: #fafaf9;
-    --muted: #1a1917; /* quiet fill: chips, hover, skeletons. Never a whole card */
-    --muted-foreground: #a6a09b; /* stone-400 */
-    --accent: #1a1917;
-    --accent-foreground: #fafaf9;
+    --primary: #e5e5e6;
+    --primary-foreground: #08090a;
 
-    --destructive: #82181a; /* red-900 */
-    --destructive-foreground: #fafaf9;
+    --secondary: #ffffff0d;
+    --secondary-foreground: #f7f8f8;
+    --muted: #1c1c1f;
+    --accent: #232326;
+    --accent-foreground: #f7f8f8;
+    --hover: #1c1c1f;
+    --active: #232326;
+    --track: #232326;
 
-    /* --- brand (violet, brightened for the black surface) --- */
+    --destructive: #82181a;
+    --destructive-foreground: #f7f8f8;
+    --error-text: #ff8a8a;
+
     --brand: #8b72ff;
     --brand-strong: #a390ff;
     --brand-foreground: #12091f;
@@ -149,49 +158,42 @@
     --gi: #2dd4bf;
     --nogi: #f5a524;
 
-    --border: #292524;
-    --input: #292524;
+    --border: #23252a;
+    --border-strong: #3e3e44;
+    --input: #23252a;
+    --field-hover: #34343a;
     --ring: #8b72ff; /* = --brand */
 
-    /* callout accents, the bright set — legible on the black surface */
     --info: #2b7fff;
-    --info-foreground: #fafaf9;
+    --info-foreground: #f7f8f8;
     --warning: #ff6900;
-    --warning-foreground: #1c1917;
+    --warning-foreground: #08090a;
     --error: #fb2c36;
-    --error-foreground: #fafaf9;
+    --error-foreground: #f7f8f8;
     --success: #00c950;
     --success-foreground: #052e16;
 
-    /* data viz: monochrome ramp (light -> dark) */
-    --chart-1: #fafaf9;
-    --chart-2: #d6d3d1;
-    --chart-3: #a6a09b;
-    --chart-4: #79716b;
-    --chart-5: #44403c;
+    --chart-1: #f7f8f8;
+    --chart-2: #d0d6e0;
+    --chart-3: #8a8f98;
+    --chart-4: #62666d;
+    --chart-5: #3e3e44;
 
-    --sidebar: #0f0d0c;
-    --sidebar-foreground: #d6d3d1;
-    --sidebar-primary: #fafaf9;
-    --sidebar-primary-foreground: #1c1917;
-    --sidebar-accent: #1a1917;
-    --sidebar-accent-foreground: #fafaf9;
-    --sidebar-border: #292524;
+    --sidebar: #0f1011;
+    --sidebar-foreground: #d0d6e0;
+    --sidebar-primary: #f7f8f8;
+    --sidebar-primary-foreground: #08090a;
+    --sidebar-accent: #232326;
+    --sidebar-accent-foreground: #f7f8f8;
+    --sidebar-border: #23252a;
     --sidebar-ring: #8b72ff;
 
-    --shadow-2xs: 0px 1px 2px 0px hsl(0 0% 0% / 0.16);
-    --shadow-xs: 0px 1px 2px 0px hsl(0 0% 0% / 0.16);
-    --shadow-sm:
-      0px 1px 2px 0px hsl(0 0% 0% / 0.28), 0px 1px 2px -1px hsl(0 0% 0% / 0.28);
-    --shadow:
-      0px 1px 3px 0px hsl(0 0% 0% / 0.3), 0px 1px 2px -1px hsl(0 0% 0% / 0.28);
-    --shadow-md:
-      0px 2px 4px 0px hsl(0 0% 0% / 0.3), 0px 2px 4px -1px hsl(0 0% 0% / 0.28);
-    --shadow-lg:
-      0px 4px 6px 0px hsl(0 0% 0% / 0.3), 0px 4px 6px -1px hsl(0 0% 0% / 0.28);
-    --shadow-xl:
-      0px 8px 10px 0px hsl(0 0% 0% / 0.32), 0px 8px 10px -1px hsl(0 0% 0% / 0.3);
-    --shadow-2xl: 0px 12px 24px 0px hsl(0 0% 0% / 0.6);
+    --shadow-lift:
+      0 3px 2px rgb(0 0 0 / 0.04), 0 1px 1px rgb(0 0 0 / 0.07),
+      0 0 1px rgb(0 0 0 / 0.08);
+    --shadow-float:
+      0 0 0 0.5px #ffffff14, 0 8px 24px rgb(0 0 0 / 0.5),
+      0 2px 6px rgb(0 0 0 / 0.3);
   }
 }
 
@@ -212,6 +214,18 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-error-text: var(--error-text);
+
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-raised: var(--raised);
+  --color-floating: var(--floating);
+  --color-foreground-secondary: var(--foreground-secondary);
+  --color-foreground-faint: var(--foreground-faint);
+  --color-hover: var(--hover);
+  --color-active: var(--active);
+  --color-track: var(--track);
 
   /* brand (signature identity hue) */
   --color-brand: var(--brand);
@@ -221,6 +235,8 @@
 
   --color-border: var(--border);
   --color-input: var(--input);
+  --color-border-strong: var(--border-strong);
+  --color-field-hover: var(--field-hover);
   --color-ring: var(--ring);
 
   /* discipline categories */
@@ -251,28 +267,60 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  --font-sans: var(--font-geist-sans, ui-sans-serif, system-ui, sans-serif);
+  --font-sans: var(--font-inter, ui-sans-serif, system-ui, sans-serif);
   --font-mono: var(
     --font-geist-mono,
     ui-monospace,
     "SFMono-Regular",
     monospace
   );
+  --font-weight-medium: 510;
+  --font-weight-semibold: 590;
+  --font-weight-bold: 680;
 
-  /* Better Auth radius scale: base tight, code/callouts use rounded-none (0) */
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.4;
+  --text-xs--letter-spacing: 0em;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.5;
+  --text-sm--letter-spacing: -0.01em;
+  --text-md: 0.875rem;
+  --text-md--line-height: 1.5;
+  --text-md--letter-spacing: -0.013em;
+  --text-base: 0.9375rem;
+  --text-base--line-height: 1.6;
+  --text-base--letter-spacing: -0.011em;
+  --text-lg: 1.0625rem;
+  --text-lg--line-height: 1.6;
+  --text-lg--letter-spacing: 0em;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.33;
+  --text-xl--letter-spacing: -0.012em;
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: 1.33;
+  --text-2xl--letter-spacing: -0.012em;
+  --text-5xl: 3rem;
+  --text-5xl--line-height: 1;
+  --text-5xl--letter-spacing: -0.022em;
+  --text-6xl: 4rem;
+  --text-6xl--line-height: 1;
+  --text-6xl--letter-spacing: -0.022em;
+
   --radius-sm: calc(var(--radius) - 2px);
-  --radius-md: calc(var(--radius) - 1px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 6px);
 
-  --shadow-2xs: var(--shadow-2xs);
-  --shadow-xs: var(--shadow-xs);
-  --shadow-sm: var(--shadow-sm);
-  --shadow: var(--shadow);
-  --shadow-md: var(--shadow-md);
-  --shadow-lg: var(--shadow-lg);
-  --shadow-xl: var(--shadow-xl);
-  --shadow-2xl: var(--shadow-2xl);
+  --shadow-lift: var(--shadow-lift);
+  --shadow-float: var(--shadow-float);
+  --shadow-2xs: var(--shadow-lift);
+  --shadow-xs: var(--shadow-lift);
+  --shadow-sm: var(--shadow-lift);
+  --shadow: var(--shadow-lift);
+  --shadow-md: var(--shadow-lift);
+  --shadow-lg: var(--shadow-float);
+  --shadow-xl: var(--shadow-float);
+  --shadow-2xl: var(--shadow-float);
 
   --tracking-tighter: calc(var(--tracking-normal) - 0.05em);
   --tracking-tight: calc(var(--tracking-normal) - 0.025em);
@@ -292,4 +340,5 @@
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
   --default-transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
+  --default-transition-duration: 150ms;
 }

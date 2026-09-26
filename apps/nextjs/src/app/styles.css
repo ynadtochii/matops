@@ -19,6 +19,16 @@
   }
 }
 
+/* iOS Safari zooms the page into any field under 16px. Unlayered, so it wins
+   over the text-* utilities on the field itself. */
+@media (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: 1rem;
+  }
+}
+
 /* Better Auth motifs — blueprint background textures (web).
    Mobile gets an RN/SVG equivalent later; see docs/design.md §2. */
 @utility bg-grid {
@@ -43,7 +53,10 @@
     @apply border-border;
   }
   body {
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
     letter-spacing: var(--tracking-normal);
+    font-feature-settings: "cv01", "ss03";
   }
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]),

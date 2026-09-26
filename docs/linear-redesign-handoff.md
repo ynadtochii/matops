@@ -114,8 +114,8 @@ both auto loaded. Read them. The ones that bite on this work:
   schedule, primitives, curriculum, referrals-screen, coach-select, leads,
   week-grid, mat-loader, overview-screen, dashboard-screen, staff; plus the old
   `(app)/design-system/design-system-screen.tsx`.
-- `shadow-lift` and `shadow-float` are already used in app code (12 uses). Find
-  where they are defined before changing them.
+- Correction found in step 1: app code used the stock Tailwind shadow scale,
+  not `shadow-lift`. ADR 141 "As built" records the mapping.
 
 ## The plan
 
@@ -130,20 +130,20 @@ at 375px, iPad and desktop, one `CHANGELOG.md` line, and one commit.
       Supersedes the look in ADR 37. Add it to `docs/map.md`.
 
 ### Step 1. Tokens
-- [ ] Put the Linear values into the existing roles in `theme.css`, both themes:
+- [x] Put the Linear values into the existing roles in `theme.css`, both themes:
       `--background`, `--card`, `--popover`, `--muted`, `--foreground`,
       `--muted-foreground`, `--border`, `--input`, `--ring`, `--primary`
       (inverted button), `--secondary`, `--accent`.
-- [ ] Add the missing roles in both themes and in `@theme inline`: surface 2 and
+- [x] Add the missing roles in both themes and in `@theme inline`: surface 2 and
       3, secondary text, faint text, strong border, field edge, raised, floating,
       hover fill, active fill, track, error text.
-- [ ] Type: Inter with `font-feature-settings: "cv01", "ss03"` in the root
+- [x] Type: Inter with `font-feature-settings: "cv01", "ss03"` in the root
       layout, replacing Geist. Text scale with 13px as the interface default,
       weights 400/510/590/680, tracking per size (see the Type section of
       `/linear-ds`).
-- [ ] Shape: `--radius` about 6px so the derived scale lands on 4/6/8/12.
-- [ ] Shadows: `shadow-lift` and `shadow-float` get the Linear values per theme.
-- [ ] Mirror every changed value in `packages/ui/src/tokens.ts`.
+- [x] Shape: `--radius` about 6px so the derived scale lands on 4/6/8/12.
+- [x] Shadows: `shadow-lift` and `shadow-float` get the Linear values per theme.
+- [x] Mirror every changed value in `packages/ui/src/tokens.ts`.
 - Expect density breakage across screens. Fix it in steps 3 and 4, not here.
 
 ### Step 2. Shared components (`packages/ui`)
@@ -201,5 +201,8 @@ Checklist for every screen:
 
 ## Next action
 
-Step 1: tokens. Also switch the theme fallback to dark in
-`packages/ui/src/theme.tsx` (both `getStoredThemeMode` and the detector script).
+Step 2: shared components. Step 1 is committed; see ADR 141 "As built" for
+the token names. Browser note: signed-in app screens stall on their loader in
+this Chrome setup, with or without the redesign (checked with a stash A/B on
+2026-09-26), and `resize_window` did not change `innerWidth`. `/privacy`
+renders and passes AA in both themes.

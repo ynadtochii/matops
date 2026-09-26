@@ -81,6 +81,39 @@ The platform has no real users. So the whole app switches at once on the branch
 - **A command menu (⌘K)** is a new feature, not part of this redesign. It is
   its own slice if we want it.
 
+## As built
+
+### Step 1: tokens
+
+- `tooling/tailwind/theme.css` holds the Linear values in the existing roles
+  and adds `surface-1/2/3`, `raised`, `floating`, `foreground-secondary`,
+  `foreground-faint`, `border-strong`, `field-hover`, `hover`, `active`,
+  `track` and `error-text`. `packages/ui/src/tokens.ts` mirrors every value.
+- `--input` is the field edge. It is Linear's `#23252a` in dark (choice 3) and
+  the AA-checked `#908c93` in light.
+- **Type:** Inter via `next/font`, `cv01` and `ss03` on `body`, and a 13px body
+  default. Tailwind's scale is remapped: `text-xs` 12, `text-sm` 13 (the
+  interface size), a new `text-md` 14, `text-base` 15, `text-lg` 17,
+  `text-xl` 20, `text-2xl` 24, `text-5xl` 48 and `text-6xl` 64, each with its
+  line height and letter spacing. `font-medium` is 510, `font-semibold` 590
+  and `font-bold` 680.
+- **Fields stay at 16px on touch screens.** iOS Safari zooms into any field
+  under 16px, and `text-base` is now 15px. One unlayered rule in
+  `apps/nextjs/src/app/styles.css` sets fields to 16px under
+  `pointer: coarse`. It is unlayered so it wins over the `text-*` utility on
+  the field itself.
+- **Radius:** `--radius` is 6px, and `rounded-sm/md/lg/xl` are 4, 6, 8 and 12.
+- **Shadows:** the app used the stock Tailwind scale, not `shadow-lift` (the
+  handoff was wrong about that). The scale now points at two tokens:
+  `2xs` to `md` are the lift, `lg` to `2xl` are the float. `shadow-lift` and
+  `shadow-float` also exist as utilities.
+- **Motion:** the default transition length is 150ms.
+- **Dark default:** the fallback in `getStoredThemeMode` and in the detector
+  script is `dark`. The browser bar color and the PWA splash background are
+  `#08090a`.
+- The Expo app imports the same `theme.css`, so its colors and text scale
+  change now. Its fonts change in the mobile step.
+
 ## Consequences
 
 - Every new screen gets sizes, weights, edges and radii from tokens. The last

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist_Mono, Inter } from "next/font/google";
 
 import { cn } from "@matops/ui";
 import { ThemeProvider } from "@matops/ui/theme";
@@ -40,18 +40,15 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "white" },
-    { media: "(prefers-color-scheme: dark)", color: "black" },
-  ],
+  themeColor: "#08090a",
   // Extend under the notch / home indicator so the installed app can honour the
   // safe-area insets in the mobile shell (see AppShell).
   viewportFit: "cover",
 };
 
-const geistSans = Geist({
+const inter = Inter({
   subsets: ["latin"],
-  variable: "--font-geist-sans",
+  variable: "--font-inter",
 });
 const geistMono = Geist_Mono({
   subsets: ["latin"],
@@ -65,7 +62,7 @@ export default function RootLayout(props: { children: React.ReactNode }) {
       <body
         className={cn(
           "bg-background text-foreground min-h-screen font-sans antialiased",
-          geistSans.variable,
+          inter.variable,
           geistMono.variable,
         )}
       >
