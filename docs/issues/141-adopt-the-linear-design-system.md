@@ -242,6 +242,20 @@ The platform has no real users. So the whole app switches at once on the branch
 - Dimmed text on the primary confirm button (`primary-foreground` at 60% and
   70%) measures 4.93:1 or more in both themes.
 
+### Step 4.5: Memberships
+
+- `page-header.tsx` (17 screens) keeps its API: a `text-2xl` semibold title,
+  a muted `text-sm` description and actions on the right.
+- The membership notice used a violet edge as a status. Blocked now uses the
+  error edge and due the warning edge.
+- Plans, claims, the month board, bookings to review and missing memberships
+  are divided lists with matching skeletons. "Waiting for confirmation" and
+  "Who this changes" are `Callout`s, the branch ticks are `Checkbox`, and
+  four buttons use `busy`. The transfer reference stays mono, since it is a
+  code people copy.
+- The month board does not give paid, silent, reminded and claimed their own
+  color. That needs a label per state, which is new copy and its own slice.
+
 ## Consequences
 
 - Every new screen gets sizes, weights, edges and radii from tokens. The last

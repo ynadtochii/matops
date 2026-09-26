@@ -6,6 +6,7 @@ import { formatMoney } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
+import { Callout } from "@matops/ui/callout";
 import { CopyButton } from "@matops/ui/copy-button";
 import { toast } from "@matops/ui/toast";
 
@@ -56,34 +57,40 @@ export function MembershipNotice() {
         {warned.map((m) => (
           <div
             key={m.assignmentId}
-            className={`${cardClass()} ${
+            className={cn(
+              cardClass(),
+              "flex flex-col gap-4",
               m.warning?.verdict === "blocked"
-                ? "border-destructive/40"
-                : "border-brand/25"
-            } flex flex-col gap-4`}
+                ? "border-error/30"
+                : "border-warning/25",
+            )}
           >
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <h2 className="text-base font-semibold">{m.planName}</h2>
+              <h2 className="text-md font-semibold">{m.planName}</h2>
               {m.amount && (
-                <p className="font-mono text-xl tabular-nums">
+                <p className="text-xl font-medium tabular-nums">
                   {formatMoney(m.amount.priceMinor, m.amount.currency)}
                 </p>
               )}
             </div>
             <div>
               <p className="text-sm font-medium">{m.warning?.headline}</p>
-              <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
+              <p className="text-foreground-secondary mt-1 text-sm leading-relaxed">
                 {m.warning?.detail}
               </p>
             </div>
             {m.reportedAt ? (
-              <div className="bg-brand-wash rounded-md p-3" role="status">
-                <p className="text-sm font-medium">Waiting for confirmation</p>
-                <p className="text-muted-foreground mt-1 text-sm">
+              <Callout
+                tone="warning"
+                role="status"
+                title="Waiting for confirmation"
+                className="rounded-md"
+              >
+                <p>
                   You submitted this payment. Your gym still needs to confirm
                   it. You do not need to submit it again.
                 </p>
-              </div>
+              </Callout>
             ) : bankDetails ? (
               <div className="border-border space-y-4 border-t pt-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -91,7 +98,7 @@ export function MembershipNotice() {
                     <p className="text-muted-foreground text-sm">
                       Transfer reference
                     </p>
-                    <p className="mt-1 font-mono text-base break-all">
+                    <p className="text-md mt-1 font-mono break-all">
                       {m.reference}
                     </p>
                   </div>
@@ -130,7 +137,7 @@ export function MembershipNotice() {
       {showPaymentInstructions && (
         <aside className="border-border min-w-0 space-y-4 border-t pt-5 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6">
           <div>
-            <h2 className="text-base font-semibold">How to pay</h2>
+            <h2 className="text-md font-semibold">How to pay</h2>
             <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
               Send a transfer in your bank app. Use the amount and reference
               shown for each membership, then select “I paid”.

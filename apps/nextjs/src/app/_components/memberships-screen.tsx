@@ -14,11 +14,15 @@ import {
   organizationHref,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
+import { Badge } from "@matops/ui/badge";
 import { Button } from "@matops/ui/button";
+import { Callout } from "@matops/ui/callout";
+import { Checkbox } from "@matops/ui/checkbox";
 import { Dialog, DialogContent, DialogTitle } from "@matops/ui/dialog";
 import { FieldError } from "@matops/ui/field";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
+import { FOCUS_RING } from "@matops/ui/motion";
 import { Textarea } from "@matops/ui/textarea";
 import { toast } from "@matops/ui/toast";
 import {
@@ -30,13 +34,7 @@ import { dateFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { useOrganization } from "./entity";
 import { PageHeader } from "./page-header";
-import {
-  cardClass,
-  ENTER,
-  Eyebrow,
-  SectionHeading,
-  stagger,
-} from "./primitives";
+import { ENTER, LIST, SectionHeading, stagger } from "./primitives";
 import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 import { Tabs } from "./tabs";
@@ -147,7 +145,7 @@ export function MembershipsScreen() {
       {tab === "plans" && (
         <div className="flex min-w-0 flex-col gap-6">
           {plans.isPending ? (
-            <SkeletonRows rows={3} />
+            <SkeletonRows rows={3} inList />
           ) : plans.isError ? (
             <ErrorState
               label="your plans"
@@ -172,7 +170,7 @@ export function MembershipsScreen() {
               >
                 Plans
               </SectionHeading>
-              <ul className="flex flex-col gap-2">
+              <ul className={LIST}>
                 {plans.data.map((p, i) => (
                   <li key={p.id} style={stagger(i)} className={ENTER}>
                     <PlanCard
@@ -191,7 +189,10 @@ export function MembershipsScreen() {
               Manage payment deadlines, time zone, and bank details in{" "}
               <Link
                 href={organizationHref("/settings", branchId)}
-                className="underline underline-offset-4"
+                className={cn(
+                  "rounded-sm underline underline-offset-4",
+                  FOCUS_RING,
+                )}
               >
                 Gym settings
               </Link>
@@ -254,7 +255,7 @@ function ClaimsWaiting() {
     }),
   );
 
-  if (claims.isPending) return <SkeletonRows rows={2} />;
+  if (claims.isPending) return <SkeletonRows rows={2} inList />;
   if (claims.isError)
     return (
       <ErrorState
@@ -274,7 +275,7 @@ function ClaimsWaiting() {
       <p className="text-muted-foreground -mt-2 text-sm">
         Members who say they have paid. Confirm each one against your bank.
       </p>
-      <ul className="flex flex-col gap-2">
+      <ul className={LIST}>
         {rows.map((c) => {
           const busy =
             (confirm.isPending &&
@@ -284,18 +285,15 @@ function ClaimsWaiting() {
           return (
             <li
               key={`${c.assignmentId}:${c.month}`}
-              className={cn(
-                cardClass(),
-                "flex flex-wrap items-center gap-3 p-3",
-              )}
+              className="flex min-h-11 flex-wrap items-center gap-3 px-4 py-3"
             >
-              <div className="flex min-w-0 flex-1 flex-col">
+              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="truncate font-medium">{c.name}</span>
                 <span className="text-muted-foreground truncate text-sm">
                   {c.planName} · {c.monthLabel}
                 </span>
                 {c.reportedAt && (
-                  <span className="text-muted-foreground text-xs">
+                  <span className="text-muted-foreground text-xs tabular-nums">
                     Said they paid on {dateFmt.format(new Date(c.reportedAt))}
                   </span>
                 )}
@@ -362,7 +360,7 @@ function MonthBoard({ nameOf }: { nameOf: (id: string) => string }) {
     }),
   );
 
-  if (board.isPending) return <SkeletonRows rows={3} />;
+  if (board.isPending) return <SkeletonRows rows={3} inList />;
   if (board.isError) {
     return (
       <ErrorState label="this month" onRetry={() => void board.refetch()} />
@@ -377,7 +375,7 @@ function MonthBoard({ nameOf }: { nameOf: (id: string) => string }) {
     <section className="flex min-w-0 flex-col gap-4">
       <SectionHeading
         action={
-          <span className="text-muted-foreground shrink-0 font-mono text-xs tabular-nums">
+          <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
             {rows.filter((r) => r.paymentRequired && r.paid).length} of{" "}
             {rows.filter((r) => r.paymentRequired).length} paid
             {rows.some((r) => !r.paymentRequired) &&
@@ -395,18 +393,15 @@ function MonthBoard({ nameOf }: { nameOf: (id: string) => string }) {
           Give somebody one on their member profile, in any branch.
         </EmptyState>
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ul className={LIST}>
           {rows.map((r) => (
             <li
               key={r.assignmentId}
-              className={cn(
-                cardClass(),
-                "flex flex-wrap items-center gap-3 p-3",
-              )}
+              className="flex min-h-11 flex-wrap items-center gap-3 px-4 py-3"
             >
-              <div className="flex min-w-0 flex-1 flex-col">
+              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="truncate font-medium">{r.name}</span>
-                <span className="text-muted-foreground truncate text-sm">
+                <span className="text-muted-foreground truncate text-sm tabular-nums">
                   {r.planName}
                   {/* What THIS month costs, so the owner reading a bank
                       statement is comparing against the right figure. */}
@@ -417,7 +412,12 @@ function MonthBoard({ nameOf }: { nameOf: (id: string) => string }) {
                     ` · ${r.entityIds.map(nameOf).join(" · ")}`}
                 </span>
                 {!r.paid && r.paymentRequired && (
-                  <span className="text-muted-foreground text-xs">
+                  <span
+                    className={cn(
+                      "text-xs tabular-nums",
+                      r.overdue ? "text-error-text" : "text-muted-foreground",
+                    )}
+                  >
                     {r.overdue
                       ? `Blocked since ${r.deadlineLabel}`
                       : `Until ${r.deadlineLabel}`}
@@ -460,7 +460,7 @@ function BookingAccessQueue() {
   const review = useQuery(
     trpc.accessPlan.bookingsToReview.queryOptions({ limit: 50 }),
   );
-  if (review.isPending) return <SkeletonRows rows={2} />;
+  if (review.isPending) return <SkeletonRows rows={2} inList />;
   if (review.isError)
     return (
       <ErrorState
@@ -481,24 +481,27 @@ function BookingAccessQueue() {
           Every upcoming booking is covered by a membership.
         </p>
       ) : (
-        <ul className="divide-border divide-y">
+        <ul className={LIST}>
           {review.data.items.map((booking) => (
             <li
               key={booking.participationId}
-              className="flex flex-wrap items-center justify-between gap-3 py-3"
+              className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
             >
-              <div className="flex min-w-0 flex-col gap-1">
+              <div className="flex min-w-0 flex-col gap-0.5">
                 <Link
                   href={`/people/${booking.personId}`}
-                  className="w-fit text-sm font-medium underline underline-offset-4"
+                  className={cn(
+                    "text-foreground w-fit rounded-sm text-sm font-medium hover:underline hover:underline-offset-4",
+                    FOCUS_RING,
+                  )}
                 >
                   {booking.name}
                 </Link>
-                <span className="text-muted-foreground text-sm wrap-anywhere">
+                <span className="text-muted-foreground text-sm wrap-anywhere tabular-nums">
                   {booking.title} · {booking.entityName} ·{" "}
                   {dateFmt.format(new Date(booking.startsAt))}
                 </span>
-                <span className="text-sm">
+                <span className="text-foreground-secondary text-sm">
                   {booking.reason === "payment-declined"
                     ? "Payment declined. Owner approval is required."
                     : booking.reason === "suspended"
@@ -508,10 +511,13 @@ function BookingAccessQueue() {
                         : "No active membership covers this branch."}
                 </span>
               </div>
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap gap-4">
                 <Link
                   href={`/people/${booking.personId}`}
-                  className="text-brand-strong inline-flex min-h-11 items-center text-sm underline underline-offset-4"
+                  className={cn(
+                    "text-brand-strong inline-flex min-h-11 items-center rounded-sm text-sm font-medium underline-offset-4 hover:underline sm:min-h-8",
+                    FOCUS_RING,
+                  )}
                 >
                   {booking.reason === "suspended" ||
                   booking.reason === "membership-inactive"
@@ -525,7 +531,10 @@ function BookingAccessQueue() {
                     booking.entityId,
                     `/class/${booking.classId}?accessPerson=${encodeURIComponent(booking.name)}&accessReason=${booking.reason}`,
                   )}
-                  className="text-muted-foreground inline-flex min-h-11 items-center text-sm underline underline-offset-4"
+                  className={cn(
+                    "text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center rounded-sm text-sm underline-offset-4 transition-colors hover:underline motion-reduce:transition-none sm:min-h-8",
+                    FOCUS_RING,
+                  )}
                 >
                   Open roster
                 </Link>
@@ -565,18 +574,14 @@ function PlanCard({
   const [pricing, setPricing] = useState(false);
 
   return (
-    <div className={`${cardClass()} flex flex-wrap gap-3`}>
+    <div className="flex flex-wrap gap-3 px-4 py-3">
       <PriceDialog plan={plan} open={pricing} onOpenChange={setPricing} />
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="font-medium">
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="flex flex-wrap items-center gap-2 font-medium">
           {plan.name}
-          {plan.archived && (
-            <span className="text-muted-foreground ml-2 text-xs uppercase">
-              archived
-            </span>
-          )}
+          {plan.archived && <Badge>Archived</Badge>}
         </span>
-        <span className="text-muted-foreground text-sm">
+        <span className="text-muted-foreground text-sm tabular-nums">
           {plan.priceMinor !== null && plan.currency
             ? `${formatMoney(plan.priceMinor, plan.currency)} a month`
             : "No price yet"}
@@ -585,13 +590,13 @@ function PlanCard({
             ? "Covers no branch yet"
             : plan.entityIds.map(nameOf).join(" · ")}
         </span>
-        <span className="text-muted-foreground text-xs">
+        <span className="text-muted-foreground text-xs tabular-nums">
           {plan.activeHolders === 1
             ? "1 member holds it"
             : `${plan.activeHolders} members hold it`}
         </span>
       </div>
-      <div className="flex flex-wrap items-start justify-end gap-2">
+      <div className="flex flex-wrap items-center justify-end gap-2">
         {!plan.archived && plan.gaps.missing > 0 && (
           <Reconcile planId={plan.id} missing={plan.gaps.missing} />
         )}
@@ -608,6 +613,7 @@ function PlanCard({
         <Button
           size="sm"
           variant="outline"
+          busy={archive.isPending}
           disabled={archive.isPending}
           onClick={() =>
             archive.mutate({ id: plan.id, archived: !plan.archived })
@@ -724,8 +730,12 @@ function PriceDialog({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={save.isPending || !earliest}>
-              {save.isPending ? "Saving…" : "Save price"}
+            <Button
+              type="submit"
+              busy={save.isPending}
+              disabled={save.isPending || !earliest}
+            >
+              Save price
             </Button>
           </div>
         </form>
@@ -858,8 +868,12 @@ function NewPlanDialog({
             onChange={setPicked}
           />
           <div className="flex justify-end">
-            <Button type="submit" disabled={create.isPending}>
-              {create.isPending ? "Adding…" : "Add plan"}
+            <Button
+              type="submit"
+              busy={create.isPending}
+              disabled={create.isPending}
+            >
+              Add plan
             </Button>
           </div>
         </form>
@@ -934,6 +948,7 @@ function CoverageDialog({
               Cancel
             </Button>
             <Button
+              busy={save.isPending}
               disabled={!changed || save.isPending}
               onClick={() =>
                 save.mutate({
@@ -943,7 +958,7 @@ function CoverageDialog({
                 })
               }
             >
-              {save.isPending ? "Saving…" : "Save branches"}
+              Save branches
             </Button>
           </div>
         </div>
@@ -1006,10 +1021,13 @@ function AffectedNotice({
   const losing = affected.filter((a) => a.loses.length > 0);
 
   return (
-    <div className="flex flex-col gap-2">
-      <Eyebrow>Who this changes</Eyebrow>
+    <Callout
+      tone={losing.length > 0 ? "warning" : "neutral"}
+      title="Who this changes"
+      className="rounded-md"
+    >
       {gaining.length > 0 && (
-        <p className="text-sm">
+        <p>
           {gaining.length === 1
             ? "1 member gains"
             : `${gaining.length} members gain`}{" "}
@@ -1019,7 +1037,7 @@ function AffectedNotice({
         </p>
       )}
       {losing.length > 0 && (
-        <p className="text-sm">
+        <p className={cn(gaining.length > 0 && "mt-1.5")}>
           {losing.length === 1
             ? "1 member loses"
             : `${losing.length} members lose`}{" "}
@@ -1028,7 +1046,7 @@ function AffectedNotice({
           and history stay.
         </p>
       )}
-    </div>
+    </Callout>
   );
 }
 
@@ -1042,20 +1060,18 @@ function BranchTicks({
   onChange: (next: string[]) => void;
 }) {
   return (
-    <fieldset className="flex flex-col gap-2">
+    <fieldset className="flex flex-col gap-0.5">
       <legend className="mb-2 text-sm font-medium">Branches it covers</legend>
       {entities.map((e) => (
         <label
           key={e.id}
-          className="text-muted-foreground hover:text-foreground flex min-h-11 cursor-pointer items-center gap-2 text-sm"
+          className="text-foreground-secondary hover:bg-hover hover:text-foreground -mx-2 flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm transition-colors motion-reduce:transition-none sm:min-h-9"
         >
-          <input
-            type="checkbox"
-            className="accent-brand size-4"
+          <Checkbox
             checked={picked.includes(e.id)}
-            onChange={(ev) =>
+            onCheckedChange={(checked) =>
               onChange(
-                ev.target.checked
+                checked === true
                   ? [...picked, e.id]
                   : picked.filter((id) => id !== e.id),
               )
@@ -1080,7 +1096,7 @@ function UncoveredQueue() {
   const trpc = useTRPC();
   const uncovered = useQuery(trpc.accessPlan.uncovered.queryOptions());
 
-  if (uncovered.isPending) return <SkeletonRows rows={2} />;
+  if (uncovered.isPending) return <SkeletonRows rows={2} inList />;
   if (uncovered.isError)
     return (
       <ErrorState
@@ -1103,9 +1119,9 @@ function UncoveredQueue() {
       <p className="text-muted-foreground -mt-2 text-sm">
         These people need a plan that covers the branch where they train.
       </p>
-      <ul className="flex flex-col gap-3">
+      <ul className={LIST}>
         {uncovered.data.groups.map((g) => (
-          <li key={g.entityId} className="flex flex-col gap-1">
+          <li key={g.entityId} className="flex flex-col gap-0.5 px-4 py-3">
             <span className="text-sm font-medium">{g.entityName}</span>
             <span className="text-muted-foreground text-sm">
               {g.people.map((p, i) => (
@@ -1113,7 +1129,10 @@ function UncoveredQueue() {
                   {i > 0 && ", "}
                   <Link
                     href={`/people/${p.personId}`}
-                    className="hover:underline"
+                    className={cn(
+                      "hover:text-foreground rounded-sm underline-offset-4 transition-colors hover:underline motion-reduce:transition-none",
+                      FOCUS_RING,
+                    )}
                   >
                     {p.name}
                   </Link>
