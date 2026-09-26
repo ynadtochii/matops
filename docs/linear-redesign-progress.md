@@ -33,7 +33,7 @@ stop the loop and notify the user.
 | 3a | Shell: sidebar (level 1, 28px items, branch fold, Gym management) | done | `50471c6` | Box sizes unmeasured: the shell stays hidden behind the loader in this browser |
 | 3b | Shell: header, branch picker, mobile shell, overdue strip | done | `159ee7d` | |
 | 4.1 | Screens: Members and People (list, person page, leads) | done | `9f4c613` | Primitives and states restyled here too |
-| 4.2 | Screens: Schedule and the curriculum timeline | todo | | |
+| 4.2 | Screens: Schedule and the curriculum timeline | done | `eb84ff9` | Shared `_components/tabs.tsx` restyled here |
 | 4.3 | Screens: Dashboard and Overview | todo | | |
 | 4.4 | Screens: Attendance and Reception | todo | | |
 | 4.5 | Screens: Payments and Memberships | todo | | |
@@ -55,6 +55,9 @@ stop the loop and notify the user.
   change (`targetPlanId === ""`), and Rank Clear are disabled for validation,
   not only while in flight.
 
+- Found in 4.2: `TrackDialog` submit silently does nothing on an empty name
+  (the field is `required`, but no message shows).
+
 ## Known limits
 
 - Signed-in screens stall on their loader in this Chrome setup, with or without
@@ -68,3 +71,4 @@ stop the loop and notify the user.
 - 2026-09-26: 3a sidebar done (`50471c6`).
 - 2026-09-26: 3b header and mobile shell done (`159ee7d`). Step 3 complete.
 - 2026-09-26: 4.1 Members and People done (`9f4c613`), by a subagent, reviewed.
+- 2026-09-26: 4.2 Schedule and curriculum done (`eb84ff9`), by a subagent, reviewed; poster loading text contrast fixed in review.
