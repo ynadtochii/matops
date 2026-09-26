@@ -34,7 +34,7 @@ stop the loop and notify the user.
 | 3b | Shell: header, branch picker, mobile shell, overdue strip | done | `159ee7d` | |
 | 4.1 | Screens: Members and People (list, person page, leads) | done | `9f4c613` | Primitives and states restyled here too |
 | 4.2 | Screens: Schedule and the curriculum timeline | done | `eb84ff9` | Shared `_components/tabs.tsx` restyled here |
-| 4.3 | Screens: Dashboard and Overview | todo | | |
+| 4.3 | Screens: Dashboard and Overview | done | `dc037e9` | `skeletons.tsx` and `mat-loader.tsx` restyled here |
 | 4.4 | Screens: Attendance and Reception | todo | | |
 | 4.5 | Screens: Payments and Memberships | todo | | |
 | 4.6 | Screens: Coaches, Referrals, Notifications | todo | | |
@@ -72,3 +72,4 @@ stop the loop and notify the user.
 - 2026-09-26: 3b header and mobile shell done (`159ee7d`). Step 3 complete.
 - 2026-09-26: 4.1 Members and People done (`9f4c613`), by a subagent, reviewed.
 - 2026-09-26: 4.2 Schedule and curriculum done (`eb84ff9`), by a subagent, reviewed; poster loading text contrast fixed in review.
+- 2026-09-26: 4.3 Dashboard and Overview done (`dc037e9`), by a subagent, reviewed; list skeleton shape fixed in review.
