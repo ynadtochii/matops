@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased: the Linear redesign
+
+- ADR 141 adopts the Linear design system in the product. The matops violet stays as the accent, dark becomes the default theme, and the dark theme keeps Linear's own values, including three known contrast failures. No code changed yet.
+
 ## Unreleased: design system reference
 
 - Added an unlinked, signed-in `/design-system` page with live theme colors, type roles, shared controls, card examples, and a searchable list/detail pattern. No product tokens or navigation changed.
