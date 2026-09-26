@@ -3,6 +3,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 
 import { cn } from "@matops/ui";
+import { FOCUS_RING_INSET } from "@matops/ui/motion";
 
 import { CountBadge } from "./primitives";
 
@@ -55,9 +56,10 @@ export function Tabs<T extends string>({
             aria-pressed={active}
             onClick={() => onChange(t.id)}
             className={cn(
-              "flex min-h-11 shrink-0 items-center gap-2 px-3 py-2 text-sm whitespace-nowrap transition-colors sm:min-h-0",
+              "flex min-h-11 shrink-0 items-center gap-2 px-3 text-sm font-medium whitespace-nowrap transition-colors motion-reduce:transition-none sm:min-h-9",
+              FOCUS_RING_INSET,
               active
-                ? "text-foreground font-medium"
+                ? "text-foreground"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
@@ -73,7 +75,7 @@ export function Tabs<T extends string>({
           the x axis, so the move is transform-only. */}
       <span
         aria-hidden
-        className="bg-brand absolute bottom-0 left-0 h-0.5 w-px origin-left transition-transform duration-200 ease-out motion-reduce:transition-none"
+        className="bg-foreground absolute bottom-0 left-0 h-0.5 w-px origin-left transition-transform duration-200 ease-out motion-reduce:transition-none"
         style={{
           transform: `translateX(${rail.left}px) scaleX(${rail.width})`,
         }}

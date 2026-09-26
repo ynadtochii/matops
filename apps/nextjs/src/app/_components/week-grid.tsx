@@ -13,6 +13,7 @@ import {
   hourSlots,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
+import { FOCUS_RING_INSET } from "@matops/ui/motion";
 
 import { time24Fmt, weekdayFmt } from "~/lib/format";
 import { useMinuteClock } from "./use-clock";
@@ -140,11 +141,9 @@ function Legend() {
         <li key={i.label} className="flex items-center gap-1.5">
           <span
             aria-hidden
-            className={cn("h-3 w-5 rounded-[2px]", TONE_SKIN[i.tone])}
+            className={cn("h-3 w-5 rounded-xs", TONE_SKIN[i.tone])}
           />
-          <span className="text-muted-foreground font-mono text-[10px] tracking-wide uppercase">
-            {i.label}
-          </span>
+          <span className="text-muted-foreground text-xs">{i.label}</span>
         </li>
       ))}
     </ul>
@@ -210,23 +209,23 @@ export function WeekGrid({
                 key={d.key}
                 className={cn(
                   "border-border border-b border-l px-2 py-2",
-                  today && "bg-brand-wash",
+                  today && "bg-hover",
                 )}
               >
                 <p
                   className={cn(
-                    "font-mono text-[10px] tracking-[0.14em] uppercase",
-                    today ? "text-brand-strong" : "text-muted-foreground",
+                    "text-2xs font-medium",
+                    today ? "text-foreground" : "text-muted-foreground",
                   )}
                 >
                   {weekdayFmt.format(d.date)}
                 </p>
                 <p
                   className={cn(
-                    "font-mono text-sm tabular-nums",
+                    "text-sm tabular-nums",
                     today
-                      ? "text-brand-strong font-semibold"
-                      : "text-foreground",
+                      ? "text-foreground font-semibold"
+                      : "text-foreground-secondary",
                   )}
                 >
                   {d.date.getDate()}
@@ -250,11 +249,11 @@ export function WeekGrid({
                 )}
               />
               {s.kind === "hour" ? (
-                <span className="text-muted-foreground absolute top-1 left-0 w-[3.25rem] pr-2 text-right font-mono text-[10px] tabular-nums">
+                <span className="text-muted-foreground text-2xs absolute top-1 left-0 w-[3.25rem] pr-2 text-right tabular-nums">
                   {hourLabel(s.hour)}
                 </span>
               ) : (
-                <span className="text-muted-foreground absolute inset-0 flex items-center justify-center font-mono text-[10px] tracking-wide uppercase">
+                <span className="text-muted-foreground text-2xs absolute inset-0 flex items-center justify-center">
                   no classes {hourLabel(s.from)}-{hourLabel(s.to)}
                 </span>
               )}
@@ -272,7 +271,7 @@ export function WeekGrid({
                 key={d.key}
                 className={cn(
                   "border-border relative border-l",
-                  d.key === todayKey && "bg-brand-wash/40",
+                  d.key === todayKey && "bg-hover/50",
                 )}
               >
                 {d.items.map(({ row, start, startMin, lane, lanes }) => {
@@ -292,7 +291,7 @@ export function WeekGrid({
                     <div
                       key={row.id}
                       className={cn(
-                        "group absolute z-10 overflow-hidden rounded-[3px] px-1.5 py-1",
+                        "group absolute z-10 overflow-hidden rounded-sm px-1.5 py-1",
                         blockSkin(row.discipline, cancelled),
                       )}
                       style={{
@@ -302,33 +301,31 @@ export function WeekGrid({
                         width: `calc(${100 / lanes}% - 4px)`,
                       }}
                     >
-                      <p className="flex items-baseline gap-1 font-mono text-[10px] tabular-nums">
+                      <p className="text-2xs flex items-baseline gap-1 tabular-nums">
                         <span className="text-muted-foreground">
                           {time24Fmt.format(start)}
                         </span>
                         {cancelled && (
-                          <span className="text-error tracking-wide uppercase">
-                            cancelled
-                          </span>
+                          <span className="text-error-text">cancelled</span>
                         )}
                       </p>
                       <p
                         className={cn(
-                          "truncate text-[12.5px] leading-tight font-medium",
+                          "truncate text-xs leading-tight font-medium",
                           cancelled && "line-through",
                         )}
                       >
                         {row.title}
                       </p>
                       {row.instructorName && height > 52 && (
-                        <p className="text-muted-foreground truncate text-[10.5px] leading-tight">
+                        <p className="text-muted-foreground text-2xs truncate leading-tight">
                           {row.instructorName}
                         </p>
                       )}
                       {!cancelled && (
                         <p
                           className={cn(
-                            "absolute right-1.5 bottom-1 font-mono text-[10px] tabular-nums",
+                            "text-2xs absolute right-1.5 bottom-1 tabular-nums",
                             full
                               ? "text-warning font-semibold"
                               : "text-muted-foreground",
@@ -346,13 +343,16 @@ export function WeekGrid({
                       {onSelect && (
                         <button
                           type="button"
-                          className="absolute inset-0 z-[1] cursor-pointer"
+                          className={cn(
+                            "absolute inset-0 z-[1] cursor-pointer rounded-sm",
+                            FOCUS_RING_INSET,
+                          )}
                           aria-label={`Open ${row.title} at ${time24Fmt.format(start)}`}
                           onClick={() => onSelect(row)}
                         />
                       )}
                       {action && !cancelled && (
-                        <div className="absolute top-0.5 right-0.5 z-[2] opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+                        <div className="absolute top-0.5 right-0.5 z-[2] opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 motion-reduce:transition-none">
                           {action(row)}
                         </div>
                       )}
@@ -369,8 +369,8 @@ export function WeekGrid({
               style={{ top: nowY }}
               aria-hidden
             >
-              <div className="bg-brand absolute right-0 left-[3.25rem] h-px" />
-              <span className="bg-brand text-brand-foreground absolute top-1/2 left-0 -translate-y-1/2 rounded-[2px] px-1 font-mono text-[9px] tabular-nums">
+              <div className="bg-foreground absolute right-0 left-[3.25rem] h-px" />
+              <span className="bg-foreground text-background text-2xs absolute top-1/2 left-0 -translate-y-1/2 rounded-xs px-1 tabular-nums">
                 {time24Fmt.format(now)}
               </span>
             </div>

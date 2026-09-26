@@ -13,7 +13,9 @@ import {
 } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
+import { Badge } from "@matops/ui/badge";
 import { Button } from "@matops/ui/button";
+import { Checkbox } from "@matops/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -23,7 +25,6 @@ import {
 import { FieldError } from "@matops/ui/field";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
-import { FOCUS_RING } from "@matops/ui/motion";
 import { Select } from "@matops/ui/select";
 import { Textarea } from "@matops/ui/textarea";
 import { toast } from "@matops/ui/toast";
@@ -32,7 +33,7 @@ import { optimistic, rollback } from "~/lib/optimistic";
 import { useTRPC } from "~/trpc/react";
 import { InstructorOptions } from "./coach-select";
 import { useEntity } from "./entity";
-import { cardClass, RESOLVE, SectionHeading } from "./primitives";
+import { LIST, RESOLVE, SectionHeading } from "./primitives";
 import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 
@@ -257,17 +258,14 @@ export function Templates({
           Create a weekly template and MatOps fills the calendar for you.
         </EmptyState>
       ) : (
-        <div className={cn("flex flex-col gap-2", RESOLVE)}>
+        <div className={cn(LIST, RESOLVE)}>
           {templates.map((t) => (
             <div
               key={t.id}
-              className={cn(
-                cardClass(),
-                "flex flex-wrap items-center justify-between gap-3",
-              )}
+              className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
             >
-              <div className="flex flex-col">
-                <span className="font-medium">
+              <div className="flex min-w-0 flex-col">
+                <span className="text-md font-medium">
                   {t.title}
                   {t.discipline && (
                     <span className="text-muted-foreground ml-2 text-xs uppercase">
@@ -275,9 +273,7 @@ export function Templates({
                     </span>
                   )}
                   {t.status === "paused" && (
-                    <span className="text-muted-foreground ml-2 text-xs uppercase">
-                      paused
-                    </span>
+                    <Badge className="ml-2">paused</Badge>
                   )}
                 </span>
                 <span className="text-muted-foreground text-sm">
@@ -394,7 +390,7 @@ export function Templates({
                 >
                   <h3
                     id="tpl-schedule-heading"
-                    className="text-muted-foreground font-mono text-xs tracking-wider uppercase"
+                    className="text-muted-foreground text-sm font-medium"
                   >
                     Weekly schedule
                   </h3>
@@ -425,7 +421,7 @@ export function Templates({
                             className={cn(
                               "h-11 min-w-0 flex-col gap-1 px-0 text-xs sm:text-sm",
                               on &&
-                                "border-foreground bg-secondary text-foreground hover:bg-secondary/80",
+                                "border-border-strong bg-active text-foreground hover:bg-active",
                             )}
                           >
                             {label}
@@ -445,7 +441,7 @@ export function Templates({
                       role={daysError ? "alert" : undefined}
                       className={cn(
                         "mt-2 text-xs",
-                        daysError ? "text-error" : "text-muted-foreground",
+                        daysError ? "text-error-text" : "text-muted-foreground",
                       )}
                     >
                       {daysError
@@ -461,7 +457,7 @@ export function Templates({
                       <Input
                         id="tpl-time"
                         type="time"
-                        className="font-mono tabular-nums dark:[color-scheme:dark]"
+                        className="tabular-nums dark:[color-scheme:dark]"
                         value={shown.time}
                         onChange={(e) =>
                           setForm({ ...shown, time: e.target.value })
@@ -474,7 +470,7 @@ export function Templates({
                       <Input
                         id="tpl-duration"
                         type="number"
-                        className="font-mono tabular-nums"
+                        className="tabular-nums"
                         min={5}
                         max={600}
                         value={shown.durationMinutes}
@@ -492,7 +488,7 @@ export function Templates({
                       <Input
                         id="tpl-capacity"
                         type="number"
-                        className="font-mono tabular-nums"
+                        className="tabular-nums"
                         min={0}
                         max={1000}
                         value={shown.capacity}
@@ -542,7 +538,7 @@ export function Templates({
                 >
                   <h3
                     id="tpl-details-heading"
-                    className="text-muted-foreground font-mono text-xs tracking-wider uppercase"
+                    className="text-muted-foreground text-sm font-medium"
                   >
                     Class details
                   </h3>
@@ -638,17 +634,13 @@ export function Templates({
                       }
                     />
                   </div>
-                  <label className="hover:bg-muted/50 flex cursor-pointer items-start gap-3 rounded-md border p-3 transition-colors">
-                    <input
-                      type="checkbox"
-                      className={cn(
-                        "accent-primary mt-0.5 size-5 shrink-0 rounded-sm",
-                        FOCUS_RING,
-                      )}
+                  <label className="border-border hover:bg-hover flex cursor-pointer items-start gap-3 rounded-md border p-3 transition-colors motion-reduce:transition-none">
+                    <Checkbox
+                      className="mt-0.5"
                       checked={shown.publicBookable}
                       aria-describedby="tpl-public-help"
-                      onChange={(e) =>
-                        setForm({ ...shown, publicBookable: e.target.checked })
+                      onCheckedChange={(checked) =>
+                        setForm({ ...shown, publicBookable: checked === true })
                       }
                     />
                     <span className="min-w-0">
@@ -757,7 +749,7 @@ function RebuildSchedule() {
           match an active template.
         </p>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
+      <div className="border-border bg-card flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
         <div>
           <p className="text-sm font-medium">{damage}</p>
           <p className="text-muted-foreground text-sm">
@@ -766,7 +758,7 @@ function RebuildSchedule() {
               : "There is no active recurring schedule."}
           </p>
           {activeBookings > 0 && (
-            <p className="text-destructive text-sm">
+            <p className="text-error-text text-sm">
               {activeBookings} active{" "}
               {activeBookings === 1 ? "booking blocks" : "bookings block"} this
               rebuild. Cancel those classes first.

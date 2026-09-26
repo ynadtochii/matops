@@ -104,7 +104,7 @@ export function CoachSelect({
     <div className="flex max-w-xs items-center gap-2">
       <label
         htmlFor={`coach-${classId}`}
-        className="text-muted-foreground font-mono text-[10px] tracking-wide uppercase"
+        className="text-muted-foreground text-xs"
       >
         Coach
       </label>

@@ -13,7 +13,7 @@ export function ClassTheme({ classId }: { classId: string }) {
   const themes = block.data?.themes ?? [];
   if (!themes.length) return null;
   return (
-    <div className="border-brand/60 border-l-2 pl-3">
+    <div className="border-border-strong border-l-2 pl-3">
       <Eyebrow>This week</Eyebrow>
       <ul className="mt-1 flex flex-col gap-3">
         {themes.map((on) => (

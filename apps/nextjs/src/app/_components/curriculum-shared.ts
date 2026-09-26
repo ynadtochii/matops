@@ -50,19 +50,19 @@ export const SURFACE = cn(
 );
 
 export const CONTROL = cn(
-  "border-border hover:bg-muted grid size-8 shrink-0 place-items-center rounded-md border",
+  "border-border hover:bg-hover hover:border-border-strong grid size-8 shrink-0 place-items-center rounded-md border",
   "disabled:pointer-events-none disabled:opacity-40",
   SURFACE,
 );
 
 export const STEP = cn(
-  "hover:bg-muted grid size-8 place-items-center",
+  "hover:bg-hover grid size-8 place-items-center",
   "focus-visible:ring-inset disabled:pointer-events-none disabled:opacity-40",
   SURFACE,
 );
 
 export const ICON_BTN = cn(
-  "text-muted-foreground hover:text-foreground grid size-7 shrink-0 place-items-center rounded",
+  "text-muted-foreground hover:text-foreground grid size-7 shrink-0 place-items-center rounded-sm",
   "relative after:absolute after:-inset-2 after:content-[''] sm:after:hidden",
   "disabled:pointer-events-none disabled:opacity-40",
   SURFACE,
@@ -75,10 +75,10 @@ export const GRIP = cn(
 
 export function chipClass(active: boolean): string {
   return cn(
-    "min-h-11 rounded-md border px-3 py-1.5 text-sm sm:min-h-0",
+    "min-h-11 rounded-full border px-3 py-1 text-sm font-medium sm:min-h-7",
     SURFACE,
     active
-      ? "bg-primary text-primary-foreground border-primary"
-      : "bg-background hover:bg-muted",
+      ? "border-border-strong bg-active text-foreground"
+      : "border-border text-foreground-secondary hover:bg-hover hover:border-border-strong",
   );
 }

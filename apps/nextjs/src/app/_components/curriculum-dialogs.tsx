@@ -13,8 +13,8 @@ import {
 import { FieldError } from "@matops/ui/field";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
-import { FOCUS_RING } from "@matops/ui/motion";
 import { Select } from "@matops/ui/select";
+import { Textarea } from "@matops/ui/textarea";
 
 import { chipClass, weeksLabel } from "./curriculum-shared";
 
@@ -176,14 +176,14 @@ export function BlockDialog({
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="block-notes">Notes</Label>
-            <textarea
+            <Textarea
               id="block-notes"
               value={form.notes}
               onChange={(e) => onChange({ ...form, notes: e.target.value })}
               placeholder="What this block covers, week by week."
               maxLength={2000}
               rows={4}
-              className={`border-input bg-background rounded-md border px-3 py-2 text-sm ${FOCUS_RING}`}
+              className="min-h-24 resize-y"
             />
           </div>
 
@@ -226,7 +226,7 @@ export function RunNoteDialog({
             passed, so this is also where "what we actually covered" goes.
           </DialogDescription>
 
-          <textarea
+          <Textarea
             aria-label={`Notes for this run of ${form.theme}`}
             value={form.note}
             onChange={(e) => onChange({ ...form, note: e.target.value })}
@@ -234,7 +234,7 @@ export function RunNoteDialog({
             maxLength={2000}
             rows={5}
             autoFocus
-            className={`border-input bg-background rounded-md border px-3 py-2 text-sm ${FOCUS_RING}`}
+            className="min-h-28 resize-y"
           />
 
           <div className="flex gap-2">

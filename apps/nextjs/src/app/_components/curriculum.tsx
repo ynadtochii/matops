@@ -15,6 +15,7 @@ import {
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
+import { Checkbox } from "@matops/ui/checkbox";
 import {
   Collapsible,
   CollapsibleContent,
@@ -26,6 +27,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@matops/ui/dropdown-menu";
+import { FOCUS_RING_INSET } from "@matops/ui/motion";
 import { toast } from "@matops/ui/toast";
 
 import type { BlockForm, RunNoteForm, TrackForm } from "./curriculum-dialogs";
@@ -60,6 +62,7 @@ import {
   ChevronDownIcon,
   ENTER,
   GripIcon,
+  LIST,
   MinusIcon,
   MoreIcon,
   NoteIcon,
@@ -258,7 +261,7 @@ export function Curriculum() {
                       type="button"
                       aria-label={`Rename or delete ${t.name}`}
                       className={cn(
-                        "hover:bg-primary-foreground/15 ml-1 grid place-items-center rounded-r-md px-2",
+                        "hover:bg-hover ml-1 grid place-items-center rounded-r-full px-2",
                         SURFACE,
                       )}
                     >
@@ -337,7 +340,7 @@ export function Curriculum() {
               <div className="mt-3 flex flex-col gap-3">
                 {groups.map((group) => {
                   const cards = (
-                    <ul className="flex flex-col gap-2">
+                    <ul className={LIST}>
                       {group.blocks.map((block) => (
                         <LibraryCard
                           key={block.id}
@@ -368,7 +371,7 @@ export function Curriculum() {
                   return (
                     <Collapsible
                       key={name}
-                      className="border-border bg-muted/20 rounded-lg border px-3 py-1"
+                      className="border-border bg-surface-1 rounded-lg border px-3 py-1"
                       open={open}
                       onOpenChange={(next) =>
                         setOpened((was) => {
@@ -382,13 +385,16 @@ export function Curriculum() {
                       <CollapsibleTrigger asChild>
                         <button
                           type="button"
-                          className="hover:text-foreground text-muted-foreground flex w-full items-center justify-between gap-2 py-2 text-left"
+                          className={cn(
+                            "hover:text-foreground text-muted-foreground flex w-full items-center justify-between gap-2 rounded-md py-2 text-left transition-colors motion-reduce:transition-none",
+                            FOCUS_RING_INSET,
+                          )}
                         >
                           <span className="text-foreground truncate text-sm font-medium">
                             {group.category ?? "No category"}
                           </span>
                           <span className="flex shrink-0 items-center gap-1.5">
-                            <span className="font-mono text-[10px] tabular-nums">
+                            <span className="text-2xs tabular-nums">
                               {group.blocks.length}
                             </span>
                             <ChevronDownIcon
@@ -401,7 +407,7 @@ export function Curriculum() {
                         </button>
                       </CollapsibleTrigger>
                       <CollapsibleContent>
-                        <div className="border-border/60 mt-1 border-t pt-3 pb-2">
+                        <div className="border-border mt-1 border-t pt-3 pb-2">
                           {cards}
                         </div>
                       </CollapsibleContent>
@@ -419,10 +425,10 @@ export function Curriculum() {
                 {ticks.map((tick, w) => (
                   <div
                     key={tick.week + "-" + w}
-                    className="absolute inset-x-0 flex items-start justify-between pr-3 font-mono text-[10px] tabular-nums"
+                    className="text-2xs absolute inset-x-0 flex items-start justify-between pr-3 tabular-nums"
                     style={{ top: w * WEEK_H + 10 }}
                   >
-                    <span className="text-foreground tracking-[0.1em]">
+                    <span className="text-foreground font-medium">
                       {tick.label ?? ""}
                     </span>
                     <span className="text-muted-foreground">w{tick.week}</span>
@@ -430,7 +436,7 @@ export function Curriculum() {
                 ))}
                 {nowTop !== null && (
                   <span
-                    className="bg-brand text-brand-foreground absolute right-1 z-20 -translate-y-1/2 rounded-[2px] px-1 py-px font-mono text-[9px] tabular-nums"
+                    className="bg-foreground text-background text-2xs absolute right-1 z-20 -translate-y-1/2 rounded-xs px-1 py-px tabular-nums"
                     style={{ top: nowTop }}
                   >
                     {dayLabel(today)}
@@ -458,7 +464,7 @@ export function Curriculum() {
                 {nowTop !== null && (
                   <div
                     aria-hidden
-                    className="bg-brand/70 absolute inset-x-0 z-0 h-px"
+                    className="bg-foreground/70 absolute inset-x-0 z-0 h-px"
                     style={{ top: nowTop }}
                   />
                 )}
@@ -614,13 +620,11 @@ function StudentVisibility() {
       title="On their class screen, in the app and on the web. Instructors always see it. Your block notes stay staff-only either way."
       className="text-muted-foreground hover:text-foreground flex min-h-11 cursor-pointer items-center gap-2 text-sm sm:min-h-0"
     >
-      <input
-        type="checkbox"
-        className="accent-brand size-4"
+      <Checkbox
         checked={on}
         disabled={save.isPending}
-        onChange={(e) =>
-          save.mutate({ curriculumForStudents: e.target.checked })
+        onCheckedChange={(checked) =>
+          save.mutate({ curriculumForStudents: checked === true })
         }
       />
       Students see the week's theme
@@ -645,9 +649,9 @@ function LibraryCard({
   return (
     <li
       className={cn(
-        "border-border bg-card group/card flex items-start gap-2 rounded-lg border p-3",
-        "transition-[background-color,border-color,opacity] duration-150 motion-reduce:transition-none",
-        flags.held ? "border-brand opacity-60" : "hover:border-brand/40",
+        "group/card flex items-start gap-2 p-3",
+        "transition-[background-color,opacity] duration-150 motion-reduce:transition-none",
+        flags.held ? "opacity-60" : "hover:bg-hover",
       )}
     >
       <button
@@ -660,7 +664,7 @@ function LibraryCard({
       </button>
       <div className="min-w-0 flex-1">
         <p className="line-clamp-2 text-sm font-medium">{block.theme}</p>
-        <p className="text-muted-foreground mt-0.5 font-mono text-[11px] tabular-nums">
+        <p className="text-muted-foreground mt-0.5 text-xs tabular-nums">
           {weeksLabel(block.defaultWeeks)}
           {block.used > 0 &&
             ` · on the plan ${block.used === 1 ? "once" : `${block.used} times`}`}
@@ -744,7 +748,7 @@ function PlacedCard({
   const meta = (
     <p
       className={cn(
-        "shrink-0 truncate font-mono text-[10px] tracking-[0.08em] uppercase tabular-nums",
+        "text-2xs shrink-0 truncate tabular-nums",
         settled ? "text-muted-foreground/70" : "text-muted-foreground",
       )}
     >
@@ -770,14 +774,14 @@ function PlacedCard({
           className={cn(
             "group/theme flex min-w-0 flex-col gap-1 overflow-hidden pr-3",
             compact ? "justify-center" : "pt-0.5",
-            at > 0 && "border-card-foreground/20 border-l pl-3",
+            at > 0 && "border-border border-l pl-3",
           )}
         >
           <div className="flex min-w-0 items-start gap-1">
             <p
               className={cn(
                 "min-w-0 flex-1 truncate font-medium",
-                compact ? "text-sm" : "text-[15px]",
+                compact ? "text-sm" : "text-base",
                 settled ? "text-muted-foreground" : "text-card-foreground",
               )}
             >
@@ -809,7 +813,7 @@ function PlacedCard({
                   className={cn(
                     ICON_BTN,
                     "size-6",
-                    on.note && "text-brand hover:text-brand",
+                    on.note && "text-foreground",
                   )}
                 >
                   <NoteIcon />
@@ -835,16 +839,16 @@ function PlacedCard({
           )}
           {!compact && on.note && (
             <p className="min-h-0 overflow-hidden text-xs leading-relaxed whitespace-pre-line">
-              <span className="text-brand-strong mr-1.5 font-mono text-[9px] tracking-[0.12em] uppercase">
+              <span className="text-foreground-secondary text-2xs mr-1.5 font-medium">
                 This run
               </span>
-              <span className="text-card-foreground/80">{on.note}</span>
+              <span className="text-foreground-secondary">{on.note}</span>
             </p>
           )}
         </div>
       ))}
       {target && (
-        <div className="border-brand text-brand flex min-w-0 items-center justify-center border-l border-dashed pl-3 font-mono text-[10px] tracking-[0.08em] uppercase">
+        <div className="border-brand text-brand-strong text-2xs flex min-w-0 items-center justify-center border-l border-dashed pl-3 font-medium">
           Add here
         </div>
       )}
@@ -858,9 +862,9 @@ function PlacedCard({
         "transition-[translate,height] duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none",
         ENTER,
         "bg-card",
-        settled && "border-card-foreground/14",
-        !settled && "border-card-foreground/20",
-        (ghost || held) && "border-brand shadow-md",
+        settled && "border-border",
+        !settled && "border-border-strong",
+        (ghost || held) && "border-border-strong shadow-md",
         target && "border-brand ring-brand/30 ring-2",
         ghost && "pointer-events-none opacity-70",
         held && "opacity-70",
@@ -870,7 +874,7 @@ function PlacedCard({
       {running && (
         <span
           aria-hidden
-          className="bg-brand absolute inset-y-0 left-0 w-[3px] rounded-l-md"
+          className="bg-foreground absolute inset-y-0 left-0 w-[3px] rounded-l-md"
         />
       )}
 
@@ -902,7 +906,7 @@ function PlacedCard({
         )}
 
         {running && (
-          <span className="text-brand shrink-0 font-mono text-[9px] tracking-[0.12em] uppercase">
+          <span className="text-foreground text-2xs shrink-0 font-medium">
             running
           </span>
         )}
@@ -921,7 +925,7 @@ function PlacedCard({
                   >
                     <MinusIcon />
                   </button>
-                  <span className="text-muted-foreground border-border border-x px-1.5 py-1 font-mono text-[11px] tabular-nums">
+                  <span className="text-muted-foreground border-border border-x px-1.5 py-1 text-xs tabular-nums">
                     {placed.weeks}w
                   </span>
                   <button
@@ -969,10 +973,7 @@ function PlacedCard({
 
       {!compact && (
         <>
-          <div
-            aria-hidden
-            className="border-card-foreground/15 mx-3 border-t"
-          />
+          <div aria-hidden className="border-border mx-3 border-t" />
           <div className="min-h-0 flex-1 overflow-hidden px-3 py-2">
             {themes}
           </div>
@@ -1001,7 +1002,7 @@ function PlacedCard({
           }}
           className="group absolute inset-x-0 bottom-0 flex h-3 cursor-ns-resize touch-none items-end justify-center pb-[3px]"
         >
-          <span className="bg-border group-hover:bg-brand group-focus-visible:bg-brand h-[3px] w-9 rounded-full transition-[background-color,width] duration-150 group-hover:w-14 group-focus-visible:w-14 motion-reduce:transition-none" />
+          <span className="bg-border group-hover:bg-muted-foreground group-focus-visible:bg-brand h-[3px] w-9 rounded-full transition-[background-color,width] duration-150 group-hover:w-14 group-focus-visible:w-14 motion-reduce:transition-none" />
         </button>
       )}
     </li>

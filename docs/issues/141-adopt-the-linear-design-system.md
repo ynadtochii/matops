@@ -198,6 +198,22 @@ The platform has no real users. So the whole app switches at once on the branch
   change, and Rank Clear. Fixing them means showing the error on submit, which
   is a logic change, so it is its own slice.
 
+### Step 4.2: Schedule and curriculum
+
+- The app's own `_components/tabs.tsx` (eight screens) is restyled in place:
+  13px medium, tertiary until selected, a 2px primary underline instead of
+  violet, 44px on touch and 36px above `sm`. Its API is unchanged.
+- Today on the week grid, the now line, and the curriculum's running block
+  and now chip use primary text and fills, not violet. Violet stays on the
+  pending count, and on the drop line, the "Add here" target and the resize
+  handle's focus, since those are focus states.
+- Three native checkboxes are `Checkbox`, the curriculum textareas are
+  `Textarea`, the paused tag is `Badge`, and the poster save uses `busy`.
+  Curriculum drag and resize behaviour is unchanged.
+- The poster preview keeps a white frame, since it shows the paper. Its
+  loading text uses `text-black/60` (5.7:1) instead of a theme token, which
+  was 3.2:1 on the paper in dark.
+
 ## Consequences
 
 - Every new screen gets sizes, weights, edges and radii from tokens. The last
