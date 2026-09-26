@@ -1,7 +1,7 @@
 import { defineConfig } from "eslint/config";
 
 import { baseConfig } from "@matops/eslint-config/base";
-import { reactConfig } from "@matops/eslint-config/react";
+import { designTokensConfig, reactConfig } from "@matops/eslint-config/react";
 
 export default defineConfig(
   {
@@ -9,4 +9,5 @@ export default defineConfig(
   },
   baseConfig,
   reactConfig,
+  designTokensConfig,
 );

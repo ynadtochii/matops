@@ -116,7 +116,7 @@ export default function JoinScreen() {
               keyboardType="phone-pad"
             />
             {error ? (
-              <Txt size={14} tone="error">
+              <Txt size={13} tone="error">
                 {error}
               </Txt>
             ) : null}

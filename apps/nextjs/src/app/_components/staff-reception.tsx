@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowRight } from "lucide-react";
 
 import {
   defaultReceptionClass,
@@ -9,9 +10,12 @@ import {
   receptionClassWindow,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
+import { Badge } from "@matops/ui/badge";
 import { Button } from "@matops/ui/button";
+import { Callout } from "@matops/ui/callout";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
+import { Spinner } from "@matops/ui/spinner";
 
 import { useTRPC } from "~/trpc/react";
 import { useEntity } from "./entity";
@@ -21,6 +25,7 @@ import {
   ReceptionClassList,
   receptionWhen,
 } from "./reception-classes";
+import { EmptyState, ErrorState } from "./states";
 
 const SEARCH_DEBOUNCE_MS = 200;
 
@@ -163,17 +168,19 @@ export function StaffReception() {
 
   return (
     <section className="flex flex-col gap-5">
-      <div className="bg-grid-small overflow-hidden rounded-lg border">
+      <div className="border-border bg-grid-small overflow-hidden rounded-lg border">
         <div className="bg-background/90 flex flex-wrap items-center justify-between gap-3 p-4">
           <div>
-            <p className="font-medium">{academy.name}</p>
+            <p className="text-md font-medium">{academy.name}</p>
             <p className={cn("text-muted-foreground mt-0.5", SECTION_LABEL)}>
               Times in {zone}
             </p>
           </div>
           {chosen && (
             <div className="text-left sm:text-right">
-              <p className="font-mono text-sm">{receptionWhen(chosen, zone)}</p>
+              <p className="text-sm font-medium tabular-nums">
+                {receptionWhen(chosen, zone)}
+              </p>
               <p className="text-muted-foreground text-sm">{chosen.title}</p>
             </div>
           )}
@@ -182,37 +189,41 @@ export function StaffReception() {
 
       {classes.isPending ? (
         <div
-          className="flex min-h-48 items-center justify-center rounded-lg border"
+          className="border-border text-muted-foreground flex min-h-48 items-center justify-center gap-3 rounded-lg border"
           role="status"
         >
-          <span className="text-muted-foreground">Loading classes…</span>
+          <Spinner />
+          <span>Loading classes…</span>
         </div>
       ) : classes.isError ? (
-        <div
-          className="flex max-w-md flex-col gap-3 rounded-lg border p-5"
-          role="alert"
+        <Callout
+          tone="error"
+          title="Could not load classes."
+          className="max-w-md"
         >
-          <p>Could not load classes.</p>
-          <Button variant="outline" onClick={() => void classes.refetch()}>
+          <Button
+            className="mt-2 self-start"
+            variant="outline"
+            onClick={() => void classes.refetch()}
+          >
             Try again
           </Button>
-        </div>
+        </Callout>
       ) : cards.length === 0 ? (
-        <div className="rounded-lg border p-5" role="status">
-          <p className="font-medium">No upcoming classes</p>
-          <p className="text-muted-foreground mt-1 text-sm">
+        <div role="status">
+          <EmptyState title="No upcoming classes">
             Nothing is scheduled in the next few days.
-          </p>
+          </EmptyState>
         </div>
       ) : (
         <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)]">
-          <div className="flex min-w-0 flex-col gap-5 rounded-lg border p-4 sm:p-5">
-            <div className="flex items-center justify-between gap-3 border-b pb-4">
+          <div className="border-border bg-card flex min-w-0 flex-col gap-5 rounded-lg border p-4 sm:p-5">
+            <div className="border-border flex items-center justify-between gap-3 border-b pb-4">
               <div>
                 <p className={cn("text-muted-foreground", SECTION_LABEL)}>
                   Desk check-in
                 </p>
-                <h2 className="mt-1 text-xl tracking-tight">
+                <h2 className="mt-1 text-xl font-semibold tracking-tight">
                   {person ? person.name : "Find a member"}
                 </h2>
               </div>
@@ -228,7 +239,8 @@ export function StaffReception() {
                 {chosen && !picking && (
                   <div className="flex flex-col gap-3">
                     <Button
-                      className="h-auto! min-h-24! w-full flex-col items-start gap-2 px-5 py-5 text-left whitespace-normal sm:min-h-24!"
+                      className="h-auto! min-h-24! w-full flex-col items-start gap-2 rounded-lg px-5 py-5 text-left whitespace-normal sm:min-h-24!"
+                      busy={busy}
                       disabled={
                         busy ||
                         (booking ? held.booked : held.present).has(person.id)
@@ -244,7 +256,7 @@ export function StaffReception() {
                       </span>
                       <span className="text-primary-foreground/70 flex w-full flex-wrap justify-between gap-2 text-sm">
                         <span>{chosen.title}</span>
-                        <span className="font-mono">
+                        <span className="tabular-nums">
                           {receptionWhen(chosen, zone)}
                         </span>
                       </span>
@@ -264,7 +276,7 @@ export function StaffReception() {
                 <Label htmlFor="staff-reception-search">Member name</Label>
                 <Input
                   id="staff-reception-search"
-                  className="min-h-12 text-base"
+                  className="text-md min-h-12"
                   value={query}
                   autoComplete="off"
                   maxLength={80}
@@ -295,7 +307,7 @@ export function StaffReception() {
                   search.data?.map((match) => (
                     <Button
                       key={match.id}
-                      className="group hover:border-foreground min-h-12 justify-between text-left whitespace-normal"
+                      className="group min-h-12 justify-between rounded-lg text-left whitespace-normal"
                       variant="outline"
                       onClick={() => {
                         setPerson({ id: match.id, name: match.name });
@@ -303,12 +315,10 @@ export function StaffReception() {
                       }}
                     >
                       <span>{match.name}</span>
-                      <span
-                        className="text-muted-foreground transition-transform group-hover:translate-x-0.5"
+                      <ArrowRight
+                        className="text-muted-foreground transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none"
                         aria-hidden
-                      >
-                        →
-                      </span>
+                      />
                     </Button>
                   ))}
               </div>
@@ -316,7 +326,7 @@ export function StaffReception() {
 
             {(picking || !chosen) && (
               <div className="flex flex-col gap-3">
-                <h3 className="text-lg font-medium tracking-tight">
+                <h3 className="text-lg font-semibold tracking-tight">
                   Choose a class
                 </h3>
                 {!chosen && (
@@ -344,35 +354,27 @@ export function StaffReception() {
               </p>
             )}
             {done && (
-              <p
-                className="border-success text-success bg-muted border-l-2 p-3 text-sm font-medium"
-                role="status"
-              >
-                {booking ? "Member booked." : "Member checked in."}
-              </p>
+              <Callout tone="success" role="status">
+                <p className="text-foreground font-medium">
+                  {booking ? "Member booked." : "Member checked in."}
+                </p>
+              </Callout>
             )}
-            {message && (
-              <p
-                className="border-error text-error bg-muted border-l-2 p-3 text-sm"
-                role="alert"
-              >
-                {message}
-              </p>
-            )}
+            {message && <Callout tone="error">{message}</Callout>}
           </div>
 
           {chosen && !picking && (
-            <aside className="flex min-w-0 flex-col overflow-hidden rounded-lg border">
-              <div className="flex items-end justify-between gap-3 border-b p-4 sm:p-5">
+            <aside className="border-border bg-card flex min-w-0 flex-col overflow-hidden rounded-lg border">
+              <div className="border-border flex items-end justify-between gap-3 border-b p-4 sm:p-5">
                 <div>
                   <p className={cn("text-muted-foreground", SECTION_LABEL)}>
                     {booking ? "Booking list" : "Live register"}
                   </p>
-                  <h2 className="mt-1 text-lg font-medium tracking-tight">
+                  <h2 className="mt-1 text-lg font-semibold tracking-tight">
                     {chosen.title}
                   </h2>
                 </div>
-                <span className="font-mono text-3xl tabular-nums">
+                <span className="text-3xl font-medium tabular-nums">
                   {booking ? held.booked.size : held.present.size}
                 </span>
               </div>
@@ -380,29 +382,44 @@ export function StaffReception() {
                 <p className="text-muted-foreground p-5 text-sm" role="status">
                   Loading the register…
                 </p>
-              ) : (roster.data?.rows ?? []).length === 0 ? (
-                <div className="bg-grid-small m-4 flex min-h-40 items-center justify-center border">
-                  <p className="bg-background text-muted-foreground max-w-44 p-3 text-center text-sm">
+              ) : roster.isError ? (
+                <div className="p-4">
+                  <ErrorState
+                    label="the register"
+                    onRetry={() => void roster.refetch()}
+                  />
+                </div>
+              ) : roster.data.rows.length === 0 ? (
+                <div className="border-border bg-grid-small m-4 flex min-h-40 items-center justify-center rounded-md border">
+                  <p className="bg-background text-muted-foreground max-w-44 rounded-md p-3 text-center text-sm">
                     {booking ? "No bookings yet." : "Nobody is checked in yet."}
                   </p>
                 </div>
               ) : (
-                <ul className="divide-y px-4">
-                  {(roster.data?.rows ?? []).map((row) => (
+                <ul className="divide-border divide-y px-4">
+                  {roster.data.rows.map((row) => (
                     <li
                       key={row.studentId}
                       className="flex min-h-12 items-center justify-between gap-3 py-2"
                     >
-                      <span>{row.name}</span>
-                      <span
-                        className={cn("text-muted-foreground", SECTION_LABEL)}
+                      <span className="text-md min-w-0 truncate">
+                        {row.name}
+                      </span>
+                      <Badge
+                        tone={
+                          row.attendanceStatus === "present"
+                            ? "success"
+                            : row.attendanceStatus === "absent"
+                              ? "error"
+                              : "neutral"
+                        }
                       >
                         {row.attendanceStatus === "present"
                           ? "Present"
                           : row.attendanceStatus === "absent"
                             ? "Absent"
                             : "Booked"}
-                      </span>
+                      </Badge>
                     </li>
                   ))}
                 </ul>

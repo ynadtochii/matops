@@ -7,6 +7,7 @@ import { Button } from "@matops/ui/button";
 import { CopyButton } from "@matops/ui/copy-button";
 
 import { useTRPC } from "~/trpc/react";
+import { ErrorState } from "./states";
 
 export function ReceptionSetup() {
   const trpc = useTRPC();
@@ -51,17 +52,19 @@ export function ReceptionSetup() {
   const link = token ? `${origin}/reception#key=${token}` : null;
 
   return (
-    <div className="border-border flex flex-col gap-3 rounded-lg border p-4">
-      <h3 className="font-semibold">Reception screen</h3>
+    <div className="border-border bg-card flex flex-col gap-3 rounded-lg border p-4">
+      <h3 className="text-md font-semibold">Reception screen</h3>
       <p className="text-muted-foreground text-sm">
         Leave a tablet at the door. Members find their name and check into a
         class or book the next one. Visitors use the walk-in form.
       </p>
 
       {link && (
-        <div className="border-border flex flex-col gap-3 rounded-lg border p-4">
-          <p className="text-sm font-semibold">Reception link</p>
-          <code className="text-sm break-all">{link}</code>
+        <div className="border-border bg-surface-1 flex flex-col gap-3 rounded-md border p-3">
+          <p className="text-sm font-medium">Reception link</p>
+          <code className="text-foreground-secondary text-xs break-all">
+            {link}
+          </code>
           <div className="flex flex-wrap gap-2">
             <CopyButton
               value={link}
@@ -80,10 +83,15 @@ export function ReceptionSetup() {
       )}
 
       {status.isPending ? (
-        <p role="status" className="text-sm">
+        <p role="status" className="text-muted-foreground text-sm">
           Checking the reception link…
         </p>
-      ) : status.data?.enabled ? (
+      ) : status.isError ? (
+        <ErrorState
+          label="the reception link"
+          onRetry={() => void status.refetch()}
+        />
+      ) : status.data.enabled ? (
         <>
           {!link && (
             <p className="text-muted-foreground text-sm">
@@ -140,7 +148,7 @@ export function ReceptionSetup() {
       )}
 
       {error && (
-        <p role="alert" className="text-error text-sm">
+        <p role="alert" className="text-error-text text-sm">
           {error.message}
         </p>
       )}
@@ -165,7 +173,12 @@ function ConfirmRow({
     <div className="flex flex-col gap-3">
       <p className="text-sm">{message}</p>
       <div className="flex flex-wrap gap-2">
-        <Button className="min-h-12" disabled={busy} onClick={onConfirm}>
+        <Button
+          className="min-h-12"
+          busy={busy}
+          disabled={busy}
+          onClick={onConfirm}
+        >
           {confirmLabel}
         </Button>
         <Button

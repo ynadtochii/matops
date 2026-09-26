@@ -1,5 +1,37 @@
 # Changelog
 
+## Unreleased: the Linear redesign
+
+- ADR 141 adopts the Linear design system in the product. The matops violet stays as the accent, dark becomes the default theme, and the dark theme keeps Linear's own values, including three known contrast failures. No code changed yet.
+- Step 1, tokens: the Linear surfaces, text steps and edges in both themes, Inter with a 13px interface default, a 4/6/8/12 radius scale, two shadows (lift and float), 150ms transitions, and dark as the default theme. Fields stay 16px on touch screens so iOS does not zoom. Screens are not restyled yet (ADR 141).
+- Step 2, shared components: Linear styling for every part in `@matops/ui`, with the same props, plus Tabs, Tooltip, Checkbox, RadioGroup, Switch, Kbd, Badge, Avatar, Progress, Skeleton, Callout and Table. Lucide replaces Radix icons, drawn at 16px with a 1.5px stroke. `cn` now merges the new `text-md`, `text-2xs` and shadow names correctly (ADR 141).
+- Step 3a, sidebar: 28px items on the level 1 surface, the current page marked with the active fill instead of violet, a fold per group headed by the branch name and "Gym management", Lucide icons, and a sign-out button that keeps its label while it works (ADR 141).
+- Step 3b, header and mobile shell: the branch picker is a full-width switcher row, the mobile tabs and bell mark the current page with primary text instead of violet, and the pending and dues strips are tighter (ADR 141).
+- Step 4.1, Members and People: one divided list per screen instead of stacked cards, `Badge` status pills with no violet status, Lucide icons in the shared primitives, sans labels instead of mono uppercase, and buttons that keep their label while they work (ADR 141).
+- Step 4.2, Schedule and curriculum: Linear tabs across eight screens, today and the now line in primary instead of violet, shared checkboxes, textareas and badges, a divided mobile day list, and poster loading text that stays readable on the paper in dark (ADR 141).
+- Step 4.3, Dashboard and Overview: sans labels and token sizes, divided lists for who is drifting and for branches, warning and neutral badges instead of violet tags, and a loading skeleton that matches the list it turns into (ADR 141).
+- Step 4.4, Attendance and Reception: badges for roster and register states, shared checkbox and callouts, a kiosk screen that keeps its large targets, and two screens that now say a read failed instead of showing an empty state (ADR 141).
+- Step 4.5, Memberships: a Linear page header on every screen, notices that use the error and warning edges instead of violet, divided lists for plans, claims and the month board, shared callouts and checkboxes, and buttons that keep their label while they save (ADR 141).
+- Step 4.6, Coaches, Referrals, Notifications: divided lists with matching skeletons, neutral chart bars, unread notifications marked by weight and a neutral dot instead of violet, and send buttons that show progress on the one notice being sent (ADR 141).
+- Step 4.7, Settings, Profile, class page: settings as label-and-control rows in divided sections, a switch for the public booking toggle, a badge for account status, and Lucide links (ADR 141).
+- Step 4.8, student web: the week, My classes and dues as divided lists, badges for booked, next class, dues and pending instead of violet tints, and a warning callout when booking is unavailable (ADR 141).
+- Step 4.9, public pages: sign-in, start, join, booking, check-in and privacy on the Linear surfaces, selected classes in neutral fills instead of violet, 44px targets on touch, and a retry when a public page cannot load instead of a message that says the link or booking is closed (ADR 141).
+- Step 5, mobile: Inter instead of Geist, the Linear colors, radius and pill buttons in the Expo kit, divided lists, tinted callouts and status pills, and a primary instead of violet active tab. Checked by typecheck and lint only; nobody has run it on a device yet (ADR 141).
+- Step 6a, one system page: the old `/design-system` showcase is gone, and `/linear-ds` now reads the product tokens and follows the app theme instead of keeping its own copy of Linear's values (ADR 141).
+- Light-theme error text is darker (`#a52121`), so the quiet destructive button and error badges pass contrast on grey surfaces, not only on white (ADR 141).
+- Step 6c, docs: `docs/design.md` rewritten for the Linear system with its section numbers kept, plus the ADR 141 lines in `docs/architecture.md`, `docs/map.md` and `docs/roadmap.md` (ADR 141).
+- Dark cards sit within 2% of the page (`#0e0f10` instead of `#141516`), so the 1px edge draws them, as on Linear; only fields, code boxes and hover fills inside a card step up (ADR 141).
+- Violet only where it is needed: the mark, keyboard focus and checked controls. Links are primary text with an underline, and counts, pending tags, progress, spinners and drag feedback are neutral, on web and mobile (ADR 141).
+- Step 6b, lint guard: an arbitrary text size or hex color in a class string is now a lint error in the web app, the shared UI package and the mobile app (ADR 141).
+
+## Unreleased: design system reference
+
+- Added an unlinked, signed-in `/design-system` page with live theme colors, type roles, shared controls, card examples, and a searchable list/detail pattern. No product tokens or navigation changed.
+- Added an unlinked, public, no-index `/linear-ds` page: a design system measured from linear.app (surfaces, text, lines, accent and status colors, Inter type scale, radii, elevation, motion, six principles) with scoped tokens and basic components (buttons, fields, switches, chips, status and priority icons, command menu, issue list, board cards). It uses its own CSS module, so matops tokens are unchanged.
+- `/linear-ds` gained a Patterns section: tabs, a status menu, tooltip, a native modal dialog, toasts with undo, checkboxes with a bulk action bar, radio cards, a sidebar with breadcrumb, progress rings and bars with a sortable projects table, callouts, a loading skeleton, and an activity feed with a comment composer. Shared parts moved to `primitives.tsx`.
+- `/linear-ds` has a Light / Dark toggle, saved for this page only (dark by default). Light values are measured from linear.app's own `data-theme="light"` tokens; a few role tokens (raised, floating, hover, active, track) keep nesting visible on white. Dark renders unchanged.
+- `/linear-ds` light theme passes WCAG AA: tertiary and quaternary text, accent, brand, the green/yellow/orange status icons, avatar colors and control edges (inputs, checkboxes, radios, switch, comment box) are darker than Linear's light values. Dark still matches linear.app exactly.
+
 ## Unreleased: the owner screens design pass
 
 - **One pass per owner screen against `docs/design.md`**, eleven screens, inside the existing system. No token, no migration, no procedure and no query changed (ADR 140).

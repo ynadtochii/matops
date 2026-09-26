@@ -84,8 +84,8 @@ function NotificationToggle() {
       }}
     >
       <View style={{ flex: 1 }}>
-        <Txt size={16}>Push notifications</Txt>
-        <Txt size={14} tone="muted">
+        <Txt size={15}>Push notifications</Txt>
+        <Txt size={13} tone="muted">
           Class reminders and cancellations.
         </Txt>
       </View>
@@ -93,7 +93,7 @@ function NotificationToggle() {
         accessibilityLabel="Push notifications"
         value={on}
         onValueChange={toggle}
-        trackColor={{ true: t.brand, false: t.input }}
+        trackColor={{ true: t.brand, false: t.track }}
         thumbColor="#ffffff"
       />
     </View>
@@ -113,10 +113,11 @@ function AppearanceControl() {
     <View
       style={{
         flexDirection: "row",
+        padding: 2,
         borderWidth: 1,
-        borderColor: t.input,
-        borderRadius: 3,
-        overflow: "hidden",
+        borderColor: t.border,
+        borderRadius: 9999,
+        backgroundColor: t.surface1,
       }}
     >
       {options.map((o) => {
@@ -130,16 +131,14 @@ function AppearanceControl() {
             onPress={() => setMode(o.key)}
             style={{
               flex: 1,
-              paddingVertical: 12,
+              minHeight: 40,
+              borderRadius: 9999,
               alignItems: "center",
-              backgroundColor: active ? t.brandWash : "transparent",
+              justifyContent: "center",
+              backgroundColor: active ? t.active : "transparent",
             }}
           >
-            <Txt
-              size={14}
-              weight={active ? 600 : 400}
-              tone={active ? "brand" : "muted"}
-            >
+            <Txt size={15} weight={500} tone={active ? "default" : "muted"}>
               {o.label}
             </Txt>
           </Pressable>

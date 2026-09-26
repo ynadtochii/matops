@@ -69,11 +69,7 @@ export function MatLoader({
           />
         ))}
       </svg>
-      {label && (
-        <p className="text-muted-foreground font-mono text-[11px] tracking-[0.16em] uppercase">
-          {label}
-        </p>
-      )}
+      {label && <p className="text-muted-foreground text-xs">{label}</p>}
     </div>
   );
 }

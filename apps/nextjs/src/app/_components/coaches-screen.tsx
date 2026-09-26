@@ -26,15 +26,15 @@ import { useTRPC } from "~/trpc/react";
 import { useEntity } from "./entity";
 import { PageHeader } from "./page-header";
 import {
-  cardClass,
   ChevronDownIcon,
   ENTER,
   Eyebrow,
+  LIST,
   RESOLVE,
   SectionHeading,
   Stat,
 } from "./primitives";
-import { SkeletonCoachCards } from "./skeletons";
+import { SkeletonCoachCards, SkeletonLines } from "./skeletons";
 import { Staff } from "./staff";
 import { EmptyState, ErrorState } from "./states";
 import { Tabs } from "./tabs";
@@ -66,17 +66,15 @@ function BarRow({
       <ul className="mt-2 flex items-end gap-1.5">
         {bars.map((b) => (
           <li key={b.key} className="flex flex-1 flex-col items-center gap-1">
-            <span className="font-mono text-[10px] tabular-nums">
+            <span className="text-2xs text-foreground-secondary tabular-nums">
               {b.value || ""}
             </span>
             <span
               aria-hidden
-              className="bg-muted-foreground/40 w-full rounded-sm"
+              className="bg-chart-4 w-full rounded-sm"
               style={{ height: `${Math.max(2, (b.value / peak) * 40)}px` }}
             />
-            <span className="text-muted-foreground font-mono text-[10px]">
-              {b.caption}
-            </span>
+            <span className="text-muted-foreground text-2xs">{b.caption}</span>
             <span className="sr-only">
               {b.caption}: {b.value}
             </span>
@@ -118,7 +116,7 @@ function BreakdownPanel({ breakdown }: { breakdown: Breakdown }) {
                   </span>
                 )}
               </span>
-              <span className="text-muted-foreground font-mono text-xs tabular-nums">
+              <span className="text-muted-foreground text-xs tabular-nums">
                 {g.classesLed}× · avg {headcount(g.avgHeadcount)}
               </span>
             </li>
@@ -154,12 +152,12 @@ function BreakdownPanel({ breakdown }: { breakdown: Breakdown }) {
               className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm"
             >
               <span>
-                <span className="text-muted-foreground font-mono text-xs tabular-nums">
+                <span className="text-muted-foreground text-xs tabular-nums">
                   {dateTimeFmt.format(new Date(c.startsAt))}
                 </span>{" "}
                 {c.title}
               </span>
-              <span className="text-muted-foreground font-mono text-xs tabular-nums">
+              <span className="text-muted-foreground text-xs tabular-nums">
                 {c.marked ? `${c.headcount} present` : "not marked"}
               </span>
             </li>
@@ -176,7 +174,7 @@ function BreakdownPanel({ breakdown }: { breakdown: Breakdown }) {
                 className="flex justify-between gap-3 text-sm"
               >
                 <span>{c.title}</span>
-                <span className="text-muted-foreground">
+                <span className="text-muted-foreground tabular-nums">
                   {dateTimeFmt.format(new Date(c.startsAt))}
                 </span>
               </li>
@@ -194,7 +192,7 @@ function BreakdownPanel({ breakdown }: { breakdown: Breakdown }) {
                 className="flex justify-between gap-3 text-sm"
               >
                 <span>{c.title}</span>
-                <span className="text-muted-foreground">
+                <span className="text-muted-foreground tabular-nums">
                   {dateTimeFmt.format(new Date(c.startsAt))}
                 </span>
               </li>
@@ -218,7 +216,7 @@ function CoachDetail({
     ...trpc.stats.coach.queryOptions({ window, instructorId }),
     placeholderData: keepPreviousData,
   });
-  if (detail.isPending) return <SkeletonCoachCards n={1} toggle={false} />;
+  if (detail.isPending) return <SkeletonLines n={3} />;
   if (detail.isError) {
     return (
       <ErrorState
@@ -250,11 +248,7 @@ function CoachWorkloadRow({
     <CoachDetail instructorId={row.instructorId} window={window} />
   );
   return (
-    <Collapsible
-      open={open}
-      onOpenChange={onToggle}
-      className="border-border/60 border-b last:border-b-0"
-    >
+    <Collapsible open={open} onOpenChange={onToggle}>
       <div className="grid items-center gap-4 p-4 sm:grid-cols-[minmax(0,1.5fr)_minmax(15rem,2fr)_auto]">
         <div className="min-w-0">
           <p className="truncate font-medium">{row.name}</p>
@@ -290,11 +284,11 @@ function CoachWorkloadRow({
       </div>
 
       {onToggle ? (
-        <CollapsibleContent className="border-border/60 border-t px-4 py-5">
+        <CollapsibleContent className="border-border border-t px-4 py-5">
           {body}
         </CollapsibleContent>
       ) : (
-        <div className="border-border/60 border-t px-4 py-5">{body}</div>
+        <div className="border-border border-t px-4 py-5">{body}</div>
       )}
     </Collapsible>
   );
@@ -362,58 +356,58 @@ function PendingCoaches() {
   return (
     <section className="flex flex-col gap-3">
       <SectionHeading count={waiting.length}>Coach requests</SectionHeading>
-      {waiting.map((m) => {
-        const busy =
-          (approve.isPending && approve.variables.memberId === m.memberId) ||
-          (reject.isPending && reject.variables.memberId === m.memberId);
-        return (
-          <div
-            key={m.memberId}
-            className={cn(
-              cardClass(),
-              "flex flex-wrap items-center justify-between gap-3",
-            )}
-          >
-            <div className="min-w-0">
-              <p className="truncate font-medium">{m.name}</p>
-              <p className="text-muted-foreground truncate text-sm">
-                {m.email} · wants to join as instructor
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="secondary"
-                busy={
-                  approve.isPending && approve.variables.memberId === m.memberId
-                }
-                disabled={busy}
-                onClick={() => approve.mutate({ memberId: m.memberId })}
-              >
-                Approve
-              </Button>
-              <ConfirmDialog
-                title={`Decline ${m.name}?`}
-                description="They won't join the gym. You can send them the instructor link again later."
-                confirmLabel="Decline request"
-                variant="destructive"
-                onConfirm={async () => {
-                  await reject.mutateAsync({ memberId: m.memberId });
-                }}
-                trigger={
-                  <Button
-                    size="sm"
-                    variant="destructive-outline"
-                    disabled={busy}
-                  >
-                    Decline
-                  </Button>
-                }
-              />
-            </div>
-          </div>
-        );
-      })}
+      <ul className={LIST}>
+        {waiting.map((m) => {
+          const busy =
+            (approve.isPending && approve.variables.memberId === m.memberId) ||
+            (reject.isPending && reject.variables.memberId === m.memberId);
+          return (
+            <li
+              key={m.memberId}
+              className="flex min-h-11 flex-wrap items-center justify-between gap-3 px-4 py-3"
+            >
+              <div className="min-w-0">
+                <p className="truncate font-medium">{m.name}</p>
+                <p className="text-muted-foreground truncate text-sm">
+                  {m.email} · wants to join as instructor
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  busy={
+                    approve.isPending &&
+                    approve.variables.memberId === m.memberId
+                  }
+                  disabled={busy}
+                  onClick={() => approve.mutate({ memberId: m.memberId })}
+                >
+                  Approve
+                </Button>
+                <ConfirmDialog
+                  title={`Decline ${m.name}?`}
+                  description="They won't join the gym. You can send them the instructor link again later."
+                  confirmLabel="Decline request"
+                  variant="destructive"
+                  onConfirm={async () => {
+                    await reject.mutateAsync({ memberId: m.memberId });
+                  }}
+                  trigger={
+                    <Button
+                      size="sm"
+                      variant="destructive-outline"
+                      disabled={busy}
+                    >
+                      Decline
+                    </Button>
+                  }
+                />
+              </div>
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 }
@@ -487,7 +481,11 @@ export function CoachesScreen() {
             )}
           >
             <SectionHeading
-              action={rangeLabel ? <Eyebrow>{rangeLabel}</Eyebrow> : undefined}
+              action={
+                rangeLabel ? (
+                  <Eyebrow className="tabular-nums">{rangeLabel}</Eyebrow>
+                ) : undefined
+              }
             >
               {isOwner ? "Coach workload" : "Your workload"}
             </SectionHeading>
@@ -515,9 +513,7 @@ export function CoachesScreen() {
                   class.
                 </EmptyState>
               ) : (
-                <div
-                  className={cn(cardClass(), "overflow-hidden p-0", RESOLVE)}
-                >
+                <div className={cn(LIST, RESOLVE)}>
                   {coaches.map((row) => (
                     <CoachWorkloadRow
                       key={row.instructorId}
@@ -541,7 +537,7 @@ export function CoachesScreen() {
                 onRetry={() => void mine.refetch()}
               />
             ) : (
-              <div className={cn(cardClass(), "overflow-hidden p-0", RESOLVE)}>
+              <div className={cn(LIST, RESOLVE)}>
                 <CoachWorkloadRow
                   window={window}
                   breakdown={mine.data.breakdown}

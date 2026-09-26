@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { Logo } from "@matops/ui/logo";
+import { FOCUS_RING } from "@matops/ui/motion";
 
 import {
   BackToMatops,
@@ -17,7 +18,10 @@ export const metadata: Metadata = {
 export default function PrivacyPage() {
   return (
     <main className="container flex min-h-screen flex-col items-start gap-6 py-16">
-      <Link href="/" className="inline-flex min-h-11 items-center sm:min-h-0">
+      <Link
+        href="/"
+        className={`inline-flex min-h-11 items-center rounded-md sm:min-h-0 ${FOCUS_RING}`}
+      >
         <Logo size={26} />
       </Link>
 
@@ -29,7 +33,7 @@ export default function PrivacyPage() {
           Last updated {PRIVACY_UPDATED}. Written in plain English on purpose.
         </p>
 
-        <div className="mt-8">
+        <div className="mt-8 text-base">
           <PrivacyText />
         </div>
 

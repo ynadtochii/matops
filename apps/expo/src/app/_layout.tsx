@@ -18,7 +18,7 @@ void SplashScreen.preventAutoHideAsync();
 
 /**
  * The navigation chrome — a neutral Stack whose header follows the resolved
- * (dark-first) palette and Geist. Lives inside the ThemeProvider so it can read
+ * (dark-first) palette and Inter. Lives inside the ThemeProvider so it can read
  * the active theme; the tab group owns its own chrome (screens render headings).
  */
 function Chrome() {
@@ -30,7 +30,7 @@ function Chrome() {
           headerStyle: { backgroundColor: theme.background },
           headerTintColor: theme.foreground,
           headerBackTitle: "Back",
-          headerTitleStyle: { fontFamily: sans(600) },
+          headerTitleStyle: { fontFamily: sans(600), fontSize: 17 },
           headerShadowVisible: false,
           contentStyle: { backgroundColor: theme.background },
         }}
@@ -43,7 +43,7 @@ function Chrome() {
 }
 
 /**
- * Root layout — loads Geist / Geist Mono (holding the splash until ready), then
+ * Root layout: loads Inter / Geist Mono (holding the splash until ready), then
  * wraps every screen in the tRPC/React Query provider and the dark-first theme.
  */
 export default function RootLayout() {

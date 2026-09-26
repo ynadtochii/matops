@@ -4,11 +4,13 @@ import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { DAY_MS, dayKey, groupByDay } from "@matops/domain";
+import { cn } from "@matops/ui";
 import { Button } from "@matops/ui/button";
+import { Callout } from "@matops/ui/callout";
 import { FieldError } from "@matops/ui/field";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
-import { Spinner } from "@matops/ui/spinner";
+import { FOCUS_RING } from "@matops/ui/motion";
 import { PublicBookingSchema } from "@matops/validators";
 
 import { ConsentChecks } from "~/app/_components/consents";
@@ -18,6 +20,7 @@ import {
   PhoneField,
 } from "~/app/_components/form-fields";
 import { MatLoader } from "~/app/_components/mat-loader";
+import { ErrorState } from "~/app/_components/states";
 import { useTRPC } from "~/trpc/react";
 
 const BLANK = { firstName: "", lastName: "", phone: "", email: "" };
@@ -63,6 +66,10 @@ function dayLabel(key: string, timeZone: string): string {
     day: "numeric",
     month: "short",
   }).format(new Date(year ?? 0, (month ?? 1) - 1, day ?? 1));
+}
+
+function isNotFound(code: string | undefined): boolean {
+  return code === "NOT_FOUND" || code === "BAD_REQUEST";
 }
 
 export function BookingPage({
@@ -115,6 +122,16 @@ export function BookingPage({
     return <MatLoader label="Opening the schedule" />;
   }
   if (schedule.isError) {
+    if (!isNotFound(schedule.error.data?.code)) {
+      return (
+        <div className="w-full max-w-sm">
+          <ErrorState
+            label="the schedule"
+            onRetry={() => void schedule.refetch()}
+          />
+        </div>
+      );
+    }
     return (
       <div className="flex max-w-sm flex-col gap-3 text-center">
         <h1 className="text-2xl font-semibold tracking-tight">
@@ -131,6 +148,16 @@ export function BookingPage({
   const timeZone = gym.timeZone;
 
   if (bookingToken && booking.isError) {
+    if (!isNotFound(booking.error.data?.code)) {
+      return (
+        <div className="w-full max-w-sm">
+          <ErrorState
+            label="your booking"
+            onRetry={() => void booking.refetch()}
+          />
+        </div>
+      );
+    }
     return (
       <div className="flex w-full max-w-sm flex-col gap-3 text-center">
         <h1 className="text-2xl font-semibold tracking-tight">
@@ -158,11 +185,11 @@ export function BookingPage({
               : "You are booked"}
         </h1>
         {row.class.changed && !classCancelled && (
-          <p className="border-warning/40 bg-warning/10 rounded-md border p-3 text-sm">
+          <Callout tone="warning" className="text-left">
             The class time has changed. The current time is shown below.
-          </p>
+          </Callout>
         )}
-        <p className="text-sm">
+        <p className="text-md font-medium">
           {row.class.title} · {whenLabel(row.class.startsAt, timeZone)}
         </p>
         {gym.address && (
@@ -173,19 +200,16 @@ export function BookingPage({
             type="button"
             variant="outline"
             disabled={cancel.isPending}
+            busy={cancel.isPending}
             onClick={() => {
               setError(null);
               cancel.mutate({ code, token: bookingToken });
             }}
           >
-            {cancel.isPending ? "Cancelling…" : "Cancel booking"}
+            Cancel booking
           </Button>
         )}
-        {error && (
-          <p role="alert" className="text-error text-sm">
-            {error}
-          </p>
-        )}
+        {error && <FieldError>{error}</FieldError>}
       </div>
     );
   }
@@ -196,7 +220,7 @@ export function BookingPage({
         <h1 className="text-2xl font-semibold tracking-tight">
           You&apos;re booked 🥋
         </h1>
-        <p className="text-sm">
+        <p className="text-md font-medium">
           {book.data.class.title} ·{" "}
           {whenLabel(book.data.class.startsAt, timeZone)}
         </p>
@@ -206,7 +230,10 @@ export function BookingPage({
         {gym.mapUrl && (
           <a
             href={gym.mapUrl}
-            className="text-sm underline underline-offset-2"
+            className={cn(
+              "text-foreground decoration-muted-foreground inline-flex min-h-11 items-center justify-center self-center rounded-sm text-sm font-medium underline underline-offset-4 hover:decoration-current sm:min-h-0",
+              FOCUS_RING,
+            )}
             target="_blank"
             rel="noreferrer noopener"
           >
@@ -233,20 +260,20 @@ export function BookingPage({
         <h1 className="text-2xl font-semibold tracking-tight">
           Book a class at {gym.name}
         </h1>
-        <p className="text-muted-foreground text-sm">
+        <p className="text-muted-foreground text-sm text-pretty">
           Pick a class, leave your details, and turn up. No account needed.
         </p>
       </div>
 
       {upcoming.length === 0 ? (
-        <p className="text-muted-foreground text-sm">
+        <p className="border-border text-muted-foreground rounded-lg border border-dashed p-4 text-sm">
           No classes are open in this gym&apos;s booking window. Call the gym
           and they will fit you in.
         </p>
       ) : chosen && !changing ? (
-        <div className="border-brand/40 bg-brand-wash flex items-center gap-3 rounded-lg border p-3 text-sm">
+        <div className="border-border bg-card flex items-center gap-3 rounded-lg border p-3 text-sm">
           <span className="flex min-w-0 flex-1 flex-col">
-            <span className="font-medium">{chosen.title}</span>
+            <span className="text-foreground font-medium">{chosen.title}</span>
             <span className="text-muted-foreground">
               {whenLabel(chosen.startsAt, timeZone)} · {chosen.durationMinutes}{" "}
               min
@@ -262,24 +289,27 @@ export function BookingPage({
           </Button>
         </div>
       ) : (
-        <fieldset className="flex flex-col gap-3">
+        <fieldset className="flex flex-col gap-4">
           <legend className="sr-only">Pick a class</legend>
           {shown.map(([key, rows]) => (
-            <div key={key} className="flex flex-col gap-1">
-              <h2 className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+            <div key={key} className="flex flex-col gap-1.5">
+              <h2 className="text-muted-foreground text-xs font-medium">
                 {dayLabel(key, timeZone)}
               </h2>
               {rows.map((c) => (
                 <label
                   key={c.id}
-                  className={`border-border flex cursor-pointer items-center gap-2.5 rounded-md border px-3 py-2 text-sm ${
-                    c.bookable ? "hover:border-brand/40" : "opacity-50"
-                  }`}
+                  className={cn(
+                    "border-border bg-card flex min-h-11 items-center gap-2.5 rounded-md border px-3 py-2 text-sm transition-colors motion-reduce:transition-none",
+                    c.bookable
+                      ? "hover:border-border-strong hover:bg-hover cursor-pointer"
+                      : "opacity-50",
+                  )}
                 >
                   <input
                     type="radio"
                     name="class"
-                    className="accent-brand size-4 shrink-0"
+                    className={cn("accent-brand size-3.5 shrink-0", FOCUS_RING)}
                     checked={classId === c.id}
                     disabled={!c.bookable}
                     onChange={() => {
@@ -287,7 +317,7 @@ export function BookingPage({
                       setChanging(false);
                     }}
                   />
-                  <span className="shrink-0 font-medium tabular-nums">
+                  <span className="text-foreground shrink-0 font-medium tabular-nums">
                     {timeLabel(c.startsAt, timeZone)}
                   </span>
                   <span className="min-w-0 flex-1 truncate">{c.title}</span>
@@ -301,7 +331,10 @@ export function BookingPage({
           {hiddenDays > 0 && (
             <button
               type="button"
-              className="text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center self-start text-sm underline underline-offset-2 sm:min-h-0"
+              className={cn(
+                "text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center self-start rounded-sm text-sm underline underline-offset-2 transition-colors motion-reduce:transition-none sm:min-h-0",
+                FOCUS_RING,
+              )}
               onClick={() => setAllDays(true)}
             >
               Show the rest of the week
@@ -392,15 +425,15 @@ export function BookingPage({
             desk before your first session.
           </p>
 
-          {error && (
-            <p role="alert" className="text-error text-sm">
-              {error}
-            </p>
-          )}
+          {error && <FieldError>{error}</FieldError>}
 
-          <Button type="submit" size="lg" disabled={book.isPending}>
-            {book.isPending && <Spinner size="sm" className="text-current" />}
-            {book.isPending ? "Booking…" : "Book this class"}
+          <Button
+            type="submit"
+            size="lg"
+            disabled={book.isPending}
+            busy={book.isPending}
+          >
+            Book this class
           </Button>
         </form>
       )}

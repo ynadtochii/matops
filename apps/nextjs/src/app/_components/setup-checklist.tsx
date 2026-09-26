@@ -146,7 +146,7 @@ export function SetupChecklist({ compact = false }: { compact?: boolean }) {
             aria-hidden
             className={`flex size-5 shrink-0 items-center justify-center rounded-full border ${
               item.done
-                ? "bg-brand-strong border-transparent text-white"
+                ? "bg-foreground text-background border-transparent"
                 : "border-border"
             }`}
           >
@@ -191,7 +191,7 @@ export function SetupChecklist({ compact = false }: { compact?: boolean }) {
                 item={next}
                 firstBranchId={firstBranchId}
                 behind={behind}
-                className="text-brand-strong font-medium"
+                className="text-foreground decoration-muted-foreground font-medium underline underline-offset-4 hover:decoration-current"
               />
             </>
           ) : (
@@ -304,7 +304,7 @@ function BranchLaunchHealth({ embedded = false }: { embedded?: boolean }) {
                               issue === "staff" ? "/coaches" : "/schedule",
                             )
                     }
-                    className="text-brand-strong focus-visible:outline-ring inline-flex min-h-11 items-center text-sm underline underline-offset-4 focus-visible:outline-2"
+                    className="text-foreground decoration-muted-foreground focus-visible:outline-ring inline-flex min-h-11 items-center text-sm underline underline-offset-4 hover:decoration-current focus-visible:outline-2"
                   >
                     {ISSUES[issue]}
                   </Link>

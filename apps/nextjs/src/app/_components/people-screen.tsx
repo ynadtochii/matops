@@ -16,6 +16,7 @@ import {
 } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { Button } from "@matops/ui/button";
+import { Checkbox } from "@matops/ui/checkbox";
 import { Dialog, DialogContent, DialogTitle } from "@matops/ui/dialog";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
@@ -163,7 +164,7 @@ export function PeopleScreen() {
     <div className="flex flex-col gap-8">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">People</h1>
+          <h1 className="text-2xl font-semibold">People</h1>
           <p className="text-muted-foreground mt-1 text-sm">
             Everybody across your branches. One row per person, however many
             branches they train at.
@@ -301,11 +302,11 @@ export function PeopleScreen() {
             )}
           </div>
 
-          <div className={cn(cardClass(), "px-4 py-0")}>
+          <div className="border-border bg-card overflow-hidden rounded-lg border">
             <div
               aria-hidden
               className={cn(
-                "border-border text-muted-foreground hidden border-b py-2 font-mono text-[10px] tracking-wide uppercase sm:grid",
+                "border-border text-muted-foreground hidden gap-x-4 border-b px-4 py-2 text-xs font-medium sm:grid",
                 cols,
               )}
             >
@@ -321,20 +322,19 @@ export function PeopleScreen() {
                   key={r.personId}
                   style={stagger(i)}
                   className={cn(
-                    "border-border/60 grid min-h-11 items-center gap-x-4 gap-y-1 border-b py-2 last:border-b-0",
+                    "border-border hover:bg-hover grid min-h-11 items-center gap-x-4 gap-y-1 border-b px-4 py-2 transition-colors last:border-b-0 motion-reduce:transition-none",
                     cols,
                     ENTER,
                   )}
                 >
                   {tab !== "staff" && (
-                    <input
-                      type="checkbox"
-                      className="size-4 self-center"
+                    <Checkbox
+                      className={cn("self-center", TAP)}
                       aria-label={`Select ${r.name}`}
                       checked={selected.includes(r.personId)}
-                      onChange={(e) =>
+                      onCheckedChange={(checked) =>
                         setSelected((was) =>
-                          e.target.checked
+                          checked === true
                             ? [...was, r.personId]
                             : was.filter((id) => id !== r.personId),
                         )
@@ -345,7 +345,7 @@ export function PeopleScreen() {
                     <Link
                       href={`/people/${r.personId}`}
                       className={cn(
-                        "truncate rounded-sm font-medium hover:underline",
+                        "text-foreground truncate rounded-sm font-medium hover:underline",
                         FOCUS_RING,
                       )}
                     >
@@ -360,7 +360,7 @@ export function PeopleScreen() {
                   </span>
                   <span
                     className={cn(
-                      "font-mono text-sm tabular-nums sm:text-right",
+                      "text-foreground-secondary text-sm tabular-nums sm:text-right",
                       r.recentVisits === 0 && "text-muted-foreground",
                     )}
                   >
@@ -421,10 +421,10 @@ function BranchChip({
     <Link
       href={branchHref(b, tab)}
       className={cn(
-        "hover:bg-muted inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors",
+        "hover:bg-hover inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors motion-reduce:transition-none",
         flagged
           ? "text-warning border-warning/40"
-          : "border-border hover:border-brand/40",
+          : "border-border text-foreground-secondary hover:border-border-strong",
         FOCUS_RING,
         TAP,
       )}
@@ -548,7 +548,7 @@ function CreateStudentDialog({
             />
           </div>
           {preview.isError && (
-            <p role="alert" className="text-error text-sm">
+            <p role="alert" className="text-error-text text-sm">
               {preview.error.message}
             </p>
           )}
@@ -561,7 +561,7 @@ function CreateStudentDialog({
                   className="border-border flex flex-wrap items-center gap-2 rounded-md border p-3"
                 >
                   <div className="min-w-0 flex-1 text-sm">
-                    <p className="font-medium">{match.name}</p>
+                    <p className="text-foreground font-medium">{match.name}</p>
                     <p className="text-muted-foreground">
                       {[match.email, match.phone].filter(Boolean).join(" · ") ||
                         "No contact details"}
@@ -609,8 +609,12 @@ function CreateStudentDialog({
                 Review
               </Button>
             ) : preview.data?.length === 0 ? (
-              <Button disabled={create.isPending} onClick={() => submit()}>
-                {create.isPending ? "Adding…" : "Add student"}
+              <Button
+                busy={create.isPending}
+                disabled={create.isPending}
+                onClick={() => submit()}
+              >
+                Add student
               </Button>
             ) : null}
           </div>
@@ -729,10 +733,11 @@ function BulkAssign({
       </div>
       <Button
         size="sm"
+        busy={assign.isPending}
         disabled={planId === "" || assign.isPending}
         onClick={() => assign.mutate({ personIds: selected, planId })}
       >
-        {assign.isPending ? "Adding…" : "Put them on it"}
+        Put them on it
       </Button>
       <Button size="sm" variant="outline" onClick={onDone}>
         Clear

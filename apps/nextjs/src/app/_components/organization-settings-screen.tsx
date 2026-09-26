@@ -4,13 +4,17 @@ import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import type { BadgeTone } from "@matops/ui/badge";
 import { formatMoney, timeZoneOptions } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
+import { Badge } from "@matops/ui/badge";
 import { Button } from "@matops/ui/button";
+import { Checkbox } from "@matops/ui/checkbox";
 import { FieldError } from "@matops/ui/field";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
+import { FOCUS_RING } from "@matops/ui/motion";
 import { Select } from "@matops/ui/select";
 import { Textarea } from "@matops/ui/textarea";
 import { toast } from "@matops/ui/toast";
@@ -21,7 +25,13 @@ import { useTRPC } from "~/trpc/react";
 import { useOrganization } from "./entity";
 import { CONTACT_EMAIL } from "./feedback-link";
 import { PageHeader } from "./page-header";
-import { cardClass, ENTER, SectionHeading, stagger } from "./primitives";
+import {
+  ENTER,
+  LIST,
+  SectionHeading,
+  SettingsRow,
+  stagger,
+} from "./primitives";
 import { Bar, SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 import { useMinuteClock } from "./use-clock";
@@ -105,16 +115,15 @@ function ModuleToggle({
   onChange: (next: boolean) => void;
 }) {
   return (
-    <label className="hover:bg-muted/40 flex cursor-pointer items-start gap-3 p-4 transition-colors duration-150">
-      <input
-        type="checkbox"
-        className="accent-brand mt-1 size-4"
+    <label className="hover:bg-hover flex cursor-pointer items-start gap-3 p-4 transition-colors motion-reduce:transition-none">
+      <Checkbox
+        className="mt-0.5"
         checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
+        onCheckedChange={(next) => onChange(next === true)}
       />
-      <span>
-        <span className="block font-medium">{label}</span>
-        <span className="text-muted-foreground block text-sm">{hint}</span>
+      <span className="flex flex-col gap-1">
+        <span className="text-sm font-medium">{label}</span>
+        <span className="text-muted-foreground text-sm">{hint}</span>
       </span>
     </label>
   );
@@ -147,7 +156,7 @@ function Modules() {
         title="Optional features"
         blurb={MODULES_BLURB}
       >
-        <SkeletonRows rows={1} />
+        <SkeletonRows rows={2} lines={2} inList />
       </SettingsSection>
     );
   if (modules.isError) {
@@ -168,12 +177,7 @@ function Modules() {
   const shown = draft ?? modules.data;
   return (
     <SettingsSection index={1} title="Optional features" blurb={MODULES_BLURB}>
-      <div
-        className={cn(
-          cardClass(),
-          "flex flex-col divide-y overflow-hidden p-0",
-        )}
-      >
+      <div className={LIST}>
         <ModuleToggle
           label="Curriculum"
           hint="Plan teaching blocks and show class themes."
@@ -220,10 +224,10 @@ const STATUS_LABEL: Record<string, string> = {
  * "Payment outstanding" set in the muted colour reads as a caption, and the
  * only line on the page that says the gym owes us money should not.
  */
-const STATUS_TONE: Record<string, string> = {
-  active: "text-success border-success/40",
-  past_due: "text-warning border-warning/40",
-  closed: "text-error border-error/40",
+const STATUS_TONE: Record<string, BadgeTone> = {
+  active: "success",
+  past_due: "warning",
+  closed: "error",
 };
 
 function Account() {
@@ -234,7 +238,7 @@ function Account() {
   if (account.isPending)
     return (
       <SettingsSection index={2} title="Your account">
-        <SkeletonRows rows={1} />
+        <SkeletonRows rows={1} inList />
       </SettingsSection>
     );
 
@@ -262,21 +266,15 @@ function Account() {
 
   return (
     <SettingsSection index={2} title="Your account">
-      <div className={cn(cardClass(), "flex flex-col gap-3")}>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-base font-medium">{OFFER_LABEL[offer] ?? offer}</p>
-          <span
-            className={cn(
-              "rounded-full border px-2 py-0.5 text-xs font-medium",
-              STATUS_TONE[accountStatus] ??
-                "text-muted-foreground border-border",
-            )}
-          >
+      <div className={LIST}>
+        <div className="flex flex-wrap items-center justify-between gap-3 p-4">
+          <p className="text-md font-medium">{OFFER_LABEL[offer] ?? offer}</p>
+          <Badge tone={STATUS_TONE[accountStatus] ?? "neutral"}>
             {STATUS_LABEL[accountStatus] ?? accountStatus}
-          </span>
+          </Badge>
         </div>
 
-        <dl className="flex flex-col gap-1.5 text-sm">
+        <dl className="flex flex-col gap-1.5 p-4 text-sm">
           {ends && (
             <div className="flex flex-wrap gap-x-2">
               <dt className="text-muted-foreground">{dateLabel}</dt>
@@ -302,7 +300,7 @@ function Account() {
           )}
         </dl>
 
-        <p className="text-muted-foreground text-sm">
+        <p className="text-muted-foreground p-4 text-sm">
           {ends && !over
             ? "You pay nothing until then. We will talk to you before anything changes."
             : ends && over
@@ -311,7 +309,10 @@ function Account() {
           To change any of this, email us at{" "}
           <a
             href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent("MatOps account")}`}
-            className="underline underline-offset-4"
+            className={cn(
+              "text-foreground decoration-muted-foreground rounded-sm underline underline-offset-4 hover:decoration-current",
+              FOCUS_RING,
+            )}
           >
             {CONTACT_EMAIL}
           </a>
@@ -362,65 +363,62 @@ function GymName() {
       title="Gym name"
       blurb="This is your gym as a whole. Each branch keeps its own name."
     >
-      <div
-        className={cn(
-          cardClass(),
-          "flex flex-wrap items-center justify-between gap-3",
-        )}
-      >
-        {editing ? (
-          <div className="flex flex-1 flex-wrap items-center gap-2">
-            <Input
-              value={draft}
-              onChange={(e) => {
-                setDraft(e.target.value);
-                setNameError(null);
-              }}
-              maxLength={80}
-              autoFocus
-              className="max-w-xs"
-              aria-label="Gym name"
-              aria-invalid={nameError ? true : undefined}
-              aria-describedby={nameError ? "gym-name-error" : undefined}
-            />
-            <Button size="sm" busy={rename.isPending} onClick={save}>
-              Save
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                setDraft(organizationName);
-                setNameError(null);
-                setEditing(false);
-              }}
-            >
-              Cancel
-            </Button>
-            {nameError && (
-              <FieldError id="gym-name-error" className="basis-full">
-                {nameError}
-              </FieldError>
-            )}
-          </div>
-        ) : (
-          <>
-            <p className="min-w-0 truncate text-base font-medium">
-              {organizationName}
-            </p>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                setDraft(organizationName);
-                setNameError(null);
-                setEditing(true);
-              }}
-            >
-              Rename
-            </Button>
-          </>
-        )}
+      <div className={LIST}>
+        <div className="flex flex-wrap items-center justify-between gap-3 p-4">
+          {editing ? (
+            <div className="flex flex-1 flex-wrap items-center gap-2">
+              <Input
+                value={draft}
+                onChange={(e) => {
+                  setDraft(e.target.value);
+                  setNameError(null);
+                }}
+                maxLength={80}
+                autoFocus
+                className="w-full sm:w-64"
+                aria-label="Gym name"
+                aria-invalid={nameError ? true : undefined}
+                aria-describedby={nameError ? "gym-name-error" : undefined}
+              />
+              <Button size="sm" busy={rename.isPending} onClick={save}>
+                Save
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setDraft(organizationName);
+                  setNameError(null);
+                  setEditing(false);
+                }}
+              >
+                Cancel
+              </Button>
+              {nameError && (
+                <FieldError id="gym-name-error" className="basis-full">
+                  {nameError}
+                </FieldError>
+              )}
+            </div>
+          ) : (
+            <>
+              <p className="text-md min-w-0 truncate font-medium">
+                {organizationName}
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setDraft(organizationName);
+                  setNameError(null);
+                  setEditing(true);
+                }}
+              >
+                Rename
+              </Button>
+            </>
+          )}
+        </div>
       </div>
     </SettingsSection>
   );
@@ -473,7 +471,7 @@ function MembershipSettings() {
   if (policy.isPending)
     return (
       <SettingsSection index={3} title="Memberships" blurb={MEMBERSHIP_BLURB}>
-        <SkeletonRows rows={2} />
+        <SkeletonRows rows={3} lines={2} inList />
       </SettingsSection>
     );
   if (policy.isError) {
@@ -492,7 +490,7 @@ function MembershipSettings() {
   return (
     <SettingsSection index={3} title="Memberships" blurb={MEMBERSHIP_BLURB}>
       <form
-        className="flex flex-col gap-4"
+        className={LIST}
         onSubmit={(e) => {
           e.preventDefault();
           const parsed = MembershipPolicySchema.safeParse({
@@ -508,57 +506,65 @@ function MembershipSettings() {
           save.mutate(parsed.data);
         }}
       >
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="flex w-28 flex-col gap-1.5">
-            <Label htmlFor="grace-days">Days to pay</Label>
-            <Input
-              id="grace-days"
-              type="number"
-              min={0}
-              max={28}
-              value={shown.graceDays}
-              aria-invalid={error ? true : undefined}
-              onChange={(e) => {
-                setDraft({ ...shown, graceDays: e.target.value });
-                setError(null);
-              }}
-            />
-          </div>
-          <div className="flex min-w-52 flex-1 flex-col gap-1.5">
-            <Label htmlFor="calendar-zone">Time zone for deadlines</Label>
-            <Select
-              id="calendar-zone"
-              value={shown.zone}
-              onChange={(e) => setDraft({ ...shown, zone: e.target.value })}
-            >
-              {zones.map((z) => (
-                <option key={z} value={z}>
-                  {z}
-                </option>
-              ))}
-            </Select>
-          </div>
-        </div>
-        {error && <FieldError id="grace-error">{error}</FieldError>}
-
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="bank-details">Bank details</Label>
+        <SettingsRow title={<Label htmlFor="grace-days">Days to pay</Label>}>
+          <Input
+            id="grace-days"
+            type="number"
+            min={0}
+            max={28}
+            className="w-24"
+            value={shown.graceDays}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? "grace-error" : undefined}
+            onChange={(e) => {
+              setDraft({ ...shown, graceDays: e.target.value });
+              setError(null);
+            }}
+          />
+          {error && (
+            <FieldError id="grace-error" className="basis-full sm:text-right">
+              {error}
+            </FieldError>
+          )}
+        </SettingsRow>
+        <SettingsRow
+          title={<Label htmlFor="calendar-zone">Time zone for deadlines</Label>}
+        >
+          <Select
+            id="calendar-zone"
+            className="w-full sm:w-64"
+            value={shown.zone}
+            onChange={(e) => setDraft({ ...shown, zone: e.target.value })}
+          >
+            {zones.map((z) => (
+              <option key={z} value={z}>
+                {z}
+              </option>
+            ))}
+          </Select>
+        </SettingsRow>
+        <SettingsRow
+          stacked
+          title={<Label htmlFor="bank-details">Bank details</Label>}
+          description={
+            <span id="bank-details-hint">
+              Members see this wherever they are told to pay, at every branch.
+              They add the reference shown on their own screen to the transfer.
+            </span>
+          }
+        >
           <Textarea
             id="bank-details"
             value={shown.bankDetails}
             rows={4}
+            aria-describedby="bank-details-hint"
             placeholder={"Bank: …\nIBAN / Card: …\nRecipient: …"}
             onChange={(e) =>
               setDraft({ ...shown, bankDetails: e.target.value })
             }
           />
-          <p className="text-muted-foreground text-sm">
-            Members see this wherever they are told to pay, at every branch.
-            They add the reference shown on their own screen to the transfer.
-          </p>
-        </div>
-
-        <div>
+        </SettingsRow>
+        <div className="flex justify-end p-4">
           <Button type="submit" busy={save.isPending}>
             Save
           </Button>
@@ -587,7 +593,7 @@ function Branches() {
       title="Payment rules per branch"
       blurb="Choose whether an unpaid member can still book at each branch."
     >
-      <ul className="flex flex-col gap-2">
+      <ul className={LIST}>
         {entities.map((e) => (
           <li key={e.id}>
             <BranchRow entityId={e.id} name={e.name} />
@@ -654,14 +660,9 @@ function BranchRow({ entityId, name }: { entityId: string; name: string }) {
   // "unpaid members can still book here" on a branch that requires payment.
   if (preview.isPending || preview.isError) {
     return (
-      <div
-        className={cn(
-          cardClass(),
-          "flex flex-wrap items-center justify-between gap-3",
-        )}
-      >
+      <div className="flex flex-wrap items-center justify-between gap-3 p-4">
         <div className="min-w-0">
-          <p className="truncate font-medium">{name}</p>
+          <p className="truncate text-sm font-medium">{name}</p>
           {preview.isError ? (
             <p className="text-muted-foreground text-sm">
               Couldn't load this branch's rule.
@@ -686,14 +687,9 @@ function BranchRow({ entityId, name }: { entityId: string; name: string }) {
   }
 
   return (
-    <div
-      className={cn(
-        cardClass(),
-        "flex flex-wrap items-center justify-between gap-3",
-      )}
-    >
+    <div className="flex flex-wrap items-center justify-between gap-3 p-4">
       <div className="min-w-0">
-        <p className="truncate font-medium">{name}</p>
+        <p className="truncate text-sm font-medium">{name}</p>
         <p className="text-muted-foreground text-sm">
           {enforced
             ? "Unpaid members can't book classes here."

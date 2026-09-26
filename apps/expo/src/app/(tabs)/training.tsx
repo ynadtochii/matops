@@ -18,6 +18,8 @@ import {
   ErrorState,
   Eyebrow,
   Heading,
+  List,
+  ListRow,
   Mono,
   Muted,
   Screen,
@@ -33,17 +35,17 @@ type MyClass = RouterOutputs["booking"]["mine"][number];
 function NextClassCard({ c, onPress }: { c: MyClass; onPress: () => void }) {
   const start = new Date(c.startsAt);
   return (
-    <View style={{ gap: 12 }}>
+    <View style={{ gap: 8 }}>
       <Eyebrow>Next class</Eyebrow>
       <Card variant="hero" onPress={onPress} style={{ gap: 4 }}>
-        <Txt size={18} weight={600}>
+        <Txt size={17} weight={600} tracking={-0.25}>
           {c.title}
         </Txt>
-        <Mono size={14}>
+        <Mono size={13} weight={400} tone="secondary">
           {dayLongFmt.format(start)} · {timeFmt.format(start)}
         </Mono>
         {c.bookingTier === "provisional" ? (
-          <Txt size={13} tone="brand">
+          <Txt size={13} tone="secondary">
             Pending approval
           </Txt>
         ) : null}
@@ -65,7 +67,7 @@ function ClassRow({
   const start = new Date(c.startsAt);
   const cancelled = c.status === "cancelled";
   return (
-    <Card variant="filled">
+    <ListRow>
       <View
         style={{
           flexDirection: "row",
@@ -75,8 +77,8 @@ function ClassRow({
         }}
       >
         <View style={{ flex: 1, gap: 4 }}>
-          <Txt size={16} weight={500} onPress={onPress}>
-            <Mono size={16} weight={600}>
+          <Txt size={15} weight={500} onPress={onPress}>
+            <Mono size={15} weight={500}>
               {timeFmt.format(start)}
             </Mono>
             {`  ${c.title}`}
@@ -88,7 +90,7 @@ function ClassRow({
             {cancelled ? (
               <StatusPill tone="error" label="Cancelled" />
             ) : c.bookingTier === "provisional" ? (
-              <Txt size={12} tone="brand">
+              <Txt size={12} tone="secondary">
                 Pending approval
               </Txt>
             ) : null}
@@ -96,7 +98,7 @@ function ClassRow({
         </View>
         {action}
       </View>
-    </Card>
+    </ListRow>
   );
 }
 
@@ -173,36 +175,40 @@ export default function Training() {
               ) : rest.length > 0 ? (
                 <View style={{ gap: 8 }}>
                   <Eyebrow>Upcoming</Eyebrow>
-                  {rest.map((c) => (
-                    <ClassRow
-                      key={c.classId}
-                      c={c}
-                      onPress={() => openClass(c.classId)}
-                      action={
-                        c.status === "cancelled" ? undefined : (
-                          <Button
-                            label="Cancel"
-                            variant="destructive"
-                            loading={pendingClassId === c.classId}
-                            onPress={() => onCancel(c.classId)}
-                          />
-                        )
-                      }
-                    />
-                  ))}
+                  <List>
+                    {rest.map((c) => (
+                      <ClassRow
+                        key={c.classId}
+                        c={c}
+                        onPress={() => openClass(c.classId)}
+                        action={
+                          c.status === "cancelled" ? undefined : (
+                            <Button
+                              label="Cancel"
+                              variant="destructive"
+                              loading={pendingClassId === c.classId}
+                              onPress={() => onCancel(c.classId)}
+                            />
+                          )
+                        }
+                      />
+                    ))}
+                  </List>
                 </View>
               ) : null}
 
               {past.length > 0 ? (
                 <View style={{ gap: 8 }}>
                   <Eyebrow>Past</Eyebrow>
-                  {past.map((c) => (
-                    <ClassRow
-                      key={c.classId}
-                      c={c}
-                      onPress={() => openClass(c.classId)}
-                    />
-                  ))}
+                  <List>
+                    {past.map((c) => (
+                      <ClassRow
+                        key={c.classId}
+                        c={c}
+                        onPress={() => openClass(c.classId)}
+                      />
+                    ))}
+                  </List>
                 </View>
               ) : null}
             </>

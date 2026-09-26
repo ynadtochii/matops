@@ -72,14 +72,14 @@ export default function Scan() {
         </Muted>
 
         {error ? (
-          <Txt size={14} tone="error">
+          <Txt size={13} tone="error">
             {error}
           </Txt>
         ) : null}
 
         {blocked ? (
           <UIStack gap={12}>
-            <Txt size={14} tone="muted">
+            <Txt size={13} tone="muted">
               Camera access is off for MatOps. Turn it on to scan.
             </Txt>
             <Button

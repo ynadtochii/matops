@@ -8,6 +8,7 @@ import type { RouterOutputs } from "@matops/api";
 import { formatMoney, groupMoneyByCurrency } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { Button } from "@matops/ui/button";
+import { Checkbox } from "@matops/ui/checkbox";
 import {
   Collapsible,
   CollapsibleContent,
@@ -21,7 +22,7 @@ import {
 } from "@matops/ui/dialog";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
-import { FOCUS_RING, PRESS } from "@matops/ui/motion";
+import { FOCUS_RING, FOCUS_RING_INSET, PRESS } from "@matops/ui/motion";
 import { Select } from "@matops/ui/select";
 import { toast } from "@matops/ui/toast";
 
@@ -29,10 +30,10 @@ import { dateTimeMediumFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { PageHeader } from "./page-header";
 import {
-  cardClass,
   ChevronDownIcon,
   ENTER,
   Eyebrow,
+  LIST,
   SectionHeading,
 } from "./primitives";
 import { SkeletonLines, SkeletonReferralsBody } from "./skeletons";
@@ -61,7 +62,7 @@ function moneyText(amounts: Money[]): string {
 
 function Num({ children }: { children: ReactNode }) {
   return (
-    <span className="text-foreground font-mono tabular-nums">{children}</span>
+    <span className="text-foreground font-medium tabular-nums">{children}</span>
   );
 }
 
@@ -74,7 +75,7 @@ function StatusDot({ status }: { status: string }) {
         status === "active" && "bg-success",
         status === "pending" && "bg-warning",
         status === "suspended" && "bg-error",
-        status === "removed" && "bg-muted-foreground/50",
+        status === "removed" && "bg-foreground-faint",
       )}
     />
   );
@@ -208,12 +209,12 @@ export function ReferralsScreen() {
                     onChange={(event) => setSearch(event.target.value)}
                   />
                 </div>
-                <label className="text-muted-foreground flex min-h-11 shrink-0 items-center gap-2 text-sm sm:min-h-0">
-                  <input
-                    type="checkbox"
+                <label className="text-foreground-secondary flex min-h-11 shrink-0 cursor-pointer items-center gap-2 text-sm sm:min-h-0">
+                  <Checkbox
                     checked={showRemoved}
-                    onChange={(event) => setShowRemoved(event.target.checked)}
-                    className="accent-brand size-4"
+                    onCheckedChange={(checked) =>
+                      setShowRemoved(checked === true)
+                    }
                   />
                   Show removed students
                 </label>
@@ -246,7 +247,7 @@ export function ReferralsScreen() {
                   "Record who brought a student in, and their students show up here."}
               </EmptyState>
             ) : (
-              <ul className="flex flex-col gap-2">
+              <ul className={LIST}>
                 {shownBoard.map((entry) => (
                   <ReferrerCard
                     key={entry.memberId}
@@ -268,12 +269,12 @@ export function ReferralsScreen() {
                   Nobody matches that search.
                 </p>
               ) : (
-                <ul className="flex flex-col gap-2">
+                <ul className={LIST}>
                   {shownUncredited.map((student) => {
                     const cleared = student.assignmentState === "cleared";
                     const rowClass = cn(
-                      "flex w-full items-center gap-3 px-4 py-3 text-left text-sm",
-                      FOCUS_RING,
+                      "hover:bg-hover flex min-h-11 w-full items-center gap-3 px-4 py-3 text-left text-sm transition-colors motion-reduce:transition-none",
+                      FOCUS_RING_INSET,
                     );
                     const hint = cleared
                       ? "credit removed · record again"
@@ -285,13 +286,7 @@ export function ReferralsScreen() {
                           onClick={() =>
                             setEditing({ studentId: student.memberId })
                           }
-                          className={cn(
-                            cardClass({
-                              variant: "outline",
-                              interactive: true,
-                            }),
-                            rowClass,
-                          )}
+                          className={rowClass}
                         >
                           <PersonLabel student={student} />
                           <span className="text-muted-foreground ml-auto shrink-0 text-xs">
@@ -357,9 +352,9 @@ function ReferrerCard({
   onEdit: (studentId: string) => void;
 }) {
   return (
-    <li className={cn(cardClass(), "flex gap-4")}>
+    <li className="flex gap-4 p-4">
       <div className="w-12 shrink-0">
-        <p className="font-mono text-2xl leading-none tabular-nums">
+        <p className="text-2xl leading-none font-medium tabular-nums">
           {entry.students.length}
         </p>
         <Eyebrow className="mt-1">
@@ -372,7 +367,7 @@ function ReferrerCard({
           {entry.role && (
             <span className="text-muted-foreground text-xs">{entry.role}</span>
           )}
-          <span className="text-muted-foreground ml-auto font-mono text-xs tabular-nums">
+          <span className="text-muted-foreground ml-auto text-xs tabular-nums">
             {moneyText(entry.monthRevenue)} confirmed this month
           </span>
         </div>
@@ -387,18 +382,21 @@ function ReferrerCard({
                 onClick={() => onEdit(student.memberId)}
                 aria-label={`Change who brought ${student.name} in`}
                 className={cn(
-                  "border-border hover:border-brand/40 hover:bg-muted flex min-h-11 max-w-52 items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm transition-[background-color,border-color,scale] duration-150 sm:min-h-0",
+                  "border-border hover:border-border-strong hover:bg-hover flex min-h-11 max-w-52 items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm transition-[background-color,border-color,scale] duration-150 sm:min-h-0",
                   FOCUS_RING,
                   PRESS,
                 )}
               >
                 <PersonLabel student={student} />
               </button>
-              <span className="text-muted-foreground text-xs">
+              <span className="text-muted-foreground text-xs tabular-nums">
                 Joined {dateTimeMediumFmt.format(new Date(student.joinedAt))}
               </span>
               {student.confirmedMonths.map((month) => (
-                <span key={month.id} className="text-muted-foreground text-xs">
+                <span
+                  key={month.id}
+                  className="text-muted-foreground text-xs tabular-nums"
+                >
                   {month.month}:{" "}
                   {formatMoney(month.amountMinor, month.currency)} confirmed by{" "}
                   {month.confirmedByName} on{" "}
@@ -648,7 +646,7 @@ function ReferralHistory({ studentMemberId }: { studentMemberId: string }) {
             {event.oldReferrerName ? `${event.oldReferrerName} → ` : ""}
             {event.newReferrerName ?? "Nobody"}
           </span>
-          <span className="text-muted-foreground block font-mono text-[10px]">
+          <span className="text-muted-foreground text-2xs block tabular-nums">
             {dateTimeMediumFmt.format(new Date(event.occurredAt))} ·{" "}
             {event.actorName}
           </span>

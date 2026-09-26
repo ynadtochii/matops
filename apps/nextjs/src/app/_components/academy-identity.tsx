@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { cn } from "@matops/ui";
 import { Button } from "@matops/ui/button";
 import { CopyButton } from "@matops/ui/copy-button";
 import { FieldError } from "@matops/ui/field";
@@ -11,7 +10,7 @@ import { Input } from "@matops/ui/input";
 import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
-import { cardClass, SectionHeading } from "./primitives";
+import { LIST, SectionHeading, SettingsRow } from "./primitives";
 
 /**
  * Branch identity (spec O6). The **name** is a label the owner can rename; the
@@ -64,15 +63,17 @@ export function AcademyIdentity({
   return (
     <section className="flex flex-col gap-4">
       <SectionHeading>Name and join code</SectionHeading>
-      <div
-        className={cn(
-          cardClass(),
-          "grid divide-y p-0 md:grid-cols-2 md:divide-x md:divide-y-0",
-        )}
-      >
-        <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 p-4">
+      <div className={LIST}>
+        <SettingsRow
+          title="Branch name"
+          description={
+            editing ? undefined : (
+              <span className="text-foreground text-md">{name}</span>
+            )
+          }
+        >
           {editing ? (
-            <div className="flex flex-1 flex-wrap items-center gap-2">
+            <>
               <Input
                 value={draft}
                 onChange={(e) => {
@@ -81,7 +82,7 @@ export function AcademyIdentity({
                 }}
                 maxLength={80}
                 autoFocus
-                className="max-w-xs"
+                className="w-full sm:w-56"
                 aria-label="Branch name"
                 aria-invalid={nameError ? true : undefined}
                 aria-describedby={nameError ? "branch-name-error" : undefined}
@@ -105,41 +106,30 @@ export function AcademyIdentity({
                   {nameError}
                 </FieldError>
               )}
-            </div>
-          ) : (
-            <>
-              <div>
-                <p className="text-muted-foreground text-sm">Branch name</p>
-                <p className="text-base font-medium">{name}</p>
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  setDraft(name);
-                  setEditing(true);
-                }}
-              >
-                Rename
-              </Button>
             </>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setDraft(name);
+                setEditing(true);
+              }}
+            >
+              Rename
+            </Button>
           )}
-        </div>
+        </SettingsRow>
 
-        <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 p-4">
-          <div>
-            <p className="text-sm font-medium">Join code</p>
-            <p className="text-muted-foreground text-sm">
-              Students type this code into the app to join. It never changes.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="font-mono text-xl tracking-[0.2em] tabular-nums sm:text-2xl">
-              {code}
-            </span>
-            {code && <CopyButton value={code} toastMessage="Code copied" />}
-          </div>
-        </div>
+        <SettingsRow
+          title="Join code"
+          description="Students type this code into the app to join. It never changes."
+        >
+          <span className="font-mono text-xl tracking-[0.2em] tabular-nums">
+            {code}
+          </span>
+          {code && <CopyButton value={code} toastMessage="Code copied" />}
+        </SettingsRow>
       </div>
     </section>
   );

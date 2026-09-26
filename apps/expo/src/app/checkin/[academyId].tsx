@@ -122,7 +122,7 @@ export default function WalkInCheckin() {
 
         {notMember ? (
           <Muted>
-            You&apos;re not a member of this gym. Ask the front desk to add you
+            You&apos;re not a member of this gym. Ask the front desk to add you.
             They can also mark you present.
           </Muted>
         ) : !scoped || today.isPending ? (
@@ -139,7 +139,7 @@ export default function WalkInCheckin() {
               <Muted>Which class are you here for?</Muted>
             ) : null}
             {error ? (
-              <Txt size={14} tone="error">
+              <Txt size={13} tone="error">
                 {error}
               </Txt>
             ) : null}
@@ -154,10 +154,10 @@ export default function WalkInCheckin() {
                       gap: 10,
                     }}
                   >
-                    <Mono size={16} weight={600}>
+                    <Mono size={15} weight={500}>
                       {timeFmt.format(new Date(c.startsAt))}
                     </Mono>
-                    <Txt size={16} weight={500} style={{ flex: 1 }}>
+                    <Txt size={15} weight={500} style={{ flex: 1 }}>
                       {c.title}
                     </Txt>
                   </View>

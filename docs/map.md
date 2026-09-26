@@ -1,5 +1,9 @@
 <!-- wayfinder:map -->
 
+**Design**
+
+- [141: Adopt the Linear design system](issues/141-adopt-the-linear-design-system.md): Linear's surface and text steps, 1px edges, Inter at 510, 13px interface text, radius by nesting and 150ms motion replace the ADR 37 look. The violet and the mark stay. Dark becomes the default theme, and the product keeps Linear's dark values, including three known contrast failures. As built: Inter, Lucide icons, divided lists, a lint rule against arbitrary sizes and hex classes, and one reference page at `/linear-ds` that reads the product tokens.
+
 **Reception**
 
 - [140: The owner screens design pass](issues/140-the-owner-screens-design-pass.md): one pass per owner screen inside the existing design system. Found four repeating patterns, three of them bugs: a screen-wide `busy` that deadened every row, a failed query drawn as nothing to do, buttons that renamed themselves mid-request, and primitives copied instead of imported.

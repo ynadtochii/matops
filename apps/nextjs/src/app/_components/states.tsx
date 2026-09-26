@@ -27,7 +27,7 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="border-border/70 flex flex-col items-start gap-2 rounded-lg border border-dashed p-4">
+    <div className="border-border flex flex-col items-start gap-1.5 rounded-lg border border-dashed p-4">
       <p className="text-foreground text-sm font-medium">{title}</p>
       {children && <p className="text-muted-foreground text-sm">{children}</p>}
       {action && <div className="pt-1">{action}</div>}
@@ -76,7 +76,7 @@ export function ErrorState({
   onRetry?: () => void;
 }) {
   return (
-    <div className="border-error/30 bg-error/5 flex flex-col items-start gap-2 rounded-lg border p-4">
+    <div className="border-error/30 bg-error/8 flex flex-col items-start gap-1.5 rounded-lg border p-4">
       <p className="text-foreground text-sm font-medium">
         Couldn&apos;t load {label}.
       </p>

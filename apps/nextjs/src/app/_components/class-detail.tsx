@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { ArrowLeft } from "lucide-react";
 
 import {
   canBook,
@@ -79,11 +80,12 @@ export function ClassDetail({ classId }: { classId: string }) {
       <Link
         href={href("/")}
         className={cn(
-          "text-muted-foreground hover:text-foreground mb-4 inline-flex min-h-11 items-center rounded-sm text-sm",
+          "text-muted-foreground hover:text-foreground mb-4 inline-flex min-h-11 items-center gap-1.5 rounded-sm text-sm transition-colors motion-reduce:transition-none",
           FOCUS_RING,
         )}
       >
-        ← Back to schedule
+        <ArrowLeft aria-hidden className="size-3.5" />
+        Back to schedule
       </Link>
       <PageHeader
         title={c.title}
@@ -91,7 +93,9 @@ export function ClassDetail({ classId }: { classId: string }) {
       />
       <div className="flex flex-col gap-8">
         {canRunOrganization && searchParams.get("accessPerson") && (
-          <section className={cn(cardClass(), ENTER, "space-y-2")}>
+          <section
+            className={cn(cardClass(), "border-warning/40", ENTER, "space-y-2")}
+          >
             <h2 className="text-lg font-semibold">Access needs action</h2>
             <p className="text-sm">
               {searchParams.get("accessPerson")}:{" "}
@@ -247,8 +251,8 @@ function Detail({
         {note && (
           <span
             className={cn(
-              "ml-2 font-mono text-xs font-normal",
-              alert ? "text-error" : "text-muted-foreground",
+              "ml-2 text-xs font-normal",
+              alert ? "text-error-text" : "text-muted-foreground",
             )}
           >
             {note}

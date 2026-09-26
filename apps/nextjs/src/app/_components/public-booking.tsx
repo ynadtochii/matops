@@ -7,11 +7,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@matops/ui";
 import { Button } from "@matops/ui/button";
 import { CopyButton } from "@matops/ui/copy-button";
+import { Label } from "@matops/ui/label";
+import { Switch } from "@matops/ui/switch";
 import { toast } from "@matops/ui/toast";
 
 import { shareLink, useCanShare } from "~/lib/share";
 import { useTRPC } from "~/trpc/react";
-import { cardClass, SectionHeading } from "./primitives";
+import { SectionHeading, SettingsRow } from "./primitives";
 import { SkeletonControlPanel } from "./skeletons";
 import { ErrorState } from "./states";
 
@@ -85,40 +87,48 @@ export function PublicBooking({ academyName }: { academyName: string }) {
       <SectionHeading>Public booking</SectionHeading>
       <div
         className={cn(
-          cardClass(),
-          "overflow-hidden p-0",
+          "border-border bg-card overflow-hidden rounded-lg border",
           enabled && "grid lg:grid-cols-[minmax(0,1fr)_auto]",
         )}
       >
-        <div className="flex min-w-0 flex-col divide-y">
-          <div className="flex flex-col gap-4 p-4">
-            <p className="text-muted-foreground max-w-2xl text-sm text-pretty">
-              Let someone book a class without an account. They become a visitor
-              lead, never a member. Only shared classes appear. Visitors never
-              see attendance or capacity.
-            </p>
-            <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm sm:min-h-9">
-              <input
-                type="checkbox"
-                className="accent-brand size-4"
-                checked={enabled}
-                disabled={setEnabled.isPending}
-                onChange={(e) =>
-                  setEnabled.mutate({ enabled: e.target.checked })
-                }
-              />
-              Allow public booking
-            </label>
-          </div>
+        <div className="divide-border flex min-w-0 flex-col divide-y">
+          <SettingsRow
+            title={
+              <Label
+                htmlFor="public-booking-enabled"
+                className="text-foreground"
+              >
+                Allow public booking
+              </Label>
+            }
+            description={
+              <span id="public-booking-hint">
+                Let someone book a class without an account. They become a
+                visitor lead, never a member. Only shared classes appear.
+                Visitors never see attendance or capacity.
+              </span>
+            }
+          >
+            <Switch
+              id="public-booking-enabled"
+              aria-describedby="public-booking-hint"
+              checked={enabled}
+              disabled={setEnabled.isPending}
+              onCheckedChange={(checked) =>
+                setEnabled.mutate({ enabled: checked })
+              }
+            />
+          </SettingsRow>
 
           {enabled && (
-            <div className="flex flex-col gap-3 p-4">
-              <p className="text-muted-foreground text-sm">
-                Send this link when someone asks about training. It works with
-                no website at all.
-              </p>
+            <SettingsRow
+              stacked
+              description="Send this link when someone asks about training. It works with no website at all."
+            >
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <code className="text-sm break-all">{url}</code>
+                <code className="text-foreground-secondary font-mono text-sm break-all">
+                  {url}
+                </code>
                 <div className="flex gap-2">
                   {shareable && (
                     <Button
@@ -142,7 +152,7 @@ export function PublicBooking({ academyName }: { academyName: string }) {
                   />
                 </div>
               </div>
-            </div>
+            </SettingsRow>
           )}
         </div>
 

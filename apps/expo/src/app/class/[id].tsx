@@ -1,4 +1,4 @@
-import { ScrollView, View } from "react-native";
+import { ScrollView, StyleSheet, View } from "react-native";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 
@@ -109,7 +109,7 @@ export default function ClassDetail() {
     booked && !cancelled && !past ? (
       <UIStack gap={8}>
         {provisional && (
-          <Txt size={14} tone="brand">
+          <Txt size={13} tone="secondary">
             Booked · pending approval
           </Txt>
         )}
@@ -155,8 +155,8 @@ export default function ClassDetail() {
           <UIStack gap={20}>
             <Field label="Day" value={dayLongFmt.format(start)} />
             <Field label="Time">
-              <Txt size={16}>
-                <Mono size={16} weight={600}>
+              <Txt size={15}>
+                <Mono size={15} weight={500}>
                   {timeFmt.format(start)}
                 </Mono>
                 {` · ${c.durationMinutes} min`}
@@ -169,13 +169,13 @@ export default function ClassDetail() {
               <Field label="This week">
                 {theme.data.themes.map((on) => (
                   <View key={on.theme}>
-                    <Txt size={16}>{on.theme}</Txt>
+                    <Txt size={15}>{on.theme}</Txt>
                     {on.notes ? <Muted>{on.notes}</Muted> : null}
                     {on.run ? (
                       <View>
-                        <Mono size={11} tone="brand">
+                        <Txt size={12} weight={500} tone="muted">
                           THIS RUN
-                        </Mono>
+                        </Txt>
                         <Txt>{on.run}</Txt>
                       </View>
                     ) : null}
@@ -184,7 +184,7 @@ export default function ClassDetail() {
               </Field>
             ) : null}
             <Field label="Capacity">
-              <Mono size={16} tone={over ? "error" : "default"}>
+              <Mono size={15} tone={over ? "error" : "default"}>
                 {capacityLabel}
                 {over ? " · may be busy" : ""}
               </Mono>
@@ -192,7 +192,7 @@ export default function ClassDetail() {
           </UIStack>
 
           {bookError && (
-            <Txt size={14} tone="error">
+            <Txt size={13} tone="error">
               {bookError}
             </Txt>
           )}
@@ -201,7 +201,11 @@ export default function ClassDetail() {
 
       {/* Sticky bottom action bar — the primary action in the thumb zone. */}
       <View
-        style={{ paddingTop: 16, borderTopWidth: 1, borderTopColor: t.border }}
+        style={{
+          paddingTop: 16,
+          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopColor: t.border,
+        }}
       >
         {action}
       </View>

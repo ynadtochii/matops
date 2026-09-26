@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { Plus } from "lucide-react";
 
 import type { RouterOutputs } from "@matops/api";
 import {
@@ -43,21 +44,9 @@ import { ErrorState, NoAccessState } from "./states";
 
 const NARROW_ROUTES = ["/class", "/profile"];
 
-const GYM_GROUP = "Gym";
+const GYM_GROUP = "Gym management";
 
-export const PlusIcon = () => (
-  <svg
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth={1.5}
-    strokeLinecap="round"
-    className="size-[18px] shrink-0"
-    aria-hidden
-  >
-    <path d="M8 3.5v9M3.5 8h9" />
-  </svg>
-);
+export const PlusIcon = () => <Plus aria-hidden />;
 
 function contentWidth(pathname: string, isStaff: boolean): string {
   if (pathname.startsWith("/schedule")) return "max-w-[1600px]";
@@ -440,6 +429,7 @@ function ShellChrome({
         />
       }
       user={user}
+      branchLabel={activeBranch?.name}
       roleLabel={
         isPending ? "pending" : (activeBranch?.role ?? organization.role)
       }
@@ -450,7 +440,7 @@ function ShellChrome({
             trigger={
               <button
                 type="button"
-                className="text-sidebar-foreground hover:bg-muted flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm transition-colors"
+                className="text-foreground-secondary hover:bg-hover [&_svg]:text-muted-foreground flex h-7 w-full items-center gap-2 rounded-md px-1.5 text-sm font-medium transition-colors"
               >
                 <ShareIcon />
                 Send someone a link
@@ -490,7 +480,7 @@ function ShellChrome({
                 }
                 className={`relative flex size-11 shrink-0 items-center justify-center rounded-md transition-colors ${
                   isCurrent("branch:/notifications")
-                    ? "text-brand-strong"
+                    ? "text-foreground"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
@@ -507,8 +497,8 @@ function ShellChrome({
         academy ? (
           <>
             {isPending && (
-              <div className="border-brand/25 bg-brand-wash text-brand-strong border-b">
-                <p className={`${columnClass} py-2.5 text-sm`}>
+              <div className="border-border bg-surface-1 text-foreground border-b">
+                <p className={`${columnClass} py-2 text-sm font-medium`}>
                   Waiting for branch approval. You can browse classes and
                   memberships, but booking is not available yet.
                 </p>
@@ -523,7 +513,9 @@ function ShellChrome({
                     : "border-warning/25 bg-warning/10 hover:bg-warning/15"
                 }`}
               >
-                <span className={`${columnClass} block py-2.5 text-sm`}>
+                <span
+                  className={`${columnClass} text-foreground-secondary block py-2 text-sm`}
+                >
                   {duesStrip}
                 </span>
               </Link>

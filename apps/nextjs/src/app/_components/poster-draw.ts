@@ -154,7 +154,7 @@ function clip(ctx: CanvasRenderingContext2D, text: string, max: number) {
 
 function fontStacks() {
   const s = getComputedStyle(document.body);
-  const sans = s.getPropertyValue("--font-geist-sans").trim();
+  const sans = s.getPropertyValue("--font-inter").trim();
   const mono = s.getPropertyValue("--font-geist-mono").trim();
   return {
     sans: `${sans ? `${sans}, ` : ""}system-ui, sans-serif`,

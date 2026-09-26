@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
 import type { LeadStage, OwnerSettableStage } from "@matops/domain";
+import type { BadgeTone } from "@matops/ui/badge";
 import {
   canPromoteLead,
   LEAD_SOURCE_LABEL,
@@ -13,6 +14,7 @@ import {
   needsFollowUp,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
+import { Badge } from "@matops/ui/badge";
 import { Button } from "@matops/ui/button";
 import { CopyButton, copyText } from "@matops/ui/copy-button";
 import {
@@ -34,7 +36,7 @@ import { toast } from "@matops/ui/toast";
 import { dateYearFmt, dayShortFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { EmailField } from "./form-fields";
-import { cardClass, Eyebrow, MoreIcon, RESOLVE, TAP } from "./primitives";
+import { cardClass, Eyebrow, LIST, MoreIcon, RESOLVE, TAP } from "./primitives";
 import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 import { Tabs } from "./tabs";
@@ -53,12 +55,12 @@ const FILTERS: { id: StageFilter; label: string }[] = [
   { id: "ghosted", label: LEAD_STAGE_LABEL.ghosted },
 ];
 
-const STAGE_TONE: Record<LeadStage, string> = {
-  new: "text-brand-strong border-brand/40",
-  contacted: "text-foreground border-border",
-  invited: "text-foreground border-border",
-  joined: "text-success border-success/40",
-  ghosted: "text-muted-foreground border-border",
+const STAGE_TONE: Record<LeadStage, BadgeTone> = {
+  new: "info",
+  contacted: "neutral",
+  invited: "neutral",
+  joined: "success",
+  ghosted: "neutral",
 };
 
 function toActivity(l: Lead) {
@@ -208,7 +210,7 @@ export function LeadsPipeline({ initialFilter }: { initialFilter?: string }) {
           Pick another stage, or wait for the next visitor.
         </EmptyState>
       ) : (
-        <div key={filter} className={cn("flex flex-col gap-3", RESOLVE)}>
+        <div key={filter} className={cn(LIST, RESOLVE)}>
           {shown.map((l) => {
             const busy =
               (setStage.isPending && setStage.variables.id === l.id) ||
@@ -218,23 +220,15 @@ export function LeadsPipeline({ initialFilter }: { initialFilter?: string }) {
             return (
               <div
                 key={l.id}
-                className={cn(
-                  cardClass(),
-                  "flex flex-wrap items-center justify-between gap-3",
-                )}
+                className="flex min-h-11 flex-wrap items-center justify-between gap-3 px-4 py-2.5"
               >
                 <div className="flex min-w-0 flex-col gap-0.5">
-                  <span className="flex flex-wrap items-center gap-2 font-medium">
+                  <span className="text-foreground flex flex-wrap items-center gap-2 font-medium">
                     {name}
-                    <span
-                      className={cn(
-                        "rounded-full border px-2 py-px text-[10px] uppercase",
-                        STAGE_TONE[l.stage],
-                      )}
-                    >
+                    <Badge tone={STAGE_TONE[l.stage]}>
                       {LEAD_STAGE_LABEL[l.stage]}
-                    </span>
-                    <span className="text-muted-foreground text-[10px] uppercase">
+                    </Badge>
+                    <span className="text-muted-foreground text-xs font-normal">
                       {LEAD_SOURCE_LABEL[l.source]}
                     </span>
                   </span>
@@ -371,7 +365,7 @@ function LeadActions({
         {items.length > 0 && canGhost && <DropdownMenuSeparator />}
         {canGhost && (
           <DropdownMenuItem
-            className="text-error focus:bg-error/10 focus:text-error"
+            className="text-error-text focus:bg-error/10 focus:text-error-text"
             onSelect={() => onStage("ghosted")}
           >
             Mark ghosted
@@ -386,7 +380,9 @@ function FunnelStat({ label, value }: { label: string; value: number }) {
   return (
     <div className={cn(cardClass(), "flex flex-col gap-1 p-3")}>
       <Eyebrow>{label}</Eyebrow>
-      <dd className="font-mono text-2xl leading-none tabular-nums">{value}</dd>
+      <dd className="text-foreground text-2xl leading-none font-semibold tabular-nums">
+        {value}
+      </dd>
     </div>
   );
 }
@@ -440,7 +436,7 @@ function PromoteDialog({
             </DialogDescription>
 
             {lead.email ? (
-              <p className="border-border bg-muted rounded-lg border px-3 py-2 font-mono text-sm">
+              <p className="border-border bg-surface-2 text-foreground rounded-md border px-3 py-2 font-mono text-sm">
                 {lead.email}
               </p>
             ) : (
@@ -456,8 +452,7 @@ function PromoteDialog({
               <Button type="button" variant="ghost" onClick={onClose}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={busy || !gate?.ok}>
-                {busy ? <Spinner size="sm" className="text-current" /> : null}
+              <Button type="submit" busy={busy} disabled={busy || !gate?.ok}>
                 Make them a member
               </Button>
             </div>

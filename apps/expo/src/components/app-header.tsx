@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { View } from "react-native";
+import { StyleSheet, View } from "react-native";
 
 import { BranchName } from "~/components/branch-switch";
 import { NotificationBell } from "~/components/notification-bell";
@@ -26,7 +26,7 @@ export function AppHeader({ right }: { right?: ReactNode }) {
         paddingHorizontal: 16,
         paddingVertical: 10,
         backgroundColor: t.card,
-        borderBottomWidth: 1,
+        borderBottomWidth: StyleSheet.hairlineWidth,
         borderBottomColor: t.border,
       }}
     >

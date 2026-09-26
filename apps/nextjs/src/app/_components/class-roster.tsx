@@ -1,10 +1,10 @@
 "use client";
 
-import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
+import type { BadgeTone } from "@matops/ui/badge";
 import {
   attendanceCounts,
   attendanceWriteAccess,
@@ -15,7 +15,9 @@ import {
   runsBranch,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
+import { Badge } from "@matops/ui/badge";
 import { Button } from "@matops/ui/button";
+import { Checkbox } from "@matops/ui/checkbox";
 import { Input } from "@matops/ui/input";
 import { FOCUS_RING } from "@matops/ui/motion";
 import { Separator } from "@matops/ui/separator";
@@ -71,7 +73,7 @@ function MarkDot({
     <span
       aria-hidden
       className={cn(
-        "size-2.5 shrink-0 rounded-full border transition-colors",
+        "size-2.5 shrink-0 rounded-full border transition-colors motion-reduce:transition-none",
         filled
           ? kind === "present"
             ? "bg-success border-success"
@@ -112,7 +114,7 @@ function MarkRule({
       aria-valuemax={total}
       aria-valuenow={present + absent}
       aria-label={`${present + absent} of ${total} marked`}
-      className="bg-border relative h-0.5 w-full overflow-hidden rounded-full"
+      className="bg-track relative h-0.5 w-full overflow-hidden rounded-full"
     >
       <span
         className={cn(bar, move, "bg-success")}
@@ -130,7 +132,7 @@ function MarkRule({
 
 function segmentClass(kind: Mark, selected: boolean) {
   return cn(
-    "inline-flex min-h-10 min-w-11 items-center justify-center rounded-sm px-2.5 text-sm transition-colors sm:min-h-8 sm:min-w-0",
+    "inline-flex min-h-10 min-w-11 items-center justify-center rounded-sm px-2.5 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none sm:min-h-8 sm:min-w-0",
     "outline-none",
     FOCUS_RING,
     selected
@@ -138,17 +140,25 @@ function segmentClass(kind: Mark, selected: boolean) {
           "text-foreground font-medium",
           kind === "present" ? "bg-success/15" : "bg-error/15",
         )
-      : "text-muted-foreground hover:text-foreground",
+      : "text-muted-foreground hover:bg-hover hover:text-foreground",
   );
 }
 
-/** A quiet uppercase note beside a name: walk-in, pending, drop-in. */
-function RowTag({ children }: { children: ReactNode }) {
-  return (
-    <span className="text-muted-foreground shrink-0 font-mono text-[10px] tracking-wide uppercase">
-      {children}
-    </span>
-  );
+/** A quiet note beside a name: walk-in, pending, drop-in. */
+function RowTag({
+  tone = "neutral",
+  children,
+}: {
+  tone?: BadgeTone;
+  children: string;
+}) {
+  return <Badge tone={tone}>{children}</Badge>;
+}
+
+function markTone(present: boolean, absent: boolean): BadgeTone {
+  if (present) return "success";
+  if (absent) return "error";
+  return "neutral";
 }
 
 /**
@@ -386,7 +396,7 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
   return (
     <div className="flex flex-col gap-4">
       {ended && cls.status !== "cancelled" && !cls.deletedAt && (
-        <div className="border-border flex flex-col gap-3 rounded-md border p-3">
+        <div className="border-border bg-surface-1 flex flex-col gap-3 rounded-lg border p-3">
           <p role="status" className="text-sm font-medium">
             {review.reviewed
               ? review.present === 0
@@ -450,15 +460,20 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
             </p>
           )}
           {finish.isError && (
-            <p role="alert" className="text-error text-sm">
+            <p role="alert" className="text-error-text text-sm">
               {finish.error.message}
             </p>
           )}
         </div>
       )}
       {classList.data.corrections.length > 0 && (
-        <details className="border-border rounded-md border p-3">
-          <summary className="cursor-pointer text-sm font-medium">
+        <details className="border-border rounded-lg border p-3">
+          <summary
+            className={cn(
+              "cursor-pointer rounded-sm text-sm font-medium outline-none",
+              FOCUS_RING,
+            )}
+          >
             Change history ({classList.data.corrections.length})
           </summary>
           <ul className="mt-3 flex flex-col gap-3">
@@ -495,7 +510,7 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
 
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-          <p className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-xs tabular-nums">
+          <p className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-xs tabular-nums">
             {canMark || ended ? (
               <>
                 <span className="flex items-center gap-1.5">
@@ -576,7 +591,7 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
                   {name}
                 </span>
                 {!canMark && ended && (
-                  <RowTag>
+                  <RowTag tone={markTone(present, absent)}>
                     {present ? "present" : absent ? "absent" : "unmarked"}
                   </RowTag>
                 )}
@@ -656,12 +671,14 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
                     {name}
                   </span>
                   {!canMark && ended && (
-                    <RowTag>
+                    <RowTag tone={markTone(present, absent)}>
                       {present ? "present" : absent ? "absent" : "unmarked"}
                     </RowTag>
                   )}
-                  {d.bookingStatus === "booked" && <RowTag>booked</RowTag>}
-                  <span className="text-muted-foreground shrink-0 font-mono text-xs tabular-nums">
+                  {d.bookingStatus === "booked" && (
+                    <RowTag tone="info">booked</RowTag>
+                  )}
+                  <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
                     {d.phone}
                   </span>
                   {canMark && (
@@ -760,15 +777,13 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
                     <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto">
                       {matchingCandidates.map((m) => (
                         <li key={m.id}>
-                          <label className="hover:bg-muted flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm sm:min-h-9">
-                            <input
-                              type="checkbox"
-                              className="accent-brand size-4"
+                          <label className="hover:bg-hover flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm transition-colors motion-reduce:transition-none sm:min-h-9">
+                            <Checkbox
                               checked={walkInIds.has(m.id)}
-                              onChange={(e) =>
+                              onCheckedChange={(checked) =>
                                 setWalkInIds((prev) => {
                                   const next = new Set(prev);
-                                  if (e.target.checked) next.add(m.id);
+                                  if (checked === true) next.add(m.id);
                                   else next.delete(m.id);
                                   return next;
                                 })

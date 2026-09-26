@@ -21,7 +21,7 @@ export function useRefreshControl() {
       refreshing={refreshing}
       onRefresh={onRefresh}
       tintColor={t.mutedForeground}
-      colors={[t.brand]}
+      colors={[t.mutedForeground]}
       progressBackgroundColor={t.card}
     />
   );

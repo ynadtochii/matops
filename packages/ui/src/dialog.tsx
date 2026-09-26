@@ -1,5 +1,6 @@
 "use client";
 
+import { XIcon } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 
 import { cn } from "@matops/ui";
@@ -24,11 +25,11 @@ export function DialogContent({
 }: React.ComponentProps<typeof DialogPrimitive.Content>) {
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="data-[state=open]:animate-in data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/50 duration-200 ease-out motion-reduce:animate-none" />
+      <DialogPrimitive.Overlay className="data-[state=open]:animate-in data-[state=open]:fade-in-0 bg-backdrop fixed inset-0 z-50 duration-150 ease-out motion-reduce:animate-none" />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 fixed top-1/2 left-1/2 z-50 flex max-h-[85dvh] w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-y-auto overscroll-contain rounded-lg border p-4 shadow-lg duration-200 ease-out motion-reduce:animate-none sm:p-6",
+          "text-foreground data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 bg-raised shadow-float fixed top-1/2 left-1/2 z-50 flex max-h-[85dvh] w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-y-auto overscroll-contain rounded-xl p-4 duration-150 ease-out motion-reduce:animate-none sm:p-6",
           className,
         )}
         {...props}
@@ -37,21 +38,11 @@ export function DialogContent({
         <DialogPrimitive.Close
           aria-label="Close"
           className={cn(
-            "text-muted-foreground hover:text-foreground hover:bg-muted absolute top-3 right-3 flex size-8 items-center justify-center rounded-md transition-colors outline-none",
+            "text-muted-foreground hover:text-foreground hover:bg-hover absolute top-3 right-3 flex size-8 items-center justify-center rounded-sm transition-colors outline-none",
             FOCUS_RING,
           )}
         >
-          <svg
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            className="size-4"
-            aria-hidden="true"
-          >
-            <path d="m4.5 4.5 7 7M11.5 4.5l-7 7" />
-          </svg>
+          <XIcon aria-hidden="true" />
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>
@@ -64,7 +55,7 @@ export function DialogTitle({
 }: React.ComponentProps<typeof DialogPrimitive.Title>) {
   return (
     <DialogPrimitive.Title
-      className={cn("pr-8 text-lg font-semibold tracking-tight", className)}
+      className={cn("pr-8 text-xl font-semibold", className)}
       {...props}
     />
   );

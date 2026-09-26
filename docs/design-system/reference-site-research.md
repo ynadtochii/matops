@@ -1,0 +1,42 @@
+# Reference-site design research
+
+Research date: 2026-09-26. Scope: Raycast, Resend, and Vercel. This note studies their design choices on their own. It does not compare them with any other product.
+
+## Evidence and limits
+
+- The [Raycast homepage](https://www.raycast.com/) and [Resend homepage](https://resend.com/) were inspected as rendered desktop pages. Their first screens and a later section were captured. Computed hero type and backgrounds were sampled in the browser.
+- Raycast's [native UI reference](https://developers.raycast.com/api-reference/user-interface), [ActionPanel](https://developers.raycast.com/api-reference/user-interface/action-panel), and [colors](https://developers.raycast.com/api-reference/user-interface/colors) describe its product rules. These docs do not measure the marketing site's CSS.
+- Resend's published [email list](https://resend.com/static/product-pages/screenshot-emails.png) and [email detail](https://resend.com/static/product-pages/screenshot-email-events.png) images show product examples, not a live dashboard. Its [transactional email page](https://resend.com/products/transactional-emails) shows how marketing uses product examples.
+- The requested [Vercel project URL](https://vercel.com/evaries-projects) redirects to login. Its private product view was not inspected. Vercel's public [Geist introduction](https://vercel.com/geist/introduction), [colors](https://vercel.com/geist/colors.md), [typography](https://vercel.com/geist/typography.md), [materials](https://vercel.com/geist/materials.md), [button](https://vercel.com/geist/button.md), and [input](https://vercel.com/geist/input.md) docs are evidence for its published design system.
+- Mobile rendering, live Raycast app behavior, live Resend dashboard behavior, and the private Vercel project view remain unverified. Do not infer them from desktop marketing pages or promotional images.
+
+## What each site contributes
+
+| Site | Observed or documented pattern | Keep separate |
+| --- | --- | --- |
+| Raycast | The homepage has a short, large headline over near-black, a red-lit hero, and product demonstrations. Its native UI API defines List, Grid, Detail, Form, and contextual ActionPanel views. Primary and secondary actions get predictable keyboard shortcuts. [Home](https://www.raycast.com/), [UI reference](https://developers.raycast.com/api-reference/user-interface), [ActionPanel](https://developers.raycast.com/api-reference/user-interface/action-panel) | The red glow, keyboard illustration, and large headline are campaign design. List search, selection, contextual actions, and loading are product rules. |
+| Resend | The homepage uses a large serif display face over black, a compact sans navigation, a short description, and clear primary and secondary actions. The rendered desktop hero heading used Domaine at 96px with a 96px line-height. Published app images use a narrow left navigation, search and filters over a dense list, thin row rules, status badges, and a detail timeline. [Home](https://resend.com/), [list image](https://resend.com/static/product-pages/screenshot-emails.png), [detail image](https://resend.com/static/product-pages/screenshot-email-events.png) | The huge serif heading, 3D object, and lighting are marketing choices. The product images show a quieter information layout, but their dimensions and states are not live measurements. |
+| Vercel | Geist defines role-specific color steps for backgrounds, hover and active fills, borders, solid fills, and text. It names separate text styles for headings, buttons, one-line labels, and multiline copy. Materials separate on-page surfaces from floating menus and modals. Buttons document size, variant, shape, loading, and disabled states. [Colors](https://vercel.com/geist/colors.md), [type](https://vercel.com/geist/typography.md), [materials](https://vercel.com/geist/materials.md), [buttons](https://vercel.com/geist/button.md) | The public Geist documentation is not the private Vercel project page. The live dark button examples measured 32px, 36px, and 40px tall for three sizes, but those measurements describe the documentation render only. |
+
+## Shared principles
+
+These are a synthesis, not a claim that all three share one implementation.
+
+1. **Strong hierarchy with few competing elements.** Marketing leads with one large claim and one primary action. Product surfaces lead with the page or task title, then controls and data. Evidence: [Raycast home](https://www.raycast.com/), [Resend home](https://resend.com/), [Geist button variants](https://vercel.com/geist/button.md).
+2. **Quiet neutral structure, selective emphasis.** Dark backgrounds, restrained surface differences, borders, and muted text carry most layout. Bright colors are limited to brand imagery, actions, or named states. Their exact hues differ. Evidence: [Raycast home](https://www.raycast.com/), [Resend list image](https://resend.com/static/product-pages/screenshot-emails.png), [Geist color roles](https://vercel.com/geist/colors.md).
+3. **Density follows the job.** Marketing sections breathe. Lists, search, filters, metadata, and contextual actions sit closer together in task interfaces. Evidence: [Raycast UI reference](https://developers.raycast.com/api-reference/user-interface), [Resend list image](https://resend.com/static/product-pages/screenshot-emails.png), [Geist typography roles](https://vercel.com/geist/typography.md).
+4. **Controls form families, not isolated drawings.** A button needs a defined size, priority, disabled and loading state. A searchable list needs a selected row, no-data behavior, and actions. Evidence: [Geist button](https://vercel.com/geist/button.md), [Geist input](https://vercel.com/geist/input.md), [Raycast List](https://developers.raycast.com/api-reference/user-interface/list), [Raycast ActionPanel](https://developers.raycast.com/api-reference/user-interface/action-panel).
+5. **Type roles matter more than one universal font.** Raycast's rendered hero used Inter at 64px and weight 600. Resend's used Domaine at 96px and weight 400. Geist documents separate heading, button, label, and copy styles. The common rule is role-based hierarchy, not a shared face or scale. Evidence: [Raycast home](https://www.raycast.com/), [Resend home](https://resend.com/), [Geist typography](https://vercel.com/geist/typography.md).
+
+## How to make a system from the research
+
+1. **Choose the product scope first.** Separate marketing pages, task screens, and documentation. Do not let an expressive hero define a dense table or form.
+2. **Collect a comparable sample.** For each reference, capture a landing view, a list, a detail view, a form, and an overlay when available. Capture desktop and mobile, light and dark where offered, plus default, hover, focus, active, disabled, loading, empty, and error states. Mark missing evidence rather than filling it in.
+3. **Write role rules before values.** Name page and surface roles, primary and secondary text, borders, focus, action priority, status, heading and label roles, and spacing or density roles. Attach one screenshot or first-party rule to each candidate. Reject roles without a real job.
+4. **Pick one consistent implementation per role.** Build a small token set for color, type, spacing, radius, and elevation. Define each component's anatomy and its state matrix. Express light and dark by the same roles rather than swapping unrelated raw colors.
+5. **Test a small set of real tasks.** Render one list, one detail view, one form, and one mobile view with realistic content. Check keyboard access, focus visibility, contrast on rendered backgrounds, text wrapping, layout at narrow widths, and whether users can distinguish actions and status without color alone.
+6. **Document decisions as rules.** Record what each role does, when to use it, when not to use it, an example, and an owner for changes. A gallery of copied hex values is not a design system.
+
+## Tools
+
+A browser with screenshots, computed-style inspection, viewport resizing, and keyboard interaction is enough for capture. First-party documentation is better for component intent than guessing from CSS. A comparison board or spreadsheet can hold the evidence matrix. A browser contrast checker can measure real foreground and background pairs. Automated CSS extraction can collect candidate values, but it cannot tell a campaign flourish from a product rule or verify intent.

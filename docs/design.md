@@ -1,26 +1,39 @@
 # matops design language
 
-The look-and-feel rulebook for both apps (web + mobile). Tokens live in
-`tooling/tailwind/theme.css`; **this doc says how to use them**. Read it before
-building any new screen or component.
+The look-and-feel rulebook for both apps (web and mobile). Tokens live in
+`tooling/tailwind/theme.css`, with a TypeScript twin in
+`packages/ui/src/tokens.ts`. **This doc says how to use them.** Read it before
+you build a new screen or component. Exact values are in `theme.css` and are
+not repeated here.
 
-**Heritage:** the token _plumbing_ and the disciplined, monochrome baseline came
-from the **Better Auth** brand system — <https://better-auth.com/brand> — which
-was the scaffold. **matops now owns its own identity** (ADR 37): a signature
-**violet** and the **basketweave** mark are ours, layered on the kept neutral
-foundation. Better Auth is heritage here, not the source of truth.
+**Where it comes from:** the structure is Linear's, measured from linear.app on
+2026-09-26 and adopted in ADR [141](issues/141-adopt-the-linear-design-system.md).
+The violet and the basketweave mark are matops's own and stay from ADR
+[37](issues/37-brand-identity.md). The older Better Auth look (warm stone,
+Geist, a 0.2rem radius) is gone.
+
+**The reference page** is `/linear-ds`. Since ADR 141 step 6a it has no token
+copy of its own: every variable in `linear-ds.module.css` is an alias of a
+product token, and it follows the app theme through `useTheme()`. So it shows
+the product as it is, in both themes. The older signed-in `/design-system` page
+is deleted.
 
 ---
 
-## 0. Ethos — one sentence
+## 0. Ethos
 
-**Sharp, not loud: monochrome, disciplined, data-first — an instrument, not a poster.**
+**Linear's structure, matops's violet: quiet steps of surface and text, 1px
+edges, one accent that marks identity only.**
 
-The gym runs on a schedule, a member list, a clock. Two matops flavors sit on the
-greyscale baseline: **Geist Mono is the mat clock** — every time, count, and
-score reads like a scoreboard (§3) — and **one signature violet** is the only
-identity colour (§1.1), carried by the **basketweave mark** (§6). Everything
-else stays monochrome; the violet is a spark, never decoration and never a status.
+The structure is: surfaces and text in steps, 1px edges instead of shadows
+between blocks, Inter at a 13px interface size, radius by nesting, and 150ms
+motion. The one identity color is the matops violet, carried by the mark (§6).
+Meaning (info, warning, error, success) has its own four hues, and the two jobs
+never swap.
+
+**Dark is the default theme.** A person who has never picked a theme gets dark,
+not the system setting. Light, dark and system all stay in the picker, and the
+stored key `theme-mode` keeps its name.
 
 ---
 
@@ -28,173 +41,214 @@ else stays monochrome; the violet is a spark, never decoration and never a statu
 
 ### 1.1 Color
 
-Exact Better Auth values. Light = their `:root` (warm stone); **dark = the brand
-page (canonical, pure black)**. Full set in `theme.css`; key tokens:
+**Surfaces, from back to front.**
 
-| Token                  | Light     | Dark      |
-| ---------------------- | --------- | --------- |
-| `--background`         | `#FFFFFF` | `#000000` |
-| `--foreground`         | `#0C0A09` | `#FAFAF9` |
-| `--card` / `--popover` | `#FAFAF9` | `#0F0D0C` |
-| `--primary`            | `#1C1917` | `#FAFAF9` |
-| `--primary-foreground` | `#FAFAF9` | `#1C1917` |
-| `--secondary`          | `#F5F5F4` | `#292524` |
-| `--muted` / `--accent` | `#F5F5F4` | `#1A1917` |
-| `--muted-foreground`   | `#79716B` | `#A6A09B` |
-| `--border` / `--input` | `#E7E5E4` | `#292524` |
-| `--ring`               | `#6A4DFF` | `#8B72FF` |
-| `--destructive`        | `#E40014` | `#82181A` |
+| Token                        | Use                                              |
+| ---------------------------- | ------------------------------------------------ |
+| `--background`               | level 0, the page                                |
+| `--surface-1`                | level 1: the sidebar, the sign-in side panel     |
+| `--surface-2`, `--surface-3` | levels 2 and 3: nested blocks, a code box        |
+| `--card`                     | a list or card: within 2% of the page in dark    |
+| `--raised`                   | fields and dialogs                               |
+| `--floating`, `--popover`    | menus, tooltips, toasts                          |
+| `--backdrop`                 | behind a modal (dark 60% black, light 65% white) |
 
-**`--destructive` is a fill, never ink.** The dark value is a maroon chosen so
-white text reads on top of it, so the token belongs on exactly one thing: the
-solid red button. Every other red on the page (a form error, a CANCELLED label,
-an invalid input's border, a failed-state box, the quiet `destructive-outline`
-button) uses `--error` below, which is legible on both themes.
+**Text in four steps.** `--foreground` (primary), `--foreground-secondary`,
+`--muted-foreground` (tertiary) and `--foreground-faint` (quaternary, for
+placeholders). Emphasis is a step up in text and weight, never a color.
 
-**Callout accents** — the _only_ non-neutral hues, and only for meaning
-(callouts, alerts, status dots). **Per theme, not shared.** These are ink as
-often as fill: a form error, a drift badge, the `destructive-outline` label. The
-bright set reads at 5:1 and up on the black surface but 2.2-3.8:1 on white, so
-light carries its own darker values.
+**Fills.** `--hover` for a row or item under the pointer, `--active` for the
+current or selected item, `--secondary` and `--accent` as quiet fills, `--muted`
+for small shapes and skeletons, `--track` behind a progress bar or a switch.
+`--primary` is the inverted fill of the main button.
 
-| Token       | Light     | Dark      | Use                         |
-| ----------- | --------- | --------- | --------------------------- |
-| `--info`    | `#1257C7` | `#2B7FFF` | neutral notice ("Heads up") |
-| `--warning` | `#A34500` | `#FF6900` | caution ("Careful")         |
-| `--error`   | `#C8102B` | `#FB2C36` | failure ("Broken")          |
-| `--success` | `#0A7D3C` | `#00C950` | confirmation ("Nice")       |
+**Edges.** `--border` is the 1px line between blocks and rows. `--border-strong`
+is the stronger line (a hover edge, a divider that must read). `--input` is the
+field edge and `--field-hover` its hover. `--control` is the edge of a
+checkbox, radio or switch.
 
-Each carries a matching `-foreground` for the fill role. In light that is white
-on warning and success; the dark values keep the originals.
+**The violet (`--brand`).** The one non-neutral hue that is not a meaning. It
+appears only where taking it away would cost identity or accessibility.
 
-**Trend, not judgement.** A metric moving up takes `--success`, down takes
-`--warning` — never `--error`, because a quiet week is worth a look, not a
-failure. The arrow (`↑` / `↓`) is always drawn as well, so direction is never
-carried by hue alone. Only ever on a comparison figure, never on the value it
-sits beside: the number itself stays neutral, because the product does not know
-what a good one looks like. This is why the attendance rate carries no colour.
+| Token                | Use                                                      |
+| -------------------- | -------------------------------------------------------- |
+| `--brand`            | the mark fill, the focus ring (`--ring`), a checked fill |
+| `--brand-strong`     | the "Ops" in the wordmark                                |
+| `--brand-foreground` | seams and ticks on a violet fill                         |
+| `--brand-wash`       | the 3px halo around a focused field                      |
 
-Rule: if a color is not `--destructive`, `--brand` (below), one of these four,
-or one of the two discipline hues (below), don't use it. Reach for weight, size, or a hairline instead. matops status maps
-onto these when Phase 3 lands: booking `● open/full/closed`, attendance
-`● present/late/absent`, class `● live/cancelled` — a small dot + a **mono**
-label, text stays neutral.
+Violet **may** mark only: the mark and wordmark, the mat loader, keyboard
+focus (the ring, and the edge of a focused field), and the checked state of a
+checkbox, radio or switch. That is the whole list. Violet **never** marks: a
+link (a link is primary text with a muted underline that turns solid on
+hover), a count, the pending tag or strip (neutral), a status, the current
+page or selected item (`--active` with primary text), a chart bar or progress
+bar (neutral or primary), a spinner (muted), drag feedback (primary), or the
+viewer. Text selection uses the browser default.
 
-**Brand hue — violet (the one identity colour).** The single non-neutral hue that
-is _not_ a status. Restrained: the mark, active nav, links, focus, the pending
-banner/tag — never a solid primary button (that stays ink), never a status.
+**`--destructive` is a fill, never ink.** In dark it is a maroon chosen so
+light text reads on it, so it belongs on the solid red button only. Red text
+uses `--error-text`; a red edge or tint uses `--error` at low opacity.
 
-| Token                | Light     | Dark      | Use                               |
-| -------------------- | --------- | --------- | --------------------------------- |
-| `--brand`            | `#6A4DFF` | `#8B72FF` | mark fill, active nav, focus      |
-| `--brand-strong`     | `#5A3CF0` | `#A390FF` | links / text-on-light             |
-| `--brand-foreground` | `#FFFFFF` | `#12091F` | text + seams on a brand fill      |
-| `--brand-wash`       | `#F1EEFF` | `#17122E` | tint surface: pending, active nav |
+**Callout hues: meaning only.** Per theme, since light needs darker values to
+pass as text. Each has a `-foreground` for its fill.
 
-Rule: violet marks **identity**, the four callouts mark **meaning** — they never
-swap jobs. Utilities: `bg-brand`, `text-brand-strong`, `bg-brand-wash`, `fill-brand`.
+| Token       | Meaning               | Examples                                |
+| ----------- | --------------------- | --------------------------------------- |
+| `--info`    | a neutral notice      | "Booked", "Next class"                  |
+| `--warning` | caution, worth a look | "Needs review", "Booking unavailable"   |
+| `--error`   | a failure or a block  | a form error, "Absent", the danger zone |
+| `--success` | a confirmation        | "Present", "Paid"                       |
 
-**Discipline hues — the category encoder (ADR 53).** Two hues that sort a list
-of classes into gi and no-gi before the reader reads a word. A **category, not
-a status**: they only ever mark what kind of training a class is.
+**Trend, not judgement.** On a comparison figure (`Stat`), up is `--success`
+and down is `--warning`, never `--error`, because a quiet week is worth a look,
+not a failure. The arrow is always drawn too, so hue never carries direction
+alone. The number itself stays neutral.
 
-| Token    | Light     | Dark      | Use                                      |
-| -------- | --------- | --------- | ---------------------------------------- |
-| `--gi`   | `#0F766E` | `#2DD4BF` | gi and judo: left rail + 8% block tint   |
-| `--nogi` | `#B45309` | `#F5A524` | no-gi and MMA: left rail + 8% block tint |
+**Discipline hues: a category, not a status (ADR 53).** `--gi` (cool, gi and
+judo) and `--nogi` (warm, no-gi and MMA). They sort classes before the reader
+reads a word, and they split on the blue-yellow axis, which survives red-green
+color blindness. Open mat carries neither. Three weights, one per density: a
+block tint with a left rail on the week grid, a bar fill behind the busiest
+classes list, a dot on the day rail. Utilities: `border-l-gi`, `bg-nogi/[0.08]`.
 
-Rule: cool = gi, warm = no-gi. They sit clear of the brand violet and of the
-four callouts, and they separate on the blue-yellow axis, which survives
-red-green color blindness. Open mat carries neither (a dashed neutral block),
-because it is both. Utilities: `border-l-gi`, `bg-nogi/[0.08]`.
+Rule: if a color is not one of the tokens above, do not use it. Reach for a
+text step, a weight or an edge instead. The lint guard (§4) blocks hex classes.
 
-The encoder has three weights, one per density. A **block tint + left rail** on
-the O2 week grid, where a class is a large shape. A **bar fill** at 20% behind
-the O1 busiest-classes list, where the bar's length is the data and the hue says
-what kind. A **dot** on the O1 day rail, where a tinted row would drown a page
-that is mostly text. Same meaning at every weight; pick by how much surface the
-element has, never for variety.
+**Contrast, honestly.**
+
+- **Light passes WCAG AA:** text 4.5:1, icons and control edges 3:1. Light
+  `--error-text` was darkened to `#a52121` after the system page audit: the old
+  `#c52f2f` passed on white but failed on its own red tint once that tint sat on
+  a level 1 to 3 surface (3.94 to 4.37:1). The new value is 4.61:1 or more at
+  the 20% hover tint on every light surface.
+- **Dark keeps Linear's own values by choice** (ADR 141 choice 3), and fails on
+  three known points: faint text (placeholders, about 3.2:1 on a raised field),
+  the field edge `--input` on its fill (about 1.2:1), and the control edge
+  `--control` (1.72:1). Linear fails the same way.
+- **If a pilot gym has trouble** reading placeholders or finding a field, the
+  fix is two token changes and no screen edits: move placeholders to tertiary
+  text, and give field and control edges a value at 3:1.
 
 ### 1.2 Typography
 
-**Geist** for UI, **Geist Mono** for code & metadata. Their exact specs:
+**Inter** for the interface, with `cv01` and `ss03` on `body`. **Geist Mono**
+stays for data and codes (§3). 13px (`text-sm`) is the interface default.
 
-| Role       | Recipe                                           | Family     |
-| ---------- | ------------------------------------------------ | ---------- |
-| H1         | `text-4xl tracking-tight`                        | Geist      |
-| H2         | `text-xl tracking-tight`                         | Geist      |
-| Body       | `text-sm`                                        | Geist      |
-| Mono label | `text-[11px] font-mono uppercase tracking-wider` | Geist Mono |
-| Mono code  | `font-mono text-sm`                              | Geist Mono |
+Tailwind's scale is remapped. Each step carries its own line height and letter
+spacing, so never add `tracking-*` by hand to fix a size.
 
-Headings are **tight-tracked**, sentence case, left-aligned — never bold-and-big.
-Body emphasis is weight + brightness (`font-medium text-foreground`), never color.
+| Class                   | Size      | Use                                                            |
+| ----------------------- | --------- | -------------------------------------------------------------- |
+| `text-2xs`              | 11px      | key hints (`Kbd`), count pills, small initials, tab bar labels |
+| `text-xs`               | 12px      | metadata, `Eyebrow`, small buttons, tooltips                   |
+| `text-sm`               | 13px      | the interface: body, rows, buttons, labels                     |
+| `text-md`               | 14px      | section headings (`SectionHeading`)                            |
+| `text-base`             | 15px      | large buttons                                                  |
+| `text-lg`               | 17px      | the wordmark                                                   |
+| `text-xl`               | 20px      | a `Stat` numeral                                               |
+| `text-2xl`              | 24px      | page titles (`PageHeader`), queue counts                       |
+| `text-5xl` / `text-6xl` | 48 / 64px | display only (the system page)                                 |
+
+**Weights:** `font-medium` is 510, `font-semibold` 590, `font-bold` 680. Titles
+and headings are semibold, labels and buttons medium. Headings are sentence
+case and left-aligned.
+
+**Fields are 16px on touch screens.** iOS Safari zooms into any field under
+16px, and `text-base` is now 15px. One rule in `apps/nextjs/src/app/styles.css`
+sets `input`, `select` and `textarea` to 16px under `pointer: coarse`. It sits
+outside every CSS layer on purpose, so it wins over the `text-*` utility on the
+field itself.
+
+**Mobile uses a larger scale.** 13px is too small on a phone, so the Expo app
+runs 15px body, 13px secondary, 17px list titles and 24px headings. React
+Native cannot load weights 510 or 590, so mobile maps to the static Inter 400,
+500, 600 and 700 files (`@expo-google-fonts/inter`).
 
 ### 1.3 Radius
 
-Base `--radius: 0.2rem` — deliberately tight. **Code blocks and inline callouts
-break to `0`** (`rounded-none`) for a sharper, editorial feel. Scale:
+`--radius` is 6px. The scale lands on four steps:
 
-| Step                 | Value                       |
-| -------------------- | --------------------------- |
-| sharp (code/callout) | `0`                         |
-| `sm`                 | `calc(var(--radius) - 2px)` |
-| `md`                 | `calc(var(--radius) - 1px)` |
-| `lg` (default)       | `var(--radius)`             |
-| `xl`                 | `calc(var(--radius) + 4px)` |
+| Class        | Value | Use                                     |
+| ------------ | ----- | --------------------------------------- |
+| `rounded-sm` | 4px   | the icon button, small inner shapes     |
+| `rounded-md` | 6px   | fields, tooltips, a code box            |
+| `rounded-lg` | 8px   | cards, lists (`LIST`), callouts, toasts |
+| `rounded-xl` | 12px  | dialogs, a kiosk frame                  |
+
+**Radius by nesting:** an outer frame is rounder than what sits inside it. A
+field (6px) inside a card (8px) inside a dialog (12px). **Buttons and action
+chips are pills** (`rounded-full`). On mobile the same rule runs 12, 8, 6 and
+pills.
 
 ### 1.4 Shadow and surface separation
 
-Used **sparingly — only to lift interactive affordances** (menus, popovers).
-**Cards and code stay flat** and rely on `--border`. The near-flat `--shadow-*`
-scale exists for the few things that float.
+Two shadows, both tokens:
 
-A card is separated from the page by its **hairline**, not by a lightness jump.
-On the pure-black theme `--card` sits a whisper above `--background`, and the
-edge carries the shape. Never paint a whole surface in `--secondary` or
-`--border` (`#292524`): at card size that value reads as a floating gray slab.
-It is a button fill and a line. `--muted` is the quiet fill for **small** shapes
-inside a card (chips, pills, avatars, skeletons) and for hover.
+- **Lift** (`--shadow-lift`): the small shadow under a control, such as the
+  primary button.
+- **Float** (`--shadow-float`): menus, dialogs, tooltips and toasts, things
+  that sit above the page.
+
+The stock Tailwind scale points at them: `shadow-2xs` to `shadow-md` are the
+lift, `shadow-lg` to `shadow-2xl` are the float. `shadow-lift` and
+`shadow-float` also exist as utilities. So an old `shadow-sm` never draws a
+third kind of shadow.
+
+**Between blocks, use an edge, not a shadow.** A card or list sits on the page
+with a 1px `--border`. The edge draws the shape, not the fill: in dark,
+`--card` (`#0e0f10`) sits within 2% of the page (`#08090a`), as Linear's panels
+do (`#0c0d0e` to `#101112`, sampled 2026-09-26). Only what nests inside a card
+steps up in brightness: a field or dialog (`--raised`), a code box
+(`--surface-2`), a hover fill. Do not paint a card with `--raised` or
+`--surface-2` to make it stand out. Rows inside a list are split by the same
+line. A dialog is the one surface that drops its edge and uses the
+float shadow instead.
 
 ### 1.5 Button weight
 
-The solid `primary` fill is near-white on the black theme, the highest-contrast
-thing the palette can make. Spend it **once per screen**, on a form submit or a
-dialog confirm. A row action inside a list is not that action: repeated down a
-list, a near-white fill turns the page into a column of light blocks and the
-content stops leading. Row actions use `secondary` for the affirmative one and
-`outline` for the neutral one. The loud treatment lives on the confirm button
-inside the dialog the row opens.
+Seven variants, props and names unchanged since before ADR 141:
 
-The same rule holds for danger. A red fill repeated down a list makes every row
-look like a mistake waiting to happen. The row trigger is `destructive-outline`
-(a hairline and a red label), and the solid `destructive` fill lives on the
-confirm button inside the dialog it opens, where it is the point of no return.
+| Variant               | Look                         | Where                                            |
+| --------------------- | ---------------------------- | ------------------------------------------------ |
+| `primary`             | inverted fill, lift shadow   | once per screen: a form submit, a dialog confirm |
+| `secondary`           | quiet fill, thin edge        | the affirmative row action                       |
+| `outline`             | thin edge, no fill           | the neutral row action                           |
+| `ghost`               | tertiary text until hover    | toolbar and icon actions                         |
+| `link`                | primary text, underlined     | an inline link that is a button                  |
+| `destructive`         | solid red fill               | the confirm inside a destructive dialog          |
+| `destructive-outline` | red tint with `--error-text` | the trigger that opens that dialog               |
 
-`destructive-outline` paints with `--error`, not `--destructive`, per the token
-rule in §1.1: `--destructive` is a fill, and as a hairline or a label on the
-page background it would be unreadable.
+Sizes: `default` 32px, `sm` 24px, `lg` 40px, `icon` 32px square with a 4px
+radius. Every size keeps a **44px touch floor below `sm`**, so do not add one by
+hand. Where a Radix part owns the element, use `buttonClass()` from
+`@matops/ui/button`.
 
-The pairing is mechanical, so there is nothing to decide per screen: **a trigger
-that opens a `variant="destructive"` confirm is `destructive-outline`; every
-other trigger is `secondary` (affirmative) or `outline` (neutral).** If that
-leaves a row with two red buttons, the question to ask is whether both actions
-really are the point of no return. Suspend is not, because Restore sits next to
-it, so its confirm is `primary` and its trigger is `outline`.
+**Spend the primary fill once per screen.** Repeated down a list, it turns the
+page into a column of bright blocks. The loud button lives in the dialog a row
+opens.
 
-A disabled button drops to `--muted` with `--muted-foreground` text. Do not dim
-a light fill with opacity: on a dark page a white button at 50% is a mid-grey
-button, which reads as enabled rather than inert.
+**The pairing rule is mechanical:** a trigger that opens a
+`variant="destructive"` confirm is `destructive-outline`; every other trigger
+is `secondary` (affirmative) or `outline` (neutral). Suspend is not the point
+of no return, since Restore sits next to it, so its confirm is `primary` and
+its trigger is `outline`.
+
+**In flight, not renamed.** A button mid-request takes the `busy` prop and
+keeps its label (ADR 140). Do not swap "Save" for "Saving…".
+
+**Disabled only while in flight** (ADR 120). A button is never disabled for
+validation: let the submit run, and show the error on the field. A disabled
+button is 50% opacity.
 
 ---
 
 ## 2. Motifs
 
-Blueprint background textures. On web they are utilities in
-`apps/nextjs/src/app/styles.css`; on mobile the `Blueprint` primitive
-(`apps/expo/src/components/ui.tsx`) tiles the same hairline grid with Views
-(ADR [44](issues/44-mobile-dark-first-design-system.md)), used behind the
-sign-in hero.
+Hairline background textures, drawn with `--border`. On web they are utilities
+in `apps/nextjs/src/app/styles.css`; on mobile the `Blueprint` primitive in
+`apps/expo/src/components/ui.tsx` tiles the same grid with Views (ADR
+[44](issues/44-mobile-dark-first-design-system.md)).
 
 | Utility          | Pattern       | Size |
 | ---------------- | ------------- | ---- |
@@ -202,169 +256,210 @@ sign-in hero.
 | `.bg-grid-small` | hairline grid | 8px  |
 | `.bg-dot`        | dot field     | 16px |
 
-All draw with `--border`. matops meaning: the mat diagram / scoring grid. Use at
-a whisper, behind non-text areas (hero, empty states, card interiors) — at most
-one per view.
+Use at most one per view, behind non-text areas (the sign-in panel, the
+reception screen, an instrument panel).
 
-**The instrument panel.** One shape carries every set of top-of-screen readings:
-a bordered strip on `bg-grid-small`, split into cells by hairlines, each cell
-floated just above the texture with `bg-background/90`. It is built, as `Panel`
-/ `panelCell` / `PanelNotice` in `apps/nextjs/src/app/_components/primitives.tsx`
-(ADR [101](issues/101-the-dashboard-uses-its-width.md)). Use it rather than
-drawing a fourth silhouette. Channels that carry nothing are simply absent and
-the grid shows through, so one job and six jobs draw the identical tile.
-It replaces a row of separate cards on purpose: several tinted cards read as
-several things to decide between, one panel reads as one instrument. When the O1
-queue is empty the strip keeps its border and texture and one channel carries the
-line of copy, so the cleared state occupies the same slot rather than leaving a
-hole.
+**The instrument panel.** One shape carries a set of top-of-screen readings: a
+bordered strip on `bg-grid-small`, split into cells by 1px lines, each cell on
+`bg-background/90`. It is `Panel` / `panelCell` / `PanelNotice` in
+`apps/nextjs/src/app/_components/primitives.tsx` (ADR
+[101](issues/101-the-dashboard-uses-its-width.md)). A channel with nothing to
+show is absent and the grid shows through. When the queue is empty, the strip
+keeps its frame and one channel carries the line of copy.
 
 ---
 
-## 3. The one matops flavor — mono is the mat clock
+## 3. Mono is for data you copy or read off a clock
 
-`Geist Mono` is reserved for machine/data values: times, counts, prices, tags,
-sequence numbers, code, status labels. In matops that means **class times,
-capacity (`18/24`), round timers, belt/stripe counts, member counts — all mono.**
-If it is a number a person reads off a clock or a board, it is mono.
+Before ADR 141, Geist Mono carried every time, count and label ("the mat
+clock"). That is no longer true. **Times and counts now use Inter with
+`tabular-nums`**, so digits line up without a second typeface. Mono uppercase
+labels are gone; labels are plain sans (`Eyebrow`, `SECTION_LABEL`).
 
-Numbered sequences (`01`, `02`, …) use mono numerals **only when order carries
-meaning** — an onboarding flow, the belt path, check-in steps. Never as decoration.
+`font-mono` (Geist Mono) stays for values a person copies or types back:
+
+- the six-digit academy code and the join-code field,
+- the bank transfer reference,
+- an API key, a URL to paste, a typed confirm phrase,
+- a phone number in a list where digits must be read one by one,
+- code and error digests.
+
+If you are about to use mono for a time or a number in a sentence, use
+`tabular-nums` instead. Numbered sequences (`01`, `02`) appear only when order
+carries meaning.
 
 ---
 
-## 4. Components (Better Auth taxonomy — build to match)
+## 4. Components
 
-**How components are built for both clients:** share the style recipe, split the
-primitive. shadcn (Radix/DOM) drives web; RN twins drive mobile; both eat one
-`cva` recipe of cross-platform classes so variants can't drift. Full mechanics
-(conditional `exports`, the container/text split, overlays via
-react-native-reusables) in **ADR [32](issues/32-cross-platform-ui.md)**. Button
-is the reference pair (`packages/ui/src/button.tsx` + `button.native.tsx` +
-`button-variants.ts`). Literal colors for RN come from `@matops/ui/tokens`.
+**Both clients share the style recipe and split the primitive.** Radix drives
+web, RN twins drive mobile, and both read one `cva` recipe of cross-platform
+classes (ADR [32](issues/32-cross-platform-ui.md)). `button-variants.ts` is the
+reference and holds no web-only classes.
 
-- **Buttons** — seven variants: `primary` (solid ink), `secondary`, `outline`,
-  `ghost`, `link`, `destructive` (solid red), `destructive-outline` (quiet red).
-  Four sizes: `sm`, `default`, `lg`, `icon`. Sharp corners; one solid primary
-  per view. `sm` carries a 44px floor on phones (`min-h-11 sm:min-h-8`) so a row
-  action is still tappable, so do not re-add that by hand at the call site. Where
-  a Radix primitive owns its own element, use `buttonClass()` from
-  `@matops/ui/button` instead of hand-copying the recipe.
-- **Inputs** — sharp, minimal. **UPPERCASE mono field labels** (`EMAIL`,
-  `PASSWORD`). Focus = visible `--ring`.
-- **Focus** — one recipe, `FOCUS_RING` in `@matops/ui/motion`: a 2px `--ring`
-  ring at a 2px offset on `--background`. `--ring` **is the brand violet**, per
-  the brand rule above: no grey in the stone ramp reaches 3:1 on white, and the
-  offset keeps the ring off the button fill so it never has to contrast with
-  ink or with the red of a destructive button. Never a partial-opacity ring;
-  `ring-ring/50` renders at 1.5:1. Compose `FOCUS_RING` rather than re-typing it,
-  and `FOCUS_RING_INSET` where the control is flush to an edge.
-- **Card** — flat `--border`, **no shadow**. Meta separated by a **dashed** rule
-  (`border-dashed`), not solid.
-- **Callouts** — a **dashed left stripe** colored by accent type: info / warning /
-  error / success (Heads up / Careful / Broken / Nice). Body copy stays neutral.
-- **Tabs** — for switching content (e.g. code languages); active tab gets a thin
-  underline/outline.
-- **Badges** — `default`, `secondary`, `destructive`, `outline`. Small, sharp.
-- **Alerts** — title + one-line description (e.g. "Auth secret updated").
-- **Loading** — a placeholder looks like what follows it. Where a shape is
-  already known, draw **that shape** in `--muted` (`skeletons.tsx` on web builds
-  each piece out of the real component, and leaves hairlines and rails as real
-  lines, since only the content is unknown). Where nothing is known yet - the
-  cold open, the academy gate - draw the **mat loader** (§6). Never both, and
-  never a spinner in front of a shape we could have drawn. A wait under 180ms
-  draws nothing. Reduced motion holds everything still. A spinner is left with
-  one job: an **action** already in flight (a button mid-submit), which is
-  feedback for something the person just did, not a stand-in for content.
+**Shared parts in `packages/ui/src`:**
+
+| Part                                                          | Use                                                                                                                      |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `Button`                                                      | §1.5                                                                                                                     |
+| `Input`, `Textarea`, `Select`                                 | one `FIELD` class: 32px, 6px radius, raised fill, `--input` edge. Focus is a violet edge with a 3px `--brand-wash` halo. |
+| `Checkbox`                                                    | a choice that waits for Save                                                                                             |
+| `Switch`                                                      | a setting that saves the moment it changes                                                                               |
+| `RadioGroup`                                                  | one of a few, all visible                                                                                                |
+| `Tabs`                                                        | switching views inside one surface                                                                                       |
+| `Tooltip`                                                     | a short label for an icon; never the only place a fact lives                                                             |
+| `Badge`                                                       | a status or tag. Tones: neutral, info, success, warning, error. No violet tone                                           |
+| `Callout`                                                     | a notice in the flow. Tones: neutral, info, success, warning, error. Info is blue, never violet.                         |
+| `Avatar`, `Progress`, `Kbd`, `Skeleton`, `Table`, `Separator` | as named                                                                                                                 |
+| `Dialog`, `AlertDialog`                                       | raised surface, 12px radius, float shadow, no edge, over `--backdrop`                                                    |
+| `DropdownMenu`, `toast`                                       | floating surface; menu items 32px on desktop, 44px on touch                                                              |
+| `Logo`, `Mark`                                                | §6                                                                                                                       |
+
+**App primitives in `apps/nextjs/src/app/_components/primitives.tsx`:**
+
+- **`LIST`**: a list is one bordered container with divided rows, not a stack
+  of cards. Every member, plan, claim, feed and settings list uses it.
+- **`SettingsRow`**: label and description on the left, the control on the
+  right from `sm`, stacked on phones. A settings page is a `LIST` of these
+  under a real `h2`.
+- **`SectionHeading`** (an `h2` with an optional `CountBadge` and an action),
+  **`Section`** (a ruled label), **`Stat`** (a numeral over a label, with the
+  trend rule in §1.1) and **`Eyebrow`** (the 12px tertiary label).
+- **Page header** (`page-header.tsx`): a `text-2xl` semibold title, a tertiary
+  `text-sm` description, and actions on the right.
+- **App tabs** (`_components/tabs.tsx`): 13px medium, tertiary until selected,
+  a 2px primary underline (not violet), 44px on touch and 36px above `sm`.
+
+**States (`states.tsx`, `skeletons.tsx`).**
+
+- **Empty:** `EmptyState`, a dashed frame that says what is missing and what to
+  do next. Never a dead end.
+- **Error:** `ErrorState`, an error-tinted box that names what failed, with a
+  retry. **A failed read never looks like nothing to do** (ADR 140). If a query
+  failed, show `ErrorState`, not "Nobody is checked in yet." or a create
+  button. On a public page, only `NOT_FOUND` or `BAD_REQUEST` may read as "not
+  valid"; any other failure is `ErrorState`.
+- **Loading:** a placeholder has the shape of what follows it (ADR
+  [80](issues/80-loading-states.md)). A list that loads into `LIST` uses
+  `SkeletonRows inList`, so the skeleton is the same divided container and the
+  page does not jump. When nothing is known yet (the cold open, the academy
+  gate) draw the mat loader (§6). A wait under 180ms draws nothing. A spinner is
+  kept for an action in flight, which is the `busy` button.
+
+**Icons: Lucide** (`lucide-react`), replacing `@radix-ui/react-icons`. One base
+rule in `styles.css` makes every `.lucide` icon 16px with a 1.5px stroke at any
+size (`vector-effect: non-scaling-stroke`). It sits in the base layer, so a
+`size-*` class still wins. Mobile keeps its own `icons.tsx`:
+`lucide-react-native` needs `react-native-svg`, a native module that forces a
+dev-client rebuild nobody can check here.
+
+**Focus.** One recipe, `FOCUS_RING` in `@matops/ui/motion`: a 2px `--ring` at a
+2px offset. `--ring` is the violet. Use `FOCUS_RING_INSET` where the control is
+flush to an edge. Never a partial-opacity ring.
+
+**The lint guard.** `designTokensConfig` in `tooling/eslint/react.ts` runs on
+`apps/nextjs`, `packages/ui` and `apps/expo`. It makes an arbitrary text size
+(`text-[13px]`) or an arbitrary hex color (`bg-[#fff]`) in any string or
+template literal an error, and the message names the token to use. It checks
+**class strings only**: a hex in a canvas drawing or in a `tokens` object is not
+a class and stays allowed. It does not catch a wrong token (violet on a status,
+say); that is still review work.
 
 ### Motion
 
-One vocabulary, four curves, no library (ADR 131).
+One vocabulary, no library (ADR 131).
 
-- **Curves** live in `tooling/tailwind/theme.css` and both apps read them.
-  `ease-out` (`cubic-bezier(0.23, 1, 0.32, 1)`) for anything entering or
-  leaving, `ease-in-out` (`cubic-bezier(0.77, 0, 0.175, 1)`) for something
-  moving on screen, `ease-drawer` for a sheet. A `transition-*` with no curve
-  of its own falls back to the ease-out. **There is no ease-in token**: it
-  starts slow and delays the frame the reader is watching.
-- **Durations.** A press 150ms, a menu 150ms, a tab or a panel 200ms, a modal
-  200ms, a page section 300ms. Nothing in the interface runs longer.
-- **The vocabulary** is in `primitives.tsx`: `ENTER` for a page section
-  arriving (fade + 1 unit up, delayed with `delay-100` / `delay-200` to stage a
-  page), `RESOLVE` for a query settling or a panel swapping, `stagger(i)` for
-  list rows (40ms apart, capped at six so a long roster is not still arriving),
-  `TAP` for a touch target, and `PRESS` / `FOCUS_RING` in `@matops/ui/motion`.
-- **What does not animate.** The sidebar, the mobile tab bar, and anything else
-  a person hits dozens of times a day. Navigation is instant on purpose.
-- **Only `transform` and `opacity`.** A width or a height animation relays out
-  the page; the one exception is the collapsible, which has no transform
-  equivalent.
-- **Reduced motion** is gentler, not absent: every transform transition names
-  `motion-reduce:transition-none`, and the opacity and colour stay.
+- **Default length is 150ms** (`--default-transition-duration`): a press, a
+  hover, a menu, a tooltip, a dialog. A tab underline and a query settling
+  (`RESOLVE`) take 200ms, a page section entering (`ENTER`) 300ms. Nothing runs
+  longer.
+- **Curves** live in `theme.css`: `ease-out` for anything entering or leaving
+  (and the default for any `transition-*`), `ease-in-out` for something moving
+  on screen, `ease-drawer` for a sheet. There is no ease-in token: it delays the
+  frame the reader is watching.
+- **The vocabulary** is in `primitives.tsx`: `ENTER`, `RESOLVE`, `stagger(i)`
+  (rows 40ms apart, capped at six), `TAP`, plus `PRESS` and `FOCUS_RING` in
+  `@matops/ui/motion`.
+- **What does not animate:** the sidebar, the mobile tab bar, and anything hit
+  dozens of times a day. Navigation is instant.
+- **Only `transform` and `opacity`**, except the collapsible, which has no
+  transform equivalent.
+- **Reduced motion:** every animation names `motion-reduce:animate-none` or
+  `motion-reduce:transition-none`, so transforms stop under
+  `prefers-reduced-motion`.
 
 ---
 
-## 5. Voice (Better Auth's four rules, for our copy)
+## 5. Voice
 
-- **Clear over clever** — name things what they are (class, invite, member list — not
-  `MembershipProvider`).
-- **Terse, but warm** — short sentences, no marketing fluff. A thoughtful coach,
-  not a billboard.
-- **Show the thing** — a real schedule or member list proves more than a paragraph.
-- **Sharp, not loud** — minimal radii, dashed dividers, mono for data. Precise,
+- **Clear over clever:** name things what they are (class, invite, member list).
+- **Terse, but warm:** short sentences, no marketing. A coach, not a billboard.
+- **Show the thing:** a real schedule or member list proves more than a paragraph.
+- **Quiet, not loud:** steps of text and surface, 1px edges, one accent. Precise,
   never decorative.
+- **An action keeps its name** from the button to the toast. A button in flight
+  keeps its label (§1.5).
 
 ---
 
 ## 6. Logo
 
 **Mark = the basketweave mat bond.** A rounded tile (`rx` 7 on a 32 viewBox)
-filled `--brand`, seams of a **basketweave** bond — the woven plank pairs real
-mats are laid in — in `--brand-foreground` at 85%, each seam running edge to
-edge. Seam path:
-`M16 0V32 M0 16H32 M8.5 0V16 M16 8.5H32 M0 23.5H16 M23.5 16V32`.
+filled `--brand`, with basketweave seams (the woven plank pairs real mats are
+laid in) in `--brand-foreground` at 85%, each seam running edge to edge. Seam
+path: `M16 0V32 M0 16H32 M8.5 0V16 M16 8.5H32 M0 23.5H16 M23.5 16V32`.
 
-Built once, shared: **`@matops/ui/logo`** — `Mark` (tile) + `Logo` (mark +
-wordmark); web = inline SVG, mobile = positioned Views (no `react-native-svg`).
-**The mark in motion is the loader.** The one place the mark animates: the six
-seams draw on with `stroke-dashoffset`, 90ms apart, the two long centre seams
-then the four planks - a mat being laid before class. Nothing is added to the
-identity; it is the same tile, violet, and 85% seams. Built for both clients:
-`apps/nextjs/src/app/_components/mat-loader.tsx` (keyframes in `styles.css`) and
-`apps/expo/src/components/mat-loader.tsx` (positioned Views + the native driver,
-no SVG dep, per ADR [44](issues/44-mobile-dark-first-design-system.md)).
-ADR [80](issues/80-loading-states.md).
+Built once, shared: **`@matops/ui/logo`**, `Mark` (tile) and `Logo` (mark plus
+wordmark); web is inline SVG, mobile is positioned Views (`logo.native.tsx`, no
+`react-native-svg`). The wordmark is "MatOps" in Inter semibold at `text-lg`,
+with "Ops" in `--brand-strong`. ADR 141 did not change the mark or the violet.
+
+**The mark in motion is the loader.** The six seams draw on with
+`stroke-dashoffset`, 90ms apart, the two long centre seams first, then the four
+planks. Web: `apps/nextjs/src/app/_components/mat-loader.tsx` (keyframes in
+`styles.css`). Mobile: `apps/expo/src/components/mat-loader.tsx`. ADR
+[80](issues/80-loading-states.md).
 
 **Every raster icon comes from one script.** `scripts/gen-icons.sh` renders the
-mark to the favicon, the PWA icons, the Apple touch icon and the Expo app icon,
-so a home-screen icon can never drift from the mark in the header. It paints the
-dark-theme brand tokens (`#8b72ff` tile, `#12091f` seams), because a saved icon
-sits on the user's wallpaper and cannot follow the app theme. Icons the OS masks
-(Apple touch, maskable, Expo) bleed to a square edge; the rest keep the `rx` 7
-tile. Re-run the script after any change to the mark.
+mark to the favicon, the PWA icons, the Apple touch icon and the Expo app icon.
+It paints the dark brand tokens, since a saved icon sits on the wallpaper and
+cannot follow the app theme. Icons the OS masks bleed to a square edge; the rest
+keep the `rx` 7 tile. Re-run it after any change to the mark.
 
 Web favicon: `apps/nextjs/src/app/icon.svg`. Use the mark at **24px minimum**;
-prefer the full `Logo` when the brand must read at a distance. Wordmark: `matops`,
-lowercase Geist ~640 weight, `-0.02em` tracking, "ops" in `--brand-strong`. Full
-reference: `docs/design-system/matops-design-system.html`. Rationale in ADR 37.
+use the full `Logo` when the brand must read at a distance. Rationale in ADR 37.
 
 ---
 
 ## 7. Status
 
-| Piece                                                                                            | State                                                                                              |
-| ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
-| Color tokens (light+dark), **brand (violet)**, callout accents, radius, shadow, fonts            | **done** — `theme.css`                                                                             |
-| Motif utilities (`.bg-grid` / `-small` / `.bg-dot`)                                              | **done** — web `styles.css`; mobile `Blueprint` (ADR 44)                                           |
-| Heading treatment, mono-as-clock, voice                                                          | **this doc** — apply when building                                                                 |
-| Cross-platform component pattern + reference Button                                              | **done** — ADR [32](issues/32-cross-platform-ui.md)                                                |
-| `@matops/ui/tokens` (literal colors for RN)                                                      | **done**                                                                                           |
-| Remaining components (input…alerts) to Better Auth taxonomy                                      | **todo** — `packages/ui`, follow the Button pattern                                                |
-| Overlays on mobile via react-native-reusables                                                    | **todo** — verify nativewind-5 compat                                                              |
-| Mobile **dark-first** theme (tri-state, persisted)                                               | **done** — `components/theme.tsx`, ADR 44                                                          |
-| Mobile Geist via `expo-font` (Geist + Geist Mono)                                                | **done** — `components/fonts.ts`, ADR 44                                                           |
-| Mobile kit derived from `@matops/ui/tokens` + web vocabulary (`Eyebrow`/`Stat`/`Card`/`Callout`) | **done** — ADR 44                                                                                  |
-| Retire `apps/expo/src/components/ui.tsx` local kit                                               | **partial** — token-derived + aligned (ADR 44); full merge onto `@matops/ui` RN primitives pending |
-| matops `● status` states (booking/attendance)                                                    | **Phase 3**, onto callout accents                                                                  |
-| matops basketweave mark + wordmark                                                               | **done** — `@matops/ui/logo`, `app/icon.svg`                                                       |
-| Loading language: shape-matched skeletons + the mat loader                                       | **done** — both clients: `_components/` on web, `components/` on mobile, ADR 80                    |
+| Piece                                                                                                                                   | State                                               |
+| --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| Tokens (surfaces, text steps, edges, violet, callouts, radius, shadow, type)                                                            | **done**: `theme.css` + `tokens.ts`, ADR 141 step 1 |
+| Shared parts (button, fields, overlays, tabs, tooltip, checkbox, radio, switch, badge, callout, avatar, progress, kbd, skeleton, table) | **done**: `packages/ui`, step 2                     |
+| Shell (sidebar, header, branch picker, mobile tab bar, banners)                                                                         | **done**: steps 3a, 3b                              |
+| The nine screen groups (steps 4.1-4.9)                                                                                                  | **done**                                            |
+| Mobile (Inter, larger scale, lists, pills)                                                                                              | **done, static gates only**: step 5                 |
+| Lint guard against arbitrary sizes and hex classes                                                                                      | **done**: step 6b                                   |
+| `/linear-ds` reads the product tokens; old showcase removed                                                                             | **done**: step 6a                                   |
+
+**What is verified:**
+
+- Static gates (typecheck and lint).
+- Contrast at the token level: every text and icon pair on the shared parts,
+  checked in both themes. Only the three dark failures in §1.1 remain, by
+  choice.
+- `/linear-ds` audited in the browser in both themes. That audit found and
+  fixed the light `--error-text` failure.
+
+**What is not verified:**
+
+- The signed-in screens have not been seen in this browser setup. Their look is
+  checked by code and tokens, not by eye.
+- The mobile app has never run on a simulator or a device.
+  `docs/mobile-device-test.md` is still outstanding, and the splash background
+  in `app.json` is still `#000000` until a native build.
+
+**Known gaps, each its own slice:** six buttons still disabled for validation
+(ADR 141 step 4.1), the month board's states have no color of their own (step
+4.5), and the class page's empty "Who's booked" section (step 4.7).

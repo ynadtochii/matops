@@ -80,7 +80,7 @@ export default function Onboarding() {
 
   const academy = found.data ?? null;
   const errText = (msg: string) => (
-    <Txt size={14} tone="error">
+    <Txt size={13} tone="error">
       {msg}
     </Txt>
   );
