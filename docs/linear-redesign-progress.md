@@ -31,7 +31,7 @@ stop the loop and notify the user.
 | 1 | Tokens, Inter, radius, shadows, dark default | done | `42451fc` | |
 | 2 | Shared components, new parts, Lucide | done | `6a7872a` | |
 | 3a | Shell: sidebar (level 1, 28px items, branch fold, Gym management) | done | `50471c6` | Box sizes unmeasured: the shell stays hidden behind the loader in this browser |
-| 3b | Shell: header, branch picker, mobile shell, overdue strip | todo | | |
+| 3b | Shell: header, branch picker, mobile shell, overdue strip | done | `159ee7d` | |
 | 4.1 | Screens: Members and People (list, person page, leads) | todo | | |
 | 4.2 | Screens: Schedule and the curriculum timeline | todo | | |
 | 4.3 | Screens: Dashboard and Overview | todo | | |
@@ -59,3 +59,4 @@ stop the loop and notify the user.
 
 - 2026-09-26: steps 0 to 2 done in the session before the loop started.
 - 2026-09-26: 3a sidebar done (`50471c6`).
+- 2026-09-26: 3b header and mobile shell done (`159ee7d`). Step 3 complete.
