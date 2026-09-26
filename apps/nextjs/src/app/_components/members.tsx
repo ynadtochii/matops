@@ -12,7 +12,6 @@ import {
   membersCsvFilename,
   runsBranch,
 } from "@matops/domain";
-import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
 import {
@@ -31,7 +30,7 @@ import { useTRPC } from "~/trpc/react";
 import { useEntity } from "./entity";
 import { LeadsPipeline } from "./leads";
 import { MemberDetail, MemberRow } from "./member-detail";
-import { cardClass, Eyebrow, MoreIcon, RESOLVE } from "./primitives";
+import { Eyebrow, LIST, MoreIcon, RESOLVE } from "./primitives";
 import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 import { Tabs } from "./tabs";
@@ -100,11 +99,11 @@ function MemberActions({
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                className="text-error focus:bg-error/10 focus:text-error flex-col items-start gap-0.5 py-2"
+                className="text-error-text focus:bg-error/10 focus:text-error-text flex-col items-start gap-0.5 py-2"
                 onSelect={() => setDialog("purge")}
               >
                 Delete permanently
-                <span className="text-error/60 font-mono text-[10px] tracking-wide uppercase">
+                <span className="text-error-text/70 text-2xs">
                   Erases every record
                 </span>
               </DropdownMenuItem>
@@ -360,42 +359,46 @@ export function Members() {
                   link below to bring people in.
                 </EmptyState>
               ) : (
-                pending.map((m) => {
-                  const approving =
-                    approve.isPending &&
-                    approve.variables.memberId === m.memberId;
-                  return (
-                    <MemberRow key={m.memberId} m={m} label={roleLabel(m)}>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        busy={approving}
-                        disabled={rowBusy(m.memberId)}
-                        onClick={() => approve.mutate({ memberId: m.memberId })}
-                      >
-                        Approve
-                      </Button>
-                      <ConfirmDialog
-                        title={`Decline ${m.name}?`}
-                        description="They won't join the gym. You can invite them again later with an invite link."
-                        confirmLabel="Decline request"
-                        variant="destructive"
-                        onConfirm={async () => {
-                          await reject.mutateAsync({ memberId: m.memberId });
-                        }}
-                        trigger={
-                          <Button
-                            size="sm"
-                            variant="destructive-outline"
-                            disabled={rowBusy(m.memberId)}
-                          >
-                            Decline
-                          </Button>
-                        }
-                      />
-                    </MemberRow>
-                  );
-                })
+                <div className={LIST}>
+                  {pending.map((m) => {
+                    const approving =
+                      approve.isPending &&
+                      approve.variables.memberId === m.memberId;
+                    return (
+                      <MemberRow key={m.memberId} m={m} label={roleLabel(m)}>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          busy={approving}
+                          disabled={rowBusy(m.memberId)}
+                          onClick={() =>
+                            approve.mutate({ memberId: m.memberId })
+                          }
+                        >
+                          Approve
+                        </Button>
+                        <ConfirmDialog
+                          title={`Decline ${m.name}?`}
+                          description="They won't join the gym. You can invite them again later with an invite link."
+                          confirmLabel="Decline request"
+                          variant="destructive"
+                          onConfirm={async () => {
+                            await reject.mutateAsync({ memberId: m.memberId });
+                          }}
+                          trigger={
+                            <Button
+                              size="sm"
+                              variant="destructive-outline"
+                              disabled={rowBusy(m.memberId)}
+                            >
+                              Decline
+                            </Button>
+                          }
+                        />
+                      </MemberRow>
+                    );
+                  })}
+                </div>
               ))}
           </div>
         ) : shownTab === "members" ? (
@@ -441,50 +444,54 @@ export function Members() {
                   Try part of a name, email or phone number.
                 </EmptyState>
               ) : (
-                shownActive.map((m) => (
-                  <div key={m.memberId} className="flex flex-col">
-                    <MemberRow
-                      m={m}
-                      label={roleLabel(m)}
-                      open={openId === m.memberId}
-                      onToggle={() => toggle(m.memberId)}
-                    >
-                      {owner && (
-                        <MemberActions
-                          name={m.name}
-                          busy={rowBusy(m.memberId)}
-                          onSuspend={
-                            m.status === "active"
-                              ? async () => {
-                                  await suspend.mutateAsync({
-                                    memberId: m.memberId,
-                                  });
-                                }
-                              : undefined
-                          }
-                          onRestore={
-                            m.status === "suspended"
-                              ? () => restore.mutate({ memberId: m.memberId })
-                              : undefined
-                          }
-                          onArchive={async () => {
-                            await archive.mutateAsync({ memberId: m.memberId });
-                          }}
-                          onPurge={
-                            canErase
-                              ? async () => {
-                                  await purge.mutateAsync({
-                                    memberId: m.memberId,
-                                  });
-                                }
-                              : undefined
-                          }
-                        />
-                      )}
-                    </MemberRow>
-                    {openId === m.memberId && <MemberDetail m={m} />}
-                  </div>
-                ))
+                <div className={LIST}>
+                  {shownActive.map((m) => (
+                    <div key={m.memberId} className="flex flex-col">
+                      <MemberRow
+                        m={m}
+                        label={roleLabel(m)}
+                        open={openId === m.memberId}
+                        onToggle={() => toggle(m.memberId)}
+                      >
+                        {owner && (
+                          <MemberActions
+                            name={m.name}
+                            busy={rowBusy(m.memberId)}
+                            onSuspend={
+                              m.status === "active"
+                                ? async () => {
+                                    await suspend.mutateAsync({
+                                      memberId: m.memberId,
+                                    });
+                                  }
+                                : undefined
+                            }
+                            onRestore={
+                              m.status === "suspended"
+                                ? () => restore.mutate({ memberId: m.memberId })
+                                : undefined
+                            }
+                            onArchive={async () => {
+                              await archive.mutateAsync({
+                                memberId: m.memberId,
+                              });
+                            }}
+                            onPurge={
+                              canErase
+                                ? async () => {
+                                    await purge.mutateAsync({
+                                      memberId: m.memberId,
+                                    });
+                                  }
+                                : undefined
+                            }
+                          />
+                        )}
+                      </MemberRow>
+                      {openId === m.memberId && <MemberDetail m={m} />}
+                    </div>
+                  ))}
+                </div>
               ))}
           </div>
         ) : shownTab === "archived" ? (
@@ -502,34 +509,35 @@ export function Members() {
                 can restore them in one click.
               </EmptyState>
             ) : (
-              archived.map((m) => (
-                <div
-                  key={m.memberId}
-                  className={cn(
-                    cardClass(),
-                    "flex flex-wrap items-center justify-between gap-3",
-                  )}
-                >
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">{m.name}</p>
-                    <p className="text-muted-foreground text-sm">
-                      {m.role} · joined {dateFmt.format(new Date(m.joinedAt))}
-                    </p>
+              <div className={LIST}>
+                {archived.map((m) => (
+                  <div
+                    key={m.memberId}
+                    className="flex min-h-11 flex-wrap items-center justify-between gap-3 px-4 py-2.5"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-foreground truncate font-medium">
+                        {m.name}
+                      </p>
+                      <p className="text-muted-foreground text-sm">
+                        {m.role} · joined {dateFmt.format(new Date(m.joinedAt))}
+                      </p>
+                    </div>
+                    <MemberActions
+                      name={m.name}
+                      busy={rowBusy(m.memberId)}
+                      onRestore={() => restore.mutate({ memberId: m.memberId })}
+                      onPurge={
+                        canErase
+                          ? async () => {
+                              await purge.mutateAsync({ memberId: m.memberId });
+                            }
+                          : undefined
+                      }
+                    />
                   </div>
-                  <MemberActions
-                    name={m.name}
-                    busy={rowBusy(m.memberId)}
-                    onRestore={() => restore.mutate({ memberId: m.memberId })}
-                    onPurge={
-                      canErase
-                        ? async () => {
-                            await purge.mutateAsync({ memberId: m.memberId });
-                          }
-                        : undefined
-                    }
-                  />
-                </div>
-              ))
+                ))}
+              </div>
             )}
           </div>
         ) : (

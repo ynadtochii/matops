@@ -14,16 +14,18 @@ import {
 } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
+import { Badge } from "@matops/ui/badge";
 import { Button } from "@matops/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@matops/ui/dialog";
 import { Label } from "@matops/ui/label";
+import { FOCUS_RING } from "@matops/ui/motion";
 import { Select } from "@matops/ui/select";
 import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
 import { useOrganization } from "./entity";
 import { PageHeader } from "./page-header";
-import { cardClass, ENTER, Eyebrow, SectionHeading } from "./primitives";
+import { cardClass, ENTER, Eyebrow, LIST, SectionHeading } from "./primitives";
 import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 
@@ -177,14 +179,16 @@ export function OrganizationPersonScreen({ personId }: { personId: string }) {
         >
           Branches
         </SectionHeading>
-        <ul className="flex flex-col gap-2">
+        <ul className={LIST}>
           {person.branches.map((b) => (
             <li
               key={b.entityId}
-              className={cn(cardClass(), "flex flex-wrap items-center gap-3")}
+              className="flex min-h-11 flex-wrap items-center gap-3 px-4 py-3"
             >
               <div className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate font-medium">{b.entityName}</span>
+                <span className="text-foreground truncate font-medium">
+                  {b.entityName}
+                </span>
                 <span className="text-muted-foreground text-sm">
                   {b.role}
                   {b.status !== "active" ? ` · ${b.status}` : ""}
@@ -282,29 +286,23 @@ export function OrganizationPersonScreen({ personId }: { personId: string }) {
               : "Staff access comes from their role at each branch."}
           </EmptyState>
         ) : (
-          <ul className="flex flex-col gap-2">
+          <ul className={LIST}>
             {held.data.map((h) => (
-              <li key={h.id} className={cn(cardClass(), "flex flex-col gap-1")}>
+              <li key={h.id} className="flex flex-col gap-1 p-4">
                 {/* What is waiting for an answer reads before the figures. An
                     owner arriving from the overview's claim link was landing on
                     a card where the claim was the fifth line down. */}
                 <span className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium">{h.planName}</span>
-                  {h.status !== "active" && (
-                    <span className="text-muted-foreground text-xs uppercase">
-                      {h.status}
-                    </span>
-                  )}
+                  <span className="text-foreground font-medium">
+                    {h.planName}
+                  </span>
+                  {h.status !== "active" && <Badge>{h.status}</Badge>}
                   {(claims.data ?? []).some(
                     (c) => c.assignmentId === h.id && c.personId === personId,
-                  ) && (
-                    <span className="border-brand/40 text-brand-strong rounded-full border px-2 py-0.5 text-xs font-medium">
-                      Says they paid
-                    </span>
-                  )}
+                  ) && <Badge tone="warning">Says they paid</Badge>}
                 </span>
                 {h.pendingChange && (
-                  <span className="text-brand-strong text-xs font-medium">
+                  <span className="text-info text-xs font-medium">
                     Moves to {h.pendingChange.targetPlanName ?? "another plan"}{" "}
                     on 1 {h.pendingChange.effectiveMonthLabel}
                   </span>
@@ -518,7 +516,7 @@ function PersonAccess({
     <section className="flex flex-col gap-4">
       <SectionHeading>Access</SectionHeading>
       <div className={cn(cardClass(), "flex flex-col gap-1")}>
-        <p className="font-medium">Sign-in email</p>
+        <p className="text-foreground font-medium">Sign-in email</p>
         <p className="text-muted-foreground text-sm">
           {person.account?.email ?? "No sign-in account"}
         </p>
@@ -675,7 +673,7 @@ function PlanChangeDialog({
             <p className="text-muted-foreground text-sm">Working it out…</p>
           )}
           {preview.isError && (
-            <p className="text-error text-sm">{preview.error.message}</p>
+            <p className="text-error-text text-sm">{preview.error.message}</p>
           )}
           {preview.data && (
             <div className="flex flex-col gap-2 text-sm">
@@ -722,10 +720,11 @@ function PlanChangeDialog({
               Cancel
             </Button>
             <Button
+              busy={schedule.isPending}
               disabled={targetPlanId === "" || schedule.isPending}
               onClick={() => schedule.mutate({ assignmentId, targetPlanId })}
             >
-              {schedule.isPending ? "Scheduling…" : "Schedule the change"}
+              Schedule the change
             </Button>
           </div>
         </div>
@@ -753,7 +752,12 @@ function PaymentHistory({ assignmentId }: { assignmentId: string }) {
 
   return (
     <details className="mt-1">
-      <summary className="text-muted-foreground cursor-pointer text-xs">
+      <summary
+        className={cn(
+          "text-muted-foreground hover:text-foreground w-fit cursor-pointer rounded-sm text-xs transition-colors motion-reduce:transition-none",
+          FOCUS_RING,
+        )}
+      >
         {months.data.length === 1
           ? "1 month recorded"
           : `${months.data.length} months recorded`}

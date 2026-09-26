@@ -182,6 +182,22 @@ The platform has no real users. So the whole app switches at once on the branch
   violet's identity jobs in ADR 37. The dues strip text is secondary on its
   warning or error tint.
 
+### Step 4.1: Members and People
+
+- `primitives.tsx` (shared by every screen): its 11 hand-drawn icons are
+  Lucide under the same names, the mono uppercase labels are plain sans, and a
+  new `LIST` class is one bordered container with divided rows. `DriftBadge`
+  renders `Badge`.
+- The member lists, person page, leads and people table are one list each
+  instead of a stack of cards. Status pills are `Badge` with a tone, and two
+  violet status texts moved to `warning` and `info`, since violet is never a
+  status. The people row checkbox is `Checkbox`. Four mid-request label
+  renames became the `busy` prop.
+- **Found, not fixed:** six buttons are still disabled for validation, against
+  ADR 120: Promote, Review, BulkAssign and the Add buttons, Schedule the
+  change, and Rank Clear. Fixing them means showing the error on submit, which
+  is a logic change, so it is its own slice.
+
 ## Consequences
 
 - Every new screen gets sizes, weights, edges and radii from tokens. The last

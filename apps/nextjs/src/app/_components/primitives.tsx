@@ -1,8 +1,23 @@
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
+import {
+  ArrowDown,
+  ArrowUp,
+  Check,
+  ChevronDown,
+  Ellipsis,
+  GripVertical,
+  Minus,
+  NotebookText,
+  Pencil,
+  Plus,
+  X,
+} from "lucide-react";
 
 import type { DisciplineTone, DriftStatus } from "@matops/domain";
+import type { BadgeTone } from "@matops/ui/badge";
 import { disciplineTone } from "@matops/domain";
 import { cn } from "@matops/ui";
+import { Badge } from "@matops/ui/badge";
 
 /**
  * Shared layout vocabulary for the owner/instructor screens: section headings,
@@ -25,7 +40,8 @@ export function cardClass({
   return cn(
     "border-border rounded-lg border p-4",
     variant === "filled" && "bg-card",
-    interactive && "hover:border-brand/40 hover:bg-muted transition-colors",
+    interactive &&
+      "hover:border-border-strong hover:bg-hover transition-colors motion-reduce:transition-none",
   );
 }
 
@@ -38,7 +54,10 @@ export const ROSTER_LIST =
   "border-border bg-card max-h-[26rem] overflow-y-auto rounded-lg border px-3";
 
 export const ROSTER_ROW =
-  "border-border/60 flex min-h-11 items-center gap-3 border-b py-1.5 last:border-b-0";
+  "border-border flex min-h-11 items-center gap-3 border-b py-1.5 last:border-b-0";
+
+export const LIST =
+  "border-border bg-card divide-border divide-y overflow-hidden rounded-lg border";
 
 export const ENTER =
   "animate-in fade-in-0 slide-in-from-bottom-1 fill-mode-backwards duration-300 ease-out motion-reduce:animate-none";
@@ -95,7 +114,7 @@ export function PanelNotice({
 }) {
   return (
     <div className={cn(panelCell, "col-span-full px-4 py-5")}>
-      <p className="text-sm font-medium">{title}</p>
+      <p className="text-foreground text-sm font-medium">{title}</p>
       {children && (
         <p className="text-muted-foreground mt-1 text-sm">{children}</p>
       )}
@@ -121,7 +140,7 @@ export function SectionHeading({
 }) {
   return (
     <div className={cn("flex items-center justify-between gap-3", className)}>
-      <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
+      <h2 className="text-md flex items-center gap-2 font-semibold">
         {children}
         {count != null && count > 0 && <CountBadge>{count}</CountBadge>}
       </h2>
@@ -134,8 +153,7 @@ export function SectionHeading({
  * The rule-and-label look `Section` wears, on its own, for a heading that sits
  * inside a section and so cannot be another `Section`.
  */
-export const SECTION_LABEL =
-  "font-mono text-[11px] font-medium tracking-[0.16em] uppercase";
+export const SECTION_LABEL = "text-sm font-medium";
 
 export function Section({
   label,
@@ -152,10 +170,12 @@ export function Section({
     <section className={cn("flex flex-col gap-4", className)}>
       <div className="flex items-center gap-3">
         <span aria-hidden className="bg-border h-px w-5 shrink-0" />
-        <h2 className={cn("shrink-0", SECTION_LABEL)}>{label}</h2>
+        <h2 className={cn("text-muted-foreground shrink-0", SECTION_LABEL)}>
+          {label}
+        </h2>
         <span aria-hidden className="bg-border h-px flex-1" />
         {meta && (
-          <span className="text-muted-foreground shrink-0 font-mono text-[10px] tracking-wide uppercase">
+          <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
             {meta}
           </span>
         )}
@@ -168,14 +188,14 @@ export function Section({
 /** A small pill of a number — the brand spark for "N things want you". */
 export function CountBadge({ children }: { children: ReactNode }) {
   return (
-    <span className="bg-brand text-brand-foreground inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 font-mono text-[11px] leading-none tabular-nums">
+    <span className="bg-brand text-brand-foreground text-2xs inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 leading-none font-medium tabular-nums">
       {children}
     </span>
   );
 }
 
 /**
- * A glanceable metric: big mono numeral over a small uppercase label, with an
+ * A glanceable metric: a large numeral over a small label, with an
  * optional comparison line beneath. The comparison stays in the muted colour on
  * purpose — a drop in visits is not an error, and painting direction green or
  * red would both overload the callout colours and encode meaning in hue alone.
@@ -197,11 +217,11 @@ export function Stat({
   return (
     <div>
       <p className="flex items-baseline gap-1.5">
-        <span className="font-mono text-xl tabular-nums">{value}</span>
+        <span className="text-xl font-medium tabular-nums">{value}</span>
         {delta != null && delta !== 0 && (
           <span
             className={cn(
-              "font-mono text-[11px] tabular-nums",
+              "text-2xs font-medium tabular-nums",
               // Down is `--warning` ("careful"), never `--error` — a quiet week
               // is worth a look, not a failure. The arrow carries the direction
               // too, so nothing here is encoded in hue alone.
@@ -223,7 +243,7 @@ export function Stat({
   );
 }
 
-/** The small mono uppercase metadata label used above stats and sub-lists. */
+/** The small metadata label used under stats and above sub-lists. */
 export function Eyebrow({
   as: Tag = "p",
   children,
@@ -238,10 +258,7 @@ export function Eyebrow({
   return (
     <Tag
       style={style}
-      className={cn(
-        "text-muted-foreground font-mono text-[10px] tracking-wide uppercase",
-        className,
-      )}
+      className={cn("text-muted-foreground text-xs", className)}
     >
       {children}
     </Tag>
@@ -255,11 +272,11 @@ const DRIFT_LABEL: Record<DriftStatus, string> = {
   dormant: "Dormant",
 };
 
-const DRIFT_TONE: Record<DriftStatus, string> = {
-  active: "text-success border-success/40",
-  cooling: "text-muted-foreground border-border",
-  at_risk: "text-warning border-warning/40",
-  dormant: "text-error border-error/40",
+const DRIFT_TONE: Record<DriftStatus, BadgeTone> = {
+  active: "success",
+  cooling: "neutral",
+  at_risk: "warning",
+  dormant: "error",
 };
 
 /** How long since a member last trained, as a band (C.2). */
@@ -271,15 +288,9 @@ export function DriftBadge({
   className?: string;
 }) {
   return (
-    <span
-      className={cn(
-        "rounded-full border px-2 py-0.5 text-xs font-medium",
-        DRIFT_TONE[drift],
-        className,
-      )}
-    >
+    <Badge tone={DRIFT_TONE[drift]} className={className}>
       {DRIFT_LABEL[drift]}
-    </span>
+    </Badge>
   );
 }
 
@@ -299,163 +310,43 @@ export function disciplineDot(discipline: string | null): string {
 }
 
 export const ChevronDownIcon = ({ className }: { className?: string }) => (
-  <svg
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={cn("size-4", className)}
-    aria-hidden="true"
-  >
-    <path d="m4 6 4 4 4-4" />
-  </svg>
+  <ChevronDown aria-hidden className={className} />
 );
 
 export const PencilIcon = ({ className }: { className?: string }) => (
-  <svg
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={cn("size-3.5", className)}
-    aria-hidden="true"
-  >
-    <path d="M10.9 2.6a1.5 1.5 0 0 1 2.1 2.1l-7.3 7.3-2.8.7.7-2.8z" />
-  </svg>
+  <Pencil aria-hidden className={cn("size-3.5", className)} />
 );
 
 export const NoteIcon = ({ className }: { className?: string }) => (
-  <svg
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={cn("size-3.5", className)}
-    aria-hidden="true"
-  >
-    <path d="M3.5 2.5h9v11h-9z" />
-    <path d="M5.75 5.5h4.5M5.75 8h4.5M5.75 10.5h2.5" />
-  </svg>
+  <NotebookText aria-hidden className={cn("size-3.5", className)} />
 );
 
-export const MoreIcon = () => (
-  <svg
-    viewBox="0 0 16 16"
-    fill="currentColor"
-    className="size-4"
-    aria-hidden="true"
-  >
-    <circle cx="3" cy="8" r="1.4" />
-    <circle cx="8" cy="8" r="1.4" />
-    <circle cx="13" cy="8" r="1.4" />
-  </svg>
-);
+export const MoreIcon = () => <Ellipsis aria-hidden />;
 
 export const GripIcon = ({ className }: { className?: string }) => (
-  <svg
-    viewBox="0 0 16 16"
-    fill="currentColor"
-    className={cn("size-4", className)}
-    aria-hidden="true"
-  >
-    <circle cx="6" cy="3.5" r="1.3" />
-    <circle cx="10" cy="3.5" r="1.3" />
-    <circle cx="6" cy="8" r="1.3" />
-    <circle cx="10" cy="8" r="1.3" />
-    <circle cx="6" cy="12.5" r="1.3" />
-    <circle cx="10" cy="12.5" r="1.3" />
-  </svg>
+  <GripVertical aria-hidden className={className} />
 );
 
 export const PlusIcon = ({ className }: { className?: string }) => (
-  <svg
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    className={cn("size-4", className)}
-    aria-hidden="true"
-  >
-    <path d="M8 3.5v9M3.5 8h9" />
-  </svg>
+  <Plus aria-hidden className={className} />
 );
 
 export const MinusIcon = ({ className }: { className?: string }) => (
-  <svg
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    className={cn("size-4", className)}
-    aria-hidden="true"
-  >
-    <path d="M3.5 8h9" />
-  </svg>
+  <Minus aria-hidden className={className} />
 );
 
 export const ArrowUpIcon = ({ className }: { className?: string }) => (
-  <svg
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={cn("size-4", className)}
-    aria-hidden="true"
-  >
-    <path d="M8 12.5v-9M4 7.5 8 3.5l4 4" />
-  </svg>
+  <ArrowUp aria-hidden className={className} />
 );
 
 export const ArrowDownIcon = ({ className }: { className?: string }) => (
-  <svg
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={cn("size-4", className)}
-    aria-hidden="true"
-  >
-    <path d="M8 3.5v9M4 8.5l4 4 4-4" />
-  </svg>
+  <ArrowDown aria-hidden className={className} />
 );
 
 export const CheckIcon = ({ className }: { className?: string }) => (
-  <svg
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.75"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={cn("size-3.5", className)}
-    aria-hidden="true"
-  >
-    <path d="m3.5 8.5 3 3 6-7" />
-  </svg>
+  <Check aria-hidden className={cn("size-3.5", className)} />
 );
 
 export const XIcon = ({ className }: { className?: string }) => (
-  <svg
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    className={cn("size-3.5", className)}
-    aria-hidden="true"
-  >
-    <path d="m4.5 4.5 7 7M11.5 4.5l-7 7" />
-  </svg>
+  <X aria-hidden className={cn("size-3.5", className)} />
 );
