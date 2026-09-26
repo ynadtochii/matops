@@ -1,6 +1,13 @@
 <!-- matops — live implementation plan + scope matrix. Rules for this file live in delivery.md. -->
 
 
+**Design system reference page**
+
+| Slice | Web | Shared | Mobile |
+| --- | --- | --- | --- |
+| Unlinked token, component, and pattern showcase at `/design-system` | done | reused | not changed |
+| Linear reference system and basic components at `/linear-ds` | done | not changed | not changed |
+
 **Reception, ADR 139 (supersedes ADR 138)**
 
 Implementation is locally complete. The slice remains wip until focused tests pass, browser and iPad checks complete, and one branch completes the pilot. Migration `0001_reception_link` is applied to dev. Migration `0002_loose_machine_man` remains to be applied. Static verification is in [the implementation plan](reception-implementation-plan.md).

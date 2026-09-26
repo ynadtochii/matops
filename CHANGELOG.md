@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased: design system reference
+
+- Added an unlinked, signed-in `/design-system` page with live theme colors, type roles, shared controls, card examples, and a searchable list/detail pattern. No product tokens or navigation changed.
+- Added an unlinked, public, no-index `/linear-ds` page: a design system measured from linear.app (surfaces, text, lines, accent and status colors, Inter type scale, radii, elevation, motion, six principles) with scoped tokens and basic components (buttons, fields, switches, chips, status and priority icons, command menu, issue list, board cards). It uses its own CSS module, so matops tokens are unchanged.
+- `/linear-ds` gained a Patterns section: tabs, a status menu, tooltip, a native modal dialog, toasts with undo, checkboxes with a bulk action bar, radio cards, a sidebar with breadcrumb, progress rings and bars with a sortable projects table, callouts, a loading skeleton, and an activity feed with a comment composer. Shared parts moved to `primitives.tsx`.
+- `/linear-ds` has a Light / Dark toggle, saved for this page only (dark by default). Light values are measured from linear.app's own `data-theme="light"` tokens; a few role tokens (raised, floating, hover, active, track) keep nesting visible on white. Dark renders unchanged.
+- `/linear-ds` light theme passes WCAG AA: tertiary and quaternary text, accent, brand, the green/yellow/orange status icons, avatar colors and control edges (inputs, checkboxes, radios, switch, comment box) are darker than Linear's light values. Dark still matches linear.app exactly.
+
 ## Unreleased: the owner screens design pass
 
 - **One pass per owner screen against `docs/design.md`**, eleven screens, inside the existing system. No token, no migration, no procedure and no query changed (ADR 140).

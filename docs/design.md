@@ -10,6 +10,11 @@ was the scaffold. **matops now owns its own identity** (ADR 37): a signature
 **violet** and the **basketweave** mark are ours, layered on the kept neutral
 foundation. Better Auth is heritage here, not the source of truth.
 
+The unlinked, sign-in-protected `/design-system` page shows the live web tokens,
+basic controls, and a searchable list/detail example. It is a reference page,
+not a separate set of tokens. Research behind its principles is in
+[`design-system/reference-site-research.md`](design-system/reference-site-research.md).
+
 ---
 
 ## 0. Ethos — one sentence
