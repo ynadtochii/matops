@@ -19,6 +19,7 @@
 - Step 5, mobile: Inter instead of Geist, the Linear colors, radius and pill buttons in the Expo kit, divided lists, tinted callouts and status pills, and a primary instead of violet active tab. Checked by typecheck and lint only; nobody has run it on a device yet (ADR 141).
 - Step 6a, one system page: the old `/design-system` showcase is gone, and `/linear-ds` now reads the product tokens and follows the app theme instead of keeping its own copy of Linear's values (ADR 141).
 - Light-theme error text is darker (`#a52121`), so the quiet destructive button and error badges pass contrast on grey surfaces, not only on white (ADR 141).
+- Step 6c, docs: `docs/design.md` rewritten for the Linear system with its section numbers kept, plus the ADR 141 lines in `docs/architecture.md`, `docs/map.md` and `docs/roadmap.md` (ADR 141).
 - Step 6b, lint guard: an arbitrary text size or hex color in a class string is now a lint error in the web app, the shared UI package and the mobile app (ADR 141).
 
 ## Unreleased: design system reference

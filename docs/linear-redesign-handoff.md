@@ -193,7 +193,7 @@ Checklist for every screen:
 - [x] Replace `(app)/design-system` with the system page. Point `/linear-ds` (or
       its successor) at the real theme tokens and delete its private token copy.
 - [x] Add a lint rule that bans hex colors and arbitrary text sizes in app code.
-- [ ] Rewrite `docs/design.md`. Update `docs/roadmap.md`, `docs/map.md`,
+- [x] Rewrite `docs/design.md`. Update `docs/roadmap.md`, `docs/map.md`,
       `CHANGELOG.md`.
 - [ ] User runs `pnpm test` (no logic should change; this confirms it).
 - [ ] With the user's go ahead: merge `design/linear` into `main`, which
@@ -201,10 +201,8 @@ Checklist for every screen:
 
 ## Next action
 
-Step 3: the app shell. Steps 1 and 2 are committed; ADR 141 "As built" has the
-token names and the new `@matops/ui` parts. Icons are Lucide (`lucide-react`
-lives in `@matops/ui`; add it to `apps/nextjs` when the shell first imports an
-icon). Browser note: signed-in app screens stall on their loader in this Chrome
-setup, with or without the redesign (checked with a stash A/B on 2026-09-26),
-and `resize_window` did not change `innerWidth`. `/privacy` renders and passes
-AA in both themes.
+Every unit the loop can do is done; see `docs/linear-redesign-progress.md`.
+What is left belongs to the user: run `pnpm test`, check the signed-in
+screens and phone widths in a real browser, run `docs/mobile-device-test.md`
+on a device, then say go for the merge of `design/linear` into `main` (which
+deploys production) and the update of `dev` from `main`.

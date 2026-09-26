@@ -18,7 +18,7 @@
 | Step 3: app shell | done | — | — |
 | Step 4: screens, nine groups | done | — | — |
 | Step 5: Expo restyle (static gates only, no device run) | — | — | wip |
-| Step 6: clean up, lint guard, merge | todo | todo | todo |
+| Step 6: clean up, lint guard, merge | wip | done | wip |
 
 **Reception, ADR 139 (supersedes ADR 138)**
 
