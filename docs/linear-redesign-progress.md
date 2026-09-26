@@ -43,7 +43,7 @@ stop the loop and notify the user.
 | 4.9 | Screens: public pages (sign-in, start, join, book, check-in, privacy) | done | `ba09d64` | Four public failed-load states fixed (ADR 140) |
 | 5 | Mobile (Expo): tokens, fonts, tabs, pushed screens, components | done (static) | `a307f55` | Unseen on a device; roadmap cell stays wip until `docs/mobile-device-test.md` runs. Icons stay `icons.tsx` |
 | 6a | Replace `(app)/design-system`; `/linear-ds` reads the real tokens | wip | | A subagent is doing it in parallel with unit 5 (disjoint files) |
-| 6b | Lint rule: no hex colors, no arbitrary text sizes in app code | todo | | |
+| 6b | Lint rule: no hex colors, no arbitrary text sizes in app code | done | `3d5ac11` | Class strings only; probed on a temp file |
 | 6c | Rewrite `docs/design.md`; update roadmap, map, changelog | todo | | |
 | 6d | User runs `pnpm test` | waiting on user | | The loop does not run tests |
 | 6e | Merge `design/linear` into `main` (production deploy), then update `dev` | waiting on user | | The loop never does this |
@@ -111,3 +111,4 @@ stop the loop and notify the user.
 - 2026-09-26: 4.8 student web done (`c7be42e`), by a subagent, reviewed.
 - 2026-09-26: 4.9 public pages done (`ba09d64`), by a subagent, reviewed. Step 4 complete.
 - 2026-09-26: 5 Expo done statically (`a307f55`), by a subagent, reviewed; three new comments removed, dashes stripped from reworded comments, a missing period fixed.
+- 2026-09-26: 6b lint guard done (`3d5ac11`).
