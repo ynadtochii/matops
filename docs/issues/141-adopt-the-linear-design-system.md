@@ -333,6 +333,16 @@ The platform has no real users. So the whole app switches at once on the branch
 - The splash background in `app.json` is still `#000000`, since changing it
   needs a native build.
 
+### Step 6b: the lint guard
+
+- `designTokensConfig` in `tooling/eslint/react.ts`, used by `apps/nextjs`,
+  `packages/ui` and `apps/expo`, makes an arbitrary text size
+  (`text-[13px]`) or an arbitrary hex color (`bg-[#fff]`) in any string or
+  template literal an error, with a message naming the token to use. It
+  checks class strings only: a hex in a canvas drawing or a `tokens` object
+  is not a class and stays allowed. Probed on a temporary file: both rules
+  fire, and a line of tokens passes.
+
 ## Consequences
 
 - Every new screen gets sizes, weights, edges and radii from tokens. The last

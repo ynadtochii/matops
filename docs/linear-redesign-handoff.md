@@ -192,7 +192,7 @@ Checklist for every screen:
 ### Step 6. Clean up, guard, merge
 - [ ] Replace `(app)/design-system` with the system page. Point `/linear-ds` (or
       its successor) at the real theme tokens and delete its private token copy.
-- [ ] Add a lint rule that bans hex colors and arbitrary text sizes in app code.
+- [x] Add a lint rule that bans hex colors and arbitrary text sizes in app code.
 - [ ] Rewrite `docs/design.md`. Update `docs/roadmap.md`, `docs/map.md`,
       `CHANGELOG.md`.
 - [ ] User runs `pnpm test` (no logic should change; this confirms it).
