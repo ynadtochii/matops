@@ -39,7 +39,7 @@ stop the loop and notify the user.
 | 4.5 | Screens: Payments and Memberships | done | `eefc1a6` | Student dues move to 4.8; shared `page-header.tsx` restyled here |
 | 4.6 | Screens: Coaches, Referrals, Notifications | done | `bb10f77` | Staff, invites and the share dialog included |
 | 4.7 | Screens: both Settings screens, Profile, class detail | done | `3b3fc57` | New shared `SettingsRow`; `form-fields.tsx` restyled here |
-| 4.8 | Screens: student web (schedule, training, dues) | todo | | |
+| 4.8 | Screens: student web (schedule, training, dues) | done | `c7be42e` | |
 | 4.9 | Screens: public pages (sign-in, start, join, book, check-in, privacy) | todo | | |
 | 5 | Mobile (Expo): tokens, fonts, tabs, pushed screens, components | todo | | Static gates only, no simulator |
 | 6a | Replace `(app)/design-system`; `/linear-ds` reads the real tokens | todo | | |
@@ -95,3 +95,4 @@ stop the loop and notify the user.
 - 2026-09-26: 4.5 Memberships done (`eefc1a6`), by a subagent, reviewed.
 - 2026-09-26: 4.6 Coaches, Referrals, Notifications done (`bb10f77`), by a subagent, reviewed.
 - 2026-09-26: 4.7 Settings, Profile, class page done (`3b3fc57`), by a subagent, reviewed.
+- 2026-09-26: 4.8 student web done (`c7be42e`), by a subagent, reviewed.
