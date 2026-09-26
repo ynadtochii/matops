@@ -38,7 +38,7 @@ stop the loop and notify the user.
 | 4.4 | Screens: Attendance and Reception | done | `37db665` | Two failed-read empty states fixed (ADR 140) |
 | 4.5 | Screens: Payments and Memberships | done | `eefc1a6` | Student dues move to 4.8; shared `page-header.tsx` restyled here |
 | 4.6 | Screens: Coaches, Referrals, Notifications | done | `bb10f77` | Staff, invites and the share dialog included |
-| 4.7 | Screens: both Settings screens, Profile, class detail | todo | | |
+| 4.7 | Screens: both Settings screens, Profile, class detail | done | `3b3fc57` | New shared `SettingsRow`; `form-fields.tsx` restyled here |
 | 4.8 | Screens: student web (schedule, training, dues) | todo | | |
 | 4.9 | Screens: public pages (sign-in, start, join, book, check-in, privacy) | todo | | |
 | 5 | Mobile (Expo): tokens, fonts, tabs, pushed screens, components | todo | | Static gates only, no simulator |
@@ -69,6 +69,13 @@ stop the loop and notify the user.
 - Found in 4.6: the referral dialog's save is disabled until a student and a
   referrer are picked (`referrals-screen.tsx:610`).
 
+- **Bug on `main`, found in 4.7:** the class page (`class-detail.tsx`) shows
+  a "Who's booked" heading with nothing under it; `ClassRoster` is never
+  rendered. Tell the user.
+- Found in 4.7: "Save address" is disabled while `linkError` is set; the
+  profile form shows errors on an invalid submit but does not move focus to
+  the first bad control; gym Modules "Save" is disabled when nothing changed.
+
 ## Known limits
 
 - Signed-in screens stall on their loader in this Chrome setup, with or without
@@ -87,3 +94,4 @@ stop the loop and notify the user.
 - 2026-09-26: 4.4 Attendance and Reception done (`37db665`), by a subagent, reviewed.
 - 2026-09-26: 4.5 Memberships done (`eefc1a6`), by a subagent, reviewed.
 - 2026-09-26: 4.6 Coaches, Referrals, Notifications done (`bb10f77`), by a subagent, reviewed.
+- 2026-09-26: 4.7 Settings, Profile, class page done (`3b3fc57`), by a subagent, reviewed.
