@@ -142,9 +142,7 @@ export function SchedulePoster() {
                 role="status"
               >
                 <Spinner className="text-black/60" />
-                <p className="text-xs text-black/60">
-                  Drawing the poster
-                </p>
+                <p className="text-xs text-black/60">Drawing the poster</p>
               </div>
             )}
           </div>
