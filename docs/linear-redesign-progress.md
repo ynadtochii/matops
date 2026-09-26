@@ -44,7 +44,7 @@ stop the loop and notify the user.
 | 5 | Mobile (Expo): tokens, fonts, tabs, pushed screens, components | done (static) | `a307f55` | Unseen on a device; roadmap cell stays wip until `docs/mobile-device-test.md` runs. Icons stay `icons.tsx` |
 | 6a | Replace `(app)/design-system`; `/linear-ds` reads the real tokens | done | `55e1e0e` | Its audit found a light `--error-text` failure, fixed in `845c099` |
 | 6b | Lint rule: no hex colors, no arbitrary text sizes in app code | done | `3d5ac11` | Class strings only; probed on a temp file |
-| 6c | Rewrite `docs/design.md`; update roadmap, map, changelog | todo | | |
+| 6c | Rewrite `docs/design.md`; update roadmap, map, changelog | done | `bb1cd5d` | Section numbers kept for the 23 files that cite them |
 | 6d | User runs `pnpm test` | waiting on user | | The loop does not run tests |
 | 6e | Merge `design/linear` into `main` (production deploy), then update `dev` | waiting on user | | The loop never does this |
 
@@ -113,3 +113,4 @@ stop the loop and notify the user.
 - 2026-09-26: 5 Expo done statically (`a307f55`), by a subagent, reviewed; three new comments removed, dashes stripped from reworded comments, a missing period fixed.
 - 2026-09-26: 6b lint guard done (`3d5ac11`).
 - 2026-09-26: 6a done (`55e1e0e`), by a subagent, reviewed and audited in the browser in both themes; light `--error-text` darkened to `#a52121` (`845c099`).
+- 2026-09-26: 6c docs done (`bb1cd5d`). Only 6d (user runs `pnpm test`) and 6e (user-approved merge) remain; the loop stops here.
