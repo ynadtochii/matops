@@ -170,6 +170,18 @@ The platform has no real users. So the whole app switches at once on the branch
   Count badges use `text-2xs` with tabular figures instead of mono 10px.
 - The sign-out button uses the `busy` prop and keeps its label (ADR 140).
 
+### Step 3b: header, branch picker, mobile shell, banners
+
+- The branch picker is a full-width row (Linear's workspace switcher) instead
+  of an outline button: 32px on desktop, 44px on touch, with an up-down chevron
+  and Lucide icons in its menu.
+- The mobile tab bar uses `text-2xs` labels and 20px icons. The current tab,
+  the current item in More and the notifications bell use primary text, not
+  violet, to match the sidebar.
+- The pending-approval strip keeps the violet wash: the pending tag is one of
+  violet's identity jobs in ADR 37. The dues strip text is secondary on its
+  warning or error tint.
+
 ## Consequences
 
 - Every new screen gets sizes, weights, edges and radii from tokens. The last

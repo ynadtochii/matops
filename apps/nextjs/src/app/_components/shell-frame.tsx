@@ -243,7 +243,7 @@ export function ShellFrame({
             aria-label="Home"
             className="-m-1.5 flex size-11 shrink-0 items-center justify-center p-1.5 md:m-0 md:size-auto md:p-0"
           >
-            <Logo size={22} withWordmark={false} />
+            <Logo size={20} withWordmark={false} />
           </Link>
           <div className="min-w-0 flex-1">{selector}</div>
           {headerExtra}
@@ -251,7 +251,7 @@ export function ShellFrame({
             href={profileHref}
             aria-label="Profile"
             aria-current={isCurrent("/profile") ? "page" : undefined}
-            className="bg-muted text-muted-foreground relative flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold uppercase after:absolute after:-inset-1 after:content-['']"
+            className="bg-active text-foreground-secondary relative flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold uppercase after:absolute after:-inset-1.5 after:content-['']"
           >
             {initials(user.name, user.email)}
           </Link>
@@ -311,9 +311,7 @@ export function ShellFrame({
                         href={i.href}
                         aria-current={isCurrent(i.path) ? "page" : undefined}
                         className={
-                          isCurrent(i.path)
-                            ? "text-brand-strong font-medium"
-                            : ""
+                          isCurrent(i.path) ? "bg-active text-foreground" : ""
                         }
                       >
                         {i.icon}
@@ -343,8 +341,8 @@ function groupsOf(items: NavItem[]): { group?: string; members: NavItem[] }[] {
 }
 
 const tabClass = (active: boolean) =>
-  `flex min-h-14 flex-1 flex-col items-center justify-center gap-1 px-1 py-2 text-[10px] font-medium tracking-tight ${
-    active ? "text-brand-strong" : "text-muted-foreground"
+  `flex min-h-14 flex-1 flex-col items-center justify-center gap-1 px-1 py-2 text-2xs font-medium transition-colors motion-reduce:transition-none [&_svg]:size-5 ${
+    active ? "text-foreground" : "text-muted-foreground"
   }`;
 
 function combineBadges(badges: (NavBadge | undefined)[]): NavBadge {

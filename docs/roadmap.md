@@ -15,7 +15,7 @@
 | Step 0: decisions and ADR | done | done | done |
 | Step 1: tokens, Inter, radius, shadows | done | done | wip |
 | Step 2: shared components and new primitives | — | done | — |
-| Step 3: app shell | todo | — | — |
+| Step 3: app shell | done | — | — |
 | Step 4: screens, nine groups | todo | — | — |
 | Step 5: Expo restyle (static gates only, no device run) | — | — | todo |
 | Step 6: clean up, lint guard, merge | todo | todo | todo |

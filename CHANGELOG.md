@@ -6,6 +6,7 @@
 - Step 1, tokens: the Linear surfaces, text steps and edges in both themes, Inter with a 13px interface default, a 4/6/8/12 radius scale, two shadows (lift and float), 150ms transitions, and dark as the default theme. Fields stay 16px on touch screens so iOS does not zoom. Screens are not restyled yet (ADR 141).
 - Step 2, shared components: Linear styling for every part in `@matops/ui`, with the same props, plus Tabs, Tooltip, Checkbox, RadioGroup, Switch, Kbd, Badge, Avatar, Progress, Skeleton, Callout and Table. Lucide replaces Radix icons, drawn at 16px with a 1.5px stroke. `cn` now merges the new `text-md`, `text-2xs` and shadow names correctly (ADR 141).
 - Step 3a, sidebar: 28px items on the level 1 surface, the current page marked with the active fill instead of violet, a fold per group headed by the branch name and "Gym management", Lucide icons, and a sign-out button that keeps its label while it works (ADR 141).
+- Step 3b, header and mobile shell: the branch picker is a full-width switcher row, the mobile tabs and bell mark the current page with primary text instead of violet, and the pending and dues strips are tighter (ADR 141).
 
 ## Unreleased: design system reference
 

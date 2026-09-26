@@ -480,7 +480,7 @@ function ShellChrome({
                 }
                 className={`relative flex size-11 shrink-0 items-center justify-center rounded-md transition-colors ${
                   isCurrent("branch:/notifications")
-                    ? "text-brand-strong"
+                    ? "text-foreground"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
@@ -498,7 +498,7 @@ function ShellChrome({
           <>
             {isPending && (
               <div className="border-brand/25 bg-brand-wash text-brand-strong border-b">
-                <p className={`${columnClass} py-2.5 text-sm`}>
+                <p className={`${columnClass} py-2 text-sm font-medium`}>
                   Waiting for branch approval. You can browse classes and
                   memberships, but booking is not available yet.
                 </p>
@@ -513,7 +513,9 @@ function ShellChrome({
                     : "border-warning/25 bg-warning/10 hover:bg-warning/15"
                 }`}
               >
-                <span className={`${columnClass} block py-2.5 text-sm`}>
+                <span
+                  className={`${columnClass} text-foreground-secondary block py-2 text-sm`}
+                >
                   {duesStrip}
                 </span>
               </Link>

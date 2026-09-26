@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Check, ChevronsUpDown, Plus } from "lucide-react";
 
 import type { CreateEntityInput } from "@matops/validators";
 import { entityHref, switchEntityHref } from "@matops/domain";
@@ -24,6 +25,7 @@ import {
 import { FieldError } from "@matops/ui/field";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
+import { FOCUS_RING } from "@matops/ui/motion";
 import { Select } from "@matops/ui/select";
 import { toast } from "@matops/ui/toast";
 import { CreateEntitySchema } from "@matops/validators";
@@ -31,33 +33,6 @@ import { CreateEntitySchema } from "@matops/validators";
 import type { Organization } from "./entity";
 import { useTRPC } from "~/trpc/react";
 import { useOrganization } from "./entity";
-
-const iconProps = {
-  viewBox: "0 0 16 16",
-  fill: "none",
-  stroke: "currentColor",
-  strokeWidth: 1.5,
-  strokeLinecap: "round",
-  strokeLinejoin: "round",
-  className: "size-3.5 shrink-0",
-  "aria-hidden": true,
-} as const;
-
-const ChevronDown = () => (
-  <svg {...iconProps}>
-    <path d="M4 6.5l4 4 4-4" />
-  </svg>
-);
-const Check = () => (
-  <svg {...iconProps}>
-    <path d="M3.5 8.5l3 3 6-7" />
-  </svg>
-);
-const Plus = () => (
-  <svg {...iconProps}>
-    <path d="M8 3.5v9M3.5 8h9" />
-  </svg>
-);
 
 /**
  * The place picker (ADR 124, reshaped by ADR 129). Switching is a link, not a
@@ -95,7 +70,7 @@ export function EntitySelector({
 
   if (alone) {
     return (
-      <span className="text-sidebar-foreground block truncate px-1 text-sm font-medium">
+      <span className="text-foreground flex h-8 items-center truncate px-1.5 text-sm font-medium">
         {active?.name ?? "Your branch"}
       </span>
     );
@@ -105,12 +80,18 @@ export function EntitySelector({
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" className="max-w-full">
-            <span className="truncate">
+          <button
+            type="button"
+            className={`text-foreground hover:bg-hover data-[state=open]:bg-active flex min-h-11 w-full min-w-0 items-center gap-1.5 rounded-md px-1.5 text-left text-sm font-medium transition-colors outline-none motion-reduce:transition-none md:min-h-8 ${FOCUS_RING}`}
+          >
+            <span className="flex-1 truncate">
               {active?.name ?? "No branches yet"}
             </span>
-            <ChevronDown />
-          </Button>
+            <ChevronsUpDown
+              aria-hidden
+              className="text-muted-foreground size-3.5"
+            />
+          </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="min-w-52">
           {entities.map((e) => {
@@ -133,7 +114,7 @@ export function EntitySelector({
                   aria-current={current ? "true" : undefined}
                 >
                   <span className="flex-1 truncate">{e.name}</span>
-                  {current && <Check />}
+                  {current && <Check aria-hidden />}
                 </Link>
               </DropdownMenuItem>
             );
@@ -142,7 +123,7 @@ export function EntitySelector({
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => setAdding(true)}>
-                <Plus />
+                <Plus aria-hidden />
                 <span className="flex-1">Add branch</span>
               </DropdownMenuItem>
             </>

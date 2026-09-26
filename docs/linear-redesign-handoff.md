@@ -157,9 +157,9 @@ at 375px, iPad and desktop, one `CHANGELOG.md` line, and one commit.
       Radix has a fixed stroke and does not meet it; decide and note it in the ADR.
 
 ### Step 3. App shell
-- [ ] Sidebar in the Linear pattern: level 1 surface, 28px items, a fold per
+- [x] Sidebar in the Linear pattern: level 1 surface, 28px items, a fold per
       branch, "Gym management" beside the current branch.
-- [ ] Header, branch picker, mobile shell, the overdue strip.
+- [x] Header, branch picker, mobile shell, the overdue strip.
 - A command menu (⌘K) is a new feature. Not part of this redesign; propose it
   as its own slice.
 
