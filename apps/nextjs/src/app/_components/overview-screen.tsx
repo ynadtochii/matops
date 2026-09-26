@@ -14,18 +14,19 @@ import {
 } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { Button } from "@matops/ui/button";
-import { FOCUS_RING } from "@matops/ui/motion";
+import { FOCUS_RING, FOCUS_RING_INSET } from "@matops/ui/motion";
 
 import { useTRPC } from "~/trpc/react";
 import { useOrganization } from "./entity";
 import { AddBranchButton } from "./entity-selector";
 import { JoinByCode } from "./join-by-code";
 import {
-  cardClass,
   CheckIcon,
+  ChevronDownIcon,
   CountBadge,
   ENTER,
   Eyebrow,
+  LIST,
   SectionHeading,
   stagger,
 } from "./primitives";
@@ -49,10 +50,16 @@ function PartialFailure({
   return (
     <div
       role="status"
-      className="border-warning/40 bg-warning/5 flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm"
+      className="border-warning/25 bg-warning/7 text-foreground-secondary flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm"
     >
       <p>{children}</p>
-      <Button variant="outline" size="sm" onClick={onRetry} disabled={busy}>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={onRetry}
+        busy={busy}
+        disabled={busy}
+      >
         Try again
       </Button>
     </div>
@@ -108,7 +115,7 @@ export function OverviewScreen() {
       <div className="border-border flex flex-wrap items-center justify-between gap-4 border-b pb-6">
         <div>
           <Eyebrow>Gym overview</Eyebrow>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight wrap-anywhere">
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight wrap-anywhere">
             {organizationName}
           </h1>
           <p className="text-muted-foreground mt-1 text-sm">
@@ -127,7 +134,7 @@ export function OverviewScreen() {
       {canRunOrganization ? (
         <OwnerOverview />
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ul className={LIST}>
           {entities.map((e) => (
             <li key={e.id}>
               <PlainCard id={e.id} name={e.name} />
@@ -269,10 +276,10 @@ function NeedsAttention() {
         {groups.map((group) => {
           const collapsible = group.items.length > 1;
           const heading = (
-            <h3 className="flex items-center justify-between gap-3 text-xs font-semibold">
+            <h3 className="flex items-center justify-between gap-3 px-2 text-xs font-semibold">
               <span>{group.reason}</span>
               <span className="flex shrink-0 items-center gap-2">
-                <span className="text-muted-foreground font-mono tabular-nums">
+                <span className="text-muted-foreground tabular-nums">
                   {group.items.length}
                   {group.reason === "Bookings without access" &&
                   review.data?.more
@@ -280,20 +287,7 @@ function NeedsAttention() {
                     : ""}
                 </span>
                 {collapsible && (
-                  <svg
-                    aria-hidden
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    className="size-4 transition-transform group-open:rotate-180 motion-reduce:transition-none"
-                  >
-                    <path
-                      d="m4 6 4 4 4-4"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
+                  <ChevronDownIcon className="text-muted-foreground size-4 transition-transform group-open:rotate-180 motion-reduce:transition-none" />
                 )}
               </span>
             </h3>
@@ -305,7 +299,7 @@ function NeedsAttention() {
                   <Link
                     href={item.href}
                     className={cn(
-                      "hover:bg-muted flex min-h-11 flex-col justify-center gap-1 rounded-md px-2 py-2 text-sm wrap-anywhere transition-colors",
+                      "hover:bg-hover flex min-h-11 flex-col justify-center gap-1 rounded-md px-2 py-2 text-sm wrap-anywhere transition-colors motion-reduce:transition-none",
                       FOCUS_RING,
                     )}
                   >
@@ -326,7 +320,7 @@ function NeedsAttention() {
             >
               <summary
                 className={cn(
-                  "hover:bg-muted min-h-11 cursor-pointer list-none content-center rounded-md [&::-webkit-details-marker]:hidden",
+                  "hover:bg-hover min-h-11 cursor-pointer list-none content-center rounded-md transition-colors motion-reduce:transition-none [&::-webkit-details-marker]:hidden",
                   FOCUS_RING,
                 )}
               >
@@ -350,7 +344,10 @@ function NeedsAttention() {
           Showing the first 50 bookings with access issues.{" "}
           <Link
             href={organizationHref("/memberships?tab=access", branchId)}
-            className="text-brand-strong underline underline-offset-4"
+            className={cn(
+              "text-brand-strong underline underline-offset-4",
+              FOCUS_RING,
+            )}
           >
             Review membership access
           </Link>
@@ -388,7 +385,7 @@ function OwnerOverview() {
       <section className="flex min-w-0 flex-col gap-4">
         <SectionHeading
           action={
-            <span className="text-muted-foreground shrink-0 font-mono text-xs tabular-nums">
+            <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
               {summary.data?.entities.length ?? entities.length} total
             </span>
           }
@@ -397,7 +394,7 @@ function OwnerOverview() {
         </SectionHeading>
         {summary.isPending && (
           <div role="status" aria-label="Loading">
-            <SkeletonRows rows={2} gap="gap-3" />
+            <SkeletonRows rows={2} inList />
           </div>
         )}
         {summary.isError && (
@@ -409,7 +406,7 @@ function OwnerOverview() {
           </PartialFailure>
         )}
         {summary.data ? (
-          <ul className="flex flex-col gap-3">
+          <ul className={LIST}>
             {rows.map((row, i) => (
               <li key={row.entityId} style={stagger(i)} className={ENTER}>
                 <BranchCard row={row} figures={figures} />
@@ -457,14 +454,13 @@ function BranchCard({
     <Link
       href={entityHref(row.entityId)}
       className={cn(
-        cardClass({ interactive: true }),
-        "flex flex-col gap-4",
-        FOCUS_RING,
+        "hover:bg-hover flex flex-col gap-4 p-4 transition-colors motion-reduce:transition-none",
+        FOCUS_RING_INSET,
       )}
     >
       <span className="flex flex-col gap-1">
         <span className="flex items-center justify-between gap-3">
-          <span className="min-w-0 text-lg font-semibold tracking-tight wrap-anywhere">
+          <span className="text-md min-w-0 font-semibold wrap-anywhere">
             {row.name}
           </span>
           {row.waiting > 0 && <CountBadge>{row.waiting}</CountBadge>}
@@ -479,7 +475,7 @@ function BranchCard({
         {stats.map((stat) => (
           <div key={stat.label} className="flex min-w-0 flex-col gap-1">
             <dt className="text-muted-foreground text-xs">{stat.label}</dt>
-            <dd className="font-mono text-xl tabular-nums">
+            <dd className="text-xl font-medium tabular-nums">
               {!stat.m || figures === "ready" ? (
                 stat.value.toLocaleString()
               ) : figures === "loading" ? (
@@ -490,7 +486,7 @@ function BranchCard({
                 </span>
               )}
             </dd>
-            <dd className="text-muted-foreground text-[11px]">{stat.period}</dd>
+            <dd className="text-muted-foreground text-2xs">{stat.period}</dd>
           </div>
         ))}
       </dl>
@@ -507,7 +503,7 @@ function BranchCard({
 function FallbackList() {
   const { entities } = useOrganization();
   return (
-    <ul className="flex flex-col gap-2">
+    <ul className={LIST}>
       {entities.map((e) => (
         <li key={e.id}>
           <PlainCard id={e.id} name={e.name} />
@@ -522,9 +518,8 @@ function PlainCard({ id, name }: { id: string; name: string }) {
     <Link
       href={entityHref(id)}
       className={cn(
-        cardClass({ interactive: true }),
-        "flex items-center justify-between gap-3",
-        FOCUS_RING,
+        "hover:bg-hover flex min-h-11 items-center justify-between gap-3 px-4 py-3 text-sm transition-colors motion-reduce:transition-none",
+        FOCUS_RING_INSET,
       )}
     >
       <span className="min-w-0 font-medium wrap-anywhere">{name}</span>

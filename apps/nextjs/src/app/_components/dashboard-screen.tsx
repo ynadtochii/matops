@@ -23,6 +23,7 @@ import {
   upcomingClassCount,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
+import { Badge } from "@matops/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -37,10 +38,10 @@ import { ClassRoster } from "./class-roster";
 import { useEntity, useEntityHref } from "./entity";
 import { PageHeader } from "./page-header";
 import {
-  cardClass,
   disciplineDot,
   DriftBadge,
   ENTER,
+  LIST,
   Panel,
   panelCell,
   PanelNotice,
@@ -73,10 +74,6 @@ interface QueueItem {
   sub?: string | null;
 }
 
-/**
- * What the overdue members owe in total, but only when a single currency is in
- * play. Two currencies are never added together (the rule spec O9 already sets).
- */
 /**
  * O1 Dashboard — the "run the week" command center (ticket 03). A "needs you"
  * action queue (every item is a blocker that can be driven to zero), a couple of
@@ -352,7 +349,7 @@ export function DashboardScreen() {
         {numbersLoading ? (
           <Bar className="mt-3 h-3 w-56" />
         ) : (
-          <p className="text-muted-foreground mt-3 font-mono text-[11px] tracking-wider uppercase tabular-nums">
+          <p className="text-muted-foreground mt-3 text-xs tabular-nums">
             {isOwner && `${activeCount} active members · `}
             {weekCount} {words.sessionPlural} this week
           </p>
@@ -454,9 +451,13 @@ export function DashboardScreen() {
                 </EmptyState>
               ) : (
                 <div className={cn("flex flex-col gap-2", RESOLVE)}>
-                  {driftList.slice(0, DRIFT_SHOWN).map((m) => (
-                    <DriftRow key={m.memberId} m={m} today={today} />
-                  ))}
+                  <ul className={LIST}>
+                    {driftList.slice(0, DRIFT_SHOWN).map((m) => (
+                      <li key={m.memberId}>
+                        <DriftRow m={m} today={today} />
+                      </li>
+                    ))}
+                  </ul>
                   {driftList.length > DRIFT_SHOWN && (
                     <Link
                       href={href("/members")}
@@ -480,7 +481,7 @@ export function DashboardScreen() {
 }
 
 /**
- * One job on the queue: a mono count over a mono label. From `lg` up the strip
+ * One job on the queue: a count over a label. From `lg` up the strip
  * is always one row, so the channels divide the content column evenly however
  * many jobs there are; a label wider than its channel truncates rather than
  * wrapping the tile taller than its neighbours.
@@ -491,19 +492,19 @@ function QueueSegment({ href, count, label, sub }: Omit<QueueItem, "key">) {
       href={href}
       className={cn(
         panelCell,
-        "group hover:bg-muted px-2.5 py-3 transition-[background-color,scale] duration-150",
+        "group hover:bg-hover px-2.5 py-3 transition-[background-color,scale] duration-150",
         FOCUS_RING_INSET,
         PRESS,
       )}
     >
-      <p className="text-brand-strong font-mono text-3xl leading-none tabular-nums">
+      <p className="text-brand-strong text-2xl leading-none font-medium tabular-nums">
         {count}
       </p>
-      <p className="text-muted-foreground group-hover:text-foreground mt-2 truncate font-mono text-[10px] tracking-wide uppercase transition-colors">
+      <p className="text-muted-foreground group-hover:text-foreground mt-2 truncate text-xs transition-colors motion-reduce:transition-none">
         {label}
       </p>
       {sub && (
-        <p className="text-muted-foreground/70 mt-1 truncate font-mono text-[10px] tabular-nums">
+        <p className="text-muted-foreground text-2xs mt-1 truncate tabular-nums">
           {sub}
         </p>
       )}
@@ -515,10 +516,10 @@ function QueueSegment({ href, count, label, sub }: Omit<QueueItem, "key">) {
 function NowLine({ now }: { now: Date }) {
   return (
     <div className="relative z-10 flex items-center gap-2 py-1" aria-hidden>
-      <span className="bg-brand text-brand-foreground rounded-[2px] px-1 py-px font-mono text-[9px] leading-none tabular-nums">
+      <span className="bg-foreground text-background text-2xs rounded-xs px-1 py-px leading-none tabular-nums">
         {timeFmt.format(now)}
       </span>
-      <span className="bg-brand h-px flex-1" />
+      <span className="bg-foreground h-px flex-1" />
     </div>
   );
 }
@@ -550,7 +551,7 @@ function DayRow({
       type="button"
       onClick={onOpen}
       className={cn(
-        "hover:bg-muted -mx-2.5 flex min-h-11 w-[calc(100%+1.25rem)] items-center gap-3 rounded-sm px-2.5 py-2 text-left text-sm",
+        "hover:bg-hover -mx-2.5 flex min-h-11 w-[calc(100%+1.25rem)] items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm transition-[background-color,scale] motion-reduce:transition-none",
         FOCUS_RING,
         PRESS,
       )}
@@ -562,9 +563,9 @@ function DayRow({
           disciplineDot(c.discipline),
         )}
       />
-      <span className="text-muted-foreground shrink-0 font-mono whitespace-nowrap tabular-nums">
+      <span className="text-muted-foreground shrink-0 whitespace-nowrap tabular-nums">
         {clock}
-        {period && <span className="ml-1 text-[10px]">{period}</span>}
+        {period && <span className="text-2xs ml-1">{period}</span>}
       </span>
       <span
         className={cn(
@@ -574,15 +575,9 @@ function DayRow({
       >
         {c.title}
       </span>
-      {unmarked && (
-        <span className="text-warning border-warning/40 shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium">
-          Needs review
-        </span>
-      )}
+      {unmarked && <Badge tone="warning">Needs review</Badge>}
       {mine ? (
-        <span className="border-brand/40 text-brand-strong shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium">
-          You
-        </span>
+        <Badge>You</Badge>
       ) : (
         c.instructorName && (
           <span className="text-muted-foreground hidden shrink-0 text-xs sm:block">
@@ -592,7 +587,7 @@ function DayRow({
       )}
       <span
         className={cn(
-          "shrink-0 font-mono text-xs tabular-nums",
+          "shrink-0 text-xs tabular-nums",
           full ? "text-warning" : "text-muted-foreground",
         )}
       >
@@ -617,9 +612,8 @@ function DriftRow({ m, today }: { m: DriftMember; today: Date }) {
     <Link
       href={href(`/members?member=${m.memberId}`)}
       className={cn(
-        cardClass({ variant: "outline", interactive: true }),
-        "flex min-h-11 flex-col gap-0.5 p-3",
-        FOCUS_RING,
+        "hover:bg-hover flex min-h-11 flex-col gap-0.5 px-3 py-2.5 text-sm transition-[background-color,scale]",
+        FOCUS_RING_INSET,
         PRESS,
       )}
     >
@@ -627,7 +621,7 @@ function DriftRow({ m, today }: { m: DriftMember; today: Date }) {
         <span className="truncate font-medium">{m.name}</span>
         <DriftBadge drift={m.drift} className="shrink-0" />
       </span>
-      <span className="text-muted-foreground text-sm">
+      <span className="text-muted-foreground text-xs">
         {days != null ? `Last trained ${days} days ago` : "Hasn't trained yet"}
       </span>
     </Link>

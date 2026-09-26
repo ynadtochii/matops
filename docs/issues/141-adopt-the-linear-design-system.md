@@ -214,6 +214,19 @@ The platform has no real users. So the whole app switches at once on the branch
   loading text uses `text-black/60` (5.7:1) instead of a theme token, which
   was 3.2:1 on the paper in dark.
 
+### Step 4.3: Dashboard and Overview
+
+- Mono uppercase labels and arbitrary sizes are gone. Queue counts are
+  `text-2xl` medium and keep the violet, since a count of things waiting for
+  you is the same job as `CountBadge`. "Who's drifting" and the overview's
+  branch cards are divided lists.
+- "Needs review" is a warning `Badge`. The "You" tag on your own class is a
+  neutral `Badge`, not violet, since it marks the viewer, not identity.
+- The overview's partial-failure strip uses the warning tokens and its retry
+  button uses `busy`.
+- `SkeletonRows` takes `inList`, so a list that loads into one divided
+  container draws its skeleton the same way and the page does not jump.
+
 ## Consequences
 
 - Every new screen gets sizes, weights, edges and radii from tokens. The last
