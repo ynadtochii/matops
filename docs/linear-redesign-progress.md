@@ -40,8 +40,8 @@ stop the loop and notify the user.
 | 4.6 | Screens: Coaches, Referrals, Notifications | done | `bb10f77` | Staff, invites and the share dialog included |
 | 4.7 | Screens: both Settings screens, Profile, class detail | done | `3b3fc57` | New shared `SettingsRow`; `form-fields.tsx` restyled here |
 | 4.8 | Screens: student web (schedule, training, dues) | done | `c7be42e` | |
-| 4.9 | Screens: public pages (sign-in, start, join, book, check-in, privacy) | todo | | |
-| 5 | Mobile (Expo): tokens, fonts, tabs, pushed screens, components | todo | | Static gates only, no simulator |
+| 4.9 | Screens: public pages (sign-in, start, join, book, check-in, privacy) | done | `ba09d64` | Four public failed-load states fixed (ADR 140) |
+| 5 | Mobile (Expo): tokens, fonts, tabs, pushed screens, components | wip | | A subagent is doing it in parallel with 4.9 (disjoint files); static gates only, no simulator. Icons stay `icons.tsx`: Lucide native needs `react-native-svg`, a native rebuild |
 | 6a | Replace `(app)/design-system`; `/linear-ds` reads the real tokens | todo | | |
 | 6b | Lint rule: no hex colors, no arbitrary text sizes in app code | todo | | |
 | 6c | Rewrite `docs/design.md`; update roadmap, map, changelog | todo | | |
@@ -76,6 +76,11 @@ stop the loop and notify the user.
   profile form shows errors on an invalid submit but does not move focus to
   the first bad control; gym Modules "Save" is disabled when nothing changed.
 
+- Found in 4.9: "Find my gym" is disabled until six digits are typed; the
+  booking page does not move focus to the first bad field; the signed-in
+  profile form on the join flow links to `/privacy` as a plain link, so
+  leaving loses what was typed (ADR 121 pattern).
+
 ## Known limits
 
 - Signed-in screens stall on their loader in this Chrome setup, with or without
@@ -96,3 +101,4 @@ stop the loop and notify the user.
 - 2026-09-26: 4.6 Coaches, Referrals, Notifications done (`bb10f77`), by a subagent, reviewed.
 - 2026-09-26: 4.7 Settings, Profile, class page done (`3b3fc57`), by a subagent, reviewed.
 - 2026-09-26: 4.8 student web done (`c7be42e`), by a subagent, reviewed.
+- 2026-09-26: 4.9 public pages done (`ba09d64`), by a subagent, reviewed. Step 4 complete.
