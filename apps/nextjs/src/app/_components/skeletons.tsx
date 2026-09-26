@@ -177,13 +177,13 @@ export function SkeletonClassDays({
   rows?: number;
   action?: boolean;
 }) {
-  return <SkeletonRows rows={rows} action />;
+  return <SkeletonRows rows={rows} action inList />;
 }
 export function SkeletonDuesBody() {
   return <SkeletonCard lines={3} />;
 }
 export function SkeletonMyClassesBody() {
-  return <SkeletonRows />;
+  return <SkeletonRows action inList />;
 }
 export function SkeletonReferralsBody() {
   return <SkeletonRows inList />;

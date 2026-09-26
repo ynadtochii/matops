@@ -7,13 +7,15 @@ import { useQuery } from "@tanstack/react-query";
 import type { RouterOutputs } from "@matops/api";
 import { nextClass, splitMyClasses } from "@matops/domain";
 import { cn } from "@matops/ui";
+import { Badge } from "@matops/ui/badge";
 import { Button } from "@matops/ui/button";
+import { FOCUS_RING } from "@matops/ui/motion";
 
 import { dayMediumFmt, timeFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { useEntity, useEntityHref } from "./entity";
 import { PageHeader } from "./page-header";
-import { cardClass, ENTER } from "./primitives";
+import { ENTER, LIST } from "./primitives";
 import { SkeletonMyClassesBody } from "./skeletons";
 import { EmptyState, ErrorState, SuspendedState } from "./states";
 import { Tabs } from "./tabs";
@@ -110,7 +112,7 @@ export function MyClassesScreen() {
                 : "Your gym records attendance after each class."}
             </EmptyState>
           ) : (
-            <ul className="flex flex-col gap-3">
+            <ul className={LIST}>
               {classes.map((c) => (
                 <li key={c.classId}>
                   <ClassRow
@@ -154,41 +156,33 @@ function ClassRow({
   const href = useEntityHref();
   const cancelled = c.status === "cancelled";
   return (
-    <div
-      className={cn(
-        cardClass(),
-        "flex flex-wrap items-center justify-between gap-4 max-sm:flex-col max-sm:items-stretch",
-        next && "border-brand/30 bg-brand-wash",
-      )}
-    >
+    <div className="hover:bg-hover flex flex-wrap items-center justify-between gap-4 px-4 py-3 transition-colors motion-reduce:transition-none max-sm:flex-col max-sm:items-stretch">
       <Link
         href={href(`/class/${c.classId}`)}
-        className="hover:text-brand focus-visible:outline-brand min-w-0 flex-1 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4"
+        className={cn("min-w-0 flex-1 rounded-sm", FOCUS_RING)}
       >
-        {next && (
-          <p className="text-brand mb-2 text-xs font-semibold">Next class</p>
-        )}
-        <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <span className="font-mono text-sm font-semibold tabular-nums">
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="text-md font-medium tabular-nums">
             {timeFmt.format(c.startsAt)}
           </span>
           <span
             className={cn(
-              "min-w-0 font-semibold break-words",
+              "text-md min-w-0 font-semibold break-words",
               cancelled && "line-through",
             )}
           >
             {c.title}
           </span>
+          {next && <Badge tone="info">Next class</Badge>}
         </p>
         <p className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
           <span>{dayMediumFmt.format(c.startsAt)}</span>
           {c.discipline && <span className="text-xs">{c.discipline}</span>}
           {cancelled && (
-            <span className="text-error font-medium">Cancelled</span>
+            <span className="text-error-text font-medium">Cancelled</span>
           )}
           {c.bookingTier === "provisional" && !cancelled && (
-            <span className="text-xs">Pending approval</span>
+            <Badge tone="brand">Pending approval</Badge>
           )}
         </p>
       </Link>

@@ -287,6 +287,17 @@ The platform has no real users. So the whole app switches at once on the branch
   there. Showing the roster decides who may see which names, so it is its own
   slice, not a restyle.
 
+### Step 4.8: Student web
+
+- The student week, My classes and the settled memberships are divided lists
+  with matching skeletons. Times use `tabular-nums` instead of mono.
+- The next class no longer has a violet tint: it carries an info "Next class"
+  `Badge`. "Booked" is an info `Badge`, the dues status is a success or
+  neutral `Badge`, and "Pending approval" is a brand `Badge`, the one pending
+  tag violet keeps.
+- "Booking unavailable" is a warning `Callout`. The install card stays a
+  plain card, since it is a prompt, not a status.
+
 ## Consequences
 
 - Every new screen gets sizes, weights, edges and radii from tokens. The last
