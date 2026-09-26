@@ -38,7 +38,7 @@ export const tokens = {
     backdrop: "#ffffffa6",
     destructive: "#e40014",
     destructiveForeground: "#ffffff",
-    errorText: "#c52f2f",
+    errorText: "#a52121",
     brand: "#6a4dff",
     brandStrong: "#5a3cf0",
     brandForeground: "#ffffff",

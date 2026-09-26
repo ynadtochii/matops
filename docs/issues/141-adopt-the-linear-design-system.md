@@ -357,6 +357,15 @@ The platform has no real users. So the whole app switches at once on the branch
   yellow for the priority icon (the warning token is orange, which already
   means urgent).
 
+### A contrast fix found on the system page
+
+- Auditing `/linear-ds` in light found that `--error-text` (`#c52f2f`) fails on
+  its own red tint once the tint sits on a level 1 to 3 surface: 4.09 to
+  4.37:1 at the 10% tint of the quiet destructive button, 3.94:1 at 12%. The
+  step 2 check had measured it on white only. Light `--error-text` is now
+  `#a52121`: 7.4:1 on white and 4.61:1 or more at the 20% hover tint on every
+  light surface. Dark is unchanged (7.3:1 or more).
+
 ## Consequences
 
 - Every new screen gets sizes, weights, edges and radii from tokens. The last

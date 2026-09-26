@@ -52,7 +52,7 @@
   /* --- destructive --- */
   --destructive: #e40014;
   --destructive-foreground: #ffffff;
-  --error-text: #c52f2f;
+  --error-text: #a52121;
 
   /* --- brand: the one signature identity hue (violet). Restrained: mark,
    * active nav, links, focus, pending tag. NEVER a status (statuses ride the
