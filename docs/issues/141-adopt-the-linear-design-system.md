@@ -256,6 +256,20 @@ The platform has no real users. So the whole app switches at once on the branch
 - The month board does not give paid, silent, reminded and claimed their own
   color. That needs a label per state, which is new copy and its own slice.
 
+### Step 4.6: Coaches, Referrals, Notifications
+
+- Coach workload, coach requests, staff, the notification feed and both
+  referral lists are divided lists, and their skeletons draw the same shape.
+  Chart bars are neutral (`bg-chart-4`). ADR 102's keepPreviousData dim and
+  disclosure, and ADR 103's motion, are unchanged.
+- An unread notification has a semibold title and a neutral dot instead of a
+  violet one. The dot is `aria-hidden`, with a hidden "Unread" label for
+  screen readers. "Send remaining" and "Retry failed" use `busy`, scoped to
+  the notice being sent.
+- The referral checkbox is `Checkbox`, and the share dialog's "No class is
+  open" note is a warning `Callout`. The QR poster keeps its own dark-on-white
+  colors so the code scans.
+
 ## Consequences
 
 - Every new screen gets sizes, weights, edges and radii from tokens. The last

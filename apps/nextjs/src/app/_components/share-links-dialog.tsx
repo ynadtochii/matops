@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { branchWords, runsBranch, shareActions } from "@matops/domain";
 import { Button } from "@matops/ui/button";
+import { Callout } from "@matops/ui/callout";
 import { CopyButton } from "@matops/ui/copy-button";
 import {
   Dialog,
@@ -21,7 +22,7 @@ import { shareLink, useCanShare } from "~/lib/share";
 import { useTRPC } from "~/trpc/react";
 import { useEntity } from "./entity";
 import { cardClass } from "./primitives";
-import { SkeletonRows } from "./skeletons";
+import { SkeletonLines } from "./skeletons";
 import { ErrorState } from "./states";
 
 const QrPoster = dynamic(() => import("./qr-poster").then((m) => m.QrPoster));
@@ -107,7 +108,7 @@ function BookingRow({ isOwner }: { isOwner: boolean }) {
   if (links.isPending) {
     return (
       <LinkCard title="Book a trial" hint={BOOKING_HINT}>
-        <SkeletonRows rows={1} />
+        <SkeletonLines n={2} />
       </LinkCard>
     );
   }
@@ -158,10 +159,10 @@ function BookingRow({ isOwner }: { isOwner: boolean }) {
         qrCodeLabel={`Booking QR code for ${academyName}`}
       />
       {!settings.hasSharedClass && (
-        <p className="text-warning text-sm">
+        <Callout tone="warning" className="rounded-md">
           No class is open for booking in the next week, so this link opens an
           empty page. Tick a class as shared in Schedule → Templates.
-        </p>
+        </Callout>
       )}
     </LinkCard>
   );
@@ -209,7 +210,7 @@ function JoinRow({ isOwner }: { isOwner: boolean }) {
   if (invites.isPending) {
     return (
       <LinkCard title={`Join the ${words.branch}`} hint={hint}>
-        <SkeletonRows rows={1} />
+        <SkeletonLines n={2} />
       </LinkCard>
     );
   }
@@ -293,7 +294,7 @@ function LinkActions({
 
   return (
     <div className="flex flex-col gap-2">
-      <code className="text-sm break-all">{url}</code>
+      <code className="text-foreground-secondary text-sm break-all">{url}</code>
       <div className="flex flex-wrap gap-2">
         <CopyButton value={url} label="Copy link" toastMessage="Link copied" />
         {shareable && (

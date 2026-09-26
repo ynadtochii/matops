@@ -154,7 +154,7 @@ export function SkeletonDayRail({ rows = 3 }: { rows?: number }) {
   );
 }
 export function SkeletonFeed() {
-  return <SkeletonRows rows={3} />;
+  return <SkeletonRows rows={3} inList />;
 }
 export function SkeletonCoachCards({
   n = 2,
@@ -162,7 +162,7 @@ export function SkeletonCoachCards({
   n?: number;
   toggle?: boolean;
 }) {
-  return <SkeletonRows rows={n} action />;
+  return <SkeletonRows rows={n} action inList />;
 }
 export function SkeletonRoster({ rows = 5 }: { rows?: number }) {
   return <SkeletonRows rows={rows} />;
@@ -186,7 +186,7 @@ export function SkeletonMyClassesBody() {
   return <SkeletonRows />;
 }
 export function SkeletonReferralsBody() {
-  return <SkeletonRows />;
+  return <SkeletonRows inList />;
 }
 export function SkeletonScheduleWeek() {
   return <SkeletonRows />;
@@ -216,11 +216,11 @@ export function CoachesSkeleton() {
             <Bar className="h-3 w-24" />
           </div>
           <Bar className="h-8 w-64" />
-          <SkeletonRows rows={3} action />
+          <SkeletonRows rows={3} action inList />
         </div>
         <div className="flex flex-col gap-4">
           <Bar className="h-5 w-16" />
-          <SkeletonRows rows={2} action />
+          <SkeletonRows rows={2} action inList />
           <SkeletonInviteCard />
         </div>
       </div>

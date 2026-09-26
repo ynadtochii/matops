@@ -27,7 +27,7 @@ import { toast } from "@matops/ui/toast";
 import { useTRPC } from "~/trpc/react";
 import { useEntity } from "./entity";
 import { InviteLinkCard } from "./invite-link-card";
-import { cardClass, MoreIcon, RESOLVE, SectionHeading } from "./primitives";
+import { LIST, MoreIcon, RESOLVE, SectionHeading } from "./primitives";
 import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 
@@ -130,11 +130,11 @@ function StaffRow({
   const copy = action ? COPY[action] : null;
 
   return (
-    <div className="border-border/60 flex items-start gap-3 border-b p-4 last:border-b-0">
-      <div className="min-w-0 flex-1">
+    <div className="flex items-start gap-3 px-4 py-3">
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <p className="truncate font-medium">{m.name}</p>
         <p className="text-muted-foreground truncate text-xs">{m.email}</p>
-        <p className="text-muted-foreground mt-1 font-mono text-[10px] tracking-wide uppercase">
+        <p className="text-foreground-secondary text-xs">
           {roleName(
             m.status === "pending" ? (m.invitedRole ?? m.role) : m.role,
           )}
@@ -310,7 +310,7 @@ export function Staff() {
       </div>
 
       {staff.isPending ? (
-        <SkeletonRows rows={2} action />
+        <SkeletonRows rows={2} action inList />
       ) : staff.isError ? (
         <ErrorState label="your staff" onRetry={() => void staff.refetch()} />
       ) : members.length === 0 ? (
@@ -318,7 +318,7 @@ export function Staff() {
           You&apos;re the only one running this branch so far.
         </EmptyState>
       ) : (
-        <div className={cn(cardClass(), "overflow-hidden p-0", RESOLVE)}>
+        <div className={cn(LIST, RESOLVE)}>
           {members.map((m) => (
             <StaffRow
               key={m.userId}
