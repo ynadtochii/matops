@@ -377,6 +377,26 @@ The platform has no real users. So the whole app switches at once on the branch
 - No screen used `bg-card` to mean "selected", so the change is one token in
   `theme.css` and `tokens.ts`. Muted text on a card improves to 5.9:1.
 
+### Violet only where it is needed (user request, 2026-09-26)
+
+- Violet now marks only the mark, wordmark and mat loader, keyboard focus (the
+  ring and a focused field's edge and halo), and the checked state of a
+  checkbox, radio or switch. Everything else lost it, on web and mobile.
+- **Links** are primary text with a permanent muted underline that turns solid
+  on hover. The underline is the cue, so color is no longer the only way to
+  tell a link from text (WCAG 1.4.1). Links that had only `hover:underline`
+  now always show it.
+- **Counts** (nav badges, `CountBadge`, the dashboard queue numbers) are
+  neutral: `bg-active` with primary text, or primary text alone.
+- **Pending** (the approval strip, the pending badge, the mobile banner and
+  labels) is neutral. The `brand` tone is gone from `Badge`, the Expo
+  `Callout` (now `neutral`), `StatusPill` and `Txt`.
+- **Other decoration:** setup-checklist ticks, schedule pending counts,
+  curriculum drop line and drop target, the progress bar and the default
+  spinner moved to primary or muted. Text selection uses the browser default.
+- This supersedes the violet list in the sections above and in ADR 37 (active
+  nav, links, pending, counts).
+
 ## Consequences
 
 - Every new screen gets sizes, weights, edges and radii from tokens. The last

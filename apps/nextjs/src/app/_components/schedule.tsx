@@ -615,7 +615,7 @@ export function Schedule({
                                 <span className="text-warning">busy</span>
                               )}
                               {c.pendingCount > 0 && (
-                                <span className="text-brand-strong">
+                                <span className="text-foreground">
                                   +{c.pendingCount} pending
                                 </span>
                               )}

@@ -193,10 +193,7 @@ function PickAcademy({ academies }: { academies: BranchChoice[] }) {
               {opening ? (
                 <Spinner size="sm" className="text-current" />
               ) : (
-                <Badge
-                  tone={a.status === "pending" ? "brand" : "neutral"}
-                  className="capitalize"
-                >
+                <Badge tone="neutral" className="capitalize">
                   {a.status === "pending" ? "pending" : a.role}
                 </Badge>
               )}

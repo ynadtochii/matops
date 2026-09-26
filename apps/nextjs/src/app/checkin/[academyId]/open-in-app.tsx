@@ -17,7 +17,7 @@ export function OpenInApp({ academyId }: { academyId: string }) {
         Already a member?{" "}
         <a
           href={`matops://checkin/${academyId}`}
-          className={`text-brand-strong inline-flex min-h-11 items-center rounded-sm font-medium underline underline-offset-4 sm:min-h-0 ${FOCUS_RING}`}
+          className={`text-foreground decoration-muted-foreground inline-flex min-h-11 items-center rounded-sm font-medium underline underline-offset-4 hover:decoration-current sm:min-h-0 ${FOCUS_RING}`}
         >
           Open the app to check in
         </a>

@@ -37,7 +37,7 @@ const webHover: Record<ButtonVariant, string> = {
   ghost: "hover:bg-hover hover:text-foreground",
   destructive: "hover:bg-destructive/90",
   "destructive-outline": "hover:bg-error/20",
-  link: "hover:underline",
+  link: "hover:decoration-current",
 };
 
 /**

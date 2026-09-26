@@ -383,7 +383,7 @@ function AcademyAddress({
       {mapUrl ? (
         <Txt
           size={13}
-          tone="brand"
+          style={{ textDecorationLine: "underline" }}
           onPress={() => {
             void Linking.openURL(mapUrl).catch(
               () => void Linking.openURL(webUrl ?? mapUrl),

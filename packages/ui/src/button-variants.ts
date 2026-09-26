@@ -53,7 +53,7 @@ export const buttonTextVariants = cva("font-medium", {
       ghost: "text-muted-foreground",
       destructive: "text-destructive-foreground",
       "destructive-outline": "text-error-text",
-      link: "text-brand-strong underline",
+      link: "text-foreground decoration-muted-foreground underline",
     },
     size: {
       default: "text-sm",

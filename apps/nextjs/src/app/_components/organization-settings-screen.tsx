@@ -310,7 +310,7 @@ function Account() {
           <a
             href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent("MatOps account")}`}
             className={cn(
-              "text-brand-strong rounded-sm underline underline-offset-4",
+              "text-foreground decoration-muted-foreground rounded-sm underline underline-offset-4 hover:decoration-current",
               FOCUS_RING,
             )}
           >

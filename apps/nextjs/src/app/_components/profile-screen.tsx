@@ -282,7 +282,7 @@ export function ProfileScreen({
                       target="_blank"
                       rel="noreferrer"
                       className={cn(
-                        "text-brand-strong inline-flex min-h-11 items-center rounded-sm text-sm underline underline-offset-4",
+                        "text-foreground decoration-muted-foreground inline-flex min-h-11 items-center rounded-sm text-sm underline underline-offset-4 hover:decoration-current",
                         FOCUS_RING,
                       )}
                     >

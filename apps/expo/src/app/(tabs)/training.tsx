@@ -45,7 +45,7 @@ function NextClassCard({ c, onPress }: { c: MyClass; onPress: () => void }) {
           {dayLongFmt.format(start)} · {timeFmt.format(start)}
         </Mono>
         {c.bookingTier === "provisional" ? (
-          <Txt size={13} tone="brand">
+          <Txt size={13} tone="secondary">
             Pending approval
           </Txt>
         ) : null}
@@ -90,7 +90,7 @@ function ClassRow({
             {cancelled ? (
               <StatusPill tone="error" label="Cancelled" />
             ) : c.bookingTier === "provisional" ? (
-              <Txt size={12} tone="brand">
+              <Txt size={12} tone="secondary">
                 Pending approval
               </Txt>
             ) : null}

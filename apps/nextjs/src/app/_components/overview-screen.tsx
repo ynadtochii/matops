@@ -345,7 +345,7 @@ function NeedsAttention() {
           <Link
             href={organizationHref("/memberships?tab=access", branchId)}
             className={cn(
-              "text-brand-strong underline underline-offset-4",
+              "text-foreground decoration-muted-foreground underline underline-offset-4 hover:decoration-current",
               FOCUS_RING,
             )}
           >

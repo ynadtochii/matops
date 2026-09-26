@@ -497,7 +497,7 @@ function ShellChrome({
         academy ? (
           <>
             {isPending && (
-              <div className="border-brand/25 bg-brand-wash text-brand-strong border-b">
+              <div className="border-border bg-surface-1 text-foreground border-b">
                 <p className={`${columnClass} py-2 text-sm font-medium`}>
                   Waiting for branch approval. You can browse classes and
                   memberships, but booking is not available yet.

@@ -231,7 +231,7 @@ export function BookingPage({
           <a
             href={gym.mapUrl}
             className={cn(
-              "text-brand-strong inline-flex min-h-11 items-center justify-center self-center rounded-sm text-sm font-medium underline underline-offset-4 sm:min-h-0",
+              "text-foreground decoration-muted-foreground inline-flex min-h-11 items-center justify-center self-center rounded-sm text-sm font-medium underline underline-offset-4 hover:decoration-current sm:min-h-0",
               FOCUS_RING,
             )}
             target="_blank"

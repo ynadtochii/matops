@@ -17,7 +17,7 @@ export function Input({
       data-slot="input"
       className={cn(
         FIELD,
-        "selection:bg-brand selection:text-brand-foreground file:text-foreground h-11 py-1 file:inline-flex file:h-6 file:border-0 file:bg-transparent file:text-sm file:font-medium sm:h-8",
+        "file:text-foreground h-11 py-1 file:inline-flex file:h-6 file:border-0 file:bg-transparent file:text-sm file:font-medium sm:h-8",
         className,
       )}
       {...props}

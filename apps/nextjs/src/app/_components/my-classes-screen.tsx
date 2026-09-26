@@ -182,7 +182,7 @@ function ClassRow({
             <span className="text-error-text font-medium">Cancelled</span>
           )}
           {c.bookingTier === "provisional" && !cancelled && (
-            <Badge tone="brand">Pending approval</Badge>
+            <Badge>Pending approval</Badge>
           )}
         </p>
       </Link>

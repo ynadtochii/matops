@@ -273,7 +273,7 @@ export function DashboardScreen() {
               >
                 <Link
                   href={href("/schedule")}
-                  className="text-brand-strong font-medium"
+                  className="text-foreground decoration-muted-foreground font-medium underline underline-offset-4 hover:decoration-current"
                 >
                   {bjj
                     ? "1. Add your weekly classes"
@@ -282,7 +282,7 @@ export function DashboardScreen() {
                 {" · "}
                 <Link
                   href={href("/members")}
-                  className="text-brand-strong font-medium"
+                  className="text-foreground decoration-muted-foreground font-medium underline underline-offset-4 hover:decoration-current"
                 >
                   2. Share your join link
                 </Link>
@@ -294,7 +294,7 @@ export function DashboardScreen() {
                     {" · "}
                     <Link
                       href={href("/members?tab=leads")}
-                      className="text-brand-strong font-medium"
+                      className="text-foreground decoration-muted-foreground font-medium underline underline-offset-4 hover:decoration-current"
                     >
                       3. Print the QR poster
                     </Link>
@@ -322,7 +322,7 @@ export function DashboardScreen() {
                       type="button"
                       onClick={() => queueErrors.forEach((e) => e.retry())}
                       className={cn(
-                        "text-brand-strong font-medium underline underline-offset-4",
+                        "text-foreground decoration-muted-foreground font-medium underline underline-offset-4 hover:decoration-current",
                         FOCUS_RING,
                         TAP,
                       )}
@@ -389,7 +389,7 @@ export function DashboardScreen() {
                   <Link
                     href={href("/schedule")}
                     className={cn(
-                      "text-brand-strong text-sm font-medium",
+                      "text-foreground decoration-muted-foreground text-sm font-medium underline underline-offset-4 hover:decoration-current",
                       FOCUS_RING,
                       TAP,
                     )}
@@ -462,7 +462,7 @@ export function DashboardScreen() {
                     <Link
                       href={href("/members")}
                       className={cn(
-                        "text-brand-strong self-start text-sm font-medium",
+                        "text-foreground decoration-muted-foreground self-start text-sm font-medium underline underline-offset-4 hover:decoration-current",
                         FOCUS_RING,
                         TAP,
                       )}
@@ -497,7 +497,7 @@ function QueueSegment({ href, count, label, sub }: Omit<QueueItem, "key">) {
         PRESS,
       )}
     >
-      <p className="text-brand-strong text-2xl leading-none font-medium tabular-nums">
+      <p className="text-foreground text-2xl leading-none font-medium tabular-nums">
         {count}
       </p>
       <p className="text-muted-foreground group-hover:text-foreground mt-2 truncate text-xs transition-colors motion-reduce:transition-none">

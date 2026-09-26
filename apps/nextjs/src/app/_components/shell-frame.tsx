@@ -389,7 +389,7 @@ function BadgeFace({ badge }: { badge?: NavBadge }) {
   }
   if (badge.count === 0) return null;
   return (
-    <span className="bg-brand text-brand-foreground text-2xs rounded-full px-1.5 font-medium tabular-nums">
+    <span className="bg-active text-foreground text-2xs rounded-full px-1.5 font-medium tabular-nums">
       {badge.count > 9 ? "9+" : badge.count}
     </span>
   );

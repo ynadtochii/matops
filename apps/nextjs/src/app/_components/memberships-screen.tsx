@@ -515,7 +515,7 @@ function BookingAccessQueue() {
                 <Link
                   href={`/people/${booking.personId}`}
                   className={cn(
-                    "text-brand-strong inline-flex min-h-11 items-center rounded-sm text-sm font-medium underline-offset-4 hover:underline sm:min-h-8",
+                    "text-foreground decoration-muted-foreground inline-flex min-h-11 items-center rounded-sm text-sm font-medium underline underline-offset-4 hover:decoration-current sm:min-h-8",
                     FOCUS_RING,
                   )}
                 >

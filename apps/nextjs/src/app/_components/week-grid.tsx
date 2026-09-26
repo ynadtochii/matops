@@ -333,7 +333,7 @@ export function WeekGrid({
                         >
                           {row.bookingCount}/{row.capacity}
                           {row.pendingCount > 0 && (
-                            <span className="text-brand-strong">
+                            <span className="text-foreground">
                               {" "}
                               +{row.pendingCount}
                             </span>

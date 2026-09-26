@@ -234,7 +234,7 @@ export function Section({
 /** A small pill of a number — the brand spark for "N things want you". */
 export function CountBadge({ children }: { children: ReactNode }) {
   return (
-    <span className="bg-brand text-brand-foreground text-2xs inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 leading-none font-medium tabular-nums">
+    <span className="bg-active text-foreground text-2xs inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 leading-none font-medium tabular-nums">
       {children}
     </span>
   );

@@ -51,7 +51,6 @@ type Tone =
   | "secondary"
   | "muted"
   | "faint"
-  | "brand"
   | "info"
   | "warning"
   | "error"
@@ -65,8 +64,6 @@ function toneColor(t: Theme, tone: Tone): string {
       return t.mutedForeground;
     case "faint":
       return t.foregroundFaint;
-    case "brand":
-      return t.brandStrong;
     case "info":
       return t.info;
     case "warning":
@@ -448,13 +445,12 @@ export function ListRow({
 
 /* -------------------------------------------------------------- callout --- */
 
-type CalloutTone = "info" | "warning" | "error" | "success" | "brand";
+type CalloutTone = "info" | "warning" | "error" | "success" | "neutral";
 
 /**
  * A status strip on a light tint of its callout accent, with a matching
- * hairline edge (the web `Callout`). Body copy stays neutral. `brand` is the
- * identity tone (the S3 pending banner). Kept named `Banner` too for the
- * existing call sites.
+ * hairline edge (the web `Callout`). Body copy stays neutral. `neutral` is the
+ * S3 pending banner. Kept named `Banner` too for the existing call sites.
  */
 function Callout({
   children,
@@ -465,8 +461,8 @@ function Callout({
 }) {
   const t = useTheme();
   const hue =
-    tone === "brand"
-      ? t.brand
+    tone === "neutral"
+      ? t.border
       : tone === "warning"
         ? t.warning
         : tone === "error"
@@ -478,19 +474,14 @@ function Callout({
     <View
       style={{
         flexDirection: "row",
-        backgroundColor: tone === "brand" ? t.brandWash : `${hue}14`,
+        backgroundColor: tone === "neutral" ? t.surface1 : `${hue}14`,
         borderRadius: RADIUS_ROW,
         borderWidth: 1,
-        borderColor: tone === "brand" ? "transparent" : `${hue}4d`,
+        borderColor: tone === "neutral" ? t.border : `${hue}4d`,
         padding: 12,
       }}
     >
-      <Txt
-        size={13}
-        tone={tone === "brand" ? "brand" : "secondary"}
-        lineHeight={19}
-        style={{ flex: 1 }}
-      >
+      <Txt size={13} tone="secondary" lineHeight={19} style={{ flex: 1 }}>
         {children}
       </Txt>
     </View>
@@ -514,7 +505,7 @@ export function StatusPill({
   tone,
   label,
 }: {
-  tone: "success" | "warning" | "error" | "info" | "brand" | "neutral";
+  tone: "success" | "warning" | "error" | "info" | "neutral";
   label: string;
 }) {
   const t = useTheme();
@@ -531,11 +522,9 @@ export function StatusPill({
   const text =
     tone === "error"
       ? t.errorText
-      : tone === "brand"
-        ? t.brandStrong
-        : tone === "neutral"
-          ? t.foregroundSecondary
-          : (hue ?? t.foreground);
+      : tone === "neutral"
+        ? t.foregroundSecondary
+        : (hue ?? t.foreground);
   return (
     <View
       style={{
@@ -545,16 +534,8 @@ export function StatusPill({
         paddingVertical: 2,
         borderRadius: PILL,
         borderWidth: 1,
-        borderColor: hue
-          ? `${hue}4d`
-          : tone === "brand"
-            ? "transparent"
-            : t.border,
-        backgroundColor: hue
-          ? `${hue}1a`
-          : tone === "brand"
-            ? t.brandWash
-            : t.secondary,
+        borderColor: hue ? `${hue}4d` : t.border,
+        backgroundColor: hue ? `${hue}1a` : t.secondary,
       }}
     >
       <Txt size={12} weight={500} color={text}>
@@ -564,7 +545,7 @@ export function StatusPill({
   );
 }
 
-/** The brand "spark" count badge — "N things want you", never a data status. */
+/** The count badge: "N things want you", never a data status. */
 export function CountBadge({ count }: { count: number }) {
   const t = useTheme();
   if (count <= 0) return null;
@@ -575,17 +556,12 @@ export function CountBadge({ count }: { count: number }) {
         paddingHorizontal: 6,
         paddingVertical: 2,
         borderRadius: PILL,
-        backgroundColor: t.brand,
+        backgroundColor: t.active,
         alignItems: "center",
         justifyContent: "center",
       }}
     >
-      <Txt
-        size={12}
-        weight={600}
-        color={t.brandForeground}
-        style={{ fontVariant: ["tabular-nums"] }}
-      >
+      <Txt size={12} weight={600} style={{ fontVariant: ["tabular-nums"] }}>
         {count}
       </Txt>
     </View>
@@ -1050,7 +1026,7 @@ export function CopyButton({
       hitSlop={12}
       style={{ minHeight: 44, justifyContent: "center" }}
     >
-      <Txt size={13} weight={500} tone="brand">
+      <Txt size={13} weight={500}>
         {copied ? "Copied ✓" : label}
       </Txt>
     </Pressable>

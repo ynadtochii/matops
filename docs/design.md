@@ -67,22 +67,24 @@ is the stronger line (a hover edge, a divider that must read). `--input` is the
 field edge and `--field-hover` its hover. `--control` is the edge of a
 checkbox, radio or switch.
 
-**The violet (`--brand`).** The one non-neutral hue that is not a meaning.
+**The violet (`--brand`).** The one non-neutral hue that is not a meaning. It
+appears only where taking it away would cost identity or accessibility.
 
-| Token                | Use                                                         |
-| -------------------- | ----------------------------------------------------------- |
-| `--brand`            | the mark fill, the focus ring (`--ring`), a count pill fill |
-| `--brand-strong`     | violet text: links, the "Ops" in the wordmark               |
-| `--brand-foreground` | text and seams on a violet fill                             |
-| `--brand-wash`       | the pending strip, the 3px field focus halo                 |
+| Token                | Use                                                      |
+| -------------------- | -------------------------------------------------------- |
+| `--brand`            | the mark fill, the focus ring (`--ring`), a checked fill |
+| `--brand-strong`     | the "Ops" in the wordmark                                |
+| `--brand-foreground` | seams and ticks on a violet fill                         |
+| `--brand-wash`       | the 3px halo around a focused field                      |
 
-Violet **may** mark: links, the mark, focus, the pending tag ("Pending
-approval"), and counts of things waiting for you (`CountBadge`, the queue
-counts on the dashboard). Violet **never** marks: a status, the current page
-or selected item (that is `--active` with primary text), a chart bar (bars are
-the neutral `--chart-*` ramp), or the viewer ("You" is a neutral badge).
-Violet text uses `--brand-strong`: plain `--brand` as light text drops to
-4.47:1 on level 3.
+Violet **may** mark only: the mark and wordmark, the mat loader, keyboard
+focus (the ring, and the edge of a focused field), and the checked state of a
+checkbox, radio or switch. That is the whole list. Violet **never** marks: a
+link (a link is primary text with a muted underline that turns solid on
+hover), a count, the pending tag or strip (neutral), a status, the current
+page or selected item (`--active` with primary text), a chart bar or progress
+bar (neutral or primary), a spinner (muted), drag feedback (primary), or the
+viewer. Text selection uses the browser default.
 
 **`--destructive` is a fill, never ink.** In dark it is a maroon chosen so
 light text reads on it, so it belongs on the solid red button only. Red text
@@ -213,7 +215,7 @@ Seven variants, props and names unchanged since before ADR 141:
 | `secondary`           | quiet fill, thin edge        | the affirmative row action                       |
 | `outline`             | thin edge, no fill           | the neutral row action                           |
 | `ghost`               | tertiary text until hover    | toolbar and icon actions                         |
-| `link`                | `--brand-strong`, underlined | an inline link that is a button                  |
+| `link`                | primary text, underlined     | an inline link that is a button                  |
 | `destructive`         | solid red fill               | the confirm inside a destructive dialog          |
 | `destructive-outline` | red tint with `--error-text` | the trigger that opens that dialog               |
 
@@ -306,7 +308,7 @@ reference and holds no web-only classes.
 | `RadioGroup`                                                  | one of a few, all visible                                                                                                |
 | `Tabs`                                                        | switching views inside one surface                                                                                       |
 | `Tooltip`                                                     | a short label for an icon; never the only place a fact lives                                                             |
-| `Badge`                                                       | a status or tag. Tones: neutral, brand (the pending tag only), info, success, warning, error                             |
+| `Badge`                                                       | a status or tag. Tones: neutral, info, success, warning, error. No violet tone                                           |
 | `Callout`                                                     | a notice in the flow. Tones: neutral, info, success, warning, error. Info is blue, never violet.                         |
 | `Avatar`, `Progress`, `Kbd`, `Skeleton`, `Table`, `Separator` | as named                                                                                                                 |
 | `Dialog`, `AlertDialog`                                       | raised surface, 12px radius, float shadow, no edge, over `--backdrop`                                                    |

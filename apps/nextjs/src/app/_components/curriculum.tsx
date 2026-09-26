@@ -484,7 +484,7 @@ export function Curriculum() {
                 {dropAt !== null && (
                   <div
                     aria-hidden
-                    className="bg-brand absolute inset-x-0 z-30 h-0.5 rounded-full"
+                    className="bg-foreground absolute inset-x-0 z-30 h-0.5 rounded-full"
                     style={{
                       top: Math.max(
                         (layout[dropAt]?.top ??
@@ -848,7 +848,7 @@ function PlacedCard({
         </div>
       ))}
       {target && (
-        <div className="border-brand text-brand-strong text-2xs flex min-w-0 items-center justify-center border-l border-dashed pl-3 font-medium">
+        <div className="border-border-strong text-muted-foreground text-2xs flex min-w-0 items-center justify-center border-l border-dashed pl-3 font-medium">
           Add here
         </div>
       )}
@@ -865,7 +865,7 @@ function PlacedCard({
         settled && "border-border",
         !settled && "border-border-strong",
         (ghost || held) && "border-border-strong shadow-md",
-        target && "border-brand ring-brand/30 ring-2",
+        target && "border-foreground ring-foreground/15 ring-2",
         ghost && "pointer-events-none opacity-70",
         held && "opacity-70",
       )}
@@ -1002,7 +1002,7 @@ function PlacedCard({
           }}
           className="group absolute inset-x-0 bottom-0 flex h-3 cursor-ns-resize touch-none items-end justify-center pb-[3px]"
         >
-          <span className="bg-border group-hover:bg-muted-foreground group-focus-visible:bg-brand h-[3px] w-9 rounded-full transition-[background-color,width] duration-150 group-hover:w-14 group-focus-visible:w-14 motion-reduce:transition-none" />
+          <span className="bg-border group-hover:bg-muted-foreground group-focus-visible:bg-ring h-[3px] w-9 rounded-full transition-[background-color,width] duration-150 group-hover:w-14 group-focus-visible:w-14 motion-reduce:transition-none" />
         </button>
       )}
     </li>

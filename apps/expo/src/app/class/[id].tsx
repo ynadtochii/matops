@@ -109,7 +109,7 @@ export default function ClassDetail() {
     booked && !cancelled && !past ? (
       <UIStack gap={8}>
         {provisional && (
-          <Txt size={13} tone="brand">
+          <Txt size={13} tone="secondary">
             Booked · pending approval
           </Txt>
         )}

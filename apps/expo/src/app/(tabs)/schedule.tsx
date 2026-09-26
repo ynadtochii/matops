@@ -261,7 +261,7 @@ export default function Schedule() {
 
       {isPending && (
         <View style={{ marginBottom: 16 }}>
-          <Banner tone="brand">
+          <Banner tone="neutral">
             Waiting for approval. You can browse and book; your gym will confirm
             you soon.
           </Banner>

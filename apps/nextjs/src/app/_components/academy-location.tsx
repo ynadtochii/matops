@@ -247,7 +247,7 @@ export function AcademyLocation({
                         target="_blank"
                         rel="noopener noreferrer"
                         className={cn(
-                          "text-brand-strong inline-flex min-h-11 items-center self-start rounded-sm text-xs underline underline-offset-2 sm:min-h-0",
+                          "text-foreground decoration-muted-foreground inline-flex min-h-11 items-center self-start rounded-sm text-xs underline underline-offset-2 hover:decoration-current sm:min-h-0",
                           FOCUS_RING,
                         )}
                       >
@@ -314,7 +314,7 @@ export function AcademyLocation({
                       target="_blank"
                       rel="noopener noreferrer"
                       className={cn(
-                        "text-brand-strong inline-flex items-center gap-0.5 rounded-sm underline underline-offset-2",
+                        "text-foreground decoration-muted-foreground inline-flex items-center gap-0.5 rounded-sm underline underline-offset-2 hover:decoration-current",
                         FOCUS_RING,
                       )}
                     >
