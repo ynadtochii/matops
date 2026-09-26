@@ -41,8 +41,8 @@ stop the loop and notify the user.
 | 4.7 | Screens: both Settings screens, Profile, class detail | done | `3b3fc57` | New shared `SettingsRow`; `form-fields.tsx` restyled here |
 | 4.8 | Screens: student web (schedule, training, dues) | done | `c7be42e` | |
 | 4.9 | Screens: public pages (sign-in, start, join, book, check-in, privacy) | done | `ba09d64` | Four public failed-load states fixed (ADR 140) |
-| 5 | Mobile (Expo): tokens, fonts, tabs, pushed screens, components | wip | | A subagent is doing it in parallel with 4.9 (disjoint files); static gates only, no simulator. Icons stay `icons.tsx`: Lucide native needs `react-native-svg`, a native rebuild |
-| 6a | Replace `(app)/design-system`; `/linear-ds` reads the real tokens | todo | | |
+| 5 | Mobile (Expo): tokens, fonts, tabs, pushed screens, components | done (static) | `a307f55` | Unseen on a device; roadmap cell stays wip until `docs/mobile-device-test.md` runs. Icons stay `icons.tsx` |
+| 6a | Replace `(app)/design-system`; `/linear-ds` reads the real tokens | wip | | A subagent is doing it in parallel with unit 5 (disjoint files) |
 | 6b | Lint rule: no hex colors, no arbitrary text sizes in app code | todo | | |
 | 6c | Rewrite `docs/design.md`; update roadmap, map, changelog | todo | | |
 | 6d | User runs `pnpm test` | waiting on user | | The loop does not run tests |
@@ -81,6 +81,14 @@ stop the loop and notify the user.
   profile form on the join flow links to `/privacy` as a plain link, so
   leaving loses what was typed (ADR 121 pattern).
 
+- Found in 5 (Expo): picking "System" in `theme.tsx` may keep the old mode
+  until the OS appearance changes; the Profile "Open in Maps" link is under
+  44pt; join, onboarding, profile Save and sign-in disable buttons for
+  validation; the `app.json` splash is `#000000`. Check on a phone: Inter at
+  every weight, 8-digit hex alpha colors, the discipline rail height, the
+  appearance switch, a dark first launch with no light flash, the Android
+  refresh spinner color, and Book / Cancel tap size in list rows.
+
 ## Known limits
 
 - Signed-in screens stall on their loader in this Chrome setup, with or without
@@ -102,3 +110,4 @@ stop the loop and notify the user.
 - 2026-09-26: 4.7 Settings, Profile, class page done (`3b3fc57`), by a subagent, reviewed.
 - 2026-09-26: 4.8 student web done (`c7be42e`), by a subagent, reviewed.
 - 2026-09-26: 4.9 public pages done (`ba09d64`), by a subagent, reviewed. Step 4 complete.
+- 2026-09-26: 5 Expo done statically (`a307f55`), by a subagent, reviewed; three new comments removed, dashes stripped from reworded comments, a missing period fixed.
