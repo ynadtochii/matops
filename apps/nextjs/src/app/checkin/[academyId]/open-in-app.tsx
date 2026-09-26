@@ -1,5 +1,7 @@
 "use client";
 
+import { FOCUS_RING } from "@matops/ui/motion";
+
 /**
  * "Open the app" member link (v1.8 slice 4). The gym QR poster still encodes this
  * public https page — a first-time, no-app visitor uses the drop-in form above.
@@ -15,7 +17,7 @@ export function OpenInApp({ academyId }: { academyId: string }) {
         Already a member?{" "}
         <a
           href={`matops://checkin/${academyId}`}
-          className="text-brand-strong font-medium underline underline-offset-4"
+          className={`text-brand-strong inline-flex min-h-11 items-center rounded-sm font-medium underline underline-offset-4 sm:min-h-0 ${FOCUS_RING}`}
         >
           Open the app to check in
         </a>

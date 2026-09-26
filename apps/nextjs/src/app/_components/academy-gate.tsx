@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
 import { postLoginTarget } from "@matops/domain";
+import { Badge } from "@matops/ui/badge";
 import { Button } from "@matops/ui/button";
 import { Logo } from "@matops/ui/logo";
 import { Spinner } from "@matops/ui/spinner";
@@ -192,9 +193,12 @@ function PickAcademy({ academies }: { academies: BranchChoice[] }) {
               {opening ? (
                 <Spinner size="sm" className="text-current" />
               ) : (
-                <span className="text-muted-foreground text-xs capitalize">
+                <Badge
+                  tone={a.status === "pending" ? "brand" : "neutral"}
+                  className="capitalize"
+                >
                   {a.status === "pending" ? "pending" : a.role}
-                </span>
+                </Badge>
               )}
             </Button>
           );

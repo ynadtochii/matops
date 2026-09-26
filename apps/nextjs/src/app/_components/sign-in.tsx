@@ -4,7 +4,6 @@ import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { Button } from "@matops/ui/button";
-import { Spinner } from "@matops/ui/spinner";
 
 import type { MagicLinkState } from "./sign-in-actions";
 import { env } from "~/env";
@@ -28,12 +27,10 @@ import { sendMagicLinkAction, signInSocialAction } from "./sign-in-actions";
 /** A submit button that shows a spinner + disables while its form is pending. */
 export function SubmitButton({
   children,
-  pendingLabel,
   variant,
   className,
 }: {
   children: React.ReactNode;
-  pendingLabel: string;
   variant?: "primary" | "outline";
   className?: string;
 }) {
@@ -45,15 +42,9 @@ export function SubmitButton({
       variant={variant}
       className={className}
       disabled={pending}
+      busy={pending}
     >
-      {pending ? (
-        <>
-          <Spinner size="sm" className="text-current" />
-          {pendingLabel}
-        </>
-      ) : (
-        children
-      )}
+      {children}
     </Button>
   );
 }
@@ -61,11 +52,7 @@ export function SubmitButton({
 export function SocialSignIn({ callbackURL }: { callbackURL: string }) {
   return (
     <form action={signInSocialAction.bind(null, callbackURL)}>
-      <SubmitButton
-        variant="outline"
-        className="w-full"
-        pendingLabel="Connecting…"
-      >
+      <SubmitButton variant="outline" className="w-full">
         Continue with Google
       </SubmitButton>
     </form>
@@ -103,9 +90,7 @@ export function SignIn({ callbackURL = "/" }: { callbackURL?: string }) {
           required
           invalid={state.status === "error"}
         />
-        <SubmitButton className="w-full" pendingLabel="Sending…">
-          Send magic link
-        </SubmitButton>
+        <SubmitButton className="w-full">Send magic link</SubmitButton>
       </form>
 
       <p
@@ -117,14 +102,14 @@ export function SignIn({ callbackURL = "/" }: { callbackURL?: string }) {
             Check your email. We sent a sign-in link to {state.email}.
           </span>
         ) : state.status === "error" ? (
-          <span className="text-error">
+          <span className="text-error-text">
             Couldn&apos;t send the link. Check the address and try again.
           </span>
         ) : env.NODE_ENV === "development" ? (
           <>
             We&apos;ll email you a sign-in link. In development, copy the{" "}
-            <code className="text-xs">[auth] magic link …</code> URL from the
-            terminal.
+            <code className="font-mono text-xs">[auth] magic link …</code> URL
+            from the terminal.
           </>
         ) : (
           "We'll email you a sign-in link."

@@ -15,6 +15,7 @@
 - Step 4.6, Coaches, Referrals, Notifications: divided lists with matching skeletons, neutral chart bars, unread notifications marked by weight and a neutral dot instead of violet, and send buttons that show progress on the one notice being sent (ADR 141).
 - Step 4.7, Settings, Profile, class page: settings as label-and-control rows in divided sections, a switch for the public booking toggle, a badge for account status, and Lucide links (ADR 141).
 - Step 4.8, student web: the week, My classes and dues as divided lists, badges for booked, next class, dues and pending instead of violet tints, and a warning callout when booking is unavailable (ADR 141).
+- Step 4.9, public pages: sign-in, start, join, booking, check-in and privacy on the Linear surfaces, selected classes in neutral fills instead of violet, 44px targets on touch, and a retry when a public page cannot load instead of a message that says the link or booking is closed (ADR 141).
 
 ## Unreleased: design system reference
 

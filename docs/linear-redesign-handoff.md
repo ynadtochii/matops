@@ -165,15 +165,15 @@ at 375px, iPad and desktop, one `CHANGELOG.md` line, and one commit.
 
 ### Step 4. Screens, one commit each
 Order:
-1. [ ] Members and People (list, person page, leads)
-2. [ ] Schedule, including the curriculum timeline
-3. [ ] Dashboard and Overview
-4. [ ] Attendance and Reception
-5. [ ] Payments and Memberships
-6. [ ] Coaches, Referrals, Notifications
-7. [ ] Both Settings screens, Profile, class detail
-8. [ ] Student web: schedule, training, dues
-9. [ ] Public pages: sign-in, start, join, `/book/<code>`, check-in, privacy
+1. [x] Members and People (list, person page, leads)
+2. [x] Schedule, including the curriculum timeline
+3. [x] Dashboard and Overview
+4. [x] Attendance and Reception
+5. [x] Payments and Memberships
+6. [x] Coaches, Referrals, Notifications
+7. [x] Both Settings screens, Profile, class detail
+8. [x] Student web: schedule, training, dues
+9. [x] Public pages: sign-in, start, join, `/book/<code>`, check-in, privacy
 
 Checklist for every screen:
 - Only theme tokens. No arbitrary sizes (see the 22 files above).

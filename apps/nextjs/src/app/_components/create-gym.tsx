@@ -38,7 +38,7 @@ export function CreateGym() {
     <div className="flex w-full max-w-sm flex-col gap-6">
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold tracking-tight">Start a gym</h1>
-        <p className="text-muted-foreground text-sm">
+        <p className="text-muted-foreground text-sm text-pretty">
           Name your gym. You are its owner right away, no approval needed. You
           add your first branch next.
         </p>
@@ -62,8 +62,13 @@ export function CreateGym() {
             required
           />
         </div>
-        <Button type="submit" size="lg" disabled={create.isPending}>
-          {create.isPending ? "Creating…" : "Create gym"}
+        <Button
+          type="submit"
+          size="lg"
+          disabled={create.isPending}
+          busy={create.isPending}
+        >
+          Create gym
         </Button>
       </form>
     </div>

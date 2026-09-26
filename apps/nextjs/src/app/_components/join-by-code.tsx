@@ -12,10 +12,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@matops/ui/dialog";
+import { FieldError } from "@matops/ui/field";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
 import { Logo } from "@matops/ui/logo";
-import { Spinner } from "@matops/ui/spinner";
 import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
@@ -94,7 +94,7 @@ export function JoinByCode({ compact = false }: { compact?: boolean }) {
             <h1 className="text-2xl font-semibold tracking-tight">
               Join your gym
             </h1>
-            <p className="text-muted-foreground text-sm">
+            <p className="text-muted-foreground text-sm text-pretty">
               Enter the 6-digit join code your gym gave you. They confirm you
               after you join.
             </p>
@@ -131,21 +131,15 @@ export function JoinByCode({ compact = false }: { compact?: boolean }) {
             />
           </div>
           {lookupError && (
-            <p
-              id="gym-lookup-error"
-              role="alert"
-              className="text-error text-sm"
-            >
-              {lookupError}
-            </p>
+            <FieldError id="gym-lookup-error">{lookupError}</FieldError>
           )}
           <Button
             type="submit"
             size="lg"
             disabled={code.length !== 6 || lookup.isPending}
+            busy={lookup.isPending}
           >
-            {lookup.isPending && <Spinner size="sm" className="text-current" />}
-            {lookup.isPending ? "Finding…" : "Find my gym"}
+            Find my gym
           </Button>
         </form>
       ) : (
@@ -165,7 +159,7 @@ export function JoinByCode({ compact = false }: { compact?: boolean }) {
           <div className="border-border bg-card flex items-center justify-between gap-3 rounded-lg border px-4 py-3">
             <div className="min-w-0">
               <p className="text-muted-foreground text-xs">Joining</p>
-              <p className="font-medium break-words">{found.name}</p>
+              <p className="text-md font-medium break-words">{found.name}</p>
               {found.address && (
                 <p className="text-muted-foreground text-xs whitespace-pre-wrap">
                   {found.address}
@@ -219,19 +213,19 @@ export function JoinByCode({ compact = false }: { compact?: boolean }) {
             required
           />
           {join.isError && (
-            <p role="alert" className="text-error text-sm">
+            <FieldError>
               {join.error.message ||
                 "Couldn't send your join request. Try again."}
-            </p>
+            </FieldError>
           )}
           <Button
             type="submit"
             size="lg"
             className="h-auto min-h-11 whitespace-normal"
             disabled={join.isPending}
+            busy={join.isPending}
           >
-            {join.isPending && <Spinner size="sm" className="text-current" />}
-            {join.isPending ? "Joining…" : `Join ${found.name}`}
+            Join {found.name}
           </Button>
         </form>
       )}

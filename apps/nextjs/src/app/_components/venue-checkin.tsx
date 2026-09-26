@@ -56,7 +56,7 @@ export function VenueCheckin({
         codeLabel={`Check-in QR code for ${academyName}`}
       />
 
-      <div className="border-border flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
+      <div className="border-border bg-card flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
         <code className="text-sm break-all">{url}</code>
         <div className="flex gap-2">
           {shareable && (

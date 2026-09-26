@@ -3,6 +3,8 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { FOCUS_RING } from "@matops/ui/motion";
+
 import { getSession } from "~/auth/server";
 import { AuthSplit } from "../_components/auth-split";
 import { PageLoader } from "../_components/mat-loader";
@@ -60,7 +62,7 @@ async function SignInGate() {
         Running a gym?{" "}
         <Link
           href="/start"
-          className="text-brand-strong inline-flex min-h-11 items-center font-medium underline-offset-4 hover:underline sm:min-h-0"
+          className={`text-brand-strong inline-flex min-h-11 items-center rounded-sm font-medium underline-offset-4 hover:underline sm:min-h-0 ${FOCUS_RING}`}
         >
           Start a gym
         </Link>

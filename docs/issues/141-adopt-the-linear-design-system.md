@@ -298,6 +298,22 @@ The platform has no real users. So the whole app switches at once on the branch
 - "Booking unavailable" is a warning `Callout`. The install card stays a
   plain card, since it is a prompt, not a status.
 
+### Step 4.9: Public pages
+
+- The sign-in side panel is level 1 with an edge instead of the violet wash.
+  The chosen class on `/book/<code>` and on the drop-in form is `bg-card` or
+  `bg-active`, not violet. Class rows are 44px. The time-changed note is a
+  warning `Callout`. The branch picker's role is a `Badge`.
+- The consent tick stays native (FormData), styled to match `Checkbox`, with
+  44px label and dialog-link targets on touch. `policy-text.tsx` stays one
+  component and takes its size from the page or dialog around it.
+- Eight mid-request label renames became `busy`, and `SubmitButton` lost its
+  `pendingLabel` prop.
+- **A fix beyond styling (ADR 140):** the invite, the booking schedule, the
+  booking status and the drop-in gym info read a network failure as "Invite
+  not valid", "Booking is closed" and the like. When the error is not
+  `NOT_FOUND` or `BAD_REQUEST`, they now show `ErrorState` with a retry.
+
 ## Consequences
 
 - Every new screen gets sizes, weights, edges and radii from tokens. The last
