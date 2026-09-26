@@ -32,7 +32,7 @@ stop the loop and notify the user.
 | 2 | Shared components, new parts, Lucide | done | `6a7872a` | |
 | 3a | Shell: sidebar (level 1, 28px items, branch fold, Gym management) | done | `50471c6` | Box sizes unmeasured: the shell stays hidden behind the loader in this browser |
 | 3b | Shell: header, branch picker, mobile shell, overdue strip | done | `159ee7d` | |
-| 4.1 | Screens: Members and People (list, person page, leads) | todo | | |
+| 4.1 | Screens: Members and People (list, person page, leads) | done | `9f4c613` | Primitives and states restyled here too |
 | 4.2 | Screens: Schedule and the curriculum timeline | todo | | |
 | 4.3 | Screens: Dashboard and Overview | todo | | |
 | 4.4 | Screens: Attendance and Reception | todo | | |
@@ -48,6 +48,13 @@ stop the loop and notify the user.
 | 6d | User runs `pnpm test` | waiting on user | | The loop does not run tests |
 | 6e | Merge `design/linear` into `main` (production deploy), then update `dev` | waiting on user | | The loop never does this |
 
+## Open findings (not redesign work; each is its own slice)
+
+- ADR 120 violations found in 4.1: Promote (`!gate?.ok`), Review
+  (`!entityId || !name.trim()`), BulkAssign and the Add buttons, Schedule the
+  change (`targetPlanId === ""`), and Rank Clear are disabled for validation,
+  not only while in flight.
+
 ## Known limits
 
 - Signed-in screens stall on their loader in this Chrome setup, with or without
@@ -60,3 +67,4 @@ stop the loop and notify the user.
 - 2026-09-26: steps 0 to 2 done in the session before the loop started.
 - 2026-09-26: 3a sidebar done (`50471c6`).
 - 2026-09-26: 3b header and mobile shell done (`159ee7d`). Step 3 complete.
+- 2026-09-26: 4.1 Members and People done (`9f4c613`), by a subagent, reviewed.
