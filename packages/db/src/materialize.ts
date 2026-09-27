@@ -175,6 +175,7 @@ export async function planRebuild(
     activeVisitors: number;
     otherVisits: number;
   }[];
+  removed: { id: string; title: string; startsAt: Date }[];
   generatedThrough: Date | null;
 }> {
   const to = new Date(now.getTime() + horizonDays * DAY_MS);
@@ -214,6 +215,23 @@ export async function planRebuild(
     );
 
   const ids = staleClassIds(existing, wanted);
+  const removed = await exec
+    .select({
+      id: classInstance.id,
+      title: classInstance.title,
+      startsAt: classInstance.startsAt,
+    })
+    .from(classInstance)
+    .innerJoin(classTemplate, eq(classTemplate.id, classInstance.templateId))
+    .where(
+      and(
+        gt(classInstance.startsAt, now),
+        isNull(classInstance.deletedAt),
+        eq(classInstance.status, "cancelled"),
+        isNotNull(classTemplate.deletedAt),
+      ),
+    )
+    .orderBy(classInstance.startsAt);
   const [cursor] = await exec
     .select({ value: min(classTemplate.generatedUntil) })
     .from(classTemplate)
@@ -221,7 +239,7 @@ export async function planRebuild(
       and(eq(classTemplate.status, "active"), isNull(classTemplate.deletedAt)),
     );
   if (ids.length === 0) {
-    return { affected: [], generatedThrough: cursor?.value ?? null };
+    return { affected: [], removed, generatedThrough: cursor?.value ?? null };
   }
 
   const participations = await exec
@@ -260,6 +278,7 @@ export async function planRebuild(
         activeVisitors: visitsByClass.get(row.id)?.active ?? 0,
         otherVisits: visitsByClass.get(row.id)?.other ?? 0,
       })),
+    removed,
     generatedThrough: cursor?.value ?? null,
   };
 }
@@ -297,6 +316,13 @@ export async function rebuildSchedule(
       .set({ status: "cancelled" })
       .where(inArray(classInstance.id, ids));
   }
+  const removedIds = plan.removed.map((item) => item.id);
+  if (removedIds.length > 0) {
+    await exec
+      .update(classInstance)
+      .set({ deletedAt: now })
+      .where(inArray(classInstance.id, removedIds));
+  }
 
   const templates = await activeTemplates(exec);
   let created = 0;
@@ -314,7 +340,7 @@ export async function rebuildSchedule(
 
   const refreshed = await planRebuild(exec, { now, horizonDays });
   return {
-    deleted: 0,
+    deleted: removedIds.length,
     bookingsRemoved: 0,
     cancelled: ids.length,
     created,

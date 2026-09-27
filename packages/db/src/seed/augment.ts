@@ -376,8 +376,6 @@ export async function fillAcademy(
       academyId,
       instructorId: staffId,
       description: FILL_TEMPLATE_MARKER,
-      discipline:
-        template.title === "NoGi" ? ("nogi" as const) : ("bjj" as const),
       durationMinutes: 60,
       capacity: 24,
       capacityPolicy: "soft",
@@ -514,15 +512,6 @@ export async function fillAcademy(
     }
   });
   if (active[0]) {
-    ranks.push({
-      id: randomUUID(),
-      academyId,
-      memberId: active[0].memberId,
-      discipline: "judo",
-      belt: "Green",
-      stripes: 0,
-      updatedBy: staffId,
-    });
     notes.push({
       id: randomUUID(),
       academyId,

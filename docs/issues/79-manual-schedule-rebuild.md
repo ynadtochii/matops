@@ -116,3 +116,10 @@ scheduler gets written from scratch.
   gate on deleting the academy.
 - ADR 78's horizon section and ADR 76's `healHorizon` section describe code that
   no longer exists. Both stand as written; this note is the supersede.
+
+## Addendum, 2026-09-27: deleted templates leave no cancelled classes behind
+
+Deleting a template cancels its future classes. They stayed on the week grid as cancelled blocks, and a rebuild kept them, because it keeps every cancelled class.
+
+A rebuild now soft-deletes (sets `class.deleted_at`) every future, cancelled class whose template is deleted. Every schedule read already filters `deleted_at IS NULL`, so they leave the grid. Nothing is hard-deleted: participation and visitor rows stay attached. Past classes are not touched. A cancelled class from an active or paused template still stays, so a class the owner cancelled on purpose keeps showing as cancelled. `planRebuild` returns these rows as `removed`, the preview shows only their count, and `rebuildSchedule` reports the count in `deleted`.
+

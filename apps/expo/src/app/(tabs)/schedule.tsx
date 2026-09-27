@@ -3,12 +3,11 @@ import { Pressable, ScrollView, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 
-import type { DisciplineTone } from "@matops/domain";
 import {
   capacityDisplay,
   clockParts,
   dayKey,
-  disciplineTone,
+  disciplineHue,
   fillLabel,
   groupByDay,
   spotsLeftLabel,
@@ -40,16 +39,19 @@ import { dayFmt } from "~/utils/format";
 
 type ClassRow = RouterOutputs["class"]["mine"][number];
 
-/** The discipline rail colour. Same tones the web schedule paints (ADR 53). */
-const toneColorOf = (t: Theme): Record<DisciplineTone, string> => ({
-  gi: t.gi,
-  nogi: t.nogi,
-  other: t.border,
-});
+const hueColorsOf = (t: Theme) => [
+  t.discipline1,
+  t.discipline2,
+  t.discipline3,
+  t.discipline4,
+  t.discipline5,
+];
 
-function railColor(t: Theme, discipline: string | null, cancelled: boolean) {
+function railColor(t: Theme, hue: number | null, cancelled: boolean) {
   if (cancelled) return `${t.error}66`;
-  return toneColorOf(t)[disciplineTone(discipline)];
+  return hue === null
+    ? t.disciplineDefault
+    : (hueColorsOf(t)[hue] ?? t.disciplineDefault);
 }
 
 /** The day rule: the day label over its list, with the class count. */
@@ -90,10 +92,12 @@ function Chevron() {
  */
 function ClassCard({
   c,
+  hue,
   onPress,
   now,
 }: {
   c: ClassRow;
+  hue: number | null;
   onPress: () => void;
   now: Date;
 }) {
@@ -115,7 +119,7 @@ function ClassCard({
       <View
         style={{
           width: 3,
-          backgroundColor: railColor(t, c.discipline, cancelled),
+          backgroundColor: railColor(t, hue, cancelled),
         }}
       />
       <View
@@ -238,6 +242,11 @@ export default function Schedule() {
     trpc.class.mine.queryOptions({ from, to }, { enabled: !suspended }),
   );
   const week = selfWeek;
+  const disciplines = useQuery(trpc.discipline.list.queryOptions());
+  const disciplineNames = useMemo(
+    () => (disciplines.data ?? []).map((d) => d.name),
+    [disciplines.data],
+  );
 
   const byDay = useMemo(() => groupByDay(week.data ?? []), [week.data]);
 
@@ -300,6 +309,7 @@ export default function Schedule() {
                       <ClassCard
                         key={c.id}
                         c={c}
+                        hue={disciplineHue(c.discipline, disciplineNames)}
                         now={now}
                         onPress={() => router.push(`/class/${c.id}`)}
                       />

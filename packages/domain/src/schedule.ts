@@ -52,18 +52,22 @@ export function describeRecurrence(
   return `${days} · ${formatStartMinutes(startsAtMinutes)}`;
 }
 
-/** The three visual families a discipline collapses to (ADR 53). */
-export type DisciplineTone = "gi" | "nogi" | "other";
+/** How many disciplines get their own colour. The rest stay neutral. */
+export const DISCIPLINE_HUE_COUNT = 5;
 
 /**
- * Which family a class's discipline belongs to. Cool for gi, warm for no-gi,
- * neutral for open mat because it is both. Every surface that paints a class
- * (the O2 week grid, the O1 day rail, the mobile schedule, the printed poster)
- * maps its own colours off this, so the same kind of training reads the same
- * everywhere.
+ * The colour slot (0 to 4) of a class's discipline: its place in the
+ * academy's discipline list. Unset, unlisted or past the fifth → null, the
+ * neutral default. Every surface that paints a class (the week grid, the day
+ * rail, the dots, the mobile schedule, the poster) indexes its own palette
+ * with this, so one discipline reads the same everywhere.
  */
-export function disciplineTone(discipline: string | null): DisciplineTone {
-  if (discipline === "nogi" || discipline === "mma") return "nogi";
-  if (discipline === "other") return "other";
-  return "gi";
+export function disciplineHue(
+  discipline: string | null,
+  order: readonly string[],
+): number | null {
+  if (!discipline) return null;
+  const key = discipline.toLowerCase();
+  const index = order.findIndex((name) => name.toLowerCase() === key);
+  return index >= 0 && index < DISCIPLINE_HUE_COUNT ? index : null;
 }

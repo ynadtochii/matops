@@ -17,7 +17,7 @@
   --line-t-strong: color-mix(in srgb, var(--foreground) 8%, transparent);
   --accent: var(--brand);
   --accent-hover: var(--brand-strong);
-  --accent-tint: var(--brand-wash);
+  --accent-tint: var(--ring-halo);
   --invert: var(--primary);
   --invert-hover: color-mix(in srgb, var(--primary) 90%, transparent);
   --on-invert: var(--primary-foreground);
@@ -43,7 +43,6 @@
   --orange: var(--warning);
   --red: var(--error);
   --blue: var(--info);
-  --teal: var(--gi);
   --r-4: 4px;
   --r-6: 6px;
   --r-8: 8px;

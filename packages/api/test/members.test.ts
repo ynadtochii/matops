@@ -15,6 +15,7 @@ const row = (memberId: string, userId: string, name: string): MemberRow => ({
   name,
   email: `${userId}@example.test`,
   phone: null,
+  erasureRequestedAt: null,
   createdAt: new Date("2026-01-01T00:00:00Z"),
 });
 

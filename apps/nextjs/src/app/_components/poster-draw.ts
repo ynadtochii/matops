@@ -1,5 +1,5 @@
-import type { DisciplineTone } from "@matops/domain";
-import { busyHours, disciplineTone, hourSlots } from "@matops/domain";
+import { busyHours, disciplineHue, hourSlots } from "@matops/domain";
+import { tokens } from "@matops/ui/tokens";
 
 import { POSTER_H, POSTER_W } from "./poster-size";
 
@@ -16,6 +16,7 @@ interface PosterData {
   academyName: string;
   joinCode: string;
   updatedLabel: string;
+  disciplines: string[];
   classes: PosterClass[];
 }
 
@@ -32,9 +33,7 @@ const PAPER = "#ffffff";
 const INK = "#0c0a09";
 const QUIET = "#79716b";
 const LINE = "#e7e5e4";
-const GI = "#0f766e";
-const NOGI = "#b45309";
-const VIOLET = "#6a4dff";
+const BRAND = "#000000";
 
 const DAY_NAMES = [
   "Sunday",
@@ -49,12 +48,13 @@ const DAY_NAMES = [
 const hhmm = (minutes: number) =>
   `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
 
-/** Print ink per tone. Open mat gets none: on paper it reads as a plain block. */
-const TONE_HUE: Record<DisciplineTone, string | null> = {
-  gi: GI,
-  nogi: NOGI,
-  other: null,
-};
+const HUE_INK = [
+  tokens.light.discipline1,
+  tokens.light.discipline2,
+  tokens.light.discipline3,
+  tokens.light.discipline4,
+  tokens.light.discipline5,
+];
 
 function overPaper(hex: string, alpha: number): string {
   const n = parseInt(hex.slice(1), 16);
@@ -161,43 +161,6 @@ function fontStacks() {
   };
 }
 
-function drawLegend(
-  ctx: CanvasRenderingContext2D,
-  mono: string,
-  right: number,
-  y: number,
-) {
-  const items: { label: string; hue: string | null }[] = [
-    { label: "GI", hue: GI },
-    { label: "NOGI", hue: NOGI },
-    { label: "OPEN MAT", hue: null },
-  ];
-  ctx.font = `500 15px ${mono}`;
-  ctx.textAlign = "left";
-  const widths = items.map((i) => 26 + ctx.measureText(i.label).width);
-  const total = widths.reduce((a, b) => a + b, 0) + 32 * (items.length - 1);
-  let x = right - total;
-  items.forEach((item, i) => {
-    ctx.fillStyle = item.hue ? overPaper(item.hue, 0.1) : PAPER;
-    ctx.strokeStyle = item.hue ?? LINE;
-    ctx.lineWidth = 1;
-    if (item.hue) {
-      roundRect(ctx, x, y - 12, 18, 14, 3);
-      ctx.fill();
-      ctx.fillStyle = item.hue;
-      ctx.fillRect(x, y - 12, 3, 14);
-    } else {
-      ctx.setLineDash([3, 3]);
-      roundRect(ctx, x, y - 12, 18, 14, 3);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
-    ctx.fillStyle = QUIET;
-    ctx.fillText(item.label, x + 26, y);
-    x += (widths[i] ?? 0) + 32;
-  });
-}
-
 export function drawPoster(
   canvas: HTMLCanvasElement,
   data: PosterData,
@@ -226,8 +189,6 @@ export function drawPoster(
   ctx.fillStyle = INK;
   ctx.font = `600 48px ${sans}`;
   ctx.fillText(clip(ctx, data.academyName, 900), PAD, PAD + 72);
-
-  drawLegend(ctx, mono, POSTER_W - PAD, PAD + 66);
 
   const gridLeft = PAD + GUTTER;
   const gridRight = POSTER_W - PAD;
@@ -295,7 +256,10 @@ export function drawPoster(
   });
 
   for (const cls of data.classes) {
-    const hue = TONE_HUE[disciplineTone(cls.discipline)];
+    const slot = disciplineHue(cls.discipline, data.disciplines);
+    const hue =
+      (slot === null ? undefined : HUE_INK[slot]) ??
+      tokens.light.disciplineDefault;
     for (const day of cls.daysOfWeek) {
       const col = layout.days.indexOf(day);
       if (col < 0) continue;
@@ -309,20 +273,16 @@ export function drawPoster(
         MIN_BLOCK_H,
       );
 
-      ctx.fillStyle = hue ? overPaper(hue, 0.08) : PAPER;
+      ctx.fillStyle = overPaper(hue, 0.08);
       roundRect(ctx, x, y, w, h, 4);
       ctx.fill();
-      ctx.strokeStyle = hue ? overPaper(hue, 0.35) : LINE;
+      ctx.strokeStyle = overPaper(hue, 0.35);
       ctx.lineWidth = 1;
-      if (!hue) ctx.setLineDash([4, 4]);
       roundRect(ctx, x + 0.5, y + 0.5, w - 1, h - 1, 4);
       ctx.stroke();
-      ctx.setLineDash([]);
-      if (hue) {
-        ctx.fillStyle = hue;
-        roundRect(ctx, x, y, 4, h, 2);
-        ctx.fill();
-      }
+      ctx.fillStyle = hue;
+      roundRect(ctx, x, y, 4, h, 2);
+      ctx.fill();
 
       ctx.fillStyle = QUIET;
       ctx.font = `500 14px ${mono}`;
@@ -345,7 +305,7 @@ export function drawPoster(
   }
 
   const footY = POSTER_H - PAD - 6;
-  ctx.fillStyle = VIOLET;
+  ctx.fillStyle = BRAND;
   roundRect(ctx, PAD, footY - 30, 8, 8, 2);
   ctx.fill();
 

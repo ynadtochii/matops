@@ -176,10 +176,10 @@ const SIGNALS: Swatch[] = [
     role: "Link hover, brand text",
   },
   {
-    name: "Brand wash",
+    name: "Ring halo",
     token: "--accent-tint",
-    source: "--brand-wash",
-    role: "Selected tint",
+    source: "--ring-halo",
+    role: "Focus halo around a field",
   },
   {
     name: "Green",
@@ -202,7 +202,12 @@ const SIGNALS: Swatch[] = [
     source: "--error-text",
     role: "Error messages",
   },
-  { name: "Teal", token: "--teal", source: "--gi", role: "Label" },
+  {
+    name: "Discipline 1",
+    token: "--discipline-1",
+    source: "--discipline-1",
+    role: "Label",
+  },
 ];
 
 const TYPE = [

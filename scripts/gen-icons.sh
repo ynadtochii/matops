@@ -5,26 +5,53 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-mark() { # $1 = corner radius in the 32x32 grid
+SEAMS="M16 0V32M0 16H32M8.5 0V16M16 8.5H32M0 23.5H16M23.5 16V32"
+
+tile() { # $1 = corner radius in the 32x32 grid, $2 = rim radius (inset 0.175)
   cat <<SVG
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="$1" fill="#8b72ff"/>
-  <path d="M16 0V32M0 16H32M8.5 0V16M16 8.5H32M0 23.5H16M23.5 16V32" stroke="#12091f" stroke-opacity="0.85" stroke-width="1.6"/>
+  <rect width="32" height="32" rx="$1" fill="#000000"/>
+  <rect x="0.175" y="0.175" width="31.65" height="31.65" rx="$2" fill="none" stroke="#ebebeb" stroke-opacity="0.3" stroke-width="0.35"/>
 </svg>
 SVG
 }
 
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
-mark 7 > "$tmp/rounded.svg"
-mark 0 > "$tmp/square.svg"
 
-png() { # $1 = svg, $2 = px, $3 = out
+# ImageMagick's SVG renderer skips a stroke with no stroke-opacity and has no
+# blur filter, so the seams render on black and the bloom is blurred here.
+cat > "$tmp/seams.svg" <<SVG
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <rect width="32" height="32" fill="#000000"/>
+  <path d="$SEAMS" stroke="#ebebeb" stroke-opacity="1" stroke-width="1.1"/>
+</svg>
+SVG
+
+tile 7 6.825 > "$tmp/rounded.svg"
+tile 0 0 > "$tmp/square.svg"
+
+png() { # $1 = tile svg, $2 = px, $3 = out
   mkdir -p "$(dirname "$3")"
-  magick -background none -density $(( $2 * 72 / 32 )) "$1" -resize "$2x$2" "$3"
+  local d=$(( $2 * 72 / 32 )) blur=$(( $2 / 32 ))
+  magick -background none -density $d "$1" -resize "$2x$2" \
+    \( -density $d "$tmp/seams.svg" -resize "$2x$2" -blur "0x$blur" -evaluate multiply 0.5 \) \
+    -compose screen -composite \
+    \( -density $d "$tmp/seams.svg" -resize "$2x$2" -evaluate multiply 0.92 \) \
+    -compose screen -composite \
+    \( -background none -density $d "$1" -resize "$2x$2" \) \
+    -compose DstIn -composite "$3"
   echo "  $3"
 }
 
-cp "$tmp/rounded.svg" apps/nextjs/src/app/icon.svg
+cat > apps/nextjs/src/app/icon.svg <<SVG
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <defs><filter id="bloom" x="0" y="0" width="32" height="32" filterUnits="userSpaceOnUse"><feGaussianBlur stdDeviation="1"/></filter></defs>
+  <rect width="32" height="32" rx="7" fill="#000000"/>
+  <path d="$SEAMS" stroke="#ebebeb" stroke-opacity="0.5" stroke-width="1.1" filter="url(#bloom)"/>
+  <path d="$SEAMS" stroke="#ebebeb" stroke-opacity="0.92" stroke-width="1.1"/>
+  <rect x="0.175" y="0.175" width="31.65" height="31.65" rx="6.825" fill="none" stroke="#ebebeb" stroke-opacity="0.3" stroke-width="0.35"/>
+</svg>
+SVG
 
 png "$tmp/rounded.svg" 192 apps/nextjs/public/icon-192.png
 png "$tmp/rounded.svg" 512 apps/nextjs/public/icon-512.png
@@ -51,6 +78,7 @@ if [ -d "$ios" ]; then
   done
 fi
 
-magick -background none -density 576 "$tmp/rounded.svg" -resize 256x256 \
-  -define icon:auto-resize=48,32,16 apps/nextjs/public/favicon.ico
+png "$tmp/rounded.svg" 256 "$tmp/favicon.png" >/dev/null
+magick "$tmp/favicon.png" -define icon:auto-resize=48,32,16 \
+  apps/nextjs/public/favicon.ico
 echo "  apps/nextjs/public/favicon.ico"

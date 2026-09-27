@@ -151,7 +151,7 @@ export function MatLoader({
     };
   }, [enter, weave, reduced]);
 
-  const th = Math.max(1, size * 0.05);
+  const th = Math.max(1, size * 0.034);
 
   return (
     <Animated.View
@@ -165,6 +165,8 @@ export function MatLoader({
           height: size,
           borderRadius: size * 0.22,
           backgroundColor: t.brand,
+          borderWidth: 1,
+          borderColor: `${t.brandForeground}4d`,
           overflow: "hidden",
         }}
       >
@@ -178,10 +180,10 @@ export function MatLoader({
                 extrapolate: "clamp",
               });
           const opacity = reduced
-            ? 0.85
+            ? 0.92
             : weave.interpolate({
                 inputRange: [from, from + 0.05, FADE_OUT, 1],
-                outputRange: [0, 0.85, 0.85, 0],
+                outputRange: [0, 0.92, 0.92, 0],
                 extrapolate: "clamp",
               });
           return (
@@ -190,6 +192,10 @@ export function MatLoader({
               style={{
                 position: "absolute",
                 backgroundColor: t.brandForeground,
+                shadowColor: t.brandForeground,
+                shadowOpacity: 0.6,
+                shadowRadius: size / 32,
+                shadowOffset: { width: 0, height: 0 },
                 ...seam.box(size, th),
                 opacity,
                 transformOrigin: seam.vertical ? "top" : "left",

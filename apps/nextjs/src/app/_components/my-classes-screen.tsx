@@ -173,7 +173,7 @@ function ClassRow({
           >
             {c.title}
           </span>
-          {next && <Badge tone="info">Next class</Badge>}
+          {next && <Badge tone="lit">Next class</Badge>}
         </p>
         <p className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
           <span>{dayMediumFmt.format(c.startsAt)}</span>

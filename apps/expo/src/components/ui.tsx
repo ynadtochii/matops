@@ -768,14 +768,18 @@ export function TextField({
  */
 export function Mark({ size = 24 }: { size?: number }) {
   const t = useTheme();
-  const th = Math.max(1, size * 0.05);
+  const th = Math.max(1, size * 0.034);
   const half = size / 2;
   const seam = (s: ViewStyle) => (
     <View
       style={{
         position: "absolute",
         backgroundColor: t.brandForeground,
-        opacity: 0.85,
+        opacity: 0.92,
+        shadowColor: t.brandForeground,
+        shadowOpacity: 0.6,
+        shadowRadius: size / 32,
+        shadowOffset: { width: 0, height: 0 },
         ...s,
       }}
     />
@@ -787,6 +791,8 @@ export function Mark({ size = 24 }: { size?: number }) {
         height: size,
         borderRadius: size * 0.22,
         backgroundColor: t.brand,
+        borderWidth: 1,
+        borderColor: `${t.brandForeground}4d`,
         overflow: "hidden",
       }}
     >

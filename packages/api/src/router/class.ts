@@ -52,6 +52,7 @@ import {
 import type { TimeZoneCtx } from "../academy-tz";
 import { academyContext, academyTimeZone } from "../academy-tz";
 import { liveClass } from "../classes";
+import { requireCatalogDiscipline } from "../discipline";
 import { requireInstructor } from "../members";
 import { CLASS_NOT_FOUND } from "../messages";
 import { notifyClassCancelled, notifyClassChanged } from "../notify";
@@ -397,6 +398,7 @@ export const classRouter = {
     .input(CreateClassSchema)
     .mutation(async ({ ctx, input }) => {
       await lockAndReadScheduleRevision(ctx.db, ctx.academyId);
+      await requireCatalogDiscipline(ctx.db, ctx.academyId, input.discipline);
       const startsAt = instantFromLocalDate(
         input.date,
         input.startsAtMinutes,

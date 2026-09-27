@@ -8,11 +8,10 @@
  * attendance→promotion automation and NO progress prediction (deliberately: BJJ
  * grading is instructor-controlled and not earned by class count; ADR 41).
  *
- * A member holds zero or more ranks, ONE per discipline (a judoka-and-jitser
- * holds a Judo rank AND a BJJ belt independently). Rank is stored as data — a
- * discipline + a belt value + a stripe count — never a hard enum, so a new
- * discipline is additive config, not a refactor. v1.4 seeds the systems below;
- * owner-defined custom ladders stay parked.
+ * A member holds zero or more ranks, ONE per discipline. Rank is stored as
+ * data (a discipline key + a belt value + a stripe count), never a hard enum, so
+ * a new discipline is additive config, not a refactor. The first release seeds
+ * BJJ only; owner-defined disciplines and ladders stay parked.
  */
 
 /** A discipline's ordered belt ladder + its sub-level (stripe/degree) rule. */
@@ -25,7 +24,7 @@ interface RankSystem {
   belts: string[];
   /**
    * Highest sub-level a belt can carry (BJJ stripes 0–4). `0` = this system has
-   * no sub-levels (e.g. Judo here is belt-colour only), so the UI hides stripes.
+   * no sub-levels (belt colour only), so the UI hides stripes.
    */
   maxStripes: number;
   /** Singular unit label for the sub-level, e.g. "stripe". */
@@ -33,10 +32,10 @@ interface RankSystem {
 }
 
 /**
- * The seeded rank systems (v1.4). BJJ is the default; Judo is included to prove
- * the model is general (a second discipline, and one with NO stripes). Add a key
- * here to support another belted art — no schema or code change needed. A
- * discipline absent from this map simply has no rank control (boxing, MMA).
+ * The seeded rank systems. The first release has BJJ only. Add a key here to
+ * support another belted art: no schema or code change needed. A discipline
+ * absent from this map has no rank control, and its stored ranks still display
+ * with the raw key as the label.
  */
 export const RANK_SYSTEMS: Record<string, RankSystem> = {
   bjj: {
@@ -45,13 +44,6 @@ export const RANK_SYSTEMS: Record<string, RankSystem> = {
     belts: ["White", "Blue", "Purple", "Brown", "Black"],
     maxStripes: 4,
     stripeUnit: "stripe",
-  },
-  judo: {
-    discipline: "judo",
-    label: "Judo",
-    belts: ["White", "Yellow", "Orange", "Green", "Blue", "Brown", "Black"],
-    maxStripes: 0, // belt-colour only in v1.4 — proves a no-stripe system
-    stripeUnit: "dan",
   },
 };
 
@@ -87,8 +79,8 @@ interface RankEntry {
 
 /**
  * The display string for a rank, e.g. `"Blue · 2 stripes"`, `"Blue · 1 stripe"`,
- * or just `"Black"` when there are no stripes (0, or a no-stripe system like
- * Judo). Used on the owner panel and the student profile so both read the same.
+ * or just `"Black"` when there are no stripes (0, or a no-stripe system).
+ * Used on the owner panel and the student profile so both read the same.
  */
 export function formatRank(entry: RankEntry): string {
   const system = RANK_SYSTEMS[entry.discipline];

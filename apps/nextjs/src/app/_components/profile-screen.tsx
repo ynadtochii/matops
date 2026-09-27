@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown } from "lucide-react";
 
 import {
@@ -27,7 +27,6 @@ import { useTRPC } from "~/trpc/react";
 import { useEntity, useEntityHref } from "./entity";
 import { FeedbackLink } from "./feedback-link";
 import { fieldErrors, PhoneField } from "./form-fields";
-import { JoinAnotherBranch } from "./join-by-code";
 import { PageHeader } from "./page-header";
 import {
   cardClass,
@@ -40,6 +39,11 @@ import {
 import { SignOutButton } from "./sign-out";
 import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState, SuspendedState } from "./states";
+
+const FOOTER_LINK = cn(
+  "text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center rounded-sm text-sm underline underline-offset-2",
+  FOCUS_RING,
+);
 
 function splitName(name: string): { firstName: string; lastName: string } {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -225,26 +229,6 @@ export function ProfileScreen({
             <SectionHeading>Account details</SectionHeading>
             <ProfileDetails name={name} email={email} phone={phone} />
           </section>
-          <section className="flex flex-col gap-4" aria-label="Preferences">
-            <SectionHeading>Preferences</SectionHeading>
-            <div className={LIST}>
-              <SettingsRow
-                title="Appearance"
-                description="Choose light, dark, or your system setting."
-              >
-                <ThemeToggle />
-              </SettingsRow>
-            </div>
-          </section>
-          <div className="border-border flex flex-wrap items-center justify-between gap-4 border-t pt-5">
-            <FeedbackLink
-              className={cn(
-                "text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center rounded-sm text-sm underline underline-offset-2",
-                FOCUS_RING,
-              )}
-            />
-            <SignOutButton />
-          </div>
         </div>
         <div
           className={cn(
@@ -313,19 +297,114 @@ export function ProfileScreen({
               {academy.status === "suspended" ? <SuspendedState /> : <MyRank />}
             </section>
           )}
-          <section className="border-border border-t pt-5">
-            <SectionHeading>More branches</SectionHeading>
-            <div className="flex flex-col gap-4 pt-3">
-              <p className="text-muted-foreground text-sm">
-                Enter the branch’s 6-digit join code to request access. Use the
-                sidebar picker to switch between branches you already joined.
-              </p>
-              <JoinAnotherBranch />
-            </div>
-          </section>
+          {!isStaff(academy) && (
+            <section className="flex flex-col gap-4" aria-label="Your data">
+              <SectionHeading>Your data</SectionHeading>
+              {academy.status === "suspended" ? (
+                <p className="text-muted-foreground text-sm">
+                  To have your data erased, ask {academy.name} directly.
+                </p>
+              ) : (
+                <EraseRequest />
+              )}
+            </section>
+          )}
+        </div>
+      </div>
+      <div className="border-border mt-10 flex flex-wrap items-center justify-between gap-4 border-t pt-5">
+        <div className="flex flex-wrap items-center gap-x-5">
+          <FeedbackLink className={FOOTER_LINK} />
+          <Link href="/privacy" className={FOOTER_LINK}>
+            Privacy
+          </Link>
+        </div>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <SignOutButton />
         </div>
       </div>
     </>
+  );
+}
+
+function EraseRequest() {
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  const academy = useEntity();
+  const request = useQuery(trpc.membership.erasureRequest.queryOptions());
+
+  const refresh = () =>
+    queryClient.invalidateQueries(trpc.membership.erasureRequest.pathFilter());
+  const onError = (err: { message: string }) =>
+    toast.error(err.message || "Couldn't send that. Try again.");
+  const ask = useMutation(
+    trpc.membership.requestErasure.mutationOptions({
+      onSuccess: async () => {
+        await refresh();
+        toast.success(`Request sent to ${academy.name}`);
+      },
+      onError,
+    }),
+  );
+  const withdraw = useMutation(
+    trpc.membership.withdrawErasureRequest.mutationOptions({
+      onSuccess: async () => {
+        await refresh();
+        toast.success("Request withdrawn");
+      },
+      onError,
+    }),
+  );
+
+  if (request.isPending) return <SkeletonRows rows={1} lines={1} inList />;
+  if (request.isError) {
+    return (
+      <ErrorState
+        label="your erase request"
+        onRetry={() => void request.refetch()}
+      />
+    );
+  }
+
+  const { requestedAt } = request.data;
+  const busy = ask.isPending || withdraw.isPending;
+  const what =
+    "your bookings, attendance, rank and notes. Your sign-in goes too, unless you belong to another gym.";
+
+  return (
+    <div className={LIST}>
+      {requestedAt ? (
+        <SettingsRow
+          title="Erase request sent"
+          description={`You asked on ${dateYearFmt.format(new Date(requestedAt))}. The owner or a manager will erase ${what}`}
+        >
+          <Button
+            size="sm"
+            variant="outline"
+            busy={withdraw.isPending}
+            disabled={busy}
+            onClick={() => withdraw.mutate()}
+          >
+            Withdraw request
+          </Button>
+        </SettingsRow>
+      ) : (
+        <SettingsRow
+          title="Erase my data"
+          description={`Ask ${academy.name} to erase ${what}`}
+        >
+          <Button
+            size="sm"
+            variant="outline"
+            busy={ask.isPending}
+            disabled={busy}
+            onClick={() => ask.mutate()}
+          >
+            Ask to erase
+          </Button>
+        </SettingsRow>
+      )}
+    </div>
   );
 }
 

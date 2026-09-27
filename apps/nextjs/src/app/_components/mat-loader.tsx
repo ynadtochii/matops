@@ -1,4 +1,7 @@
 import type { CSSProperties } from "react";
+import { useId } from "react";
+
+import { MarkBloom, MarkRim, SEAM_GLOW, SEAM_LINE } from "@matops/ui/logo";
 
 /**
  * The one loading moment that carries the brand: the basketweave mark laying
@@ -23,6 +26,7 @@ const SEAMS: { d: string; len: number }[] = [
 ];
 
 export function MatLoader({ label }: { label?: string }) {
+  const bloom = useId();
   return (
     <div
       role="status"
@@ -30,14 +34,12 @@ export function MatLoader({ label }: { label?: string }) {
       className="mat-loader flex flex-col items-center gap-4 motion-reduce:animate-none"
     >
       <svg width={56} height={56} viewBox="0 0 32 32" fill="none" aria-hidden>
+        <MarkBloom id={bloom} />
         <rect width="32" height="32" rx="7" fill="var(--brand)" />
+        <MarkRim />
         {SEAMS.map((seam, i) => (
-          <path
+          <g
             key={seam.d}
-            d={seam.d}
-            stroke="var(--brand-foreground)"
-            strokeOpacity={0.85}
-            strokeWidth={1.6}
             className="mat-seam motion-reduce:animate-none"
             style={
               {
@@ -47,7 +49,10 @@ export function MatLoader({ label }: { label?: string }) {
                 strokeDashoffset: 0,
               } as CSSProperties
             }
-          />
+          >
+            <path d={seam.d} filter={`url(#${bloom})`} {...SEAM_GLOW} />
+            <path d={seam.d} {...SEAM_LINE} />
+          </g>
         ))}
       </svg>
       {label && <p className="text-muted-foreground text-xs">{label}</p>}

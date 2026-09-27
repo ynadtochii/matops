@@ -28,7 +28,6 @@ describe("isValidRank", () => {
 
   it("rejects a belt not in the ladder", () => {
     expect(isValidRank("bjj", "Red", 0)).toBe(false);
-    // Judo belt is not a BJJ belt.
     expect(isValidRank("bjj", "Yellow", 0)).toBe(false);
   });
 
@@ -36,13 +35,11 @@ describe("isValidRank", () => {
     expect(isValidRank("bjj", "Blue", 5)).toBe(false);
     expect(isValidRank("bjj", "Blue", -1)).toBe(false);
     expect(isValidRank("bjj", "Blue", 1.5)).toBe(false);
-    // Judo has no stripes at all.
-    expect(isValidRank("judo", "Green", 1)).toBe(false);
-    expect(isValidRank("judo", "Green", 0)).toBe(true);
   });
 
   it("rejects a discipline with no seeded system", () => {
     expect(isValidRank("boxing", "White", 0)).toBe(false);
+    expect(isValidRank("judo", "Green", 0)).toBe(false);
   });
 });
 
@@ -62,8 +59,8 @@ describe("formatRank", () => {
     );
   });
 
-  it("omits stripes for a no-stripe system", () => {
-    expect(formatRank({ discipline: "judo", belt: "Green", stripes: 0 })).toBe(
+  it("shows only the belt for a discipline with no seeded system", () => {
+    expect(formatRank({ discipline: "judo", belt: "Green", stripes: 2 })).toBe(
       "Green",
     );
   });
@@ -174,16 +171,6 @@ describe("isRankRegression", () => {
         "bjj",
         { belt: "Purple", stripes: 0 },
         { belt: "Blue", stripes: 4 },
-      ),
-    ).toBe(true);
-  });
-
-  it("rejects a demotion in a no-stripe system (Judo)", () => {
-    expect(
-      isRankRegression(
-        "judo",
-        { belt: "Green", stripes: 0 },
-        { belt: "Yellow", stripes: 0 },
       ),
     ).toBe(true);
   });

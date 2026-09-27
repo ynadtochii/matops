@@ -6,9 +6,13 @@ import { blockText, IdSchema, lineText } from "./fields";
 
 // ─── Scheduling (Phase 2) ────────────────────────────────────────────────────
 
-/** Optional grappling tag on a class/template (spec O3, matches the DB enum). */
-const DisciplineSchema = z.enum(["bjj", "nogi", "judo", "mma", "other"]);
-export type Discipline = z.infer<typeof DisciplineSchema>;
+export const DisciplineNameSchema = lineText(1, 40);
+export type Discipline = z.infer<typeof DisciplineNameSchema>;
+export const DisciplineIdSchema = z.object({ id: z.uuid() });
+export const AddDisciplineSchema = z.object({ name: DisciplineNameSchema });
+export const RenameDisciplineSchema = DisciplineIdSchema.extend({
+  name: DisciplineNameSchema,
+});
 
 /** An IANA zone name the runtime knows. Bounded before the lookup. */
 const TimeZoneSchema = z
@@ -38,7 +42,7 @@ const SessionDescription = blockText(0, 500)
 export const CreateClassTemplateSchema = z.object({
   title: lineText(1, 80),
   description: SessionDescription,
-  discipline: DisciplineSchema.nullish(),
+  discipline: DisciplineNameSchema.nullish(),
   // Nullable as well as optional: null is "nobody", while a missing field on
   // edit leaves the coach alone.
   instructorId: IdSchema.nullish(),
@@ -79,7 +83,7 @@ export const RebuildScheduleSchema = z.object({
 export const CreateClassSchema = z.object({
   title: lineText(1, 80),
   description: SessionDescription,
-  discipline: DisciplineSchema.nullish(),
+  discipline: DisciplineNameSchema.nullish(),
   instructorId: IdSchema.optional(),
   date: z.iso.date(), // "YYYY-MM-DD"
   startsAtMinutes: z.number().int().min(0).max(1439),

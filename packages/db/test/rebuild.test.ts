@@ -170,4 +170,28 @@ describe("rebuildSchedule", () => {
       true,
     );
   });
+
+  it("removes a deleted template's future cancelled classes and keeps its past", async () => {
+    const t = uuid(11);
+    const future = uuid(12);
+    const past = uuid(13);
+    await daily(t, "Dropped");
+    await pg.exec(
+      `UPDATE "class_template" SET deleted_at = now() WHERE id = '${t}'`,
+    );
+    await classAt(future, t, new Date(Date.now() + 2 * DAY_MS), "cancelled");
+    await classAt(past, t, new Date(Date.now() - 2 * DAY_MS), "cancelled");
+    await book(future, "u_student");
+
+    const res = await rebuildSchedule(exec());
+
+    expect(res.deleted).toBe(1);
+    expect(
+      await exists("class", `id = '${future}' AND deleted_at IS NOT NULL`),
+    ).toBe(true);
+    expect(await exists("class", `id = '${past}' AND deleted_at IS NULL`)).toBe(
+      true,
+    );
+    expect(await count("class_participation")).toBe(1);
+  });
 });

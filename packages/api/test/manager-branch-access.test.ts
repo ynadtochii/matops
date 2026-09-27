@@ -111,7 +111,7 @@ describe("a gym manager at a branch", () => {
     expect(
       await rejectionCode(
         at(MANAGER, GYM).membership.purge({
-          memberId: memberId(GYM, STUDENT),
+          memberId: memberId(GYM, OWNER),
         }),
       ),
     ).toBe("FORBIDDEN");

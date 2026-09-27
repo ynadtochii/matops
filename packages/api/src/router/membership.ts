@@ -31,7 +31,12 @@ import {
   sql,
   updateUserProfile,
 } from "@matops/db";
-import { classInstance, classParticipation, entity } from "@matops/db/schema";
+import {
+  classInstance,
+  classParticipation,
+  entity,
+  entityMembership,
+} from "@matops/db/schema";
 import {
   approveMembership,
   canApprove,
@@ -67,6 +72,7 @@ import { LAST_OWNER } from "../messages";
 import {
   branchManagerIdentityProcedure,
   branchManagerProcedure,
+  enrolledProcedure,
   ownerIdentityProcedure,
   protectedProcedure,
   refreshSessionCookie,
@@ -267,6 +273,23 @@ async function requireBranchLifecycleChange(
   }
 }
 
+function ownStudentMembership(ctx: {
+  academyId: string;
+  membership: Membership & { memberId: string | null };
+}) {
+  const { memberId } = ctx.membership;
+  if (!memberId || isStaffRole(ctx.membership)) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Only a student can ask the gym to erase their data.",
+    });
+  }
+  return and(
+    eq(entityMembership.id, memberId),
+    eq(entityMembership.entityId, ctx.academyId),
+  );
+}
+
 export const membershipRouter = {
   /**
    * Self-join via an invite link (spec S1–S3, docs/issues/14, 20, 26). The caller
@@ -391,6 +414,7 @@ export const membershipRouter = {
           role: r.role,
           status: r.status,
           invitedRole: r.invitedRole,
+          erasureRequestedAt: r.erasureRequestedAt,
           joinedAt: r.createdAt,
           visitCount: visitByUser.get(r.userId) ?? 0,
         };
@@ -539,18 +563,53 @@ export const membershipRouter = {
       return { ok: true as const, seatsFreed: freed };
     }),
 
+  /** The caller's own erase request at this academy (spec S7, ADR 145). */
+  erasureRequest: enrolledProcedure.query(async ({ ctx }) => {
+    const [row] = await ctx.db
+      .select({ requestedAt: entityMembership.erasureRequestedAt })
+      .from(entityMembership)
+      .where(ownStudentMembership(ctx));
+    return { requestedAt: row?.requestedAt ?? null };
+  }),
+
+  /**
+   * A student asks the owner and managers to erase their data (spec S7, ADR
+   * 145). Nothing is deleted here: the request waits on the Students Requests
+   * tab until an owner or manager runs `purge`. Asking twice keeps the first
+   * date.
+   */
+  requestErasure: enrolledProcedure.mutation(async ({ ctx }) => {
+    await ctx.db
+      .update(entityMembership)
+      .set({
+        erasureRequestedAt: sql`coalesce(${entityMembership.erasureRequestedAt}, now())`,
+      })
+      .where(ownStudentMembership(ctx));
+    return { ok: true as const };
+  }),
+
+  withdrawErasureRequest: enrolledProcedure.mutation(async ({ ctx }) => {
+    await ctx.db
+      .update(entityMembership)
+      .set({ erasureRequestedAt: null })
+      .where(ownStudentMembership(ctx));
+    return { ok: true as const };
+  }),
+
   /**
    * Erase a member for good (spec O4, docs/issues/84). Irreversible, and the
-   * action an owner uses to answer a data-deletion request.
+   * action an owner or manager uses to answer a data-deletion request (ADR
+   * 145). A manager cannot erase an owner or anyone who runs the gym.
    *
    * Archiving FIRST is not decoration: it reuses the locked never-ownerless
    * guard, and it is the recoverable state a half-finished erase falls back to,
    * because the RLS transaction and the base connection cannot commit as one.
    */
-  purge: ownerIdentityProcedure
+  purge: branchManagerIdentityProcedure
     .input(MemberActionSchema)
     .mutation(async ({ ctx, input }) => {
       const m = await requireMember(identityScope(ctx), input.memberId);
+      await requireBranchLifecycleChange(ctx, m);
       if (m.accountUserId === ctx.session.user.id) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",

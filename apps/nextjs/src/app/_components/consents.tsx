@@ -78,7 +78,7 @@ function Check({
           type="checkbox"
           checked={checked}
           onChange={(e) => onChange(e.target.checked)}
-          className={`accent-brand border-control mt-0.5 size-3.5 shrink-0 cursor-pointer rounded-sm ${FOCUS_RING}`}
+          className={`accent-primary border-control mt-0.5 size-3.5 shrink-0 cursor-pointer rounded-sm ${FOCUS_RING}`}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? `${id}-error` : undefined}
         />

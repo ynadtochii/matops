@@ -8,7 +8,7 @@ import { FOCUS_RING, PRESS } from "./motion";
 import { Spinner } from "./spinner";
 
 const buttonVariants = cva(
-  "flex-row items-center justify-center gap-1.5 rounded-full border border-transparent font-medium " +
+  "rounded-control flex-row items-center justify-center gap-1.5 border border-transparent font-medium " +
     "inline-flex shrink-0 whitespace-nowrap outline-none " +
     "transition-[background-color,border-color,color,box-shadow,scale] duration-150 " +
     `${PRESS} ${FOCUS_RING} ` +
@@ -21,9 +21,9 @@ const buttonVariants = cva(
         primary:
           "bg-primary border-primary text-primary-foreground shadow-lift hover:bg-primary/90",
         secondary:
-          "bg-secondary border-border text-secondary-foreground hover:bg-active hover:border-border-strong",
+          "edge-lit-surface-2 hover:edge-lit-surface-3 text-secondary-foreground shadow-lift",
         outline:
-          "border-border text-foreground hover:bg-hover hover:border-border-strong bg-transparent",
+          "border-border-strong text-foreground hover:bg-hover bg-transparent",
         ghost:
           "text-muted-foreground hover:bg-hover hover:text-foreground bg-transparent",
         destructive:
@@ -36,7 +36,7 @@ const buttonVariants = cva(
         default: "h-8 min-h-11 px-3.5 text-sm sm:min-h-8",
         sm: "h-6 min-h-11 px-2.5 text-xs sm:min-h-6",
         lg: "h-10 min-h-11 px-4.5 text-base sm:min-h-10",
-        icon: "h-8 min-h-11 w-8 min-w-11 rounded-sm text-sm sm:min-h-8 sm:min-w-8",
+        icon: "h-8 min-h-11 w-8 min-w-11 text-sm sm:min-h-8 sm:min-w-8",
       },
     },
     defaultVariants: { variant: "primary", size: "default" },

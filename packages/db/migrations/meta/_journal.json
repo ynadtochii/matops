@@ -36,6 +36,20 @@
       "when": 1789939731052,
       "tag": "0004_first_release_drops",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790516264167,
+      "tag": "0005_academy_disciplines",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790518891031,
+      "tag": "0006_erasure_request",
+      "breakpoints": true
     }
   ]
 }

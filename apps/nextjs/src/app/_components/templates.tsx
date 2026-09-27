@@ -30,15 +30,13 @@ import { toast } from "@matops/ui/toast";
 import { optimistic, rollback } from "~/lib/optimistic";
 import { useTRPC } from "~/trpc/react";
 import { InstructorOptions } from "./coach-select";
+import { DisciplineManager } from "./discipline-manager";
 import { useEntity } from "./entity";
 import { LIST, RESOLVE, SectionHeading } from "./primitives";
 import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 
 type Template = RouterOutputs["template"]["list"][number];
-
-const DISCIPLINES = ["bjj", "nogi", "judo", "mma", "other"] as const;
-type Discipline = (typeof DISCIPLINES)[number];
 
 const browserTz = () => {
   try {
@@ -58,7 +56,7 @@ interface FormState {
   title: string;
   instructorId: string;
   description: string;
-  discipline: Discipline | "";
+  discipline: string;
   daysOfWeek: number[];
   time: string; // "HH:MM"
   durationMinutes: number;
@@ -106,6 +104,7 @@ export function Templates({
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const list = useQuery(trpc.template.list.queryOptions());
+  const disciplines = useQuery(trpc.discipline.list.queryOptions());
   const me = useEntity();
 
   const [form, setForm] = useState<FormState | null>(null);
@@ -175,9 +174,21 @@ export function Templates({
   const editingTemplate = list.data?.find((t) => t.id === openId);
   const shown =
     form ?? (editingTemplate ? formFromTemplate(editingTemplate) : null);
+  const unavailableDiscipline =
+    shown !== null &&
+    shown.discipline !== "" &&
+    disciplines.isSuccess &&
+    !disciplines.data.some(
+      (discipline) => discipline.name === shown.discipline,
+    );
 
   const submit = () => {
     if (!shown) return;
+    if (disciplines.isPending || disciplines.isError) return;
+    if (unavailableDiscipline) {
+      document.getElementById("tpl-discipline")?.focus();
+      return;
+    }
     if (shown.title.trim().length < 1) {
       setTitleError(true);
       document.getElementById("tpl-title")?.focus();
@@ -247,7 +258,7 @@ export function Templates({
                 <span className="text-md font-medium">
                   {t.title}
                   {t.discipline && (
-                    <span className="text-muted-foreground ml-2 text-xs uppercase">
+                    <span className="text-muted-foreground ml-2 text-xs">
                       {t.discipline}
                     </span>
                   )}
@@ -542,24 +553,42 @@ export function Templates({
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <Label htmlFor="tpl-discipline">Discipline</Label>
-                      <Select
-                        className="w-full min-w-0"
-                        id="tpl-discipline"
-                        value={shown.discipline}
-                        onChange={(e) =>
-                          setForm({
-                            ...shown,
-                            discipline: e.target.value as Discipline | "",
-                          })
+                      <DisciplineManager
+                        items={disciplines.data ?? []}
+                        selected={shown.discipline}
+                        canManage={owner}
+                        disabled={disciplines.isPending || disciplines.isError}
+                        unavailable={!!unavailableDiscipline}
+                        onSelect={(name) =>
+                          setForm({ ...shown, discipline: name })
                         }
-                      >
-                        <option value="">None</option>
-                        {DISCIPLINES.map((d) => (
-                          <option key={d} value={d}>
-                            {d.toUpperCase()}
-                          </option>
-                        ))}
-                      </Select>
+                      />
+                      {disciplines.isPending && (
+                        <p
+                          role="status"
+                          className="text-muted-foreground text-xs"
+                        >
+                          Loading disciplines…
+                        </p>
+                      )}
+                      {disciplines.isError && (
+                        <p className="text-error-text text-xs">
+                          Couldn&apos;t load disciplines.{" "}
+                          <button
+                            type="button"
+                            className="underline"
+                            onClick={() => void disciplines.refetch()}
+                          >
+                            Try again
+                          </button>
+                        </p>
+                      )}
+                      {unavailableDiscipline && (
+                        <FieldError id="tpl-discipline-unavailable">
+                          This discipline is no longer available. Choose another
+                          or None.
+                        </FieldError>
+                      )}
                     </div>
                   </div>
                   <div className="flex flex-col gap-1.5">
@@ -587,7 +616,11 @@ export function Templates({
                 <Button type="button" variant="ghost" onClick={closeForm}>
                   Cancel
                 </Button>
-                <Button type="submit" busy={busy}>
+                <Button
+                  type="submit"
+                  busy={busy}
+                  disabled={disciplines.isPending || disciplines.isError}
+                >
                   {openId ? "Save changes" : "Create template"}
                 </Button>
               </div>
@@ -637,7 +670,7 @@ function RebuildSchedule() {
         await queryClient.invalidateQueries(trpc.template.pathFilter());
         await queryClient.invalidateQueries(trpc.booking.pathFilter());
         toast.success(
-          `Rebuilt: ${res.cancelled} cancelled, ${res.created} generated`,
+          `Rebuilt: ${res.cancelled} cancelled, ${res.deleted} removed, ${res.created} generated`,
         );
       },
       onError: (e) =>
@@ -646,6 +679,7 @@ function RebuildSchedule() {
   );
 
   const affected = preview.data?.affected ?? [];
+  const removed = preview.data?.removed ?? [];
   const activeBookings = affected.reduce(
     (sum, item) => sum + item.activeParticipants + item.activeVisitors,
     0,
@@ -662,9 +696,14 @@ function RebuildSchedule() {
     : null;
 
   const damage =
-    affected.length === 0
-      ? "Nothing is stale right now."
-      : `Cancels ${affected.length} upcoming ${affected.length === 1 ? "class" : "classes"}.`;
+    [
+      affected.length > 0 &&
+        `Cancels ${affected.length} upcoming ${affected.length === 1 ? "class" : "classes"}.`,
+      removed.length > 0 &&
+        `Removes ${removed.length} cancelled ${removed.length === 1 ? "class" : "classes"} of deleted templates.`,
+    ]
+      .filter(Boolean)
+      .join(" ") || "Nothing is stale right now.";
 
   return (
     <div className="mt-4 flex flex-col gap-3 border-t pt-6">
@@ -723,7 +762,7 @@ function RebuildSchedule() {
           </Button>
           <ConfirmDialog
             title="Rebuild the schedule?"
-            description={`${damage} Past classes, one-off classes, cancelled classes, participation, and visitor records stay.`}
+            description={`${damage} Past classes, one-off classes, classes you cancelled from active templates, participation, and visitor records stay.`}
             confirmLabel="Rebuild schedule"
             variant="destructive"
             onConfirm={async () => {

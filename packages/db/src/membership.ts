@@ -423,6 +423,7 @@ export interface MemberRow {
   name: string;
   email: string | null;
   phone: string | null;
+  erasureRequestedAt: Date | null;
   createdAt: Date;
 }
 
@@ -445,6 +446,7 @@ export async function listMembersOf(
       name: sql<string>`coalesce(${person.name}, ${user.name})`,
       email: sql<string | null>`coalesce(${person.email}, ${user.email})`,
       phone: sql<string | null>`coalesce(${person.phone}, ${user.phone})`,
+      erasureRequestedAt: entityMembership.erasureRequestedAt,
       createdAt: entityMembership.createdAt,
     })
     .from(entityMembership)

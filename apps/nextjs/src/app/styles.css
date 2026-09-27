@@ -43,6 +43,34 @@
     linear-gradient(to bottom, var(--border) 1px, transparent 1px);
   background-size: 8px 8px;
 }
+/* A 1px gradient border around a solid fill: `edge-lit-raised`, `edge-rim-card`.
+   The fill is set here because the border gradient needs its own background
+   layer, so a separate bg-* utility on the same element would erase it. */
+@utility edge-lit-* {
+  --edge-fill: --value(--color-*);
+  border: 1px solid transparent;
+  background:
+    linear-gradient(var(--edge-fill), var(--edge-fill)) padding-box,
+    var(--edge-lit) border-box;
+}
+@utility edge-rim-* {
+  --edge-fill: --value(--color-*);
+  border: 1px solid transparent;
+  background:
+    linear-gradient(var(--edge-fill), var(--edge-fill)) padding-box,
+    var(--edge-rim) border-box;
+}
+/* A lit left edge that glows in its own color: `glow-edge-discipline-1`. */
+@utility glow-edge-* {
+  --glow: --value(--color-*);
+  box-shadow:
+    var(--shadow-lift),
+    inset 10px 0 8px -6px color-mix(in oklab, var(--glow) 50%, transparent),
+    -12px 0 10px -8px color-mix(in oklab, var(--glow) 40%, transparent);
+}
+@utility bg-meter {
+  background-image: var(--meter-fill);
+}
 @layer base {
   * {
     @apply border-border;

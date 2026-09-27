@@ -8,7 +8,7 @@ not repeated here.
 
 **Where it comes from:** the structure is Linear's, measured from linear.app on
 2026-09-26 and adopted in ADR [141](issues/141-adopt-the-linear-design-system.md).
-The violet and the basketweave mark are matops's own and stay from ADR
+The basketweave mark is matops's own and stays from ADR
 [37](issues/37-brand-identity.md). The older Better Auth look (warm stone,
 Geist, a 0.2rem radius) is gone.
 
@@ -22,12 +22,12 @@ is deleted.
 
 ## 0. Ethos
 
-**Linear's structure, matops's violet: quiet steps of surface and text, 1px
+**Linear's structure, matops's mark: quiet steps of surface and text, 1px
 edges, one accent that marks identity only.**
 
 The structure is: surfaces and text in steps, 1px edges instead of shadows
 between blocks, Inter at a 13px interface size, radius by nesting, and 150ms
-motion. The one identity color is the matops violet, carried by the mark (§6).
+motion. The one identity piece is the black mark with glowing grey seams (§6).
 Meaning (info, warning, error, success) has its own four hues, and the two jobs
 never swap.
 
@@ -67,24 +67,28 @@ is the stronger line (a hover edge, a divider that must read). `--input` is the
 field edge and `--field-hover` its hover. `--control` is the edge of a
 checkbox, radio or switch.
 
-**The violet (`--brand`).** The one non-neutral hue that is not a meaning. It
-appears only where taking it away would cost identity or accessibility.
+**The brand tokens (`--brand`): the mark only (ADR 143).** The interface is
+black, white and grey, and so is the mark: a black tile with light grey seams in
+both themes. The brand tokens paint the mark, the "Ops" in the wordmark and the
+mat loader, and nothing else.
 
-| Token                | Use                                                      |
-| -------------------- | -------------------------------------------------------- |
-| `--brand`            | the mark fill, the focus ring (`--ring`), a checked fill |
-| `--brand-strong`     | the "Ops" in the wordmark                                |
-| `--brand-foreground` | seams and ticks on a violet fill                         |
-| `--brand-wash`       | the 3px halo around a focused field                      |
+| Token                | Use                            |
+| -------------------- | ------------------------------ |
+| `--brand`            | the mark fill, the mat loader  |
+| `--brand-strong`     | the grey "Ops" in the wordmark |
+| `--brand-foreground` | the seams and rim on the mark  |
 
-Violet **may** mark only: the mark and wordmark, the mat loader, keyboard
-focus (the ring, and the edge of a focused field), and the checked state of a
-checkbox, radio or switch. That is the whole list. Violet **never** marks: a
-link (a link is primary text with a muted underline that turns solid on
-hover), a count, the pending tag or strip (neutral), a status, the current
-page or selected item (`--active` with primary text), a chart bar or progress
-bar (neutral or primary), a spinner (muted), drag feedback (primary), or the
-viewer. Text selection uses the browser default.
+Focus is `--ring` (foreground in light, `#b5b6ba` in dark) with the neutral
+`--ring-halo` around a focused field. A checked checkbox, radio or switch fills
+with `--primary`. A link is primary text with a muted underline that turns
+solid on hover. Text selection uses the browser default.
+
+**Lit edges and meters (ADR 143).** Depth comes from light, not hue.
+`edge-lit-<color>` draws a 1px gradient border (bright at the top left) around
+a fill of that color, for controls. `edge-rim-<color>` is the same for raised
+panels. Each sets the whole `background`, so never add a `bg-*` utility to the
+same element. `shadow-key` is the 1px lip under a key cap. `bg-meter` is the
+grey-to-foreground fill of a progress or capacity bar, on a `--track`.
 
 **`--destructive` is a fill, never ink.** In dark it is a maroon chosen so
 light text reads on it, so it belongs on the solid red button only. Red text
@@ -105,12 +109,15 @@ and down is `--warning`, never `--error`, because a quiet week is worth a look,
 not a failure. The arrow is always drawn too, so hue never carries direction
 alone. The number itself stays neutral.
 
-**Discipline hues: a category, not a status (ADR 53).** `--gi` (cool, gi and
-judo) and `--nogi` (warm, no-gi and MMA). They sort classes before the reader
-reads a word, and they split on the blue-yellow axis, which survives red-green
-color blindness. Open mat carries neither. Three weights, one per density: a
-block tint with a left rail on the week grid, a bar fill behind the busiest
-classes list, a dot on the day rail. Utilities: `border-l-gi`, `bg-nogi/[0.08]`.
+**Discipline hues: a category, not a status (ADR 53, 144).**
+`--discipline-1` to `--discipline-5`, five muted hues. The first five names in
+the academy's discipline list get them in order (`disciplineHue`). Every other
+class (no discipline, not in the list, or past the fifth name) uses
+`--discipline-default`: white on dark, a light grey on light, in the same
+weights as a hue. They sort classes before the reader reads a word. Three
+weights, one per density: a block tint with a left rail on the week grid, a
+rail on the phone list, a dot on the day rail. Utilities:
+`border-l-discipline-1`, `bg-discipline-2`, `glow-edge-discipline-3`.
 
 Rule: if a color is not one of the tokens above, do not use it. Reach for a
 text step, a weight or an edge instead. The lint guard (§4) blocks hex classes.
@@ -122,10 +129,9 @@ text step, a weight or an edge instead. The lint guard (§4) blocks hex classes.
   `#c52f2f` passed on white but failed on its own red tint once that tint sat on
   a level 1 to 3 surface (3.94 to 4.37:1). The new value is 4.61:1 or more at
   the 20% hover tint on every light surface.
-- **Dark keeps Linear's own values by choice** (ADR 141 choice 3), and fails on
-  three known points: faint text (placeholders, about 3.2:1 on a raised field),
-  the field edge `--input` on its fill (about 1.2:1), and the control edge
-  `--control` (1.72:1). Linear fails the same way.
+- **Dark uses the lazy.so grey scale** (ADR 143). Faint text passes 3.4:1 on
+  a raised field. It still fails on two known points: the field edge `--input`
+  on its fill (1.37:1) and the control edge `--control` on a card (1.9:1).
 - **If a pilot gym has trouble** reading placeholders or finding a field, the
   fix is two token changes and no screen edits: move placeholders to tertiary
   text, and give field and control edges a value at 3:1.
@@ -167,19 +173,19 @@ Native cannot load weights 510 or 590, so mobile maps to the static Inter 400,
 
 ### 1.3 Radius
 
-`--radius` is 6px. The scale lands on four steps:
+`--radius` is 6px. The scale lands on five steps:
 
-| Class        | Value | Use                                     |
-| ------------ | ----- | --------------------------------------- |
-| `rounded-sm` | 4px   | the icon button, small inner shapes     |
-| `rounded-md` | 6px   | fields, tooltips, a code box            |
-| `rounded-lg` | 8px   | cards, lists (`LIST`), callouts, toasts |
-| `rounded-xl` | 12px  | dialogs, a kiosk frame                  |
+| Class             | Value | Use                                     |
+| ----------------- | ----- | --------------------------------------- |
+| `rounded-sm`      | 4px   | badges, key caps, small inner shapes    |
+| `rounded-control` | 5px   | every button (ADR 143)                  |
+| `rounded-md`      | 6px   | fields, tooltips, a code box            |
+| `rounded-lg`      | 8px   | cards, lists (`LIST`), callouts, toasts |
+| `rounded-xl`      | 12px  | dialogs, a kiosk frame                  |
 
 **Radius by nesting:** an outer frame is rounder than what sits inside it. A
-field (6px) inside a card (8px) inside a dialog (12px). **Buttons and action
-chips are pills** (`rounded-full`). On mobile the same rule runs 12, 8, 6 and
-pills.
+field (6px) inside a card (8px) inside a dialog (12px). **Buttons are 5px, not
+pills** (ADR 143). On mobile the same rule runs 12, 8 and 6.
 
 ### 1.4 Shadow and surface separation
 
@@ -195,32 +201,39 @@ lift, `shadow-lg` to `shadow-2xl` are the float. `shadow-lift` and
 `shadow-float` also exist as utilities. So an old `shadow-sm` never draws a
 third kind of shadow.
 
-**Between blocks, use an edge, not a shadow.** A card or list sits on the page
-with a 1px `--border`. The edge draws the shape, not the fill: in dark,
-`--card` (`#0e0f10`) sits within 2% of the page (`#08090a`), as Linear's panels
-do (`#0c0d0e` to `#101112`, sampled 2026-09-26). Only what nests inside a card
-steps up in brightness: a field or dialog (`--raised`), a code box
-(`--surface-2`), a hover fill. Do not paint a card with `--raised` or
-`--surface-2` to make it stand out. Rows inside a list are split by the same
-line. A dialog is the one surface that drops its edge and uses the
-float shadow instead.
+**Cards by level (ADR 143), from `cardClass()` in `@matops/ui/card`:**
+
+- **Flat**, most content: `--card` (`#131416` in dark) on the page
+  (`#0a0a0b`), with no edge in dark and a 1px `--card-edge` in light. The fill
+  step draws the shape, not a line.
+- **Raised**, what sits above the page (a dialog, a menu, a panel that must
+  stand out): `edge-rim-raised` or `edge-rim-floating` (a gradient border, bright
+  at the top left) and the float shadow.
+- **Selected**, the chosen one of a set: a `--foreground-secondary` edge. A flat
+  card keeps a transparent border, so switching levels never moves the layout.
+
+Rows inside a list are still split by a 1px `--border`. Only what nests inside
+a card steps up in brightness: a field (`--raised`), a code box
+(`--surface-2`), a hover fill. The app's own `cardClass` in
+`_components/primitives.tsx` still draws the ADR 141 edge until Phase 3 of ADR
+143 moves the screens over.
 
 ### 1.5 Button weight
 
 Seven variants, props and names unchanged since before ADR 141:
 
-| Variant               | Look                         | Where                                            |
-| --------------------- | ---------------------------- | ------------------------------------------------ |
-| `primary`             | inverted fill, lift shadow   | once per screen: a form submit, a dialog confirm |
-| `secondary`           | quiet fill, thin edge        | the affirmative row action                       |
-| `outline`             | thin edge, no fill           | the neutral row action                           |
-| `ghost`               | tertiary text until hover    | toolbar and icon actions                         |
-| `link`                | primary text, underlined     | an inline link that is a button                  |
-| `destructive`         | solid red fill               | the confirm inside a destructive dialog          |
-| `destructive-outline` | red tint with `--error-text` | the trigger that opens that dialog               |
+| Variant               | Look                          | Where                                            |
+| --------------------- | ----------------------------- | ------------------------------------------------ |
+| `primary`             | inverted fill, lift shadow    | once per screen: a form submit, a dialog confirm |
+| `secondary`           | quiet fill, lit gradient edge | the affirmative row action                       |
+| `outline`             | strong edge, no fill          | the neutral row action                           |
+| `ghost`               | tertiary text until hover     | toolbar and icon actions                         |
+| `link`                | primary text, underlined      | an inline link that is a button                  |
+| `destructive`         | solid red fill                | the confirm inside a destructive dialog          |
+| `destructive-outline` | red tint with `--error-text`  | the trigger that opens that dialog               |
 
-Sizes: `default` 32px, `sm` 24px, `lg` 40px, `icon` 32px square with a 4px
-radius. Every size keeps a **44px touch floor below `sm`**, so do not add one by
+Sizes: `default` 32px, `sm` 24px, `lg` 40px, `icon` 32px square. All are 5px
+(`rounded-control`). Every size keeps a **44px touch floor below `sm`**, so do not add one by
 hand. Where a Radix part owns the element, use `buttonClass()` from
 `@matops/ui/button`.
 
@@ -296,23 +309,30 @@ carries meaning.
 
 **Shared parts in `packages/ui/src`:**
 
-| Part                          | Use                                                                                                                      |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `Button`                      | §1.5                                                                                                                     |
-| `Input`, `Textarea`, `Select` | one `FIELD` class: 32px, 6px radius, raised fill, `--input` edge. Focus is a violet edge with a 3px `--brand-wash` halo. |
-| `Checkbox`                    | a choice that waits for Save                                                                                             |
-| `Badge`                       | a status or tag. Tones: neutral, info, success, warning, error. No violet tone                                           |
-| `Callout`                     | a notice in the flow. Tones: neutral, info, success, warning, error. Info is blue, never violet.                         |
-| `Separator`                   | a divider between sections                                                                                               |
-| `Dialog`, `AlertDialog`       | raised surface, 12px radius, float shadow, no edge, over `--backdrop`                                                    |
-| `DropdownMenu`, `toast`       | floating surface; menu items 32px on desktop, 44px on touch                                                              |
-| `Logo`, `Mark`                | §6                                                                                                                       |
+| Part                          | Use                                                                                                                                                                    |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Button`                      | §1.5                                                                                                                                                                   |
+| `Input`, `Textarea`, `Select` | one `FIELD` class: 32px, 6px radius, raised fill, `--input` edge. Focus is a `--ring` edge with a 3px `--ring-halo`.                                                   |
+| `Checkbox`                    | a choice that waits for Save                                                                                                                                           |
+| `Badge`                       | a status or tag, 4px radius. Tones: neutral (on `--surface-2`), info, success, warning, error. No violet tone                                                          |
+| `Callout`                     | a notice in the flow. Tones: neutral, info, success, warning, error. Info is blue, never violet.                                                                       |
+| `Separator`                   | a divider between sections                                                                                                                                             |
+| `Dialog`, `AlertDialog`       | `edge-rim-raised`, 12px radius, float shadow, over `--backdrop`                                                                                                        |
+| `DropdownMenu`                | `edge-rim-floating`; menu items 32px on desktop, 44px on touch                                                                                                         |
+| `toast`                       | floating surface, float shadow                                                                                                                                         |
+| `cardClass`                   | `@matops/ui/card`: flat, raised or selected (§1.4); `interactive` adds a hover fill                                                                                    |
+| `Meter`                       | a 4px bar on `--track`: one `value` or `segments`, `bg-meter` fill or a status tone, `role="meter"`, capped at `max`; `glow` puts a white light on the tip (dark only) |
+| `Kbd`                         | a key cap: `--surface-2`, strong edge, `shadow-key` lip, `text-2xs`                                                                                                    |
+| `Logo`, `Mark`                | §6                                                                                                                                                                     |
 
-Class-roster dialogs opened from Schedule, Dashboard and Attendance keep a
-bounded 42rem / 85dvh frame while their query settles. The heading stays in
-place; only the roster scrolls. Its loading rows mirror the divided roster
-instead of swapping a stack of cards into a list. Smaller form and information
-dialogs still size to their content.
+Class-roster dialogs opened from Schedule, Dashboard and Attendance size to
+their content up to 85dvh (`ROSTER_DIALOG` in `class-roster.tsx`). Their top
+edge is pinned at 8dvh instead of centred, so the heading never moves while the
+roster loads; only the bottom edge can. The coach row renders before the query
+settles, and the skeleton draws the review notice, the tally and one row per
+booking (the caller passes `expectedRows`), so the loaded roster lands at about
+the same height. The dialog takes focus on open, not its first control. Inside,
+only the roster scrolls, and the tally stays pinned above the list.
 
 **App primitives in `apps/nextjs/src/app/_components/primitives.tsx`:**
 
@@ -353,7 +373,7 @@ size (`vector-effect: non-scaling-stroke`). It sits in the base layer, so a
 dev-client rebuild nobody can check here.
 
 **Focus.** One recipe, `FOCUS_RING` in `@matops/ui/motion`: a 2px `--ring` at a
-2px offset. `--ring` is the violet. Use `FOCUS_RING_INSET` where the control is
+2px offset. `--ring` is neutral (ADR 143). Use `FOCUS_RING_INSET` where the control is
 flush to an edge. Never a partial-opacity ring.
 
 **The lint guard.** `designTokensConfig` in `tooling/eslint/react.ts` runs on
@@ -404,14 +424,18 @@ One vocabulary, no library (ADR 131).
 ## 6. Logo
 
 **Mark = the basketweave mat bond.** A rounded tile (`rx` 7 on a 32 viewBox)
-filled `--brand`, with basketweave seams (the woven plank pairs real mats are
-laid in) in `--brand-foreground` at 85%, each seam running edge to edge. Seam
-path: `M16 0V32 M0 16H32 M8.5 0V16 M16 8.5H32 M0 23.5H16 M23.5 16V32`.
+filled `--brand` (black), with basketweave seams (the woven plank pairs real
+mats are laid in) in `--brand-foreground` (light grey) at 92%, 1.1 wide, each
+seam running edge to edge. A slight bloom sits under the seams: the same path
+at 50%, blurred with `stdDeviation` 1. A 1px rim at 30% lets the black tile
+read on the dark page (`non-scaling-stroke`, so it stays 1px at any size). Seam path:
+`M16 0V32 M0 16H32 M8.5 0V16 M16 8.5H32 M0 23.5H16 M23.5 16V32`.
 
 Built once, shared: **`@matops/ui/logo`**, `Mark` (tile) and `Logo` (mark plus
 wordmark); web is inline SVG, mobile is positioned Views in `apps/expo/src/components/ui.tsx` (no
 `react-native-svg`). The wordmark is "MatOps" in Inter semibold at `text-lg`,
-with "Ops" in `--brand-strong`. ADR 141 did not change the mark or the violet.
+with "Ops" in the `--brand-strong` grey. Mobile draws the bloom as an iOS
+shadow on each seam (Android shows no glow).
 
 **The mark in motion is the loader.** The six seams draw on with
 `stroke-dashoffset`, 90ms apart, the two long centre seams first, then the four

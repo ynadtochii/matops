@@ -20,6 +20,7 @@ import { Badge } from "@matops/ui/badge";
 import { Button } from "@matops/ui/button";
 import { Checkbox } from "@matops/ui/checkbox";
 import { Input } from "@matops/ui/input";
+import { Meter } from "@matops/ui/meter";
 import { FOCUS_RING } from "@matops/ui/motion";
 import { Separator } from "@matops/ui/separator";
 import { toast } from "@matops/ui/toast";
@@ -77,60 +78,17 @@ function MarkDot({
   );
 }
 
-/**
- * How far through the class the marking is. The rule is stacked, so its two
- * segments carry the present/absent split as well as the progress; the figures
- * beside it are the readable copy of the same fact.
- */
-function MarkRule({
-  present,
-  absent,
-  total,
-}: {
-  present: number;
-  absent: number;
-  total: number;
-}) {
-  if (total === 0) return null;
-  const share = (n: number) => n / total;
-  // Both segments are the full width of the rule and are scaled down to their
-  // share, so the growth is a transform rather than a width: a width animation
-  // relays out the row on every marked student.
-  const bar = "absolute inset-y-0 left-0 w-full origin-left";
-  const move =
-    "transition-transform duration-300 motion-reduce:transition-none";
-  return (
-    <div
-      role="progressbar"
-      aria-valuemin={0}
-      aria-valuemax={total}
-      aria-valuenow={present + absent}
-      aria-label={`${present + absent} of ${total} marked`}
-      className="bg-track relative h-0.5 w-full overflow-hidden rounded-full"
-    >
-      <span
-        className={cn(bar, move, "bg-success")}
-        style={{ transform: `scaleX(${share(present)})` }}
-      />
-      <span
-        className={cn(bar, move, "bg-error")}
-        style={{
-          transform: `translateX(${share(present) * 100}%) scaleX(${share(absent)})`,
-        }}
-      />
-    </div>
-  );
-}
-
 function segmentClass(kind: Mark, selected: boolean) {
   return cn(
-    "inline-flex min-h-10 min-w-11 items-center justify-center rounded-sm px-2.5 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none sm:min-h-8 sm:min-w-0",
+    "inline-flex min-h-10 min-w-11 items-center justify-center gap-1.5 rounded-sm px-2.5 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none sm:min-h-7 sm:min-w-0",
     "outline-none",
     FOCUS_RING,
     selected
       ? cn(
           "text-foreground font-medium",
-          kind === "present" ? "bg-success/15" : "bg-error/15",
+          kind === "present"
+            ? "bg-success/15 [&>svg]:text-success"
+            : "bg-error/15 [&>svg]:text-error",
         )
       : "text-muted-foreground hover:bg-hover hover:text-foreground",
   );
@@ -154,6 +112,20 @@ function markTone(present: boolean, absent: boolean): BadgeTone {
 }
 
 /**
+ * The frame for a roster dialog. It sizes to its content, and its top edge is
+ * pinned rather than centred, so the header stays still while the list loads
+ * and only the bottom edge moves. Radix would focus the first control and light
+ * its ring before anyone pressed a key, so the dialog takes focus instead.
+ */
+export const ROSTER_DIALOG = {
+  className: "top-[8dvh] translate-y-0 overflow-hidden outline-none",
+  onOpenAutoFocus: (event: Event) => {
+    event.preventDefault();
+    (event.currentTarget as HTMLElement).focus();
+  },
+};
+
+/**
  * Everyone on one class (spec O5): booked + walk-ins with their marks, the
  * summary counts, mark present/absent, mark-all-present, and the walk-in
  * picker. Used by the O5 Attendance screen and by the O2 schedule's class
@@ -161,10 +133,16 @@ function markTone(present: boolean, absent: boolean): BadgeTone {
  * or older than the 14-day backfill) it degrades to a read-only attendee list,
  * because the server refuses to mark there anyway.
  *
- * The list owns its own scroll: the tally and Mark all present stay in place
- * while a long roster moves under them, which is the whole job on the mat.
+ * The tally and Mark all present stay pinned while a long roster scrolls under
+ * them, which is the whole job on the mat.
  */
-export function ClassRoster({ cls }: { cls: ClassRow }) {
+export function ClassRoster({
+  cls,
+  expectedRows,
+}: {
+  cls: ClassRow;
+  expectedRows: number;
+}) {
   const trpc = useTRPC();
   const academy = useEntity();
   const queryClient = useQueryClient();
@@ -336,27 +314,61 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
     }),
   );
 
+  const ended =
+    classEndsAt({
+      startsAt: new Date(cls.startsAt),
+      durationMinutes: cls.durationMinutes,
+    }) <= now.getTime();
+  const showsReview = ended && cls.status !== "cancelled" && !cls.deletedAt;
+
+  const details = (
+    <div className="flex flex-col gap-1.5">
+      <CoachSelect
+        classId={classId}
+        startsAt={cls.startsAt}
+        instructorId={cls.instructorId ?? ""}
+        instructorName={cls.instructorName}
+      />
+      {cls.description && (
+        <p className="text-muted-foreground text-sm">{cls.description}</p>
+      )}
+    </div>
+  );
+
+  // Drawn to the loaded roster's shape and row count, so a dialog that sizes
+  // to its content does not jump when the list arrives.
   if (classList.isPending)
     return (
-      <div
-        role="status"
-        aria-label="Loading class list"
-        className="flex flex-col gap-4"
-      >
-        <div aria-hidden className="flex flex-col gap-3">
-          <Bar className="h-4 w-36" />
-          <Bar className="h-4 w-56" />
-        </div>
-        <div aria-hidden className="flex flex-col gap-2">
-          <Bar className="h-3 w-44" />
-          <div className={ROSTER_LIST}>
-            {Array.from({ length: 3 }, (_, i) => (
-              <div key={i} className={ROSTER_ROW}>
-                <Bar className="size-3 shrink-0 rounded-full" />
-                <Bar className="h-4 w-2/3" />
-              </div>
-            ))}
+      <div className="flex flex-col gap-4">
+        {details}
+        <div
+          role="status"
+          aria-label="Loading class list"
+          className="flex flex-col gap-4"
+        >
+          {showsReview && (
+            <Bar
+              className={cn("rounded-lg", reasonRequired ? "h-41" : "h-18")}
+            />
+          )}
+          <div aria-hidden className="-mb-2 flex flex-col gap-2 pb-2">
+            <div className="flex min-h-8 items-center">
+              <Bar className="h-3 w-44" />
+            </div>
+            {canMark && expectedRows > 0 && <Bar className="h-0.5" />}
           </div>
+          {expectedRows === 0 ? (
+            <Bar className="h-22 rounded-lg" />
+          ) : (
+            <div aria-hidden className={ROSTER_LIST}>
+              {Array.from({ length: Math.min(expectedRows, 12) }, (_, i) => (
+                <div key={i} className={ROSTER_ROW}>
+                  <Bar className="h-4 w-1/3" />
+                </div>
+              ))}
+            </div>
+          )}
+          {canMark && <Bar className="h-12.75 rounded-lg" />}
         </div>
       </div>
     );
@@ -384,11 +396,6 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
     : walkInCandidates;
   const counts = classList.data.counts;
   const review = classList.data.review;
-  const ended =
-    classEndsAt({
-      startsAt: new Date(cls.startsAt),
-      durationMinutes: cls.durationMinutes,
-    }) <= now.getTime();
   const saving =
     mark.isPending ||
     markAll.isPending ||
@@ -407,24 +414,60 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
 
   return (
     <div className="flex flex-col gap-4">
-      {ended && cls.status !== "cancelled" && !cls.deletedAt && (
-        <div className="border-border bg-surface-1 flex flex-col gap-3 rounded-lg border p-3">
-          <p role="status" className="text-sm font-medium">
-            {review.reviewed
-              ? review.present === 0
-                ? "Nobody attended, confirmed"
-                : "Attendance reviewed"
-              : "Attendance needs review"}
-          </p>
-          <p className="text-muted-foreground text-sm">
-            {review.reviewed && review.reviewedAt
-              ? `Reviewed by ${review.reviewer?.name ?? "Unknown reviewer"} on ${new Date(review.reviewedAt).toLocaleString()}. Changing the roster requires another review.`
-              : review.unmarked > 0
-                ? `Mark the remaining ${review.unmarked} ${review.unmarked === 1 ? "person" : "people"} present or absent, including visitors.`
-                : review.total === 0
-                  ? "No people are listed. Add anyone who attended, or confirm that nobody attended."
-                  : "Check the member and visitor marks, then finish attendance."}
-          </p>
+      {details}
+      {showsReview && (
+        <div className="border-border bg-card flex flex-col gap-3 rounded-lg border p-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <p
+                role="status"
+                className="flex items-center gap-2 text-sm font-medium"
+              >
+                <span
+                  aria-hidden
+                  className={cn(
+                    "size-1.5 shrink-0 rounded-full",
+                    review.reviewed ? "bg-success" : "bg-warning",
+                  )}
+                />
+                {review.reviewed
+                  ? review.present === 0
+                    ? "Nobody attended, confirmed"
+                    : "Attendance reviewed"
+                  : "Attendance needs review"}
+              </p>
+              <p className="text-muted-foreground pl-3.5 text-xs">
+                {review.reviewed && review.reviewedAt
+                  ? `Reviewed by ${review.reviewer?.name ?? "Unknown reviewer"} on ${new Date(review.reviewedAt).toLocaleString()}. Changing the roster requires another review.`
+                  : review.unmarked > 0
+                    ? `Mark the remaining ${review.unmarked} ${review.unmarked === 1 ? "person" : "people"} present or absent, including visitors.`
+                    : review.total === 0
+                      ? "No people are listed. Add anyone who attended, or confirm that nobody attended."
+                      : "Check the member and visitor marks, then finish attendance."}
+              </p>
+            </div>
+            {!review.reviewed && canMark && (
+              <Button
+                size="sm"
+                className="shrink-0 self-start sm:self-center"
+                busy={finish.isPending}
+                disabled={saving || !correctionReady}
+                onClick={() =>
+                  finish.mutate({
+                    id: classId,
+                    fingerprint: review.fingerprint,
+                    nobodyAttended:
+                      review.present === 0 && review.unmarked === 0,
+                    reason: reasonRequired ? reason : undefined,
+                  })
+                }
+              >
+                {review.present === 0 && review.unmarked === 0
+                  ? "Nobody attended"
+                  : "Finish attendance"}
+              </Button>
+            )}
+          </div>
           {reasonRequired && (
             <div className="flex flex-col gap-1.5">
               <label
@@ -445,25 +488,6 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
                 change history.
               </p>
             </div>
-          )}
-          {!review.reviewed && canMark && (
-            <Button
-              className="self-start"
-              busy={finish.isPending}
-              disabled={saving || !correctionReady}
-              onClick={() =>
-                finish.mutate({
-                  id: classId,
-                  fingerprint: review.fingerprint,
-                  nobodyAttended: review.present === 0 && review.unmarked === 0,
-                  reason: reasonRequired ? reason : undefined,
-                })
-              }
-            >
-              {review.present === 0 && review.unmarked === 0
-                ? "Nobody attended"
-                : "Finish attendance"}
-            </Button>
           )}
           {!review.reviewed && !canMark && (
             <p className="text-muted-foreground text-sm">
@@ -503,20 +527,8 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
           </ul>
         </details>
       )}
-      <div className="flex flex-col gap-3">
-        <CoachSelect
-          classId={classId}
-          startsAt={cls.startsAt}
-          instructorId={cls.instructorId ?? ""}
-          instructorName={cls.instructorName}
-        />
-        {cls.description && (
-          <p className="text-muted-foreground text-sm">{cls.description}</p>
-        )}
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+      <div className="bg-raised sticky top-0 z-10 -mb-2 flex flex-col gap-2 pb-2">
+        <div className="flex min-h-8 flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <p className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-xs tabular-nums">
             {canMark || ended ? (
               <>
@@ -565,11 +577,17 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
             </Button>
           )}
         </div>
-        {canMark && (
-          <MarkRule
-            present={review.present}
-            absent={review.absent}
-            total={review.total}
+        {canMark && review.total > 0 && (
+          <Meter
+            role="progressbar"
+            max={review.total}
+            label={`${review.present + review.absent} of ${review.total} marked`}
+            segments={[
+              { value: review.present, tone: "success" },
+              { value: review.absent, tone: "error" },
+            ]}
+            glow
+            className="h-0.5"
           />
         )}
       </div>
@@ -581,19 +599,13 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
             : "This class has no member attendance records."}
         </EmptyState>
       ) : (
-        <ul className={ROSTER_LIST}>
+        <ul className={cn(ROSTER_LIST, "max-h-none overflow-visible")}>
           {rows.map((r) => {
             const present = r.attendanceStatus === "present";
             const absent = r.attendanceStatus === "absent";
             const name = r.name ?? "Member";
             return (
               <li key={r.studentId} className={ROSTER_ROW}>
-                {(canMark || ended) && (
-                  <MarkDot
-                    kind={absent ? "absent" : "present"}
-                    filled={present || absent}
-                  />
-                )}
                 <span className="min-w-0 flex-1 truncate text-sm" title={name}>
                   {name}
                 </span>
@@ -630,7 +642,7 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
                   <div
                     role="group"
                     aria-label={`Attendance for ${name}`}
-                    className="border-border bg-muted flex shrink-0 gap-0.5 rounded-md border p-0.5"
+                    className="border-border flex shrink-0 gap-0.5 rounded-md border p-0.5"
                   >
                     <button
                       type="button"
@@ -647,7 +659,7 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
                         })
                       }
                     >
-                      <Check aria-hidden className="size-3.5 sm:hidden" />
+                      <Check aria-hidden className="size-3.5" />
                       <span className="hidden sm:inline">Present</span>
                     </button>
                     <button
@@ -665,7 +677,7 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
                         })
                       }
                     >
-                      <X aria-hidden className="size-3.5 sm:hidden" />
+                      <X aria-hidden className="size-3.5" />
                       <span className="hidden sm:inline">Absent</span>
                     </button>
                   </div>
@@ -679,19 +691,13 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
       {dropIns.length > 0 && (
         <div className="flex flex-col gap-2">
           <Eyebrow>Drop-ins</Eyebrow>
-          <ul className={ROSTER_LIST}>
+          <ul className={cn(ROSTER_LIST, "max-h-none overflow-visible")}>
             {dropIns.map((d) => {
               const present = d.attendanceStatus === "present";
               const absent = d.attendanceStatus === "absent";
               const name = `${d.firstName} ${d.lastName}`.trim();
               return (
                 <li key={d.id} className={ROSTER_ROW}>
-                  {(canMark || ended) && (
-                    <MarkDot
-                      kind={absent ? "absent" : "present"}
-                      filled={present || absent}
-                    />
-                  )}
                   <span className="min-w-0 flex-1 truncate text-sm">
                     {name}
                   </span>
@@ -710,7 +716,7 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
                     <div
                       role="group"
                       aria-label={`Attendance for ${name}`}
-                      className="border-border bg-muted flex shrink-0 gap-0.5 rounded-md border p-0.5"
+                      className="border-border flex shrink-0 gap-0.5 rounded-md border p-0.5"
                     >
                       <button
                         type="button"
@@ -729,7 +735,7 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
                           })
                         }
                       >
-                        <Check aria-hidden className="size-3.5 sm:hidden" />
+                        <Check aria-hidden className="size-3.5" />
                         <span className="hidden sm:inline">Present</span>
                       </button>
                       <button
@@ -747,7 +753,7 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
                           })
                         }
                       >
-                        <X aria-hidden className="size-3.5 sm:hidden" />
+                        <X aria-hidden className="size-3.5" />
                         <span className="hidden sm:inline">Absent</span>
                       </button>
                     </div>

@@ -11,17 +11,16 @@ import {
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 
 import type { RouterOutputs } from "@matops/api";
-import type { DisciplineTone } from "@matops/domain";
 import {
   calendarWeekStart,
   capacityDisplay,
-  disciplineTone,
   GRID_WEEK_STARTS_ON,
   groupByDay,
   scheduleWeekWindow,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
+import { Badge } from "@matops/ui/badge";
 import { Button } from "@matops/ui/button";
 import {
   Dialog,
@@ -46,26 +45,17 @@ import {
 } from "~/lib/format";
 import { optimistic, rollback } from "~/lib/optimistic";
 import { useTRPC } from "~/trpc/react";
-import { ClassRoster } from "./class-roster";
+import { ClassRoster, ROSTER_DIALOG } from "./class-roster";
 import { InstructorOptions } from "./coach-select";
 import { useEntity } from "./entity";
-import { LIST, RESOLVE, Section } from "./primitives";
+import { disciplineDot, LIST, RESOLVE, Section } from "./primitives";
 import { SchedulePoster } from "./schedule-poster";
 import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
+import { useDisciplineHue } from "./use-discipline-hue";
 import { WeekGrid } from "./week-grid";
 
 type ClassRow = RouterOutputs["class"]["week"][number];
-
-const DISCIPLINES = ["bjj", "nogi", "judo", "mma", "other"] as const;
-type Discipline = (typeof DISCIPLINES)[number];
-
-/** The mobile list's discipline rail. The desktop grid paints its own map. */
-const TONE_RAIL: Record<DisciplineTone, string> = {
-  gi: "bg-gi",
-  nogi: "bg-nogi",
-  other: "bg-border",
-};
 
 const browserTz = () => {
   try {
@@ -81,7 +71,7 @@ const weekStart = (offset: number) =>
 interface OneOffForm {
   title: string;
   instructorId: string;
-  discipline: Discipline | "";
+  discipline: string;
   date: string; // YYYY-MM-DD
   time: string; // HH:MM
   durationMinutes: number;
@@ -133,7 +123,14 @@ export function Schedule({
   );
   const stale = week.isPlaceholderData;
   const templates = useQuery(trpc.template.list.queryOptions());
+  const disciplines = useQuery(trpc.discipline.list.queryOptions());
+  const { hueOf } = useDisciplineHue();
   const me = useEntity();
+  const unavailableDiscipline =
+    form !== null &&
+    form.discipline !== "" &&
+    disciplines.isSuccess &&
+    !disciplines.data.some((discipline) => discipline.name === form.discipline);
   const invalidate = () =>
     queryClient.invalidateQueries(trpc.class.week.pathFilter());
   const onError = (err: { message: string }) =>
@@ -192,6 +189,11 @@ export function Schedule({
 
   const submitOneOff = () => {
     if (!form) return;
+    if (disciplines.isPending || disciplines.isError) return;
+    if (unavailableDiscipline) {
+      document.getElementById("cl-discipline")?.focus();
+      return;
+    }
     if (form.title.trim().length < 1) {
       setTitleError(true);
       document.getElementById("cl-title")?.focus();
@@ -243,33 +245,58 @@ export function Schedule({
       open={detail !== undefined}
       onOpenChange={(next) => !next && setDetailId(null)}
     >
-      <DialogContent className="h-[min(42rem,85dvh)] overflow-hidden">
+      <DialogContent {...ROSTER_DIALOG}>
         {detail && (
           <>
-            <DialogTitle>{detail.title}</DialogTitle>
-            <DialogDescription>
-              {dayShortFmt.format(new Date(detail.startsAt))} ·{" "}
-              {timeFmt.format(new Date(detail.startsAt))} ·{" "}
-              {detail.durationMinutes} min
-              {detail.discipline && ` · ${detail.discipline.toUpperCase()}`}
-              {detail.status === "cancelled" && " · cancelled"}
-            </DialogDescription>
-            {detailTemplate && onOpenTemplate && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="self-start"
-                onClick={() => {
-                  setDetailId(null);
-                  onOpenTemplate(detailTemplate.id);
-                }}
-              >
-                Open template · {detailTemplate.title}
-              </Button>
-            )}
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 pr-10">
+                <DialogTitle className="pr-0">{detail.title}</DialogTitle>
+                {detail.discipline && (
+                  <span className="text-muted-foreground flex items-center gap-1.5 text-xs">
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "size-2 rounded-full",
+                        disciplineDot(hueOf(detail.discipline)),
+                      )}
+                    />
+                    {detail.discipline}
+                  </span>
+                )}
+                {detail.status === "cancelled" && (
+                  <Badge tone="error">cancelled</Badge>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                <DialogDescription className="tabular-nums">
+                  {dayShortFmt.format(new Date(detail.startsAt))},{" "}
+                  {timeFmt.format(new Date(detail.startsAt))} for{" "}
+                  {detail.durationMinutes} min
+                </DialogDescription>
+                {detailTemplate && onOpenTemplate && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="-mr-2"
+                    onClick={() => {
+                      setDetailId(null);
+                      onOpenTemplate(detailTemplate.id);
+                    }}
+                  >
+                    {detailTemplate.title === detail.title
+                      ? "Open template"
+                      : `Open template: ${detailTemplate.title}`}
+                  </Button>
+                )}
+              </div>
+            </div>
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
-              <ClassRoster key={detail.id} cls={detail} />
+              <ClassRoster
+                key={detail.id}
+                cls={detail}
+                expectedRows={detail.bookingCount}
+              />
             </div>
           </>
         )}
@@ -431,20 +458,55 @@ export function Schedule({
                   <Select
                     id="cl-discipline"
                     value={form.discipline}
+                    disabled={disciplines.isPending || disciplines.isError}
+                    aria-invalid={unavailableDiscipline}
+                    aria-describedby={
+                      unavailableDiscipline
+                        ? "cl-discipline-unavailable"
+                        : undefined
+                    }
                     onChange={(e) =>
                       setForm({
                         ...form,
-                        discipline: e.target.value as Discipline | "",
+                        discipline: e.target.value,
                       })
                     }
                   >
                     <option value="">None</option>
-                    {DISCIPLINES.map((d) => (
-                      <option key={d} value={d}>
-                        {d.toUpperCase()}
+                    {unavailableDiscipline && (
+                      <option value={form.discipline} disabled>
+                        {form.discipline} (no longer available)
+                      </option>
+                    )}
+                    {disciplines.data?.map((discipline) => (
+                      <option key={discipline.id} value={discipline.name}>
+                        {discipline.name}
                       </option>
                     ))}
                   </Select>
+                  {disciplines.isPending && (
+                    <p role="status" className="text-muted-foreground text-xs">
+                      Loading disciplines…
+                    </p>
+                  )}
+                  {disciplines.isError && (
+                    <p className="text-error-text text-xs">
+                      Couldn&apos;t load disciplines.{" "}
+                      <button
+                        type="button"
+                        className="underline"
+                        onClick={() => void disciplines.refetch()}
+                      >
+                        Try again
+                      </button>
+                    </p>
+                  )}
+                  {unavailableDiscipline && (
+                    <FieldError id="cl-discipline-unavailable">
+                      This discipline is no longer available. Choose another or
+                      None.
+                    </FieldError>
+                  )}
                 </div>
               </div>
               <div className="flex flex-col gap-1.5">
@@ -459,7 +521,11 @@ export function Schedule({
                 />
               </div>
               <div className="flex gap-2">
-                <Button type="submit" busy={create.isPending}>
+                <Button
+                  type="submit"
+                  busy={create.isPending}
+                  disabled={disciplines.isPending || disciplines.isError}
+                >
                   Add class
                 </Button>
                 <Button
@@ -533,7 +599,7 @@ export function Schedule({
                       c.bookingCount,
                       c.capacity,
                     ).isOver;
-                    const tone = disciplineTone(c.discipline);
+                    const hue = hueOf(c.discipline);
                     const { clock, period } = clockParts(new Date(c.startsAt));
                     return (
                       <li
@@ -547,7 +613,7 @@ export function Schedule({
                           aria-hidden
                           className={cn(
                             "w-[3px] shrink-0",
-                            cancelled ? "bg-error/40" : TONE_RAIL[tone],
+                            cancelled ? "bg-error/40" : disciplineDot(hue),
                           )}
                         />
                         <button
@@ -589,11 +655,7 @@ export function Schedule({
                                   cancelled
                                 </span>
                               )}
-                              {c.discipline && (
-                                <span className="uppercase">
-                                  {c.discipline}
-                                </span>
-                              )}
+                              {c.discipline && <span>{c.discipline}</span>}
                               <span>
                                 {c.bookingCount}/{c.capacity} booked
                               </span>

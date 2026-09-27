@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight } from "lucide-react";
+import { CalendarCheck, CalendarDays, Flame } from "lucide-react";
 
 import {
   compareRank,
@@ -21,6 +21,7 @@ import { Badge } from "@matops/ui/badge";
 import { Button } from "@matops/ui/button";
 import { CopyButton } from "@matops/ui/copy-button";
 import { Input } from "@matops/ui/input";
+import { Kbd } from "@matops/ui/kbd";
 import { FOCUS_RING } from "@matops/ui/motion";
 import { Select } from "@matops/ui/select";
 import { Textarea } from "@matops/ui/textarea";
@@ -30,7 +31,7 @@ import type { Member, MemberHistory } from "./members";
 import { dateFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { useEntity, useOrganization } from "./entity";
-import { DriftBadge, LIST, RESOLVE, Stat, TAP } from "./primitives";
+import { DriftBadge, LIST, RESOLVE, TAP } from "./primitives";
 import { SkeletonLines, SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 import { Tabs } from "./tabs";
@@ -49,6 +50,23 @@ const MEMBERSHIP_TAG: Record<string, string> = {
   suspended: "suspended",
 };
 
+export function Initials({ name }: { name: string }) {
+  const letters = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+  return (
+    <span
+      aria-hidden
+      className="edge-lit-surface-2 text-foreground-secondary text-2xs flex size-8 shrink-0 items-center justify-center rounded-full font-semibold"
+    >
+      {letters || "?"}
+    </span>
+  );
+}
+
 export function MemberRow({
   m,
   label,
@@ -57,7 +75,7 @@ export function MemberRow({
   onToggle,
 }: {
   m: Member;
-  label: string;
+  label?: string;
   children: React.ReactNode;
   /** When present, the name becomes a toggle for the detail panel (C.2). */
   open?: boolean;
@@ -65,62 +83,78 @@ export function MemberRow({
 }) {
   const name = (
     <>
-      <span className="text-foreground flex flex-wrap items-center gap-x-2 gap-y-1 font-medium">
-        {m.name}
-        {m.status === "suspended" && <Badge>suspended</Badge>}
-        {!isStaffRole(m) && m.membership && m.membership.verdict !== "ok" && (
-          <Badge tone="error">{MEMBERSHIP_TAG[m.membership.verdict]}</Badge>
+      <Initials name={m.name} />
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="text-foreground truncate font-medium">{m.name}</span>
+          {m.status === "suspended" && <Badge>suspended</Badge>}
+          {!isStaffRole(m) && m.membership && m.membership.verdict !== "ok" && (
+            <Badge tone="error">{MEMBERSHIP_TAG[m.membership.verdict]}</Badge>
+          )}
+        </span>
+        <span className="text-muted-foreground flex min-w-0 flex-wrap gap-x-3 text-sm">
+          {label && <span className="text-foreground-secondary">{label}</span>}
+          <span className="truncate">{m.email}</span>
+          {m.phone && <span className="tabular-nums">{m.phone}</span>}
+        </span>
+        {/* Why they are on THIS branch's roster. Somebody whose plan covers the
+            gym is a member of the gym, not a visitor (ADR 126). */}
+        {isStaffRole(m) && m.status === "active" && (
+          <span className="text-muted-foreground text-sm">
+            Staff access. No membership required
+          </span>
+        )}
+        {!isStaffRole(m) && m.membership?.covered && (
+          <span className="text-muted-foreground text-sm">
+            Covered by {m.membership.planNames.join(", ")}
+          </span>
+        )}
+        {!isStaffRole(m) && m.membership && !m.membership.covered && (
+          <span className="text-muted-foreground text-sm">
+            Joined this branch, no membership covers it
+          </span>
         )}
       </span>
-      <span className="text-muted-foreground text-sm">
-        {label} · {m.email}
-        {m.phone ? ` · ${m.phone}` : ""}
-        {m.visitCount > 0 ? ` · attended ${m.visitCount}×` : ""}
-      </span>
-      {/* Why they are on THIS branch's roster. Somebody whose plan covers the
-          gym is a member of the gym, not a visitor (ADR 126). */}
-      {isStaffRole(m) && m.status === "active" && (
-        <span className="text-muted-foreground text-sm">
-          Staff access. No membership required
-        </span>
-      )}
-      {!isStaffRole(m) && m.membership?.covered && (
-        <span className="text-muted-foreground text-sm">
-          Covered by {m.membership.planNames.join(", ")}
-        </span>
-      )}
-      {!isStaffRole(m) && m.membership && !m.membership.covered && (
-        <span className="text-muted-foreground text-sm">
-          Joined this branch, no membership covers it
+      {m.visitCount > 0 && (
+        <span
+          title={`Attended ${m.visitCount} ${m.visitCount === 1 ? "class" : "classes"}`}
+          className="bg-surface-2 text-muted-foreground text-2xs hidden h-5.5 min-w-6 shrink-0 items-center justify-center rounded-sm px-1.5 font-medium tabular-nums sm:inline-flex"
+        >
+          <span className="sr-only">Attended </span>
+          {m.visitCount}
+          <span className="sr-only"> classes</span>
         </span>
       )}
     </>
   );
   return (
-    <div className="flex min-h-11 flex-wrap items-center justify-between gap-3 px-4 py-2.5">
+    <div className="flex min-h-14 items-center gap-2 px-2 py-2">
       {onToggle ? (
         <button
           type="button"
+          data-row-toggle
           onClick={onToggle}
           aria-expanded={open}
           className={cn(
-            "-mx-1.5 flex flex-1 items-center gap-2 rounded-md px-1.5 py-1 text-left",
+            "group/row rounded-control flex min-w-0 flex-1 items-center gap-3 border border-transparent px-2 py-1.5 text-left transition-colors motion-reduce:transition-none",
+            "hover:bg-hover focus-visible:edge-lit-surface-2",
             FOCUS_RING,
           )}
         >
-          <ChevronRight
-            aria-hidden
-            className={cn(
-              "text-muted-foreground shrink-0 transition-transform duration-200 motion-reduce:transition-none",
-              open && "rotate-90",
-            )}
-          />
-          <span className="flex flex-col">{name}</span>
+          {name}
+          <Kbd className="hidden group-focus-visible/row:inline-flex">
+            <span aria-hidden>↵</span>
+            <span className="sr-only">Enter</span>
+          </Kbd>
         </button>
       ) : (
-        <div className="flex flex-col">{name}</div>
+        <div className="flex min-w-0 flex-1 items-center gap-3 px-2 py-1.5">
+          {name}
+        </div>
       )}
-      <div className="flex flex-wrap justify-end gap-2">{children}</div>
+      <div className="flex shrink-0 flex-wrap justify-end gap-2">
+        {children}
+      </div>
     </div>
   );
 }
@@ -145,7 +179,7 @@ export function MemberDetail({ m }: { m: Member }) {
   );
 
   return (
-    <div className={cn("border-border bg-surface-1 border-t p-4", RESOLVE)}>
+    <div className={cn("px-4 pb-4", RESOLVE)}>
       <Tabs
         label={`${m.name} detail`}
         value={tab}
@@ -545,19 +579,21 @@ function RankTab({ memberId }: { memberId: string }) {
           Set rank
         </span>
         <div className="flex flex-wrap items-end gap-3">
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-muted-foreground text-xs">Discipline</span>
-            <Select
-              value={discipline}
-              onChange={(e) => onDiscipline(e.target.value)}
-            >
-              {systems.map((s) => (
-                <option key={s.discipline} value={s.discipline}>
-                  {s.label}
-                </option>
-              ))}
-            </Select>
-          </label>
+          {systems.length > 1 && (
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-muted-foreground text-xs">Discipline</span>
+              <Select
+                value={discipline}
+                onChange={(e) => onDiscipline(e.target.value)}
+              >
+                {systems.map((s) => (
+                  <option key={s.discipline} value={s.discipline}>
+                    {s.label}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          )}
           <label className="flex flex-col gap-1 text-sm">
             <span className="text-muted-foreground text-xs">Belt</span>
             <Select value={belt} onChange={(e) => setBelt(e.target.value)}>
@@ -774,13 +810,13 @@ function Overview({ m, data }: { m: Member; data: MemberHistory }) {
         </span>
       </div>
 
-      <div className="flex flex-wrap gap-x-8 gap-y-3">
-        <Stat value={s.total} label="Sessions" />
-        <Stat value={s.thisMonth} label="This month" />
-        <Stat value={s.streakWeeks} label="Week streak" />
+      <div className="grid grid-cols-2 gap-2 sm:max-w-xl sm:grid-cols-3">
+        <StatTile icon={CalendarCheck} value={s.total} label="Sessions" />
+        <StatTile icon={CalendarDays} value={s.thisMonth} label="This month" />
+        <StatTile icon={Flame} value={s.streakWeeks} label="Week streak" />
       </div>
 
-      <dl className="text-sm">
+      <dl className="max-w-xl text-sm">
         <Detail term="Role" value={m.role} />
         <Detail
           term="Email"
@@ -797,6 +833,26 @@ function Overview({ m, data }: { m: Member; data: MemberHistory }) {
   );
 }
 
+function StatTile({
+  icon: Icon,
+  value,
+  label,
+}: {
+  icon: typeof Flame;
+  value: number;
+  label: string;
+}) {
+  return (
+    <div className="edge-lit-surface-2 flex flex-col gap-5 rounded-lg p-3">
+      <Icon aria-hidden className="text-muted-foreground" />
+      <div>
+        <p className="text-xl font-medium tabular-nums">{value}</p>
+        <p className="text-muted-foreground text-xs">{label}</p>
+      </div>
+    </div>
+  );
+}
+
 function Detail({
   term,
   value,
@@ -807,9 +863,9 @@ function Detail({
   copy?: string;
 }) {
   return (
-    <div className="border-border flex items-center justify-between gap-2 border-b py-1.5 last:border-0">
+    <div className="border-border grid min-h-10 grid-cols-[6rem_minmax(0,1fr)] items-center gap-3 border-b py-1 last:border-0">
       <dt className="text-muted-foreground">{term}</dt>
-      <dd className="text-foreground flex items-center gap-1 font-medium">
+      <dd className="text-foreground flex min-w-0 items-center gap-1 font-medium">
         <span className="break-all">{value}</span>
         {copy && (
           <CopyButton
