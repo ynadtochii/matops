@@ -32,7 +32,7 @@ import { CoachSelect } from "./coach-select";
 import { useEntity } from "./entity";
 import { PhoneField } from "./form-fields";
 import { cardClass, Eyebrow, ROSTER_LIST, ROSTER_ROW } from "./primitives";
-import { SkeletonRows } from "./skeletons";
+import { Bar } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 import { useMinuteClock } from "./use-clock";
 
@@ -336,7 +336,30 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
     }),
   );
 
-  if (classList.isPending) return <SkeletonRows />;
+  if (classList.isPending)
+    return (
+      <div
+        role="status"
+        aria-label="Loading class list"
+        className="flex flex-col gap-4"
+      >
+        <div aria-hidden className="flex flex-col gap-3">
+          <Bar className="h-4 w-36" />
+          <Bar className="h-4 w-56" />
+        </div>
+        <div aria-hidden className="flex flex-col gap-2">
+          <Bar className="h-3 w-44" />
+          <div className={ROSTER_LIST}>
+            {Array.from({ length: 3 }, (_, i) => (
+              <div key={i} className={ROSTER_ROW}>
+                <Bar className="size-3 shrink-0 rounded-full" />
+                <Bar className="h-4 w-2/3" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
   if (classList.isError) {
     return (
       <ErrorState

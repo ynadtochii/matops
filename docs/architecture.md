@@ -52,6 +52,7 @@ The tenant model (organization, entity, `entity_membership`, `person`, academy a
 
 - **No scheduled jobs.** Nothing runs on a timer. `.github/workflows/ci.yml` (lint, format, typecheck, test) is the only workflow, and no code reads `CRON_SECRET`. Owners and managers extend the calendar by hand. Class reminders are local notifications on the phone (ADR 54).
 - **Deploy.** `vercel-build` in `apps/nextjs/package.json` runs `@matops/db migrate:deploy` before the build. It runs only when `VERCEL_ENV=production`, takes an advisory lock, and checks the applied count against the journal. `apps/nextjs/vercel.json` pins the functions to `fra1`.
+- **Privacy policy.** `/privacy` and the public-form dialogs share `PrivacyText`; its MatOps contact is the same support email used by `FeedbackLink`. No public legal environment variables are required at startup. Confirm and publish the operator's legal identity and address before real invitations (first-release plan S7).
 - **Errors.** `@sentry/nextjs` on the web only; the Expo app reports nothing (ADR 72).
 - **Tests.** PGlite for RLS and router tests, vitest for pure rules and schemas. The last full run passed 1,168 tests across `notifications`, `validators`, `domain`, `db` and `api` (2026-09-27).
 - **Not built:** universal and App links (the app uses the `matops://` scheme), a shared rate-limit store, booking-count reconciliation, and the native home-screen widget. The mobile Google browser-to-app hand-off still fails (ADR 35).

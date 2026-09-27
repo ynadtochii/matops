@@ -296,17 +296,23 @@ carries meaning.
 
 **Shared parts in `packages/ui/src`:**
 
-| Part                          | Use                                                                                                                       |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `Button`                      | §1.5                                                                                                                      |
+| Part                          | Use                                                                                                                      |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `Button`                      | §1.5                                                                                                                     |
 | `Input`, `Textarea`, `Select` | one `FIELD` class: 32px, 6px radius, raised fill, `--input` edge. Focus is a violet edge with a 3px `--brand-wash` halo. |
-| `Checkbox`                    | a choice that waits for Save                                                                                              |
-| `Badge`                       | a status or tag. Tones: neutral, info, success, warning, error. No violet tone                                            |
-| `Callout`                     | a notice in the flow. Tones: neutral, info, success, warning, error. Info is blue, never violet.                          |
-| `Separator`                   | a divider between sections                                                                                                |
+| `Checkbox`                    | a choice that waits for Save                                                                                             |
+| `Badge`                       | a status or tag. Tones: neutral, info, success, warning, error. No violet tone                                           |
+| `Callout`                     | a notice in the flow. Tones: neutral, info, success, warning, error. Info is blue, never violet.                         |
+| `Separator`                   | a divider between sections                                                                                               |
 | `Dialog`, `AlertDialog`       | raised surface, 12px radius, float shadow, no edge, over `--backdrop`                                                    |
 | `DropdownMenu`, `toast`       | floating surface; menu items 32px on desktop, 44px on touch                                                              |
-| `Logo`, `Mark`                | §6                                                                                                                        |
+| `Logo`, `Mark`                | §6                                                                                                                       |
+
+Class-roster dialogs opened from Schedule, Dashboard and Attendance keep a
+bounded 42rem / 85dvh frame while their query settles. The heading stays in
+place; only the roster scrolls. Its loading rows mirror the divided roster
+instead of swapping a stack of cards into a list. Smaller form and information
+dialogs still size to their content.
 
 **App primitives in `apps/nextjs/src/app/_components/primitives.tsx`:**
 
@@ -426,15 +432,15 @@ use the full `Logo` when the brand must read at a distance. Rationale in ADR 37.
 
 ## 7. Status
 
-| Piece                                                                                                                                   | State                                               |
-| --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| Tokens (surfaces, text steps, edges, violet, callouts, radius, shadow, type)                                                            | **done**: `theme.css` + `tokens.ts`, ADR 141 step 1 |
-| Shared parts (button, fields, overlays, checkbox, badge, callout, separator, overlays)                                                  | **done**: `packages/ui`, step 2                     |
-| Shell (sidebar, header, branch picker, mobile tab bar, banners)                                                                         | **done**: steps 3a, 3b                              |
-| The nine screen groups (steps 4.1-4.9)                                                                                                  | **done**                                            |
-| Mobile (Inter, larger scale, lists, pills)                                                                                              | **done, static gates only**: step 5                 |
-| Lint guard against arbitrary sizes and hex classes                                                                                      | **done**: step 6b                                   |
-| `/linear-ds` reads the product tokens; old showcase removed                                                                             | **done**: step 6a                                   |
+| Piece                                                                                  | State                                               |
+| -------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| Tokens (surfaces, text steps, edges, violet, callouts, radius, shadow, type)           | **done**: `theme.css` + `tokens.ts`, ADR 141 step 1 |
+| Shared parts (button, fields, overlays, checkbox, badge, callout, separator, overlays) | **done**: `packages/ui`, step 2                     |
+| Shell (sidebar, header, branch picker, mobile tab bar, banners)                        | **done**: steps 3a, 3b                              |
+| The nine screen groups (steps 4.1-4.9)                                                 | **done**                                            |
+| Mobile (Inter, larger scale, lists, pills)                                             | **done, static gates only**: step 5                 |
+| Lint guard against arbitrary sizes and hex classes                                     | **done**: step 6b                                   |
+| `/linear-ds` reads the product tokens; old showcase removed                            | **done**: step 6a                                   |
 
 **What is verified:**
 

@@ -62,7 +62,7 @@ Do not run tests without an explicit user request. Run lint and typecheck after 
 
 ## Current step
 
-The dead code removal (batches B1-B7 of plan `wobbly-dreaming-quiche.md`, docs in B8) is done. Migration `0004_first_release_drops.sql` is applied to dev; production gets it in a later deploy than the code of B1-B6. S7 stays open on three items that need the user: the real privacy operator and contact values (`NEXT_PUBLIC_LEGAL_ENTITY`, `NEXT_PUBLIC_LEGAL_ADDRESS`, `NEXT_PUBLIC_PRIVACY_CONTACT`) set in Vercel Production and checked on `/privacy`; a backup and restore rehearsal on an isolated database (deferred by the user on 2026-09-27; it blocks the first real invitation); and a recheck in the Neon console that production is still empty. The full `pnpm test` after B8 is for the user to run.
+The dead code removal (batches B1-B7 of plan `wobbly-dreaming-quiche.md`, docs in B8) is done. Migration `0004_first_release_drops.sql` is applied to dev; production gets it in a later deploy than the code of B1-B6. `/privacy` now directs member data requests to the academy and MatOps questions to the existing support email; it no longer requires three public legal environment variables at boot. S7 stays open on three items that need the user: confirm the real privacy operator identity and address and publish them on `/privacy` before real invitations (the existing support email is not proof of legal identity); a backup and restore rehearsal on an isolated database (deferred by the user on 2026-09-27; it blocks the first real invitation); and a recheck in the Neon console that production is still empty. The full `pnpm test` after B8 is for the user to run.
 
 ## S0 cutover map (2026-09-26)
 

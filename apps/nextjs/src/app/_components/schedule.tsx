@@ -243,7 +243,7 @@ export function Schedule({
       open={detail !== undefined}
       onOpenChange={(next) => !next && setDetailId(null)}
     >
-      <DialogContent>
+      <DialogContent className="h-[min(42rem,85dvh)] overflow-hidden">
         {detail && (
           <>
             <DialogTitle>{detail.title}</DialogTitle>
@@ -268,7 +268,9 @@ export function Schedule({
                 Open template · {detailTemplate.title}
               </Button>
             )}
-            <ClassRoster key={detail.id} cls={detail} />
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
+              <ClassRoster key={detail.id} cls={detail} />
+            </div>
           </>
         )}
       </DialogContent>

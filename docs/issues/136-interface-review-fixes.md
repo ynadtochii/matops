@@ -103,3 +103,11 @@ while the app is English-only.
 - Focus is violet now, not grey, on both themes and both clients.
 - Light-theme reds, greens and oranges are visibly darker. This is the point.
 - No migration. No API change. No test change.
+
+## Addendum · 2026-09-27
+
+The three public legal/privacy environment variables and their startup validation
+are removed. `/privacy` now directs member data requests to the academy and
+MatOps questions to the existing feedback email. The operator's legal identity
+and address are still an S7 pre-invitation release check; the support email does
+not establish them. This supersedes the environment-variable consequence above.

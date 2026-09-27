@@ -219,7 +219,7 @@ export function Attendance() {
         open={selected !== null}
         onOpenChange={(open) => !open && setSelected(null)}
       >
-        <DialogContent>
+        <DialogContent className="h-[min(42rem,85dvh)] overflow-hidden">
           {selected && (
             <>
               <DialogTitle>{selected.title}</DialogTitle>
@@ -227,7 +227,9 @@ export function Attendance() {
                 {format.format(new Date(selected.startsAt))} ·{" "}
                 {selected.durationMinutes} min
               </DialogDescription>
-              <ClassRoster key={selected.id} cls={selected} />
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
+                <ClassRoster key={selected.id} cls={selected} />
+              </div>
             </>
           )}
         </DialogContent>

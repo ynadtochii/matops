@@ -2,6 +2,9 @@
 
 ## Unreleased: first release, one academy
 
+- Removed the three public legal/privacy environment variables from Next.js startup and the privacy policy. The public policy now directs member data requests to the academy and MatOps questions to the existing support email; the operator's legal identity and address remain a pre-invitation release check.
+- Class-detail dialogs on Schedule, Dashboard and Attendance now hold a stable, scrollable frame while the roster loads; the loading state matches the divided roster, and shared dialogs have tighter heading rhythm and a larger close target.
+
 - ADR 142: a new academy starts with payment admission off, so an approved, active student books with no plan; the per-branch switch in Gym settings turns it back on, and every web payment screen follows that flag. Only an owner can book a student past the booking window and the payment check, and the new owner-only `booking.cancelFor` procedure cancels for a student from the class roster. `/start` is one form that makes the gym and its first academy, one academy opens directly with no gym menu, and the setup list asks for a schedule, a join link, a first approved student and a first booking instead of plans and an instructor. No migration. Web only.
 - ADR 142 addendum: after a manual check, the web app hides the venue check-in QR, both reception screens, the coach breakdown, the booking window and phone country settings, public booking, the Notifications page, the Optional features and Your account sections, the days-to-pay and deadline zone rows, the per-branch payment switch, and Add academy. Server procedures stay.
 - ADR 142 addendum: one academy shows one set of screens. Roster becomes Students (with add, import and export), Branch settings becomes Settings (with bank details while payment is on), renaming the academy renames the gym, and People, Gym settings and Gym overview leave the sidebar and redirect.
@@ -72,7 +75,6 @@
 - **Both screens pick the class for you.** After a name, reception offers the class running or about to run, and otherwise the soonest bookable one, as one button with the full list behind "Choose a different class". Two classes open at once is the exception: nothing is chosen and the screen asks, because guessing between overlapping mats is the bug ADR 117 fixed for visitors.
 - **Staff have their own reception screen.** Reception in the branch menu: search the roster, tap a name, act on the class already chosen. The class stays selected and only the search clears, so a queue keeps moving, and the register is visible before anybody is searched. It is the ordinary staff attendance write, with the same capacity rules, 14-day window and correction history.
 - `class_participation` gained a nullable `check_in_source` (`reception_self` or `staff`), written with `coalesce` so a repeat never replaces whoever recorded it first.
-
 
 ## Unreleased: interface writing review
 

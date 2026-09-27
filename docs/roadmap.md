@@ -265,7 +265,7 @@ What is built: the identity join loop, the scheduling core with a 180-day horizo
 
 **Open operational items:** **`AUTH_SECRET` needs rotating** on the next deploy (the old auth error hook logged it — ADR 60); the mobile **Google browser→app session hand-off** still does not land ([mobile-google-login-handoff.md](mobile-google-login-handoff.md)); and every mobile wave since v1.8 is **static-gates-green only** — no simulator in this environment, so the checks in [mobile-device-test.md](mobile-device-test.md) are outstanding.
 
-**Before real invitations:** set the legal and privacy variables in Vercel Production and rehearse backup and restore (first-release plan S7). The runbook is [beta-launch-plan.md](beta-launch-plan.md).
+**Before real invitations:** confirm and publish the legal operator's identity and address on `/privacy` and rehearse backup and restore (first-release plan S7). The policy uses the existing support email; no legal/privacy environment variables are required. The runbook is [beta-launch-plan.md](beta-launch-plan.md).
 
 > **Verified live on Neon.**
 >
