@@ -3,19 +3,15 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import {
-  Bell,
   CalendarCheck,
   CalendarDays,
   ChartNoAxesColumn,
   ChevronDown,
-  ConciergeBell,
   CreditCard,
   LayoutGrid,
   Menu,
-  Share,
   SlidersHorizontal,
   User,
-  UserPlus,
   Users,
 } from "lucide-react";
 
@@ -72,15 +68,11 @@ function initials(name: string, email: string): string {
 export const DashboardIcon = () => <LayoutGrid aria-hidden />;
 export const ScheduleIcon = () => <CalendarDays aria-hidden />;
 export const TrainingIcon = () => <CalendarCheck aria-hidden />;
-export const NotificationsIcon = () => <Bell aria-hidden />;
 export const ProfileIcon = () => <User aria-hidden />;
 export const MembersIcon = () => <Users aria-hidden />;
 export const SettingsIcon = () => <SlidersHorizontal aria-hidden />;
 export const PaymentsIcon = () => <CreditCard aria-hidden />;
-export const ReferralsIcon = () => <UserPlus aria-hidden />;
 export const CoachesIcon = () => <ChartNoAxesColumn aria-hidden />;
-export const ReceptionIcon = () => <ConciergeBell aria-hidden />;
-export const ShareIcon = () => <Share aria-hidden />;
 const MoreIcon = () => <Menu aria-hidden />;
 
 interface ShellFrameProps {
@@ -129,8 +121,7 @@ export function ShellFrame({
   banners,
   children,
 }: ShellFrameProps) {
-  // Phones reach the feed from the header bell, so it never spends a tab slot.
-  const tabItems = items.filter((i) => i.path !== "/notifications");
+  const tabItems = items;
 
   // A phone gives a tab about 50px. An owner has seven of them, which shreds
   // every label, so past the cap the tail moves into one "More" menu and its

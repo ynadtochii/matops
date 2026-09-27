@@ -89,10 +89,7 @@ export async function myEntities() {
     queryClient.getQueryData(options.queryKey) ?? {
       organizationId: "",
       canCreateBranches: false,
-      canCreateGeneralBranches: false,
       canRunOrganization: false,
-      curriculumEnabled: false,
-      referralsEnabled: false,
       role: "member",
       entities: [],
     }

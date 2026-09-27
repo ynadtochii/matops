@@ -76,14 +76,16 @@ export function StudentScreen() {
       {lockedMessage && (
         <Callout tone="warning" title="Booking unavailable" className="mb-6">
           <p>{lockedMessage}</p>
-          <Button
-            asChild
-            variant="outline"
-            size="sm"
-            className="mt-2 self-start"
-          >
-            <Link href={href("/payments")}>View membership</Link>
-          </Button>
+          {academy.membershipEnforced && (
+            <Button
+              asChild
+              variant="outline"
+              size="sm"
+              className="mt-2 self-start"
+            >
+              <Link href={href("/payments")}>View membership</Link>
+            </Button>
+          )}
         </Callout>
       )}
       {week.isPending ? (

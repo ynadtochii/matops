@@ -55,27 +55,6 @@ export async function findPersonDuplicates(
   }));
 }
 
-export async function getOrganizationPerson(
-  exec: DbReader,
-  organizationId: string,
-  personId: string,
-) {
-  const [row] = await exec
-    .select()
-    .from(person)
-    .where(
-      and(
-        eq(person.organizationId, organizationId),
-        or(
-          eq(sql`${person.id}::text`, personId),
-          eq(person.accountUserId, personId),
-        ),
-      ),
-    )
-    .limit(1);
-  return row ?? null;
-}
-
 /**
  * The organization's `person` row for a login, made if it is missing.
  *

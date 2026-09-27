@@ -67,27 +67,8 @@ export const dateYearFmt = new Intl.DateTimeFormat(undefined, {
   year: "numeric",
 });
 
-export const monthShortFmt = new Intl.DateTimeFormat(undefined, {
-  month: "short",
-});
-
 /** "Jul 2026" */
 export const monthYearFmt = new Intl.DateTimeFormat(undefined, {
   month: "short",
   year: "numeric",
-});
-
-/** "Mon, Jul 21, 14:05" */
-export const dateTimeFmt = new Intl.DateTimeFormat(undefined, {
-  weekday: "short",
-  month: "short",
-  day: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-});
-
-/** "21 Jul 2026, 14:05" */
-export const dateTimeMediumFmt = new Intl.DateTimeFormat(undefined, {
-  dateStyle: "medium",
-  timeStyle: "short",
 });

@@ -13,24 +13,15 @@ const NOT_MEMBER_DATA: Record<string, string> = {
     "A lead is not a member. It carries no member_id and is erased with the academy, not with a member (spec O4).",
   drop_in_visit:
     "A visitor's class, which belongs to a lead and not to a member. Erased with the academy, like the lead itself (ADR 115).",
-  curriculum_track:
-    "One of the gym's teaching plans. It outlives every member who trained under it (ADR 111).",
-  curriculum_block_template:
-    "The gym's reusable block library. A theme belongs to the syllabus, not to a person (ADR 105).",
-  curriculum_block:
-    "One stretch of weeks on the gym's plan. It names a theme and its dates, never a member (ADR 104).",
   academy_invite:
     "A shareable link belongs to the academy and to the role, not to whoever used it.",
-  academy_profile:
-    "The place's own settings: its booking switch, its API key, its curriculum visibility. Not member data (ADR 124).",
+  academy_profile: "The place's own settings row. Not member data (ADR 124).",
   tenant_probe:
     "The seed:health probe row. Not member data and not reachable by a member.",
   access_plan_entity:
     "Which branches one of the gym's membership plans covers. It is the plan's own shape, not anybody's membership of it (ADR 126).",
   product_event:
     "A count of what happened, naming the gym, the branch and a role. It holds no user id and no personal field, so a member has nothing in it to erase (ADR 128).",
-  reception_link:
-    "The branch's permanent entrance link. It belongs to the door, not to anybody who walks through it, and holds only a hash (ADR 139).",
   notification_notice:
     "A notice belongs to the academy. Member erasure removes its recipient rows while retaining the operational record.",
   notification_attempt:

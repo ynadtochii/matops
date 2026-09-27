@@ -1,7 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { createEntity } from "@matops/db";
-
 import type { Harness } from "./helpers";
 import { harness, rejectionCode, seedAcademies, seedClasses } from "./helpers";
 
@@ -123,10 +121,9 @@ describe("who is credited when nobody is named", () => {
   const ORG = "acad_ci_gym";
   const BOSS = "u_ci_gym_owner";
   let h: Harness;
-  let gym: string;
 
   const session = {
-    title: "Open gym",
+    title: "Open mat",
     date: "2026-09-15",
     startsAtMinutes: 600,
     durationMinutes: 60,
@@ -134,7 +131,7 @@ describe("who is credited when nobody is named", () => {
     capacity: 20,
   };
   const weekly = {
-    title: "Open gym",
+    title: "Open mat",
     daysOfWeek: [1],
     startsAtMinutes: 600,
     durationMinutes: 60,
@@ -157,16 +154,6 @@ describe("who is credited when nobody is named", () => {
         members: [{ userId: BOSS, role: "owner", status: "active" }],
       },
     ]);
-    const made = await createEntity(
-      {
-        organizationId: ORG,
-        type: "general_space",
-        name: "The Gym",
-        ownerUserId: BOSS,
-      },
-      h.exec,
-    );
-    gym = made.entityId;
   });
 
   afterAll(() => h.close());
@@ -176,58 +163,19 @@ describe("who is credited when nobody is named", () => {
     expect(row?.instructorId).toBe(BOSS);
   });
 
-  it("credits nobody for a session at a general space", async () => {
-    // Each general-space session below takes its own hour: one branch runs one
-    // room, so two sessions at the same time would be refused (ADR 126).
-    const row = await h
-      .as(BOSS, ORG, at(gym))
-      .class.create({ ...session, startsAtMinutes: 660 });
-    expect(row?.instructorId).toBeNull();
-  });
-
   it("does the same for a recurring template", async () => {
     const mat = await h.as(BOSS, ORG, at(ORG)).template.create(weekly);
-    const space = await h
-      .as(BOSS, ORG, at(gym))
-      .template.create({ ...weekly, startsAtMinutes: 720 });
-    expect([mat?.instructorId, space?.instructorId]).toEqual([BOSS, null]);
+    expect(mat?.instructorId).toBe(BOSS);
   });
 
-  it("keeps an id the caller sent, even at a general space", async () => {
-    const row = await h
-      .as(BOSS, ORG, at(gym))
-      .class.create({ ...session, startsAtMinutes: 780, instructorId: BOSS });
-    expect(row?.instructorId).toBe(BOSS);
-  });
-
-  it("makes a general space's sessions strict and a mat's soft", async () => {
+  it("makes a class and a template soft", async () => {
     const mat = await h.as(BOSS, ORG, at(ORG)).class.create(session);
-    const space = await h
-      .as(BOSS, ORG, at(gym))
-      .class.create({ ...session, startsAtMinutes: 840 });
-    expect([mat?.capacityPolicy, space?.capacityPolicy]).toEqual([
+    const made = await h
+      .as(BOSS, ORG, at(ORG))
+      .template.create({ ...weekly, startsAtMinutes: 900 });
+    expect([mat?.capacityPolicy, made?.capacityPolicy]).toEqual([
       "soft",
-      "strict",
+      "soft",
     ]);
-  });
-
-  it("copies the policy from a template onto every class it makes", async () => {
-    const made = await h.as(BOSS, ORG, at(gym)).template.create({
-      ...weekly,
-      startsAtMinutes: 900,
-    });
-    expect(made?.capacityPolicy).toBe("strict");
-    const rows = await h.pg.query<{ n: number }>(
-      `SELECT count(*)::int AS n FROM "class"
-        WHERE academy_id = '${gym}' AND capacity_policy = 'strict'`,
-    );
-    expect(rows.rows[0]?.n).toBeGreaterThan(0);
-  });
-
-  it("stores no curriculum track for a general space", async () => {
-    const row = await h
-      .as(BOSS, ORG, at(gym))
-      .template.create({ ...weekly, startsAtMinutes: 960 });
-    expect(row?.curriculumTrackId).toBeNull();
   });
 });

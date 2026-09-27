@@ -10,58 +10,75 @@ import {
 } from "../src/organization-setup";
 
 const nothing: SetupFacts = {
-  gymNamed: false,
   branches: 0,
   branchesLocated: 0,
   branchesScheduled: 0,
-  instructors: 0,
+  invites: 0,
+  activeStudents: 0,
+  bookings: 0,
+  paymentsOn: false,
   bankDetails: false,
   paidPlans: 0,
   plans: 0,
   assignments: 0,
   uncoveredMembers: 0,
-  invites: 0,
 };
 
+const keys = (facts: SetupFacts) => organizationSetup(facts).map((i) => i.key);
 const done = (facts: SetupFacts, key: string) =>
   organizationSetup(facts).find((i) => i.key === key)?.done;
 const blocked = (facts: SetupFacts, key: string) =>
   organizationSetup(facts).find((i) => i.key === key)?.blocked;
 
 describe("organizationSetup", () => {
-  it("omits bank details until a paid plan exists", () => {
-    expect(organizationSetup(nothing).map((i) => i.key)).toEqual([
-      "gym",
+  it("runs from the academy to the first booking, with no payment step", () => {
+    expect(keys(nothing)).toEqual([
       "branch",
       "location",
       "schedule",
-      "staff",
-      "plan",
-      "assign",
-      "ready",
       "invite",
+      "approve",
+      "booking",
     ]);
   });
 
-  it("blocks everything that needs a branch until one exists", () => {
-    const items = organizationSetup(nothing);
-    const stuck = items.filter((i) => i.blocked).map((i) => i.key);
+  it("has no separate instructor step, so a solo owner can finish", () => {
+    const solo = {
+      ...nothing,
+      branches: 1,
+      branchesLocated: 1,
+      branchesScheduled: 1,
+      invites: 1,
+      activeStudents: 1,
+      bookings: 1,
+    };
+    expect(setupProgress(organizationSetup(solo))).toEqual({
+      done: 6,
+      total: 6,
+      complete: true,
+    });
+  });
+
+  it("blocks everything that needs an academy until one exists", () => {
+    const stuck = organizationSetup(nothing)
+      .filter((i) => i.blocked)
+      .map((i) => i.key);
     expect(stuck).toEqual([
       "location",
       "schedule",
-      "staff",
-      "plan",
-      "assign",
-      "ready",
       "invite",
+      "approve",
+      "booking",
     ]);
   });
 
-  it("unblocks branch work as soon as there is a branch", () => {
+  it("blocks the first booking until there is a class and a student", () => {
     const one = { ...nothing, branches: 1 };
-    expect(blocked(one, "schedule")).toBe(false);
-    expect(blocked(one, "staff")).toBe(false);
-    expect(blocked(one, "invite")).toBe(false);
+    expect(blocked(one, "booking")).toBe(true);
+    expect(blocked({ ...one, branchesScheduled: 1 }, "booking")).toBe(true);
+    expect(
+      blocked({ ...one, branchesScheduled: 1, activeStudents: 1 }, "booking"),
+    ).toBe(false);
   });
 
   it("wants the place and zone on EVERY branch, not just one", () => {
@@ -82,39 +99,39 @@ describe("organizationSetup", () => {
     ).toBe(true);
   });
 
-  it("adds bank details after a paid plan", () => {
-    const paid = { ...nothing, branches: 1, plans: 1, paidPlans: 1 };
-    expect(organizationSetup(paid).map((i) => i.key)).toEqual([
-      "gym",
+  it("adds the plan steps only while a branch requires payment", () => {
+    const paying = { ...nothing, branches: 1, paymentsOn: true };
+    expect(keys(paying)).toEqual([
       "branch",
       "location",
       "schedule",
-      "staff",
+      "invite",
+      "approve",
+      "booking",
       "plan",
-      "bank",
       "assign",
       "ready",
-      "invite",
     ]);
-    expect(blocked(paid, "bank")).toBe(false);
-    expect(done({ ...paid, bankDetails: true }, "bank")).toBe(true);
+    expect(keys({ ...paying, plans: 1, paidPlans: 1 })).toContain("bank");
+    expect(
+      done({ ...paying, plans: 1, paidPlans: 1, bankDetails: true }, "bank"),
+    ).toBe(true);
   });
 
   it("blocks assignment until a plan exists", () => {
-    expect(blocked({ ...nothing, branches: 1 }, "assign")).toBe(true);
-    expect(blocked({ ...nothing, branches: 1, plans: 1 }, "assign")).toBe(
-      false,
-    );
-  });
-
-  it("does not call an empty gym ready", () => {
-    const empty = { ...nothing, branches: 1, plans: 1 };
-    expect(done(empty, "ready")).toBe(false);
-    expect(blocked(empty, "ready")).toBe(true);
+    const paying = { ...nothing, branches: 1, paymentsOn: true };
+    expect(blocked(paying, "assign")).toBe(true);
+    expect(blocked({ ...paying, plans: 1 }, "assign")).toBe(false);
   });
 
   it("is ready when somebody is assigned and nobody is uncovered", () => {
-    const covered = { ...nothing, branches: 1, plans: 1, assignments: 3 };
+    const covered = {
+      ...nothing,
+      branches: 1,
+      paymentsOn: true,
+      plans: 1,
+      assignments: 3,
+    };
     expect(done(covered, "ready")).toBe(true);
     expect(done({ ...covered, uncoveredMembers: 1 }, "ready")).toBe(false);
   });
@@ -124,33 +141,9 @@ describe("setupProgress", () => {
   it("counts nothing done for a gym that has just been made", () => {
     expect(setupProgress(organizationSetup(nothing))).toEqual({
       done: 0,
-      total: 9,
+      total: 6,
       complete: false,
     });
-  });
-
-  it("is complete only when every item is done", () => {
-    const all: SetupFacts = {
-      gymNamed: true,
-      branches: 1,
-      branchesLocated: 1,
-      branchesScheduled: 1,
-      instructors: 1,
-      bankDetails: true,
-      paidPlans: 1,
-      plans: 1,
-      assignments: 2,
-      uncoveredMembers: 0,
-      invites: 1,
-    };
-    expect(setupProgress(organizationSetup(all))).toEqual({
-      done: 10,
-      total: 10,
-      complete: true,
-    });
-    expect(
-      setupProgress(organizationSetup({ ...all, invites: 0 })).complete,
-    ).toBe(false);
   });
 });
 
@@ -160,9 +153,6 @@ const ready: BranchHealthFacts = {
   enforced: true,
   uncovered: 0,
   planCovers: true,
-  bjj: true,
-  publicBookingEnabled: false,
-  publicClasses: 0,
 };
 
 describe("branchLaunchIssues", () => {
@@ -186,35 +176,6 @@ describe("branchLaunchIssues", () => {
         enforced: false,
         planCovers: false,
         uncovered: 4,
-      }),
-    ).toEqual([]);
-  });
-
-  it("flags public booking that is on with nothing shared, and nothing else", () => {
-    expect(
-      branchLaunchIssues({ ...ready, publicBookingEnabled: true }),
-    ).toEqual(["public"]);
-    // Off is a decision, not a gap: an academy that never wanted a public page
-    // is not missing anything.
-    expect(
-      branchLaunchIssues({ ...ready, publicBookingEnabled: false }),
-    ).toEqual([]);
-    expect(
-      branchLaunchIssues({
-        ...ready,
-        publicBookingEnabled: true,
-        publicClasses: 2,
-      }),
-    ).toEqual([]);
-  });
-
-  it("never asks a general space about public classes", () => {
-    expect(
-      branchLaunchIssues({
-        ...ready,
-        bjj: false,
-        publicBookingEnabled: true,
-        publicClasses: 0,
       }),
     ).toEqual([]);
   });

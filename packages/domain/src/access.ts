@@ -97,9 +97,9 @@ export function isArchived(m: Pick<Membership, "status">): boolean {
 
 /**
  * Does this membership still belong on the gym's roster? False once they are
- * archived or declined. The one predicate behind the member list, the growth
- * counts and the referrals screen's default filter, so the three cannot disagree
- * about who counts as a current member.
+ * archived or declined. The one predicate behind the member list and the
+ * growth counts, so the two cannot disagree about who counts as a current
+ * member.
  */
 export function isOnRoster(m: Pick<Membership, "status">): boolean {
   return !isArchived(m) && m.status !== "removed";

@@ -9,7 +9,6 @@ import {
   canRemoveOrDemote,
   isPendingCoach,
   isStudentLensMembership,
-  isWebLensMembership,
   wouldLeaveOwnerless,
 } from "../src/membership";
 
@@ -100,23 +99,6 @@ describe("owner step-down (demote → instructor)", () => {
       rm("c", "instructor", "active"),
     ];
     expect(canRemoveOrDemote(members, "a")).toBe(true);
-  });
-});
-
-describe("web lens (docs/issues/18)", () => {
-  it("includes owners, instructors, and pending instructors", () => {
-    expect(isWebLensMembership({ role: "owner" })).toBe(true);
-    expect(isWebLensMembership({ role: "instructor" })).toBe(true);
-    expect(
-      isWebLensMembership({ role: "member", invitedRole: "instructor" }),
-    ).toBe(true);
-  });
-
-  it("excludes students (they belong to the mobile lens)", () => {
-    expect(isWebLensMembership({ role: "student" })).toBe(false);
-    expect(
-      isWebLensMembership({ role: "member", invitedRole: "student" }),
-    ).toBe(false);
   });
 });
 

@@ -1,17 +1,5 @@
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
-import {
-  ArrowDown,
-  ArrowUp,
-  Check,
-  ChevronDown,
-  Ellipsis,
-  GripVertical,
-  Minus,
-  NotebookText,
-  Pencil,
-  Plus,
-  X,
-} from "lucide-react";
+import { Check, ChevronDown, Ellipsis, Plus, X } from "lucide-react";
 
 import type { DisciplineTone, DriftStatus } from "@matops/domain";
 import type { BadgeTone } from "@matops/ui/badge";
@@ -199,7 +187,7 @@ export function SectionHeading({
  * The rule-and-label look `Section` wears, on its own, for a heading that sits
  * inside a section and so cannot be another `Section`.
  */
-export const SECTION_LABEL = "text-sm font-medium";
+const SECTION_LABEL = "text-sm font-medium";
 
 export function Section({
   label,
@@ -359,34 +347,10 @@ export const ChevronDownIcon = ({ className }: { className?: string }) => (
   <ChevronDown aria-hidden className={className} />
 );
 
-export const PencilIcon = ({ className }: { className?: string }) => (
-  <Pencil aria-hidden className={cn("size-3.5", className)} />
-);
-
-export const NoteIcon = ({ className }: { className?: string }) => (
-  <NotebookText aria-hidden className={cn("size-3.5", className)} />
-);
-
 export const MoreIcon = () => <Ellipsis aria-hidden />;
-
-export const GripIcon = ({ className }: { className?: string }) => (
-  <GripVertical aria-hidden className={className} />
-);
 
 export const PlusIcon = ({ className }: { className?: string }) => (
   <Plus aria-hidden className={className} />
-);
-
-export const MinusIcon = ({ className }: { className?: string }) => (
-  <Minus aria-hidden className={className} />
-);
-
-export const ArrowUpIcon = ({ className }: { className?: string }) => (
-  <ArrowUp aria-hidden className={className} />
-);
-
-export const ArrowDownIcon = ({ className }: { className?: string }) => (
-  <ArrowDown aria-hidden className={className} />
 );
 
 export const CheckIcon = ({ className }: { className?: string }) => (

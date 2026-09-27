@@ -109,7 +109,7 @@ export function SkeletonCard({ lines = 3 }: { lines?: number }) {
   );
 }
 
-export function SkeletonControlPanel() {
+function SkeletonControlPanel() {
   return <SkeletonCard lines={2} />;
 }
 /**
@@ -153,9 +153,6 @@ export function SkeletonDayRail({ rows = 3 }: { rows?: number }) {
     </div>
   );
 }
-export function SkeletonFeed() {
-  return <SkeletonRows rows={3} inList />;
-}
 export function SkeletonCoachCards({
   n = 2,
 }: {
@@ -184,9 +181,6 @@ export function SkeletonDuesBody() {
 }
 export function SkeletonMyClassesBody() {
   return <SkeletonRows action inList />;
-}
-export function SkeletonReferralsBody() {
-  return <SkeletonRows inList />;
 }
 export function SkeletonScheduleWeek() {
   return <SkeletonRows />;
@@ -227,7 +221,6 @@ export function CoachesSkeleton() {
     </Frame>
   );
 }
-export const ReferralsSkeleton = ScreenSkeleton;
 export const PaymentsSkeleton = ScreenSkeleton;
 export function SettingsSkeleton() {
   return (
@@ -249,7 +242,6 @@ export function SettingsSkeleton() {
     </Frame>
   );
 }
-export const NotificationsSkeleton = ScreenSkeleton;
 export const ProfileSkeleton = ScreenSkeleton;
 export const AttendanceSkeleton = ScreenSkeleton;
 export const ClassDetailSkeleton = ScreenSkeleton;

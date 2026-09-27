@@ -96,7 +96,6 @@ export const classTemplate = pgTable(
     title: t.text().notNull(),
     description: t.text(),
     discipline: discipline(), // nullable optional tag
-    curriculumTrackId: t.uuid(), // null = the academy's default track
     daysOfWeek: t.integer().array().notNull(), // 0=Sun … 6=Sat
     startsAtMinutes: t.integer().notNull(), // minutes from LOCAL midnight
     durationMinutes: t.integer().notNull(),
@@ -108,10 +107,6 @@ export const classTemplate = pgTable(
      * behaviour changes under them (ADR 126).
      */
     capacityPolicy: t.text().notNull().default("soft"),
-    // Copied onto each class at materialization, not joined: a one-off class has
-    // no template and can still be published, and an owner can unpublish a
-    // single date without touching the recurring template (ADR 115).
-    publicBookable: t.boolean().notNull().default(false),
     status: templateStatus().notNull().default("active"), // business status…
     deletedAt: t.timestamp({ withTimezone: true }), // …orthogonal soft-delete
     generatedUntil: t.timestamp({ withTimezone: true }), // materialization cursor (slice 2.2)
@@ -163,7 +158,6 @@ export const classInstance = pgTable(
     capacity: t.integer().notNull(),
     capacityPolicy: t.text().notNull().default("soft"),
     bookingCount: t.integer().notNull().default(0),
-    publicBookable: t.boolean().notNull().default(false),
     status: classStatus().notNull().default("scheduled"),
     attendanceReviewedAt: t.timestamp({ withTimezone: true }),
     attendanceReviewedBy: t.text(),
@@ -407,11 +401,6 @@ export const dropInVisit = pgTable(
       .references(() => classInstance.id),
     bookingStatus: bookingStatus().notNull().default("none"),
     attendanceStatus: attendanceStatus().notNull().default("unmarked"),
-    // Returned once to the public caller; the only handle that cancels a
-    // visitor booking, so it is never listed by any read endpoint.
-    cancelToken: t.text(),
-    cancelTokenExpiresAt: t.timestamp({ withTimezone: true }),
-    bookedClassStartsAt: t.timestamp({ withTimezone: true }),
     bookedAt: t.timestamp({ withTimezone: true }),
     cancelledAt: t.timestamp({ withTimezone: true }),
     attendedAt: t.timestamp({ withTimezone: true }),
@@ -427,6 +416,5 @@ export const dropInVisit = pgTable(
     uniqueIndex("dv_uniq_lead_class").on(table.dropInId, table.classId),
     index("dv_by_academy_class").on(table.academyId, table.classId),
     index("dv_by_lead").on(table.dropInId),
-    uniqueIndex("dv_uniq_cancel_token").on(table.cancelToken),
   ],
 );

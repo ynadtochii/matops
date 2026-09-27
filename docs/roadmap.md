@@ -1,61 +1,89 @@
 <!-- matops — live implementation plan + scope matrix. Rules for this file live in delivery.md. -->
 
 
+**First release: one academy, approval-only booking, ADR 142**
+
+Plan: [first-release-plan.md](first-release-plan.md). Code built, including the dead-code removal (B1-B7). Expo changed only where removed features reached it (B5, B6). Lint and typecheck pass, and the last full test run passed 1,168 tests. Browser checks were skipped by decision (plan Decision 12). Not released: S7 waits on privacy details, a restore rehearsal and a production check, and `0004` ships in a later deploy than the code.
+
+| Slice | DB | API | Web | Mobile | Shared | Infra |
+| --- | --- | --- | --- | --- | --- | --- |
+| S0 cutover map | done | done | done | not needed | done | not needed |
+| S1a approval-only admission, new academies default off, `cancelFor` (the owner override is removed, ADR 142) | done | done | not needed | not changed | not needed | not needed |
+| S1b web payment readers follow the flag | not needed | done | done | not changed | not needed | not needed |
+| S2 one form creates the gym and its first academy, resume without a duplicate | not needed | done | done | not changed | done | not needed |
+| S3 setup list without plans or instructor, one academy opens directly | not needed | done | done | not changed | done | not needed |
+| S4 optional features stay behind their flags (removed, ADR 142) | not needed | not needed | removed | not changed | not needed | not needed |
+| S5 academy week, server smoke on dev | not needed | done | not needed | not changed | not needed | not needed |
+| Hide 14 features after the manual check (ADR 142 addendum) | not needed | not needed | done | not changed | not needed | not needed |
+| One academy, one set of screens: Students, Settings, redirects (ADR 142 addendum) | not needed | not needed | done | not changed | not needed | not needed |
+| B1 dead code: procedures with no caller, knip leftovers | not needed | done | done | not changed | done | not needed |
+| B2 dead code: multi-academy screens and their procedures | not needed | done | done | not changed | done | not needed |
+| B3 dead code: public booking and `/book/<code>` | not needed | done | done | not changed | done | not needed |
+| B4 dead code: referrals | done | done | done | not changed | done | not needed |
+| B5 dead code: curriculum | done | done | done | done | done | not needed |
+| B6 dead code: general spaces | not needed | done | done | done | done | not needed |
+| B7 migration `0004_first_release_drops`: applied to dev; production in a later deploy | done | not needed | not needed | not needed | not needed | todo |
+| Browser checks (S1b to S5) | — | — | skipped | not needed | — | — |
+| S6 contracts and active docs | — | — | — | — | done | — |
+| S7 pilot release checks | — | — | todo | not needed | — | todo |
+
 **Design system reference page**
 
 | Slice | Web | Shared | Mobile |
 | --- | --- | --- | --- |
-| Unlinked token, component, and pattern showcase at `/design-system` | done | reused | not changed |
+| Unlinked token, component, and pattern showcase at `/design-system` (removed in Linear step 6a) | removed | reused | not changed |
 | Linear reference system and basic components at `/linear-ds` | done | not changed | not changed |
 
-**Linear redesign, ADR 141 (branch `design/linear`)**
+**Linear redesign, ADR 141: merged to `main` in PR #12 (`aac088d`)**
+
+Closed. The Expo steps passed static gates only; nobody ran them on a device.
 
 | Slice | Web | Shared | Mobile |
 | --- | --- | --- | --- |
 | Step 0: decisions and ADR | done | done | done |
-| Step 1: tokens, Inter, radius, shadows | done | done | wip |
+| Step 1: tokens, Inter, radius, shadows | done | done | done |
 | Step 2: shared components and new primitives | — | done | — |
 | Step 3: app shell | done | — | — |
 | Step 4: screens, nine groups | done | — | — |
-| Step 5: Expo restyle (static gates only, no device run) | — | — | wip |
-| Step 6: clean up, lint guard, merge | wip | done | wip |
+| Step 5: Expo restyle (static gates only, no device run) | — | — | done |
+| Step 6: clean up, lint guard, merge | done | done | done |
 
-**Reception, ADR 139 (supersedes ADR 138)**
+**Reception, ADR 139 (supersedes ADR 138): removed (ADR 142)**
 
-Implementation is locally complete. The slice remains wip until focused tests pass, browser and iPad checks complete, and one branch completes the pilot. Migration `0001_reception_link` is applied to dev. Migration `0002_loose_machine_man` remains to be applied. Static verification is in [the implementation plan](reception-implementation-plan.md).
+Closed without release. ADR 142 removed the reception screens and procedures, and migration `0004_first_release_drops` drops `reception_link`.
 
 | Slice | DB | API | Web | Mobile | Shared | Infra |
 | --- | --- | --- | --- | --- | --- | --- |
-| Permanent entrance link, storage and management | wip | wip | wip | not needed | not needed | not needed |
-| Link exchange and staff handover | not needed | wip | wip | not needed | not needed | not needed |
-| Name search, then the class already chosen | not needed | wip | wip | not needed | wip | not needed |
-| Book before the hour, check in after | wip | wip | wip | not needed | wip | not needed |
-| Existing walk-in form and automatic reset | reused | reused | wip | not needed | reused | not needed |
-| Staff reception screen | not needed | wip | wip | not needed | reused | not needed |
+| Permanent entrance link, storage and management | removed | removed | removed | not needed | not needed | not needed |
+| Link exchange and staff handover | not needed | removed | removed | not needed | not needed | not needed |
+| Name search, then the class already chosen | not needed | removed | removed | not needed | removed | not needed |
+| Book before the hour, check in after | removed | removed | removed | not needed | removed | not needed |
+| Existing walk-in form and automatic reset | removed | removed | removed | not needed | removed | not needed |
+| Staff reception screen | not needed | removed | removed | not needed | removed | not needed |
 
 **First academy fresh install, 2026-09-08**
 
-The active release scope is in [PLAN.md](/Users/kuna/projects/matops/PLAN.md), [ADR 135](/Users/kuna/projects/matops/docs/issues/135-first-academy-fresh-install-contract.md), and the [technical plan](/Users/kuna/projects/matops/docs/first-academy-technical-plan.md). Implementation is in final static verification. Focused tests were written but did not run. Browser, device, privacy, and restore checks still gate release.
+The active release scope is in [first-release-plan.md](/Users/kuna/projects/matops/docs/first-release-plan.md) and [ADR 135](/Users/kuna/projects/matops/docs/issues/135-first-academy-fresh-install-contract.md). Built. ADR 142 now defines the release (the block at the top); privacy and restore checks still gate it.
 
 | Slice                                     | DB   | API  | Web  | Mobile     | Shared | Infra      |
 | ----------------------------------------- | ---- | ---- | ---- | ---------- | ------ | ---------- |
 | S0 contract and removal map               | done | done | done | done       | done   | done       |
 | S1 adult person identity                  | done | done | done | done       | done   | not needed |
 | S2 staff-assigned membership evidence     | done | done | done | done       | done   | not needed |
-| S3 saved notices and manual delivery      | done | done | done | not needed | done   | done       |
-| S4 branch booking window and safe rebuild | done | done | done | done       | done   | done       |
-| S5 hosted visitor booking                 | done | done | done | not needed | done   | done       |
+| S3 saved notices (manual delivery removed, ADR 142) | done | done | done | not needed | done   | done       |
+| S4 booking window (setting removed, ADR 142) and safe rebuild | done | done | done | done       | done   | done       |
+| S5 hosted visitor booking (removed, ADR 142) | removed | removed | removed | not needed | removed | removed |
 | S6 focused owner evidence                 | done | done | done | not needed | done   | not needed |
 | S7 release surface cleanup                | done | done | done | done       | done   | done       |
-| S8 fresh baseline and active docs         | wip  | wip  | done | done       | done   | wip        |
+| S8 fresh baseline and active docs         | done | done | done | done       | done   | done       |
 
-S8 finishes when the fresh migration baseline and workspace static checks pass. Application jobs, student shopping, guardian access, announcements, broad Insights, student training statistics, and the external booking API are removed from the release.
+The fresh baseline shipped as `0000_baseline`. Application jobs, student shopping, guardian access, announcements, broad Insights, student training statistics, and the external booking API are removed from the release.
 
 **Superseded release records**
 
 **Explicit attendance review, ADR 133**
 
-Status: built with the existing editing limit. The new correction policy is approved in PLAN.md but not implemented. Owners and managers may correct older attendance with a reason and history; instructors retain the current window. Product rules: O1 and O5. [Earlier decision](/Users/kuna/projects/matops/docs/issues/133-explicit-attendance-review.md).
+Status: built with the existing editing limit. The new correction policy is approved but not implemented. Owners and managers may correct older attendance with a reason and history; instructors retain the current window. Product rules: O1 and O5. [Earlier decision](/Users/kuna/projects/matops/docs/issues/133-explicit-attendance-review.md).
 
 | Slice                                     | DB  | API | Web | Mobile | Shared | Infra |
 | ----------------------------------------- | --- | --- | --- | ------ | ------ | ----- |
@@ -87,7 +115,7 @@ Status: implemented. Workspace typecheck passed 17/17 and lint passed 15/15. Tes
 - [x] Final workspace lint and typecheck.
 - [ ] User-run regression tests and browser acceptance.
 
-No migration. Existing billing records remain unchanged. [Plan](/Users/kuna/projects/matops/docs/staff-roster-isolation-plan.md).
+No migration. Existing billing records remain unchanged. Decision: [ADR 132](/Users/kuna/projects/matops/docs/issues/132-staff-roster-isolation.md).
 
 # matops — Roadmap (live plan + scope matrix)
 
@@ -116,21 +144,21 @@ Organization invitations, free trials, card processing and student plan replacem
 
 **Built: the owner screens design pass (v7.8)**
 
-Status: **built, not clicked through and the suites not run here**. Static gates green (`pnpm typecheck` 17/17 after every task). Presentation only: **no migration, no procedure, no query and no token changed**, so nothing below the web layer can regress. One behaviour change, specced in O4: ending a membership from the member detail now asks first, matching the person screen. Decisions: [ADR 140](/Users/kuna/projects/matops/docs/issues/140-the-owner-screens-design-pass.md). Plan and the per screen log: [owner-screens-design-loop-handoff.md](/Users/kuna/projects/matops/docs/owner-screens-design-loop-handoff.md). Route map: [owner-screens-sitemap.md](/Users/kuna/projects/matops/docs/owner-screens-sitemap.md).
+Status: **built, not clicked through and the suites not run here**. Static gates green (`pnpm typecheck` 17/17 after every task). Presentation only: **no migration, no procedure, no query and no token changed**, so nothing below the web layer can regress. One behaviour change, specced in O4: ending a membership from the member detail now asks first, matching the person screen. Decisions: [ADR 140](/Users/kuna/projects/matops/docs/issues/140-the-owner-screens-design-pass.md).
 
 | Slice                                    | DB  | API | Web  | Mob | Shared | Infra |
 | ---------------------------------------- | --- | --- | ---- | --- | ------ | ----- |
 | Branch dashboard: the rail, the honest queue | n/a | n/a | done | n/a | n/a | n/a |
-| Gym overview: one state vocabulary       | n/a | n/a | done | n/a | n/a | n/a |
+| Gym overview: one state vocabulary       | n/a (removed, ADR 142) | n/a | done | n/a | n/a | n/a |
 | Memberships: counts on the tabs          | n/a | n/a | done | n/a | n/a | n/a |
-| People list: columns at 200 rows         | n/a | n/a | done | n/a | n/a | n/a |
-| Person: the actions ranked               | n/a | n/a | done | n/a | n/a | n/a |
+| People list: columns at 200 rows         | n/a (removed, ADR 142) | n/a | done | n/a | n/a | n/a |
+| Person: the actions ranked               | n/a (removed, ADR 142) | n/a | done | n/a | n/a | n/a |
 | Roster: the day's work before setup      | n/a | n/a | done | n/a | n/a | n/a |
 | Schedule: three tabs, one screen         | n/a | n/a | done | n/a | n/a | n/a |
 | Coaches: per-row pending state           | n/a | n/a | done | n/a | n/a | n/a |
 | Both settings screens, matched           | n/a | n/a | done | n/a | n/a | n/a |
-| Reception: one eyebrow, not three        | n/a | n/a | done | n/a | n/a | n/a |
-| Referrals, Attendance, Class, Notices    | n/a | n/a | done | n/a | n/a | n/a |
+| Reception: one eyebrow, not three        | n/a (removed, ADR 142) | n/a | done | n/a | n/a | n/a |
+| Referrals, Attendance, Class, Notices    | n/a (Referrals removed, ADR 142) | n/a | done | n/a | n/a | n/a |
 
 Not done: nothing was opened in a browser, no suite was run here, settings section navigation, and whether `CountBadge` means attention or a plain total.
 
@@ -138,22 +166,22 @@ Not done: nothing was opened in a browser, no suite was run here, settings secti
 
 **Built: the manager runs every branch, and a plan change waits for the 1st (v7.7)**
 
-Status: **built, not clicked through and the suites not run here**. Static gates green (`pnpm typecheck` 17/17, `pnpm lint` 15/15). **Tests were run** (2026-09-06, twice): the workspace suite is **green, 1611 tests across 130 files**. It had 25 failures on the baseline `b237f03`; this release fixed every one and introduced none. Migration `0065` is **applied to dev** (64 rows against 64 journal entries, checked 2026-09-06) and verified live: `end_month` nullable, the lifetime unique index replaced by the partial one on `(plan_id, user_id, start_month)`, `access_assignment_change` with its checks, six foreign keys and partial unique index, RLS on with all four `matops_app` grants, and all 15 existing assignments still open-ended. Product rules: MB1-MB8 in [spec.md](/Users/kuna/projects/matops/docs/spec.md). Decisions: [ADR 129](/Users/kuna/projects/matops/docs/issues/129-the-manager-runs-every-branch.md). Plan: [PLAN.md](/Users/kuna/projects/matops/PLAN.md).
+Status: **built, not clicked through and the suites not run here**. Static gates green (`pnpm typecheck` 17/17, `pnpm lint` 15/15). **Tests were run** (2026-09-06, twice): the workspace suite is **green, 1611 tests across 130 files**. It had 25 failures on the baseline `b237f03`; this release fixed every one and introduced none. Migration `0065` is **applied to dev** (64 rows against 64 journal entries, checked 2026-09-06) and verified live: `end_month` nullable, the lifetime unique index replaced by the partial one on `(plan_id, user_id, start_month)`, `access_assignment_change` with its checks, six foreign keys and partial unique index, RLS on with all four `matops_app` grants, and all 15 existing assignments still open-ended. Product rules: MB1-MB8 in [spec.md](/Users/kuna/projects/matops/docs/spec.md). Decisions: [ADR 129](/Users/kuna/projects/matops/docs/issues/129-the-manager-runs-every-branch.md).
 
 | Slice                                         | DB   | API  | Web  | Mob  | Shared | Infra |
 | --------------------------------------------- | ---- | ---- | ---- | ---- | ------ | ----- |
 | Manager capabilities at every branch          | n/a  | done | done | n/a  | done   | n/a   |
 | Coverage as one workflow                      | n/a  | done | done | n/a  | n/a    | n/a   |
-| Next-month plan replacement                   | done | done | done | done | done   | n/a   |
+| Next-month plan replacement                   | done (removed, ADR 142) | done | done | done | done   | n/a   |
 | Bookings needing review, never cancelled      | n/a  | done | done | n/a  | done   | n/a   |
-| Gym and branch navigation together            | n/a  | done | done | n/a  | done   | n/a   |
-| People, Staff and person tasks in one screen  | n/a  | done | done | n/a  | done   | n/a   |
-| Daily work first on the overview and in setup | n/a  | done | done | n/a  | done   | n/a   |
+| Gym and branch navigation together            | n/a (removed, ADR 142) | done | done | n/a  | done   | n/a   |
+| People, Staff and person tasks in one screen  | n/a (removed, ADR 142) | done | done | n/a  | done   | n/a   |
+| Daily work first on the overview and in setup | n/a (the overview removed, ADR 142) | done | done | n/a  | done   | n/a   |
 | The mobile branch picker beside the schedule  | n/a  | n/a  | n/a  | done | n/a    | n/a   |
 
 - [x] Write ADR 129 and carry it into the spec, the map, the changelog and this file.
 - [x] Build the eight slices and hand the focused test commands over.
-- [x] Run the focused suites listed in [PLAN.md](/Users/kuna/projects/matops/PLAN.md), and the whole workspace suite. Green, twice.
+- [x] Run the focused suites and the whole workspace suite. Green, twice.
 - [x] Apply `0065` to dev, then check the applied count against `_journal.json`.
 - [ ] Walk the manual acceptance list: zero-branch setup, single-branch owner, multi-branch manager, branch instructor and student, plus the outstanding Expo device checklist. These stay human work.
 
@@ -161,42 +189,42 @@ A manager is no longer stopped at the organization: they run every live branch w
 
 **Built: finishing the organization pivot (v7.6)**
 
-Status: **built, not clicked through and the suites not run here**. Static gates green (`pnpm typecheck` 17/17, `pnpm lint` 15/15). Migrations `0060` to `0064` are **applied to dev** (63 rows against 63 journal entries, checked 2026-09-04); two hand-run fills are outstanding, `2026-09-04-general-branches-backfill.sql` and `2026-09-04-paid-commitment.sql`. Product rules: FP1-FP10 in [spec.md](/Users/kuna/projects/matops/docs/spec.md). Decisions: [ADR 128](/Users/kuna/projects/matops/docs/issues/128-registration-creates-the-organization-only.md). Plan: [PLAN.md](/Users/kuna/projects/matops/PLAN.md). Loop state, one item per run: [EPIC.md](/Users/kuna/projects/matops/EPIC.md). Migrations start at `0060`; `0059` is reserved for the delayed `payment_settings.bank_details` drop and is not reused.
+Status: **built, not clicked through and the suites not run here**. Static gates green (`pnpm typecheck` 17/17, `pnpm lint` 15/15). Migrations `0060` to `0064` are **applied to dev** (63 rows against 63 journal entries, checked 2026-09-04); two hand-run fills are outstanding, `2026-09-04-general-branches-backfill.sql` and `2026-09-04-paid-commitment.sql`. Product rules: FP1-FP10 in [spec.md](/Users/kuna/projects/matops/docs/spec.md). Decisions: [ADR 128](/Users/kuna/projects/matops/docs/issues/128-registration-creates-the-organization-only.md). Migrations start at `0060`; `0059` is reserved for the delayed `payment_settings.bank_details` drop and is not reused.
 
 | Slice                                           | DB   | API  | Web  | Mob  | Shared | Infra |
 | ----------------------------------------------- | ---- | ---- | ---- | ---- | ------ | ----- |
 | Organization-only creation                      | done | done | done | n/a  | n/a    | n/a   |
-| The zero-branch organization shell              | n/a  | done | done | n/a  | n/a    | n/a   |
+| The zero-branch organization shell              | n/a (replaced by `/start` resume mode, ADR 142) | done | done | n/a  | n/a    | n/a   |
 | First-branch creation and branch capabilities   | done | done | done | n/a  | n/a    | n/a   |
 | The guided setup journey                        | n/a  | done | done | n/a  | done   | n/a   |
 | Membership prices and price history             | done | done | done | done | done   | n/a   |
-| Organization people and bulk migration          | n/a  | done | done | n/a  | done   | n/a   |
+| Organization people and bulk migration          | n/a (removed, ADR 142) | done | done | n/a  | done   | n/a   |
 | Organization manager permissions                | n/a  | done | done | n/a  | done   | n/a   |
 | Legacy dues out of normal use                   | n/a  | done | done | n/a  | n/a    | n/a   |
-| Type-aware branch surfaces                      | n/a  | done | done | done | done   | n/a   |
-| Product entry, commercial state and measurement | done | done | done | n/a  | done   | done  |
+| Type-aware branch surfaces                      | n/a (removed, ADR 142) | done | done | done | done   | n/a   |
+| Product entry, commercial state and measurement | done (commercial state removed, ADR 142; measurement stays) | done | done | n/a  | done   | done  |
 
 - [x] Write ADR 128 and carry it into the spec, the architecture doc, the map and this file.
 - [x] Build the ten slices, one epic item per run, and hand the focused test commands over.
 - [x] Apply `0060` and the migrations after it to dev in order, then check the applied count against `_journal.json`. Note that the file set skips `0051`, so a contiguous-run check reports a migration that never existed.
-- [x] Run the focused suites listed in [EPIC.md](/Users/kuna/projects/matops/EPIC.md)'s log. Run with the whole workspace suite in v7.7, which fixed the 25 failures v7.5 and v7.6 left behind.
+- [x] Run the focused suites. Run with the whole workspace suite in v7.7, which fixed the 25 failures v7.5 and v7.6 left behind.
 - [ ] Run the two hand-run fills under `packages/db/scripts`.
 - [ ] Walk the manual acceptance list: the BJJ-only journey, organization-only registration, BJJ plus a general space, denied actions per role, and the outstanding Expo device checklist. These stay human work.
 
 Registration stops creating a mat, so an organization with no branch becomes a normal state rather than a failed write. Every new branch runs the shared membership gate from creation; legacy branch dues survive only to migrate and roll back the branches that predate the cutover.
 
-**Built: the owner level (v7.5)**
+**Built: the owner level (v7.5). The gym-level screens are removed, ADR 142.**
 
-Status: **built**. Static gates green (`pnpm typecheck` 17/17, `pnpm lint` 15/15), suites green (**1441 tests across 118 files**: domain 658, api 565, db 179, validators 36, notifications 3), and migrations `0057` and `0058` applied to **dev** with the bank-details fill run there and a second run writing nothing. Two things are open: nobody has walked the pilot gym, and `0059` drops `payment_settings.bank_details` one deploy after this reaches production. Product rules: OD1-OD7 in [spec.md](/Users/kuna/projects/matops/docs/spec.md). Decisions: [ADR 127](/Users/kuna/projects/matops/docs/issues/127-the-owner-level.md). Run file with one checkbox per run: [owner-dashboard-plan.md](/Users/kuna/projects/matops/docs/owner-dashboard-plan.md). Files, signatures, UI copy and named test cases: [owner-dashboard-detailed-plan.md](/Users/kuna/projects/matops/docs/owner-dashboard-detailed-plan.md). Migrations `0057` and `0058` add one column each; `0059` drops `payment_settings.bank_details` one deploy later. No feature flag: every slice is additive until the branch Payments screen retires, and that touches only branches an owner has switched on.
+Status: **built**. Static gates green (`pnpm typecheck` 17/17, `pnpm lint` 15/15), suites green (**1441 tests across 118 files**: domain 658, api 565, db 179, validators 36, notifications 3), and migrations `0057` and `0058` applied to **dev** with the bank-details fill run there and a second run writing nothing. Two things are open: nobody has walked the pilot gym, and `0059` drops `payment_settings.bank_details` one deploy after this reaches production. Product rules: OD1-OD7 in [spec.md](/Users/kuna/projects/matops/docs/spec.md). Decisions: [ADR 127](/Users/kuna/projects/matops/docs/issues/127-the-owner-level.md). Migrations `0057` and `0058` add one column each; `0059` drops `payment_settings.bank_details` one deploy later. No feature flag: every slice is additive until the branch Payments screen retires, and that touches only branches an owner has switched on.
 
 | Slice                                      | DB   | API  | Web  | Mob  | Shared | Infra |
 | ------------------------------------------ | ---- | ---- | ---- | ---- | ------ | ----- |
-| Organization shell                         | n/a  | n/a  | done | n/a  | n/a    | n/a   |
+| Organization shell                         | n/a (removed, ADR 142) | n/a  | done | n/a  | n/a    | n/a   |
 | One bank account and organization Settings | done | done | done | done | n/a    | n/a   |
 | The claim                                  | done | done | done | done | done   | n/a   |
 | Activation and branch Payments retired     | n/a  | done | done | done | n/a    | done  |
-| Staff across branches                      | n/a  | done | done | n/a  | done   | n/a   |
-| Announce to every branch                   | n/a  | done | done | n/a  | done   | n/a   |
+| Staff across branches                      | n/a (removed, ADR 142) | done | done | n/a  | done   | n/a   |
+| Announce to every branch                   | n/a (removed, ADR 135) | done | done | n/a  | done   | n/a   |
 
 - [x] Settle the decisions with the owner: curriculum stays per branch, one bank account per organization, branch Payments retires at activation, activation becomes a procedure, logo upload and organization delete are out.
 - [x] Write ADR 127 and the detailed plan.
@@ -204,17 +232,17 @@ Status: **built**. Static gates green (`pnpm typecheck` 17/17, `pnpm lint` 15/15
 - [x] Apply `0057` and `0058` to dev, run the suites, flip these cells and the spec block to as-built.
 - [ ] Walk the pilot organization on dev, then drop `payment_settings.bank_details` in a later deploy (`0059`).
 
-**Built: general branches and shared memberships (v7.4)**
+**Built: general branches and shared memberships (v7.4). General branches removed, ADR 142.**
 
-Status: **built and behind a flag**. `organization.general_branches_enabled` is off everywhere except the pilot, so no existing gym can open a general branch until somebody turns it on. **v7.6 changes that**: migration `0060` makes the column default true and the existing live organizations are filled by hand, because the membership and booking path this flag was waiting on is built (ADR 128). Migrations `0049`-`0056` are applied to **dev**, not production. Product rules: GB1-GB9 in [spec.md](/Users/kuna/projects/matops/docs/spec.md). Decisions: [ADR 126](/Users/kuna/projects/matops/docs/issues/126-a-branch-is-not-always-a-mat.md). Scope, the delivery record with a log entry per step, the acceptance coverage map and the two known gaps: [implementation plan](/Users/kuna/projects/matops/docs/general-branches-memberships-plan.md). One step is still open: the manual acceptance walkthrough (6.3) needs a person.
+Status: **built and behind a flag**. `organization.general_branches_enabled` is off everywhere except the pilot, so no existing gym can open a general branch until somebody turns it on. **v7.6 changes that**: migration `0060` makes the column default true and the existing live organizations are filled by hand, because the membership and booking path this flag was waiting on is built (ADR 128). Migrations `0049`-`0056` are applied to **dev**, not production. Product rules: GB1-GB9 in [spec.md](/Users/kuna/projects/matops/docs/spec.md). Decisions: [ADR 126](/Users/kuna/projects/matops/docs/issues/126-a-branch-is-not-always-a-mat.md). One step is still open: the manual acceptance walkthrough (6.3) needs a person.
 
 | Slice                                                          | DB   | API  | Web  | Mob  | Shared | Infra |
 | -------------------------------------------------------------- | ---- | ---- | ---- | ---- | ------ | ----- |
-| General entity creation and shared schedule                    | done | done | done | done | done   | n/a   |
+| General entity creation and shared schedule                    | done (removed, ADR 142) | done | done | done | done   | n/a   |
 | Organization plan catalog and entity member-profile assignment | done | done | done | n/a  | done   | n/a   |
 | Manual monthly status, grace, warnings, and cancellation sweep | done | done | done | done | done   | done  |
-| Membership eligibility and general-space booking               | done | done | done | done | done   | n/a   |
-| Owner member directory and business overview                   | n/a  | done | done | done | done   | n/a   |
+| Membership eligibility and general-space booking               | done (general spaces removed, ADR 142) | done | done | done | done   | n/a   |
+| Owner member directory and business overview                   | n/a (removed, ADR 142) | done | done | done | done   | n/a   |
 | Access backfill, compatibility, and pilot checks               | done | n/a  | n/a  | n/a  | n/a    | done  |
 
 - [x] Document organization-level creation, member-profile assignment, entity member lists, and owner reporting.
@@ -229,15 +257,15 @@ Manual paid/unpaid tracking is included. Payment processing and automatic collec
 > Flip cells as you go: **`—`** not needed · **`todo`** · **`wip`** · **`done`**. Every flip to `done` must pass the [Definition of Done](delivery.md#4-definition-of-done-the-anti-drift-gate).
 > Surfaces: **DB · API · Web · Mob · Sh(ared) · Inf(ra)**. Spec IDs trace up to [spec.md](spec.md); tickets to [map.md](map.md).
 
-**Status:** **Phases 0-4 complete, plus every product wave through v3.2, and the v3.3 web refactor.** Static gates green: `lint` 15/15 · `typecheck` 17/17 · `pnpm test` **456 green** (domain 275 · db 82 · api 72 · validators 24 · notifications 3). **`next build` was last run for v3.9** — v2.5 to v3.1 are lint + typecheck only, and the per-wave verify lines below say so. Tests live in three homes now — `packages/db/test` (PGlite RLS), `packages/domain/test` (pure rules) and, since ADR [60](issues/60-backend-review-fixes.md), `packages/api/test` (real routers + real middleware + real SQL over PGlite).
+**Status (2026-09-27):** the first release is built: **one BJJ academy per gym** and **approval-only booking** ([ADR 142](issues/142-first-release-approval-only-booking.md), [first-release-plan.md](first-release-plan.md)). Static gates are green. The last full test run passed **1,168 tests** across `notifications`, `validators`, `domain`, `db` and `api` (2026-09-27). Migrations are `0000_baseline` to `0004_first_release_drops`; `0004` ships to production in a later deploy than the code. Tests live in `packages/db/test` (PGlite RLS), `packages/api/test` (real routers over PGlite, ADR [60](issues/60-backend-review-fixes.md)), `packages/domain/test` and `packages/validators/test`.
 
-What is built: the identity join loop (Phase 1), the scheduling core (Phase 2), booking & attendance (Phase 3), notifications (Phase 4 — engine, plus a **daily dues sweep** since ADR [75](issues/75-daily-cron-on-github-actions.md)), the Expo student app, and the waves below — v1.1 UX, v1.2 stats, v1.3 payments, v1.4 rank & notes, v1.5 PWA, v1.7 mobile design, v1.8 mobile IA, v1.9 referrals, v2.0/v2.1 mobile waves, v2.2 student web funnel, v2.3/v2.4 review fixes, v2.5 coach workload, v2.6 the Settings split, v2.7 invite roles + the coach queue, v2.8 the web Profile, v2.9 academy time zone / address / delete, v2.10 referrals owner-only, v3.0 in-app QR scan, v3.1 the pinned map link, v3.2 the student web at parity, v3.3 the web shell seams (refactor, ADR [74](issues/74-web-shell-seams.md)), v3.4 the member CSV export, v3.5 the daily cron on GitHub Actions (ADR [75](issues/75-daily-cron-on-github-actions.md)), v3.6 the pilot blockers (ADR [76](issues/76-pilot-blockers.md)), v3.7 the notification center (ADR [77](issues/77-notification-center.md)), v3.9 the loading states (ADR [80](issues/80-loading-states.md)), v3.10 the membership gate (ADR [82](issues/82-membership-booking-gate.md)), and **v7.2 the organization/entity pivot** (ADR [124](issues/124-the-organization-owns-typed-entities.md), seven waves, migrations `0042`-`0047`): one gym can run two academies from one login, each with its own schedule, roster, dues, code and booking link, with the URL naming the academy and an owner overview across them, plus **v7.3 the pivot review fixes** (ADR [125](issues/125-the-pivot-review-fixes.md), no migration): organization ownership reaches every mat, `purge` cannot delete the founder, one query cache per academy, and `entity` / `academy_profile` writes back under RLS.
+What is built: the identity join loop, the scheduling core with a 180-day horizon, booking and attendance with explicit review (ADR [133](issues/133-explicit-attendance-review.md)), class notices (a saved notice, one email batch through Resend, push and the app feed), drop-in leads with the wall-QR form at `/checkin/<id>`, rank and notes, coach figures, student import and export, the student web and the Expo app, and the organization and entity model (ADR [124](issues/124-the-organization-owns-typed-entities.md)) with one academy per gym. The payment code (shared memberships, ADR 135) is built and switched off with no control to turn it on. Rows below marked **removed** are history: reception, public booking, referrals, curriculum, general spaces, the notifications page, the gym-level screens, the payment switch and `booking.bookFor` were removed by ADR 142; scheduled jobs, announcements, insights and student statistics by ADR [135](issues/135-first-academy-fresh-install-contract.md).
 
-**Not built yet:** **Phase 5** launch hardening (universal/App links — the app still uses a custom scheme; booking-count reconciliation; a **shared-store** rate limiter — v3.6 shipped an in-process one, ADR [76](issues/76-pilot-blockers.md), which leaks across a Fluid-compute scale-out), **any scheduler beyond the daily dues tick** (v3.5 put `/api/cron/remind` on a **daily** GitHub Actions run at 09:00 Lisbon; `/api/cron/materialize` stays dormant and the **class** reminder sweep stays switched off, both on purpose — ADR 75), and **v1.3 R.2** the native home-screen widget (scaffolded, guide in [home-widget-implementation.md](home-widget-implementation.md)).
+**Not built yet:** **Phase 5** launch hardening (universal and App links: the app still uses a custom scheme; booking-count reconciliation; a **shared-store** rate limiter: the in-process one from ADR [76](issues/76-pilot-blockers.md) is per instance), **any scheduled job** (nothing runs on a timer: no dues reminders, and owners extend the calendar by hand), a second academy on the web, turning payment on from a screen, and **v1.3 R.2** the native home-screen widget (guide in [home-widget-implementation.md](home-widget-implementation.md)).
 
 **Open operational items:** **`AUTH_SECRET` needs rotating** on the next deploy (the old auth error hook logged it — ADR 60); the mobile **Google browser→app session hand-off** still does not land ([mobile-google-login-handoff.md](mobile-google-login-handoff.md)); and every mobile wave since v1.8 is **static-gates-green only** — no simulator in this environment, so the checks in [mobile-device-test.md](mobile-device-test.md) are outstanding.
 
-**Before a beta with an external customer:** the web-only readiness gaps (no deployment, no transactional email, no error boundary, no rate limiting, no privacy page) are collected in [beta-readiness.md](beta-readiness.md).
+**Before real invitations:** set the legal and privacy variables in Vercel Production and rehearse backup and restore (first-release plan S7). The runbook is [beta-launch-plan.md](beta-launch-plan.md).
 
 > **Verified live on Neon.**
 >
@@ -311,37 +339,37 @@ One row per slice. This is the single answer to _"what's left, on which surface?
 ² Sentry covers the **errors** half on the **web** only (ADR [72](issues/72-sentry-error-tracking.md)): all three Next runtimes plus source-map upload. **Rate limiting is untouched**, and the Expo app reports nothing.
 | **v1.2** | **Personal & Insight** _(no new domain, no migration, no cron)_ | | | | | | |
 | A.0 | `stats.ts` pure engine + tests (ADR 39) | — | — | — | — | done | — |
-| B.1 | My Training stats (student, `stats.me`) | — | done | — | done | — | — |
+| B.1 | My Training stats (student, `stats.me`) (removed, ADR 135) | — | done | — | done | — | — |
 | B.2 | Training tab + next-class card (`booking.mine`) | — | done | — | done | — | — |
 | B.3 | Edit profile (name / phone) | — | done | — | done | done | — |
-| C.1 | Gym insights + "who's drifting" (owner web) | — | done | done | — | — | — |
+| C.1 | Gym insights + "who's drifting" (owner web) (insights removed, ADR 135; drifting stays) | — | done | done | — | — | — |
 | C.2 | Tabbed member detail (attendance history) | — | done | done | — | — | — |
 | **v1.3** | **Frictionless & Pay** _(payments = manual bank transfer; ADR 40)_ | | | | | | |
 | F.1 | Today / next-class one-tap home card | — | — | — | done | — | — |
 | F.2 | Mark-all-present (bulk attendance) | — | done | done | — | done | — |
-| F.3 | Scannable venue QR — reconcile docs (already built) | — | — | done | — | — | — |
-| P.1 | Dues + payment-claim schema & domain (ADR 40) | done | — | — | — | done | — |
-| P.2 | Owner: paid / overdue status on member list (O7) | — | done | done | — | — | — |
-| P.3 | Student pay: requisites + "I paid" + confirm (S9, O7) | — | done | done | done | done | — |
-| R.1 | Payment reminders (**scheduled daily** since v3.5 — ADR 75) | done | done | — | — | done | done |
+| F.3 | Scannable venue QR — reconcile docs (already built) (the web poster is removed, ADR 142; `/checkin/<id>` stays) | — | — | done | — | — | — |
+| P.1 | Dues + payment-claim schema & domain (ADR 40) (replaced by shared memberships, ADR 135) | done | — | — | — | done | — |
+| P.2 | Owner: paid / overdue status on member list (O7) (replaced by shared memberships, ADR 135) | — | done | done | — | — | — |
+| P.3 | Student pay: requisites + "I paid" + confirm (S9, O7) (replaced by shared memberships, ADR 135) | — | done | done | done | done | — |
+| R.1 | Payment reminders (**scheduled daily** since v3.5 — ADR 75) (removed, ADR 135) | done | done | — | — | done | done |
 | R.2 | Home-screen widget (S10, native) | — | — | — | todo | — | — |
-| **v6.2** | **The public booking API and the drop-in lead path** _(ADR 115 - migrations `0037`-`0040`)_ | | | | | | |
+| **v6.2** | **The public booking API and the drop-in lead path** _(ADR 115 - migrations `0037`-`0040`)_ (public booking removed, ADR 142; the lead path stays) | | | | | | |
 | A.0 | `drop_in_visit` + the roster and attendee reads on it, `class_id` dropped (O5) | done | done | done | — | — | — |
 | A.1 | Lead stages, source, the phone match at self-join, the pipeline and both queue items (O1, O4) | done | done | done | — | done | — |
-| A.2 | `public_bookable` on template and class, copied at materialization, the owner checkbox (O3) | done | done | done | — | — | — |
-| A.3 | The master switch, the publishable key and the origin allowlist (O6) | done | done | done | — | — | — |
-| A.4 | `GET /academy` and `GET /classes`, the deny list enforced by the query | — | done | — | — | done | — |
-| A.5 | `POST /bookings` and `DELETE /bookings/{token}`, on the in-process limiter | — | done | — | — | done | — |
-| A.6 | The shared `/book/<code>` page, built on the public API, plus the link and QR | — | — | done | — | — | — |
-| A.7 | Integrator docs ([public-api.md](public-api.md)) | — | — | — | — | done | — |
+| A.2 | `public_bookable` on template and class, copied at materialization, the owner checkbox (O3) (removed, ADR 142) | done | done | done | — | — | — |
+| A.3 | The master switch, the publishable key and the origin allowlist (O6) (removed, ADR 142) | done | done | done | — | — | — |
+| A.4 | `GET /academy` and `GET /classes`, the deny list enforced by the query (removed, ADR 142) | — | done | — | — | done | — |
+| A.5 | `POST /bookings` and `DELETE /bookings/{token}`, on the in-process limiter (removed, ADR 142) | — | done | — | — | done | — |
+| A.6 | The shared `/book/<code>` page, built on the public API, plus the link and QR (removed, ADR 142) | — | — | done | — | — | — |
+| A.7 | Integrator docs (removed with the public API, ADR 142) | — | — | — | — | done | — |
 | **v7.1** | **The web app fits a phone** _(ADR 123 - no migration)_ | | | | | | |
 | B.8 | A 44px floor in `packages/ui` (button, input, select, menu), and `Select` stops zooming iOS | — | — | done | — | done | — |
 | B.9 | The bottom bar caps at five tabs with a **More** menu; the phone header sheds its duplicates (O11) | — | — | done | — | done | — |
-| **v7.0** | **The booking page groups by day and opens on three** _(no migration)_ | | | | | | |
+| **v7.0** | **The booking page groups by day and opens on three** _(no migration)_ (removed, ADR 142) | | | | | | |
 | B.7 | `dayKey` / `groupByDay` take an optional zone; the picker groups and caps at 3 days (§4) | — | — | done | — | done | — |
-| **v6.9** | **Ticking "Share this class publicly" reaches the classes** _(bug fix - no migration, one hand-run fill)_ | | | | | | |
+| **v6.9** | **Ticking "Share this class publicly" reaches the classes** _(bug fix - no migration, one hand-run fill)_ (removed, ADR 142) | | | | | | |
 | B.6 | `publicBookable` joins `templateContentChanged`, so a share-only edit propagates (O3) | — | — | — | — | done | done |
-| **v6.8** | **The link is two taps away, from every screen** _(ADR 122 - no migration)_ | | | | | | |
+| **v6.8** | **The link is two taps away, from every screen** _(ADR 122 - no migration)_ (removed, ADR 142) | | | | | | |
 | B.4 | `academy.shareLinks` (staff, three fields) + `invite.list` drops to staff (O4) | — | done | — | — | done | — |
 | B.5 | The Share dialog in the shell: all three links, the two gates named, activation in place (O4) | — | — | done | — | done | — |
 | **v6.7** | **The policy comes to the form, and the mat has a warning on it** _(ADR 121 - no migration)_ | | | | | | |
@@ -362,27 +390,27 @@ One row per slice. This is the single answer to _"what's left, on which surface?
 | **v6.3** | **The visitor picks the class** _(ADR 117 - no migration)_ | | | | | | |
 | B.0 | `visitorClassChoices`: the classes on now, and the ones to book instead | done | — | — | — | done | — |
 | B.1 | The wall-QR form asks which class, and the submit re-checks the pick (§4) | — | done | done | — | done | — |
-| **v6.1** | **A note on one run of a block** _(ADR 113 - migration `0036`)_ | | | | | | |
+| **v6.1** | **A note on one run of a block** _(ADR 113 - migration `0036`)_ (removed, ADR 142) | | | | | | |
 | C.11 | `curriculum_block.notes` + `setRunNote` + the run note on the plan and the class (O13) | done | done | done | done | done | — |
-| **v6.0** | **Several blocks on one stretch of weeks** _(ADR 112 - migration `0035`)_ | | | | | | |
+| **v6.0** | **Several blocks on one stretch of weeks** _(ADR 112 - migration `0035`)_ (removed, ADR 142) | | | | | | |
 | C.10a | `curriculum_block.slot_id` + the plan grouped into slots + the column card (O13) | done | done | done | done | done | — |
 | C.10b | Track delete detaches its classes, from the chip row (O13) | — | done | done | — | done | — |
-| **v5.9** | **Many curriculums, one library** _(ADR 111 - migration `0034`)_ | | | | | | |
+| **v5.9** | **Many curriculums, one library** _(ADR 111 - migration `0034`)_ (removed, ADR 142) | | | | | | |
 | C.9a | `curriculum_track` + the plan filtered by track + the chip row (O13) | done | done | done | — | done | — |
 | C.9b | `class_template.curriculum_track_id` + the Curriculum picker + `forClass` through it (O13) | done | done | done | — | done | — |
-| **v5.8** | **The theme on a class, with a student switch** _(ADR 110 - migration `0033`)_ | | | | | | |
+| **v5.8** | **The theme on a class, with a student switch** _(ADR 110 - migration `0033`)_ (removed, ADR 142) | | | | | | |
 | C.1b | The block's theme on the class + the owner's student switch (O13, S5) | done | done | done | done | done | — |
-| **v5.7** | **The running block is editable** _(ADR 109 - no migration)_ | | | | | | |
+| **v5.7** | **The running block is editable** _(ADR 109 - no migration)_ (removed, ADR 142) | | | | | | |
 | C.1g | One editable floor: settled is the only frozen state (O13) | done | done | done | — | done | — |
-| **v5.6** | **The curriculum week starts on Monday** _(ADR 108 - migration `0032`)_ | | | | | | |
+| **v5.6** | **The curriculum week starts on Monday** _(ADR 108 - migration `0032`)_ (removed, ADR 142) | | | | | | |
 | C.1f | Monday-aligned rows and placements + the curriculum UI polish pass (O13) | done | done | done | — | done | — |
-| **v5.5** | **Block categories** _(ADR 107 - migration `0031`)_ | | | | | | |
+| **v5.5** | **Block categories** _(ADR 107 - migration `0031`)_ (removed, ADR 142) | | | | | | |
 | C.1e | `category` on the block + collapsible groups in the library (O13) | done | done | done | — | done | — |
-| **v5.4** | **The timeline is a run of weeks** _(ADR 106 - one screen, no migration, no procedure)_ | | | | | | |
+| **v5.4** | **The timeline is a run of weeks** _(ADR 106 - one screen, no migration, no procedure)_ (removed, ADR 142) | | | | | | |
 | C.1d | Blank week canvas + pointer drag, resize and reorder (O13) | — | — | done | — | — | — |
-| **v5.3** | **A block library and a drop-target timeline** _(ADR 105 - migrations `0029`, `0030`)_ | | | | | | |
+| **v5.3** | **A block library and a drop-target timeline** _(ADR 105 - migrations `0029`, `0030`)_ (removed, ADR 142) | | | | | | |
 | C.1c | `curriculum_block_template` library + placement split + drag and drop (O13) | done | done | done | — | done | — |
-| **v5.2** | **Curriculum blocks as a timeline** _(un-parks the curriculum planner; ADR 104 - migration `0028`)_ | | | | | | |
+| **v5.2** | **Curriculum blocks as a timeline** _(un-parks the curriculum planner; ADR 104 - migration `0028`)_ (removed, ADR 142) | | | | | | |
 | C.1 | `curriculum_block` + RLS + the `rippleFrom` sequence rule (O13) | done | done | done | — | done | — |
 | C.1b | The block theme on the class detail modal (O2 / O5) | — | todo | todo | — | — | — |
 | C.2 | The taught line on a class (`class.taught`) | todo | todo | todo | — | todo | — |
@@ -409,7 +437,7 @@ One row per slice. This is the single answer to _"what's left, on which surface?
 | N.3 | Rolling week window on the schedule (S4) | — | — | — | done | — | — |
 | N.4 | Instructor name on the schedule row (S4) | — | done | — | done | — | — |
 | N.5 | Who's in the class, privacy-gated (S5) | — | done | — | done | done | — |
-| **v1.9** | **Internal Referrals** _(staff attribution + reporting; ADR 52)_ | | | | | | |
+| **v1.9** | **Internal Referrals** _(staff attribution + reporting; ADR 52)_ (removed, ADR 142) | | | | | | |
 | J.1 | Referral schema, RLS, audit + pure rules | done | — | — | — | done | — |
 | J.2 | Staff dashboard/assign + owner correct/history router | — | done | — | — | done | — |
 | J.3 | Responsive O9 referrals ledger + role-aware navigation | — | — | done | — | — | — |
@@ -465,12 +493,12 @@ One row per slice. This is the single answer to _"what's left, on which surface?
 | **v3.7** | **The notification center** _(S13 / O12 / §4; ADR 77 — migrations `0023`, `0024`)_ | | | | | | |
 | T.1 | Migration `0023`: `notification`, RLS policy, `insertNotifications` | done | — | — | — | done | — |
 | T.2 | `deliver()` writes the inbox row first; `notification` router (`list` / `unreadCount` / `markAllRead`) | done | done | — | — | — | — |
-| T.3 | `/notifications` screen: feed by day, unread dots, mark-read on open, nav badge | — | — | done | — | — | — |
-| T.4 | `announce` + `audienceCounts` (owner); compose box with the audience picker | — | done | done | — | done | — |
+| T.3 | `/notifications` screen: feed by day, unread dots, mark-read on open, nav badge (removed, ADR 142) | — | — | done | — | — | — |
+| T.4 | `announce` + `audienceCounts` (owner); compose box with the audience picker (removed, ADR 135) | — | done | done | — | done | — |
 | T.5 | _(dropped in v3.8: no gym message is emailed, so there is no email preference)_ | — | — | — | — | — | — |
-| T.6 | The feed on the phone: a header bell with a red dot, `notifications` pushed over the tabs | — | — | done | — | — | — |
+| T.6 | The feed on the phone: a header bell with a red dot, `notifications` pushed over the tabs (the web bell is removed, ADR 142; the app feed stays) | — | — | done | — | — | — |
 | T.7 | One `AppHeader` on the phone, matching the web mobile bar; the web's bell + settings glyphs replace the emoji | — | — | done | — | — | — |
-| **v3.10** | **The membership gate** _(S9 / S11 / O7 / §4; ADR 82 — migration `0025`)_ | | | | | | |
+| **v3.10** | **The membership gate** _(S9 / S11 / O7 / §4; ADR 82 — migration `0025`)_ (replaced by shared memberships, ADR 135; the payment flag is off, ADR 142) | | | | | | |
 | G.1 | `bookingAccess` / `bookingAccessMessage` / `firstDueAt` pure clock + tests | — | — | — | — | done | — |
 | G.2 | Migration `0025`: `grace_days` + `enforced_at` on `payment_settings`; `Membership` gains `memberId` / `joinedAt` | done | done | — | — | — | — |
 | G.3 | `booking.book` guard; `planOptions` / `choosePlan` / `updateBookingGate`; approval auto-assigns a single plan; router tests | — | done | — | — | — | — |
@@ -487,7 +515,7 @@ One row per slice. This is the single answer to _"what's left, on which surface?
 | L.7 | `InlineLoading` retired — its last caller duplicated the button's own spinner | — | — | — | done | — | — |
 | **v3.4** | **Member CSV export** _(O4; browser-side, no migration, no router change)_ | | | | | | |
 | U.1 | `membersCsv` / `membersCsvFilename` in `@matops/domain` (+ tests, formula-injection guard) | — | — | — | — | done | — |
-| U.2 | Members tab **Export CSV** over the filtered roster | — | — | done | — | — | — |
+| U.2 | Members tab **Export CSV** over the filtered roster (replaced by Export data, ADR 142) | — | — | done | — | — | — |
 | **v3.6** | **Pilot blockers** _(O1 / O4 / §4; ADR 76 — no migration, no new dependency)_ | | | | | | |
 | B.1 | Sentry sampling capped for the free plan: no traces, no logs, replay on error only | — | — | — | — | — | done |
 | B.2 | The class horizon: `healHorizon` (ADR 76) → daily sweep (ADR 78) → the owner's **Rebuild schedule** button, 6 months (ADR 79) | — | done | — | — | — | — |
@@ -496,7 +524,7 @@ One row per slice. This is the single answer to _"what's left, on which surface?
 | B.5 | `FeedbackLink` (sidebar footer + Profile) and the first-run checklist on an empty dashboard | — | — | done | — | — | — |
 | B.6 | Approve / decline / roster / history move to `staffProcedure`; `dues: null` for a non-owner | — | done | done | — | — | — |
 | B.7 | `/members` becomes a staff route; four owner-only blocks grow their own `isOwner` gate | — | — | done | — | — | — |
-| **v3.5** | **A daily cron, off the host** _(ADR 75; no migration, no domain change)_ | | | | | | |
+| **v3.5** | **A daily cron, off the host** _(ADR 75; no migration, no domain change)_ (removed, ADR 135) | | | | | | |
 | C.1 | `.github/workflows/cron.yml` — daily 09:00 Lisbon, dues sweep, `CRON_SECRET` bearer | — | — | — | — | — | done |
 | C.2 | `/api/cron/remind` sends **dues only** (`leadMinutes: 0` empties the class claim) | — | done | — | — | — | — |
 | **v3.1** | **A pinned map link for the academy** _(O6 / S7; ADR 71)_ | | | | | | |
@@ -504,7 +532,7 @@ One row per slice. This is the single answer to _"what's left, on which surface?
 | P.2 | `academyMapUrl(address, mapUrl)` prefers the pin; `academy.current` returns `mapUrl` | — | done | — | — | done | — |
 | P.3 | Settings card: map-link input + live **Check the pin ↗** preview, gated on an address | — | — | done | — | — | — |
 | P.4 | Mobile Profile opens the pin, or the phone's own map app on the address | — | — | — | done | — | — |
-| **v2.10** | **Referrals go owner-only** _(O9 / O1; ADR 69)_ | | | | | | |
+| **v2.10** | **Referrals go owner-only** _(O9 / O1; ADR 69)_ (removed, ADR 142) | | | | | | |
 | R.1 | `referral.dashboard` / `assign` move to `ownerProcedure`; nav item hidden for instructors | — | done | done | — | — | — |
 | R.2 | Instructor-only branches deleted from the screen (locked chips, owner-only hints, `isOwner`) | — | — | done | — | — | — |
 | R.3 | `stats.gym` returns owner-only `newMembers` (null for an instructor) instead of two always-on fields | — | done | done | — | — | — |
@@ -580,7 +608,7 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 - **5.1 Reconciliation** — periodic recompute of `booking_count` from participations (safety net for the denormalized count). Refs: ticket 13.
 - **5.2 Observability & abuse** — error tracking, structured logs, rate-limit the **public** drop-in endpoint (QR-in-gym is the main anti-spam; add a soft limit). Refs: ticket 25.
 - **5.x Reminder scheduling — DONE for dues, off-host (ADR 75).** ADR 46 removed the two Vercel Cron jobs (proprietary + Hobby is non-commercial/1-per-day). v3.5 puts both routes on a **daily GitHub Actions** tick with the same `CRON_SECRET` bearer token, which locks us to no host. **Daily is a Neon limit, not a preference:** Neon Free sleeps after 5 min idle on ~100 compute-hours/month, so each ping buys ≥5 min of compute and a 15-min cadence would keep the DB awake until it hard-suspends. **Class** reminders stay off (ADR 54 schedules them on the device; the benefit is fewer no-shows, which v1 does not track). Anything sub-hourly needs a paid Neon plan first. Refs: ADR 75, 46, 34, ticket 17.
-- **5.4 Backend restructure before the pilot — WAVE IN PROGRESS.** Plan in [backend-architecture-plan.md](backend-architecture-plan.md), run file in [backend-architecture-epic.md](backend-architecture-epic.md). **Phase 0 done:** the test suite is a usable gate again (589 passing in 19s, from 27 failing in 5m49s), because thirteen procedures stopped writing identity tables from inside the tenant transaction and the mistake became a compile error (ADR [92](issues/92-identity-writes-leave-the-tenant-transaction.md)). **Phase 1 done:** the tenant transaction rolls back on a thrown `TRPCError` (ADR [13](issues/13-booking-write-atomicity.md) amended), a structural test refuses a tenant table without RLS, production stops sending raw Postgres text to clients, four unbounded reads got a ceiling, migration `0027` adds the four missing indexes, and the CORS wildcard is gone (ADR [93](issues/93-safety-pass-before-the-pilot.md), 604 tests passing). **Phase 2 done:** each repeated query has one copy again. The roster read, the payments reads, the class pre-read, the booking counter, the "notify the booked students" block and the repeated user-facing strings collapsed into flat functions in `packages/api/src`, and the extraction turned up a real defect: the owner's grace-period screen and the rule that enforces it carried two separate defaults (ADR [94](issues/94-one-copy-of-each-query.md), 617 tests passing). **Phase 3 done:** the rules left the routers. Ten moved into `packages/domain` with a test each, written before the caller switched, and the ADR writes down the line for what belongs there (ADR [95](issues/95-what-belongs-in-domain.md), 671 tests passing). Two real fixes fell out: both clients now ask the same `canBook` the server does, closing the deep-link gap where a class three weeks out showed a Book button that was then refused; and a template saved without edits stops writing to every future class. **Phase 4 done:** every rule has one definition, and the string boundary enforces itself (ADR [96](issues/96-one-definition-per-rule.md), 690 tests passing). It found the most so far: the QR check-in mutation was guarded by the 14-day attendance window rather than its own rule, so a student could mark themselves present at a class from last week; the query behind the scanner was bounded too tightly for a long class; `HttpUrlSchema` was the one field that skipped invisible-character stripping while being the one rendered as an `href`; and two tested reminder rules were never called at all. **Phase 5 done:** the notification path has a test (ADR [97](issues/97-the-notification-path-gets-a-test.md), 707 tests passing). It is the part of the backend that runs with nobody watching, and it had none. Eleven cases now cover the reminder SQL that actually runs, one parameter made 299 untestable lines testable, the claim-then-send gap is proved to cost the push and not the message, and both cron routes share one tested shared-secret guard. **Phase 6 done:** fewer round trips, and one rule for what a mutation dirties (ADR [98](issues/98-fewer-round-trips-and-one-invalidation-rule.md), 733 tests passing). Three of its five items were wrong or already done and were rejected with the evidence. The one that mattered was a cache bug: no booking and no attendance mark refreshed the gym's figures, so insights, the drifting list and a student's training stats sat stale after the thing that changed them. **Phase 7 done, and the wave with it** (ADR [99](issues/99-cover-the-procedures-a-pilot-gym-walks-first.md), **812 tests passing**, from 589 at the start of the wave). The onboarding funnel every pilot gym walks first had been untestable and now has 14 tests; the public drop-in, the destructive schedule writes and the attendance mutations are covered; `pnpm typecheck` now includes every `test/` directory; and a structural test requires each academy-scoped table to be erased or carry a written exemption. **The restructure is complete.** What remains before a pilot is operational, not code: `CRON_SECRET` is unset, dev and production share one database, and there is no backup story.
+- **5.4 Backend restructure before the pilot — WAVE IN PROGRESS.** **Phase 0 done:** the test suite is a usable gate again (589 passing in 19s, from 27 failing in 5m49s), because thirteen procedures stopped writing identity tables from inside the tenant transaction and the mistake became a compile error (ADR [92](issues/92-identity-writes-leave-the-tenant-transaction.md)). **Phase 1 done:** the tenant transaction rolls back on a thrown `TRPCError` (ADR [13](issues/13-booking-write-atomicity.md) amended), a structural test refuses a tenant table without RLS, production stops sending raw Postgres text to clients, four unbounded reads got a ceiling, migration `0027` adds the four missing indexes, and the CORS wildcard is gone (ADR [93](issues/93-safety-pass-before-the-pilot.md), 604 tests passing). **Phase 2 done:** each repeated query has one copy again. The roster read, the payments reads, the class pre-read, the booking counter, the "notify the booked students" block and the repeated user-facing strings collapsed into flat functions in `packages/api/src`, and the extraction turned up a real defect: the owner's grace-period screen and the rule that enforces it carried two separate defaults (ADR [94](issues/94-one-copy-of-each-query.md), 617 tests passing). **Phase 3 done:** the rules left the routers. Ten moved into `packages/domain` with a test each, written before the caller switched, and the ADR writes down the line for what belongs there (ADR [95](issues/95-what-belongs-in-domain.md), 671 tests passing). Two real fixes fell out: both clients now ask the same `canBook` the server does, closing the deep-link gap where a class three weeks out showed a Book button that was then refused; and a template saved without edits stops writing to every future class. **Phase 4 done:** every rule has one definition, and the string boundary enforces itself (ADR [96](issues/96-one-definition-per-rule.md), 690 tests passing). It found the most so far: the QR check-in mutation was guarded by the 14-day attendance window rather than its own rule, so a student could mark themselves present at a class from last week; the query behind the scanner was bounded too tightly for a long class; `HttpUrlSchema` was the one field that skipped invisible-character stripping while being the one rendered as an `href`; and two tested reminder rules were never called at all. **Phase 5 done:** the notification path has a test (ADR [97](issues/97-the-notification-path-gets-a-test.md), 707 tests passing). It is the part of the backend that runs with nobody watching, and it had none. Eleven cases now cover the reminder SQL that actually runs, one parameter made 299 untestable lines testable, the claim-then-send gap is proved to cost the push and not the message, and both cron routes share one tested shared-secret guard. **Phase 6 done:** fewer round trips, and one rule for what a mutation dirties (ADR [98](issues/98-fewer-round-trips-and-one-invalidation-rule.md), 733 tests passing). Three of its five items were wrong or already done and were rejected with the evidence. The one that mattered was a cache bug: no booking and no attendance mark refreshed the gym's figures, so insights, the drifting list and a student's training stats sat stale after the thing that changed them. **Phase 7 done, and the wave with it** (ADR [99](issues/99-cover-the-procedures-a-pilot-gym-walks-first.md), **812 tests passing**, from 589 at the start of the wave). The onboarding funnel every pilot gym walks first had been untestable and now has 14 tests; the public drop-in, the destructive schedule writes and the attendance mutations are covered; `pnpm typecheck` now includes every `test/` directory; and a structural test requires each academy-scoped table to be erased or carry a written exemption. **The restructure is complete.** What remains before a pilot is operational, not code: `CRON_SECRET` is unset, dev and production share one database, and there is no backup story.
 - **5.3 Release** — Vercel prod, Neon prod branch + migration run, EAS build + store submit, env promotion.
 
 ### v1.2 — Personal & Insight
@@ -654,7 +682,7 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 
 ---
 
-### v1.9 — Internal Referrals
+### v1.9 — Internal Referrals (removed, ADR 142)
 
 **Exit test:** staff attribute an eligible student once to any retained academy member and see confirmed current-month/lifetime payment performance by referrer; instructors cannot change an assignment, while owners can correct/clear it and inspect the complete audit. Decision: **ADR [52](issues/52-internal-referral-tracking.md)**. Migration `0018`; no student/mobile surface and no commission or payout behavior.
 
@@ -834,7 +862,7 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 
 **Left open on purpose:** staff still cannot book a lead onto a future class. The leads screen shows a `nextBookingAt` it has no action to create, and the desk's "Add visitor" box is capped at the markable window, so a lead who phones the gym is still not covered. That is its own slice.
 
-### v6.2 — The public booking API and the drop-in lead path (ADR 115)
+### v6.2 — The public booking API and the drop-in lead path (ADR 115) (public booking removed, ADR 142; the lead path stays)
 
 **Exit test:** an owner ticks "Share this class publicly" on the Tuesday template and switches Public booking on in Settings. They text `/book/990001` to someone who asked about training. That person picks Tuesday, leaves four fields and a consent tick, and appears in Drop-in leads as a new lead from the shared link with a booking on Tuesday. Nobody can see how full the class is. The visitor turns up, the coach marks them present on the register, and the owner's dashboard shows one under **Trained, not joined**. The owner opens the lead's ⋯ menu, copies the join link, sends it, and taps **Mark invited** (the lead reads Invited; copying alone changes nothing). The person joins with the same phone written differently, and the lead flips to Joined with the member linked. The same visitor comes back on Thursday and **Tuesday's register still shows them**. **Migrations `0037`-`0040`.**
 
@@ -843,17 +871,17 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 - **A.2 Publication is a copied flag.** **DONE.** `public_bookable` on the template, copied onto the class at materialization, off by default. Copied and not joined, because a one-off class has no template and an owner can unshare one date without touching the recurring template. This is also how kids classes stay off the internet. Spec: **O3.**
 - **A.3 One switch, one publishable key, one optional allowlist.** **DONE.** Columns on `organization`, next to `public_code`, so key resolution is the base-connection read `findAcademyByCode` already was and there is no new table or policy. Switching off closes the surface and keeps the key. Spec: **O6.**
 - **A.4 The deny list is enforced by the query.** **DONE.** The read helpers select five columns and `publicClassView` returns those plus `bookable`, so no response body can carry capacity, a count, a coach or a template id. An unshared class answers `404`, never `403`, so the API cannot confirm a private class exists. Spec: **O6.**
-- **A.5 A booking makes a lead, never an account.** **DONE.** Idempotent by (lead, class), so a double tap on a bad connection is harmless. Booking closes 60 minutes out, which stops a stranger booking a class already on the mat. Cancelling keeps the lead. **The limits ride the existing in-process brake**, which ADR [116](issues/116-rate-limiting-and-the-cost-ceiling.md) settled in the same window: `take()` owns the product rule ("3 bookings per phone per day") and a WAF rule at the edge owns the bill, so there is no durable counter. [public-api.md](public-api.md) tells integrators what the numbers mean. Spec: **O6.**
+- **A.5 A booking makes a lead, never an account.** **DONE.** Idempotent by (lead, class), so a double tap on a bad connection is harmless. Booking closes 60 minutes out, which stops a stranger booking a class already on the mat. Cancelling keeps the lead. **The limits ride the existing in-process brake**, which ADR [116](issues/116-rate-limiting-and-the-cost-ceiling.md) settled in the same window: `take()` owns the product rule ("3 bookings per phone per day") and a WAF rule at the edge owns the bill, so there is no durable counter. Spec: **O6.**
 - **A.6 The shared page is a consumer of the API.** **DONE.** `/book/<code>` uses the academy's own key, so any gap in the contract shows up in our page before a customer's site hits it. Spec: **O6.**
 - **A.7 One page an integrator can build from.** **DONE.** Four calls, the error table, the limits, and the two lines the calling page must show: the consent line with the privacy link, and the waiver signed at the desk.
 
 **Series verify:** typecheck 17/17 · lint clean on every package touched. New tests written: `packages/domain/test/leads.test.ts` and `public-api.test.ts` (the phone matcher, both queues, the funnel, the window caps, the cut-off, the projection's field list, CORS); `packages/db/test/dropin.test.ts` rewritten against the real helpers and covering the Monday-then-Wednesday register case plus a `drop_in_visit` RLS leak test; `packages/api/test/public-booking-api.test.ts` (the key, the deny list, 404-not-403, the cut-off, idempotency, a full class, cross-academy refusal, the limits and `Retry-After`) and `leads.test.ts` (the stages, the phone match at self-join, and a structural test that fails if a fourth file in `packages/api/src` reads the visits table). **The vitest suites were not run**, per the session rule: run `pnpm test`. Migrations `0037`-`0040` were replayed on a throwaway PGlite (which caught a real bug: drizzle renders a column unqualified inside a raw `sql` template, so the three leads-list correlated subqueries were ambiguous and now spell out their table aliases), then **applied to Neon** 2026-08-30 and verified live: **applied to Neon** 2026-08-30 and verified live: the backfill made one visit row for each of the two class-linked leads (`none` / `present`, `attended_at` set from `last_visit_at`) and no visit is orphaned; `drop_in.class_id` and `visit_count` are gone; `drop_in_visit` has RLS on with `drop_in_visit_isolation`, all four `matops_app` grants and its four indexes; the five existing leads all read `stage = new`, `source = wall_qr`; `public_bookable` is on `class` and `class_template`, default false, and none of the 677 classes is shared; the one academy has public booking off with no key; and under `SET LOCAL ROLE matops_app` the academy reads its own two visits and five leads, a foreign id reads zero of each, a cross-academy INSERT is refused by the policy, and an unset `app.academy_id` reads zero. **Nothing was looked at in a browser.**
 
-### v6.1 — A note on one run of a block (ADR 113)
+### v6.1 — A note on one run of a block (ADR 113) (removed, ADR 142)
 
 **Exit test:** an owner writes "comp team joins from week 2" on the September run of Closed guard. February's run of the same block is untouched, and so are the block's own notes in the library. A coach opens a class that week and reads it under the theme, labelled This run. A student sees neither. The stretch ends, and the note can still be edited. **Migration `0036`, one nullable column, one new procedure.**
 
-- **L.7 The gap was a missing object, not a missing field.** **DONE.** ADR 105 §D.2 made a placement a reference so renaming a block renames it everywhere, and that left nothing that could be said about one run of it. Editing the block's notes to describe September rewrites February and every past placement. `curriculum-plan.md:118` asked to watch what goes into block notes before structuring them; what was wanted was a second smaller field about the weeks, not more structure in that one. Spec: **O13.**
+- **L.7 The gap was a missing object, not a missing field.** **DONE.** ADR 105 §D.2 made a placement a reference so renaming a block renames it everywhere, and that left nothing that could be said about one run of it. Editing the block's notes to describe September rewrites February and every past placement. The curriculum plan asked to watch what goes into block notes before structuring them; what was wanted was a second smaller field about the weeks, not more structure in that one. Spec: **O13.**
 - **L.8 One nullable column, on the row that already means "this run".** **DONE.** Since ADR 112 a placement row is one theme on one stretch, exactly what the note is about, so `curriculum_block.notes` needs no join, no table, no policy and no grants.
 - **L.9 Two fields, two names.** **DONE.** The failure mode here is two boxes called Notes and nobody knowing which to use, and that is a naming problem. Block notes say what the block covers and change every run on purpose; **This run** says what these weeks are doing about it and changes nothing else. On the plan the run note sits under the block's with a brand rule down its left edge; on the class it gets the words, because a coach reads it there with no timeline around it.
 - **L.10 Writable after the stretch has ended, on purpose.** **DONE.** ADR 109 froze settled because dates decide which classes fall inside a block. A note decides nothing, so `setRunNote` carries no editable guard and is the only write a settled stretch takes besides renaming its block. That makes it the cheapest form of **C.2's taught line** and the first raw material **C.6** can read, without blocking C.2, which is per class and still the better answer.
@@ -861,7 +889,7 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 
 **Series verify:** typecheck 17/17 · lint clean on every package touched · `next build` green · four router cases added over PGlite (a note stays on its own placement and leaves the block and the other run alone; a settled stretch takes a note and clears it while still refusing `unplace`; staff read the note on a class and a student never does; a student and another gym are both refused the write), plus every `forClass` assertion extended with `run`. **The vitest suites were not run**, per the session rule: run `pnpm test`. Migration `0036` is a plain nullable `ADD COLUMN`, **applied to Neon** 2026-08-30 — 37 rows, every existing placement null, and the tenant seam re-checked under `SET LOCAL ROLE matops_app`. **Nothing was looked at in a browser.**
 
-### v6.0 — Several blocks on one stretch of weeks (ADR 112)
+### v6.0 — Several blocks on one stretch of weeks (ADR 112) (removed, ADR 142)
 
 **Exit test:** an owner drags Standing onto the timeline, drops Pinning on top of it, and the two run side by side over the same two weeks. Lengthening the stretch moves both and pushes everything after it. Taking Pinning off changes no dates. A coach opening a class that week reads both themes. Deleting a track that classes follow moves those classes back to the default track instead of refusing. **Migration `0035`, one new column, one new procedure.**
 
@@ -874,7 +902,7 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 
 **Series verify:** typecheck 17/17 · lint clean on every package touched · `next build` green · five router cases added over PGlite (two blocks run over the same weeks and both count as used; a resize keeps one row of dates for the slot and pushes the next stretch; the same block twice and an eleventh block both refuse; dropping one theme moves no dates and the last one refuses; a class reads every theme running that week), plus the track-delete case rewritten from "refuses" to "detaches" and every `plan[].theme` assertion moved to `plan[].themes`. **The vitest suites were not run**, per the session rule: run `pnpm test`. Migration `0035` was replayed on a throwaway PGlite (backfill to the row's own id, `NOT NULL` holds, both indexes present, a second block on a slot accepted and a duplicate rejected), then **applied to Neon** 2026-08-30 — 36 rows, the five live placements each on their own slot, and the tenant seam re-checked under `SET LOCAL ROLE matops_app` (own rows readable, a foreign id reading zero, a second block on a slot accepted, a duplicate refused). **Nothing was looked at in a browser.**
 
-### v5.9 — Many curriculums, one library (ADR 111)
+### v5.9 — Many curriculums, one library (ADR 111) (removed, ADR 142)
 
 **Exit test:** an owner opens Schedule → Curriculum, adds a track called No-gi, drags blocks from the same library onto its timeline, and the Fundamentals plan does not move a day. They point the No-gi class template at it, open a No-gi class, and read the No-gi theme while a same-day Fundamentals class reads its own. **Migration `0034`, one new table, two new columns, three new procedures.**
 
@@ -886,11 +914,11 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 
 **Series verify:** typecheck 17/17 · `pnpm -F @matops/nextjs lint` and the five package lints clean · `next build` green · five router cases added over PGlite (a ripple in one track leaves the other alone; a block used in another track still refuses deletion and names the track; two same-day classes read their own tracks and an unassigned template falls back to the default; the default track and a track classes follow both refuse deletion; a student is refused every track write and another academy sees only its own). _(v6.0, ADR 112 replaced the track-follow refusal with a detach.)_ **The vitest suites were not run**, per the session rule: run `pnpm test`. Migration `0034` was replayed on a throwaway PGlite against a copy of the live shape (backfill correct, `NOT NULL` holds, the one-default index rejects a second default), then **applied to Neon** 2026-08-29 — 35 rows, RLS policy, grants, indexes and the tenant seam all verified live. **Nothing was looked at in a browser.**
 
-### v5.8 — The theme on a class, with a student switch (ADR 110)
+### v5.8 — The theme on a class, with a student switch (ADR 110) (removed, ADR 142)
 
 **Exit test:** a coach opens a class in the current block from Schedule, the dashboard or Attendance and reads the week's theme and its notes above the roster. A student sees nothing until the owner ticks one box on Schedule → Curriculum, and then sees the theme without the notes. **Migration `0033`, one boolean, one new procedure.**
 
-- **J.1 Five slices built a planner nothing read back.** **DONE.** `curriculum.forDate` shipped tested in v5.2 with **zero callers**, which is the failure `curriculum-plan.md` §7 opens with: _"A curriculum page in a nav menu is a dead curriculum."_ `curriculum.forClass` puts the theme where the coach already stands. Spec: **O13**, **S5.**
+- **J.1 Five slices built a planner nothing read back.** **DONE.** `curriculum.forDate` shipped tested in v5.2 with **zero callers**, which is the failure the curriculum plan's §7 opens with: _"A curriculum page in a nav menu is a dead curriculum."_ `curriculum.forClass` puts the theme where the coach already stands. Spec: **O13**, **S5.**
 - **J.2 A block spans weeks, so it is a lookup and not a column.** **DONE.** Every class in a week shares one theme, so there is no `class.curriculum_block_id`, no backfill and no write path to keep in step when ADR 109 lets a running block move; the theme is derived from the class's date on every read. It also belongs on the class **detail** rather than a week list, which would print the same line down fifteen rows.
 - **J.3 A class id, not a date, and null is the only refusal.** **DONE.** The server owns both the class's instant and the academy zone, and `dayKey()` takes no zone, so a client cannot tell which day a 22:00 class falls on in the gym's zone; one day out at a block boundary names the wrong week. The gate lives inside one `enrolledProcedure`: staff get theme + notes, an active member of an academy with the switch on gets the theme with `notes: null`, everyone else and any uncovered class gets `null`. Never a throw, so a pending member gets a class screen without a theme rather than a broken panel, and all three call sites are one `if`.
 - **J.4 The flag rides the `useAcademy()` seam.** **DONE.** `organization` already carries the per-academy settings every role reads, handed to both clients by `academy.current` (ADR 74), so no screen makes an extra request and `academy.updateSettings` already has the right tier. **Default off**, per C.9: nothing written while only staff could read it goes student-visible on deploy day.
@@ -898,7 +926,7 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 
 **Series verify:** typecheck and lint clean across db, validators, domain, api, nextjs and expo · four router cases added over PGlite (instructor sees the notes, student sees nothing while off, student sees theme-not-notes while on, a class no block covers is null). Migration `0033` replayed on a throwaway PGlite, then **applied to Neon** (2026-08-29, 34 rows in `drizzle.__drizzle_migrations`, the one live academy defaulting to off). **The vitest suites were not run**, per the session rule: run `pnpm test`. **Nothing was looked at in a browser.**
 
-### v5.7 — The running block is editable (ADR 109)
+### v5.7 — The running block is editable (ADR 109) (removed, ADR 142)
 
 **Exit test:** the block covering today carries the same row of controls as a draft - grip, `− n +`, both arrows, edit and remove - and shortening it pulls the rest of the plan forward with an Undo. A block that has already ended still refuses everything but a rename. **No migration.**
 
@@ -909,7 +937,7 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 
 **Series verify:** typecheck and lint clean across domain, api and nextjs · the loosened rules exercised with `node --experimental-strip-types`: a running block shrunk (still covers today, tail pulled to a Monday), removed (successor takes its Monday and becomes running) and reordered, each checked for state, contiguity and Monday alignment, plus a settled block still under the floor. Router cases rewritten from "refuses" to "allows", with the settled refusals kept and one added for `move`. **The vitest suites were not run**, per the session rule: run `pnpm test`. **Nothing was looked at in a browser.**
 
-### v5.6 — The curriculum week starts on Monday (ADR 108)
+### v5.6 — The curriculum week starts on Monday (ADR 108) (removed, ADR 142)
 
 **Exit test:** every row on the Curriculum timeline runs Monday to Sunday and lines up with the week number beside it, and a block placed on a Saturday opens on the Monday of that week rather than on Saturday. **Migration `0032`, a data shift, no schema change.**
 
@@ -920,7 +948,7 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 
 **Series verify:** typecheck and lint clean across domain, api and nextjs · the date rules exercised with `node --experimental-strip-types` (seven weekdays onto one Monday, month and year-end crossings, the empty, running, lapsed and never-go-backwards branches of `nextStart`, and a two-block chain landing all-Monday). Migration `0032` replayed on a throwaway PGlite over one deliberately unaligned academy and one already aligned, checking every row lands Mon..Sun and the chain stays contiguous, then **applied to Neon** (2026-08-29, 33 rows in `drizzle.__drizzle_migrations`; the four `seed_org_alma` rows shifted 4 days from Friday to Monday and re-checked live for Mon..Sun, contiguity and spans still matching `weeks`). **The vitest suites were not run**, per the session rule: run `pnpm test`. **Nothing was looked at in a browser** (the extension failed to open a tab), so the polish pass has been read from the code, never watched.
 
-### v5.5 — Block categories (ADR 107)
+### v5.5 — Block categories (ADR 107) (removed, ADR 142)
 
 **Exit test:** an instructor writing a block picks "Guard" from a list or types "Leg locks" to make a new category, and the library draws each group with its count and folds it shut with one press. Typing "guard" where "Guard" exists files under the existing one. **Migration `0031`, one nullable column, no new procedure.**
 
@@ -931,7 +959,7 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 
 **Series verify:** typecheck and lint clean across domain, validators, db, api and nextjs · `next build` green · the three new pure rules exercised with `node --experimental-strip-types` (an existing spelling reused, a new name kept, blank meaning none, one name per category whatever the case, groups ordered with the uncategorised last, and an empty library). Migration `0031` replayed on a throwaway PGlite, then **applied to Neon**, 32 rows in `drizzle.__drizzle_migrations`. Two router cases added over PGlite. **The vitest suites were not run**, per the session rule: run `pnpm test`. **Nothing was looked at in a browser.** Still to walk: a collapsed group under a finger, and whether the datalist offers itself usefully on a phone keyboard.
 
-### v5.4 — The timeline is a run of weeks (ADR 106)
+### v5.4 — The timeline is a run of weeks (ADR 106) (removed, ADR 142)
 
 **Exit test:** an academy with nothing planned opens Curriculum and sees sixteen empty weeks with the week numbers down the side. Dragging a block from the library opens a gap under the cursor; dragging a placed block's bottom edge stretches it and slides everything below as you pull; dragging its grip shuffles it past its neighbours. Nothing is written until the pointer comes up. **No migration, no procedure, no new dependency.** Built against the published "Curriculum Blocks" prototype.
 
@@ -942,13 +970,13 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 - **E.5 The keyboard path grew.** **DONE.** The stepper, the arrows and Add to plan all stay, and the resize handle is a `role="slider"` with `aria-valuenow` that takes the arrow keys. Pointer events cover touch now, so the buttons are no longer the touch fallback; they are the keyboard path and the one that says out loud what it does.
 - **E.6 The card layout is the prototype's.** **DONE.** Grip, body and controls in a row with the resize bar across the bottom, which fits a one-week block at 68px a week where the previous stacked layout needed 98. `monthShortFmt` joins `~/lib/format.ts` for the rail.
 
-- **E.7 A row was mostly empty card.** **DONE.** Height is duration, so a two-week block is 126px tall and drew a theme, a date line and three inches of nothing. The block's **notes** now fill the row and clip, which puts v1's lesson plan (`curriculum-plan.md` §8) where the coach looks; a one-week block leaves them out rather than showing a sliced line. **Both cards gained an edit button**, a `PencilIcon` beside the library card's delete and beside the plan row's stepper, opening the same dialog on the same block; a settled row carries that one control and nothing else, since a past block's name can be corrected even though its dates cannot. A clickable title was tried first and dropped: a hidden affordance on a card that already has a grip, a resize edge and four buttons. Spec: **O13.**
+- **E.7 A row was mostly empty card.** **DONE.** Height is duration, so a two-week block is 126px tall and drew a theme, a date line and three inches of nothing. The block's **notes** now fill the row and clip, which puts v1's lesson plan (the curriculum plan's §8) where the coach looks; a one-week block leaves them out rather than showing a sliced line. **Both cards gained an edit button**, a `PencilIcon` beside the library card's delete and beside the plan row's stepper, opening the same dialog on the same block; a settled row carries that one control and nothing else, since a past block's name can be corrected even though its dates cannot. A clickable title was tried first and dropped: a hidden affordance on a card that already has a grip, a resize edge and four buttons. Spec: **O13.**
 
 - **E.8 The running row was a third kind of card.** **DONE.** It carried a large primary **"Still on this, +1 week"** button, which ADR 104 §4 called the control the feature lived on, while every draft below it did the same arithmetic with a `− 2w +` stepper. The running row takes that stepper, with **`−` disabled**, which is the rule the server already enforces: extend yes, shorten no. One press still fixes the rest of the year, and the screen has one control set instead of two. The arrows and ✕ stay draft-only. Spec: **O13.**
 
 **Series verify:** `pnpm -F @matops/nextjs typecheck` and `lint` clean · `next build` green · the built CSS grepped for `cursor:ns-resize`, `touch-action:none`, `cursor:grab`, `cursor:grabbing`, `transition-property:translate,height`, `border-style:dashed`, `white-space:pre-line`, `line-clamp:2` and the handle's hover width, all present. **Nothing was looked at in a browser**, the fifth session with no tab. The drag has been reasoned about, not watched. Still to walk: a resize crossing several weeks, a reorder dragged over a settled block, a drop past the end of the plan, and the whole screen under a finger.
 
-### v5.3 — A block library and a drop-target timeline (ADR 105)
+### v5.3 — A block library and a drop-target timeline (ADR 105) (removed, ADR 142)
 
 **Exit test:** an instructor writes "closed guard" once, drags it onto the plan in September and again in February, and both are the same block. Dropping one in the middle pushes everything after it down, dropping onto a week that has already run is refused, and every drop, move and removal can be undone in one press. **Migrations `0029` and `0030`, one new table, one changed table, the screen rewritten.** Reverses ADR 104 §3's "buttons before drag", at the owner's request.
 
@@ -961,7 +989,7 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 
 **Series verify:** typecheck green across domain, validators, db, api and nextjs · lint clean in all five · `next build` green · the pure rules exercised directly with `node --experimental-strip-types` (insert at every position, insert past the end, insert into an empty plan, remove and close the gap, move across several positions in both directions, a move round trip proving Undo restores every date, the uneven-length reorder, the clamps and the draft floor). Migrations `0029` and `0030` **applied to Neon**, 31 rows in `drizzle.__drizzle_migrations`, both tables RLS-enabled, and the one real block written through the v5.2 screen survived the backfill with its notes. **The vitest suites were not run**, per the session rule: run `pnpm test`. **Nothing was looked at in a browser**, the fifth session with no tab. Still to walk: the drop line tracking the cursor, a drag over a 52-week plan, whether a drop reads correctly when the pointer is over a settled block, and the library rail at `lg` against a long plan.
 
-### v5.2 — Curriculum blocks as a timeline (ADR 104)
+### v5.2 — Curriculum blocks as a timeline (ADR 104) (removed, ADR 142)
 
 **Exit test:** an owner opens Schedule → Curriculum, sees the gym's plan as a column where a block's height is its length, presses **+** on the block running now, and every block after it slides down with one line saying what moved and an **Undo**. Blocks that already ran do not move. **Migration `0028`, one new table, one new router, one new sub-tab.** Un-parks the curriculum planner.
 
@@ -969,12 +997,12 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 - **C.1 The table.** **DONE.** Migration `0028`: `curriculum_block(id, academy_id, starts_on date, ends_on date, weeks int, theme, notes, created_at, updated_at)`, one index on `(academy_id, starts_on)`, plus the grant, `ENABLE ROW LEVEL SECURITY` and the standard isolation policy copied from `0006`. `rls-coverage.test.ts` picks it up on its own, because it asks Postgres for every table with an `academy_id` column. **Applied to Neon 2026-08-28**, with the policy, the index and the grants verified live.
 - **C.1 The router.** **DONE.** `list` (blocks plus `today` in the **academy** zone, so the browser never decides what is settled), `forDate`, `create`, `update`, `resize`, `move`, `delete`, all `staffProcedure`. Each mutation re-derives today, refuses a settled block, refuses to shorten the running one, and writes the recomputed tail inside the request's own tenant transaction, so a half-applied ripple cannot exist. `resize` returns `previousWeeks` so Undo needs no second mutation. Ten cases in `packages/api/test/curriculum.test.ts` over PGlite, including a student `FORBIDDEN` on every write and another academy seeing nothing.
 - **C.1 The screen.** **DONE.** A third tab on Schedule, so no new route and no new row in the route access table. Blocks are positioned from their real dates at 14px a day, so height is duration and a gap in the data draws as a gap; the rail carries week numbers and month labels; the brand now-line is the one the week grid draws. The running block carries **"Still on this, +1 week"** and nothing else; a draft carries `− n +`, move up, move down and delete; a settled block carries no control at all. The browser runs the same `rippleFrom` over its cache before the request leaves, so the cards slide on press and roll back on an error, animating `top` and `height` at 300ms on the project easing, off under `prefers-reduced-motion`. Spec: **O13.**
-- **C.1b The theme on the class detail modal.** **NOT DONE.** `curriculum.forDate` exists and is tested; nothing calls it yet. Until it does, the plan lives on a tab, which `curriculum-plan.md` §7 names as the way this feature dies.
+- **C.1b The theme on the class detail modal.** **NOT DONE.** `curriculum.forDate` exists and is tested; nothing calls it yet. Until it does, the plan lives on a tab, which the curriculum plan's §7 names as the way this feature dies.
 - **C.2 The taught line.** **NOT DONE.** Deliberately out of this slice.
 
 **Series verify:** `pnpm typecheck` green across domain, validators, db, api and nextjs · `pnpm -F @matops/nextjs lint`, `-F @matops/api lint` and `-F @matops/domain lint` clean · `next build` green · the pure rules were exercised directly with `node --experimental-strip-types` (ripple forward and back, a reorder in both directions, an uneven reorder, the year-end date roll, `nextStart` on an empty and an expired plan, the ISO week rule and the `RangeError` guards). **The vitest suites were not run**, per the session rule: run `pnpm test`. **Nothing was looked at in a browser**, the fourth session with no tab to attach to. Still to walk: a 1-week block's card at 98px, whether a 52-week plan is usable as one long scroll, the slide on a real ripple, and the toast's Undo.
 
-### v5.1 — The referrals screen joins the motion vocabulary (ADR 103)
+### v5.1 — The referrals screen joins the motion vocabulary (ADR 103) (removed, ADR 142)
 
 **Exit test:** the two ADR 102 patterns have no unconverted call site left, the chip that opens the referral dialog answers a press, and the placeholder uses the screen's rhythm. **No migration, no procedure, no new dependency.** The ADR 101 / 102 design pass run over O9.
 
@@ -1137,7 +1165,7 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 
 **Series verify:** hand over `pnpm lint`, `pnpm typecheck`, `pnpm test`. Not run in-session (standing rule). The region pin is unverifiable until the next deploy.
 
-### v3.10 — The membership gate (ADR 82)
+### v3.10 — The membership gate (ADR 82) (replaced by shared memberships, ADR 135)
 
 **Exit test:** with the switch **off**, nothing anywhere changes. With it on: a student with no plan books through the grace window under a countdown strip, then cannot book until they choose a plan; an overdue member books through the same window, then cannot book until they tap **I paid** (which unblocks instantly; an owner reject re-locks); a pending member, staff, cancel, and the QR check-in are never gated; approving a student in a one-plan academy assigns the plan with dues on the 1st of next month, zero extra steps.
 
@@ -1165,7 +1193,7 @@ Only the non-obvious tasks + spec/ticket refs are listed. Fill tasks into checkb
 
 **Series verify:** typecheck 17/17 · lint 15/15 · `next build` green, all twelve routes in the list, the keyframes and both classes present in the emitted CSS with the reduced-motion utility winning the cascade. No test change: the whole wave is presentation. **Neither client has been seen running** — no browser extension and no simulator in the build env, so the weave timing, the native `transformOrigin` scaling, and each skeleton's fit to the screen behind it want an eyeball pass (`docs/mobile-device-test.md`).
 
-### v3.5 — A daily cron, off the host (ADR 75)
+### v3.5 — A daily cron, off the host (ADR 75) (removed, ADR 135)
 
 **Exit test:** a member who is three days from their due date gets one push + email at 09:00 Lisbon without anyone at the gym doing anything, and gets exactly one that period. No class reminder is sent by the server. **No migration, no domain change, no screen.**
 

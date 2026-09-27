@@ -2,12 +2,7 @@ import { ScrollView, StyleSheet, View } from "react-native";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 
-import {
-  canBook,
-  capacityDisplay,
-  isBjjAcademy,
-  notBookableMessage,
-} from "@matops/domain";
+import { canBook, capacityDisplay, notBookableMessage } from "@matops/domain";
 
 import { useBookClass, useCancelBooking } from "~/components/book-control";
 import { ClassDetailSkeleton } from "~/components/skeletons";
@@ -43,19 +38,6 @@ export default function ClassDetail() {
   }>();
   const q = useQuery(trpc.class.get.queryOptions({ id }, { retry: false }));
   const academy = useQuery(trpc.academy.current.queryOptions());
-  // Same key as WhoIsIn, which renders below the `q.isPending` gate and so
-  // would not start fetching until the class itself lands.
-  const current = useQuery(trpc.academy.current.queryOptions());
-  const theme = useQuery(
-    trpc.curriculum.forClass.queryOptions(
-      { id },
-      {
-        enabled:
-          current.data?.curriculumEnabled === true &&
-          isBjjAcademy(current.data.type),
-      },
-    ),
-  );
 
   const { onBook, isPending: booking, error: bookError } = useBookClass();
   const { onCancel, isPending: cancelling } = useCancelBooking();
@@ -165,24 +147,6 @@ export default function ClassDetail() {
             {/* "Nobody" rather than a dash: a general space runs sessions
                 that nobody teaches, and the web says the same word. */}
             <Field label="Instructor" value={c.instructorName ?? "Nobody"} />
-            {theme.data?.themes.length ? (
-              <Field label="This week">
-                {theme.data.themes.map((on) => (
-                  <View key={on.theme}>
-                    <Txt size={15}>{on.theme}</Txt>
-                    {on.notes ? <Muted>{on.notes}</Muted> : null}
-                    {on.run ? (
-                      <View>
-                        <Txt size={12} weight={500} tone="muted">
-                          THIS RUN
-                        </Txt>
-                        <Txt>{on.run}</Txt>
-                      </View>
-                    ) : null}
-                  </View>
-                ))}
-              </Field>
-            ) : null}
             <Field label="Capacity">
               <Mono size={15} tone={over ? "error" : "default"}>
                 {capacityLabel}

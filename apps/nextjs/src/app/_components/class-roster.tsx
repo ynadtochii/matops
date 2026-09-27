@@ -10,7 +10,7 @@ import {
   attendanceWriteAccess,
   bulkMarkTargets,
   classEndsAt,
-  isBjjAcademy,
+  isOwner,
   isStaffRole,
   runsBranch,
 } from "@matops/domain";
@@ -27,7 +27,6 @@ import { AddVisitorSchema } from "@matops/validators";
 
 import { optimistic, rollback } from "~/lib/optimistic";
 import { useTRPC } from "~/trpc/react";
-import { ClassTheme } from "./class-theme";
 import { CoachSelect } from "./coach-select";
 import { useEntity } from "./entity";
 import { PhoneField } from "./form-fields";
@@ -175,7 +174,6 @@ function markTone(present: boolean, absent: boolean): BadgeTone {
 export function ClassRoster({ cls }: { cls: ClassRow }) {
   const trpc = useTRPC();
   const academy = useEntity();
-  const bjj = isBjjAcademy(academy.type);
   const queryClient = useQueryClient();
   const invalidateFor = useInvalidate();
   const classId = cls.id;
@@ -206,17 +204,6 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
     ...trpc.attendance.members.queryOptions(),
     enabled: canMark,
   });
-  // Fired here, not left to <ClassTheme> to start on mount: the roster is behind
-  // a skeleton gate, so a query that only begins once the gate lifts lands a
-  // second later and shoves the whole dialog down. Same query options, so React
-  // Query serves ClassTheme from cache — one request, one layout swap.
-  const theme = useQuery(
-    trpc.curriculum.forClass.queryOptions(
-      { id: classId },
-      { enabled: bjj && academy.curriculumEnabled },
-    ),
-  );
-
   // The week read carries `markedCount`, which the O1 dashboard turns into its
   // "classes to mark" queue. Refetching it per mark would re-run two correlated
   // count subqueries per class row for every tap, so it waits until the roster
@@ -305,6 +292,20 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
     if (failed) onError(failed.reason as { message: string });
   };
 
+  const cancelFor = useMutation(
+    trpc.booking.cancelFor.mutationOptions({
+      onSuccess: () => {
+        toast.success("Booking cancelled");
+        return invalidate();
+      },
+      onError,
+    }),
+  );
+  const canCancelBookings =
+    isOwner(academy) &&
+    cls.status === "scheduled" &&
+    new Date(cls.startsAt).getTime() > now.getTime();
+
   const markAll = useMutation(
     trpc.attendance.markAll.mutationOptions({
       onMutate: (vars) =>
@@ -343,11 +344,7 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
     }),
   );
 
-  if (
-    classList.isPending ||
-    (bjj && academy.curriculumEnabled && theme.isPending)
-  )
-    return <SkeletonRoster />;
+  if (classList.isPending) return <SkeletonRoster />;
   if (classList.isError) {
     return (
       <ErrorState
@@ -492,17 +489,12 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
         </details>
       )}
       <div className="flex flex-col gap-3">
-        {bjj && (
-          <>
-            {academy.curriculumEnabled && <ClassTheme classId={classId} />}
-            <CoachSelect
-              classId={classId}
-              startsAt={cls.startsAt}
-              instructorId={cls.instructorId ?? ""}
-              instructorName={cls.instructorName}
-            />
-          </>
-        )}
+        <CoachSelect
+          classId={classId}
+          startsAt={cls.startsAt}
+          instructorId={cls.instructorId ?? ""}
+          instructorName={cls.instructorName}
+        />
         {cls.description && (
           <p className="text-muted-foreground text-sm">{cls.description}</p>
         )}
@@ -601,6 +593,24 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
                 {r.bookingStatus === "none" && <RowTag>walk-in</RowTag>}
                 {r.bookingStatus === "booked" &&
                   r.bookingTier === "provisional" && <RowTag>pending</RowTag>}
+                {canCancelBookings && r.bookingStatus === "booked" && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={cancelFor.isPending}
+                    busy={
+                      cancelFor.isPending &&
+                      cancelFor.variables.personId === r.studentId
+                    }
+                    aria-label={`Cancel booking for ${name}`}
+                    onClick={() =>
+                      cancelFor.mutate({ classId, personId: r.studentId })
+                    }
+                  >
+                    Cancel booking
+                  </Button>
+                )}
                 {canMark && (
                   <div
                     role="group"

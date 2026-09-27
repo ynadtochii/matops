@@ -1,8 +1,7 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { createEntity, eq, provisionOrganization } from "@matops/db";
-import { entityMembership } from "@matops/db/schema";
+import { createEntity, provisionOrganization } from "@matops/db";
 
 import type { Harness } from "./helpers";
 import {
@@ -34,6 +33,8 @@ describe("a gym manager at a branch", () => {
 
   const at = (user: string, entityId: string, organizationId = GYM) =>
     h.as(user, organizationId, withEntity(entityId));
+  const enter = (user: string, entityId: string, organizationId = GYM) =>
+    h.enter(user, organizationId, withEntity(entityId));
 
   beforeAll(async () => {
     h = await harness();
@@ -80,7 +81,7 @@ describe("a gym manager at a branch", () => {
 
   it("enters a branch it holds no membership at, as a manager", async () => {
     for (const entityId of [GYM, second]) {
-      const current = await at(MANAGER, entityId).entity.current();
+      const current = await enter(MANAGER, entityId);
       expect([entityId, current.id, current.role]).toEqual([
         entityId,
         entityId,
@@ -123,30 +124,9 @@ describe("a gym manager at a branch", () => {
     ).toBe("FORBIDDEN");
   });
 
-  it("adds somebody at one branch without touching their role at another", async () => {
-    await at(MANAGER, GYM).entity.addStudentToBranch({
-      entityId: second,
-      userId: STUDENT,
-    });
-
-    const rows = await h.exec
-      .select({
-        entityId: entityMembership.entityId,
-        role: entityMembership.role,
-      })
-      .from(entityMembership)
-      .where(eq(entityMembership.userId, STUDENT));
-    const roleAt = (id: string) => rows.find((r) => r.entityId === id)?.role;
-    expect([roleAt(GYM), roleAt(second)]).toEqual(["student", "student"]);
-  });
-
   it("reaches nothing in another gym", async () => {
-    expect(await rejectionCode(at(MANAGER, OTHER).entity.current())).toBe(
-      "FORBIDDEN",
-    );
-    expect(await rejectionCode(at(OUTSIDER, GYM, OTHER).entity.current())).toBe(
-      "FORBIDDEN",
-    );
+    expect(await rejectionCode(enter(MANAGER, OTHER))).toBe("FORBIDDEN");
+    expect(await rejectionCode(enter(OUTSIDER, GYM, OTHER))).toBe("FORBIDDEN");
   });
 
   it("cannot change an owner's branch status", async () => {
@@ -172,23 +152,12 @@ describe("a gym manager at a branch", () => {
     );
   });
 
-  it("does not create a student branch record for organization staff", async () => {
-    expect(
-      await rejectionCode(
-        at(OWNER, GYM).entity.addStudentToBranch({
-          entityId: second,
-          userId: MANAGER,
-        }),
-      ),
-    ).toBe("PRECONDITION_FAILED");
-  });
-
   it("keeps a branch owner role above an organization manager role", async () => {
     await pg.exec(
       `UPDATE "member" SET role = 'manager' WHERE user_id = '${OWNER}' AND organization_id = '${GYM}';`,
     );
     try {
-      const current = await at(OWNER, GYM).entity.current();
+      const current = await enter(OWNER, GYM);
       const staff = await at(OWNER, GYM).membership.staff();
       expect(current.role).toBe("owner");
       expect(
@@ -205,8 +174,6 @@ describe("a gym manager at a branch", () => {
     await pg.exec(
       `UPDATE "member" SET role = 'student' WHERE id = 'mem_${GYM}_${MANAGER}';`,
     );
-    expect(await rejectionCode(at(MANAGER, second).entity.current())).toBe(
-      "FORBIDDEN",
-    );
+    expect(await rejectionCode(enter(MANAGER, second))).toBe("FORBIDDEN");
   });
 });

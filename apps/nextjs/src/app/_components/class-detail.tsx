@@ -5,12 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 
-import {
-  canBook,
-  capacityDisplay,
-  isBjjAcademy,
-  notBookableMessage,
-} from "@matops/domain";
+import { canBook, capacityDisplay, notBookableMessage } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
@@ -18,7 +13,6 @@ import { FOCUS_RING } from "@matops/ui/motion";
 
 import { dayLongFmt, timeFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
-import { ClassTheme } from "./class-theme";
 import { useEntity, useEntityHref, useOrganization } from "./entity";
 import { PageHeader } from "./page-header";
 import { cardClass, ENTER, SectionHeading } from "./primitives";
@@ -30,7 +24,6 @@ import { useMinuteClock } from "./use-clock";
 export function ClassDetail({ classId }: { classId: string }) {
   const href = useEntityHref();
   const academy = useEntity();
-  const bjj = isBjjAcademy(academy.type);
   const trpc = useTRPC();
   const { book, cancel, busy, lockedMessage } = useBooking();
   const { canRunOrganization } = useOrganization();
@@ -191,12 +184,7 @@ export function ClassDetail({ classId }: { classId: string }) {
               term="Time"
               value={`${timeFmt.format(start)} · ${c.durationMinutes} min`}
             />
-            {bjj && (
-              <Detail
-                term="Discipline"
-                value={c.discipline ?? "Not specified"}
-              />
-            )}
+            <Detail term="Discipline" value={c.discipline ?? "Not specified"} />
             <Detail
               term="Instructor"
               value={c.instructorName ?? "Not assigned yet"}
@@ -221,8 +209,6 @@ export function ClassDetail({ classId }: { classId: string }) {
             )}
           </dl>
         </section>
-
-        {bjj && <ClassTheme classId={classId} />}
 
         <section className={cn(ENTER, "space-y-4 delay-200")}>
           <SectionHeading>Who's booked</SectionHeading>

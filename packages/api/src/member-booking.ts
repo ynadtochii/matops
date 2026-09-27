@@ -31,11 +31,8 @@ export type BookForMemberInput = Parameters<typeof bookingGate>[1] & {
 };
 
 /**
- * Book one named person onto one class (ADR 139). The student booking their own
- * class and the entrance screen booking the person who just found their name
- * run exactly this, so neither can drift from the other's capacity accounting
- * or admission rules. The caller decides WHO; this decides whether that person
- * may have the place.
+ * Book one named person onto one class (ADR 139). The caller decides WHO; this
+ * decides whether that person may have the place.
  *
  * Idempotent: a second call on an already-booked class returns `booked: false`
  * and leaves the count alone.

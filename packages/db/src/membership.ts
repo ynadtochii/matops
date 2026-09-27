@@ -6,7 +6,7 @@ import { canRemoveOrDemote } from "@matops/domain";
 import type { DbExec } from "./client";
 import type { DbReader, TenantTx } from "./tenant";
 import { member, organization, user } from "./auth-schema";
-import { academyProfile, entity, entityMembership } from "./entity-schema";
+import { entity, entityMembership } from "./entity-schema";
 import { ensureAccountPerson } from "./person";
 import { person } from "./person-schema";
 
@@ -131,7 +131,7 @@ export async function getEntityMembership(
  * The caller's membership at one entity, in the shape the academy tiers read.
  *
  * Role and status come from `entity_membership`, and `memberId` is that row's
- * id, because every dues, claim, rank, note and referral row keys on it. A
+ * id, because every dues, claim, rank and note row keys on it. A
  * closed academy is not a membership, so the entity and its organization must
  * both still be live.
  */
@@ -327,7 +327,7 @@ export async function listEntitiesForUser(
 
 /**
  * Resolve the caller's `entity_membership.id` at one entity. Dues, claims,
- * ranks, notes and referrals all key on that id, but the tRPC context only
+ * ranks and notes all key on that id, but the tRPC context only
  * carries `user.id` and the entity id, so a student-facing resolver maps one to
  * the other here. Returns null if the person has no membership there.
  */
@@ -361,7 +361,6 @@ interface UserAcademy {
   address: string | null;
   mapUrl: string | null;
   bookingWindowDays: number;
-  curriculumForStudents: boolean;
   /** Set once shared memberships decide access here (ADR 126). */
   membershipEnforcedAt: Date | null;
   role: string;
@@ -401,7 +400,6 @@ export async function listMembershipsForUser(
     address: entity.address,
     mapUrl: entity.mapUrl,
     bookingWindowDays: entity.bookingWindowDays,
-    curriculumForStudents: sql<boolean>`coalesce(${academyProfile.curriculumForStudents}, false)`,
     membershipEnforcedAt: entity.membershipEnforcedAt,
   };
 
@@ -409,7 +407,6 @@ export async function listMembershipsForUser(
     .select({ ...entityCols, joinedAt: member.createdAt })
     .from(member)
     .innerJoin(entity, eq(entity.organizationId, member.organizationId))
-    .leftJoin(academyProfile, eq(academyProfile.entityId, entity.id))
     .innerJoin(organization, eq(organization.id, entity.organizationId))
     .where(
       and(
@@ -432,7 +429,6 @@ export async function listMembershipsForUser(
     })
     .from(entityMembership)
     .innerJoin(entity, eq(entity.id, entityMembership.entityId))
-    .leftJoin(academyProfile, eq(academyProfile.entityId, entity.id))
     .innerJoin(organization, eq(organization.id, entity.organizationId))
     .where(
       and(

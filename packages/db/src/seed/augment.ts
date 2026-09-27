@@ -1,5 +1,5 @@
 /**
- * "Fill an existing academy" mode — add fake students (and their dues, bookings,
+ * "Fill an existing academy" mode: add fake students (and their bookings,
  * attendance, ranks, notes) AROUND the real owner of a real academy, so the gym
  * looks alive when you sign in. Unlike the two-fake-academy seed (data.ts/run.ts),
  * this writes into a REAL academy, so teardown must be surgical:
@@ -8,8 +8,10 @@
  *     real classes, or its real members;
  *   - it removes ONLY rows tied to a `seed_` member/user id.
  *
- * Fake students reuse existing plans and classes. An empty academy gets marked
- * demo plans, templates, and classes that clear can identify and remove.
+ * Fake students reuse existing classes. An academy with no classes gets marked
+ * demo templates and classes that clear can identify and remove. Plans,
+ * assignments and months are added only while the branch requires payment
+ * (`membership_enforced_at` set); an approval-only branch gets none.
  * `booking_count` on each real class is RECOMPUTED from its confirmed bookings on
  * both fill and clear, so it stays correct with fakes added or removed.
  */
@@ -35,8 +37,6 @@ import {
   member,
   memberNote,
   memberRank,
-  memberReferral,
-  memberReferralAudit,
   membershipMonth,
   membershipMonthAudit,
   membershipPolicy,
@@ -319,22 +319,28 @@ export async function fillAcademy(
     .onConflictDoNothing();
   report.entity_membership = students.length;
 
-  // 2a. Memberships, if this branch runs the shared gate (ADR 126-129). Without
-  //     them every fake reads as a person with no membership, which is the one
-  //     state a filled academy should NOT be full of.
-  Object.assign(
-    report,
-    await fillMemberships(exec, {
-      academyId,
-      organizationId,
-      staffId,
-      now,
-      holders: students.filter(
-        (student) =>
-          student.status === "active" || student.status === "suspended",
-      ),
-    }),
-  );
+  // 2a. Memberships only while this branch requires payment (ADR 126-129,
+  //     ADR 142). An approval-only branch shows no payment screens, so it gets
+  //     no payment rows.
+  const [gate] = await exec
+    .select({ membershipEnforcedAt: entity.membershipEnforcedAt })
+    .from(entity)
+    .where(eq(entity.id, academyId));
+  if (gate?.membershipEnforcedAt) {
+    Object.assign(
+      report,
+      await fillMemberships(exec, {
+        academyId,
+        organizationId,
+        staffId,
+        now,
+        holders: students.filter(
+          (student) =>
+            student.status === "active" || student.status === "suspended",
+        ),
+      }),
+    );
+  }
 
   const existingClasses = await exec
     .select({ id: classInstance.id })
@@ -369,7 +375,6 @@ export async function fillAcademy(
       durationMinutes: 60,
       capacity: 24,
       capacityPolicy: "soft",
-      publicBookable: true,
       timeZone: resolveAcademyTimeZone(academy?.timeZone),
       ...template,
     }));
@@ -389,43 +394,6 @@ export async function fillAcademy(
       created += await materializeTemplate(exec, template, { now });
     }
     report.class = created;
-  }
-
-  // Multiple referrers + unassigned examples. All referral rows target fakes,
-  // which keeps `clear` surgical even though the actor is the real owner.
-  const referralCandidates = active.slice(-2);
-  const referralTargets = active
-    .slice(0, Math.max(0, active.length - referralCandidates.length))
-    .slice(0, 10);
-  const referralRows = referralTargets.map((student, index) => ({
-    id: randomUUID(),
-    academyId,
-    studentMemberId: student.memberId,
-    referrerMemberId:
-      referralCandidates[index % referralCandidates.length]?.memberId,
-    assignedBy: staffId,
-    createdAt: new Date(now.getTime() - 60 * DAY_MS),
-    updatedAt: new Date(now.getTime() - 60 * DAY_MS),
-  }));
-  if (
-    referralRows.length > 0 &&
-    referralRows.every((row) => row.referrerMemberId)
-  ) {
-    await exec.insert(memberReferral).values(referralRows);
-    await exec.insert(memberReferralAudit).values(
-      referralRows.map((row) => ({
-        id: randomUUID(),
-        academyId,
-        studentMemberId: row.studentMemberId,
-        oldReferrerMemberId: null,
-        newReferrerMemberId: row.referrerMemberId,
-        action: "assigned" as const,
-        actorId: staffId,
-        occurredAt: row.createdAt,
-      })),
-    );
-    report.member_referral = referralRows.length;
-    report.member_referral_audit = referralRows.length;
   }
 
   // 3. Bookings + attendance on the academy's EXISTING classes.
@@ -897,26 +865,6 @@ export async function clearAcademy(
     );
   }
   // Their dues / claims / rank / promotions / notes (member_id is a seed member).
-  await del("member_referral_audit", () =>
-    exec
-      .delete(memberReferralAudit)
-      .where(
-        and(
-          eq(memberReferralAudit.academyId, academyId),
-          like(memberReferralAudit.studentMemberId, seedLike),
-        ),
-      ),
-  );
-  await del("member_referral", () =>
-    exec
-      .delete(memberReferral)
-      .where(
-        and(
-          eq(memberReferral.academyId, academyId),
-          like(memberReferral.studentMemberId, seedLike),
-        ),
-      ),
-  );
   await del("rank_promotion", () =>
     exec
       .delete(rankPromotion)

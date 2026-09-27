@@ -5,13 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
-import {
-  isOwner,
-  isPendingCoach,
-  membersCsv,
-  membersCsvFilename,
-  runsBranch,
-} from "@matops/domain";
+import { isOwner, isPendingCoach, runsBranch } from "@matops/domain";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
 import {
@@ -34,7 +28,6 @@ import { Eyebrow, LIST, MoreIcon, RESOLVE } from "./primitives";
 import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 import { Tabs } from "./tabs";
-import { VenueCheckin } from "./venue-checkin";
 
 export type Member = RouterOutputs["membership"]["members"][number];
 export type MemberHistory = RouterOutputs["membership"]["memberHistory"];
@@ -310,19 +303,6 @@ export function Members() {
     (suspend.isPending && suspend.variables.memberId === id) ||
     (restore.isPending && restore.variables.memberId === id);
 
-  const exportCsv = () => {
-    const url = URL.createObjectURL(
-      new Blob([membersCsv(shownActive)], { type: "text/csv;charset=utf-8" }),
-    );
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = membersCsvFilename(academy.name, new Date());
-    link.click();
-    // The download is queued, not synchronous: revoking in this tick can cancel
-    // it before the browser fetches the blob (Firefox does).
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  };
-
   const listState = memberList.isPending ? (
     <SkeletonRows rows={4} action gap="gap-3" />
   ) : memberList.isError ? (
@@ -419,18 +399,6 @@ export function Members() {
                     ? `${shownActive.length} of ${active.length} people`
                     : `${active.length} ${active.length === 1 ? "person" : "people"}`}
                 </Eyebrow>
-                <div className="flex items-center gap-2">
-                  {owner && (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      disabled={shownActive.length === 0}
-                      onClick={exportCsv}
-                    >
-                      Export CSV
-                    </Button>
-                  )}
-                </div>
               </div>
             )}
             {listState ??
@@ -541,15 +509,7 @@ export function Members() {
             )}
           </div>
         ) : (
-          <div className="flex flex-col gap-8">
-            {/* The leads are the tab; the poster that brings them in is how you
-                get more, so it follows them. */}
-            <LeadsPipeline initialFilter={stageParam ?? undefined} />
-            <VenueCheckin
-              academyId={academy.academyId}
-              academyName={academy.name}
-            />
-          </div>
+          <LeadsPipeline initialFilter={stageParam ?? undefined} />
         )}
       </div>
     </div>

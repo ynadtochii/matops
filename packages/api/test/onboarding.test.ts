@@ -124,6 +124,58 @@ describe("start a gym", () => {
     expect(await codeOf(h, academyId)).toMatch(/^\d{6}$/);
   });
 
+  it("stores the time zone picked at setup and starts with approval-only booking", async () => {
+    const h = await base();
+    await h.as(OWNER, null).organization.create({ name: "Alma" });
+    const { entityId } = await h.as(OWNER, null).entity.create({
+      type: "bjj_academy",
+      name: "Alma",
+      timeZone: "Europe/Lisbon",
+    });
+    const row = await h.pg.query<{
+      time_zone: string | null;
+      membership_enforced_at: string | null;
+    }>(`SELECT time_zone, membership_enforced_at FROM "entity" WHERE id = $1`, [
+      entityId,
+    ]);
+    expect(row.rows[0]).toEqual({
+      time_zone: "Europe/Lisbon",
+      membership_enforced_at: null,
+    });
+  });
+
+  it("refuses a time zone the runtime does not know", async () => {
+    const h = await base();
+    await h.as(OWNER, null).organization.create({ name: "Alma" });
+    expect(
+      await rejectionCode(
+        h.as(OWNER, null).entity.create({
+          type: "bjj_academy",
+          name: "Alma",
+          timeZone: "Mars/Olympus",
+        }),
+      ),
+    ).toBe("BAD_REQUEST");
+  });
+
+  it("resumes a gym with no academy without making a second gym", async () => {
+    const h = await base();
+    const { organizationId } = await h
+      .as(OWNER, null)
+      .organization.create({ name: "Alma" });
+    await expect(h.as(OWNER, null).organization.mine()).resolves.toEqual([
+      { organizationId, name: "Alma" },
+    ]);
+    const { entityId } = await h
+      .as(OWNER, null)
+      .entity.create({ type: "bjj_academy", name: "Alma" });
+    expect(entityId).toBe(organizationId);
+    const orgs = await h.pg.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM "organization"`,
+    );
+    expect(orgs.rows[0]?.n).toBe(1);
+  });
+
   it("gives two gyms two different codes", async () => {
     const h = await base();
     const a = await startGym(h, OWNER, "Alma");

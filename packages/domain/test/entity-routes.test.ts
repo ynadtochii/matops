@@ -4,7 +4,6 @@ import {
   canVisit,
   entityFromPath,
   entityHref,
-  organizationHref,
   pathWithinEntity,
 } from "../src/entity";
 
@@ -28,12 +27,6 @@ describe("entity routes", () => {
   it("builds the home path without a trailing slash", () => {
     expect(entityHref("acad_a")).toBe("/entities/acad_a");
     expect(entityHref("acad_a", "/members")).toBe("/entities/acad_a/members");
-  });
-
-  it("keeps organization query parameters with the selected branch", () => {
-    expect(organizationHref("/memberships?tab=payments", "branch a")).toBe(
-      "/memberships?tab=payments&branch=branch%20a",
-    );
   });
 
   it("strips the entity for the route table", () => {
@@ -71,13 +64,7 @@ describe("who may open which screen", () => {
   });
 
   it("keeps staff screens off a student", () => {
-    for (const path of [
-      "/members",
-      "/schedule",
-      "/coaches",
-      "/attendance",
-      "/reception",
-    ]) {
+    for (const path of ["/members", "/schedule", "/coaches", "/attendance"]) {
       expect([path, canVisit(path, student)]).toEqual([path, false]);
       expect([path, canVisit(path, coach)]).toEqual([path, true]);
     }
@@ -103,40 +90,6 @@ describe("who may open which screen", () => {
       ]);
     }
   });
-
-  it("runs a general space on the same screens minus the BJJ ones", () => {
-    const gym = { ...owner, type: "general_space" };
-    for (const path of ["/", "/schedule", "/members", "/attendance"]) {
-      expect([path, canVisit(path, gym)]).toEqual([path, true]);
-    }
-    expect(canVisit("/entities/acad_a/settings", gym)).toBe(true);
-    expect(canVisit("/entities/acad_a/referrals", gym)).toBe(false);
-  });
-
-  it("keeps referrals for a BJJ academy", () => {
-    const mat = { ...owner, type: "bjj_academy" };
-    expect(canVisit("/entities/acad_a/schedule", mat)).toBe(true);
-    expect(canVisit("/entities/acad_a/referrals", mat)).toBe(true);
-  });
-
-  it("hides referrals when the gym has not enabled them", () => {
-    const mat = {
-      ...owner,
-      type: "bjj_academy",
-      referralsEnabled: false,
-    };
-    expect(canVisit("/entities/acad_a/referrals", mat)).toBe(false);
-    expect(canVisit("/entities/acad_a/schedule", mat)).toBe(true);
-  });
-
-  it("keeps the role check on a general space", () => {
-    const gymCoach = { ...coach, type: "general_space" };
-    expect(canVisit("/settings", gymCoach)).toBe(false);
-    expect(canVisit("/schedule", gymCoach)).toBe(true);
-    expect(canVisit("/members", { ...student, type: "general_space" })).toBe(
-      false,
-    );
-  });
 });
 
 describe("a gym manager at a branch", () => {
@@ -148,20 +101,10 @@ describe("a gym manager at a branch", () => {
       "/schedule",
       "/members",
       "/attendance",
-      "/reception",
       "/coaches",
       "/settings",
     ]) {
       expect([path, canVisit(path, manager)]).toEqual([path, true]);
     }
-  });
-
-  it("keeps the BJJ narrowing", () => {
-    expect(canVisit("/referrals", { ...manager, type: "general_space" })).toBe(
-      false,
-    );
-    expect(canVisit("/referrals", { ...manager, type: "bjj_academy" })).toBe(
-      true,
-    );
   });
 });

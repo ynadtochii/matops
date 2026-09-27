@@ -93,28 +93,10 @@ export function canRemoveOrDemote(
 // --- Client is the role lens (docs/issues/18) --------------------------------
 
 /**
- * True if this membership belongs in the WEB (owner/instructor) lens: an active
- * owner or instructor, or a pending instructor still awaiting approval (they wait
- * on the web, not the student app). Pending/active students belong to the mobile
- * lens instead. Drives which academies the web switcher lists.
- */
-export function isWebLensMembership(m: {
-  role: string;
-  invitedRole?: string | null;
-}): boolean {
-  return (
-    m.role === "owner" ||
-    m.role === "instructor" ||
-    m.invitedRole === "instructor"
-  );
-}
-
-/**
  * True if this membership belongs in the MOBILE (student) lens: an active
  * student, or a pending member invited as a student (they wait on the app, on
- * the schedule — spec S3/S4). The complement of the web lens per membership, so
- * one person can be web-lens at one gym and student-lens at another. Drives the
- * mobile switcher + `academy.listMineStudent` (the deferred mobile pass).
+ * the schedule — spec S3/S4). Drives the mobile switcher +
+ * `academy.listMineStudent` (the deferred mobile pass).
  */
 export function isStudentLensMembership(m: {
   role: string;

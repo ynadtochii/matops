@@ -261,7 +261,7 @@ describe("two branches in one week", () => {
     db = execOn(pg);
     await pg.query(
       `INSERT INTO "entity" (id, organization_id, type, name, slug, is_default, public_code)
-         VALUES ('academy_A2', $1, 'general_space', 'Gym floor', 'gym-floor', false, '654321')`,
+         VALUES ('academy_A2', $1, 'bjj_academy', 'Gym floor', 'gym-floor', false, '654321')`,
       [A],
     );
     for (const entityId of [A, "academy_A2"]) {

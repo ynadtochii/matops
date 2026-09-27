@@ -7,34 +7,34 @@
  * done because the gym holds the row, and it stops being done if that row goes.
  */
 export interface SetupFacts {
-  /** The gym has a name of its own, rather than the one it was born with. */
-  gymNamed: boolean;
   branches: number;
   /** Branches whose place and time zone are both filled in. */
   branchesLocated: number;
   /** Branches with at least one active recurring class or session. */
   branchesScheduled: number;
-  instructors: number;
+  invites: number;
+  activeStudents: number;
+  bookings: number;
+  paymentsOn: boolean;
   bankDetails: boolean;
   paidPlans: number;
   plans: number;
   assignments: number;
   /** Active members no membership covers, across every branch. */
   uncoveredMembers: number;
-  invites: number;
 }
 
 export type SetupKey =
-  | "gym"
   | "branch"
   | "location"
   | "schedule"
-  | "staff"
-  | "bank"
+  | "invite"
+  | "approve"
+  | "booking"
   | "plan"
+  | "bank"
   | "assign"
-  | "ready"
-  | "invite";
+  | "ready";
 
 interface SetupItem {
   key: SetupKey;
@@ -44,32 +44,39 @@ interface SetupItem {
 }
 
 /**
- * The list, in the order the work actually happens. Nothing after the first
- * branch can be done before it exists, and nothing about money can be done
- * before there is a plan, so those items report `blocked` rather than simply
- * not done: an owner reading a flat list of ten crosses cannot tell which one
- * to start.
+ * The list, in the order the work actually happens: an academy, its classes,
+ * a student invited and approved, then a first booking. A teaching owner is
+ * the staff, so there is no separate instructor step. Plan and payment steps
+ * appear only while a branch requires payment to book.
  */
 export function organizationSetup(facts: SetupFacts): SetupItem[] {
   const hasBranch = facts.branches > 0;
+  const scheduled = hasBranch && facts.branchesScheduled === facts.branches;
   const hasPlan = facts.plans > 0;
 
   const items: SetupItem[] = [
-    { key: "gym", done: facts.gymNamed, blocked: false },
     { key: "branch", done: hasBranch, blocked: false },
     {
       key: "location",
       done: hasBranch && facts.branchesLocated === facts.branches,
       blocked: !hasBranch,
     },
+    { key: "schedule", done: scheduled, blocked: !hasBranch },
+    { key: "invite", done: facts.invites > 0, blocked: !hasBranch },
     {
-      key: "schedule",
-      done: hasBranch && facts.branchesScheduled === facts.branches,
+      key: "approve",
+      done: facts.activeStudents > 0,
       blocked: !hasBranch,
     },
-    { key: "staff", done: facts.instructors > 0, blocked: !hasBranch },
-    { key: "plan", done: hasPlan, blocked: !hasBranch },
+    {
+      key: "booking",
+      done: facts.bookings > 0,
+      blocked: facts.activeStudents === 0 || facts.branchesScheduled === 0,
+    },
   ];
+  if (!facts.paymentsOn) return items;
+
+  items.push({ key: "plan", done: hasPlan, blocked: !hasBranch });
   if (facts.paidPlans > 0) {
     items.push({ key: "bank", done: facts.bankDetails, blocked: false });
   }
@@ -77,12 +84,9 @@ export function organizationSetup(facts: SetupFacts): SetupItem[] {
     { key: "assign", done: facts.assignments > 0, blocked: !hasPlan },
     {
       key: "ready",
-      // Nobody covered is not readiness, it is an empty gym: this asks whether
-      // the people who are here can train, so it needs an assignment first.
       done: facts.assignments > 0 && facts.uncoveredMembers === 0,
       blocked: facts.assignments === 0,
     },
-    { key: "invite", done: facts.invites > 0, blocked: !hasBranch },
   );
   return items;
 }
@@ -105,35 +109,22 @@ export interface BranchHealthFacts {
   uncovered: number;
   /** A plan of this gym names this branch among the ones it covers. */
   planCovers: boolean;
-  bjj: boolean;
-  publicBookingEnabled: boolean;
-  publicClasses: number;
 }
 
-export type BranchIssue =
-  "schedule" | "staff" | "covered" | "membership" | "public";
+export type BranchIssue = "schedule" | "staff" | "covered" | "membership";
 
 /**
  * What stops a branch opening (spec FP8). Each one is a thing the owner can
  * fix, so an empty list means the branch is ready rather than merely quiet.
- *
- * The public-classes check fires only where the owner has TURNED public
- * booking ON and shared nothing, which is the state that misleads a visitor.
- * A gym that never wanted a public page is not missing anything, and flagging
- * it would nag every academy about a feature it declined.
  */
 export function branchLaunchIssues(facts: BranchHealthFacts): BranchIssue[] {
   const issues: BranchIssue[] = [];
   if (!facts.scheduled) issues.push("schedule");
-  // A general space runs sessions without a coach, and a solo owner who
-  // teaches their own classes IS the coach. Only a mat with nobody running it
-  // is a warning (ADR 129).
-  if (facts.bjj && !facts.staffed) issues.push("staff");
+  // A solo owner who teaches their own classes IS the coach. Only a mat with
+  // nobody running it is a warning (ADR 129).
+  if (!facts.staffed) issues.push("staff");
   if (facts.enforced && !facts.planCovers) issues.push("membership");
   if (facts.enforced && facts.uncovered > 0) issues.push("covered");
-  if (facts.bjj && facts.publicBookingEnabled && facts.publicClasses === 0) {
-    issues.push("public");
-  }
   return issues;
 }
 

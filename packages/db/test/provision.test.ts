@@ -6,7 +6,6 @@ import { createEntity, provisionOrganization } from "../src/provision";
 import {
   academyProfile,
   classTemplate,
-  curriculumTrack,
   entity,
   entityMembership,
 } from "../src/schema";
@@ -37,14 +36,13 @@ describe("provisioning an organization", () => {
 
   afterAll(() => pg.close());
 
-  it("makes all four rows on the first run", async () => {
+  it("makes all three rows on the first run", async () => {
     const result = await provisionOrganization(
       { organizationId: ORG, ownerUserId: OWNER },
       execOn(pg),
     );
     expect(result.created.sort()).toEqual([
       "academy_profile",
-      "curriculum_track",
       "entity",
       "entity_membership",
     ]);
@@ -86,7 +84,6 @@ describe("provisioning an organization", () => {
     expect(await exec.select().from(entity)).toHaveLength(1);
     expect(await exec.select().from(academyProfile)).toHaveLength(1);
     expect(await exec.select().from(entityMembership)).toHaveLength(1);
-    expect(await exec.select().from(curriculumTrack)).toHaveLength(1);
   });
 
   it("refuses an organization that does not exist", async () => {
@@ -128,7 +125,6 @@ describe("repairing a half-provisioned organization", () => {
 
     expect(result.created.sort()).toEqual([
       "academy_profile",
-      "curriculum_track",
       "entity_membership",
     ]);
   });
@@ -174,84 +170,10 @@ describe("adding a second entity", () => {
     expect(rows.filter((r) => r.isDefault)).toHaveLength(1);
   });
 
-  it("gives it its own curriculum track and owner membership", async () => {
-    const exec = execOn(pg);
-    const tracks = await exec.select().from(curriculumTrack);
-    const memberships = await exec.select().from(entityMembership);
-    expect(tracks.map((t) => t.academyId).sort()).toEqual(
-      [ORG, secondId].sort(),
-    );
+  it("gives it its own owner membership", async () => {
+    const memberships = await execOn(pg).select().from(entityMembership);
     expect(memberships.map((m) => m.entityId).sort()).toEqual(
       [ORG, secondId].sort(),
-    );
-  });
-});
-
-describe("adding a general space", () => {
-  let pg: PGlite;
-  let gymId: string;
-
-  beforeAll(async () => {
-    pg = await freshDb([]);
-    await seedOrganization(pg, ORG);
-    await provisionOrganization(
-      { organizationId: ORG, ownerUserId: OWNER },
-      execOn(pg),
-    );
-    const made = await createEntity(
-      {
-        organizationId: ORG,
-        type: "general_space",
-        name: "The Gym",
-        ownerUserId: OWNER,
-      },
-      execOn(pg),
-    );
-    gymId = made.entityId;
-  });
-
-  afterAll(() => pg.close());
-
-  it("makes only the entity and the owner membership", async () => {
-    const again = await createEntity(
-      {
-        organizationId: ORG,
-        type: "general_space",
-        name: "The Sauna",
-        ownerUserId: OWNER,
-      },
-      execOn(pg),
-    );
-    expect(again.created.sort()).toEqual(["entity", "entity_membership"]);
-  });
-
-  it("gives it no academy profile", async () => {
-    const rows = await execOn(pg).select().from(academyProfile);
-    expect(rows.map((r) => r.entityId)).toEqual([ORG]);
-  });
-
-  it("gives it no curriculum track", async () => {
-    const rows = await execOn(pg).select().from(curriculumTrack);
-    expect(rows.map((r) => r.academyId)).toEqual([ORG]);
-  });
-
-  it("enforces shared memberships from the moment it opens", async () => {
-    const rows = await execOn(pg).select().from(entity);
-    const gymRow = rows.find((r) => r.id === gymId);
-    const matRow = rows.find((r) => r.id === ORG);
-    expect(gymRow?.membershipEnforcedAt).toBeInstanceOf(Date);
-    expect(matRow?.membershipEnforcedAt).toBeNull();
-  });
-
-  it("still gives it its own code and an active owner", async () => {
-    const exec = execOn(pg);
-    const rows = await exec.select().from(entity);
-    const gym = rows.find((r) => r.id === gymId);
-    expect(gym?.publicCode).toMatch(/^\d{6}$/);
-    expect(gym?.type).toBe("general_space");
-    const memberships = await exec.select().from(entityMembership);
-    expect(memberships.find((m) => m.entityId === gymId)?.status).toBe(
-      "active",
     );
   });
 });
@@ -279,20 +201,15 @@ describe("the first branch of a gym that has none", () => {
     expect(made.entityId).toBe(ORG);
   });
 
-  it("runs on shared memberships from its first day", async () => {
+  it("starts with approval-only booking", async () => {
     const rows = await execOn(pg).select().from(entity);
-    expect(rows.find((r) => r.id === ORG)?.membershipEnforcedAt).toBeInstanceOf(
-      Date,
-    );
+    expect(rows.find((r) => r.id === ORG)?.membershipEnforcedAt).toBeNull();
   });
 
   it("gets every row a mat needs, without provisionOrganization", async () => {
     const exec = execOn(pg);
     expect(
       (await exec.select().from(academyProfile)).map((r) => r.entityId),
-    ).toEqual([ORG]);
-    expect(
-      (await exec.select().from(curriculumTrack)).map((r) => r.academyId),
     ).toEqual([ORG]);
     expect(
       (await exec.select().from(entityMembership)).map((r) => ({
@@ -392,51 +309,13 @@ describe("a branch created with a chosen id", () => {
       {
         organizationId: ORG_C,
         entityId: "seed_pilot_gym",
-        type: "general_space",
-        name: "Pilot Gym floor",
+        type: "bjj_academy",
+        name: "Pilot BJJ",
         ownerUserId: OWNER,
       },
       execOn(pg),
     );
     expect(made.entityId).toBe("seed_pilot_gym");
-  });
-});
-
-describe("a first branch that is a general space", () => {
-  let pg: PGlite;
-  const ORG_D = "org_delta";
-
-  beforeAll(async () => {
-    pg = await freshDb([]);
-    await seedOrganization(pg, ORG_D);
-  });
-
-  afterAll(() => pg.close());
-
-  it("makes the entity and the creator's membership, and nothing BJJ", async () => {
-    const made = await createEntity(
-      {
-        organizationId: ORG_D,
-        type: "general_space",
-        name: "The Gym",
-        ownerUserId: OWNER,
-      },
-      execOn(pg),
-    );
-
-    expect(made.created.sort()).toEqual(["entity", "entity_membership"]);
-    const exec = execOn(pg);
-    expect(await exec.select().from(academyProfile)).toHaveLength(0);
-    expect(await exec.select().from(curriculumTrack)).toHaveLength(0);
-    expect(
-      (await exec.select().from(entityMembership)).map((r) => r.role),
-    ).toEqual(["owner"]);
-  });
-
-  it("is still the default branch of its gym", async () => {
-    const rows = await execOn(pg).select().from(entity);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]?.isDefault).toBe(true);
   });
 });
 
@@ -565,8 +444,8 @@ describe("copying a branch's setup into a new one", () => {
     await pg.query(
       `INSERT INTO "class_template"
          (academy_id, instructor_id, title, days_of_week, starts_at_minutes,
-          duration_minutes, time_zone, capacity, public_bookable)
-       VALUES ($1, $2, 'Fundamentals', '{1,3}', 1080, 60, 'Europe/Lisbon', 20, true)`,
+          duration_minutes, time_zone, capacity)
+       VALUES ($1, $2, 'Fundamentals', '{1,3}', 1080, 60, 'Europe/Lisbon', 20)`,
       [sourceId, COACH],
     );
 
@@ -599,16 +478,6 @@ describe("copying a branch's setup into a new one", () => {
       capacity: 20,
     });
     expect(rows[0]?.generatedUntil).toBeNull();
-  });
-
-  it("drops the source's public booking flag and curriculum track", async () => {
-    const rows = await execOn(pg)
-      .select()
-      .from(classTemplate)
-      .where(eq(classTemplate.academyId, copyId));
-
-    expect(rows[0]?.publicBookable).toBe(false);
-    expect(rows[0]?.curriculumTrackId).toBeNull();
   });
 
   it("copies the staff and leaves the students where they are", async () => {

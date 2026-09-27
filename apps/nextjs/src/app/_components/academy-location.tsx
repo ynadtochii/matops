@@ -4,12 +4,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowUpRight } from "lucide-react";
 
-import {
-  academyCountry,
-  academyMapUrl,
-  DIAL_COUNTRIES,
-  timeZoneOptions,
-} from "@matops/domain";
+import { academyMapUrl, timeZoneOptions } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { Button } from "@matops/ui/button";
 import { FieldError } from "@matops/ui/field";
@@ -42,9 +37,6 @@ export function AcademyLocation({
   const [editingAddress, setEditingAddress] = useState(false);
   const [draft, setDraft] = useState(address ?? "");
   const [linkDraft, setLinkDraft] = useState(mapUrl ?? "");
-  const [bookingWindowError, setBookingWindowError] = useState<string | null>(
-    null,
-  );
   const linkError =
     linkDraft.trim() && !MapUrlSchema.safeParse(linkDraft.trim()).success
       ? "Paste a share link from Google Maps, Apple Maps, OpenStreetMap, or Waze."
@@ -66,15 +58,14 @@ export function AcademyLocation({
   return (
     <section className="flex flex-col gap-4">
       <div>
-        <SectionHeading>Branch rules and location</SectionHeading>
+        <SectionHeading>Location and time zone</SectionHeading>
         <p className="text-muted-foreground mt-1 max-w-2xl text-sm text-pretty">
-          Set the local calendar, phone country, booking window, and address for
-          this branch.
+          Set the local calendar and address.
         </p>
       </div>
       {settings.isError && (
         <ErrorState
-          label="branch rules"
+          label="location settings"
           onRetry={() => void settings.refetch()}
         />
       )}
@@ -129,98 +120,6 @@ export function AcademyLocation({
                 {zones.map((z) => (
                   <option key={z} value={z}>
                     {z}
-                  </option>
-                ))}
-              </Select>
-            </SettingsRow>
-
-            <SettingsRow
-              title={<h3>Booking window</h3>}
-              description="Students can book classes on these branch calendar days."
-            >
-              <Label htmlFor="booking-window-days">Days ahead</Label>
-              <Input
-                id="booking-window-days"
-                type="number"
-                min={1}
-                max={90}
-                className="w-24"
-                defaultValue={settings.data.bookingWindowDays}
-                disabled={save.isPending}
-                aria-invalid={bookingWindowError ? true : undefined}
-                aria-describedby={
-                  bookingWindowError ? "booking-window-error" : undefined
-                }
-                onChange={() => setBookingWindowError(null)}
-                onBlur={(event) => {
-                  const bookingWindowDays = Number(event.target.value);
-                  if (
-                    !Number.isInteger(bookingWindowDays) ||
-                    bookingWindowDays < 1 ||
-                    bookingWindowDays > 90
-                  ) {
-                    setBookingWindowError(
-                      "Use a whole number from 1 to 90 days.",
-                    );
-                    return;
-                  }
-                  setBookingWindowError(null);
-                  if (bookingWindowDays !== settings.data.bookingWindowDays) {
-                    save.mutate(
-                      { bookingWindowDays },
-                      {
-                        onSuccess: () => toast.success("Booking window saved"),
-                      },
-                    );
-                  }
-                }}
-              />
-              {bookingWindowError && (
-                <FieldError
-                  id="booking-window-error"
-                  className="basis-full sm:text-right"
-                >
-                  {bookingWindowError}
-                </FieldError>
-              )}
-            </SettingsRow>
-
-            <SettingsRow
-              title={<h3>Phone country</h3>}
-              description={
-                <>
-                  Phone fields start with this country code. MatOps guesses from
-                  the time zone until you save one.
-                  {!settings.data.country && (
-                    <span className="mt-1 block text-xs">
-                      Guessed from {settings.data.timeZone}. Save it to make it
-                      yours.
-                    </span>
-                  )}
-                </>
-              }
-            >
-              <Label htmlFor="academy-country" className="sr-only">
-                Academy country
-              </Label>
-              <Select
-                id="academy-country"
-                className="w-full sm:w-64"
-                value={academyCountry(
-                  settings.data.country,
-                  settings.data.timeZone,
-                )}
-                disabled={save.isPending}
-                onChange={(e) => {
-                  save.mutate(
-                    { country: e.target.value },
-                    { onSuccess: () => toast.success("Country saved") },
-                  );
-                }}
-              >
-                {DIAL_COUNTRIES.map((c) => (
-                  <option key={c.iso} value={c.iso}>
-                    {c.name} ({c.dial})
                   </option>
                 ))}
               </Select>

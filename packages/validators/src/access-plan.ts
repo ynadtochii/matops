@@ -78,41 +78,7 @@ export const AssignMembershipSchema = z
     userId: "personId" in input ? input.personId : input.userId,
   }));
 
-/** How many people one bulk run may touch. Past this it is an import, not a click. */
-const MAX_BULK_ASSIGN = 500;
-
-/** Give the same plan to several people at once (ADR 128). */
-export const BulkAssignMembershipSchema = z
-  .union([
-    z.object({
-      personIds: z.array(IdSchema).min(1).max(MAX_BULK_ASSIGN),
-      planId: z.uuid(),
-      startMonth: z.iso.date().nullish(),
-    }),
-    z.object({
-      userIds: z.array(IdSchema).min(1).max(MAX_BULK_ASSIGN),
-      planId: z.uuid(),
-      startMonth: z.iso.date().nullish(),
-    }),
-  ])
-  .transform((input) => ({
-    ...input,
-    userIds: "personIds" in input ? input.personIds : input.userIds,
-  }));
-
 export const AssignmentIdSchema = z.object({ id: z.uuid() });
-
-/**
- * Move one membership onto another plan from the first of next month
- * (ADR 129). The month is NOT an input: the server computes it from the gym's
- * own membership calendar, so a clock on a laptop cannot move a boundary.
- */
-export const PlanChangeSchema = z.object({
-  assignmentId: z.uuid(),
-  targetPlanId: z.uuid(),
-});
-
-export const CancelPlanChangeSchema = z.object({ changeId: z.uuid() });
 
 /**
  * The bookings that need a look after a coverage or plan change (ADR 129).
@@ -179,8 +145,6 @@ export const MarkMembershipMonthSchema = z.object({
   resolveHoldReason: blockText(1, 500).optional(),
 });
 
-export const MembershipMonthsSchema = z.object({ assignmentId: z.uuid() });
-
 /**
  * A member says they sent the transfer. No month: the server uses the one they
  * are being judged on, which is the only month they are ever shown (ADR 127).
@@ -217,10 +181,4 @@ export const MembershipPolicySchema = z.object({
    * REPLACES it: a partial save from a second form would blank the account.
    */
   bankDetails: blockText(0, 2000),
-});
-
-/** The window the organization overview reports on. Both ends, or neither. */
-export const OrganizationWindowSchema = z.object({
-  from: z.iso.datetime(),
-  to: z.iso.datetime(),
 });

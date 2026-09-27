@@ -12,16 +12,17 @@ import {
   inArray,
   isNull,
   listOwnedOrganizations,
+  ne,
   recordMilestone,
   withScope,
 } from "@matops/db";
 import {
   academyInvite,
-  academyProfile,
   accessAssignment,
   accessPlan,
   accessPlanEntity,
   accessPlanPrice,
+  classParticipation,
   classTemplate,
   entity,
   entityMembership,
@@ -30,16 +31,11 @@ import {
 } from "@matops/db/schema";
 import {
   branchLaunchIssues,
-  isBjjAcademy,
   organizationSetup,
   setupProgress,
   slugify,
 } from "@matops/domain";
-import {
-  CreateAcademySchema,
-  IdSchema,
-  OrganizationModulesSchema,
-} from "@matops/validators";
+import { CreateAcademySchema, IdSchema } from "@matops/validators";
 
 import { studentRosterOf } from "../members";
 import { loadRosterStanding } from "../membership-access";
@@ -190,7 +186,8 @@ export const organizationRouter = {
     const now = new Date();
     let branchesLocated = 0;
     let branchesScheduled = 0;
-    let instructors = 0;
+    let activeStudents = 0;
+    let bookings = 0;
     let uncoveredMembers = 0;
     // `academy_invite` carries no `matops_app` grants at all (ADR 60), so this
     // read has to happen on the base connection: asking for it inside the
@@ -218,7 +215,6 @@ export const organizationRouter = {
             .select({
               timeZone: entity.timeZone,
               address: entity.address,
-              type: entity.type,
             })
             .from(entity)
             .where(eq(entity.id, branch.id));
@@ -235,20 +231,25 @@ export const organizationRouter = {
             );
           if ((templates?.n ?? 0) > 0) branchesScheduled += 1;
 
-          const [staff] = await tx
+          const [students] = await tx
             .select({ n: count() })
             .from(entityMembership)
             .where(
               and(
-                eq(entityMembership.role, "instructor"),
+                eq(entityMembership.role, "student"),
                 eq(entityMembership.status, "active"),
               ),
             );
-          instructors += staff?.n ?? 0;
+          activeStudents += students?.n ?? 0;
+
+          const [booked] = await tx
+            .select({ n: count() })
+            .from(classParticipation)
+            .where(ne(classParticipation.bookingStatus, "none"));
+          bookings += booked?.n ?? 0;
 
           // Who actually runs the mat, which includes an owner who teaches
-          // their own classes (ADR 129). The count above is the gym-level
-          // "bring an instructor in" step and is a different question.
+          // their own classes (ADR 129).
           const [running] = await tx
             .select({ n: count() })
             .from(entityMembership)
@@ -281,24 +282,6 @@ export const organizationRouter = {
             uncoveredMembers += uncovered;
           }
 
-          const bjj = isBjjAcademy(place?.type ?? "");
-          const [profile] = bjj
-            ? await tx
-                .select({ enabled: academyProfile.publicBookingEnabled })
-                .from(academyProfile)
-                .where(eq(academyProfile.entityId, branch.id))
-            : [];
-          const [shared] = profile?.enabled
-            ? await tx
-                .select({ n: count() })
-                .from(classTemplate)
-                .where(
-                  and(
-                    eq(classTemplate.publicBookable, true),
-                    isNull(classTemplate.deletedAt),
-                  ),
-                )
-            : [];
           const [covering] = await tx
             .select({ n: count() })
             .from(accessPlanEntity)
@@ -313,9 +296,6 @@ export const organizationRouter = {
               enforced: branch.membershipEnforcedAt !== null,
               uncovered,
               planCovers: (covering?.n ?? 0) > 0,
-              bjj,
-              publicBookingEnabled: profile?.enabled ?? false,
-              publicClasses: shared?.n ?? 0,
             }),
           });
         },
@@ -324,11 +304,12 @@ export const organizationRouter = {
     }
 
     const items = organizationSetup({
-      gymNamed: gym.name.trim().length > 0,
       branches: branches.length,
       branchesLocated,
       branchesScheduled,
-      instructors,
+      activeStudents,
+      bookings,
+      paymentsOn: branches.some((b) => b.membershipEnforcedAt !== null),
       bankDetails: gym.bankDetails,
       paidPlans: gym.paidPlans,
       plans: gym.plans,
@@ -339,55 +320,6 @@ export const organizationRouter = {
 
     return { items, progress: setupProgress(items), branches: health };
   }),
-
-  /**
-   * What the gym has agreed to pay and where that stands (ADR 128).
-   *
-   * A read only. Nothing in this codebase charges anybody: the offer, the date
-   * free access ends and the agreed price are set by us, out of band, and shown
-   * here so an owner is never surprised by a bill and a pilot that quietly ran
-   * past its date is visible.
-   */
-  account: organizationManagerIdentityProcedure.query(async ({ ctx }) => {
-    const rows = await ctx.baseDb
-      .select({
-        offer: organization.offer,
-        pilotEndsOn: organization.pilotEndsOn,
-        agreedPriceMinor: organization.agreedPriceMinor,
-        agreedPriceCurrency: organization.agreedPriceCurrency,
-        billingContact: organization.billingContact,
-        accountStatus: organization.accountStatus,
-      })
-      .from(organization)
-      .where(eq(organization.id, ctx.organizationId))
-      .limit(1);
-    const row = rows[0];
-    if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "No gym" });
-    return row;
-  }),
-
-  modules: organizationManagerIdentityProcedure.query(async ({ ctx }) => {
-    const [row] = await ctx.baseDb
-      .select({
-        curriculumEnabled: organization.curriculumEnabled,
-        referralsEnabled: organization.referralsEnabled,
-      })
-      .from(organization)
-      .where(eq(organization.id, ctx.organizationId))
-      .limit(1);
-    if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "No gym" });
-    return row;
-  }),
-
-  setModules: organizationManagerIdentityProcedure
-    .input(OrganizationModulesSchema)
-    .mutation(async ({ ctx, input }) => {
-      await ctx.baseDb
-        .update(organization)
-        .set(input)
-        .where(eq(organization.id, ctx.organizationId));
-      return input;
-    }),
 
   /**
    * Rename the gym. Writes `organization.name` and nothing else: each branch

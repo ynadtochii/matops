@@ -1,9 +1,7 @@
 import type { TenantTx } from "@matops/db";
 import { desc, eq, sql } from "@matops/db";
-import { academyProfile, classTemplate, entity } from "@matops/db/schema";
+import { classTemplate, entity } from "@matops/db/schema";
 import { resolveAcademyTimeZone } from "@matops/domain";
-
-export { FALLBACK_TIME_ZONE as DEFAULT_TIME_ZONE } from "@matops/domain";
 
 export interface TimeZoneCtx {
   db: TenantTx;
@@ -16,7 +14,6 @@ interface AcademyContext {
   country: string | null;
   bookingWindowDays: number;
   scheduleRevision: number;
-  curriculumForStudents: boolean;
 }
 
 export async function academyContext(
@@ -28,13 +25,10 @@ export async function academyContext(
       country: entity.country,
       bookingWindowDays: entity.bookingWindowDays,
       scheduleRevision: entity.scheduleRevision,
-      curriculumForStudents: sql<boolean>`coalesce(${academyProfile.curriculumForStudents}, false)`,
     })
     .from(entity)
-    .leftJoin(academyProfile, eq(academyProfile.entityId, entity.id))
     .where(eq(entity.id, ctx.academyId))
     .limit(1);
-  const curriculumForStudents = org?.curriculumForStudents ?? false;
   const country = org?.country ?? null;
   const bookingWindowDays = org?.bookingWindowDays ?? 7;
   const scheduleRevision = org?.scheduleRevision ?? 0;
@@ -44,7 +38,6 @@ export async function academyContext(
       country,
       bookingWindowDays,
       scheduleRevision,
-      curriculumForStudents,
     };
   }
 
@@ -59,7 +52,6 @@ export async function academyContext(
     country,
     bookingWindowDays,
     scheduleRevision,
-    curriculumForStudents,
   };
 }
 

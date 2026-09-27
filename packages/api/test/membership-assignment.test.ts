@@ -58,8 +58,8 @@ describe("assigning a shared membership", () => {
     const made = await createEntity(
       {
         organizationId: ORG,
-        type: "general_space",
-        name: "The Gym",
+        type: "bjj_academy",
+        name: "Second Mat",
         ownerUserId: OWNER,
       },
       h.exec,
@@ -304,6 +304,14 @@ describe("marking a membership month paid", () => {
     );
     return res.rows[0]?.n ?? -1;
   };
+  const monthsOf = async () =>
+    (
+      await h.pg.query<{ month: string; status: string }>(
+        `SELECT month::text AS month, status FROM "membership_month"
+           WHERE assignment_id = $1 ORDER BY month DESC`,
+        [assignment],
+      )
+    ).rows;
 
   it("is owner only", async () => {
     expect(
@@ -330,9 +338,7 @@ describe("marking a membership month paid", () => {
   });
 
   it("has no record at all until somebody ticks it", async () => {
-    expect(
-      await owner().accessPlan.months({ assignmentId: assignment }),
-    ).toEqual([]);
+    expect(await monthsOf()).toEqual([]);
   });
 
   it("marks a month paid once, however many times it is called", async () => {
@@ -348,9 +354,7 @@ describe("marking a membership month paid", () => {
     });
 
     expect([first.changed, again.changed]).toEqual([true, false]);
-    const months = await owner().accessPlan.months({
-      assignmentId: assignment,
-    });
+    const months = await monthsOf();
     expect(months).toHaveLength(1);
     expect([months[0]?.month, months[0]?.status]).toEqual([
       "2026-09-01",
@@ -393,9 +397,7 @@ describe("marking a membership month paid", () => {
       month: "2026-10-01",
       paid: true,
     });
-    const months = await owner().accessPlan.months({
-      assignmentId: assignment,
-    });
+    const months = await monthsOf();
     expect(months.map((m) => m.month)).toEqual(["2026-10-01", "2026-09-01"]);
   });
 

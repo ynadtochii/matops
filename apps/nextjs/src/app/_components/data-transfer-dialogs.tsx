@@ -38,10 +38,12 @@ const columns = {
 export function StudentImportDialog({
   entities,
   plans,
+  payments,
   onOpenChange,
 }: {
   entities: { id: string; name: string }[];
   plans: { id: string; name: string; archived: boolean }[];
+  payments: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
   const trpc = useTRPC();
@@ -112,8 +114,9 @@ export function StudentImportDialog({
         <DialogTitle>Import students</DialogTitle>
         <div className="flex flex-col gap-4">
           <p className="text-muted-foreground text-sm">
-            Paste CSV or choose a file. Use name, email, phone, branch, plan,
-            start_month, payment_month, and payment_status headers.
+            {payments
+              ? "Paste CSV or choose a file. Use name, email, phone, branch, plan, start_month, payment_month, and payment_status headers."
+              : "Paste CSV or choose a file. Use name, email, phone, and branch headers."}
           </p>
           <Input
             type="file"
@@ -148,37 +151,43 @@ export function StudentImportDialog({
                 ))}
               </Select>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="import-plan">Default membership</Label>
-              <Select
-                id="import-plan"
-                value={planId}
-                onChange={(event) => setPlanId(event.target.value)}
-              >
-                <option value="">No default</option>
-                {plans
-                  .filter((plan) => !plan.archived)
-                  .map((plan) => (
-                    <option key={plan.id} value={plan.id}>
-                      {plan.name}
-                    </option>
-                  ))}
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="import-paid">Starting payment</Label>
-              <Select
-                id="import-paid"
-                value={paymentStatus}
-                onChange={(event) =>
-                  setPaymentStatus(event.target.value as "" | "paid" | "unpaid")
-                }
-              >
-                <option value="">Use the CSV</option>
-                <option value="unpaid">Unpaid</option>
-                <option value="paid">Paid</option>
-              </Select>
-            </div>
+            {payments && (
+              <>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="import-plan">Default membership</Label>
+                  <Select
+                    id="import-plan"
+                    value={planId}
+                    onChange={(event) => setPlanId(event.target.value)}
+                  >
+                    <option value="">No default</option>
+                    {plans
+                      .filter((plan) => !plan.archived)
+                      .map((plan) => (
+                        <option key={plan.id} value={plan.id}>
+                          {plan.name}
+                        </option>
+                      ))}
+                  </Select>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="import-paid">Starting payment</Label>
+                  <Select
+                    id="import-paid"
+                    value={paymentStatus}
+                    onChange={(event) =>
+                      setPaymentStatus(
+                        event.target.value as "" | "paid" | "unpaid",
+                      )
+                    }
+                  >
+                    <option value="">Use the CSV</option>
+                    <option value="unpaid">Unpaid</option>
+                    <option value="paid">Paid</option>
+                  </Select>
+                </div>
+              </>
+            )}
           </div>
           {preview && (
             <div className="flex flex-col gap-3">

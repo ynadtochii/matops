@@ -1,8 +1,8 @@
 # MatOps monetization plan
 
 > **Status: pricing hypothesis. Not approved for implementation.**
-> Updated 2026-09-01 from current competitor pricing and the planned
-> [organization and entity pivot](organization-entity-pivot.md).
+> Updated 2026-09-01 from current competitor pricing and the organization and
+> entity model (ADR 124, [architecture §5](architecture.md#5-tenancy-postgres-rls)).
 
 This document covers what an academy or facility pays MatOps. It does not cover
 how members pay the academy. Member payments remain a separate provider

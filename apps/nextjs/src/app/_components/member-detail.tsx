@@ -135,7 +135,8 @@ export function MemberDetail({ m }: { m: Member }) {
   const trpc = useTRPC();
   // Memberships belong to the owner group, so only an owner sees the tab. A
   // coach reading eligibility for their own branch is a different screen.
-  const owner = runsBranch(useEntity());
+  const entity = useEntity();
+  const owner = runsBranch(entity);
   const [tab, setTab] = useState<
     "overview" | "attendance" | "rank" | "notes" | "membership"
   >("overview");
@@ -155,7 +156,7 @@ export function MemberDetail({ m }: { m: Member }) {
           { id: "attendance", label: "Attendance" },
           { id: "rank", label: "Rank" },
           { id: "notes", label: "Notes" },
-          ...(owner && !isStaffRole(m)
+          ...(owner && entity.membershipEnforced && !isStaffRole(m)
             ? [{ id: "membership" as const, label: "Membership" }]
             : []),
         ]}

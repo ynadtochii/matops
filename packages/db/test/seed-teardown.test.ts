@@ -85,8 +85,6 @@ describe("seed roundtrip — up then down", () => {
       "class_template",
       "class_participation",
       "member_rank",
-      "member_referral",
-      "member_referral_audit",
       "drop_in",
       "notification",
     ]) {

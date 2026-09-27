@@ -6,14 +6,12 @@ import { useQuery } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
 import {
-  branchWords,
   capacityDisplay,
   classEndsAt,
   dashboardWeekWindow,
   dayPlan,
   daysSince,
   dayWindow,
-  isBjjAcademy,
   isFirstRun,
   isStaff as isStaffOf,
   leadQueues,
@@ -35,7 +33,7 @@ import { FOCUS_RING, FOCUS_RING_INSET, PRESS } from "@matops/ui/motion";
 import { clockParts, dayLongFmt, timeFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { ClassRoster } from "./class-roster";
-import { useEntity, useEntityHref } from "./entity";
+import { useEntity, useEntityHref, useOrganization } from "./entity";
 import { PageHeader } from "./page-header";
 import {
   disciplineDot,
@@ -49,6 +47,7 @@ import {
   Section,
   TAP,
 } from "./primitives";
+import { SetupChecklist } from "./setup-checklist";
 import { Bar, SkeletonDayRail, SkeletonQueue, SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 import { StudentScreen } from "./student-screen";
@@ -84,12 +83,11 @@ export function DashboardScreen() {
   const href = useEntityHref();
   const trpc = useTRPC();
   const c = useEntity();
+  const { canRunOrganization } = useOrganization();
   const [detailId, setDetailId] = useState<string | null>(null);
 
   const isOwner = runsBranch(c);
   const isStaff = isStaffOf(c);
-  const bjj = isBjjAcademy(c.type);
-  const words = branchWords(c.type);
 
   const { today, tomorrow } = useMemo(() => {
     const at = new Date();
@@ -215,7 +213,7 @@ export function DashboardScreen() {
   const queueErrors: { label: string; retry: () => void }[] = [];
   if (attendance.isError)
     queueErrors.push({
-      label: `${words.sessionPlural} to review`,
+      label: "classes to review",
       retry: () => void attendance.refetch(),
     });
   if (memberList.isError)
@@ -258,6 +256,12 @@ export function DashboardScreen() {
       <div className={ENTER}>
         <PageHeader title="Dashboard" subtitle={dayLongFmt.format(today)} />
 
+        {canRunOrganization && (
+          <div className="mb-6 empty:hidden">
+            <SetupChecklist />
+          </div>
+        )}
+
         {/* Needs you — one instrument panel of equal channels on a hairline
             grid; a job at zero is dropped, not drawn empty. The violet lives in
             the counts only: it is a spark, not a surface (design.md §1.1). */}
@@ -266,18 +270,12 @@ export function DashboardScreen() {
         ) : (
           <Panel className={RESOLVE} cols={Math.max(queue.length, 1)}>
             {firstRun ? (
-              <PanelNotice
-                title={`This ${words.branch} is empty. ${
-                  bjj ? "Three" : "Two"
-                } steps to open it.`}
-              >
+              <PanelNotice title="This academy is empty. Two steps to open it.">
                 <Link
                   href={href("/schedule")}
                   className="text-foreground decoration-muted-foreground font-medium underline underline-offset-4 hover:decoration-current"
                 >
-                  {bjj
-                    ? "1. Add your weekly classes"
-                    : "1. Add your weekly sessions"}
+                  1. Add your weekly classes
                 </Link>
                 {" · "}
                 <Link
@@ -286,20 +284,6 @@ export function DashboardScreen() {
                 >
                   2. Share your join link
                 </Link>
-                {/* The visitor poster is a BJJ path: a general space has no
-                    drop-in form and no public booking (ADR 126), so offering
-                    one would be a step that leads nowhere. */}
-                {bjj && (
-                  <>
-                    {" · "}
-                    <Link
-                      href={href("/members?tab=leads")}
-                      className="text-foreground decoration-muted-foreground font-medium underline underline-offset-4 hover:decoration-current"
-                    >
-                      3. Print the QR poster
-                    </Link>
-                  </>
-                )}
               </PanelNotice>
             ) : (
               <>
@@ -334,8 +318,8 @@ export function DashboardScreen() {
                   queue.length === 0 && (
                     <PanelNotice title="All clear.">
                       {isOwner
-                        ? `Every past ${words.session} reviewed, everyone approved, and no new leads.`
-                        : `Every past ${words.session} reviewed and everyone approved.`}
+                        ? "Every past class reviewed, everyone approved, and no new leads."
+                        : "Every past class reviewed and everyone approved."}
                     </PanelNotice>
                   )
                 )}
@@ -351,7 +335,7 @@ export function DashboardScreen() {
         ) : (
           <p className="text-muted-foreground mt-3 text-xs tabular-nums">
             {isOwner && `${activeCount} active members · `}
-            {weekCount} {words.sessionPlural} this week
+            {weekCount} classes this week
           </p>
         )}
       </div>
@@ -372,7 +356,7 @@ export function DashboardScreen() {
             meta={
               week.isPending || week.isError
                 ? undefined
-                : `${dayList.length} ${dayList.length === 1 ? words.session : words.sessionPlural}`
+                : `${dayList.length} ${dayList.length === 1 ? "class" : "classes"}`
             }
           >
             {week.isPending ? (
@@ -384,7 +368,7 @@ export function DashboardScreen() {
               />
             ) : dayList.length === 0 ? (
               <EmptyState
-                title={`No ${words.sessionPlural} ${showTomorrow ? "tomorrow" : "today"}.`}
+                title={`No classes ${showTomorrow ? "tomorrow" : "today"}.`}
                 action={
                   <Link
                     href={href("/schedule")}
@@ -394,7 +378,7 @@ export function DashboardScreen() {
                       TAP,
                     )}
                   >
-                    Add a {words.session}
+                    Add a class
                   </Link>
                 }
               >

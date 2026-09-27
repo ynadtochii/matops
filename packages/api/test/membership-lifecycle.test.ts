@@ -260,10 +260,6 @@ describe("member archive and permanent erase (docs/issues/84)", () => {
       await h
         .as(OWNER, ACAD)
         .note.add({ memberId: LEAVER_MEMBER, body: "Note about the leaver." });
-      await h.as(OWNER, ACAD).referral.assign({
-        studentMemberId: FRIEND_MEMBER,
-        referrerMemberId: LEAVER_MEMBER,
-      });
       await h.pg.exec(`
         INSERT INTO "notification" (id, academy_id, user_id, kind, title, body, created_at)
         VALUES (gen_random_uuid(), '${ACAD}', '${LEAVER}', 'news', 'Hi', 'Body', now());
@@ -304,17 +300,6 @@ describe("member archive and permanent erase (docs/issues/84)", () => {
       await seedFootprint();
       await h.as(OWNER, ACAD).membership.purge({ memberId: LEAVER_MEMBER });
       expect(await storedBookingCount(h.pg, FUTURE)).toBe(0);
-    });
-
-    it("cuts the referral credit it leaves dangling", async () => {
-      await seedFootprint();
-      await h.as(OWNER, ACAD).membership.purge({ memberId: LEAVER_MEMBER });
-
-      const res = await h.pg.query<{ referrer_member_id: string | null }>(
-        `SELECT referrer_member_id FROM "member_referral" WHERE student_member_id = $1`,
-        [FRIEND_MEMBER],
-      );
-      expect(res.rows[0]?.referrer_member_id).toBeNull();
     });
 
     it("deletes the sign-in account when this was their only gym", async () => {

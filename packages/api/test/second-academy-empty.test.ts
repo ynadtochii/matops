@@ -1,16 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { eq } from "@matops/db";
-import { organization } from "@matops/db/schema";
-
 import type { Harness } from "./helpers";
-import {
-  harness,
-  memberId,
-  rejectionCode,
-  seedAcademies,
-  seedClasses,
-} from "./helpers";
+import { harness, memberId, seedAcademies, seedClasses } from "./helpers";
 
 const ORG = "acad_second_empty";
 const OWNER = "u_second_owner";
@@ -100,64 +91,5 @@ describe("a second academy starts empty", () => {
     ]);
     expect((await first().class.week(WEEK)).map((c) => c.id)).toContain(CLASS);
     expect(await first().template.list()).toHaveLength(1);
-  });
-});
-
-describe("opening a general branch", () => {
-  let h: Harness;
-
-  beforeAll(async () => {
-    h = await harness();
-    await seedAcademies(h.pg, [
-      {
-        id: ORG,
-        code: "700091",
-        members: [{ userId: OWNER, role: "owner", status: "active" }],
-      },
-    ]);
-    // The entitlement defaults ON since migration `0060` (ADR 128), so a gym
-    // that is NOT entitled has to be made one deliberately. That is the state
-    // the refusal below is about.
-    await h.exec
-      .update(organization)
-      .set({ generalBranchesEnabled: false })
-      .where(eq(organization.id, ORG));
-  });
-
-  afterAll(() => h.close());
-
-  it("refuses one while the flag is off", async () => {
-    expect(
-      await rejectionCode(
-        h.as(OWNER, ORG).entity.create({
-          name: "The Gym",
-          type: "general_space",
-        }),
-      ),
-    ).toBe("FORBIDDEN");
-  });
-
-  it("still opens a second mat while the flag is off", async () => {
-    const made = await h
-      .as(OWNER, ORG)
-      .entity.create({ name: "Second Mat", type: "bjj_academy" });
-    expect(made.created).toContain("academy_profile");
-  });
-
-  it("opens one once the flag is on, with no profile or track", async () => {
-    await h.exec
-      .update(organization)
-      .set({ generalBranchesEnabled: true })
-      .where(eq(organization.id, ORG));
-
-    const made = await h
-      .as(OWNER, ORG)
-      .entity.create({ name: "The Gym", type: "general_space" });
-    expect(made.created.sort()).toEqual(["entity", "entity_membership"]);
-
-    const headers = new Headers();
-    headers.set("x-matops-entity", made.entityId);
-    const current = await h.as(OWNER, ORG, headers).entity.current();
-    expect([current.name, current.type]).toEqual(["The Gym", "general_space"]);
   });
 });

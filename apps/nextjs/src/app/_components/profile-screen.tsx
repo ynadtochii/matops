@@ -292,17 +292,19 @@ export function ProfileScreen({
                   )}
                 </div>
               )}
-              {!isStaff(academy) && academy.status === "active" && (
-                <Button
-                  asChild
-                  variant="outline"
-                  className="h-auto min-h-11 self-start whitespace-normal"
-                >
-                  <Link href={href("/payments")}>
-                    View membership and payments
-                  </Link>
-                </Button>
-              )}
+              {!isStaff(academy) &&
+                academy.status === "active" &&
+                academy.membershipEnforced && (
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="h-auto min-h-11 self-start whitespace-normal"
+                  >
+                    <Link href={href("/payments")}>
+                      View membership and payments
+                    </Link>
+                  </Button>
+                )}
             </div>
           </section>
           {!isStaff(academy) && (

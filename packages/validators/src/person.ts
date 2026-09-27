@@ -22,13 +22,3 @@ export const CreateStudentPersonSchema = PersonContactSchema.extend({
   entityId: IdSchema,
   duplicateDecision: DuplicateDecisionSchema.optional(),
 });
-
-export const PersonIdSchema = z.object({ personId: z.uuid() });
-
-export const GetPersonSchema = PersonIdSchema.extend({
-  includeArchived: z.boolean().default(false),
-});
-
-export const PersonDirectorySchema = z
-  .object({ includeArchived: z.boolean().default(false) })
-  .optional();
