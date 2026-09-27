@@ -26,20 +26,25 @@ export function useBooking() {
   // uses, so the screen and the write cannot disagree, and the app shows the
   // identical words (ADR 126). Cancel is never gated: somebody whose month ran
   // out must still be able to give their place back.
+  // With payment off the server gate only asks for approval, which the entity
+  // already answers, so there is nothing to wait for.
+  const needsGate =
+    isActiveMember(academy) && !isStaff(academy) && academy.membershipEnforced;
   const gate = useQuery({
     ...trpc.booking.access.queryOptions(),
-    enabled: !isStaff(academy),
+    enabled: needsGate,
     refetchInterval: (query) => (query.state.data?.locked ? 10000 : false),
   });
   const lockedMessage = !isActiveMember(academy)
     ? accessReason("pending-approval", academy.name)
-    : !isStaff(academy) && gate.isPending
-      ? "Checking your booking access…"
+    : !needsGate
+      ? null
       : gate.isError
         ? "Couldn't check your booking access. Refresh this page to try again."
         : gate.data?.locked
           ? gate.data.message
           : null;
+  const locked = !!lockedMessage || (needsGate && gate.isPending);
 
   const invalidate = () => invalidateFor("booking");
   const onError = (err: { message: string }) =>
@@ -74,6 +79,7 @@ export function useBooking() {
     cancel,
     busyFor,
     busy: book.isPending || cancel.isPending,
+    locked,
     lockedMessage,
   };
 }

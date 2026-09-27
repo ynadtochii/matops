@@ -207,7 +207,11 @@ export const UpdateAcademySettingsSchema = z.object({
   address: blockText(0, 200).optional(),
   mapUrl: z.union([MapUrlSchema, z.literal("")]).optional(),
   bookingWindowDays: z.number().int().min(1).max(90).optional(),
+  signupHealthQuestion: z.boolean().optional(),
+  waiverRequired: z.boolean().optional(),
 });
+
+export const SaveWaiverSchema = z.object({ body: blockText(20, 5000) });
 
 export const DeleteAcademySchema = z.object({
   confirm: lineText(1, 120),
@@ -225,6 +229,11 @@ export type InviteRole = z.infer<typeof InviteRoleSchema>;
 export const JoinAcademySchema = z.object({
   token: OpaqueTokenSchema,
   ...personFields,
+  belt: lineText(1, 40).optional(),
+  stripes: z.number().int().min(0).max(20).optional(),
+  health: blockText(0, 1000).optional(),
+  emailUpdates: z.boolean().optional(),
+  waiverId: z.uuid().optional(),
 });
 
 /**
@@ -233,6 +242,8 @@ export const JoinAcademySchema = z.object({
  * channel). Same field shapes as the join schemas.
  */
 export const UpdateProfileSchema = z.object(personFields);
+
+export const EmailUpdatesSchema = z.object({ emailUpdates: z.boolean() });
 
 /** A single member action (approve / reject / remove / suspend / promote). */
 export const MemberActionSchema = z.object({

@@ -30,3 +30,5 @@ export * from "./product-event";
 export * from "./product-report";
 export * from "./attendance-review";
 export * from "./person";
+export * from "./signup";
+export * from "./waiver";

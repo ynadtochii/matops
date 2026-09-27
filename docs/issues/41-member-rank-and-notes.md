@@ -84,3 +84,7 @@ The first release is one BJJ academy per gym (ADR 142). The seeded Judo ladder s
 The model does not change. `member_rank.discipline` and the history tables keep a free-text discipline key, not an enum, and rank systems stay a keyed map in code. A later slice can let an owner add a discipline and its belt ladder by adding a table that feeds the same map shape. That needs no migration of existing rank rows.
 
 A rank row saved under a key with no system (for example an old `judo` row in dev data) still displays, with the raw key as its label, and staff can still clear it. Staff cannot set a new rank in it.
+
+## 2026-09-27 · The student states their starting belt and can write one note at sign-up
+
+ADR 146 amends two rules above. A student joining by invite link now picks their current belt, and it is written to `member_rank` with the student as `updated_by` and no promotion row. It never overwrites a rank staff already set, and rank still only goes up after that. When the academy asks about injuries, the student's answer is saved as one `member_note` with the student as author, labelled **From sign-up form** on the staff panel. Students still never read notes.

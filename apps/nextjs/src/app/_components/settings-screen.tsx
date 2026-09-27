@@ -10,6 +10,7 @@ import { useEntity, useOrganization } from "./entity";
 import { MembershipSettings } from "./membership-settings";
 import { PageHeader } from "./page-header";
 import { ENTER } from "./primitives";
+import { SignupQuestions } from "./signup-questions";
 
 export function SettingsScreen() {
   const academy = useEntity();
@@ -21,6 +22,7 @@ export function SettingsScreen() {
       <div className={cn("flex flex-col gap-10", ENTER)}>
         <AcademyIdentity name={academy.name} code={academy.code} />
         <AcademyLocation address={academy.address} mapUrl={academy.mapUrl} />
+        <SignupQuestions />
         {canRunOrganization && academy.membershipEnforced && (
           <MembershipSettings />
         )}

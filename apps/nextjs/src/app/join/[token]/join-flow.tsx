@@ -5,15 +5,32 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
+import type { SignupAnswers } from "@matops/domain";
+import {
+  academyMapUrl,
+  RANK_SYSTEMS,
+  SIGNUP_DISCIPLINE,
+  SIGNUP_FOR_CHILD,
+  SIGNUP_NEVER_TRAINED,
+} from "@matops/domain";
 import { Button } from "@matops/ui/button";
+import { Checkbox } from "@matops/ui/checkbox";
+import { FieldError } from "@matops/ui/field";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
 import { FOCUS_RING } from "@matops/ui/motion";
+import { Select } from "@matops/ui/select";
 import { Spinner } from "@matops/ui/spinner";
+import { Textarea } from "@matops/ui/textarea";
 import { toast } from "@matops/ui/toast";
+import { EmailSchema, UpdateProfileSchema } from "@matops/validators";
 
 import type { MagicLinkState } from "~/app/_components/sign-in-actions";
-import { EmailField, PhoneField } from "~/app/_components/form-fields";
+import {
+  EmailField,
+  fieldErrors,
+  PhoneField,
+} from "~/app/_components/form-fields";
 import {
   OrDivider,
   SocialSignIn,
@@ -27,6 +44,64 @@ export interface JoinProfile {
   firstName: string;
   lastName: string;
   phone: string;
+}
+
+const BJJ = RANK_SYSTEMS[SIGNUP_DISCIPLINE];
+
+type Errors = Partial<Record<string, string>>;
+
+const SignUpSchema = UpdateProfileSchema.extend({ email: EmailSchema });
+
+function checkForm(
+  form: HTMLFormElement,
+  schema: typeof UpdateProfileSchema | typeof SignUpSchema,
+  needs: { belt?: boolean; agreement?: boolean },
+): Errors {
+  const data = new FormData(form);
+  const read = (key: string) => {
+    const value = data.get(key);
+    return typeof value === "string" ? value : "";
+  };
+  const values = {
+    firstName: read("firstName"),
+    lastName: read("lastName"),
+    phone: read("phone"),
+    email: read("email"),
+  };
+  const parsed = schema.safeParse(values);
+  const errors: Errors = parsed.success
+    ? {}
+    : fieldErrors(parsed.error.issues, values.phone);
+  if (needs.belt && read("belt") === "") {
+    errors.belt = "Pick your belt";
+  }
+  if (needs.agreement && read("agreement") !== "on") {
+    errors.agreement = "Tick the box to accept the agreement";
+  }
+  return errors;
+}
+
+function useFormCheck(check: (form: HTMLFormElement) => Errors) {
+  const [errors, setErrors] = useState<Errors | null>(null);
+  return {
+    errors: errors ?? {},
+    onChange: (e: React.FormEvent<HTMLFormElement>) => {
+      if (!errors) return;
+      const form = e.currentTarget;
+      // The phone reaches FormData through a hidden input that only re-renders
+      // after this event, so read the form on the next frame.
+      requestAnimationFrame(() => setErrors(check(form)));
+    },
+    passes: (form: HTMLFormElement) => {
+      const found = check(form);
+      setErrors(found);
+      if (Object.keys(found).length === 0) return true;
+      requestAnimationFrame(() =>
+        form.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus(),
+      );
+      return false;
+    },
+  };
 }
 
 export function JoinFlow({
@@ -55,7 +130,10 @@ export function JoinFlow({
         router.replace("/");
         router.refresh();
       },
-      onError: (err) => toast.error(err.message || "Couldn't join. Try again."),
+      onError: (err) => {
+        toast.error(err.message || "Couldn't join. Try again.");
+        void invite.refetch();
+      },
     }),
   );
 
@@ -92,23 +170,38 @@ export function JoinFlow({
     );
   }
 
-  const { academyName, academyAddress, academyTimeZone, academyCountry, role } =
-    invite.data;
+  const {
+    academyName,
+    academyAddress,
+    academyMapUrl: pinnedMapUrl,
+    academyTimeZone,
+    academyCountry,
+    signupHealthQuestion,
+    waiver,
+    role,
+  } = invite.data;
+  const mapUrl = academyMapUrl(academyAddress, pinnedMapUrl);
 
   return (
     <div className="flex w-full max-w-sm flex-col gap-5">
-      <div className="flex flex-col gap-1 text-center">
+      <div className="flex flex-col gap-1 text-center sm:-mx-12">
         <h1 className="text-2xl font-semibold tracking-tight">
           Join {academyName}
         </h1>
-        <p className="text-muted-foreground text-sm">
+        <p className="text-muted-foreground text-sm text-balance">
           You&apos;re joining as a{role === "instructor" ? "n" : ""} {role}.
           Your gym confirms you after you join.
         </p>
-        {academyAddress && (
-          <p className="text-muted-foreground text-xs whitespace-pre-wrap">
+        {academyAddress && mapUrl && (
+          <a
+            href={mapUrl}
+            target="_blank"
+            rel="noreferrer"
+            className={`text-muted-foreground decoration-muted-foreground/50 hover:text-foreground self-center rounded-sm text-xs whitespace-pre-wrap underline underline-offset-4 hover:decoration-current ${FOCUS_RING}`}
+          >
             {academyAddress}
-          </p>
+            <span className="sr-only"> (opens in maps in a new tab)</span>
+          </a>
         )}
       </div>
 
@@ -125,6 +218,9 @@ export function JoinFlow({
           timeZone={academyTimeZone}
           country={academyCountry}
           defaults={profile}
+          student={role === "student"}
+          askHealth={signupHealthQuestion}
+          waiver={waiver}
           pending={join.isPending}
           onSubmit={(p) => join.mutate({ token, ...p })}
         />
@@ -149,6 +245,9 @@ function SignUp({
     sendJoinLinkAction.bind(null, token),
     { status: "idle" },
   );
+  const { errors, onChange, passes } = useFormCheck((form) =>
+    checkForm(form, SignUpSchema, {}),
+  );
 
   if (state.status === "sent") {
     return (
@@ -166,15 +265,25 @@ function SignUp({
     <div className="flex flex-col gap-3">
       <SocialSignIn callbackURL={`/join/${token}`} />
       <OrDivider />
-      <form action={formAction} className="flex flex-col gap-3">
-        <NameFields timeZone={timeZone} country={country} />
+      <form
+        action={formAction}
+        noValidate
+        onChange={onChange}
+        onSubmit={(e) => {
+          if (!passes(e.currentTarget)) e.preventDefault();
+        }}
+        className="flex flex-col gap-3"
+      >
+        <NameFields timeZone={timeZone} country={country} errors={errors} />
         <EmailField
           name="email"
           value={email}
           onChange={setEmail}
           placeholder="you@example.com"
           required
-          invalid={state.status === "error"}
+          invalid={state.status === "error" || undefined}
+          error={errors.email}
+          quietError
         />
         <SubmitButton className="w-full">Join {academyName}</SubmitButton>
         <p aria-live="polite" className="text-muted-foreground text-sm">
@@ -196,6 +305,9 @@ function ProfileForm({
   timeZone,
   country,
   defaults,
+  student,
+  askHealth,
+  waiver,
   pending,
   onSubmit,
 }: {
@@ -203,14 +315,27 @@ function ProfileForm({
   timeZone: string | null;
   country: string | null;
   defaults?: JoinProfile;
+  student: boolean;
+  askHealth: boolean;
+  waiver: { id: string; body: string } | null;
   pending: boolean;
-  onSubmit: (profile: JoinProfile) => void;
+  onSubmit: (profile: JoinProfile & SignupAnswers) => void;
 }) {
+  const agreement = student ? waiver : null;
+  const { errors, onChange, passes } = useFormCheck((form) =>
+    checkForm(form, UpdateProfileSchema, {
+      belt: student,
+      agreement: agreement !== null,
+    }),
+  );
   return (
     <form
       className="flex flex-col gap-3"
+      noValidate
+      onChange={onChange}
       onSubmit={(e) => {
         e.preventDefault();
+        if (!passes(e.currentTarget)) return;
         const data = new FormData(e.currentTarget);
         const read = (key: string) => {
           const value = data.get(key);
@@ -220,10 +345,67 @@ function ProfileForm({
           firstName: read("firstName"),
           lastName: read("lastName"),
           phone: read("phone"),
+          ...(student && {
+            belt: read("belt"),
+            stripes: Number(read("stripes")),
+            health: askHealth ? read("health") : undefined,
+            emailUpdates: read("emailUpdates") === "on",
+            waiverId: agreement?.id,
+          }),
         });
       }}
     >
-      <NameFields defaults={defaults} timeZone={timeZone} country={country} />
+      <NameFields
+        defaults={defaults}
+        timeZone={timeZone}
+        country={country}
+        errors={errors}
+      />
+      {student && (
+        <>
+          <TrainingFields
+            academyName={academyName}
+            askHealth={askHealth}
+            beltError={errors.belt}
+          />
+          <label className="flex min-h-11 cursor-pointer items-start gap-3 py-1 text-sm sm:min-h-0">
+            <Checkbox className="mt-0.5" name="emailUpdates" />
+            <span>
+              Keep me updated on changes at {academyName}
+              <span className="text-muted-foreground block text-xs">
+                No spam. Ever. Unsubscribe any time.
+              </span>
+            </span>
+          </label>
+        </>
+      )}
+      {agreement && (
+        <div className="flex flex-col gap-2">
+          <Label id="agreement-label">Agreement</Label>
+          <div
+            role="region"
+            aria-labelledby="agreement-label"
+            tabIndex={0}
+            className={`border-border text-foreground-secondary max-h-48 overflow-y-auto rounded-md border p-3 text-sm whitespace-pre-wrap ${FOCUS_RING}`}
+          >
+            {agreement.body}
+          </div>
+          <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm sm:min-h-0">
+            <Checkbox
+              key={agreement.id}
+              name="agreement"
+              aria-invalid={errors.agreement ? true : undefined}
+              aria-describedby={
+                errors.agreement ? "agreement-error" : undefined
+              }
+            />
+            I have read and agree
+          </label>
+          <FieldError id="agreement-error" className="sr-only">
+            {errors.agreement}
+          </FieldError>
+        </div>
+      )}
       <Button type="submit" size="lg" disabled={pending} busy={pending}>
         Join {academyName}
       </Button>
@@ -243,10 +425,12 @@ function NameFields({
   defaults,
   timeZone,
   country,
+  errors,
 }: {
   defaults?: JoinProfile;
   timeZone: string | null;
   country: string | null;
+  errors: Errors;
 }) {
   const [phone, setPhone] = useState(defaults?.phone ?? "");
   return (
@@ -260,7 +444,12 @@ function NameFields({
           autoComplete="given-name"
           maxLength={60}
           required
+          aria-invalid={errors.firstName ? true : undefined}
+          aria-describedby={errors.firstName ? "firstName-error" : undefined}
         />
+        <FieldError id="firstName-error" className="sr-only">
+          {errors.firstName}
+        </FieldError>
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="lastName">Last name</Label>
@@ -271,7 +460,12 @@ function NameFields({
           autoComplete="family-name"
           maxLength={60}
           required
+          aria-invalid={errors.lastName ? true : undefined}
+          aria-describedby={errors.lastName ? "lastName-error" : undefined}
         />
+        <FieldError id="lastName-error" className="sr-only">
+          {errors.lastName}
+        </FieldError>
       </div>
       <PhoneField
         timeZone={timeZone}
@@ -280,7 +474,83 @@ function NameFields({
         value={phone}
         onChange={setPhone}
         required
+        error={errors.phone}
+        quietError
       />
+    </>
+  );
+}
+
+function TrainingFields({
+  academyName,
+  askHealth,
+  beltError,
+}: {
+  academyName: string;
+  askHealth: boolean;
+  beltError?: string;
+}) {
+  const [belt, setBelt] = useState("");
+  const hasBelt = BJJ?.belts.includes(belt) ?? false;
+  return (
+    <>
+      <div className={hasBelt ? "grid grid-cols-[1fr_auto] gap-3" : "grid"}>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="belt">Your belt</Label>
+          <Select
+            id="belt"
+            name="belt"
+            value={belt}
+            onChange={(e) => setBelt(e.target.value)}
+            required
+            aria-invalid={beltError ? true : undefined}
+            aria-describedby={beltError ? "belt-error" : undefined}
+          >
+            <option value="" disabled>
+              Pick one
+            </option>
+            <option value={SIGNUP_NEVER_TRAINED}>Never trained</option>
+            {BJJ?.belts.map((b) => (
+              <option key={b} value={b}>
+                {b}
+              </option>
+            ))}
+            <option value={SIGNUP_FOR_CHILD}>Enquiring for a child</option>
+          </Select>
+          <FieldError id="belt-error" className="sr-only">
+            {beltError}
+          </FieldError>
+        </div>
+        {hasBelt && (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="stripes">Stripes</Label>
+            <Select id="stripes" name="stripes" defaultValue="0">
+              {Array.from({ length: (BJJ?.maxStripes ?? 0) + 1 }, (_, n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </Select>
+          </div>
+        )}
+      </div>
+      {askHealth && (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="health">
+            Any injuries or medical conditions? (optional)
+          </Label>
+          <Textarea
+            id="health"
+            name="health"
+            rows={3}
+            maxLength={1000}
+            aria-describedby="health-help"
+          />
+          <p id="health-help" className="text-muted-foreground text-xs">
+            Only coaches at {academyName} can see this.
+          </p>
+        </div>
+      )}
     </>
   );
 }

@@ -17,6 +17,10 @@
  * ======================================================================== */
 
 :root {
+  /* Native parts (autofill preview text, scrollbars, pickers) take their
+     colors from this, not from our tokens. */
+  color-scheme: light;
+
   /* --- surfaces, level 0 to 3 --- */
   --background: #ffffff;
   --foreground: #282a30;
@@ -137,6 +141,7 @@
   --spacing: 0.25rem;
 
   @variant dark {
+    color-scheme: dark;
     --background: #0a0a0b;
     --foreground: #ffffff;
     --surface-1: #0f1012;

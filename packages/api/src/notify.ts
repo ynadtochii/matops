@@ -2,17 +2,19 @@ import type { DbExec } from "@matops/db";
 import type { NotificationKind, PushMessage } from "@matops/domain";
 import type { BatchPush } from "@matops/notifications";
 import {
+  eq,
   getAcademyPublic,
   getPushTargets,
   insertNotifications,
 } from "@matops/db";
+import { user } from "@matops/db/schema";
 import {
   buildApprovalMessage,
   buildCancelledMessage,
   buildClassChangeMessage,
   formatWhen,
 } from "@matops/domain";
-import { sendPush } from "@matops/notifications";
+import { sendEmail, sendPush } from "@matops/notifications";
 
 /**
  * API-side notification helpers (Phase 4, docs/issues/17, 34). Routers gather
@@ -179,7 +181,7 @@ export async function notifyClassChanged(
   );
 }
 
-/** Membership approved → welcome push to the newly approved member (push only). */
+/** Membership approved → welcome push and email to the newly approved member. */
 export async function notifyMembershipApproved(
   input: {
     academyId: string;
@@ -200,6 +202,18 @@ export async function notifyMembershipApproved(
     }),
     exec,
   );
+  try {
+    const [row] = await exec
+      .select({ email: user.email })
+      .from(user)
+      .where(eq(user.id, input.userId))
+      .limit(1);
+    if (row?.email) {
+      await sendEmail({ to: row.email, subject: push.title, text: push.body });
+    }
+  } catch (err) {
+    console.error("[notify] approval email failed", err);
+  }
 }
 
 /**

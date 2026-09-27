@@ -20,6 +20,7 @@ import {
   rankCorrection,
   rankPromotion,
   user,
+  waiverAcceptance,
 } from "./schema";
 
 type EraseExec = DbExec | TenantTx;
@@ -142,6 +143,16 @@ export async function eraseMemberData(
         and(
           eq(memberNote.academyId, academyId),
           eq(memberNote.memberId, memberId),
+        ),
+      ),
+  );
+  await del("waiver_acceptance", () =>
+    exec
+      .delete(waiverAcceptance)
+      .where(
+        and(
+          eq(waiverAcceptance.academyId, academyId),
+          eq(waiverAcceptance.memberId, memberId),
         ),
       ),
   );

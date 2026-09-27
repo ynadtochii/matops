@@ -28,11 +28,12 @@ export const noteRouter = {
   forMember: staffProcedure
     .input(MemberActionSchema)
     .query(async ({ ctx, input }) => {
-      await requireMember(ctx, input.memberId);
-      return ctx.db
+      const member = await requireMember(ctx, input.memberId);
+      const rows = await ctx.db
         .select({
           id: memberNote.id,
           body: memberNote.body,
+          authorId: memberNote.authorId,
           authorName: user.name,
           createdAt: memberNote.createdAt,
         })
@@ -41,6 +42,10 @@ export const noteRouter = {
         .where(eq(memberNote.memberId, input.memberId))
         .orderBy(desc(memberNote.createdAt))
         .limit(NOTES_LIMIT);
+      return rows.map(({ authorId, ...note }) => ({
+        ...note,
+        fromSignup: authorId === member.accountUserId,
+      }));
     }),
 
   /** Add a staff note about a member (spec O4). */

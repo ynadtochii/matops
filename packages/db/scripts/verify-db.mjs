@@ -19,6 +19,12 @@ const client = new pg.Client({ connectionString: direct });
 await client.connect();
 
 let failed = 0;
+const ALL_GRANTS = { sel: true, ins: true, upd: true, del: true };
+const APPEND_ONLY = {
+  academy_waiver: { sel: true, ins: true, upd: false, del: false },
+  waiver_acceptance: { sel: true, ins: true, upd: false, del: true },
+};
+
 const check = (ok, label, detail = "") => {
   if (!ok) failed += 1;
   console.log(
@@ -73,12 +79,20 @@ try {
   const reachable = tables.filter((t) => t.sel || t.ins || t.upd || t.del);
   const baseOnly = tables.filter((t) => !t.sel && !t.ins && !t.upd && !t.del);
 
-  const bad = reachable.filter(
-    (t) => !t.rls || t.policies === 0 || !t.sel || !t.ins || !t.upd || !t.del,
-  );
+  const bad = reachable.filter((t) => {
+    const want = APPEND_ONLY[t.name] ?? ALL_GRANTS;
+    return (
+      !t.rls ||
+      t.policies === 0 ||
+      t.sel !== want.sel ||
+      t.ins !== want.ins ||
+      t.upd !== want.upd ||
+      t.del !== want.del
+    );
+  });
   check(
     bad.length === 0,
-    "every table matops_app can reach has RLS, a policy and 4 grants",
+    "every table matops_app can reach has RLS, a policy and its grants",
     `${reachable.length} checked`,
   );
   for (const t of bad) {

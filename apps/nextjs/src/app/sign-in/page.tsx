@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { FOCUS_RING } from "@matops/ui/motion";
 
 import { getSession } from "~/auth/server";
-import { AuthSplit } from "../_components/auth-split";
+import { AuthDoor } from "../_components/auth-door";
 import { PageLoader } from "../_components/mat-loader";
 import { SignIn } from "../_components/sign-in";
 
@@ -15,8 +15,6 @@ export const metadata: Metadata = {
   description:
     "Sign in to MatOps. Schedule, members, attendance and dues for a BJJ academy.",
 };
-
-const ANCHORS = ["Schedule", "Members", "Attendance", "Dues"];
 
 /**
  * Signed-out entry (spec S1). One screen, no scroll: the door, not a marketing
@@ -36,7 +34,7 @@ async function SignInGate() {
   if (session) redirect("/");
 
   return (
-    <AuthSplit
+    <AuthDoor
       headline={
         <>
           Run the mat,
@@ -44,8 +42,7 @@ async function SignInGate() {
           not the paperwork.
         </>
       }
-      blurb="MatOps runs the admin side of a BJJ academy. Your week of classes, who turned up, who has paid, and every belt you gave out."
-      anchors={ANCHORS}
+      blurb="MatOps runs the admin side of a BJJ academy. Your week of classes, who turned up, and every belt you gave out."
     >
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold tracking-tight">Sign in</h1>
@@ -67,6 +64,6 @@ async function SignInGate() {
           Start a gym
         </Link>
       </p>
-    </AuthSplit>
+    </AuthDoor>
   );
 }

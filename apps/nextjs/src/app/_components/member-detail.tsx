@@ -758,8 +758,10 @@ function NotesTab({ memberId }: { memberId: string }) {
               </p>
               <div className="text-muted-foreground flex items-center justify-between text-xs">
                 <span>
-                  {n.authorName ?? "Staff"} ·{" "}
-                  {dateFmt.format(new Date(n.createdAt))}
+                  {n.fromSignup
+                    ? "From sign-up form"
+                    : (n.authorName ?? "Staff")}{" "}
+                  · {dateFmt.format(new Date(n.createdAt))}
                 </span>
                 <ConfirmDialog
                   title="Delete this note?"
@@ -828,6 +830,12 @@ function Overview({ m, data }: { m: Member; data: MemberHistory }) {
         ) : null}
         {favorite ? <Detail term="Favorite" value={favorite} /> : null}
         <Detail term="Joined" value={dateFmt.format(new Date(m.joinedAt))} />
+        {data.waiverAcceptedAt ? (
+          <Detail
+            term="Agreement"
+            value={`Agreed ${dateFmt.format(new Date(data.waiverAcceptedAt))}`}
+          />
+        ) : null}
       </dl>
     </div>
   );

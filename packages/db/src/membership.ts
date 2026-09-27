@@ -656,7 +656,7 @@ async function upsertPendingEntityMembership(
     personId: string | null;
   },
   exec: DbExec,
-): Promise<{ status: string; alreadyMember: boolean }> {
+): Promise<{ memberId: string; status: string; alreadyMember: boolean }> {
   const existing = await exec
     .select({
       id: entityMembership.id,
@@ -685,10 +685,10 @@ async function upsertPendingEntityMembership(
         .update(entityMembership)
         .set({ invitedRole: input.invitedRole })
         .where(eq(entityMembership.id, row.id));
-      return { status: row.status, alreadyMember: true };
+      return { memberId: row.id, status: row.status, alreadyMember: true };
     }
     if (row.status === "active") {
-      return { status: row.status, alreadyMember: true };
+      return { memberId: row.id, status: row.status, alreadyMember: true };
     }
     await exec
       .update(entityMembership)
@@ -699,19 +699,24 @@ async function upsertPendingEntityMembership(
         joinedAt: null,
       })
       .where(eq(entityMembership.id, row.id));
-    return { status: "pending", alreadyMember: false };
+    return { memberId: row.id, status: "pending", alreadyMember: false };
   }
 
-  await exec.insert(entityMembership).values({
-    organizationId: input.organizationId,
-    entityId: input.entityId,
-    userId: input.userId,
-    personId: input.personId,
-    role: "member",
-    status: "pending",
-    invitedRole: input.invitedRole,
-  });
-  return { status: "pending", alreadyMember: false };
+  const inserted = await exec
+    .insert(entityMembership)
+    .values({
+      organizationId: input.organizationId,
+      entityId: input.entityId,
+      userId: input.userId,
+      personId: input.personId,
+      role: "member",
+      status: "pending",
+      invitedRole: input.invitedRole,
+    })
+    .returning({ id: entityMembership.id });
+  const memberId = inserted[0]?.id;
+  if (!memberId) throw new Error("entity membership insert returned no row");
+  return { memberId, status: "pending", alreadyMember: false };
 }
 
 export async function createPendingMembership(
@@ -722,7 +727,7 @@ export async function createPendingMembership(
     invitedRole: string;
   },
   exec: DbExec,
-): Promise<{ status: string; alreadyMember: boolean }> {
+): Promise<{ memberId: string; status: string; alreadyMember: boolean }> {
   // The organization row records that the person belongs to the gym at all, and
   // is reused untouched: it carries no status or intent any more, so there is
   // nothing about it a second link could change.

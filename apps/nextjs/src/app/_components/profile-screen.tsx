@@ -14,6 +14,7 @@ import {
 } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { Button } from "@matops/ui/button";
+import { Checkbox } from "@matops/ui/checkbox";
 import { FieldError } from "@matops/ui/field";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
@@ -297,6 +298,12 @@ export function ProfileScreen({
               {academy.status === "suspended" ? <SuspendedState /> : <MyRank />}
             </section>
           )}
+          {!isStaff(academy) && academy.status !== "suspended" && (
+            <section className="flex flex-col gap-4" aria-label="Emails">
+              <SectionHeading>Emails</SectionHeading>
+              <EmailUpdates />
+            </section>
+          )}
           {!isStaff(academy) && (
             <section className="flex flex-col gap-4" aria-label="Your data">
               <SectionHeading>Your data</SectionHeading>
@@ -404,6 +411,57 @@ function EraseRequest() {
           </Button>
         </SettingsRow>
       )}
+    </div>
+  );
+}
+
+function EmailUpdates() {
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  const academy = useEntity();
+  const current = useQuery(trpc.membership.emailUpdates.queryOptions());
+  const save = useMutation(
+    trpc.membership.setEmailUpdates.mutationOptions({
+      onSuccess: async (_, input) => {
+        await queryClient.invalidateQueries(
+          trpc.membership.emailUpdates.pathFilter(),
+        );
+        toast.success(input.emailUpdates ? "Emails on" : "Emails off");
+      },
+      onError: (err) => toast.error(err.message || "Couldn't save. Try again."),
+    }),
+  );
+
+  if (current.isPending) return <SkeletonRows rows={1} lines={1} inList />;
+  if (current.isError) {
+    return (
+      <ErrorState
+        label="your email choice"
+        onRetry={() => void current.refetch()}
+      />
+    );
+  }
+
+  return (
+    <div className={LIST}>
+      <SettingsRow
+        title={
+          <Label htmlFor="email-updates">
+            Keep me updated on changes at {academy.name}
+          </Label>
+        }
+        description="Emails about your membership and your booked classes always arrive."
+      >
+        <Checkbox
+          id="email-updates"
+          className="size-5"
+          checked={current.data.optedInAt !== null}
+          disabled={save.isPending}
+          onCheckedChange={(checked) =>
+            save.mutate({ emailUpdates: checked === true })
+          }
+        />
+      </SettingsRow>
     </div>
   );
 }
