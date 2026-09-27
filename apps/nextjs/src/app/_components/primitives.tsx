@@ -1,11 +1,5 @@
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
-import {
-  Check,
-  ChevronDown,
-  Ellipsis,
-  Plus,
-  X,
-} from "lucide-react";
+import { Check, ChevronDown, Ellipsis, Plus, X } from "lucide-react";
 
 import type { DisciplineTone, DriftStatus } from "@matops/domain";
 import type { BadgeTone } from "@matops/ui/badge";
