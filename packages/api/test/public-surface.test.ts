@@ -2,7 +2,11 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { Harness } from "./helpers";
 import { resetRateLimits } from "../src/rate-limit";
-import { PUBLIC_DEFAULT_MAX } from "../src/trpc";
+import {
+  createTRPCRouter,
+  PUBLIC_DEFAULT_MAX,
+  publicProcedure,
+} from "../src/trpc";
 import { harness, rejectionCode, seedAcademies, seedClasses } from "./helpers";
 
 const A = "academy_A";
@@ -461,25 +465,29 @@ describe("the rate limit, driven through a real procedure", () => {
 });
 
 describe("the default cap every public procedure carries", () => {
+  const probe = createTRPCRouter({
+    session: publicProcedure.query(({ ctx }) => ctx.session),
+  });
+
   it("caps a public procedure that declares no limit of its own", async () => {
     const h = await base();
-    const caller = h.as("nobody", null, from("6.6.6.6"));
+    const caller = probe.createCaller(
+      h.ctxFor("nobody", null, from("6.6.6.6")),
+    );
     for (let i = 0; i < PUBLIC_DEFAULT_MAX; i++) {
-      await expect(caller.auth.getSession()).resolves.toMatchObject({
+      await expect(caller.session()).resolves.toMatchObject({
         user: { id: "nobody" },
       });
     }
-    expect(await rejectionCode(caller.auth.getSession())).toBe(
-      "TOO_MANY_REQUESTS",
-    );
+    expect(await rejectionCode(caller.session())).toBe("TOO_MANY_REQUESTS");
   });
 
   it("leaves an authed procedure alone", async () => {
     const h = await base();
     const ip = from("5.5.5.5");
-    const caller = h.as("nobody", null, ip);
+    const caller = probe.createCaller(h.ctxFor("nobody", null, ip));
     for (let i = 0; i < PUBLIC_DEFAULT_MAX; i++) {
-      await caller.auth.getSession();
+      await caller.session();
     }
 
     await expect(

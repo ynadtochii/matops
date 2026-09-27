@@ -23,9 +23,6 @@ import {
   classInstance,
   classParticipation,
   classTemplate,
-  curriculumBlock,
-  curriculumBlockTemplate,
-  curriculumTrack,
   dropIn,
   dropInVisit,
   entity,
@@ -33,8 +30,6 @@ import {
   member,
   memberNote,
   memberRank,
-  memberReferral,
-  memberReferralAudit,
   membershipMonth,
   membershipMonthAudit,
   membershipPolicy,
@@ -92,14 +87,6 @@ export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
       .delete(attendanceCorrection)
       .where(inArray(attendanceCorrection.academyId, ids)),
   );
-  await del("member_referral_audit", () =>
-    exec
-      .delete(memberReferralAudit)
-      .where(inArray(memberReferralAudit.academyId, ids)),
-  );
-  await del("member_referral", () =>
-    exec.delete(memberReferral).where(inArray(memberReferral.academyId, ids)),
-  );
   await del("drop_in_visit", () =>
     exec.delete(dropInVisit).where(inArray(dropInVisit.academyId, ids)),
   );
@@ -123,17 +110,6 @@ export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
   );
   await del("academy_invite", () =>
     exec.delete(academyInvite).where(inArray(academyInvite.academyId, ids)),
-  );
-  await del("curriculum_block", () =>
-    exec.delete(curriculumBlock).where(inArray(curriculumBlock.academyId, ids)),
-  );
-  await del("curriculum_block_template", () =>
-    exec
-      .delete(curriculumBlockTemplate)
-      .where(inArray(curriculumBlockTemplate.academyId, ids)),
-  );
-  await del("curriculum_track", () =>
-    exec.delete(curriculumTrack).where(inArray(curriculumTrack.academyId, ids)),
   );
 
   // What the demo gym wrote while it was being USED: the notification centre

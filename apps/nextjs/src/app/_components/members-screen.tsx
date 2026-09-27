@@ -1,32 +1,98 @@
 "use client";
 
-import { branchWords } from "@matops/domain";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
-import { useEntity } from "./entity";
-import { Invites } from "./invites";
+import { Button } from "@matops/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@matops/ui/dialog";
+
+import { useTRPC } from "~/trpc/react";
+import { CreateStudentDialog } from "./create-student-dialog";
+import {
+  OrganizationExportDialog,
+  StudentImportDialog,
+} from "./data-transfer-dialogs";
+import { useAnyBranchTakesPayment, useEntity, useOrganization } from "./entity";
+import { InviteLinkCard } from "./invite-link-card";
 import { Members } from "./members";
 import { PageHeader } from "./page-header";
 
-/**
- * Roster (IA ticket 02, spec O4, named by FP9): the people who train here. The
- * student invite link, then three tabs. Requests holds the pending approvals,
- * Members the active list, and Drop-in leads the visitors the check-in poster
- * brings in. Staff and the instructor link live on the Coaches screen.
- */
 export function MembersScreen() {
-  const words = branchWords(useEntity().type);
+  const academy = useEntity();
+  const { canRunOrganization } = useOrganization();
+
   return (
     <>
       <PageHeader
-        title="Roster"
-        subtitle={`Everyone who trains at this ${words.branch}.`}
+        title="Students"
+        subtitle={`Everyone who trains at ${academy.name}.`}
+        action={canRunOrganization ? <StudentActions /> : undefined}
       />
-      {/* The invite link is a setup step, so it sits under the day's work
-          rather than above it. */}
-      <div className="flex flex-col gap-10">
-        <Members />
-        <Invites />
-      </div>
+      <Members />
     </>
+  );
+}
+
+function StudentActions() {
+  const trpc = useTRPC();
+  const { entities } = useOrganization();
+  const payments = useAnyBranchTakesPayment();
+  const [open, setOpen] = useState<
+    "invite" | "add" | "import" | "export" | null
+  >(null);
+  const plans = useQuery({
+    ...trpc.accessPlan.list.queryOptions(),
+    enabled: payments && open === "import",
+  });
+  const close = (next: boolean) => {
+    if (!next) setOpen(null);
+  };
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Button size="sm" onClick={() => setOpen("invite")}>
+        Invite students
+      </Button>
+      <Button size="sm" variant="outline" onClick={() => setOpen("add")}>
+        Add student
+      </Button>
+      <Button size="sm" variant="outline" onClick={() => setOpen("import")}>
+        Import students
+      </Button>
+      <Button size="sm" variant="outline" onClick={() => setOpen("export")}>
+        Export data
+      </Button>
+      <Dialog open={open === "invite"} onOpenChange={close}>
+        <DialogContent className="max-w-lg">
+          <DialogTitle>Invite students</DialogTitle>
+          <DialogDescription>
+            Share this link or its QR code. People who join wait for your
+            approval before they can book.
+          </DialogDescription>
+          <InviteLinkCard
+            role="student"
+            label="Student link"
+            hint="A forwarded link never opens access on its own."
+          />
+        </DialogContent>
+      </Dialog>
+      {open === "add" && (
+        <CreateStudentDialog entities={entities} onOpenChange={close} />
+      )}
+      {open === "import" && (
+        <StudentImportDialog
+          entities={entities}
+          plans={plans.data ?? []}
+          payments={payments}
+          onOpenChange={close}
+        />
+      )}
+      {open === "export" && <OrganizationExportDialog onOpenChange={close} />}
+    </div>
   );
 }

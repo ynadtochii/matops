@@ -11,22 +11,19 @@ import superjson from "superjson";
 import { z, ZodError } from "zod/v4";
 
 import type { Auth } from "@matops/auth";
-import type { DbReader, TenantTx } from "@matops/db";
+import type { TenantTx } from "@matops/db";
 import type { DbExec } from "@matops/db/client";
 import type { Membership } from "@matops/domain";
 import {
-  eq,
   getEntityInOrganization,
   getEntityMembership,
   getMembership,
   withScope,
 } from "@matops/db";
 import { db } from "@matops/db/client";
-import { organization } from "@matops/db/schema";
 import {
   canEnroll,
   isActiveMember,
-  isBjjAcademy,
   isManager,
   isOwner,
   isStaff,
@@ -216,10 +213,6 @@ export const publicProcedure = t.procedure
   .use(timingMiddleware)
   .use(rateLimited(PUBLIC_DEFAULT_MAX, PUBLIC_DEFAULT_WINDOW_MS));
 
-export const receptionBaseProcedure = t.procedure
-  .use(timingMiddleware)
-  .use(rateLimited(600, PUBLIC_DEFAULT_WINDOW_MS));
-
 /**
  * Protected (authenticated) procedure
  *
@@ -357,7 +350,7 @@ async function resolveEntity<U extends { id: string }>(ctx: {
   // archived or suspended the entity membership, which they would otherwise
   // have no way to undo. A branch owner stays an owner even when the caller
   // only manages the organization. `memberId` is null when there is no entity
-  // membership at all, because every dues, rank, note and referral row keys on
+  // membership at all, because every dues, rank and note row keys on
   // `entity_membership.id` and the Better Auth member id is a different id
   // space — so a manager with no row here cannot book as a student, and this
   // never enrols them as one.
@@ -536,71 +529,6 @@ export const branchManagerProcedure = memberProcedure.use(({ ctx, next }) => {
 });
 
 /**
- * The BJJ-only tiers. Belts, promotions and the curriculum belong to a mat, so
- * a general space is refused them by the server, not by a hidden nav item
- * (ADR 126). The check runs after the entity is resolved, so it names the place
- * the request asked for and never the one a session happened to hold.
- */
-const BJJ_ONLY = "Not a BJJ academy";
-
-export const bjjEnrolledProcedure = enrolledProcedure.use(({ ctx, next }) => {
-  if (!isBjjAcademy(ctx.entity.type)) {
-    throw new TRPCError({ code: "FORBIDDEN", message: BJJ_ONLY });
-  }
-  return next();
-});
-
-export const bjjStaffProcedure = staffProcedure.use(({ ctx, next }) => {
-  if (!isBjjAcademy(ctx.entity.type)) {
-    throw new TRPCError({ code: "FORBIDDEN", message: BJJ_ONLY });
-  }
-  return next();
-});
-
-const MODULE_DISABLED = "This module is not enabled for this gym";
-
-async function requireOrganizationModule(
-  database: DbReader,
-  organizationId: string,
-  module: "curriculum" | "referrals",
-) {
-  const [row] = await database
-    .select({
-      enabled:
-        module === "curriculum"
-          ? organization.curriculumEnabled
-          : organization.referralsEnabled,
-    })
-    .from(organization)
-    .where(eq(organization.id, organizationId))
-    .limit(1);
-  if (!row?.enabled) {
-    throw new TRPCError({ code: "FORBIDDEN", message: MODULE_DISABLED });
-  }
-}
-
-export const curriculumEnrolledProcedure = bjjEnrolledProcedure.use(
-  async ({ ctx, next }) => {
-    await requireOrganizationModule(ctx.db, ctx.organizationId, "curriculum");
-    return next();
-  },
-);
-
-export const curriculumStaffProcedure = bjjStaffProcedure.use(
-  async ({ ctx, next }) => {
-    await requireOrganizationModule(ctx.db, ctx.organizationId, "curriculum");
-    return next();
-  },
-);
-
-export const referralsBranchManagerProcedure = branchManagerProcedure.use(
-  async ({ ctx, next }) => {
-    await requireOrganizationModule(ctx.db, ctx.organizationId, "referrals");
-    return next();
-  },
-);
-
-/**
  * Identity procedures: same authorization as the tenant tiers, but NO ambient
  * transaction. They exist for the writes that touch `organization` or `member`
  * (ADR 68, 84). Those tables carry no RLS policy and migration `0020` revoked
@@ -637,9 +565,9 @@ function identityProcedure(allow: (m: Membership) => boolean, denial: string) {
 
 /**
  * Organization owner, with NO ambient transaction (ADR 92, applied to the new
- * scope). Adding an entity writes `academy_profile` and `curriculum_track`,
- * whose policies match on `app.academy_id` — and an organization transaction
- * leaves that unset on purpose, so those inserts would be refused by the very
+ * scope). Adding an entity writes `academy_profile`, whose policy matches on
+ * `app.academy_id` — and an organization transaction leaves that unset on
+ * purpose, so that insert would be refused by the very
  * rule that keeps entities apart. The write belongs on the base connection.
  */
 export const organizationOwnerIdentityProcedure = protectedProcedure.use(

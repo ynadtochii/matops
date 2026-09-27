@@ -7,15 +7,18 @@
  * ONE demo academy ("Alma beta"), owned by the real user, built for the beta
  * test: an outside tester joins through the seeded instructor invite link.
  *
- * The dataset is shaped to light up EVERY UI state at least once: member
- * statuses (active / pending / suspended / archived / removed), a manager who
- * runs the gym without training at it, all four drift bands (active / cooling /
- * at risk / dormant), the membership month on all four answers (paid / silent /
- * reminded / claimed) plus somebody with no membership at all, a plan change
- * waiting for the 1st, an archived plan, attendance history (present / absent /
- * unmarked / walk-in), one-off and cancelled classes, all five disciplines,
- * belts across disciplines with a promotion timeline, drop-in leads across the
- * funnel, referrals in all three audit states, and a live invite link per role.
+ * The dataset is shaped to light up EVERY first-release UI state at least once:
+ * member statuses (active / pending / suspended / archived / removed), a manager
+ * who runs the gym without training at it, all four drift bands (active /
+ * cooling / at risk / dormant), attendance history (present / absent / unmarked
+ * / walk-in), one-off and cancelled classes, all five disciplines, belts across
+ * disciplines with a promotion timeline, drop-in leads across the funnel, and a
+ * live invite link per role.
+ *
+ * The academy is approval-only (`membershipEnforcedAt` null, ADR 142). It still
+ * carries plans, assignments and months on all four answers, a plan change
+ * waiting for the 1st and an archived plan. They stay hidden while payment is
+ * off, and they are ready if a developer switches payment on.
  */
 import { computeOccurrences, monthOf, nextMonth } from "@matops/domain";
 
@@ -37,8 +40,6 @@ import type {
   member,
   memberNote,
   memberRank,
-  memberReferral,
-  memberReferralAudit,
   membershipMonth,
   membershipMonthAudit,
   membershipPolicy,
@@ -81,8 +82,6 @@ type NewPromotion = typeof rankPromotion.$inferInsert;
 type NewNote = typeof memberNote.$inferInsert;
 type NewDropIn = typeof dropIn.$inferInsert;
 type NewDropInVisit = typeof dropInVisit.$inferInsert;
-type NewReferral = typeof memberReferral.$inferInsert;
-type NewReferralAudit = typeof memberReferralAudit.$inferInsert;
 
 /** Everything the seed inserts, grouped by table. Future (materialized) classes
  * and their bookings are NOT here — run.ts adds those after materialization,
@@ -105,8 +104,6 @@ interface SeedGraph {
   notes: NewNote[];
   dropIns: NewDropIn[];
   dropInVisits: NewDropInVisit[];
-  referrals: NewReferral[];
-  referralAudits: NewReferralAudit[];
   /** Active students who stopped training — run.ts leaves them out of future
    * bookings so their drift band is not contradicted by a booking tomorrow. */
   quietStudentIds: string[];
@@ -1086,7 +1083,7 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
       address: academy.address,
       mapUrl: academy.mapUrl,
       publicCode: academy.publicCode,
-      membershipEnforcedAt: new Date(now.getTime() - 200 * DAY_MS),
+      membershipEnforcedAt: null,
       createdAt: now,
       updatedAt: now,
     },
@@ -1271,111 +1268,6 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
     now,
   });
 
-  // Direct attributions with more than one referrer and deliberate unassigned
-  // students, plus one corrected and one cleared attribution so the O9 history
-  // shows all three audit actions. An assigned removed student gives the
-  // historical include toggle a meaningful example.
-  const referrals: NewReferral[] = [];
-  const referralAudits: NewReferralAudit[] = [];
-  const addReferral = (
-    academyId: string,
-    studentMemberId: string,
-    referrerMemberId: string,
-    actorId: string,
-  ) => {
-    referrals.push({
-      id: newId(),
-      academyId,
-      studentMemberId,
-      referrerMemberId,
-      assignedBy: actorId,
-      createdAt: new Date(now.getTime() - 60 * DAY_MS),
-      updatedAt: new Date(now.getTime() - 60 * DAY_MS),
-    });
-    referralAudits.push({
-      id: newId(),
-      academyId,
-      studentMemberId,
-      oldReferrerMemberId: null,
-      newReferrerMemberId: referrerMemberId,
-      action: "assigned",
-      actorId,
-      occurredAt: new Date(now.getTime() - 60 * DAY_MS),
-    });
-  };
-  const ownerMemberId = seedMembershipId(academy.key, "you");
-  const coach1MemberId = seedMembershipId(academy.key, coach1.handle);
-  students.slice(0, 8).forEach((student, index) => {
-    addReferral(
-      academy.id,
-      seedMembershipId(academy.key, student.persona.handle),
-      index % 2 === 0 ? coach1MemberId : ownerMemberId,
-      opts.realUser.id,
-    );
-  });
-  const removedStudent = students.find(
-    (student) => student.status === "removed",
-  );
-  if (removedStudent) {
-    addReferral(
-      academy.id,
-      seedMembershipId(academy.key, removedStudent.persona.handle),
-      coach1MemberId,
-      opts.realUser.id,
-    );
-  }
-
-  // Corrected: credited to the coach at first, moved to the owner a month later.
-  const correctedStudent = students[8];
-  if (correctedStudent) {
-    const studentMemberId = seedMembershipId(
-      academy.key,
-      correctedStudent.persona.handle,
-    );
-    addReferral(academy.id, studentMemberId, coach1MemberId, opts.realUser.id);
-    const row = referrals[referrals.length - 1];
-    if (row) {
-      row.referrerMemberId = ownerMemberId;
-      row.updatedAt = new Date(now.getTime() - 25 * DAY_MS);
-    }
-    referralAudits.push({
-      id: newId(),
-      academyId: academy.id,
-      studentMemberId,
-      oldReferrerMemberId: coach1MemberId,
-      newReferrerMemberId: ownerMemberId,
-      action: "corrected",
-      actorId: opts.realUser.id,
-      occurredAt: new Date(now.getTime() - 25 * DAY_MS),
-    });
-  }
-
-  // Cleared: the row is retained with a null referrer, which locks the student
-  // against a fresh guess by another staff member (ADR 52).
-  const clearedStudent = students[9];
-  if (clearedStudent) {
-    const studentMemberId = seedMembershipId(
-      academy.key,
-      clearedStudent.persona.handle,
-    );
-    addReferral(academy.id, studentMemberId, coach1MemberId, opts.realUser.id);
-    const row = referrals[referrals.length - 1];
-    if (row) {
-      row.referrerMemberId = null;
-      row.updatedAt = new Date(now.getTime() - 15 * DAY_MS);
-    }
-    referralAudits.push({
-      id: newId(),
-      academyId: academy.id,
-      studentMemberId,
-      oldReferrerMemberId: coach1MemberId,
-      newReferrerMemberId: null,
-      action: "cleared",
-      actorId: opts.realUser.id,
-      occurredAt: new Date(now.getTime() - 15 * DAY_MS),
-    });
-  }
-
   return {
     users,
     organizations,
@@ -1394,8 +1286,6 @@ export function buildSeedGraph(opts: SeedGraphOptions): SeedGraph {
     notes: data.notes,
     dropIns: data.dropIns,
     dropInVisits: data.dropInVisits,
-    referrals,
-    referralAudits,
     quietStudentIds: students
       .filter((s) => s.quietSince !== undefined)
       .map((s) => s.persona.userId),

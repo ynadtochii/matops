@@ -76,3 +76,7 @@ export function useOrganization(): Organization {
   }
   return organization;
 }
+
+export function useAnyBranchTakesPayment(): boolean {
+  return useOrganization().entities.some((e) => e.membershipEnforced);
+}

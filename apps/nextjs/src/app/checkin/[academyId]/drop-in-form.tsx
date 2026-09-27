@@ -43,15 +43,7 @@ function classLabel(startsAt: Date, now: Date): string {
  * was a button that would not press. Submitting always does something now, and
  * anything wrong is named on the field it belongs to.
  */
-export function DropInForm({
-  academyId,
-  reception = false,
-  onComplete,
-}: {
-  academyId: string;
-  reception?: boolean;
-  onComplete?: () => void;
-}) {
+export function DropInForm({ academyId }: { academyId: string }) {
   const trpc = useTRPC();
   const academy = useQuery(
     trpc.dropIn.academyInfo.queryOptions({ academyId }, { retry: false }),
@@ -73,15 +65,7 @@ export function DropInForm({
     setError(err.message || "Couldn't check you in. Try again.");
     void academy.refetch();
   };
-  const submit = useMutation(
-    reception
-      ? trpc.reception.submitVisitor.mutationOptions({ onError, gcTime: 0 })
-      : trpc.dropIn.submit.mutationOptions({ onError }),
-  );
-
-  useEffect(() => {
-    if (submit.isSuccess) onComplete?.();
-  }, [submit.isSuccess, onComplete]);
+  const submit = useMutation(trpc.dropIn.submit.mutationOptions({ onError }));
 
   useEffect(() => {
     if (Object.keys(errors).length === 0) return;
@@ -183,12 +167,7 @@ export function DropInForm({
     <form
       ref={formRef}
       noValidate
-      autoComplete={reception ? "off" : undefined}
-      className={
-        reception
-          ? "flex w-full max-w-lg flex-col gap-4 [&_button]:min-h-12 [&_input:not([type=checkbox]):not([type=radio])]:min-h-12 [&_label]:min-h-6 [&_label:has(input)]:min-h-12 [&_select]:min-h-12"
-          : "flex w-full max-w-sm flex-col gap-4"
-      }
+      className="flex w-full max-w-sm flex-col gap-4"
       onSubmit={(e) => {
         e.preventDefault();
         setError(null);
@@ -241,7 +220,7 @@ export function DropInForm({
             setFirstName(e.target.value);
             clearError("firstName");
           }}
-          autoComplete={reception ? "off" : "given-name"}
+          autoComplete="given-name"
           maxLength={60}
           required
           aria-invalid={errors.firstName ? true : undefined}
@@ -260,7 +239,7 @@ export function DropInForm({
             setLastName(e.target.value);
             clearError("lastName");
           }}
-          autoComplete={reception ? "off" : "family-name"}
+          autoComplete="family-name"
           maxLength={60}
           required
           aria-invalid={errors.lastName ? true : undefined}
@@ -271,7 +250,6 @@ export function DropInForm({
         )}
       </div>
       <PhoneField
-        autoComplete={reception ? "off" : undefined}
         timeZone={timeZone}
         country={country}
         value={phone}
@@ -283,7 +261,6 @@ export function DropInForm({
         error={errors.phone}
       />
       <EmailField
-        autoComplete={reception ? "off" : undefined}
         value={email}
         onChange={(v) => {
           setEmail(v);

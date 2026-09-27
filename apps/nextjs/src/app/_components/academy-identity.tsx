@@ -10,13 +10,13 @@ import { Input } from "@matops/ui/input";
 import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
+import { useOrganization } from "./entity";
 import { LIST, SectionHeading, SettingsRow } from "./primitives";
 
 /**
- * Branch identity (spec O6). The **name** is a label the owner can rename; the
- * **join code** is the permanent identifier students type to find the gym.
- * Renaming updates every screen that reads the branch (sidebar, switcher) via
- * an `academy` path invalidation; the join code never changes.
+ * Academy identity (spec O6). With one academy the gym and the academy are the
+ * same place to the owner, so a rename writes both names and they cannot drift.
+ * The join code never changes.
  */
 export function AcademyIdentity({
   name,
@@ -30,21 +30,29 @@ export function AcademyIdentity({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name);
   const [nameError, setNameError] = useState<string | null>(null);
+  const { entities, canRunOrganization } = useOrganization();
+  const renameGymToo = canRunOrganization && entities.length === 1;
 
-  const rename = useMutation(
-    trpc.academy.rename.mutationOptions({
-      onSuccess: async () => {
-        await queryClient.invalidateQueries(trpc.academy.pathFilter());
-        toast.success("Branch renamed");
-        setEditing(false);
-      },
-      onError: () => {
-        const message = "Couldn't rename the branch. Try again.";
-        setNameError(message);
-        toast.error(message);
-      },
-    }),
-  );
+  const renameAcademy = useMutation(trpc.academy.rename.mutationOptions());
+  const renameGym = useMutation(trpc.organization.rename.mutationOptions());
+  const renaming = renameAcademy.isPending || renameGym.isPending;
+
+  const rename = async (next: string) => {
+    try {
+      await renameAcademy.mutateAsync({ name: next });
+      if (renameGymToo) await renameGym.mutateAsync({ name: next });
+      await Promise.all([
+        queryClient.invalidateQueries(trpc.academy.pathFilter()),
+        queryClient.invalidateQueries(trpc.entity.pathFilter()),
+      ]);
+      toast.success("Academy renamed");
+      setEditing(false);
+    } catch {
+      const message = "Couldn't rename the academy. Try again.";
+      setNameError(message);
+      toast.error(message);
+    }
+  };
 
   const save = () => {
     const next = draft.trim();
@@ -57,7 +65,7 @@ export function AcademyIdentity({
       setEditing(false);
       return;
     }
-    rename.mutate({ name: next });
+    void rename(next);
   };
 
   return (
@@ -65,7 +73,7 @@ export function AcademyIdentity({
       <SectionHeading>Name and join code</SectionHeading>
       <div className={LIST}>
         <SettingsRow
-          title="Branch name"
+          title="Academy name"
           description={
             editing ? undefined : (
               <span className="text-foreground text-md">{name}</span>
@@ -83,11 +91,11 @@ export function AcademyIdentity({
                 maxLength={80}
                 autoFocus
                 className="w-full sm:w-56"
-                aria-label="Branch name"
+                aria-label="Academy name"
                 aria-invalid={nameError ? true : undefined}
                 aria-describedby={nameError ? "branch-name-error" : undefined}
               />
-              <Button size="sm" busy={rename.isPending} onClick={save}>
+              <Button size="sm" busy={renaming} onClick={save}>
                 Save
               </Button>
               <Button

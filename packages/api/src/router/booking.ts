@@ -13,6 +13,7 @@ import {
   recordMilestone,
 } from "@matops/db";
 import { classInstance, classParticipation } from "@matops/db/schema";
+import { isOwner } from "@matops/domain";
 import {
   BookClassSchema,
   BookForSchema,
@@ -20,7 +21,6 @@ import {
 } from "@matops/validators";
 
 import { academyContext } from "../academy-tz";
-import { findBranchPerson } from "../branch-person";
 import { releaseSeats } from "../classes";
 import { bookForMember } from "../member-booking";
 import { bookingGate } from "../payments-gate";
@@ -117,36 +117,32 @@ export const bookingRouter = {
       return { ok: true as const, tier: result.tier };
     }),
 
-  /**
-   * Book a named member onto a class from the staff desk (ADR 139). The desk
-   * check-in write only reaches about a day ahead, because it records
-   * attendance; this is how staff reception holds a place on a class further
-   * out. Same shared write as the member's own booking, so the admission rules,
-   * the branch booking window and the capacity accounting are theirs, not a
-   * staff override.
-   */
-  bookFor: staffProcedure
+  /** The owner cancels a named person's booking. Idempotent, like `cancel`. */
+  cancelFor: staffProcedure
     .input(BookForSchema)
     .mutation(async ({ ctx, input }) => {
-      const subject = await findBranchPerson(ctx.db, ctx, input.personId);
-      if (!subject) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "That person does not have active access to this academy",
-        });
+      if (!isOwner(ctx.membership)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Owner only" });
       }
-      const academy = await academyContext(ctx);
-      const result = await bookForMember(ctx.db, {
-        entity: ctx.entity,
-        membership: subject,
-        accountUserId: subject.accountUserId,
-        classId: input.classId,
-        academyId: ctx.academyId,
-        organizationId: ctx.organizationId,
-        bookingWindowDays: academy.bookingWindowDays,
-        timeZone: academy.timeZone,
-      });
-      return { ok: true as const, tier: result.tier, booked: result.booked };
+      await lockAndReadScheduleRevision(ctx.db, ctx.academyId);
+      const [cancelled] = await ctx.db
+        .update(classParticipation)
+        .set({ bookingStatus: "cancelled", cancelledAt: new Date() })
+        .where(
+          and(
+            eq(classParticipation.classId, input.classId),
+            eq(classParticipation.personId, input.personId),
+            eq(classParticipation.bookingStatus, "booked"),
+          ),
+        )
+        .returning({ tier: classParticipation.bookingTier });
+
+      if (cancelled?.tier === "confirmed") {
+        await releaseSeats(ctx.db, [input.classId]);
+      }
+      if (cancelled) await bumpScheduleRevision(ctx.db, ctx.academyId);
+
+      return { ok: true as const, cancelled: !!cancelled };
     }),
 
   /**

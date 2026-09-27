@@ -57,7 +57,7 @@ describe("membership access isolation", () => {
     // a second branch for A, two of A's members and one plan each side.
     await pg.exec(`
       INSERT INTO "entity" (id, organization_id, type, name, slug, public_code)
-        VALUES ('${GYM_A}', '${ORG_A}', 'general_space', 'Gym A', 'gym-a', '100777');
+        VALUES ('${GYM_A}', '${ORG_A}', 'bjj_academy', 'Gym A', 'gym-a', '100777');
       INSERT INTO "user" (id, name, email, email_verified, created_at, updated_at)
         VALUES ('${ALEX}', 'Alex', 'alex@test.local', true, now(), now()),
                ('${BEA}', 'Bea', 'bea@test.local', true, now(), now());

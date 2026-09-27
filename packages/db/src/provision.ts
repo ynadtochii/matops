@@ -1,14 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 
-import { capacityPolicyFor, isBjjAcademy, slugify } from "@matops/domain";
+import { slugify } from "@matops/domain";
 
 import type { DbExec } from "./client";
-import type { DbReader, DbWriter } from "./tenant";
+import type { DbWriter } from "./tenant";
 import { generateAcademyCode } from "./academy-code";
 import { organization } from "./auth-schema";
-import { DEFAULT_TRACK_NAME } from "./curriculum";
-import { curriculumTrack } from "./curriculum-schema";
 import { academyProfile, entity, entityMembership } from "./entity-schema";
 import { ensureAccountPerson } from "./person";
 import { classTemplate } from "./scheduling";
@@ -35,22 +33,15 @@ interface EntityRows {
   mapUrl?: string | null;
   isDefault?: boolean;
   membershipEnforcedAt?: Date | null;
-  curriculumForStudents?: boolean;
-  publicBookingEnabled?: boolean;
 }
 
 /**
- * The rows a working place needs: the entity, an owner membership, and for a
- * BJJ academy its profile and a curriculum track to place a block on.
- *
- * A general space gets neither of the last two. `academy_profile` holds the
- * curriculum switch and the public booking key, and a curriculum track is a
- * teaching plan, so both are BJJ-only by definition (ADR 126). The readers that
- * used to inner join the profile are left joins for that reason.
+ * The rows a working place needs: the entity, an owner membership and its
+ * academy profile.
  *
  * Every step is an `ON CONFLICT DO NOTHING` insert, so the whole thing is safe
- * to run again. Postgres already holds the uniqueness (the two primary keys,
- * `entity_membership_one_per_user`, `curriculum_track_one_default`), so asking
+ * to run again. Postgres already holds the uniqueness (the two primary keys and
+ * `entity_membership_one_per_user`), so asking
  * in application code first would be slower and would still race.
  */
 async function provisionEntityRows(
@@ -61,7 +52,6 @@ async function provisionEntityRows(
   const mark = (step: string, made: unknown[]) => {
     if (made.length > 0) created.push(step);
   };
-  const bjj = isBjjAcademy(input.type);
 
   mark(
     "entity",
@@ -79,10 +69,7 @@ async function provisionEntityRows(
         address: input.address,
         mapUrl: input.mapUrl,
         publicCode: input.publicCode,
-        membershipEnforcedAt:
-          input.membershipEnforcedAt === undefined
-            ? new Date()
-            : input.membershipEnforcedAt,
+        membershipEnforcedAt: input.membershipEnforcedAt ?? null,
       })
       // Named target on purpose: the row carries three unique constraints, and
       // only the primary key means "already provisioned". A public-code or slug
@@ -92,20 +79,14 @@ async function provisionEntityRows(
       .returning({ id: entity.id }),
   );
 
-  if (bjj) {
-    mark(
-      "academy_profile",
-      await exec
-        .insert(academyProfile)
-        .values({
-          entityId: input.entityId,
-          curriculumForStudents: input.curriculumForStudents ?? false,
-          publicBookingEnabled: input.publicBookingEnabled ?? false,
-        })
-        .onConflictDoNothing()
-        .returning({ id: academyProfile.entityId }),
-    );
-  }
+  mark(
+    "academy_profile",
+    await exec
+      .insert(academyProfile)
+      .values({ entityId: input.entityId })
+      .onConflictDoNothing()
+      .returning({ id: academyProfile.entityId }),
+  );
 
   if (input.ownerUserId) {
     const ownerPersonId = await ensureAccountPerson(
@@ -128,21 +109,6 @@ async function provisionEntityRows(
         })
         .onConflictDoNothing()
         .returning({ id: entityMembership.id }),
-    );
-  }
-
-  if (bjj) {
-    mark(
-      "curriculum_track",
-      await exec
-        .insert(curriculumTrack)
-        .values({
-          academyId: input.entityId,
-          name: DEFAULT_TRACK_NAME,
-          isDefault: true,
-        })
-        .onConflictDoNothing()
-        .returning({ id: curriculumTrack.id }),
     );
   }
 
@@ -197,17 +163,12 @@ export async function provisionOrganization(
  * and the staff who run it (ADR 128).
  *
  * Nothing else is copied, and the list of what is left out is the point:
- * bookings, attendance, ranks, notes, referrals and payment history all belong
+ * bookings, attendance, ranks, notes and payment history all belong
  * to the people at the branch they happened at, and a copy of them would be a
  * record of something that never took place.
  *
  * Templates arrive as a plan, not as a schedule: `generated_until` is left null
- * so the caller materializes them into the new branch's own classes, and the
- * BJJ-only fields are dropped rather than pointed at the source's rows, since a
- * curriculum track belongs to one branch and a public booking flag is a
- * decision about this branch's own link. The capacity rule comes from the
- * DESTINATION's type for the same reason: a BJJ mat's soft cap copied into a
- * one-room space would take bookings past what the room holds.
+ * so the caller materializes them into the new branch's own classes.
  *
  * Students are not staff and are not copied. A person joins a branch, and
  * moving one silently would give them a place they never asked for.
@@ -216,7 +177,6 @@ async function copyBranchSetup(
   input: {
     fromEntityId: string;
     toEntityId: string;
-    toType: string;
     organizationId: string;
   },
   exec: DbWriter,
@@ -242,14 +202,12 @@ async function copyBranchSetup(
         title: t.title,
         description: t.description,
         discipline: t.discipline,
-        curriculumTrackId: null,
         daysOfWeek: t.daysOfWeek,
         startsAtMinutes: t.startsAtMinutes,
         durationMinutes: t.durationMinutes,
         timeZone: t.timeZone,
         capacity: t.capacity,
-        capacityPolicy: capacityPolicyFor(input.toType),
-        publicBookable: false,
+        capacityPolicy: "soft",
       })),
     );
     created.push("class_template");
@@ -402,7 +360,6 @@ export async function createEntity(
           {
             fromEntityId: input.copyFromEntityId,
             toEntityId: entityId,
-            toType: input.type,
             organizationId: input.organizationId,
           },
           tx,
@@ -412,24 +369,4 @@ export async function createEntity(
 
     return { organizationId: input.organizationId, entityId, created };
   });
-}
-
-/**
- * May this organization open a branch that is not a mat (ADR 126)?
- *
- * The flag is off for everyone until the pilot turns it on, so the answer for a
- * missing or closed organization is no.
- */
-export async function generalBranchesEnabled(
-  organizationId: string,
-  exec: DbReader,
-): Promise<boolean> {
-  const rows = await exec
-    .select({ enabled: organization.generalBranchesEnabled })
-    .from(organization)
-    .where(
-      and(eq(organization.id, organizationId), isNull(organization.deletedAt)),
-    )
-    .limit(1);
-  return rows[0]?.enabled ?? false;
 }

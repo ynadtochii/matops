@@ -13,7 +13,6 @@ import { randomUUID } from "node:crypto";
 import { and, eq, gte, inArray } from "drizzle-orm";
 
 import type { SeedAcademy, SeedExec } from "./registry";
-import { DEFAULT_TRACK_NAME } from "../curriculum";
 import { materializeTemplate } from "../materialize";
 import {
   academyInvite,
@@ -26,7 +25,6 @@ import {
   classInstance,
   classParticipation,
   classTemplate,
-  curriculumTrack,
   dropIn,
   dropInVisit,
   entity,
@@ -34,8 +32,6 @@ import {
   member,
   memberNote,
   memberRank,
-  memberReferral,
-  memberReferralAudit,
   membershipMonth,
   membershipMonthAudit,
   membershipPolicy,
@@ -105,17 +101,6 @@ export async function seedAll(
     academyProfile,
     graph.academyProfiles,
   );
-  await insert(
-    report,
-    "curriculum_track",
-    exec,
-    curriculumTrack,
-    graph.entities.map((e) => ({
-      academyId: e.id,
-      name: DEFAULT_TRACK_NAME,
-      isDefault: true,
-    })),
-  );
   await insert(report, "member", exec, member, graph.members);
   await insert(report, "person", exec, person, graph.people);
   await insert(
@@ -183,20 +168,6 @@ export async function seedAll(
   await insert(report, "member_note", exec, memberNote, graph.notes);
   await insert(report, "drop_in", exec, dropIn, graph.dropIns);
   await insert(report, "drop_in_visit", exec, dropInVisit, graph.dropInVisits);
-  await insert(
-    report,
-    "member_referral",
-    exec,
-    memberReferral,
-    graph.referrals,
-  );
-  await insert(
-    report,
-    "member_referral_audit",
-    exec,
-    memberReferralAudit,
-    graph.referralAudits,
-  );
 
   // 5. Materialize FUTURE classes from the seeded templates (reuses the real
   //    engine — fills [now, horizon) with no overlap against the past classes).

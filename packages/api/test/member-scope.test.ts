@@ -89,21 +89,6 @@ describe("member-scoped owner mutations reject a foreign memberId", () => {
     );
   });
 
-  it("referral.assign", async () => {
-    await expect(
-      owner().referral.assign({
-        studentMemberId: FOREIGN,
-        referrerMemberId: OWN,
-      }),
-    ).rejects.toThrow(/Member not found/);
-  });
-
-  it("referral.history", async () => {
-    await expect(
-      owner().referral.history({ studentMemberId: FOREIGN }),
-    ).rejects.toThrow(/Member not found|Student not found/);
-  });
-
   it("the same calls work on the owner's own academy", async () => {
     await expect(
       owner().note.add({ memberId: OWN, body: "kept" }),

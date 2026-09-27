@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased: first release, one academy
+
+- ADR 142: a new academy starts with payment admission off, so an approved, active student books with no plan; the per-branch switch in Gym settings turns it back on, and every web payment screen follows that flag. Only an owner can book a student past the booking window and the payment check, and the new owner-only `booking.cancelFor` procedure cancels for a student from the class roster. `/start` is one form that makes the gym and its first academy, one academy opens directly with no gym menu, and the setup list asks for a schedule, a join link, a first approved student and a first booking instead of plans and an instructor. No migration. Web only.
+- ADR 142 addendum: after a manual check, the web app hides the venue check-in QR, both reception screens, the coach breakdown, the booking window and phone country settings, public booking, the Notifications page, the Optional features and Your account sections, the days-to-pay and deadline zone rows, the per-branch payment switch, and Add academy. Server procedures stay.
+- ADR 142 addendum: one academy shows one set of screens. Roster becomes Students (with add, import and export), Branch settings becomes Settings (with bank details while payment is on), renaming the academy renames the gym, and People, Gym settings and Gym overview leave the sidebar and redirect.
+- The student join link lives only behind Invite students on Students (the Send someone a link dialog and the How students join section are gone), Settings is the last sidebar item, and the setup checklist can be closed.
+- Seeds follow the first release: `seed pilot` builds one approval-only BJJ academy with no general branches, plans or optional features; the Alma beta demo is approval-only and seeds no referrals (its plans and months stay, hidden while payment is off); `seed fill` adds payment rows only when the academy requires payment and no longer adds referrals.
+- ADR 142 addendum: dead code removed. Reception, public booking and `/book`, referrals, curriculum, general spaces, the Gym overview, People, Person and Gym settings screens, the notice retry procedures, `entity.setMembershipEnforced` and `booking.bookFor` are gone with their procedures and tests. Migration `0004_first_release_drops.sql` drops their tables and columns; it is applied to dev and ships to production in a later deploy than the code. Payments code, drop-in leads and the organization and entity model stay.
+
 ## Unreleased: the Linear redesign
 
 - ADR 141 adopts the Linear design system in the product. The matops violet stays as the accent, dark becomes the default theme, and the dark theme keeps Linear's own values, including three known contrast failures. No code changed yet.

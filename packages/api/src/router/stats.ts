@@ -3,15 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod/v4";
 
 import type { DbExec, MemberRow } from "@matops/db";
-import type {
-  ClassMark,
-  CoachClass,
-  CoachWindowKey,
-  DirectoryEntry,
-  EntityMetricInput,
-  EntitySummary,
-  PaymentTally,
-} from "@matops/domain";
+import type { ClassMark, CoachClass, CoachWindowKey } from "@matops/domain";
 import {
   and,
   attendanceReviewSnapshot,
@@ -20,25 +12,19 @@ import {
   getEntityMembership,
   gte,
   inArray,
-  isNotNull,
   isNull,
   lt,
-  ne,
   sql,
   withScope,
 } from "@matops/db";
 import {
-  accessAssignment,
-  accessPlanEntity,
   classInstance,
   classParticipation,
-  dropIn,
   entityMembership,
   membershipMonth,
   notification,
 } from "@matops/db/schema";
 import {
-  appliesInMonth,
   canEnroll,
   canReadCoachFigures,
   classifyDrift,
@@ -47,16 +33,9 @@ import {
   coachWindowRange,
   coachWorkload,
   coachWorkloadFor,
-  combineDirectory,
-  combineEntitySummaries,
-  groupMoneyByCurrency,
   isActiveMember,
   isPendingCoach,
   isStaff,
-  monthBucket,
-  monthOf,
-  monthVerdict,
-  organizationMetrics,
   runsBranch,
   runsOrganization,
 } from "@matops/domain";
@@ -64,38 +43,22 @@ import {
   CoachDetailSchema,
   CoachStatsSchema,
   IdSchema,
-  OrganizationWindowSchema,
 } from "@matops/validators";
 
 import type { TimeZoneCtx } from "../academy-tz";
 import type { MemberScope } from "../members";
 import { academyTimeZone } from "../academy-tz";
 import {
-  directoryRosterOf,
   rosterOf,
   staffAmong,
   studentRosterOf,
   nameByUser as userNames,
 } from "../members";
-import { loadRosterStanding } from "../membership-access";
-import { membershipCalendar } from "../membership-status";
-import { readOrganizationEntities } from "../organization-read";
 import {
   branchManagerProcedure,
-  organizationManagerIdentityProcedure,
   organizationMemberIdentityProcedure,
   staffProcedure,
 } from "../trpc";
-
-/**
- * How far back the revenue read pulls confirmed claims. This month plus last
- * month is at most 62 days on any calendar; 70 leaves room for the academy time
- * zone shifting a boundary either way. The exact month split is done in code
- * with `monthBucket`, so this bound only keeps the query from growing forever.
- */
-const REVENUE_WINDOW_DAYS = 70;
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * The rows every O10 read needs: classes whose START falls in the window, plus
@@ -210,289 +173,6 @@ async function loadCoachContext(
   };
 }
 
-/**
- * One branch's numbers for the organization overview, read in its own scope.
- *
- * Everything here is per branch. Turning branch figures into people figures is
- * `organizationMetrics`'s job, and the split is deliberate: a query cannot know
- * that the same person also trains next door.
- */
-async function readEntityMetrics(
-  entity: { id: string; name: string },
-  organizationId: string,
-  baseDb: DbExec,
-  window: { from: Date; to: Date; now: Date },
-): Promise<EntityMetricInput> {
-  return withScope(
-    { organizationId, entityId: entity.id },
-    async (db) => {
-      const members = await studentRosterOf({ academyId: entity.id, db });
-      const standing = await loadRosterStanding(db, {
-        entityId: entity.id,
-        people: members.map((m) => ({
-          userId: m.userId,
-          status: m.status,
-          role: m.role,
-        })),
-        now: window.now,
-      });
-
-      const present = await db
-        .select({
-          studentId: sql<string>`coalesce(${classParticipation.personId}::text, ${classParticipation.studentId})`,
-        })
-        .from(classParticipation)
-        .innerJoin(
-          classInstance,
-          eq(classInstance.id, classParticipation.classId),
-        )
-        .where(
-          and(
-            eq(classParticipation.attendanceStatus, "present"),
-            gte(classInstance.startsAt, window.from),
-            lt(classInstance.startsAt, window.to),
-          ),
-        );
-
-      const sessions = await db
-        .select({
-          capacity: classInstance.capacity,
-          reserved: classInstance.bookingCount,
-        })
-        .from(classInstance)
-        .where(
-          and(
-            gte(classInstance.startsAt, window.from),
-            lt(classInstance.startsAt, window.to),
-            ne(classInstance.status, "cancelled"),
-            isNull(classInstance.deletedAt),
-          ),
-        );
-
-      return {
-        entityId: entity.id,
-        entityName: entity.name,
-        activated: true,
-        members: members.map((m) => ({
-          userId: m.userId,
-          role: m.role,
-          status: m.status,
-          joinedAt: m.createdAt,
-        })),
-        eligibleUserIds: [...standing.entries()]
-          .filter(([, v]) => v.verdict === "ok")
-          .map(([userId]) => userId),
-        attendedUserIds: [...new Set(present.map((p) => p.studentId))],
-        visits: present.length,
-        sessions,
-      };
-    },
-    baseDb,
-  );
-}
-
-/**
- * Every shared membership's standing for the current month, counted ONCE.
- *
- * Read in an organization scope rather than per entity, because the record is
- * the organization's: counting it per covered branch would say a gym with two
- * branches has twice the memberships it sold.
- */
-async function readPaymentTally(
-  organizationId: string,
-  baseDb: DbExec,
-  now: Date,
-): Promise<PaymentTally> {
-  return withScope(
-    { organizationId },
-    async (db) => {
-      const tally: PaymentTally = { paid: 0, withinGrace: 0, blocked: 0 };
-      const held = await db
-        .select({
-          id: accessAssignment.id,
-          startMonth: accessAssignment.startMonth,
-          endMonth: accessAssignment.endMonth,
-          createdAt: accessAssignment.createdAt,
-        })
-        .from(accessAssignment)
-        .where(eq(accessAssignment.status, "active"));
-      if (held.length === 0) return tally;
-
-      const calendar = await membershipCalendar(db);
-      const month = monthOf(now, calendar.timeZone);
-      const months = await db
-        .select({
-          assignmentId: membershipMonth.assignmentId,
-          status: membershipMonth.status,
-        })
-        .from(membershipMonth)
-        .where(eq(membershipMonth.month, month));
-
-      for (const a of held.filter((r) => appliesInMonth(r, month))) {
-        const paid =
-          months.find((m) => m.assignmentId === a.id)?.status === "confirmed";
-        const verdict = monthVerdict({
-          month,
-          startMonth: a.startMonth,
-          joinedOn: a.createdAt.toISOString().slice(0, 10),
-          policy: calendar,
-          paid,
-          now,
-        });
-        if (verdict === "paid") tally.paid += 1;
-        else if (verdict === "within-grace") tally.withinGrace += 1;
-        else tally.blocked += 1;
-      }
-      return tally;
-    },
-    baseDb,
-  );
-}
-
-/**
- * One branch's slice of the organization directory.
- *
- * Attendance is counted per branch and stays that way on the badge, so a branch
- * total is never mistaken for a head count of people.
- */
-async function readEntityDirectory(
-  entity: { id: string; name: string },
-  organizationId: string,
-  baseDb: DbExec,
-  window: { now: Date; since: Date },
-): Promise<DirectoryEntry[]> {
-  return withScope(
-    { organizationId, entityId: entity.id },
-    async (db) => {
-      const members = await directoryRosterOf({ academyId: entity.id, db });
-      if (members.length === 0) return [];
-
-      const standing = await loadRosterStanding(db, {
-        entityId: entity.id,
-        people: members.map((m) => ({
-          userId: m.userId,
-          status: m.status,
-          role: m.role,
-        })),
-        now: window.now,
-      });
-
-      const visits = await db
-        .select({
-          studentId: sql<string>`coalesce(${classParticipation.personId}::text, ${classParticipation.studentId})`,
-          count: sql<number>`count(*)::int`,
-        })
-        .from(classParticipation)
-        .innerJoin(
-          classInstance,
-          eq(classInstance.id, classParticipation.classId),
-        )
-        .where(
-          and(
-            eq(classParticipation.attendanceStatus, "present"),
-            gte(classInstance.startsAt, window.since),
-          ),
-        )
-        .groupBy(
-          sql`coalesce(${classParticipation.personId}::text, ${classParticipation.studentId})`,
-        );
-      const visitByUser = new Map(visits.map((v) => [v.studentId, v.count]));
-
-      return members.map((m) => {
-        const seen = standing.get(m.userId);
-        return {
-          entityId: entity.id,
-          entityName: entity.name,
-          memberId: m.memberId,
-          userId: m.userId,
-          name: m.name,
-          email: m.email,
-          status: m.status,
-          role: m.role,
-          invitedRole: m.invitedRole,
-          covered: seen?.covered ?? false,
-          planNames: seen?.planNames ?? [],
-          verdict: seen?.verdict ?? null,
-          recentVisits: visitByUser.get(m.userId) ?? 0,
-        };
-      });
-    },
-    baseDb,
-  );
-}
-
-/**
- * One academy's row for the overview, read through the same helpers its own
- * dashboard uses: the roster, the academy time zone and the confirmed-revenue
- * reader. Nothing here is a second implementation of a figure the entity
- * dashboard already shows.
- */
-async function readEntitySummary(
-  entity: { id: string; name: string },
-  organizationId: string,
-  baseDb: DbExec,
-  now: Date,
-): Promise<EntitySummary> {
-  return withScope(
-    { organizationId, entityId: entity.id },
-    async (db) => {
-      const scope = { academyId: entity.id, db };
-      const timeZone = await academyTimeZone(scope);
-      const members = await studentRosterOf(scope);
-      const revenue = await readRevenue(scope, now, timeZone);
-
-      const [leads] = await db
-        .select({ n: sql<number>`count(*)::int` })
-        .from(dropIn)
-        .where(eq(dropIn.stage, "new"));
-      const [claims] = await db
-        .select({ n: sql<number>`count(*)::int` })
-        .from(membershipMonth)
-        .innerJoin(
-          accessAssignment,
-          eq(accessAssignment.id, membershipMonth.assignmentId),
-        )
-        .innerJoin(
-          accessPlanEntity,
-          eq(accessPlanEntity.planId, accessAssignment.planId),
-        )
-        .where(
-          and(
-            eq(accessPlanEntity.entityId, entity.id),
-            eq(membershipMonth.status, "reported"),
-          ),
-        );
-      const [classes] = await db
-        .select({ n: sql<number>`count(*)::int` })
-        .from(classInstance)
-        .where(
-          and(
-            gte(classInstance.startsAt, now),
-            lt(classInstance.startsAt, new Date(now.getTime() + 7 * DAY_MS)),
-            ne(classInstance.status, "cancelled"),
-            isNull(classInstance.deletedAt),
-          ),
-        );
-
-      return {
-        entityId: entity.id,
-        name: entity.name,
-        timeZone,
-        memberUserIds: members.filter(isActiveMember).map((m) => m.userId),
-        pendingMembers: members.filter((m) => m.status === "pending").length,
-        newLeads: leads?.n ?? 0,
-        openClaims: claims?.n ?? 0,
-        upcomingClasses: classes?.n ?? 0,
-        revenue: revenue.map((r) => ({
-          currency: r.currency,
-          amountMinor: r.amountMinor,
-        })),
-      };
-    },
-    baseDb,
-  );
-}
-
 const navigationCount = (count: number) => ({
   state: "ready" as const,
   count,
@@ -539,32 +219,11 @@ async function readBranchNavigationCounts(
   );
 }
 
-async function readOrganizationNavigationCounts(
+async function readOrganizationClaimCount(
   organizationId: string,
   baseDb: DbExec,
 ) {
-  const branches = await readOrganizationEntities(organizationId, baseDb);
-  let coaches = 0;
-  for (const branch of branches) {
-    coaches += await withScope(
-      { organizationId, entityId: branch.id },
-      async (db) => {
-        const [row] = await db
-          .select({ count: sql<number>`count(*)::int` })
-          .from(entityMembership)
-          .where(
-            and(
-              eq(entityMembership.entityId, branch.id),
-              eq(entityMembership.status, "pending"),
-              eq(entityMembership.invitedRole, "instructor"),
-            ),
-          );
-        return row?.count ?? 0;
-      },
-      baseDb,
-    );
-  }
-  const claims = await withScope(
+  return withScope(
     { organizationId },
     async (db) => {
       const [row] = await db
@@ -575,7 +234,6 @@ async function readOrganizationNavigationCounts(
     },
     baseDb,
   );
-  return { coaches, claims };
 }
 
 /**
@@ -586,67 +244,6 @@ async function readOrganizationNavigationCounts(
  * academy time zone.
  */
 type DashboardScope = MemberScope & { db: TenantDb };
-
-async function readRevenue(ctx: DashboardScope, now: Date, timeZone: string) {
-  const windowStart = new Date(
-    now.getTime() - REVENUE_WINDOW_DAYS * 24 * 60 * 60 * 1000,
-  );
-  const rows = await ctx.db
-    .select({
-      amountMinor: membershipMonth.priceMinor,
-      currency: membershipMonth.currency,
-      confirmedAt: membershipMonth.reviewedAt,
-    })
-    .from(membershipMonth)
-    .innerJoin(
-      accessAssignment,
-      eq(accessAssignment.id, membershipMonth.assignmentId),
-    )
-    .innerJoin(
-      accessPlanEntity,
-      eq(accessPlanEntity.planId, accessAssignment.planId),
-    )
-    .where(
-      and(
-        eq(accessPlanEntity.entityId, ctx.academyId),
-        eq(membershipMonth.status, "confirmed"),
-        gte(membershipMonth.reviewedAt, windowStart),
-        isNotNull(membershipMonth.priceMinor),
-        isNotNull(membershipMonth.currency),
-      ),
-    );
-  const thisBucket = monthBucket(now, timeZone);
-  const inMonth = (bucket: number) =>
-    groupMoneyByCurrency(
-      rows.flatMap((r) =>
-        r.confirmedAt !== null &&
-        r.amountMinor !== null &&
-        r.currency !== null &&
-        monthBucket(r.confirmedAt, timeZone) === bucket
-          ? [
-              {
-                amountMinor: r.amountMinor,
-                currency: r.currency,
-                confirmedAt: r.confirmedAt,
-              },
-            ]
-          : [],
-      ),
-    );
-  const current = inMonth(thisBucket);
-  const previous = new Map(
-    inMonth(thisBucket - 1).map((m) => [m.currency, m.amountMinor]),
-  );
-  const currencies = new Set([
-    ...current.map((m) => m.currency),
-    ...previous.keys(),
-  ]);
-  return [...currencies].sort().map((currency) => ({
-    currency,
-    amountMinor: current.find((m) => m.currency === currency)?.amountMinor ?? 0,
-    previousMinor: previous.get(currency) ?? 0,
-  }));
-}
 
 async function readDrifting(
   ctx: DashboardScope,
@@ -722,8 +319,8 @@ export const statsRouter = {
       }
 
       const runsGym = runsOrganization(ctx.orgMembership);
-      const organization = runsGym
-        ? await readOrganizationNavigationCounts(ctx.organizationId, ctx.baseDb)
+      const claims = runsGym
+        ? await readOrganizationClaimCount(ctx.organizationId, ctx.baseDb)
         : null;
       const branch = input.branchId
         ? await getEntityInOrganization(
@@ -779,12 +376,10 @@ export const statsRouter = {
               }
             : null,
         counts: {
-          people: organization
-            ? navigationCount(organization.coaches)
-            : unavailableNavigationCount,
-          memberships: organization
-            ? navigationCount(organization.claims)
-            : unavailableNavigationCount,
+          memberships:
+            claims !== null
+              ? navigationCount(claims)
+              : unavailableNavigationCount,
           roster:
             counts && staff
               ? navigationCount(counts.roster)
@@ -799,122 +394,6 @@ export const statsRouter = {
               ? navigationCount(counts.unread)
               : unavailableNavigationCount,
         },
-      };
-    }),
-
-  /**
-   * Every academy the organization runs, and the totals across them (ADR 124,
-   * Decision 14). Owner-only, and the authorization happens BEFORE any entity
-   * is enumerated: a non-owner never learns that a sibling mat exists.
-   *
-   * Each academy is read inside its own exact scope, one transaction per
-   * entity, and the rows are combined by a pure function afterwards. There is
-   * no organization-wide query and no relaxed policy: entity isolation is
-   * exactly what it is on every other screen. That is slower than one big read
-   * and it is the point, because the alternative is a mode where one query can
-   * see two mats at once. No metrics projection until a measurement asks for
-   * one (the plan's follow-up slices).
-   */
-  organization: organizationManagerIdentityProcedure.query(async ({ ctx }) => {
-    const now = new Date();
-    const entities = await readOrganizationEntities(
-      ctx.organizationId,
-      ctx.baseDb,
-    );
-    const summaries: EntitySummary[] = [];
-    for (const entity of entities) {
-      summaries.push(
-        await readEntitySummary(entity, ctx.organizationId, ctx.baseDb, now),
-      );
-    }
-    return combineEntitySummaries(summaries);
-  }),
-
-  /**
-   * One row per PERSON across the whole organization (ADR 126). Owner-only, and
-   * the authorization happens before any entity is enumerated, exactly as
-   * `organization` above does: a non-owner never learns a sibling mat exists.
-   *
-   * Read the same way too, one transaction per entity in its own exact scope,
-   * combined by a pure function afterwards. There is no organization-wide query
-   * over the tenant tables and no relaxed policy. Slower than one big read, and
-   * that is the point.
-   *
-   * Grouping is by USER ID, never by display name: two people called Ana Silva
-   * are two people, and merging them would put one member's attendance on
-   * another's row.
-   */
-  organizationMembers: organizationManagerIdentityProcedure.query(
-    async ({ ctx }) => {
-      const now = new Date();
-      const since = new Date(now.getTime() - 30 * DAY_MS);
-      const entities = await readOrganizationEntities(
-        ctx.organizationId,
-        ctx.baseDb,
-      );
-
-      const entries: DirectoryEntry[] = [];
-      for (const entity of entities) {
-        entries.push(
-          ...(await readEntityDirectory(
-            entity,
-            ctx.organizationId,
-            ctx.baseDb,
-            { now, since },
-          )),
-        );
-      }
-      return {
-        entities,
-        rows: combineDirectory(entries),
-      };
-    },
-  ),
-
-  /**
-   * The organization's own figures over a window (ADR 126). Owner-only, one
-   * scoped read per entity, combined by a pure function.
-   *
-   * A PERSON is counted once however many branches they belong to; a BRANCH
-   * figure is an enrolment or a visit and may count them again. The two are
-   * named apart in the payload for that reason, and are never added together.
-   *
-   * No revenue. A paid/unpaid tracker records that somebody ticked a box, which
-   * is not the same as money arriving, and reporting it as income would be the
-   * dashboard claiming more than it knows.
-   */
-  organizationMetrics: organizationManagerIdentityProcedure
-    .input(OrganizationWindowSchema.optional())
-    .query(async ({ ctx, input }) => {
-      const now = new Date();
-      const to = input?.to ? new Date(input.to) : now;
-      const from = input?.from
-        ? new Date(input.from)
-        : new Date(to.getTime() - 30 * DAY_MS);
-      const entities = await readOrganizationEntities(
-        ctx.organizationId,
-        ctx.baseDb,
-      );
-
-      const rows: EntityMetricInput[] = [];
-      for (const entity of entities) {
-        rows.push(
-          await readEntityMetrics(entity, ctx.organizationId, ctx.baseDb, {
-            from,
-            to,
-            now,
-          }),
-        );
-      }
-      const payment = await readPaymentTally(
-        ctx.organizationId,
-        ctx.baseDb,
-        now,
-      );
-      return {
-        from,
-        to,
-        ...organizationMetrics(rows, payment, { from, to }),
       };
     }),
 

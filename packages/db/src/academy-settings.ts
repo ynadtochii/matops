@@ -1,9 +1,9 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import type { DbExec } from "./client";
 import type { DbReader, DbWriter } from "./tenant";
 import { organization } from "./auth-schema";
-import { academyProfile, entity } from "./entity-schema";
+import { entity } from "./entity-schema";
 
 interface AcademySettings {
   academyId: string;
@@ -13,7 +13,6 @@ interface AcademySettings {
   address: string | null;
   mapUrl: string | null;
   bookingWindowDays: number;
-  curriculumForStudents: boolean;
 }
 
 export async function getAcademySettings(
@@ -29,10 +28,8 @@ export async function getAcademySettings(
       address: entity.address,
       mapUrl: entity.mapUrl,
       bookingWindowDays: entity.bookingWindowDays,
-      curriculumForStudents: sql<boolean>`coalesce(${academyProfile.curriculumForStudents}, false)`,
     })
     .from(entity)
-    .leftJoin(academyProfile, eq(academyProfile.entityId, entity.id))
     .where(and(eq(entity.id, academyId), isNull(entity.deletedAt)))
     .limit(1);
   return rows[0] ?? null;
@@ -47,7 +44,6 @@ export async function updateAcademySettings(
     address?: string;
     mapUrl?: string;
     bookingWindowDays?: number;
-    curriculumForStudents?: boolean;
   },
   exec: DbWriter,
 ): Promise<void> {
@@ -58,7 +54,6 @@ export async function updateAcademySettings(
     address?: string | null;
     mapUrl?: string | null;
     bookingWindowDays?: number;
-    curriculumForStudents?: boolean;
   } = {};
   if (patch.name !== undefined) next.name = patch.name;
   if (patch.timeZone !== undefined) next.timeZone = patch.timeZone;
@@ -67,20 +62,11 @@ export async function updateAcademySettings(
   if (patch.mapUrl !== undefined) next.mapUrl = patch.mapUrl.trim() || null;
   if (patch.bookingWindowDays !== undefined)
     next.bookingWindowDays = patch.bookingWindowDays;
-  if (patch.curriculumForStudents !== undefined)
-    next.curriculumForStudents = patch.curriculumForStudents;
-  const { curriculumForStudents, ...place } = next;
-  if (Object.keys(place).length > 0) {
+  if (Object.keys(next).length > 0) {
     await exec
       .update(entity)
-      .set(place)
+      .set(next)
       .where(and(eq(entity.id, academyId), isNull(entity.deletedAt)));
-  }
-  if (curriculumForStudents !== undefined) {
-    await exec
-      .update(academyProfile)
-      .set({ curriculumForStudents })
-      .where(eq(academyProfile.entityId, academyId));
   }
 }
 

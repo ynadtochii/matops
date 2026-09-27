@@ -1,30 +1,16 @@
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
-import type { DbExec, DbReader, DbWriter } from "@matops/db";
-import {
-  and,
-  eq,
-  findPersonDuplicates,
-  getOrganizationPerson,
-  inArray,
-  isNull,
-} from "@matops/db";
-import { entity, entityMembership, person, user } from "@matops/db/schema";
+import type { DbReader, DbWriter } from "@matops/db";
+import { and, eq, findPersonDuplicates, inArray, isNull } from "@matops/db";
+import { entity, entityMembership, person } from "@matops/db/schema";
 import {
   CreateStudentPersonSchema,
-  GetPersonSchema,
-  PersonDirectorySchema,
-  PersonIdSchema,
   PreviewCreatePersonSchema,
 } from "@matops/validators";
 
-import {
-  organizationManagerIdentityProcedure,
-  organizationMemberIdentityProcedure,
-} from "../trpc";
+import { organizationMemberIdentityProcedure } from "../trpc";
 
-const PERSON_NOT_FOUND = "Person not found";
 const PERSON_ARCHIVED = "Restore this person before changing them";
 
 function sameIds(left: string[], right: string[]) {
@@ -34,42 +20,6 @@ function sameIds(left: string[], right: string[]) {
     sortedLeft.length === sortedRight.length &&
     sortedLeft.every((id, index) => id === sortedRight[index])
   );
-}
-
-async function requirePerson(
-  exec: DbReader,
-  organizationId: string,
-  personId: string,
-) {
-  const row = await getOrganizationPerson(exec, organizationId, personId);
-  if (!row)
-    throw new TRPCError({ code: "NOT_FOUND", message: PERSON_NOT_FOUND });
-  return row;
-}
-
-async function branchesForPerson(
-  organizationId: string,
-  personId: string,
-  exec: DbExec,
-) {
-  return exec
-    .select({
-      enrollmentId: entityMembership.id,
-      entityId: entityMembership.entityId,
-      entityName: entity.name,
-      role: entityMembership.role,
-      status: entityMembership.status,
-      invitedRole: entityMembership.invitedRole,
-      joinedAt: entityMembership.joinedAt,
-    })
-    .from(entityMembership)
-    .innerJoin(entity, eq(entity.id, entityMembership.entityId))
-    .where(
-      and(
-        eq(entityMembership.organizationId, organizationId),
-        eq(entityMembership.personId, personId),
-      ),
-    );
 }
 
 export async function enrollStudent(
@@ -269,109 +219,5 @@ export const personRouter = {
           })),
         };
       });
-    }),
-
-  directory: organizationManagerIdentityProcedure
-    .input(PersonDirectorySchema)
-    .query(async ({ ctx, input }) => {
-      const rows = await ctx.baseDb
-        .select()
-        .from(person)
-        .where(
-          and(
-            eq(person.organizationId, ctx.organizationId),
-            input?.includeArchived ? undefined : isNull(person.archivedAt),
-          ),
-        )
-        .orderBy(person.name, person.id);
-      return Promise.all(
-        rows.map(async (row) => ({
-          ...row,
-          branches: await branchesForPerson(
-            ctx.organizationId,
-            row.id,
-            ctx.baseDb,
-          ),
-        })),
-      );
-    }),
-
-  get: organizationManagerIdentityProcedure
-    .input(GetPersonSchema)
-    .query(async ({ ctx, input }) => {
-      const row = await requirePerson(
-        ctx.baseDb,
-        ctx.organizationId,
-        input.personId,
-      );
-      if (row.archivedAt && !input.includeArchived) {
-        throw new TRPCError({ code: "NOT_FOUND", message: PERSON_NOT_FOUND });
-      }
-      const account = row.accountUserId
-        ? await ctx.baseDb
-            .select({ userId: user.id, name: user.name, email: user.email })
-            .from(user)
-            .where(eq(user.id, row.accountUserId))
-            .limit(1)
-            .then((found) => found[0] ?? null)
-        : null;
-      return {
-        ...row,
-        account,
-        branches: await branchesForPerson(
-          ctx.organizationId,
-          row.id,
-          ctx.baseDb,
-        ),
-      };
-    }),
-
-  archive: organizationManagerIdentityProcedure
-    .input(PersonIdSchema)
-    .mutation(async ({ ctx, input }) => {
-      const target = await requirePerson(
-        ctx.baseDb,
-        ctx.organizationId,
-        input.personId,
-      );
-      if (target.archivedAt)
-        return { changed: false, archivedAt: target.archivedAt };
-      const [saved] = await ctx.baseDb
-        .update(person)
-        .set({ archivedAt: new Date() })
-        .where(
-          and(
-            eq(person.organizationId, ctx.organizationId),
-            eq(person.id, target.id),
-            isNull(person.archivedAt),
-          ),
-        )
-        .returning({ archivedAt: person.archivedAt });
-      return {
-        changed: saved !== undefined,
-        archivedAt: saved?.archivedAt ?? null,
-      };
-    }),
-
-  restore: organizationManagerIdentityProcedure
-    .input(PersonIdSchema)
-    .mutation(async ({ ctx, input }) => {
-      const target = await requirePerson(
-        ctx.baseDb,
-        ctx.organizationId,
-        input.personId,
-      );
-      if (!target.archivedAt) return { changed: false };
-      const [saved] = await ctx.baseDb
-        .update(person)
-        .set({ archivedAt: null })
-        .where(
-          and(
-            eq(person.organizationId, ctx.organizationId),
-            eq(person.id, target.id),
-          ),
-        )
-        .returning({ id: person.id });
-      return { changed: saved !== undefined };
     }),
 } satisfies TRPCRouterRecord;

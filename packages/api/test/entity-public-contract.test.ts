@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { createEntity, eq } from "@matops/db";
-import { academyProfile, entity, entityMembership } from "@matops/db/schema";
+import { entity, entityMembership } from "@matops/db/schema";
 
 import type { Harness } from "./helpers";
 import { harness, seedClasses } from "./helpers";
@@ -48,14 +48,6 @@ describe("a public link names one academy, never its sibling", () => {
     southCode = row?.code ?? "";
 
     await h.exec
-      .update(academyProfile)
-      .set({ publicBookingEnabled: true })
-      .where(eq(academyProfile.entityId, ORG));
-    await h.exec
-      .update(academyProfile)
-      .set({ publicBookingEnabled: true })
-      .where(eq(academyProfile.entityId, south));
-    await h.exec
       .update(entity)
       .set({ timeZone: "Europe/Kyiv" })
       .where(eq(entity.id, south));
@@ -77,7 +69,6 @@ describe("a public link names one academy, never its sibling", () => {
         instructorId: OWNER,
         title: "North Gi",
         startsInMinutes: 120,
-        publicBookable: true,
       },
       {
         id: CLASS_SOUTH,
@@ -85,7 +76,6 @@ describe("a public link names one academy, never its sibling", () => {
         instructorId: OWNER,
         title: "South No-gi",
         startsInMinutes: 180,
-        publicBookable: true,
       },
     ]);
   });

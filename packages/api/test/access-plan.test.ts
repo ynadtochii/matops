@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { createEntity } from "@matops/db";
+import { createEntity, eq } from "@matops/db";
+import { entity } from "@matops/db/schema";
 
 import type { Harness } from "./helpers";
 import { harness, personId, rejectionCode, seedAcademies } from "./helpers";
@@ -46,8 +47,8 @@ describe("the membership plan catalog", () => {
     const made = await createEntity(
       {
         organizationId: ORG,
-        type: "general_space",
-        name: "The Gym",
+        type: "bjj_academy",
+        name: "Second Mat",
         ownerUserId: OWNER,
       },
       h.exec,
@@ -361,8 +362,8 @@ describe("moving several people at once", () => {
     const made = await createEntity(
       {
         organizationId: BULK,
-        type: "general_space",
-        name: "The Gym",
+        type: "bjj_academy",
+        name: "Second Mat",
         ownerUserId: BOSS,
       },
       h.exec,
@@ -379,29 +380,16 @@ describe("moving several people at once", () => {
 
   afterAll(() => h.close());
 
-  it("places everybody it can and names who it could not", async () => {
-    const result = await owner().accessPlan.assignMany({
-      userIds: [ANA, BEA, GONE],
-      planId,
-    });
-
-    expect(result.placed).toBe(2);
-    expect(result.failed).toBe(1);
-    expect(result.results.find((r) => r.userId === GONE)?.outcome).toBe(
-      "failed",
-    );
-    expect(result.results.find((r) => r.userId === ANA)?.outcome).toBe(
-      "created",
-    );
+  it("places each person and refuses somebody outside the gym", async () => {
+    await owner().accessPlan.assign({ userId: ANA, planId });
+    await owner().accessPlan.assign({ userId: BEA, planId });
+    expect(
+      await rejectionCode(owner().accessPlan.assign({ userId: GONE, planId })),
+    ).toBe("NOT_FOUND");
   });
 
-  it("says `already` on a second run rather than making a second membership", async () => {
-    const again = await owner().accessPlan.assignMany({
-      userIds: [ANA, BEA],
-      planId,
-    });
-    expect(again.results.map((r) => r.outcome)).toEqual(["already", "already"]);
-
+  it("makes no second membership on a second assign", async () => {
+    await owner().accessPlan.assign({ userId: ANA, planId });
     const held = await owner().accessPlan.forUser({ userId: ANA });
     expect(held.filter((h2) => h2.planId === planId)).toHaveLength(1);
   });
@@ -419,8 +407,8 @@ describe("moving several people at once", () => {
     const later = await createEntity(
       {
         organizationId: BULK,
-        type: "general_space",
-        name: "The Sauna",
+        type: "bjj_academy",
+        name: "Third Mat",
         ownerUserId: BOSS,
       },
       h.exec,
@@ -475,22 +463,11 @@ describe("moving several people at once", () => {
   });
 
   it("reports nobody uncovered once a branch runs on memberships", async () => {
-    await owner().entity.setMembershipEnforced({
-      entityId: BULK,
-      enforced: true,
-    });
+    await h.exec
+      .update(entity)
+      .set({ membershipEnforcedAt: new Date() })
+      .where(eq(entity.id, BULK));
     const queue = await owner().accessPlan.uncovered();
     expect(queue.total).toBe(0);
-  });
-
-  it("reports readiness for that branch, with its blockers named", async () => {
-    const preview = await owner().entity.activationPreview({ entityId: BULK });
-    expect(preview.readiness.uncoveredPeople).toBe(0);
-    expect(preview.readiness.unpricedPlans).toBe(0);
-    expect(preview.readiness.pendingEnrolment).toBe(0);
-    // No bank details were ever set for this gym, so it is not ready and says
-    // exactly which of the four things is missing.
-    expect(preview.readiness.bankDetails).toBe(false);
-    expect(preview.ready).toBe(false);
   });
 });

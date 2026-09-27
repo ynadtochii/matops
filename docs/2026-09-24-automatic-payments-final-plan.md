@@ -16,7 +16,9 @@ live payment is authorized by this file.
 Against the repo (HEAD `22c1926`, branch `main`, 99 uncommitted paths):
 
 - Migrations are `0000_baseline` plus `0001` to `0003`. The next is **`0004`**.
-  ADRs run to 140, so the new one is **141**.
+  ADRs run to 140, so the new one is **141**. _(Since then `0004` and ADRs 141
+  and 142 have been used by the first release, so read `0004` below as the
+  next free migration and ADR 141 as the next free ADR number.)_
 - No scheduler exists: `.github/workflows/` holds only `ci.yml` and
   `apps/nextjs/vercel.json` holds only the region. ADR 135 excludes scheduled
   jobs. `CLAUDE.md` still describes cron routes and a public REST API that are
@@ -27,10 +29,10 @@ Against the repo (HEAD `22c1926`, branch `main`, 99 uncommitted paths):
 - `appendMonthAudit` (`accessPlan.ts:1039`) requires `actorId`, while the
   column is nullable. A provider write has no user, so the helper's input
   becomes optional there.
-- The reception route (`apps/nextjs/src/app/api/reception/route.ts`) and
-  `resolveReceptionLink` (`packages/db/src/reception.ts:100`) are the template:
-  a sessionless route resolves one id on `ctx.baseDb`, then everything runs
-  in `withScope`.
+- The reception route and `resolveReceptionLink` were the template this plan
+  named. ADR 142 removed them, so a future payments release needs its own
+  entry point: a sessionless route that resolves one id on `ctx.baseDb`, then
+  runs everything in `withScope`.
 - `expo-web-browser` is already a dependency, so the app opens Checkout with
   no native change.
 
@@ -180,15 +182,16 @@ a student who forgot to transfer. Stripe's own retries run for weeks. The
 student's standing shows **Fix your card** (a Portal link) and a notice goes
 out through the existing notice tables. Suspension stays a staff action.
 
-### D9. The webhook is the fourth enumerated seam exception
+### D9. The webhook is an enumerated seam exception
 
-`POST /api/stripe/webhook`, modelled on the reception route:
+`POST /api/stripe/webhook`, a new sessionless route (the reception route this
+plan first copied was removed in ADR 142):
 
 1. Read the raw body, verify the signature with the Connect endpoint secret.
    Refuse a `livemode` that does not match the key in use.
 2. Resolve the organization from `event.account` through
    `resolveStripeAccount(accountId, exec)` on `ctx.baseDb`. That lookup is the
-   exception: one table, one id, like `resolveReceptionLink`. An unknown
+   exception: one table, one id. An unknown
    account is logged to Sentry and answered 200.
 3. Open `withScope({ organizationId })`, insert the event into `stripe_event`
    with `ON CONFLICT DO NOTHING`. A duplicate answers 200 at once.
@@ -247,8 +250,9 @@ ignored in this wave.
 
 A student pays through the enrolled tier, so they are signed in on web or in
 the app. A person with no account link keeps the manual rail. Payment links
-for people without accounts are later work. A visitor pays as a guest from the hosted `/book/<code>` page, which already carries a
-private status token per booking.
+for people without accounts are later work. ADR 142 removed the hosted
+`/book/<code>` page this plan used for visitor payment, so a visitor payment
+needs a new entry point before A6 can start.
 
 ## 3. Schema delta (migration `0004`, structure only)
 
@@ -303,10 +307,10 @@ throughout. Sizes are estimates, not commitments.
 - [ ] `packages/stripe` with env, interface, real client, fake.
 - [ ] `payments.connect` (create the account, store the id, return an Account
       Link URL), `connectStatus`, `disconnect` (D11).
-- [ ] Return and refresh pages under gym Settings.
+- [ ] Return and refresh pages under the academy Settings.
 - [ ] Webhook route with `account.updated` and
       `account.application.deauthorized`; every other type recorded.
-- [ ] Gym Settings beside bank details: **Connect Stripe**, status, the plain
+- [ ] Settings beside bank details: **Connect Stripe**, status, the plain
       terms (Stripe's fees, the gym keeps the rest, payouts to the gym's bank).
 - [ ] No student-facing change.
 
@@ -365,18 +369,18 @@ throughout. Sizes are estimates, not commitments.
 ### A6. A visitor pays for one class  ·  about 3 days
 - [ ] `academy_profile.drop_in_price_*`, `drop_in_visit` payment columns.
 - [ ] Branch Settings: drop-in price, shown only when the gym is connected.
-- [ ] `/book/<code>`: after a booking, **Pay now** opens guest Checkout with
-      `client_reference_id = <visitId>`; the status page shows Paid.
+- [ ] A new visitor entry point (ADR 142 removed `/book/<code>`): after a
+      booking, **Pay now** opens guest Checkout with
+      `client_reference_id = <visitId>`; the visitor sees Paid.
 - [ ] `checkout.session.completed` writes `paid_at` on the visit.
-- [ ] Reception, desk and roster show the paid mark. Cancelling a booking
+- [ ] The class roster shows the paid mark. Cancelling a booking
       does not refund; the gym refunds in its dashboard.
 
 ### Definition of done, in the same change (delivery.md §4)
 - [ ] `docs/spec.md`: new IDs for the student card rail, the visitor payment
-      and the owner's connection. FP10 stays true: it is about what the gym
-      pays matops.
-- [ ] `docs/architecture.md`: the webhook as the fourth enumerated exception,
-      beside the reception paragraph at line 9, and the list at line 611.
+      and the owner's connection.
+- [ ] `docs/architecture.md`: the webhook as an enumerated exception in §5,
+      beside the public drop-in procedures.
 - [ ] ADR 141, indexed in `docs/map.md`, recording the later-work gate on
       reconciliation against ADR 135.
 - [ ] `docs/roadmap.md`: the Parked "Card billing" row (line 1181) becomes
@@ -402,8 +406,7 @@ Commands: `pnpm -F @matops/domain test`, `pnpm -F @matops/api test`,
 
 ## 6. Before A1 starts
 
-- [ ] Switch to `dev`. Commit the reception work sitting on `main` first, on
-      `dev`, so the payments work does not ride on 99 uncommitted paths.
+- [ ] Switch to `dev` and start from a clean working tree.
 - [ ] matops has a Stripe platform account with Connect enabled, a platform
       profile and live keys. **The platform's legal entity must be in a country
       Stripe onboards.** Ukraine is not one. This is the first thing to confirm.

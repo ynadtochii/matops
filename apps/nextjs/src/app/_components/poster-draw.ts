@@ -19,7 +19,6 @@ interface PosterData {
   classes: PosterClass[];
 }
 
-export { POSTER_H, POSTER_W };
 const POSTER_SCALE = 2;
 
 const PAD = 64;

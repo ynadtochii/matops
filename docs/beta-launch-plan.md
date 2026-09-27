@@ -2,9 +2,8 @@
 
 # From test app to real beta
 
-This replaces [beta-readiness.md](beta-readiness.md), which was written at v2.7
-against a deployment that did not yet exist. Most of its list is now built.
-What is left is not product. It is the setup around the product.
+This replaces an earlier gap analysis written at v2.7, before any deployment
+existed. Most of its list is now built. What is left is not product. It is the setup around the product.
 
 Three constraints from the brief:
 
@@ -49,10 +48,9 @@ as a child of it. That direction matters:
 
 Production is then emptied and rebuilt from migration `0000`. That is worth
 doing for its own sake: the live schema was hand-applied over months across six
-backfill migrations and several `when`-stamp corrections, and the 42-migration
-chain has only ever been proven against PGlite
-(`packages/db/test/helpers.ts:19`). A clean rebuild proves it against real Neon
-and removes drift you cannot otherwise see.
+backfill migrations and several `when`-stamp corrections. The chain is now
+`0000_baseline` to `0004`, applied on the Neon dev branch. A clean rebuild
+proves it on production too and removes drift you cannot otherwise see.
 
 #### The runbook
 
@@ -70,7 +68,8 @@ Between step 7 and step 9 the live site is broken. Nobody is using it.
    command.
 
 4. **Confirm dev is a full copy.** `pnpm -F @matops/db verify` should report
-   42 of 42 migrations, RLS plus a policy plus four grants on every tenant table,
+   the journal's 5 migrations applied (dev's ledger also holds 6 rows from the
+   unmerged `stripe` branch, so it shows more applied rows than entries), RLS plus a policy plus four grants on every tenant table,
    and the user and academy counts you recognise. **This is your backup. Do not
    go further until it passes.**
 
@@ -91,19 +90,22 @@ Between step 7 and step 9 the live site is broken. Nobody is using it.
 
    It prints the host and what it is about to drop before it drops anything, and
    refuses if the host does not contain the fragment you named. The `matops_app`
-   role survives a schema drop; migration `0001` is idempotent about it.
+   role survives a schema drop; `0000_baseline` creates it only when it is
+   missing and grants it to the connection role.
 
 8. **Vercel, Production scope:** `POSTGRES_URL` = the new production string.
    Rotate **`AUTH_SECRET`** in the same edit. It has been outstanding since ADR
    60 and costs nothing now, because there are no sessions left to invalidate.
-   Set `CRON_SECRET` while you are there.
+   No code reads `CRON_SECRET`, so it needs no value.
 
-9. **Redeploy production.** The build applies all 42 migrations to the empty
-   database and asserts the count. Watch the log for:
+9. **Redeploy production.** The build applies all 5 migrations (`0000_baseline`
+   to `0004_first_release_drops`) to the empty database and asserts the count.
+   `0004` must ship in a later deploy than the code that stopped using its
+   tables. Watch the log for:
 
    ```
-   [migrate:deploy] journal has 42 entries, applying
-   [migrate:deploy] ok: 42 migrations applied
+   [migrate:deploy] journal has 5 entries, applying
+   [migrate:deploy] ok: 5 migrations applied
    ```
 
    If those lines are missing, the dashboard Build Command is overriding
@@ -115,7 +117,7 @@ Between step 7 and step 9 the live site is broken. Nobody is using it.
     POSTGRES_URL="<prod string>" node packages/db/scripts/verify-db.mjs
     ```
 
-    Expect 42 of 42, RLS everywhere, and **0 users, 0 academies**.
+    Expect 5 of 5, RLS everywhere, and **0 users, 0 academies**.
 
 11. **Sign in on the live site and Start a gym.** That is the first row in
     production.
@@ -196,7 +198,8 @@ deliberately boring:
 3. It runs `drizzle-kit migrate` with `ALLOW_PROD_WRITE=1`, the one legitimate
    caller of that override.
 4. It then **counts the rows** in `drizzle.__drizzle_migrations` and compares
-   them to the entries in `_journal.json`. Both are 42 today. A mismatch throws.
+   them to the entries in `_journal.json`. Both are 5 on a fresh database. A
+   mismatch throws.
 
 Step 4 is the reason this is a script and not a `&&`. `drizzle-kit` skips any
 entry whose `when` stamp is not newer than the last applied row **and still
@@ -281,11 +284,10 @@ in rather than during their first week.
 
 ### 2.1 Stop hardcoding the domain
 
-Five places carry the string today:
+Four places carry the string today:
 
 - `apps/nextjs/src/app/layout.tsx:16` (metadata base)
 - `apps/nextjs/src/auth/server.ts:20` (the `productionUrl` fallback)
-- `.github/workflows/cron.yml:25` (`APP_URL`)
 - `apps/expo/eas.json:26` and `:32` (`EXPO_PUBLIC_API_URL`, preview and production)
 
 The web ones should read one variable. `VERCEL_PROJECT_PRODUCTION_URL` already
@@ -294,8 +296,7 @@ literal is only a fallback for a local production build. Replace all three web
 literals with that variable and drop the fallback, or set one
 `NEXT_PUBLIC_APP_URL` and use it everywhere. Then the next move is one setting.
 
-`eas.json` and the cron workflow stay literal. They run outside Vercel and each
-is one line.
+`eas.json` stays literal. It runs outside Vercel and is one line.
 
 ### 2.2 The rest of the move
 
@@ -309,12 +310,7 @@ is one line.
   does not work. Send yourself one from the live site to prove it.
 - **Google OAuth**: add the new authorized redirect URI before the switch,
   remove the old one after.
-- **Public booking**: each academy's origin allowlist and publishable key live
-  on the `organization` row. The allowlist covers the gym's own website, not
-  yours, so it is unaffected. The `/book/<code>` link you handed anyone is not.
 - Rotate `AUTH_SECRET` in the same deploy.
-- Set `CRON_SECRET` so `/api/cron/*` is not open, then confirm the daily tick
-  still reports `"ok":true` the next morning.
 
 ---
 
@@ -388,24 +384,17 @@ Short list. The screens all exist.
 ### 4.1 The schedule can run dry, silently
 
 Classes materialize only when a template is saved
-(`packages/api/src/router/template.ts`), 180 days forward, plus the owner's
-manual **Rebuild schedule** button. A gym that sets up its week in September and
-never edits a template again has an empty calendar in March, with no warning and
-no error.
-
-`/api/cron/materialize` and `runMaterializationSweep` already exist and are
-tested. They are dormant on purpose (ADR 46, 79). **Add one curl to the daily
-GitHub Actions tick that already runs.** Three lines in `cron.yml`, and it
-closes the only silent failure a gym would blame on the product.
+(`packages/api/src/router/template.ts`), 180 days forward. An owner or manager
+adds more with **Extend schedule** on the Templates tab. Nothing runs on a timer,
+so a gym that sets up its week in September and never touches it again has an
+empty calendar in March, with no warning and no error. Tell each pilot gym to
+press Extend schedule once a month, or add a warning when the horizon gets short.
 
 ### 4.2 First run
 
-An owner who signs up lands on an empty dashboard. Empty states exist, but
-nothing says what to do next. Three steps on the dashboard, dismissed when done:
-add your weekly classes, share your join link, print the QR poster.
-
-The largest product item on this page, and the only one a self-serve gym cannot
-get past. If you onboard every pilot gym by hand (see 5.2), it can wait.
+Built. An owner with an empty academy sees two steps on the dashboard: add your
+weekly classes, share your join link. Owners and managers also get the setup
+checklist at the top of the dashboard until it is complete or closed.
 
 ### 4.3 A way to reach you
 
@@ -416,14 +405,14 @@ the app, and you never find out why.
 
 Written down once, in the beta brief:
 
-- No card payments. Dues are a bank transfer the student marks as paid and the
-  owner confirms.
+- No payments of any kind. An approved student books without a plan.
 - No class reminders on web. Only the phone app schedules those, and the phone
-  app is not in this beta. Dues reminders do go out daily.
+  app is not in this beta. No dues reminders or other scheduled messages.
 - No waitlists, no hard capacity, no no-show tracking.
-- The taught line on a class (what was actually covered) is not built. The
-  curriculum shows what is planned.
-- Staff cannot yet book a lead onto a future class.
+- No public booking page. A visitor uses the wall-QR drop-in form.
+- Nobody can book for a student, and staff cannot book a lead onto a future
+  class. The owner can cancel a student's booking.
+- One academy per gym.
 
 A pilot gym forgives a missing feature it was told about. It does not forgive
 one it discovered.
@@ -466,9 +455,9 @@ Nothing below Part 1 is safe to do first.
 | 6   | Domain move, `AUTH_SECRET` rotation, Resend and Google reconfigured, hardcoded hosts removed | Part 2   | one day                                              |
 | 7   | Edge rate limiting, Sentry alerts, `/api/health` and an uptime check                        | 3.1, 3.2 | half a day                                           |
 | 8   | `/terms`, the processor paragraph, the deletion line on `/privacy`                          | 3.3      | half a day                                           |
-| 9   | Materialize sweep on the daily cron                                                         | 4.1      | an hour                                              |
+| 9   | A short-horizon warning, or a monthly Extend schedule reminder to each gym                  | 4.1      | an hour                                              |
 | 10  | Feedback link, the beta brief written out                                                   | 4.3, 4.4 | half a day                                           |
-| 11  | First-run checklist on the dashboard                                                        | 4.2      | one to two days                                      |
+| 11  | First-run checklist on the dashboard (built)                                                | 4.2      | done                                                 |
 
 Items 1 to 5 are what lets you keep developing without fear. Items 6 to 10 are
 what a stranger needs. Item 11 is what a stranger needs when you are not in the

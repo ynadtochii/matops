@@ -8,14 +8,12 @@ import {
   DAY_LABELS,
   describeRecurrence,
   formatStartMinutes,
-  isBjjAcademy,
   runsBranch,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Badge } from "@matops/ui/badge";
 import { Button } from "@matops/ui/button";
-import { Checkbox } from "@matops/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -61,13 +59,11 @@ interface FormState {
   instructorId: string;
   description: string;
   discipline: Discipline | "";
-  curriculumTrackId: string;
   daysOfWeek: number[];
   time: string; // "HH:MM"
   durationMinutes: number;
   capacity: number;
   timeZone: string;
-  publicBookable: boolean;
 }
 
 const emptyForm = (instructorId: string, timeZone: string): FormState => ({
@@ -75,13 +71,11 @@ const emptyForm = (instructorId: string, timeZone: string): FormState => ({
   description: "",
   instructorId,
   discipline: "",
-  curriculumTrackId: "",
   daysOfWeek: [],
   time: "18:00",
   durationMinutes: 60,
   capacity: 20,
   timeZone,
-  publicBookable: false,
 });
 
 const formFromTemplate = (t: Template): FormState => ({
@@ -89,13 +83,11 @@ const formFromTemplate = (t: Template): FormState => ({
   description: t.description ?? "",
   instructorId: t.instructorId ?? "",
   discipline: t.discipline ?? "",
-  curriculumTrackId: t.curriculumTrackId ?? "",
   daysOfWeek: t.daysOfWeek,
   time: formatStartMinutes(t.startsAtMinutes),
   durationMinutes: t.durationMinutes,
   capacity: t.capacity,
   timeZone: t.timeZone,
-  publicBookable: t.publicBookable,
 });
 
 /**
@@ -115,13 +107,6 @@ export function Templates({
   const queryClient = useQueryClient();
   const list = useQuery(trpc.template.list.queryOptions());
   const me = useEntity();
-  const bjj = isBjjAcademy(me.type);
-  const board = useQuery(
-    trpc.curriculum.board.queryOptions(
-      {},
-      { enabled: bjj && me.curriculumEnabled },
-    ),
-  );
 
   const [form, setForm] = useState<FormState | null>(null);
   const [daysError, setDaysError] = useState(false);
@@ -190,8 +175,6 @@ export function Templates({
   const editingTemplate = list.data?.find((t) => t.id === openId);
   const shown =
     form ?? (editingTemplate ? formFromTemplate(editingTemplate) : null);
-  const tracks = board.data?.tracks ?? [];
-  const defaultTrack = tracks.find((t) => t.isDefault);
 
   const submit = () => {
     if (!shown) return;
@@ -209,19 +192,15 @@ export function Templates({
     const payload = {
       title: shown.title.trim(),
       description: shown.description,
-      // A general space offers "Nobody" as a real choice, so an empty pick is
-      // null and clears the coach. A BJJ form has no such option: empty there
-      // means "leave it as it is", which the server reads from a missing field.
-      instructorId: shown.instructorId || (bjj ? undefined : null),
+      // Empty means "leave it as it is", which the server reads from a missing
+      // field.
+      instructorId: shown.instructorId || undefined,
       discipline: shown.discipline === "" ? null : shown.discipline,
-      curriculumTrackId:
-        shown.curriculumTrackId === "" ? null : shown.curriculumTrackId,
       daysOfWeek: shown.daysOfWeek,
       startsAtMinutes: timeToMinutes(shown.time),
       durationMinutes: shown.durationMinutes,
       capacity: shown.capacity,
       timeZone: shown.timeZone,
-      publicBookable: shown.publicBookable,
     };
     if (openId) update.mutate({ id: openId, ...payload });
     else create.mutate(payload);
@@ -558,62 +537,30 @@ export function Templates({
                           fallbackLabel={
                             editingTemplate?.instructorName ?? "You"
                           }
-                          noneLabel={bjj ? undefined : "Nobody"}
                         />
                       </Select>
                     </div>
-                    {bjj && (
-                      <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="tpl-discipline">Discipline</Label>
-                        <Select
-                          className="w-full min-w-0"
-                          id="tpl-discipline"
-                          value={shown.discipline}
-                          onChange={(e) =>
-                            setForm({
-                              ...shown,
-                              discipline: e.target.value as Discipline | "",
-                            })
-                          }
-                        >
-                          <option value="">None</option>
-                          {DISCIPLINES.map((d) => (
-                            <option key={d} value={d}>
-                              {d.toUpperCase()}
-                            </option>
-                          ))}
-                        </Select>
-                      </div>
-                    )}
-                    {bjj && tracks.length > 1 && (
-                      <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="tpl-track">Curriculum</Label>
-                        <Select
-                          className="w-full min-w-0"
-                          id="tpl-track"
-                          value={shown.curriculumTrackId}
-                          onChange={(e) =>
-                            setForm({
-                              ...shown,
-                              curriculumTrackId: e.target.value,
-                            })
-                          }
-                        >
-                          <option value="">
-                            {defaultTrack
-                              ? `${defaultTrack.name} (default)`
-                              : "Default"}
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="tpl-discipline">Discipline</Label>
+                      <Select
+                        className="w-full min-w-0"
+                        id="tpl-discipline"
+                        value={shown.discipline}
+                        onChange={(e) =>
+                          setForm({
+                            ...shown,
+                            discipline: e.target.value as Discipline | "",
+                          })
+                        }
+                      >
+                        <option value="">None</option>
+                        {DISCIPLINES.map((d) => (
+                          <option key={d} value={d}>
+                            {d.toUpperCase()}
                           </option>
-                          {tracks
-                            .filter((t) => !t.isDefault)
-                            .map((t) => (
-                              <option key={t.id} value={t.id}>
-                                {t.name}
-                              </option>
-                            ))}
-                        </Select>
-                      </div>
-                    )}
+                        ))}
+                      </Select>
+                    </div>
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="tpl-description">
@@ -634,27 +581,6 @@ export function Templates({
                       }
                     />
                   </div>
-                  <label className="border-border hover:bg-hover flex cursor-pointer items-start gap-3 rounded-md border p-3 transition-colors motion-reduce:transition-none">
-                    <Checkbox
-                      className="mt-0.5"
-                      checked={shown.publicBookable}
-                      aria-describedby="tpl-public-help"
-                      onCheckedChange={(checked) =>
-                        setForm({ ...shown, publicBookable: checked === true })
-                      }
-                    />
-                    <span className="min-w-0">
-                      <span className="block text-sm font-medium">
-                        Share this class publicly
-                      </span>
-                      <span
-                        id="tpl-public-help"
-                        className="text-muted-foreground mt-1 block text-xs leading-relaxed"
-                      >
-                        Show this class on your public booking page.
-                      </span>
-                    </span>
-                  </label>
                 </section>
               </div>
               <div className="flex shrink-0 items-center justify-end gap-2 border-t px-5 py-4 sm:px-6">

@@ -1,42 +1,13 @@
 import type { Membership } from "./access";
 import { isStaff, runsBranch } from "./access";
 
-/**
- * What kinds of place an organization may run (ADR 124).
- *
- * The list is fixed in two places on purpose: here, and the `entity_type_supported`
- * check constraint on the table. Adding a type needs a migration to widen the
- * constraint, so the two cannot drift without someone noticing.
- */
-export const ENTITY_TYPES = ["bjj_academy", "general_space"] as const;
+/** What kinds of place an organization may run (ADR 124). */
+export const ENTITY_TYPES = ["bjj_academy"] as const;
 
 type EntityType = (typeof ENTITY_TYPES)[number];
 
 export function isSupportedEntityType(value: string): value is EntityType {
   return (ENTITY_TYPES as readonly string[]).includes(value);
-}
-
-/** True for the type that gets the BJJ screens: belts, curriculum, referrals. */
-export function isBjjAcademy(type: string): boolean {
-  return type === "bjj_academy";
-}
-
-/** True for a gym, a sauna, or any other room an organization books people into. */
-export function isGeneralSpace(type: string): boolean {
-  return type === "general_space";
-}
-
-/**
- * How a session at this kind of place treats its capacity. A general space has
- * ONE room, so a full session is full; a BJJ mat has always let the count run
- * over and shown it red (spec §4), and changing that under an existing academy
- * is not this release's business (ADR 126).
- *
- * It hangs off the TYPE and never off the row it was copied from: a BJJ
- * schedule copied into a general space is a general space's schedule.
- */
-export function capacityPolicyFor(type: string): "soft" | "strict" {
-  return isBjjAcademy(type) ? "soft" : "strict";
 }
 
 /**
@@ -65,23 +36,6 @@ export function entityFromPath(pathname: string): string | null {
 export function entityHref(entityId: string, path = "/"): string {
   const base = `${ENTITY_PREFIX}/${encodeURIComponent(entityId)}`;
   return path === "/" ? base : `${base}${path}`;
-}
-
-export function organizationHref(path: string, branchId?: string): string {
-  if (!branchId) return path;
-  const hashIndex = path.indexOf("#");
-  const beforeHash = hashIndex < 0 ? path : path.slice(0, hashIndex);
-  const hash = hashIndex < 0 ? "" : path.slice(hashIndex);
-  const queryIndex = beforeHash.indexOf("?");
-  const pathname =
-    queryIndex < 0 ? beforeHash : beforeHash.slice(0, queryIndex);
-  const query = queryIndex < 0 ? "" : beforeHash.slice(queryIndex + 1);
-  const params = query
-    .split("&")
-    .filter(Boolean)
-    .filter((param) => param.split("=", 1)[0] !== "branch");
-  params.push(`branch=${encodeURIComponent(branchId)}`);
-  return `${pathname}?${params.join("&")}${hash}`;
 }
 
 /**
@@ -113,25 +67,18 @@ export function pathWithinEntity(pathname: string): string {
  * `entity.list` refuses anyone who is not an organization member and lists only
  * the entities the caller may open (ADR 124).
  *
- * `types` narrows a screen to the kinds of place that have it. A general space
- * runs a schedule, a roster and its own settings, but referrals are a BJJ
- * programme, so the rule names the one type that gets them (ADR 126).
- *
  * This is convenience, not security. The tRPC tier is the real guard
  * (`packages/api/src/trpc.ts`); this only decides what a person is offered.
  */
 const ROUTE_ACCESS: {
   prefix: string;
   allowed: (m: Membership) => boolean;
-  types?: readonly EntityType[];
 }[] = [
   { prefix: "/members", allowed: isStaff },
-  { prefix: "/referrals", allowed: runsBranch, types: ["bjj_academy"] },
   { prefix: "/settings", allowed: runsBranch },
   { prefix: "/schedule", allowed: isStaff },
   { prefix: "/coaches", allowed: isStaff },
   { prefix: "/attendance", allowed: isStaff },
-  { prefix: "/reception", allowed: isStaff },
 ];
 
 /**
@@ -141,54 +88,42 @@ const ROUTE_ACCESS: {
  */
 export function canVisit(
   pathname: string,
-  m: Membership & { type?: string; referralsEnabled?: boolean },
+  m: Membership & { type?: string },
 ): boolean {
   if (m.type !== undefined && !isSupportedEntityType(m.type)) return false;
   const path = pathWithinEntity(pathname);
   const rule = ROUTE_ACCESS.find(
     (r) => path === r.prefix || path.startsWith(`${r.prefix}/`),
   );
-  if (
-    (path === "/referrals" || path.startsWith("/referrals/")) &&
-    m.referralsEnabled === false
-  )
-    return false;
   if (!rule) return true;
-  if (rule.types && m.type !== undefined && !rule.types.includes(m.type))
-    return false;
   return rule.allowed(m);
 }
 
 interface BranchTie {
   academyId: string;
-  organizationId: string;
   name: string;
 }
 
-type PostLoginTarget<T extends BranchTie = BranchTie> =
+type PostLoginTarget =
   | { kind: "join" }
   | { kind: "openGym"; organizationId: string; name: string }
-  | { kind: "openBranch"; academyId: string; name: string }
-  | { kind: "pick"; gyms: T[] };
+  | { kind: "openBranch"; academyId: string; name: string };
 
 /**
  * Where a session that names no gym should land (ADR 49, amended by ADR 128
  * and ADR 129).
  *
- * Somebody who RUNS a gym lands on its overview, whether or not they also
- * train at one of its branches: the overview is the actionable screen for the
- * job they came to do, and the branch is one link away. That also fixes the
- * case ADR 128 found, where an owner with no branch yet held no
- * `entity_membership` and was offered the student join-by-code form.
+ * Somebody who RUNS a gym opens it, whether or not they also train at one of
+ * its branches. That also fixes the case ADR 128 found, where an owner with no
+ * branch yet held no `entity_membership` and was offered the student
+ * join-by-code form.
  *
- * Everybody else lands on their branch. One tie per gym is what counts, not
- * one per branch, because somebody who trains at two mats of one gym is not
- * being asked to choose between gyms.
+ * Everybody else opens their first branch.
  */
-export function postLoginTarget<T extends BranchTie>(
-  ties: readonly T[],
+export function postLoginTarget(
+  ties: readonly BranchTie[],
   runsGyms: readonly { organizationId: string; name: string }[],
-): PostLoginTarget<T> {
+): PostLoginTarget {
   const runs = runsGyms[0];
   if (runs) {
     return {
@@ -197,69 +132,7 @@ export function postLoginTarget<T extends BranchTie>(
       name: runs.name,
     };
   }
-
-  const gyms = new Map<string, T>();
-  for (const t of ties) {
-    if (!gyms.has(t.organizationId)) gyms.set(t.organizationId, t);
-  }
-  if (gyms.size === 0) return { kind: "join" };
-
-  const only = gyms.size === 1 ? [...gyms.values()][0] : undefined;
-  if (only) {
-    return { kind: "openBranch", academyId: only.academyId, name: only.name };
-  }
-  return { kind: "pick", gyms: [...gyms.values()] };
-}
-
-/**
- * Query parameters that survive a branch switch (ADR 129).
- *
- * A date is a date wherever you are standing, so the week you were reading
- * follows you. A person, a class and a session belong to the branch you are
- * leaving, so their ids do not: showing branch A's member id under branch B's
- * name is the interface lying about which mat you are on.
- */
-const PORTABLE_PARAMS = new Set([
-  "date",
-  "from",
-  "to",
-  "week",
-  "tab",
-  "filter",
-]);
-
-/** Routes whose id lives inside the path, so the path itself cannot travel. */
-const BRANCH_OWNED_PREFIXES = ["/class", "/attendance"];
-
-/**
- * The same screen at another branch, or that branch's home when it has no such
- * screen (ADR 129).
- *
- * `membership` is the caller's standing AT THE DESTINATION, which is what
- * decides whether the destination even offers the screen. A general space has
- * no referrals, a student has no roster, and either case falls back to the home
- * page rather than to a refusal.
- */
-export function switchEntityHref(
-  pathname: string,
-  search: string,
-  target: { id: string } & Membership & {
-      type?: string;
-      referralsEnabled?: boolean;
-    },
-): string {
-  const within = pathWithinEntity(pathname);
-  const portable =
-    !BRANCH_OWNED_PREFIXES.some(
-      (p) => within === p || within.startsWith(`${p}/`),
-    ) && canVisit(within, target);
-  const path = portable ? within : "/";
-  if (path === "/") return entityHref(target.id);
-
-  const query = search
-    .replace(/^\?/, "")
-    .split("&")
-    .filter((pair) => PORTABLE_PARAMS.has(pair.split("=")[0] ?? ""))
-    .join("&");
-  return `${entityHref(target.id, path)}${query ? `?${query}` : ""}`;
+  const first = ties[0];
+  if (!first) return { kind: "join" };
+  return { kind: "openBranch", academyId: first.academyId, name: first.name };
 }

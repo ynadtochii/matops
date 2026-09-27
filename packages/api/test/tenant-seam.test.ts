@@ -110,13 +110,6 @@ describe("tenant seam", () => {
     ).resolves.toBeTruthy();
   });
 
-  it("refuses the referral ledger to an instructor", async () => {
-    await expect(h.as(INSTRUCTOR_A, A).referral.dashboard()).rejects.toThrow(
-      /Owners and managers only/,
-    );
-    await expect(h.as(OWNER_A, A).referral.dashboard()).resolves.toBeTruthy();
-  });
-
   it("keeps the drifting list off an instructor's dashboard", async () => {
     const forInstructor = await h.as(INSTRUCTOR_A, A).stats.dashboard();
     expect(forInstructor.drifting).toBeNull();

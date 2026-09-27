@@ -8,7 +8,6 @@ import {
   disciplineLabel,
   formatMoney,
   formatRank,
-  isBjjAcademy,
 } from "@matops/domain";
 import { UpdateProfileSchema } from "@matops/validators";
 
@@ -437,9 +436,6 @@ export default function Profile() {
   // server rejects the read while a join is still pending. Hide the section
   // rather than showing an error where nothing is wrong yet.
   const approved = current.data?.status === "active";
-  // Belts belong to a mat. A general branch has no rank, and `rank.mine` is
-  // refused there by the server, so the section goes rather than erroring.
-  const bjj = isBjjAcademy(current.data?.type ?? "");
   // Which gate this branch runs on, so no screen offers a setting the server
   // stopped reading (ADR 126, ADR 127).
 
@@ -489,12 +485,10 @@ export default function Profile() {
           </Banner>
         ) : (
           <>
-            {bjj && (
-              <Stack gap={8}>
-                <Eyebrow>My rank</Eyebrow>
-                <MyRanks />
-              </Stack>
-            )}
+            <Stack gap={8}>
+              <Eyebrow>My rank</Eyebrow>
+              <MyRanks />
+            </Stack>
 
             {approved && (
               <View

@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { branchWords, runsBranch } from "@matops/domain";
+import { runsBranch } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
@@ -54,7 +54,6 @@ export function InviteLinkCard({
   const invites = useQuery(trpc.invite.list.queryOptions());
   const academy = useEntity();
   const academyName = academy.name;
-  const words = branchWords(academy.type);
   const isOwner = runsBranch(academy);
 
   // Offer the OS share sheet (ADR 42) only where it exists.
@@ -165,7 +164,7 @@ export function InviteLinkCard({
                 void shareLink({
                   url,
                   title: `Join ${academyName} on MatOps`,
-                  text: `Here's your link to join our ${words.branch}:`,
+                  text: "Here's your link to join our academy:",
                 })
               }
             >

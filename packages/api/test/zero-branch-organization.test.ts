@@ -29,46 +29,6 @@ async function gymWithNoBranch(): Promise<{
 }
 
 describe("a gym with no branch", () => {
-  it("answers the overview with zero totals and no branches", async () => {
-    const { h } = await gymWithNoBranch();
-
-    await expect(h.as(OWNER, null).stats.organization()).resolves.toMatchObject(
-      {
-        members: 0,
-        pendingMembers: 0,
-        newLeads: 0,
-        openClaims: 0,
-        upcomingClasses: 0,
-        revenue: [],
-        entities: [],
-      },
-    );
-  });
-
-  it("answers the metrics with zero people and no branch rows", async () => {
-    const { h } = await gymWithNoBranch();
-
-    await expect(
-      h.as(OWNER, null).stats.organizationMetrics(),
-    ).resolves.toMatchObject({
-      enrolledMembers: 0,
-      membersWithAccess: 0,
-      membersAttended: 0,
-      newMembers: 0,
-      attendanceByBranch: [],
-      sessionUse: [],
-      enrolmentsByBranch: [],
-    });
-  });
-
-  it("answers the people directory with no rows", async () => {
-    const { h } = await gymWithNoBranch();
-
-    await expect(
-      h.as(OWNER, null).stats.organizationMembers(),
-    ).resolves.toMatchObject({ entities: [], rows: [] });
-  });
-
   it("returns confirmed organization badge zeroes without a selected branch", async () => {
     const { h, organizationId } = await gymWithNoBranch();
 
@@ -81,7 +41,6 @@ describe("a gym with no branch", () => {
       organizationId,
       branch: null,
       counts: {
-        people: { state: "ready", count: 0 },
         memberships: { state: "ready", count: 0 },
         roster: { state: "unavailable" },
         coaches: { state: "unavailable" },
@@ -97,25 +56,11 @@ describe("a gym with no branch", () => {
     await expect(h.as(OWNER, null).accessPlan.list()).resolves.toEqual([]);
   });
 
-  it("says the owner may create branches, general spaces included", async () => {
+  it("says the owner may create branches", async () => {
     const { h } = await gymWithNoBranch();
 
     await expect(h.as(OWNER, null).entity.list()).resolves.toMatchObject({
       canCreateBranches: true,
-      canCreateGeneralBranches: true,
-    });
-  });
-
-  it("withholds general spaces from a gym that is not entitled to them", async () => {
-    const { h, organizationId } = await gymWithNoBranch();
-    await h.pg.query(
-      `UPDATE "organization" SET general_branches_enabled = false WHERE id = $1`,
-      [organizationId],
-    );
-
-    await expect(h.as(OWNER, null).entity.list()).resolves.toMatchObject({
-      canCreateBranches: true,
-      canCreateGeneralBranches: false,
     });
   });
 
@@ -144,14 +89,19 @@ describe("a gym with no branch", () => {
     ).toBe("NOT_FOUND");
   });
 
-  it("hands back a setup list where only the gym's name is done", async () => {
+  it("hands back a setup list with nothing done and no payment steps", async () => {
     const { h } = await gymWithNoBranch();
 
     const setup = await h.as(OWNER, null).organization.setup();
 
-    expect(setup.progress).toEqual({ done: 1, total: 9, complete: false });
-    expect(setup.items.filter((i) => i.done).map((i) => i.key)).toEqual([
-      "gym",
+    expect(setup.progress).toEqual({ done: 0, total: 6, complete: false });
+    expect(setup.items.map((i) => i.key)).toEqual([
+      "branch",
+      "location",
+      "schedule",
+      "invite",
+      "approve",
+      "booking",
     ]);
     expect(setup.items.find((i) => i.key === "branch")).toMatchObject({
       done: false,

@@ -11,7 +11,6 @@ import {
   formatMoney,
   formatMonth,
   nextMonth,
-  organizationHref,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { Badge } from "@matops/ui/badge";
@@ -32,7 +31,7 @@ import {
 
 import { dateFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
-import { useOrganization } from "./entity";
+import { useAnyBranchTakesPayment, useOrganization } from "./entity";
 import { PageHeader } from "./page-header";
 import { ENTER, LIST, SectionHeading, stagger } from "./primitives";
 import { SkeletonRows } from "./skeletons";
@@ -45,9 +44,9 @@ type Affected = RouterOutputs["accessPlan"]["coveragePreview"]["affected"];
 /**
  * The organization's membership plans (ADR 126).
  *
- * It sits beside `/overview` rather than inside a branch on purpose: a plan
- * belongs to the owner group and can cover a mat and a gym at once, so there is
- * no single branch it could live under. Assigning one to a person happens on
+ * It sits outside a branch on purpose: a plan belongs to the owner group and
+ * can cover more than one branch, so there is no single branch it could live
+ * under. Assigning one to a person happens on
  * that person's member profile inside a branch, which is where an owner already
  * is when they think about it.
  */
@@ -55,31 +54,32 @@ type MembershipTab = "payments" | "access" | "plans";
 
 export function MembershipsScreen() {
   const { entities, canRunOrganization, role } = useOrganization();
+  const inUse = useAnyBranchTakesPayment();
+  const readable = canRunOrganization && inUse;
   const trpc = useTRPC();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
-  const branchId = searchParams.get("branch") ?? undefined;
   const [tab, setTab] = useState<MembershipTab>(
     tabParam === "access" || tabParam === "plans" ? tabParam : "payments",
   );
   const plans = useQuery({
     ...trpc.accessPlan.list.queryOptions(),
-    enabled: canRunOrganization && tab === "plans",
+    enabled: readable && tab === "plans",
   });
   // The same three queries the sections below make, read here for the tab
   // counts. One query key means one request, so a tab wearing its number costs
   // nothing on the tab that is already open.
   const claims = useQuery({
     ...trpc.accessPlan.claims.queryOptions(),
-    enabled: canRunOrganization,
+    enabled: readable,
   });
   const uncovered = useQuery({
     ...trpc.accessPlan.uncovered.queryOptions(),
-    enabled: canRunOrganization,
+    enabled: readable,
   });
   const review = useQuery({
     ...trpc.accessPlan.bookingsToReview.queryOptions({ limit: 50 }),
-    enabled: canRunOrganization,
+    enabled: readable,
   });
   const [editing, setEditing] = useState<Plan | null>(null);
   const [adding, setAdding] = useState(false);
@@ -93,6 +93,15 @@ export function MembershipsScreen() {
         <EmptyState title="Only the people who run this gym can shape its membership plans.">
           Ask whoever runs the gym.
         </EmptyState>
+      </div>
+    );
+  }
+
+  if (!inUse) {
+    return (
+      <div className="flex flex-col gap-8">
+        <PageHeader title="Memberships" />
+        <EmptyState title="This gym does not take payments in MatOps." />
       </div>
     );
   }
@@ -184,17 +193,17 @@ export function MembershipsScreen() {
             </section>
           )}
 
-          {role === "owner" && (
+          {role === "owner" && entities[0] && (
             <p className="text-muted-foreground border-border border-t pt-4 text-sm">
               Manage payment deadlines, time zone, and bank details in{" "}
               <Link
-                href={organizationHref("/settings", branchId)}
+                href={entityHref(entities[0].id, "/settings")}
                 className={cn(
                   "rounded-sm underline underline-offset-4",
                   FOCUS_RING,
                 )}
               >
-                Gym settings
+                Settings
               </Link>
               .
             </p>
@@ -488,15 +497,9 @@ function BookingAccessQueue() {
               className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
             >
               <div className="flex min-w-0 flex-col gap-0.5">
-                <Link
-                  href={`/people/${booking.personId}`}
-                  className={cn(
-                    "text-foreground w-fit rounded-sm text-sm font-medium hover:underline hover:underline-offset-4",
-                    FOCUS_RING,
-                  )}
-                >
+                <span className="text-foreground text-sm font-medium">
                   {booking.name}
-                </Link>
+                </span>
                 <span className="text-muted-foreground text-sm wrap-anywhere tabular-nums">
                   {booking.title} · {booking.entityName} ·{" "}
                   {dateFmt.format(new Date(booking.startsAt))}
@@ -512,20 +515,6 @@ function BookingAccessQueue() {
                 </span>
               </div>
               <div className="flex flex-wrap gap-4">
-                <Link
-                  href={`/people/${booking.personId}`}
-                  className={cn(
-                    "text-foreground decoration-muted-foreground inline-flex min-h-11 items-center rounded-sm text-sm font-medium underline underline-offset-4 hover:decoration-current sm:min-h-8",
-                    FOCUS_RING,
-                  )}
-                >
-                  {booking.reason === "suspended" ||
-                  booking.reason === "membership-inactive"
-                    ? "Restore access"
-                    : booking.reason === "payment-declined"
-                      ? "Confirm payment"
-                      : "Give membership"}
-                </Link>
                 <Link
                   href={entityHref(
                     booking.entityId,
@@ -1127,15 +1116,7 @@ function UncoveredQueue() {
               {g.people.map((p, i) => (
                 <span key={p.personId}>
                   {i > 0 && ", "}
-                  <Link
-                    href={`/people/${p.personId}`}
-                    className={cn(
-                      "hover:text-foreground rounded-sm underline-offset-4 transition-colors hover:underline motion-reduce:transition-none",
-                      FOCUS_RING,
-                    )}
-                  >
-                    {p.name}
-                  </Link>
+                  {p.name}
                 </span>
               ))}
             </span>

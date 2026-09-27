@@ -48,8 +48,8 @@ export async function requireClassFacts(
  * followed by a write would let both see the same free place.
  *
  * A `soft` class is unguarded and always succeeds, so the BJJ rule is untouched:
- * the count may pass capacity and is shown red (spec §4). Only `strict`, which
- * is what a general space's sessions are, can refuse.
+ * the count may pass capacity and is shown red (spec §4). Only `strict` can
+ * refuse.
  *
  * Returns whether a place was taken. The caller is inside the request's own
  * transaction, so refusing and throwing rolls the participation row back with

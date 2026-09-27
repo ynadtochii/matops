@@ -34,7 +34,6 @@ import {
   attendanceWriteAccess,
   bulkMarkTargets,
   normalizePhone,
-  receptionSearchText,
   runsBranch,
 } from "@matops/domain";
 import {
@@ -46,12 +45,10 @@ import {
   MarkAllAttendanceSchema,
   MarkAttendanceSchema,
   MarkVisitorSchema,
-  SearchMembersSchema,
 } from "@matops/validators";
 
 import { academyTimeZone } from "../academy-tz";
 import { loadAttendanceRoster } from "../attendance-review";
-import { searchBranchPeople } from "../branch-person";
 import { claimSeatIfStrict, requireClassFacts, SESSION_FULL } from "../classes";
 import { directoryRosterOf } from "../members";
 import { staffIdentityProcedure, staffProcedure } from "../trpc";
@@ -63,7 +60,6 @@ import { staffIdentityProcedure, staffProcedure } from "../trpc";
  * on the RLS-scoped `ctx.db`. Self check-ins (QR, slice 3.4) and drop-ins (3.5)
  * surface in the same list, already marked present.
  */
-const STAFF_SEARCH_LIMIT = 10;
 
 export const attendanceRouter = {
   /** Active members of the academy (id = user.id, name) for the walk-in picker. */
@@ -74,29 +70,6 @@ export const attendanceRouter = {
       .filter((m) => m.status === "active")
       .map((m) => ({ id: m.personId, name: m.name, role: m.role }));
   }),
-
-  /**
-   * The same roster, narrowed to a typed name and capped (ADR 139). The staff
-   * reception screen types instead of scrolling a long list; authority and the
-   * visible fields are `members`' own, so this adds speed and not access.
-   */
-  searchMembers: staffProcedure
-    .input(SearchMembersSchema)
-    .query(async ({ ctx, input }) => {
-      const query = receptionSearchText(input.query);
-      if (query.length < 2) return [];
-      const members = await searchBranchPeople(
-        ctx.db,
-        ctx,
-        query,
-        STAFF_SEARCH_LIMIT,
-      );
-      return members.map((m) => ({
-        id: m.personId,
-        name: m.name,
-        role: m.role,
-      }));
-    }),
 
   /**
    * Everyone on a class (spec O5): booked (confirmed + provisional) + walk-ins

@@ -1,7 +1,7 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { bookVisitor, cancelVisitorBooking, createDropIn } from "../src/dropin";
+import { bookVisitor, createDropIn } from "../src/dropin";
 import { execOn, freshDb, single } from "./helpers";
 
 type Tx = Parameters<Parameters<PGlite["transaction"]>[0]>[0];
@@ -180,14 +180,13 @@ describe("drop_in dedupe by phone, one visit row per class (ADR 115)", () => {
   });
 });
 
-describe("visitor bookings (ADR 115)", () => {
+describe("visitor bookings", () => {
   let pg: PGlite;
   let db: ReturnType<typeof execOn>;
 
-  const booking = (phone: string, classId: string, cancelToken: string) => ({
+  const booking = (phone: string, classId: string) => ({
     ...lead(phone, null),
     classId,
-    cancelToken,
   });
 
   beforeEach(async () => {
@@ -201,13 +200,9 @@ describe("visitor bookings (ADR 115)", () => {
   });
 
   it("the same phone posting twice to one class yields one booking", async () => {
-    const first = await bookVisitor(booking("5551234", CLASS_MON, "tok-1"), db);
-    const second = await bookVisitor(
-      booking("5551234", CLASS_MON, "tok-2"),
-      db,
-    );
+    const first = await bookVisitor(booking("5551234", CLASS_MON), db);
+    const second = await bookVisitor(booking("5551234", CLASS_MON), db);
     expect(second.visitId).toBe(first.visitId);
-    expect(second.cancelToken).toBe("tok-1");
     const rows = await pg.query<{ n: number }>(
       `SELECT count(*)::int AS n FROM "drop_in_visit"`,
     );
@@ -215,35 +210,13 @@ describe("visitor bookings (ADR 115)", () => {
   });
 
   it("a booked visitor is unmarked, so a no-show can be recorded", async () => {
-    await bookVisitor(booking("5551234", CLASS_MON, "tok-1"), db);
+    await bookVisitor(booking("5551234", CLASS_MON), db);
     const rows = await pg.query<{
       booking_status: string;
       attendance_status: string;
     }>(`SELECT booking_status, attendance_status FROM "drop_in_visit"`);
     expect(single(rows).booking_status).toBe("booked");
     expect(single(rows).attendance_status).toBe("unmarked");
-  });
-
-  it("a cancelled booking leaves the lead in place", async () => {
-    await bookVisitor(booking("5551234", CLASS_MON, "tok-1"), db);
-    expect(await cancelVisitorBooking("academy_A", "tok-1", db)).toBe(true);
-    const visit = await pg.query<{ booking_status: string }>(
-      `SELECT booking_status FROM "drop_in_visit"`,
-    );
-    expect(single(visit).booking_status).toBe("cancelled");
-    const leads = await pg.query<{ n: number }>(
-      `SELECT count(*)::int AS n FROM "drop_in" WHERE phone='5551234'`,
-    );
-    expect(single(leads).n).toBe(1);
-  });
-
-  it("one academy's key cannot cancel another academy's booking", async () => {
-    await bookVisitor(booking("5551234", CLASS_MON, "tok-1"), db);
-    expect(await cancelVisitorBooking("academy_B", "tok-1", db)).toBe(false);
-  });
-
-  it("an unknown token cancels nothing", async () => {
-    expect(await cancelVisitorBooking("academy_A", "nope", db)).toBe(false);
   });
 });
 

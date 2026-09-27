@@ -31,18 +31,13 @@ describe("the app role can delete the rows a permanent erase must clear", () => 
 
   beforeAll(async () => {
     pg = await freshDb();
-    await seedMemberships(pg, "academy_A", ["mem_gone", "mem_ref"]);
-    await seedMemberships(pg, "academy_B", ["mem_other", "mem_ref_b"]);
+    await seedMemberships(pg, "academy_A", ["mem_gone"]);
+    await seedMemberships(pg, "academy_B", ["mem_other"]);
     await pg.exec(`
       INSERT INTO notification (academy_id, user_id, kind, title, body, link)
       VALUES
         ('academy_A', 'user_gone', 'announcement', 'A news', 'body', '/'),
         ('academy_B', 'user_gone', 'announcement', 'B news', 'body', '/');
-      INSERT INTO member_referral_audit
-        (academy_id, student_member_id, old_referrer_member_id, new_referrer_member_id, action, actor_id)
-      VALUES
-        ('academy_A', 'mem_gone', NULL, 'mem_ref', 'assigned', 'owner_A'),
-        ('academy_B', 'mem_other', NULL, 'mem_ref_b', 'assigned', 'owner_B');
     `);
   });
 
@@ -57,17 +52,7 @@ describe("the app role can delete the rows a permanent erase must clear", () => 
     expect(await remaining(pg, "notification", "academy_A")).toBe(0);
   });
 
-  it("deletes a referral audit row", async () => {
-    await asTenant(pg, "academy_A", (tx) =>
-      tx.query(
-        `DELETE FROM member_referral_audit WHERE student_member_id = 'mem_gone'`,
-      ),
-    );
-    expect(await remaining(pg, "member_referral_audit", "academy_A")).toBe(0);
-  });
-
   it("a delete still cannot cross the tenant boundary", async () => {
     expect(await remaining(pg, "notification", "academy_B")).toBe(1);
-    expect(await remaining(pg, "member_referral_audit", "academy_B")).toBe(1);
   });
 });

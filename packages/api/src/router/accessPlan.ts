@@ -6,7 +6,6 @@ import type { AssignmentCoverage } from "@matops/domain";
 import {
   and,
   asc,
-  desc,
   eq,
   eventRole,
   gt,
@@ -64,15 +63,11 @@ import {
   AssignMembershipSchema,
   AssignmentIdSchema,
   BookingReviewSchema,
-  BulkAssignMembershipSchema,
-  CancelPlanChangeSchema,
   ClaimMembershipMonthSchema,
   CreateAccessPlanSchema,
   MarkMembershipMonthSchema,
   MemberAssignmentsSchema,
-  MembershipMonthsSchema,
   MembershipPolicySchema,
-  PlanChangeSchema,
   RejectMembershipClaimSchema,
   SetAccessPlanCoverageSchema,
   SetAccessPlanPriceSchema,
@@ -107,12 +102,8 @@ const NOT_A_MEMBER = "That person is not part of this gym";
 const ASSIGNMENT_NOT_FOUND = "That membership is gone";
 const MEMBERSHIP_NOT_ACTIVE =
   "That membership is not active, so there is nothing to pay for.";
-const CHANGE_NOT_FOUND = "That plan change is gone";
-const CHANGE_ALREADY_STARTED =
-  "That change has already started. Schedule a new one for next month instead.";
 const CHANGE_PENDING =
   "This membership already has a plan change waiting. Cancel that one first.";
-const SAME_PLAN = "They are already on that plan from that month";
 const TARGET_OVERLAPS =
   "They already hold that plan over those months. Open the membership they have instead.";
 const TARGET_ARCHIVED_DEPENDENCY =
@@ -478,43 +469,6 @@ async function loadAssignment(db: TenantTx, id: string) {
     throw new TRPCError({ code: "NOT_FOUND", message: ASSIGNMENT_NOT_FOUND });
   }
   return row;
-}
-
-/**
- * Every branch this person still reaches in a given month through memberships
- * OTHER than one. The honest half of a plan change: a branch dropped by the new
- * plan is only a loss when nothing else of theirs covers it.
- */
-async function coverageElsewhere(
-  db: TenantTx,
-  userId: string,
-  exceptAssignmentId: string,
-  month: string,
-): Promise<Set<string>> {
-  const rows = await db
-    .select({
-      id: accessAssignment.id,
-      status: accessAssignment.status,
-      startMonth: accessAssignment.startMonth,
-      endMonth: accessAssignment.endMonth,
-      entityId: accessPlanEntity.entityId,
-    })
-    .from(accessAssignment)
-    .innerJoin(
-      accessPlanEntity,
-      eq(accessPlanEntity.planId, accessAssignment.planId),
-    )
-    .where(eq(accessAssignment.personId, userId));
-  return new Set(
-    rows
-      .filter(
-        (r) =>
-          r.id !== exceptAssignmentId &&
-          r.status === "active" &&
-          appliesInMonth(r, month),
-      )
-      .map((r) => r.entityId),
-  );
 }
 
 /** Archived is frozen, not merely hidden: no rename, no coverage change. */
@@ -1387,64 +1341,6 @@ export const accessPlanRouter = {
     }),
 
   /**
-   * Give the same membership to several people at once (ADR 128, spec FP8).
-   *
-   * One person at a time through `assignOne`, so a bulk run and a single click
-   * cannot drift about what assigning means: the same restore rule, the same
-   * branch enrolment, the same refusal on a closed plan.
-   *
-   * **It does not stop at the first failure.** A run of forty where one person
-   * has left the gym should place the other thirty-nine and say who was
-   * missed, because the alternative is an owner guessing how far it got. Each
-   * outcome comes back named, and the caller decides what to show.
-   */
-  assignMany: organizationManagerProcedure
-    .input(BulkAssignMembershipSchema)
-    .mutation(async ({ ctx, input }) => {
-      const results: {
-        userId: string;
-        outcome: "created" | "restored" | "already" | "failed";
-        reason?: string;
-      }[] = [];
-
-      for (const userId of input.userIds) {
-        try {
-          const done = await assignOne(ctx, {
-            userId,
-            planId: input.planId,
-            startMonth: input.startMonth,
-            assigningEntityId: null,
-          });
-          results.push({
-            userId,
-            outcome: done.created
-              ? "created"
-              : done.restored
-                ? "restored"
-                : "already",
-          });
-        } catch (error) {
-          results.push({
-            userId,
-            outcome: "failed",
-            reason:
-              error instanceof TRPCError
-                ? error.message
-                : "Couldn't add it. Try again.",
-          });
-        }
-      }
-
-      const placed = results.filter((r) => r.outcome !== "failed").length;
-      if (placed > 0) recordFirstAssignment(ctx);
-      return {
-        results,
-        placed,
-        failed: results.filter((r) => r.outcome === "failed").length,
-      };
-    }),
-
-  /**
    * Re-enrol every holder of one plan at every branch it covers (spec FP8).
    *
    * Coverage can change after people are already on a plan: a gym adds a new
@@ -1603,248 +1499,6 @@ export const accessPlanRouter = {
     .mutation(({ ctx, input }) =>
       setAssignmentStatus(ctx, input.id, "cancelled"),
     ),
-
-  /**
-   * What changing somebody's plan would do, before it is scheduled (ADR 129).
-   *
-   * The month is computed here rather than taken from the caller, so a laptop
-   * clock cannot move a boundary. Everything the owner needs to decide is in
-   * one answer: when it starts, what the new plan costs that month, which
-   * branches they gain and lose, and which of their booked sessions the change
-   * would leave without coverage.
-   */
-  previewChange: organizationManagerProcedure
-    .input(PlanChangeSchema)
-    .query(async ({ ctx, input }) => {
-      const { month, next, timeZone } = await currentMonthOf(ctx.db);
-      const source = await loadAssignment(ctx.db, input.assignmentId);
-      const target = await loadPlan(ctx.db, input.targetPlanId);
-
-      const from = await coverageOf(ctx.db, source.planId);
-      const to = await coverageOf(ctx.db, target.id);
-      const elsewhere = await coverageElsewhere(
-        ctx.db,
-        source.userId,
-        source.id,
-        next,
-      );
-
-      const prices = await ctx.db
-        .select({
-          planId: accessPlanPrice.planId,
-          effectiveMonth: accessPlanPrice.effectiveMonth,
-          priceMinor: accessPlanPrice.priceMinor,
-          currency: accessPlanPrice.currency,
-        })
-        .from(accessPlanPrice)
-        .where(eq(accessPlanPrice.planId, target.id));
-
-      const staff = await loadStaffAccess(ctx.db, {
-        entityIds: [...new Set([...from, ...to])],
-        userIds: source.accountUserId ? [source.accountUserId] : [],
-      });
-      const losing = from.filter(
-        (id) =>
-          !to.includes(id) &&
-          !elsewhere.has(id) &&
-          (!source.accountUserId || !staff.get(id)?.has(source.accountUserId)),
-      );
-      return {
-        effectiveMonth: next,
-        effectiveMonthLabel: formatMonth(next, timeZone),
-        currentMonth: month,
-        sourcePlanId: source.planId,
-        targetPlanId: target.id,
-        targetPlanName: target.name,
-        targetArchived: target.archivedAt !== null,
-        amount: priceForMonth(prices, next),
-        gains: to
-          .filter(
-            (id) =>
-              !from.includes(id) &&
-              (!source.accountUserId ||
-                !staff.get(id)?.has(source.accountUserId)),
-          )
-          .sort(),
-        loses: losing.sort(),
-        userId: source.userId,
-        pending: (await pendingChanges(ctx.db, month)).some(
-          (c) => c.sourceAssignmentId === source.id,
-        ),
-      };
-    }),
-
-  /**
-   * Move one membership onto another plan from the first of next month.
-   *
-   * The month they are in is left exactly as it is: the old plan runs to the
-   * end of it with its amount, its paid flag and its claim intact, and the new
-   * one starts on the 1st with a clean record of its own. Nothing is prorated
-   * and nothing is refunded (ADR 129).
-   *
-   * One transaction, over rows locked for this person, so two staff pressing at
-   * once make one change rather than two overlapping memberships.
-   */
-  scheduleChange: organizationManagerProcedure
-    .input(PlanChangeSchema)
-    .mutation(async ({ ctx, input }) => {
-      const { month, next } = await currentMonthOf(ctx.db);
-      const source = await loadAssignment(ctx.db, input.assignmentId);
-      const periods = await lockAssignmentsOf(
-        ctx.db,
-        source.personId,
-        source.accountUserId,
-        ctx.organizationId,
-      );
-      if (source.status !== "active") {
-        throw new TRPCError({
-          code: "CONFLICT",
-          message: MEMBERSHIP_NOT_ACTIVE,
-        });
-      }
-      if (source.endMonth !== null && source.endMonth <= next) {
-        throw new TRPCError({
-          code: "CONFLICT",
-          message: CHANGE_ALREADY_STARTED,
-        });
-      }
-      if (source.planId === input.targetPlanId) {
-        throw new TRPCError({ code: "CONFLICT", message: SAME_PLAN });
-      }
-
-      const target = await loadPlan(ctx.db, input.targetPlanId);
-      await requireStudentCoverage(
-        ctx.db,
-        ctx.organizationId,
-        source.personId,
-        source.accountUserId,
-        await coverageOf(ctx.db, target.id),
-      );
-      if (target.archivedAt !== null) {
-        throw new TRPCError({ code: "CONFLICT", message: PLAN_CLOSED });
-      }
-      if (
-        (
-          await pendingChanges(ctx.db, month, {
-            personId: source.personId,
-            accountUserId: source.accountUserId,
-          })
-        ).some((c) => c.sourceAssignmentId === source.id)
-      ) {
-        throw new TRPCError({ code: "CONFLICT", message: CHANGE_PENDING });
-      }
-      requireNoOverlap(periods, target.id, {
-        startMonth: next,
-        endMonth: null,
-      });
-
-      await ctx.db
-        .update(accessAssignment)
-        .set({ endMonth: next })
-        .where(eq(accessAssignment.id, source.id));
-
-      const [successor] = await ctx.db
-        .insert(accessAssignment)
-        .values({
-          organizationId: ctx.organizationId,
-          personId: source.personId,
-          planId: target.id,
-          assigningEntityId: source.assigningEntityId,
-          startMonth: next,
-          startsOn: next,
-          assignedBy: ctx.session.user.id,
-        })
-        .returning({ id: accessAssignment.id });
-      if (!successor) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Couldn't schedule the change. Try again.",
-        });
-      }
-
-      const [change] = await ctx.db
-        .insert(accessAssignmentChange)
-        .values({
-          organizationId: ctx.organizationId,
-          personId: source.personId,
-          sourceAssignmentId: source.id,
-          targetAssignmentId: successor.id,
-          effectiveMonth: next,
-          previousSourceEndMonth: source.endMonth,
-          scheduledBy: ctx.session.user.id,
-        })
-        .returning({ id: accessAssignmentChange.id });
-
-      // Branch memberships are prepared now so the 1st needs no second action.
-      // They grant nothing on their own: access still asks for a membership
-      // whose period covers the month, and the successor's does not start yet.
-      const enrolment = await enrolInCoveredBranches(
-        ctx.db,
-        ctx.organizationId,
-        source.personId,
-        source.accountUserId,
-        await coverageOf(ctx.db, target.id),
-      );
-
-      return {
-        changeId: change?.id ?? null,
-        successorId: successor.id,
-        effectiveMonth: next,
-        ...enrolment,
-      };
-    }),
-
-  /**
-   * Take back a change that has not started (ADR 129).
-   *
-   * It ends the successor that never ran and puts the source's end month back
-   * to whatever this change found there, in one transaction. The change row
-   * survives, marked cancelled: the record that somebody scheduled it and
-   * thought again is worth keeping. After the boundary there is no undo, only a
-   * new change for the month after this one.
-   */
-  cancelScheduledChange: organizationManagerProcedure
-    .input(CancelPlanChangeSchema)
-    .mutation(async ({ ctx, input }) => {
-      const { month } = await currentMonthOf(ctx.db);
-      const [change] = await ctx.db
-        .select()
-        .from(accessAssignmentChange)
-        .where(eq(accessAssignmentChange.id, input.changeId));
-      if (change?.cancelledAt !== null) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: CHANGE_NOT_FOUND,
-        });
-      }
-      await lockAssignmentsOf(
-        ctx.db,
-        change.personId,
-        null,
-        ctx.organizationId,
-      );
-      if (!changeIsPending(change, month)) {
-        throw new TRPCError({
-          code: "CONFLICT",
-          message: CHANGE_ALREADY_STARTED,
-        });
-      }
-
-      await ctx.db
-        .update(accessAssignment)
-        .set({ status: "cancelled" })
-        .where(eq(accessAssignment.id, change.targetAssignmentId));
-      await ctx.db
-        .update(accessAssignment)
-        .set({ endMonth: change.previousSourceEndMonth })
-        .where(eq(accessAssignment.id, change.sourceAssignmentId));
-      await ctx.db
-        .update(accessAssignmentChange)
-        .set({ cancelledAt: new Date(), cancelledBy: ctx.session.user.id })
-        .where(eq(accessAssignmentChange.id, change.id));
-
-      return { changeId: change.id, cancelled: true as const };
-    }),
 
   /** Every membership one person holds in this organization. */
   forUser: organizationManagerProcedure
@@ -2176,52 +1830,6 @@ export const accessPlanRouter = {
       rows,
     };
   }),
-
-  /**
-   * The months recorded against one membership, newest first.
-   *
-   * A month that is NOT here is unpaid: the tracker is ticked by hand and a gap
-   * in it must never read as a yes (ADR 126).
-   */
-  months: organizationManagerProcedure
-    .input(MembershipMonthsSchema)
-    .query(async ({ ctx, input }) => {
-      const rows = await ctx.db
-        .select({
-          month: membershipMonth.month,
-          status: membershipMonth.status,
-          version: membershipMonth.version,
-          reportedAt: membershipMonth.reportedAt,
-          reviewedAt: membershipMonth.reviewedAt,
-          reviewedBy: membershipMonth.reviewedBy,
-        })
-        .from(membershipMonth)
-        .where(eq(membershipMonth.assignmentId, input.assignmentId))
-        .orderBy(desc(membershipMonth.month));
-      if (rows.length === 0) return [];
-
-      // History reads what each month cost AT THE TIME. Resolving it here is
-      // what stops a price rise in March from rewriting February's line.
-      const [held] = await ctx.db
-        .select({ planId: accessAssignment.planId })
-        .from(accessAssignment)
-        .where(eq(accessAssignment.id, input.assignmentId));
-      const prices = held
-        ? await ctx.db
-            .select({
-              effectiveMonth: accessPlanPrice.effectiveMonth,
-              priceMinor: accessPlanPrice.priceMinor,
-              currency: accessPlanPrice.currency,
-            })
-            .from(accessPlanPrice)
-            .where(eq(accessPlanPrice.planId, held.planId))
-        : [];
-
-      return rows.map((r) => ({
-        ...r,
-        amount: priceForMonth(prices, r.month),
-      }));
-    }),
 
   /**
    * The organization's membership settings, with sane answers before anybody
@@ -2605,6 +2213,7 @@ export const accessPlanRouter = {
           : undefined;
         return {
           ...m,
+          warning: ctx.entity.membershipEnforcedAt ? m.warning : null,
           reference: paymentReference(ctx.session.user.name, m.assignmentId),
           next:
             change && next

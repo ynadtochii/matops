@@ -23,13 +23,7 @@ export * from "./notification-notice";
 export * from "./academy-settings";
 // Permanent erasure of one member (spec O4) — see ./erase.ts.
 export * from "./erase";
-// Public booking API (key resolution, published classes) — see ./public-api.ts.
-export * from "./public-api";
-// Permanent reception entrance link (ADR 139) — see ./reception.ts.
-export * from "./reception";
-// Default curriculum track for a new academy — see ./curriculum.ts.
-export * from "./curriculum";
-// Idempotent organization setup (entity, profile, owner membership, track).
+// Idempotent organization setup (entity, profile, owner membership).
 export * from "./provision";
 export * from "./schedule-guard";
 export * from "./product-event";

@@ -4,27 +4,7 @@
  * propagate and whom to notify; the actual writes/notifications happen there.
  */
 
-import { isBjjAcademy } from "./entity";
 import { normalizeDaysOfWeek } from "./schedule";
-
-/**
- * Who is credited for a session the caller just created, when they named nobody.
- *
- * A BJJ class always has a coach, so silence means the staff member who saved
- * it: that is how one tap on "Add class" produces a class with a name on it. A
- * general space runs sessions nobody teaches, so silence there means nobody,
- * and the sauna does not end up credited to whoever opened the form (ADR 126).
- *
- * An id the caller DID send always wins, whatever the type.
- */
-export function instructorForNewSession(
-  entityType: string,
-  sent: string | null | undefined,
-  actingUserId: string,
-): string | null {
-  if (sent != null) return sent;
-  return isBjjAcademy(entityType) ? actingUserId : null;
-}
 
 interface TemplateRecurrence {
   daysOfWeek: number[];
@@ -64,7 +44,6 @@ interface TemplateContent {
   instructorId: string | null;
   durationMinutes: number;
   capacity: number;
-  publicBookable: boolean;
 }
 
 /**
@@ -80,10 +59,6 @@ type TemplateEditStrategy = "regenerate" | "update-in-place" | "none";
  * Every field here is one the in-place update copies onto the class row, so a
  * field missing from this list is a setting the owner can save on the template
  * and never see reach a class that already exists.
- *
- * `curriculumTrackId` is deliberately absent: the track is read through the
- * template on every request and never copied onto a class row, so re-pointing a
- * template must not cancel or rewrite a single class.
  */
 export function templateContentChanged(
   before: TemplateContent,
@@ -95,8 +70,7 @@ export function templateContentChanged(
     before.discipline !== after.discipline ||
     before.instructorId !== after.instructorId ||
     before.durationMinutes !== after.durationMinutes ||
-    before.capacity !== after.capacity ||
-    before.publicBookable !== after.publicBookable
+    before.capacity !== after.capacity
   );
 }
 
@@ -111,7 +85,6 @@ export function templateEditStrategy(
 interface ClassNotifiable {
   /** UTC start instant. */
   startsAt: Date;
-  /** Null at a general space, where a session need not be taught (ADR 126). */
   instructorId: string | null;
 }
 

@@ -256,8 +256,8 @@ in `apps/nextjs/src/app/styles.css`; on mobile the `Blueprint` primitive in
 | `.bg-grid-small` | hairline grid | 8px  |
 | `.bg-dot`        | dot field     | 16px |
 
-Use at most one per view, behind non-text areas (the sign-in panel, the
-reception screen, an instrument panel).
+Use at most one per view, behind non-text areas (the sign-in panel, an
+instrument panel).
 
 **The instrument panel.** One shape carries a set of top-of-screen readings: a
 bordered strip on `bg-grid-small`, split into cells by 1px lines, each cell on

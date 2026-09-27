@@ -54,12 +54,9 @@ describe("gym-level permissions", () => {
 
   afterAll(() => h.close());
 
-  it("lets a manager read the gym: people, plans, payments, reports, setup", async () => {
+  it("lets a manager read the gym: plans, payments, setup", async () => {
     await expect(as(MANAGER).accessPlan.list()).resolves.toBeDefined();
     await expect(as(MANAGER).accessPlan.monthBoard()).resolves.toBeDefined();
-    await expect(
-      as(MANAGER).stats.organizationMembers(),
-    ).resolves.toBeDefined();
     await expect(as(MANAGER).organization.setup()).resolves.toBeDefined();
   });
 
@@ -75,18 +72,10 @@ describe("gym-level permissions", () => {
     ).resolves.toBeDefined();
   });
 
-  it("refuses a manager the two owner-only actions", async () => {
+  it("refuses a manager the owner-only branch create", async () => {
     expect(
       await rejectionCode(
         as(MANAGER).entity.create({ type: "bjj_academy", name: "Second Mat" }),
-      ),
-    ).toBe("FORBIDDEN");
-    expect(
-      await rejectionCode(
-        as(MANAGER).entity.setMembershipEnforced({
-          entityId: GYM,
-          enforced: true,
-        }),
       ),
     ).toBe("FORBIDDEN");
   });
@@ -97,10 +86,6 @@ describe("gym-level permissions", () => {
         user,
         "FORBIDDEN",
       ]);
-      expect([
-        user,
-        await rejectionCode(as(user).stats.organizationMembers()),
-      ]).toEqual([user, "FORBIDDEN"]);
       expect([
         user,
         await rejectionCode(as(user).organization.setup()),
@@ -116,9 +101,6 @@ describe("gym-level permissions", () => {
 
   it("refuses somebody who runs a different gym", async () => {
     expect(await rejectionCode(as(OUTSIDER).accessPlan.list())).toBe(
-      "FORBIDDEN",
-    );
-    expect(await rejectionCode(as(OUTSIDER).stats.organizationMembers())).toBe(
       "FORBIDDEN",
     );
   });

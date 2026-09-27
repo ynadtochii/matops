@@ -7,11 +7,6 @@ const mat = {
   organizationId: "org_a",
   name: "North Mat",
 };
-const gymFloor = {
-  academyId: "e_gym",
-  organizationId: "org_a",
-  name: "The Gym",
-};
 const other = { academyId: "e_beta", organizationId: "org_b", name: "Beta" };
 
 describe("postLoginTarget", () => {
@@ -41,17 +36,11 @@ describe("postLoginTarget", () => {
     });
   });
 
-  it("counts gyms, not branches, so two mats of one gym ask nothing", () => {
-    expect(postLoginTarget([mat, gymFloor], [])).toMatchObject({
+  it("opens the first branch when the person belongs to several", () => {
+    expect(postLoginTarget([mat, other], [])).toEqual({
       kind: "openBranch",
       academyId: "e_north",
-    });
-  });
-
-  it("asks which gym when the person belongs to two", () => {
-    expect(postLoginTarget([mat, other], [])).toEqual({
-      kind: "pick",
-      gyms: [mat, other],
+      name: "North Mat",
     });
   });
 

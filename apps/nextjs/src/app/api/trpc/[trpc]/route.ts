@@ -12,8 +12,8 @@ import { auth } from "~/auth/server";
 const rootCause = (e: unknown): unknown =>
   e instanceof Error && e.cause ? rootCause(e.cause) : e;
 
-const handler = async (req: NextRequest) => {
-  const response = await fetchRequestHandler({
+const handler = (req: NextRequest) =>
+  fetchRequestHandler({
     endpoint: "/api/trpc",
     router: appRouter,
     req,
@@ -23,15 +23,6 @@ const handler = async (req: NextRequest) => {
         headers: req.headers,
       }),
     onError({ error, path, type, ctx }) {
-      if (path?.startsWith("reception.")) {
-        console.error("Reception request failed", { path, code: error.code });
-        if (error.code === "INTERNAL_SERVER_ERROR") {
-          Sentry.captureException(new Error("Reception request failed"), {
-            tags: { trpcPath: path, trpcType: type, code: error.code },
-          });
-        }
-        return;
-      }
       console.error(`>>> tRPC Error on '${path}'`, error);
       const root = rootCause(error);
       if (root !== error) console.error(`>>> caused by`, root);
@@ -52,11 +43,5 @@ const handler = async (req: NextRequest) => {
       });
     },
   });
-
-  if (req.nextUrl.pathname.includes("reception.")) {
-    response.headers.set("Cache-Control", "private, no-store");
-  }
-  return response;
-};
 
 export { handler as GET, handler as POST };

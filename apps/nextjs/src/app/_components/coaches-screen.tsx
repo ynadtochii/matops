@@ -10,23 +10,17 @@ import {
 
 import type { RouterOutputs } from "@matops/api";
 import type { CoachWindowKey } from "@matops/domain";
-import { DAY_LABELS, isPendingCoach, runsBranch } from "@matops/domain";
+import { isPendingCoach, runsBranch } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@matops/ui/collapsible";
 import { toast } from "@matops/ui/toast";
 
-import { dateTimeFmt, monthDayFmt } from "~/lib/format";
+import { monthDayFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { useEntity } from "./entity";
 import { PageHeader } from "./page-header";
 import {
-  ChevronDownIcon,
   ENTER,
   Eyebrow,
   LIST,
@@ -34,12 +28,10 @@ import {
   SectionHeading,
   Stat,
 } from "./primitives";
-import { SkeletonCoachCards, SkeletonLines } from "./skeletons";
+import { SkeletonCoachCards } from "./skeletons";
 import { Staff } from "./staff";
 import { EmptyState, ErrorState } from "./states";
 import { Tabs } from "./tabs";
-
-type Breakdown = RouterOutputs["stats"]["coach"]["breakdown"];
 
 type CoachRow = RouterOutputs["stats"]["coaches"]["coaches"][number];
 
@@ -49,248 +41,27 @@ const WINDOW_TABS: { id: CoachWindowKey; label: string }[] = [
   { id: "last_90_days", label: "Last 90 days" },
 ];
 
-const headcount = (avg: number | null) =>
-  avg === null ? "Not recorded" : (Math.round(avg * 10) / 10).toString();
-
-function BarRow({
-  bars,
-  label,
-}: {
-  bars: { key: string; caption: string; value: number }[];
-  label: string;
-}) {
-  const peak = Math.max(1, ...bars.map((b) => b.value));
+function CoachWorkloadRow({ row }: { row: CoachRow }) {
   return (
-    <div>
-      <Eyebrow>{label}</Eyebrow>
-      <ul className="mt-2 flex items-end gap-1.5">
-        {bars.map((b) => (
-          <li key={b.key} className="flex flex-1 flex-col items-center gap-1">
-            <span className="text-2xs text-foreground-secondary tabular-nums">
-              {b.value || ""}
+    <div className="grid items-center gap-4 p-4 sm:grid-cols-[minmax(0,1.5fr)_minmax(15rem,2fr)]">
+      <div className="min-w-0">
+        <p className="truncate font-medium">{row.name}</p>
+        {!row.onStaff && <Eyebrow>No longer staff</Eyebrow>}
+      </div>
+
+      <div className="grid grid-cols-3 gap-4">
+        <Stat value={row.classesLed} label="classes led" />
+        <Stat
+          value={
+            <span className={cn(row.unresolvedEnded > 0 && "text-warning")}>
+              {row.unresolvedEnded}
             </span>
-            <span
-              aria-hidden
-              className="bg-chart-4 w-full rounded-sm"
-              style={{ height: `${Math.max(2, (b.value / peak) * 40)}px` }}
-            />
-            <span className="text-muted-foreground text-2xs">{b.caption}</span>
-            <span className="sr-only">
-              {b.caption}: {b.value}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function BreakdownPanel({ breakdown }: { breakdown: Breakdown }) {
-  if (
-    breakdown.recent.length === 0 &&
-    breakdown.unresolved.length === 0 &&
-    breakdown.cancelled.length === 0
-  ) {
-    return (
-      <p className="text-muted-foreground text-sm">
-        No classes led in this window. Pick a wider window, or set this coach on
-        a class from the schedule.
-      </p>
-    );
-  }
-  return (
-    <div className="flex flex-col gap-5">
-      <div>
-        <Eyebrow>Which classes</Eyebrow>
-        <ul className="mt-2 flex flex-col gap-1">
-          {breakdown.byClass.map((g) => (
-            <li
-              key={g.title}
-              className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm"
-            >
-              <span>
-                {g.title}
-                {g.discipline && (
-                  <span className="text-muted-foreground ml-2 text-xs uppercase">
-                    {g.discipline}
-                  </span>
-                )}
-              </span>
-              <span className="text-muted-foreground text-xs tabular-nums">
-                {g.classesLed}× · avg {headcount(g.avgHeadcount)}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <div className="grid gap-5 sm:grid-cols-2">
-        <BarRow
-          label="By weekday"
-          bars={breakdown.byWeekday.map((value, i) => ({
-            key: String(i),
-            caption: DAY_LABELS[i] ?? "",
-            value,
-          }))}
+          }
+          label="needs review"
         />
-        <BarRow
-          label="By week"
-          bars={breakdown.byWeek.map((w, i) => ({
-            key: String(w.weekBucket),
-            caption: `w${i + 1}`,
-            value: w.classesLed,
-          }))}
-        />
+        <Stat value={row.cancelled} label="cancelled" />
       </div>
-
-      <div>
-        <Eyebrow>Classes led</Eyebrow>
-        <ul className="mt-2 flex flex-col gap-1">
-          {breakdown.recent.map((c) => (
-            <li
-              key={c.classId}
-              className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm"
-            >
-              <span>
-                <span className="text-muted-foreground text-xs tabular-nums">
-                  {dateTimeFmt.format(new Date(c.startsAt))}
-                </span>{" "}
-                {c.title}
-              </span>
-              <span className="text-muted-foreground text-xs tabular-nums">
-                {c.marked ? `${c.headcount} present` : "not marked"}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
-      {breakdown.unresolved.length > 0 && (
-        <div>
-          <Eyebrow>Needs attendance review</Eyebrow>
-          <ul className="mt-2 flex flex-col gap-1">
-            {breakdown.unresolved.map((c) => (
-              <li
-                key={c.classId}
-                className="flex justify-between gap-3 text-sm"
-              >
-                <span>{c.title}</span>
-                <span className="text-muted-foreground tabular-nums">
-                  {dateTimeFmt.format(new Date(c.startsAt))}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {breakdown.cancelled.length > 0 && (
-        <div>
-          <Eyebrow>Cancelled</Eyebrow>
-          <ul className="mt-2 flex flex-col gap-1">
-            {breakdown.cancelled.map((c) => (
-              <li
-                key={c.classId}
-                className="flex justify-between gap-3 text-sm"
-              >
-                <span>{c.title}</span>
-                <span className="text-muted-foreground tabular-nums">
-                  {dateTimeFmt.format(new Date(c.startsAt))}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
     </div>
-  );
-}
-
-function CoachDetail({
-  instructorId,
-  window,
-}: {
-  instructorId: string | undefined;
-  window: CoachWindowKey;
-}) {
-  const trpc = useTRPC();
-  const detail = useQuery({
-    ...trpc.stats.coach.queryOptions({ window, instructorId }),
-    placeholderData: keepPreviousData,
-  });
-  if (detail.isPending) return <SkeletonLines n={3} />;
-  if (detail.isError) {
-    return (
-      <ErrorState
-        label="this coach's classes"
-        onRetry={() => void detail.refetch()}
-      />
-    );
-  }
-  return <BreakdownPanel breakdown={detail.data.breakdown} />;
-}
-
-function CoachWorkloadRow({
-  row,
-  window,
-  open,
-  onToggle,
-  breakdown,
-}: {
-  row: CoachRow;
-  window: CoachWindowKey;
-  open: boolean;
-  onToggle?: () => void;
-
-  breakdown?: Breakdown;
-}) {
-  const body = breakdown ? (
-    <BreakdownPanel breakdown={breakdown} />
-  ) : (
-    <CoachDetail instructorId={row.instructorId} window={window} />
-  );
-  return (
-    <Collapsible open={open} onOpenChange={onToggle}>
-      <div className="grid items-center gap-4 p-4 sm:grid-cols-[minmax(0,1.5fr)_minmax(15rem,2fr)_auto]">
-        <div className="min-w-0">
-          <p className="truncate font-medium">{row.name}</p>
-          {!row.onStaff && <Eyebrow>No longer staff</Eyebrow>}
-        </div>
-
-        <div className="grid grid-cols-3 gap-4">
-          <Stat value={row.classesLed} label="classes led" />
-          <Stat
-            value={
-              <span className={cn(row.unresolvedEnded > 0 && "text-warning")}>
-                {row.unresolvedEnded}
-              </span>
-            }
-            label="needs review"
-          />
-          <Stat value={row.cancelled} label="cancelled" />
-        </div>
-
-        {onToggle && (
-          <CollapsibleTrigger asChild>
-            <Button size="sm" variant="outline">
-              {open ? "Hide" : "Breakdown"}
-              <ChevronDownIcon
-                className={cn(
-                  "transition-[rotate] duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none",
-                  open && "rotate-180",
-                )}
-              />
-            </Button>
-          </CollapsibleTrigger>
-        )}
-      </div>
-
-      {onToggle ? (
-        <CollapsibleContent className="border-border border-t px-4 py-5">
-          {body}
-        </CollapsibleContent>
-      ) : (
-        <div className="border-border border-t px-4 py-5">{body}</div>
-      )}
-    </Collapsible>
   );
 }
 
@@ -310,9 +81,6 @@ function PendingCoaches() {
     Promise.all([
       queryClient.invalidateQueries(trpc.membership.members.pathFilter()),
       queryClient.invalidateQueries(trpc.membership.staff.pathFilter()),
-      queryClient.invalidateQueries(
-        trpc.stats.organizationMembers.pathFilter(),
-      ),
       queryClient.invalidateQueries(trpc.stats.navigationSummary.pathFilter()),
     ]);
   const onError = (err: { message: string }) =>
@@ -422,7 +190,6 @@ function PendingCoaches() {
  */
 export function CoachesScreen() {
   const trpc = useTRPC();
-  const [openId, setOpenId] = useState<string | null>(null);
   const [window, setWindow] = useState<CoachWindowKey>("this_month");
 
   const me = useEntity();
@@ -515,17 +282,7 @@ export function CoachesScreen() {
               ) : (
                 <div className={cn(LIST, RESOLVE)}>
                   {coaches.map((row) => (
-                    <CoachWorkloadRow
-                      key={row.instructorId}
-                      row={row}
-                      window={window}
-                      open={openId === row.instructorId}
-                      onToggle={() =>
-                        setOpenId(
-                          openId === row.instructorId ? null : row.instructorId,
-                        )
-                      }
-                    />
+                    <CoachWorkloadRow key={row.instructorId} row={row} />
                   ))}
                 </div>
               )
@@ -539,9 +296,6 @@ export function CoachesScreen() {
             ) : (
               <div className={cn(LIST, RESOLVE)}>
                 <CoachWorkloadRow
-                  window={window}
-                  breakdown={mine.data.breakdown}
-                  open
                   row={{
                     ...mine.data.workload,
                     name: mine.data.name,
