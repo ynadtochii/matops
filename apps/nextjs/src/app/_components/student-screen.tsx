@@ -62,7 +62,7 @@ function dayName(key: string, todayKey: string, tomorrowKey: string) {
 export function StudentScreen() {
   const trpc = useTRPC();
   const href = useEntityHref();
-  const { book, cancel, busyFor, lockedMessage } = useBooking();
+  const { book, cancel, busyFor, locked, lockedMessage } = useBooking();
   const academy = useEntity();
   const suspended = academy.status === "suspended";
 
@@ -98,7 +98,7 @@ export function StudentScreen() {
   );
   const bookRow = (c: ClassRow): BookProps => ({
     busy: busyFor(c.id),
-    locked: !!lockedMessage,
+    locked,
     onBook: () => book.mutate({ classId: c.id }),
     onCancel: () => cancel.mutate({ classId: c.id }),
   });
@@ -566,14 +566,14 @@ function ClassRowCard({
   return (
     <div
       className={cn(
-        "relative flex flex-col px-4 py-4 transition-colors motion-reduce:transition-none",
+        "relative flex flex-col px-4 py-4 transition-colors motion-reduce:transition-none lg:grid lg:grid-cols-[6.5rem_minmax(0,1fr)_auto] lg:items-center lg:gap-x-6 lg:px-5",
         booked ? "bg-raised" : "hover:bg-hover",
         past && "opacity-60",
       )}
     >
       {booked && <span aria-hidden className={LIT_BAR} />}
-      <div className="flex items-center justify-between gap-3">
-        <span className="flex items-baseline gap-2">
+      <div className="flex items-center justify-between gap-3 lg:self-start">
+        <span className="flex items-baseline gap-2 lg:flex-col lg:gap-0.5">
           <span className="text-md font-medium tabular-nums">
             {timeFmt.format(start)}
           </span>
@@ -582,33 +582,43 @@ function ClassRowCard({
           </span>
         </span>
         {booked && (
-          <Badge>
+          <Badge className="lg:hidden">
             <Check aria-hidden />
             Booked
           </Badge>
         )}
       </div>
-      <Link
-        href={href(`/class/${c.id}`)}
-        className={cn(
-          "text-md mt-1 self-start rounded-sm font-semibold break-words hover:underline",
-          FOCUS_RING,
-          cancelled && "text-muted-foreground line-through",
-        )}
-      >
-        {c.title}
-      </Link>
-      <p className="text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-        {c.discipline && <Discipline name={c.discipline} />}
-        {c.instructorName && <span>{c.instructorName}</span>}
-        {cancelled && (
-          <span className="text-error-text font-medium">Cancelled</span>
-        )}
-      </p>
+      <div className="flex min-w-0 flex-col">
+        <div className="mt-1 flex items-center gap-3 lg:mt-0">
+          <Link
+            href={href(`/class/${c.id}`)}
+            className={cn(
+              "text-md rounded-sm font-semibold break-words hover:underline",
+              FOCUS_RING,
+              cancelled && "text-muted-foreground line-through",
+            )}
+          >
+            {c.title}
+          </Link>
+          {booked && (
+            <Badge className="hidden lg:inline-flex">
+              <Check aria-hidden />
+              Booked
+            </Badge>
+          )}
+        </div>
+        <p className="text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+          {c.discipline && <Discipline name={c.discipline} />}
+          {c.instructorName && <span>{c.instructorName}</span>}
+          {cancelled && (
+            <span className="text-error-text font-medium">Cancelled</span>
+          )}
+        </p>
+      </div>
 
       {!cancelled && (
-        <div className="mt-4 flex flex-col gap-3 sm:max-w-sm">
-          <div className="flex flex-col gap-1.5">
+        <div className="mt-4 flex flex-col gap-3 sm:max-w-sm lg:mt-0 lg:flex-row lg:items-center lg:gap-6">
+          <div className="flex flex-col gap-1.5 lg:w-36">
             <span className="text-muted-foreground text-xs tabular-nums">
               {spotsLeftLabel(c.capacity, c.bookingCount)}
             </span>
@@ -620,7 +630,7 @@ function ClassRowCard({
               />
             )}
           </div>
-          {!past && <BookControl c={c} className="w-full" {...props} />}
+          {!past && <BookControl c={c} className="w-full lg:w-36" {...props} />}
         </div>
       )}
     </div>

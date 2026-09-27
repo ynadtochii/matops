@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod/v4";
 
 import type { TenantTx } from "@matops/db";
-import type { Membership } from "@matops/domain";
+import type { Membership, SignupWrites } from "@matops/domain";
 import {
   and,
   createPendingMembership,
@@ -25,17 +25,20 @@ import {
   or,
   recordMilestone,
   resolveInviteToken,
+  saveSignupAnswers,
   setMemberRoleStatus,
   setMemberStatus,
   setMemberStatusIfNotLastOwner,
   sql,
   updateUserProfile,
+  withScope,
 } from "@matops/db";
 import {
   classInstance,
   classParticipation,
   entity,
   entityMembership,
+  waiverAcceptance,
 } from "@matops/db/schema";
 import {
   approveMembership,
@@ -50,9 +53,11 @@ import {
   isStaffRole,
   isStudentMember,
   isSuspended,
+  signupWrites,
   trainingStats,
 } from "@matops/domain";
 import {
+  EmailUpdatesSchema,
   JoinAcademySchema,
   JoinByCodeSchema,
   MemberActionSchema,
@@ -103,6 +108,7 @@ async function joinPending(
     firstName: string;
     lastName: string;
     phone: string;
+    signup?: SignupWrites;
   },
 ) {
   const userId = ctx.session.user.id;
@@ -123,6 +129,20 @@ async function joinPending(
     },
     ctx.baseDb,
   );
+  const { signup } = input;
+  if (signup && !result.alreadyMember) {
+    await withScope(
+      { organizationId: input.organizationId, entityId: input.academyId },
+      (tx) =>
+        saveSignupAnswers(tx, {
+          academyId: input.academyId,
+          memberId: result.memberId,
+          userId,
+          ...signup,
+        }),
+      ctx.baseDb,
+    );
+  }
   await linkLeadOnJoin(input.academyId, input.phone, userId, ctx.baseDb);
   if (input.invitedRole === "student" && !result.alreadyMember) {
     await recordMilestone(
@@ -281,7 +301,7 @@ function ownStudentMembership(ctx: {
   if (!memberId || isStaffRole(ctx.membership)) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
-      message: "Only a student can ask the gym to erase their data.",
+      message: "Only a student can do this.",
     });
   }
   return and(
@@ -309,6 +329,15 @@ export const membershipRouter = {
           message: "This invite isn't valid. Ask your gym for a new link.",
         });
       }
+      const signup = signupWrites({
+        role: invite.role,
+        healthQuestion: invite.signupHealthQuestion,
+        requiredWaiverId: invite.waiver?.id ?? null,
+        answers: input,
+      });
+      if (!signup.ok) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: signup.message });
+      }
       return joinPending(ctx, {
         organizationId: invite.organizationId,
         academyId: invite.academyId,
@@ -316,6 +345,7 @@ export const membershipRouter = {
         firstName: input.firstName,
         lastName: input.lastName,
         phone: input.phone,
+        signup: signup.writes,
       });
     }),
 
@@ -477,10 +507,17 @@ export const membershipRouter = {
       const now = new Date();
       const timeZone = await academyTimeZone(ctx);
       const lastAttendance = history[0]?.startsAt ?? null;
+      const [agreement] = await ctx.db
+        .select({ acceptedAt: waiverAcceptance.acceptedAt })
+        .from(waiverAcceptance)
+        .where(eq(waiverAcceptance.memberId, input.memberId))
+        .orderBy(desc(waiverAcceptance.acceptedAt))
+        .limit(1);
       return {
         stats: trainingStats(history, now, timeZone),
         drift: classifyDrift(lastAttendance, now),
         lastAttendance,
+        waiverAcceptedAt: agreement?.acceptedAt ?? null,
         history,
       };
     }),
@@ -595,6 +632,24 @@ export const membershipRouter = {
       .where(ownStudentMembership(ctx));
     return { ok: true as const };
   }),
+
+  emailUpdates: enrolledProcedure.query(async ({ ctx }) => {
+    const [row] = await ctx.db
+      .select({ optedInAt: entityMembership.emailUpdatesAt })
+      .from(entityMembership)
+      .where(ownStudentMembership(ctx));
+    return { optedInAt: row?.optedInAt ?? null };
+  }),
+
+  setEmailUpdates: enrolledProcedure
+    .input(EmailUpdatesSchema)
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db
+        .update(entityMembership)
+        .set({ emailUpdatesAt: input.emailUpdates ? sql`now()` : null })
+        .where(ownStudentMembership(ctx));
+      return { ok: true as const };
+    }),
 
   /**
    * Erase a member for good (spec O4, docs/issues/84). Irreversible, and the

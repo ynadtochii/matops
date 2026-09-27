@@ -2,6 +2,7 @@
 
 **Class scheduling**
 
+- [146: Student sign-up answers](issues/146-student-sign-up-answers.md): the web invite-link join asks a student for their belt (written to rank), an optional health answer when the academy turns it on in Settings (saved as a staff note), and an email news opt-in (changeable on Profile). Approval also sends an email. Migration `0007`. Slice B adds an owner-written agreement with versions, required at join when turned on, with each acceptance recorded (migration `0008`). Amends ADR 41.
 - [145: A student asks the gym to erase their data](issues/145-student-asks-to-erase-data.md): a student requests erasure from web Profile; owners and managers see it on the Dashboard and the Students Requests tab and answer it with `membership.purge`, which managers may now run (not on an owner). Replaces ADR 129's owner-only erase. Migration `0006`. Web Profile drops "More branches", links to Privacy, and says "gym".
 - [144: Academy-defined class disciplines](issues/144-academy-defined-class-disciplines.md): each academy starts with an empty optional discipline list. Owners and managers add and manage names beside the recurring-template picker; the one-off class picker uses the same list. Existing templates lose fixed enum tags; historical classes keep their saved values.
 

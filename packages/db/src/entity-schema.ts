@@ -52,6 +52,8 @@ export const entity = pgTable(
     publicCode: t.text().notNull().unique(),
     status: t.text().notNull().default("active"),
     membershipEnforcedAt: t.timestamp({ withTimezone: true }),
+    signupHealthQuestion: t.boolean().notNull().default(false),
+    waiverRequired: t.boolean().notNull().default(false),
     createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: t
       .timestamp({ withTimezone: true })
@@ -116,6 +118,7 @@ export const entityMembership = pgTable(
     invitedRole: t.text(),
     joinedAt: t.timestamp({ withTimezone: true }),
     erasureRequestedAt: t.timestamp({ withTimezone: true }),
+    emailUpdatesAt: t.timestamp({ withTimezone: true }),
     createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: t
       .timestamp({ withTimezone: true })

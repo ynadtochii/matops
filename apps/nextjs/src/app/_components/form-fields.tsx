@@ -87,6 +87,7 @@ export function PhoneField({
   required,
   disabled,
   error,
+  quietError,
   className,
   autoComplete,
 }: {
@@ -109,6 +110,8 @@ export function PhoneField({
   disabled?: boolean;
   /** What is wrong with this field, shown under it. */
   error?: string;
+  /** Show the error only as a red border; screen readers still read it. */
+  quietError?: boolean;
   className?: string;
   autoComplete?: string;
 }) {
@@ -167,7 +170,11 @@ export function PhoneField({
           className="min-w-0 flex-1"
         />
       </div>
-      {error && <FieldError id={errorId}>{error}</FieldError>}
+      {error && (
+        <FieldError id={errorId} className={cn(quietError && "sr-only")}>
+          {error}
+        </FieldError>
+      )}
       {name && <input type="hidden" name={name} value={value} />}
     </div>
   );
@@ -202,6 +209,7 @@ export function EmailField({
   disabled,
   invalid,
   error,
+  quietError,
   hint,
   className,
   autoComplete,
@@ -217,6 +225,8 @@ export function EmailField({
   invalid?: boolean;
   /** What is wrong with this field, shown under it. */
   error?: string;
+  /** Show the error only as a red border; screen readers still read it. */
+  quietError?: boolean;
   hint?: string;
   className?: string;
   autoComplete?: string;
@@ -262,7 +272,11 @@ export function EmailField({
           ))}
         </datalist>
       )}
-      {error && <FieldError id={errorId}>{error}</FieldError>}
+      {error && (
+        <FieldError id={errorId} className={cn(quietError && "sr-only")}>
+          {error}
+        </FieldError>
+      )}
       {hint && !error && (
         <p className="text-muted-foreground text-xs">{hint}</p>
       )}

@@ -13,6 +13,7 @@ import type { SeedExec } from "./registry";
 import {
   academyInvite,
   academyProfile,
+  academyWaiver,
   accessAssignment,
   accessAssignmentChange,
   accessPlan,
@@ -41,6 +42,7 @@ import {
   rankPromotion,
   session,
   user,
+  waiverAcceptance,
 } from "../schema";
 import { SEED_MARKER, seedAcademyIds, seedAcademyList } from "./registry";
 
@@ -98,6 +100,14 @@ export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
   );
   await del("member_note", () =>
     exec.delete(memberNote).where(inArray(memberNote.academyId, ids)),
+  );
+  await del("waiver_acceptance", () =>
+    exec
+      .delete(waiverAcceptance)
+      .where(inArray(waiverAcceptance.academyId, ids)),
+  );
+  await del("academy_waiver", () =>
+    exec.delete(academyWaiver).where(inArray(academyWaiver.academyId, ids)),
   );
   await del("member_rank", () =>
     exec.delete(memberRank).where(inArray(memberRank.academyId, ids)),

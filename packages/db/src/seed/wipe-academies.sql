@@ -17,6 +17,8 @@ DELETE FROM "drop_in_visit";
 DELETE FROM "drop_in";
 DELETE FROM "rank_promotion";
 DELETE FROM "member_note";
+DELETE FROM "waiver_acceptance";
+DELETE FROM "academy_waiver";
 DELETE FROM "member_rank";
 DELETE FROM "notification";
 DELETE FROM "notification_notice";

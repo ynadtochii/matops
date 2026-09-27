@@ -50,6 +50,13 @@
       "when": 1790518891031,
       "tag": "0006_erasure_request",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790540823697,
+      "tag": "0007_signup_questions",
+      "breakpoints": true
     }
   ]
 }

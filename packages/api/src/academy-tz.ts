@@ -14,6 +14,8 @@ interface AcademyContext {
   country: string | null;
   bookingWindowDays: number;
   scheduleRevision: number;
+  signupHealthQuestion: boolean;
+  waiverRequired: boolean;
 }
 
 export async function academyContext(
@@ -25,20 +27,21 @@ export async function academyContext(
       country: entity.country,
       bookingWindowDays: entity.bookingWindowDays,
       scheduleRevision: entity.scheduleRevision,
+      signupHealthQuestion: entity.signupHealthQuestion,
+      waiverRequired: entity.waiverRequired,
     })
     .from(entity)
     .where(eq(entity.id, ctx.academyId))
     .limit(1);
-  const country = org?.country ?? null;
-  const bookingWindowDays = org?.bookingWindowDays ?? 7;
-  const scheduleRevision = org?.scheduleRevision ?? 0;
+  const rest = {
+    country: org?.country ?? null,
+    bookingWindowDays: org?.bookingWindowDays ?? 7,
+    scheduleRevision: org?.scheduleRevision ?? 0,
+    signupHealthQuestion: org?.signupHealthQuestion ?? false,
+    waiverRequired: org?.waiverRequired ?? false,
+  };
   if (org?.timeZone) {
-    return {
-      timeZone: resolveAcademyTimeZone(org.timeZone),
-      country,
-      bookingWindowDays,
-      scheduleRevision,
-    };
+    return { timeZone: resolveAcademyTimeZone(org.timeZone), ...rest };
   }
 
   const [row] = await ctx.db
@@ -47,12 +50,7 @@ export async function academyContext(
     .groupBy(classTemplate.timeZone)
     .orderBy(desc(sql`count(*)`))
     .limit(1);
-  return {
-    timeZone: resolveAcademyTimeZone(null, row?.timeZone),
-    country,
-    bookingWindowDays,
-    scheduleRevision,
-  };
+  return { timeZone: resolveAcademyTimeZone(null, row?.timeZone), ...rest };
 }
 
 export async function academyTimeZone(ctx: TimeZoneCtx): Promise<string> {

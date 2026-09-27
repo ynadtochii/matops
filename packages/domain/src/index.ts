@@ -43,5 +43,6 @@ export * from "./phone";
 export * from "./query-window";
 export * from "./rank";
 export * from "./schedule";
+export * from "./signup";
 export * from "./slug";
 export * from "./stats";

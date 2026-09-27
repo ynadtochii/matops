@@ -3,10 +3,12 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod/v4";
 
 import {
+  currentWaiver,
   findAcademyByCode,
   getAcademyCode,
   getAcademySettings,
   listMembershipsForUser,
+  saveWaiverVersion,
   softDeleteAcademy,
   updateAcademySettings,
 } from "@matops/db";
@@ -23,6 +25,7 @@ import {
   CreateAcademySchema,
   DeleteAcademySchema,
   IdSchema,
+  SaveWaiverSchema,
   UpdateAcademySettingsSchema,
 } from "@matops/validators";
 
@@ -117,18 +120,15 @@ export const academyRouter = {
   }),
 
   settings: branchManagerProcedure.query(async ({ ctx }) => {
-    const { timeZone, country, bookingWindowDays, scheduleRevision } =
-      await academyContext(ctx);
+    const academy = await academyContext(ctx);
     const zones = await ctx.db
       .selectDistinct({ timeZone: classTemplate.timeZone })
       .from(classTemplate);
     return {
-      timeZone,
-      country,
-      bookingWindowDays,
-      scheduleRevision,
+      ...academy,
+      waiver: await currentWaiver(ctx.academyId, ctx.db),
       drifting: driftingTemplateZones(
-        timeZone,
+        academy.timeZone,
         zones.map((z) => z.timeZone),
       ),
     };
@@ -143,11 +143,30 @@ export const academyRouter = {
           message: "That is not a time zone we recognise",
         });
       }
-      await ctx.withScope((db) =>
-        updateAcademySettings(ctx.academyId, input, db),
-      );
+      await ctx.withScope(async (db) => {
+        if (input.waiverRequired && !(await currentWaiver(ctx.academyId, db))) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Write the agreement before you turn it on.",
+          });
+        }
+        await updateAcademySettings(ctx.academyId, input, db);
+      });
       return { ok: true as const };
     }),
+
+  saveWaiver: branchManagerProcedure
+    .input(SaveWaiverSchema)
+    .mutation(({ ctx, input }) =>
+      saveWaiverVersion(
+        {
+          academyId: ctx.academyId,
+          body: input.body,
+          createdBy: ctx.session.user.id,
+        },
+        ctx.db,
+      ),
+    ),
 
   /**
    * Soft delete (ADR 68): the rows survive, so the 6-digit code is never

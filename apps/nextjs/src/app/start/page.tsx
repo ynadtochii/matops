@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 
-import { AuthSplit } from "~/app/_components/auth-split";
+import { AuthDoor } from "~/app/_components/auth-door";
 import { CreateGym } from "~/app/_components/create-gym";
 import { MatLoader } from "~/app/_components/mat-loader";
 import { SignIn } from "~/app/_components/sign-in";
@@ -25,7 +25,7 @@ export const metadata: Metadata = {
  */
 export default function StartPage() {
   return (
-    <AuthSplit
+    <AuthDoor
       headline={
         <>
           Open your gym
@@ -38,7 +38,7 @@ export default function StartPage() {
       <Suspense fallback={<MatLoader label="Opening your gym" />}>
         <StartForm />
       </Suspense>
-    </AuthSplit>
+    </AuthDoor>
   );
 }
 

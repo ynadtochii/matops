@@ -25,7 +25,7 @@ export function ClassDetail({ classId }: { classId: string }) {
   const href = useEntityHref();
   const academy = useEntity();
   const trpc = useTRPC();
-  const { book, cancel, busy, lockedMessage } = useBooking();
+  const { book, cancel, busy, locked, lockedMessage } = useBooking();
   const { canRunOrganization } = useOrganization();
   const searchParams = useSearchParams();
   const now = useMinuteClock();
@@ -153,7 +153,7 @@ export function ClassDetail({ classId }: { classId: string }) {
                       <Button
                         variant="secondary"
                         busy={busy}
-                        disabled={busy || !!lockedMessage || !bookable.ok}
+                        disabled={busy || locked || !bookable.ok}
                       >
                         Book class
                       </Button>
@@ -162,7 +162,7 @@ export function ClassDetail({ classId }: { classId: string }) {
                 ) : (
                   <Button
                     busy={busy}
-                    disabled={busy || !!lockedMessage || !bookable.ok}
+                    disabled={busy || locked || !bookable.ok}
                     onClick={() => book.mutate({ classId })}
                   >
                     Book class

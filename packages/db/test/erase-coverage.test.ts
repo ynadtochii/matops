@@ -11,6 +11,8 @@ const NOT_MEMBER_DATA: Record<string, string> = {
   class_template: "The gym's own recurring schedule, not member data.",
   academy_discipline:
     "The academy's own list of class names, not member data (ADR 144).",
+  academy_waiver:
+    "The academy's own agreement text. A member's acceptance of it is in waiver_acceptance (ADR 146).",
   drop_in:
     "A lead is not a member. It carries no member_id and is erased with the academy, not with a member (spec O4).",
   drop_in_visit:

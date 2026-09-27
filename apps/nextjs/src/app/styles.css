@@ -29,6 +29,20 @@
   }
 }
 
+/* Browsers paint autofilled fields with their own !important background and
+   text color. An inset shadow covers the fill, and it joins Tailwind's shadow
+   chain so the focus ring still draws. */
+:is(input, textarea, select):autofill {
+  background-clip: padding-box;
+  --tw-inset-shadow: inset 0 0 0 100vmax var(--raised);
+  box-shadow:
+    var(--tw-inset-shadow), var(--tw-inset-ring-shadow),
+    var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  -webkit-text-fill-color: var(--foreground);
+  caret-color: var(--foreground);
+  filter: none;
+}
+
 /* Better Auth motifs — blueprint background textures (web).
    Mobile gets an RN/SVG equivalent later; see docs/design.md §2. */
 @utility bg-grid {

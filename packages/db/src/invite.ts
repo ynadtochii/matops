@@ -4,6 +4,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import type { DbExec } from "./client";
 import { entity } from "./entity-schema";
 import { academyInvite } from "./invite-schema";
+import { currentWaiver } from "./waiver";
 
 /**
  * Invite-link helpers (spec O4, docs/issues/20). All run on the BASE connection —
@@ -132,8 +133,11 @@ export async function resolveInviteToken(
   academyId: string;
   academyName: string;
   academyAddress: string | null;
+  academyMapUrl: string | null;
   academyTimeZone: string | null;
   academyCountry: string | null;
+  signupHealthQuestion: boolean;
+  waiver: { id: string; body: string; createdAt: Date } | null;
   role: string;
 } | null> {
   const rows = await exec
@@ -143,8 +147,11 @@ export async function resolveInviteToken(
       role: academyInvite.role,
       academyName: entity.name,
       academyAddress: entity.address,
+      academyMapUrl: entity.mapUrl,
       academyTimeZone: entity.timeZone,
       academyCountry: entity.country,
+      signupHealthQuestion: entity.signupHealthQuestion,
+      waiverRequired: entity.waiverRequired,
     })
     .from(academyInvite)
     .innerJoin(entity, eq(academyInvite.academyId, entity.id))
@@ -157,5 +164,11 @@ export async function resolveInviteToken(
     )
     .limit(1);
 
-  return rows[0] ?? null;
+  const row = rows[0];
+  if (!row) return null;
+  const { waiverRequired, ...invite } = row;
+  return {
+    ...invite,
+    waiver: waiverRequired ? await currentWaiver(row.academyId, exec) : null,
+  };
 }

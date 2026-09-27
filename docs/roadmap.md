@@ -34,6 +34,8 @@ Plan: [first-release-plan.md](first-release-plan.md). Code built, including the 
 | S6 contracts and active docs | — | — | — | — | done | — |
 | S7 pilot release checks | — | — | todo | not needed | — | todo |
 | Erase requests (student asks, owner or manager erases), no "More branches", Privacy link, "gym" wording (ADR 145); `0006` applied to dev | done | done | done | not changed | not needed | not needed |
+| Sign-up answers slice A: belt, health note, email opt-in, approval email (ADR 146); `0007` applied to dev 2026-09-27 | done | done | done | not changed | done | todo |
+| Sign-up answers slice B: versioned agreement, required at join, acceptance recorded (ADR 146); in `0007`, applied to dev 2026-09-27 | done | done | done | not changed | done | todo |
 
 **Design system reference page**
 

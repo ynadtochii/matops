@@ -44,6 +44,8 @@ export async function updateAcademySettings(
     address?: string;
     mapUrl?: string;
     bookingWindowDays?: number;
+    signupHealthQuestion?: boolean;
+    waiverRequired?: boolean;
   },
   exec: DbWriter,
 ): Promise<void> {
@@ -54,6 +56,8 @@ export async function updateAcademySettings(
     address?: string | null;
     mapUrl?: string | null;
     bookingWindowDays?: number;
+    signupHealthQuestion?: boolean;
+    waiverRequired?: boolean;
   } = {};
   if (patch.name !== undefined) next.name = patch.name;
   if (patch.timeZone !== undefined) next.timeZone = patch.timeZone;
@@ -62,6 +66,10 @@ export async function updateAcademySettings(
   if (patch.mapUrl !== undefined) next.mapUrl = patch.mapUrl.trim() || null;
   if (patch.bookingWindowDays !== undefined)
     next.bookingWindowDays = patch.bookingWindowDays;
+  if (patch.signupHealthQuestion !== undefined)
+    next.signupHealthQuestion = patch.signupHealthQuestion;
+  if (patch.waiverRequired !== undefined)
+    next.waiverRequired = patch.waiverRequired;
   if (Object.keys(next).length > 0) {
     await exec
       .update(entity)
