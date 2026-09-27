@@ -4,12 +4,11 @@ import type { ReactNode } from "react";
 import { useMemo } from "react";
 
 import type { RouterOutputs } from "@matops/api";
-import type { DisciplineTone } from "@matops/domain";
 import {
   busyHours,
   capacityDisplay,
   DAY_MS,
-  disciplineTone,
+  DISCIPLINE_HUE_COUNT,
   hourSlots,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
@@ -17,23 +16,33 @@ import { FOCUS_RING_INSET } from "@matops/ui/motion";
 
 import { time24Fmt, weekdayFmt } from "~/lib/format";
 import { useMinuteClock } from "./use-clock";
+import { useDisciplineHue } from "./use-discipline-hue";
 
 type ClassRow = RouterOutputs["class"]["week"][number];
 
 const HOUR_H = 64;
 const GAP_H = 26;
 
-/** The grid block paint for each tone. The Legend below reads the same map. */
-const TONE_SKIN: Record<DisciplineTone, string> = {
-  gi: "border-border bg-[color-mix(in_oklab,var(--color-gi)_8%,var(--color-card))] border border-l-[3px] border-l-gi",
-  nogi: "border-border bg-[color-mix(in_oklab,var(--color-nogi)_8%,var(--color-card))] border border-l-[3px] border-l-nogi",
-  other: "border-border bg-card border border-dashed",
-};
+const HUE_SKIN = [
+  "border-l-discipline-1 bg-[color-mix(in_oklab,var(--color-discipline-1)_8%,var(--color-card))] glow-edge-discipline-1",
+  "border-l-discipline-2 bg-[color-mix(in_oklab,var(--color-discipline-2)_8%,var(--color-card))] glow-edge-discipline-2",
+  "border-l-discipline-3 bg-[color-mix(in_oklab,var(--color-discipline-3)_8%,var(--color-card))] glow-edge-discipline-3",
+  "border-l-discipline-4 bg-[color-mix(in_oklab,var(--color-discipline-4)_8%,var(--color-card))] glow-edge-discipline-4",
+  "border-l-discipline-5 bg-[color-mix(in_oklab,var(--color-discipline-5)_8%,var(--color-card))] glow-edge-discipline-5",
+];
+const DEFAULT_SKIN =
+  "border-l-discipline-default bg-[color-mix(in_oklab,var(--color-discipline-default)_8%,var(--color-card))] glow-edge-discipline-default";
 
-function blockSkin(discipline: string | null, cancelled: boolean) {
+const hueSkin = (hue: number | null) =>
+  cn(
+    "border-border border border-l-[3px]",
+    hue === null ? DEFAULT_SKIN : HUE_SKIN[hue],
+  );
+
+function blockSkin(hue: number | null, cancelled: boolean) {
   if (cancelled)
     return "border border-dashed border-error/40 bg-[color-mix(in_oklab,var(--color-error)_5%,var(--color-card))] text-muted-foreground";
-  return TONE_SKIN[disciplineTone(discipline)];
+  return hueSkin(hue);
 }
 
 interface Placed {
@@ -129,21 +138,16 @@ function buildSlots(rows: ClassRow[]): {
 
 const hourLabel = (h: number) => time24Fmt.format(new Date(2000, 0, 1, h, 0));
 
-function Legend() {
-  const items: { label: string; tone: DisciplineTone }[] = [
-    { label: "Gi", tone: "gi" },
-    { label: "NoGi", tone: "nogi" },
-    { label: "Open mat", tone: "other" },
-  ];
+function Legend({ names }: { names: string[] }) {
   return (
-    <ul className="flex items-center gap-4">
-      {items.map((i) => (
-        <li key={i.label} className="flex items-center gap-1.5">
+    <ul className="flex flex-wrap items-center justify-end gap-4">
+      {names.slice(0, DISCIPLINE_HUE_COUNT).map((name, hue) => (
+        <li key={name} className="flex items-center gap-1.5">
           <span
             aria-hidden
-            className={cn("h-3 w-5 rounded-xs", TONE_SKIN[i.tone])}
+            className={cn("h-3 w-5 rounded-xs", hueSkin(hue))}
           />
-          <span className="text-muted-foreground text-xs">{i.label}</span>
+          <span className="text-muted-foreground text-xs">{name}</span>
         </li>
       ))}
     </ul>
@@ -162,6 +166,7 @@ export function WeekGrid({
   onSelect?: (c: ClassRow) => void;
 }) {
   const now = useMinuteClock();
+  const { names, hueOf } = useDisciplineHue();
 
   const days = useMemo(() => {
     const all = Array.from({ length: 7 }, (_, i) => {
@@ -191,7 +196,7 @@ export function WeekGrid({
   return (
     <div className="hidden md:block">
       <div className="mb-3 flex items-center justify-end">
-        <Legend />
+        <Legend names={names} />
       </div>
 
       <div className="border-border overflow-hidden rounded-lg border">
@@ -292,7 +297,7 @@ export function WeekGrid({
                       key={row.id}
                       className={cn(
                         "group absolute z-10 overflow-hidden rounded-sm px-1.5 py-1",
-                        blockSkin(row.discipline, cancelled),
+                        blockSkin(hueOf(row.discipline), cancelled),
                       )}
                       style={{
                         top,

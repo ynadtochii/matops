@@ -1,4 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="7" fill="#8b72ff"/>
-  <path d="M16 0V32M0 16H32M8.5 0V16M16 8.5H32M0 23.5H16M23.5 16V32" stroke="#12091f" stroke-opacity="0.85" stroke-width="1.6"/>
+  <defs><filter id="bloom" x="0" y="0" width="32" height="32" filterUnits="userSpaceOnUse"><feGaussianBlur stdDeviation="1"/></filter></defs>
+  <rect width="32" height="32" rx="7" fill="#000000"/>
+  <path d="M16 0V32M0 16H32M8.5 0V16M16 8.5H32M0 23.5H16M23.5 16V32" stroke="#ebebeb" stroke-opacity="0.5" stroke-width="1.1" filter="url(#bloom)"/>
+  <path d="M16 0V32M0 16H32M8.5 0V16M16 8.5H32M0 23.5H16M23.5 16V32" stroke="#ebebeb" stroke-opacity="0.92" stroke-width="1.1"/>
+  <rect x="0.175" y="0.175" width="31.65" height="31.65" rx="6.825" fill="none" stroke="#ebebeb" stroke-opacity="0.3" stroke-width="0.35"/>
 </svg>

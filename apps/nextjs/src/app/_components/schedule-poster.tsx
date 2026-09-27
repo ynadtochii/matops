@@ -16,6 +16,7 @@ import { toast } from "@matops/ui/toast";
 import { useTRPC } from "~/trpc/react";
 import { useEntity } from "./entity";
 import { POSTER_H, POSTER_W } from "./poster-size";
+import { useDisciplineHue } from "./use-discipline-hue";
 
 const updatedFmt = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
@@ -43,6 +44,7 @@ export function SchedulePoster() {
   // than from the concrete classes on screen. The schedule route prefetches
   // this list, so reading it here costs no request.
   const list = useQuery(trpc.template.list.queryOptions());
+  const { names: disciplines } = useDisciplineHue();
   const classes = useMemo(
     () =>
       (list.data ?? [])
@@ -69,10 +71,11 @@ export function SchedulePoster() {
       academyName: name,
       joinCode: code,
       updatedLabel: `Updated ${updatedFmt.format(new Date())}`,
+      disciplines,
       classes,
     });
     setDrawing(false);
-  }, [classes, code, name]);
+  }, [classes, code, disciplines, name]);
 
   useEffect(() => {
     if (open) void render();

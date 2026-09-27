@@ -5,6 +5,7 @@ import {
   bookingTier,
   canBook,
   capacityDisplay,
+  companyLabel,
   fillLabel,
   notBookableMessage,
   spotsLeftLabel,
@@ -194,5 +195,17 @@ describe("fillLabel", () => {
 
   it("shows count over capacity otherwise", () => {
     expect(fillLabel(20, 12)).toBe("12/20");
+  });
+});
+
+describe("companyLabel", () => {
+  it("names the reader alone when theirs is the only booking", () => {
+    expect(companyLabel(1)).toBe("Just you so far");
+    expect(companyLabel(0)).toBe("Just you so far");
+  });
+
+  it("counts everyone else", () => {
+    expect(companyLabel(2)).toBe("You and 1 other");
+    expect(companyLabel(12)).toBe("You and 11 others");
   });
 });

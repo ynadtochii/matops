@@ -149,7 +149,7 @@ export function DropInForm({ academyId }: { academyId: string }) {
       <input
         type="radio"
         name="di-class"
-        className={cn("accent-brand size-3.5 shrink-0", FOCUS_RING)}
+        className={cn("accent-primary size-3.5 shrink-0", FOCUS_RING)}
         checked={selected === value}
         onChange={() => {
           setPicked(value);

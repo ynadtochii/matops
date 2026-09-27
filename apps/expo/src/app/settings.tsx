@@ -93,7 +93,7 @@ function NotificationToggle() {
         accessibilityLabel="Push notifications"
         value={on}
         onValueChange={toggle}
-        trackColor={{ true: t.brand, false: t.track }}
+        trackColor={{ true: t.primary, false: t.track }}
         thumbColor="#ffffff"
       />
     </View>

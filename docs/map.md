@@ -1,5 +1,10 @@
 <!-- wayfinder:map -->
 
+**Class scheduling**
+
+- [145: A student asks the gym to erase their data](issues/145-student-asks-to-erase-data.md): a student requests erasure from web Profile; owners and managers see it on the Dashboard and the Students Requests tab and answer it with `membership.purge`, which managers may now run (not on an owner). Replaces ADR 129's owner-only erase. Migration `0006`. Web Profile drops "More branches", links to Privacy, and says "gym".
+- [144: Academy-defined class disciplines](issues/144-academy-defined-class-disciplines.md): each academy starts with an empty optional discipline list. Owners and managers add and manage names beside the recurring-template picker; the one-off class picker uses the same list. Existing templates lose fixed enum tags; historical classes keep their saved values.
+
 **First release**
 
 - [142: First release: approval-only booking](issues/142-first-release-approval-only-booking.md): new academies start with payment admission off, so an approved, active student books with no plan. The flag and `bookingGate` stay, every payment screen follows the flag, and no control turns payment on. The owner can cancel for a student; nobody books for one. `/start` makes the gym and its academy in one form, and one academy opens directly with no gym menu. The 2026-09-27 addenda remove reception, public booking, referrals, curriculum, general spaces, the notifications page and retry, the gym-level screens, the payment switch and `booking.bookFor`, and drop their tables in migration `0004`. A later addendum removes strict capacity, branch copy, NativeWind, the Alma beta seed, `tooling/tailwind`, `tooling/github`, and several `packages/ui` components; organization commercial columns leave the Drizzle schema and need a later drop migration. Supersedes parts of 135, 128, 129 and 139.
@@ -7,6 +12,7 @@
 **Design**
 
 - [141: Adopt the Linear design system](issues/141-adopt-the-linear-design-system.md): Linear's surface and text steps, 1px edges, Inter at 510, 13px interface text, radius by nesting and 150ms motion replace the ADR 37 look. The violet and the mark stay. Dark becomes the default theme, and the product keeps Linear's dark values, including three known contrast failures. As built: Inter, Lucide icons, divided lists, a lint rule against arbitrary sizes and hex classes, and one reference page at `/linear-ds` that reads the product tokens.
+- [143: A monochrome interface with lit edges](issues/143-monochrome-lit-edges.md): amends 141. Violet leaves every control and stays on the mark only; focus and checked fills are neutral. Dark takes the lazy.so cool grey scale, and new tokens and utilities draw gradient edges (`edge-lit-*`, `edge-rim-*`), a key-cap lip and a gradient meter fill. Phase 1 (tokens) and Phase 2 (primitives: 5px buttons, rim-edged dialogs and menus, new `cardClass`, `Meter` and `Kbd`) are done; screens, light mode and `/linear-ds` follow.
 
 **Reception (removed by 142) and owner screens**
 

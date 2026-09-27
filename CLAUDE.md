@@ -19,7 +19,7 @@ The first release is **one BJJ academy per gym** with **approval-only booking**.
 - **Migrations.** `packages/db/migrations` holds `0000_baseline` to `0004_first_release_drops` (five journal entries). `0004` drops the removed features' tables and columns. It must ship in a **later deploy** than the code that stopped using them. Dev has `0000`-`0004` applied, and its ledger also holds 6 rows from the unmerged `stripe` branch, so `pnpm -F @matops/db verify` reports more applied rows than the journal. Production has zero academies (user confirmed 2026-09-26); recheck before the first real invitation.
 - **Tests.** The last full run passed 1,168 tests across `@matops/notifications`, `validators`, `domain`, `db` and `api` (2026-09-27).
 - **Scheduled jobs.** None. `apps/nextjs/src/app/api` holds only `auth` and `trpc` routes, and `.github/workflows/ci.yml` (lint, format, typecheck, test) is the only workflow. The class horizon is 180 days, filled on each template save and extended or rebuilt by an owner or manager from Schedule. No code reads `CRON_SECRET`.
-- **Open items.** Before real invitations: set `NEXT_PUBLIC_LEGAL_ENTITY`, `NEXT_PUBLIC_LEGAL_ADDRESS` and `NEXT_PUBLIC_PRIVACY_CONTACT` in Vercel Production, and rehearse backup and restore on an isolated database (first-release plan S7). Rotate `AUTH_SECRET` on the next deploy (ADR 60). The mobile Google browser-to-app hand-off still fails (`docs/mobile-google-login-handoff.md`).
+- **Open items.** Before real invitations: confirm the operator's legal identity and address and publish them on `/privacy` (the page uses the existing support email, not legal env vars), and rehearse backup and restore on an isolated database (first-release plan S7). Rotate `AUTH_SECRET` on the next deploy (ADR 60). The mobile Google browser-to-app hand-off still fails (`docs/mobile-google-login-handoff.md`).
 
 Docs of record: `docs/architecture.md` (§0 as built, §5 tenancy) · `docs/spec.md` (behavior, per ID) · `docs/roadmap.md` (status matrix) · `CHANGELOG.md` · `docs/map.md` (ADR index).
 
@@ -35,7 +35,7 @@ Business reference, **not build plans**: `docs/business-model.md` · `docs/reven
   - `seed pilot <your-email>` builds one BJJ academy, "Pilot BJJ" (Europe/Lisbon), approval-only, with no plans. Idempotent. `seed down` removes it. Root aliases: `pnpm db:seed` (pilot), `pnpm db:seed:down` (down).
   - `seed fill <code>` adds about 20 fake students (bookings, attendance, ranks, notes) around the real owner of the academy with that 6-digit code. It never touches real rows. It adds plans, assignments and months only while that academy takes payment. `seed clear <code>` removes only the fakes; `seed status <code>` counts them.
   - `psql "$POSTGRES_URL&sslrootcert=system" -f packages/db/src/seed/wipe-academies.sql` deletes **every** academy (destructive, keeps real `user` rows).
-- `.env` holds `POSTGRES_URL` (the Neon **dev** branch, pooled, `sslmode=verify-full`), `DB_ENV=dev` and `AUTH_SECRET` (its own, never production's). `apps/nextjs/src/env.ts` also requires the three `NEXT_PUBLIC_LEGAL_*` / `NEXT_PUBLIC_PRIVACY_CONTACT` values that `/privacy` shows.
+- `.env` holds `POSTGRES_URL` (the Neon **dev** branch, pooled, `sslmode=verify-full`), `DB_ENV=dev` and `AUTH_SECRET` (its own, never production's). `/privacy` uses the existing feedback contact; no legal/privacy env vars are required to start Next.js.
 
 ## Branching, databases and deploys
 

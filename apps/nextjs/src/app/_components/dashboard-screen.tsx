@@ -32,7 +32,7 @@ import { FOCUS_RING, FOCUS_RING_INSET, PRESS } from "@matops/ui/motion";
 
 import { clockParts, dayLongFmt, timeFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
-import { ClassRoster } from "./class-roster";
+import { ClassRoster, ROSTER_DIALOG } from "./class-roster";
 import { useEntity, useEntityHref, useOrganization } from "./entity";
 import { PageHeader } from "./page-header";
 import {
@@ -52,6 +52,7 @@ import { Bar, SkeletonDayRail, SkeletonQueue, SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 import { StudentScreen } from "./student-screen";
 import { useMinuteClock } from "./use-clock";
+import { useDisciplineHue } from "./use-discipline-hue";
 
 type ClassRow = Omit<RouterOutputs["class"]["week"][number], "startsAt"> & {
   startsAt: Date;
@@ -178,6 +179,12 @@ export function DashboardScreen() {
       ? []
       : [
           {
+            key: "erase-requests",
+            href: href("/members?tab=requests"),
+            count: members.filter((m) => m.erasureRequestedAt !== null).length,
+            label: "Erase requests",
+          },
+          {
             key: "coach-requests",
             href: href("/coaches"),
             count: pendingCoaches,
@@ -237,7 +244,7 @@ export function DashboardScreen() {
         open={detail !== undefined}
         onOpenChange={(next) => !next && setDetailId(null)}
       >
-        <DialogContent>
+        <DialogContent {...ROSTER_DIALOG}>
           {detail && (
             <>
               <DialogTitle>{detail.title}</DialogTitle>
@@ -247,7 +254,13 @@ export function DashboardScreen() {
                 {detail.discipline && ` · ${detail.discipline.toUpperCase()}`}
                 {detail.instructorName && ` · ${detail.instructorName}`}
               </DialogDescription>
-              <ClassRoster key={detail.id} cls={detail} />
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
+                <ClassRoster
+                  key={detail.id}
+                  cls={detail}
+                  expectedRows={detail.bookingCount}
+                />
+              </div>
             </>
           )}
         </DialogContent>
@@ -530,6 +543,7 @@ function DayRow({
   const full = capacityDisplay(c.bookingCount, c.capacity).isOver;
   const ended = classEndsAt(c) <= now.getTime();
   const { clock, period } = clockParts(c.startsAt);
+  const { hueOf } = useDisciplineHue();
   return (
     <button
       type="button"
@@ -544,7 +558,7 @@ function DayRow({
         aria-hidden
         className={cn(
           "relative z-10 size-2 shrink-0 rounded-full",
-          disciplineDot(c.discipline),
+          disciplineDot(hueOf(c.discipline)),
         )}
       />
       <span className="text-muted-foreground shrink-0 whitespace-nowrap tabular-nums">

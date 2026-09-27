@@ -176,6 +176,7 @@ export async function directoryRosterOf(
         memberId: null,
         status: "active",
         invitedRole: null,
+        erasureRequestedAt: null,
         inheritedRole: true,
       });
     }

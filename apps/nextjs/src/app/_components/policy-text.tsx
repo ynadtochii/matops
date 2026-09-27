@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { FOCUS_RING } from "@matops/ui/motion";
 
-import { env } from "~/env";
+import { CONTACT_EMAIL } from "./contact";
 
 /**
  * The policy prose, in one place. The privacy page renders it as a page and the
@@ -28,14 +28,10 @@ export function PrivacyText() {
     <div className="text-foreground-secondary max-w-[58ch] leading-relaxed text-pretty">
       <Heading>Who is responsible</Heading>
       <p>
-        MatOps is run by <strong>{env.NEXT_PUBLIC_LEGAL_ENTITY}</strong>,{" "}
-        {env.NEXT_PUBLIC_LEGAL_ADDRESS}. Write to{" "}
-        <strong>{env.NEXT_PUBLIC_PRIVACY_CONTACT}</strong> for a copy of your
-        data or to have it deleted. We answer within 30 days.
-      </p>
-      <p className="mt-2">
         Your academy decides what happens to its members&apos; data. MatOps
-        stores it on the academy&apos;s behalf, so ask your academy first.
+        stores it on the academy&apos;s behalf, so ask your academy first about
+        your data. For questions about MatOps, write to{" "}
+        <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
       </p>
 
       <Heading>What we store</Heading>
@@ -84,9 +80,10 @@ export function PrivacyText() {
 
       <Heading>Your rights</Heading>
       <p>
-        Ask for a copy, a correction or a deletion:{" "}
-        <strong>{env.NEXT_PUBLIC_PRIVACY_CONTACT}</strong>. In the EU or the UK
-        you can also complain to your national data protection authority.
+        Ask your academy for a copy, a correction or a deletion of your member
+        data. For questions about data MatOps holds, write to{" "}
+        <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>. In the EU or
+        the UK you can also complain to your national data protection authority.
       </p>
 
       <Heading>Cookies</Heading>

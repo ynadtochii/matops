@@ -67,3 +67,18 @@ export function groupByDay<T extends { startsAt: string | Date }>(
   }
   return [...groups.entries()];
 }
+
+/**
+ * "Starts in 45 min" for a class in the next 12 hours. Null once it has
+ * started or when it is further away, where the day label says more.
+ */
+export function startsInLabel(startsAt: Date, now: Date): string | null {
+  const minutes = Math.ceil((startsAt.getTime() - now.getTime()) / 60_000);
+  if (minutes <= 0 || minutes > 12 * 60) return null;
+  if (minutes < 60) return `Starts in ${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest === 0
+    ? `Starts in ${hours} h`
+    : `Starts in ${hours} h ${rest} min`;
+}

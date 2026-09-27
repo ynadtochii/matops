@@ -24,15 +24,6 @@ import { person } from "./person-schema";
  * Slice 2.1 defines `class_template`; slice 2.2 adds `class` (+ class_status).
  */
 
-/** Optional grappling tag on a class/template (docs/spec O3, S4 filter chips). */
-export const discipline = pgEnum("discipline", [
-  "bjj",
-  "nogi",
-  "judo",
-  "mma",
-  "other",
-]);
-
 /** Template lifecycle: `active` generates future classes; `paused` stops (docs/issues/16). */
 export const templateStatus = pgEnum("template_status", ["active", "paused"]);
 
@@ -75,6 +66,24 @@ export const attendanceStatus = pgEnum("attendance_status", [
  */
 export const bookingTier = pgEnum("booking_tier", ["confirmed", "provisional"]);
 
+export const academyDiscipline = pgTable(
+  "academy_discipline",
+  (t) => ({
+    id: t.uuid().notNull().primaryKey().defaultRandom(),
+    academyId: t
+      .text()
+      .notNull()
+      .references(() => entity.id),
+    name: t.text().notNull(),
+  }),
+  (table) => [
+    uniqueIndex("ad_uniq_academy_name_ci").on(
+      table.academyId,
+      sql`lower(${table.name})`,
+    ),
+  ],
+);
+
 /**
  * Recurring weekly class definition (spec O3). Materialized into concrete `class`
  * rows lazily on write + by a bounded daily cron (slice 2.2, docs/issues/16).
@@ -95,7 +104,7 @@ export const classTemplate = pgTable(
     instructorId: t.text(), // → user.id
     title: t.text().notNull(),
     description: t.text(),
-    discipline: discipline(), // nullable optional tag
+    discipline: t.text(),
     daysOfWeek: t.integer().array().notNull(), // 0=Sun … 6=Sat
     startsAtMinutes: t.integer().notNull(), // minutes from LOCAL midnight
     durationMinutes: t.integer().notNull(),
@@ -152,7 +161,7 @@ export const classInstance = pgTable(
     instructorId: t.text(),
     title: t.text().notNull(), // copied from template; per-instance overridable
     description: t.text(),
-    discipline: discipline(),
+    discipline: t.text(),
     startsAt: t.timestamp({ withTimezone: true }).notNull(), // resolved UTC instant
     durationMinutes: t.integer().notNull(),
     capacity: t.integer().notNull(),

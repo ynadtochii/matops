@@ -4,11 +4,12 @@
  * Structure measured from linear.app on 2026-09-26, the spec page is /linear-ds:
  *   - dark  = Linear's dark values, kept as measured (ADR 141 choice 3)
  *   - light = Linear's light values, darkened where needed to pass WCAG AA
- *   - the matops violet and mark stay (ADR 37); callouts keep their meaning
+ *   - monochrome UI (ADR 143): violet stays on the mark only; callouts keep
+ *     their meaning; depth comes from lit edges, measured from lazy.so
  *   - Inter for UI, Geist Mono for code and data
  *
  * One source of truth for BOTH platforms:
- *   - web    apps/nextjs/src/app/styles.css   @import "@matops/tailwind-config/theme"
+ *   - web    apps/nextjs/src/app/styles.css   @import "./theme.css"
  *   - mobile apps/expo/src/styles.css          @import "@matops/tailwind-config/theme"
  * Change a value here and both the web and mobile app follow.
  *
@@ -54,27 +55,32 @@
   --destructive-foreground: #ffffff;
   --error-text: #a52121;
 
-  /* --- brand: the one signature identity hue (violet). Restrained: mark,
-   * active nav, links, focus, pending tag. NEVER a status (statuses ride the
-   * functional callouts below). Text uses --brand-strong: plain --brand is
-   * 4.47:1 on surface 3. See docs/design.md §1.1 + ADR 37, 141. --- */
-  --brand: #6a4dff;
-  --brand-strong: #5a3cf0;
-  --brand-foreground: #ffffff;
-  --brand-wash: #f1eeff;
+  /* --- brand: the mark and wordmark only (ADR 37, 143). Black tile, light
+   * grey seams in both themes. Never on a control, focus or status. --- */
+  --brand: #000000;
+  --brand-strong: #767676;
+  --brand-foreground: #ebebeb;
 
-  /* --- discipline hues: a CATEGORY encoder (gi vs no-gi on the schedule
-   * grid), never a status. See ADR 53. --- */
-  --gi: #0f766e;
-  --nogi: #b45309;
+  /* --- discipline hues: a CATEGORY encoder, never a status. Assigned by
+   * the discipline's place in the academy's list (`disciplineHue`). The
+   * default paints any class without one of the five: white on dark, a
+   * light grey on light, because white would vanish on a white card. --- */
+  --discipline-1: #5b7493;
+  --discipline-2: #5f8570;
+  --discipline-3: #a0705a;
+  --discipline-4: #86709a;
+  --discipline-5: #948049;
+  --discipline-default: #bdbbc0;
 
   /* --- lines & focus --- */
   --border: #e9e8ea;
   --border-strong: #dcdbdd;
+  --card-edge: #e9e8ea; /* a flat card's edge: a line in light, none in dark */
   --input: #908c93;
   --field-hover: #817d84;
   --control: #908c93;
-  --ring: #6a4dff; /* = --brand. A grey ring could not reach 3:1 on white. */
+  --ring: #282a30;
+  --ring-halo: #0000000f;
 
   /* --- callout accents (functional only). Per theme: the bright hues carry
    * 5:1+ on the dark surface but 2.2-3.8:1 on white, and these are ink as
@@ -103,9 +109,10 @@
   --sidebar-accent: #00000012;
   --sidebar-accent-foreground: #282a30;
   --sidebar-border: #e9e8ea;
-  --sidebar-ring: #6a4dff;
+  --sidebar-ring: #282a30;
 
-  /* --- shape: 6px base, the scale lands on 4 / 6 / 8 / 12 --- */
+  /* --- shape: 6px base, the scale lands on 4 / 6 / 8 / 12, and 5 for a
+   * button (rounded-control) --- */
   --radius: 0.375rem;
 
   /* --- elevation: lift for controls and cards, float for menus and dialogs --- */
@@ -114,90 +121,118 @@
     0 1px 1px #00000012, 0 0 1px #00000014;
   --shadow-float:
     0 0 0 0.5px #00000014, 0 7px 24px #0000000f, 0 3px 12px #00000017;
+  --shadow-key: 0 1px 0 #0000001a;
+
+  /* --- lit edges: a 1px gradient border, bright at the top left. --edge-lit
+   * is for controls, --edge-rim for raised panels. Drawn by the edge-* utilities
+   * in styles.css. --- */
+  --edge-lit: linear-gradient(115deg, #00000024 18%, #0000000f 110%);
+  --edge-rim: linear-gradient(95deg, #0000001f, #0000000f);
+
+  /* --- meter: the fill of progress and capacity bars --- */
+  --meter-fill: linear-gradient(90deg, #908c93, #282a30);
 
   /* --- typography rhythm --- */
   --tracking-normal: -0.01em;
   --spacing: 0.25rem;
 
   @variant dark {
-    --background: #08090a;
-    --foreground: #f7f8f8;
-    --surface-1: #0f1011;
-    --surface-2: #141516;
-    --surface-3: #191a1b;
-    --card: #0e0f10;
-    --card-foreground: #f7f8f8;
-    --popover: #191a1b;
-    --popover-foreground: #f7f8f8;
-    --raised: #141516;
-    --floating: #191a1b;
+    --background: #0a0a0b;
+    --foreground: #ffffff;
+    --surface-1: #0f1012;
+    --surface-2: #1a1b1f;
+    --surface-3: #1f2024;
+    --card: #131416;
+    --card-foreground: #ffffff;
+    --popover: #1f2024;
+    --popover-foreground: #ffffff;
+    --raised: #1a1b1f;
+    --floating: #1f2024;
 
-    --foreground-secondary: #d0d6e0;
-    --muted-foreground: #8a8f98;
-    --foreground-faint: #62666d;
+    --foreground-secondary: #b5b6ba;
+    --muted-foreground: #8a8c93;
+    --foreground-faint: #6c6e74;
 
-    --primary: #e5e5e6;
-    --primary-foreground: #08090a;
+    --primary: #ffffff;
+    --primary-foreground: #0a0a0b;
 
     --secondary: #ffffff0d;
-    --secondary-foreground: #f7f8f8;
-    --muted: #1c1c1f;
-    --accent: #232326;
-    --accent-foreground: #f7f8f8;
-    --hover: #1c1c1f;
-    --active: #232326;
-    --track: #232326;
-    --backdrop: #00000099;
+    --secondary-foreground: #ffffff;
+    --muted: #1a1b1f;
+    --accent: #26272c;
+    --accent-foreground: #ffffff;
+    --hover: #1a1b1f;
+    --active: #26272c;
+    --track: #26272c;
+    --backdrop: #000000a6;
 
     --destructive: #82181a;
-    --destructive-foreground: #f7f8f8;
+    --destructive-foreground: #ffffff;
     --error-text: #ff8a8a;
 
-    --brand: #8b72ff;
-    --brand-strong: #a390ff;
-    --brand-foreground: #12091f;
-    --brand-wash: #17122e;
+    --brand: #000000;
+    --brand-strong: #8c8c8c;
+    --brand-foreground: #ebebeb;
 
-    --gi: #2dd4bf;
-    --nogi: #f5a524;
+    --discipline-1: #8ea6c4;
+    --discipline-2: #8fb8a0;
+    --discipline-3: #cf9f86;
+    --discipline-4: #b7a0cc;
+    --discipline-5: #c6b27a;
+    --discipline-default: #ffffff;
 
-    --border: #23252a;
-    --border-strong: #3e3e44;
-    --input: #23252a;
-    --field-hover: #34343a;
-    --control: #3e3e44;
-    --ring: #8b72ff; /* = --brand */
+    --border: #26272c;
+    --border-strong: #323338;
+    --card-edge: transparent;
+    --input: #323338;
+    --field-hover: #43444a;
+    --control: #43444a;
+    --ring: #b5b6ba;
+    --ring-halo: #ffffff14;
 
     --info: #2b7fff;
-    --info-foreground: #f7f8f8;
+    --info-foreground: #ffffff;
     --warning: #ff6900;
-    --warning-foreground: #08090a;
+    --warning-foreground: #0a0a0b;
     --error: #fb2c36;
-    --error-foreground: #f7f8f8;
+    --error-foreground: #ffffff;
     --success: #00c950;
     --success-foreground: #052e16;
 
-    --chart-1: #f7f8f8;
-    --chart-2: #d0d6e0;
-    --chart-3: #8a8f98;
-    --chart-4: #62666d;
-    --chart-5: #3e3e44;
+    --chart-1: #ffffff;
+    --chart-2: #b5b6ba;
+    --chart-3: #8a8c93;
+    --chart-4: #62646a;
+    --chart-5: #323338;
 
-    --sidebar: #0f1011;
-    --sidebar-foreground: #d0d6e0;
-    --sidebar-primary: #f7f8f8;
-    --sidebar-primary-foreground: #08090a;
-    --sidebar-accent: #232326;
-    --sidebar-accent-foreground: #f7f8f8;
-    --sidebar-border: #23252a;
-    --sidebar-ring: #8b72ff;
+    --sidebar: #0f1012;
+    --sidebar-foreground: #b5b6ba;
+    --sidebar-primary: #ffffff;
+    --sidebar-primary-foreground: #0a0a0b;
+    --sidebar-accent: #26272c;
+    --sidebar-accent-foreground: #ffffff;
+    --sidebar-border: #1f2024;
+    --sidebar-ring: #b5b6ba;
 
     --shadow-lift:
-      0 3px 2px rgb(0 0 0 / 0.04), 0 1px 1px rgb(0 0 0 / 0.07),
-      0 0 1px rgb(0 0 0 / 0.08);
+      inset 0 1px 0 rgb(255 255 255 / 0.06), 0 1px 2px rgb(4 4 7 / 0.45);
     --shadow-float:
-      0 0 0 0.5px #ffffff14, 0 8px 24px rgb(0 0 0 / 0.5),
-      0 2px 6px rgb(0 0 0 / 0.3);
+      0 0 0 0.5px rgb(255 255 255 / 0.1), inset 0 1px 0 rgb(255 255 255 / 0.06),
+      0 2px 2px rgb(4 4 7 / 0.45), 0 8px 24px rgb(4 4 7 / 0.6);
+    --shadow-key: 0 1px 0 rgb(0 0 0 / 0.6);
+
+    --edge-lit: linear-gradient(
+      115deg,
+      rgb(255 255 255 / 0.17) 18%,
+      rgb(255 255 255 / 0.02) 110%
+    );
+    --edge-rim: linear-gradient(
+      95deg,
+      rgb(255 255 255 / 0.26),
+      rgb(255 255 255 / 0.07)
+    );
+
+    --meter-fill: linear-gradient(90deg, #62646a, #ffffff);
   }
 }
 
@@ -232,22 +267,26 @@
   --color-track: var(--track);
   --color-backdrop: var(--backdrop);
 
-  /* brand (signature identity hue) */
   --color-brand: var(--brand);
   --color-brand-strong: var(--brand-strong);
   --color-brand-foreground: var(--brand-foreground);
-  --color-brand-wash: var(--brand-wash);
 
   --color-border: var(--border);
   --color-input: var(--input);
   --color-border-strong: var(--border-strong);
+  --color-card-edge: var(--card-edge);
   --color-field-hover: var(--field-hover);
   --color-control: var(--control);
   --color-ring: var(--ring);
+  --color-ring-halo: var(--ring-halo);
 
   /* discipline categories */
-  --color-gi: var(--gi);
-  --color-nogi: var(--nogi);
+  --color-discipline-1: var(--discipline-1);
+  --color-discipline-2: var(--discipline-2);
+  --color-discipline-3: var(--discipline-3);
+  --color-discipline-4: var(--discipline-4);
+  --color-discipline-5: var(--discipline-5);
+  --color-discipline-default: var(--discipline-default);
 
   /* callout accents */
   --color-info: var(--info);
@@ -316,12 +355,14 @@
   --text-6xl--letter-spacing: -0.022em;
 
   --radius-sm: calc(var(--radius) - 2px);
+  --radius-control: calc(var(--radius) - 1px);
   --radius-md: var(--radius);
   --radius-lg: calc(var(--radius) + 2px);
   --radius-xl: calc(var(--radius) + 6px);
 
   --shadow-lift: var(--shadow-lift);
   --shadow-float: var(--shadow-float);
+  --shadow-key: var(--shadow-key);
   --shadow-2xs: var(--shadow-lift);
   --shadow-xs: var(--shadow-lift);
   --shadow-sm: var(--shadow-lift);

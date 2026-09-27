@@ -29,7 +29,7 @@ export function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "text-foreground data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 bg-raised shadow-float fixed top-1/2 left-1/2 z-50 flex max-h-[85dvh] w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-y-auto overscroll-contain rounded-xl p-4 duration-150 ease-out motion-reduce:animate-none sm:p-6",
+          "text-foreground data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 edge-rim-raised shadow-float fixed top-1/2 left-1/2 z-50 flex max-h-[85dvh] w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col gap-3 overflow-y-auto overscroll-contain rounded-xl p-5 duration-150 ease-out motion-reduce:animate-none sm:gap-4 sm:p-6",
           className,
         )}
         {...props}
@@ -38,11 +38,11 @@ export function DialogContent({
         <DialogPrimitive.Close
           aria-label="Close"
           className={cn(
-            "text-muted-foreground hover:text-foreground hover:bg-hover absolute top-3 right-3 flex size-8 items-center justify-center rounded-sm transition-colors outline-none",
+            "text-muted-foreground hover:text-foreground hover:bg-hover absolute top-3 right-3 flex size-10 items-center justify-center rounded-md transition-colors outline-none",
             FOCUS_RING,
           )}
         >
-          <XIcon aria-hidden="true" />
+          <XIcon aria-hidden="true" className="size-4" />
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>
@@ -55,7 +55,10 @@ export function DialogTitle({
 }: React.ComponentProps<typeof DialogPrimitive.Title>) {
   return (
     <DialogPrimitive.Title
-      className={cn("pr-8 text-xl font-semibold", className)}
+      className={cn(
+        "pr-10 text-xl leading-tight font-semibold tracking-tight",
+        className,
+      )}
       {...props}
     />
   );
@@ -67,7 +70,7 @@ export function DialogDescription({
 }: React.ComponentProps<typeof DialogPrimitive.Description>) {
   return (
     <DialogPrimitive.Description
-      className={cn("text-muted-foreground text-sm", className)}
+      className={cn("text-muted-foreground text-sm leading-relaxed", className)}
       {...props}
     />
   );

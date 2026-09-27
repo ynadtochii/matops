@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ellipsis } from "lucide-react";
+import { Ellipsis, Search } from "lucide-react";
 
 import type { RouterOutputs } from "@matops/api";
-import { isOwner, isPendingCoach, runsBranch } from "@matops/domain";
+import { isPendingCoach, runsBranch } from "@matops/domain";
+import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
 import {
@@ -17,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@matops/ui/dropdown-menu";
 import { Input } from "@matops/ui/input";
+import { Kbd } from "@matops/ui/kbd";
 import { Spinner } from "@matops/ui/spinner";
 import { toast } from "@matops/ui/toast";
 
@@ -24,8 +26,8 @@ import { dateFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { useEntity } from "./entity";
 import { LeadsPipeline } from "./leads";
-import { MemberDetail, MemberRow } from "./member-detail";
-import { Eyebrow, LIST, RESOLVE } from "./primitives";
+import { Initials, MemberDetail, MemberRow } from "./member-detail";
+import { Eyebrow, RESOLVE } from "./primitives";
 import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 import { Tabs } from "./tabs";
@@ -38,6 +40,28 @@ type MemberTab = "requests" | "members" | "leads" | "archived";
 const isMemberTab = (v: string | null): v is MemberTab =>
   v === "requests" || v === "members" || v === "leads" || v === "archived";
 type MemberDialog = "suspend" | "archive" | "purge";
+
+const PEOPLE = "divide-border flex flex-col divide-y";
+
+function walkRows(event: React.KeyboardEvent<HTMLElement>) {
+  if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+  const rows = Array.from(
+    event.currentTarget.querySelectorAll<HTMLElement>("[data-row-toggle]"),
+  );
+  const at = rows.indexOf(document.activeElement as HTMLElement);
+  const next = rows[event.key === "ArrowDown" ? at + 1 : at - 1];
+  if (!next) return;
+  event.preventDefault();
+  next.focus();
+}
+
+function isTyping(target: EventTarget | null) {
+  return (
+    target instanceof HTMLElement &&
+    (target.isContentEditable ||
+      ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+  );
+}
 
 function MemberActions({
   name,
@@ -160,10 +184,10 @@ function MemberActions({
   );
 }
 
-function roleLabel(m: Member): string {
+function roleLabel(m: Member): string | undefined {
   if (m.status === "pending")
     return `wants to join as ${m.invitedRole ?? "student"}`;
-  return m.role;
+  return m.role === "student" ? undefined : m.role;
 }
 
 export function Members() {
@@ -172,9 +196,6 @@ export function Members() {
   const memberList = useQuery(trpc.membership.members.queryOptions());
   const academy = useEntity();
   const owner = runsBranch(academy);
-  // Permanent erase stays with owners (ADR 129); everything else on this row
-  // is ordinary branch work.
-  const canErase = isOwner(academy);
   const archivedList = useQuery({
     ...trpc.membership.archived.queryOptions(),
     enabled: owner,
@@ -204,6 +225,19 @@ export function Members() {
 
   const [query, setQuery] = useState("");
   const needle = query.trim().toLowerCase();
+  const searchRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "/" || event.metaKey || event.ctrlKey) return;
+      if (isTyping(event.target) || !searchRef.current) return;
+      event.preventDefault();
+      searchRef.current.focus();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const invalidate = async () => {
     await queryClient.invalidateQueries(trpc.membership.members.pathFilter());
@@ -287,6 +321,12 @@ export function Members() {
   const pending = members.filter(
     (m) => m.status === "pending" && !isPendingCoach(m),
   );
+  const eraseRequests = owner
+    ? members.filter(
+        (m): m is Member & { erasureRequestedAt: Date } =>
+          m.erasureRequestedAt !== null,
+      )
+    : [];
   const active = members.filter((m) => m.status !== "pending");
   const archived = archivedList.data ?? [];
   const shownActive = active.filter(
@@ -320,12 +360,20 @@ export function Members() {
         value={shownTab}
         onChange={setTab}
         tabs={[
-          { id: "requests", label: "Requests", count: pending.length },
-          { id: "members", label: "Members" },
+          {
+            id: "requests",
+            label: "Requests",
+            count: pending.length + eraseRequests.length,
+          },
+          { id: "members", label: "Members", count: active.length },
           ...(owner
             ? [
                 { id: "leads" as const, label: "Drop-in leads" },
-                { id: "archived" as const, label: "Archived" },
+                {
+                  id: "archived" as const,
+                  label: "Archived",
+                  count: archived.length,
+                },
               ]
             : []),
         ]}
@@ -333,6 +381,41 @@ export function Members() {
       <div key={shownTab} className={RESOLVE}>
         {shownTab === "requests" ? (
           <div className="flex flex-col gap-3">
+            {!listState && eraseRequests.length > 0 && (
+              <>
+                <Eyebrow>Asked to erase their data</Eyebrow>
+                <div className={cn(PEOPLE, "mb-4")}>
+                  {eraseRequests.map((m) => (
+                    <MemberRow
+                      key={m.memberId}
+                      m={m}
+                      label={`asked ${dateFmt.format(new Date(m.erasureRequestedAt))}`}
+                    >
+                      <ConfirmDialog
+                        title={`Erase ${m.name}'s data?`}
+                        description="This erases everything your gym holds about them: attendance, rank and promotion history, coach notes, payment history and bookings. It can't be undone. Their sign-in is deleted too, unless they belong to another gym on MatOps."
+                        confirmLabel="Erase everything"
+                        confirmPhrase={m.name}
+                        variant="destructive"
+                        onConfirm={async () => {
+                          await purge.mutateAsync({ memberId: m.memberId });
+                        }}
+                        trigger={
+                          <Button
+                            size="sm"
+                            variant="destructive-outline"
+                            disabled={rowBusy(m.memberId)}
+                          >
+                            Erase data
+                          </Button>
+                        }
+                      />
+                    </MemberRow>
+                  ))}
+                </div>
+                <Eyebrow>Join requests</Eyebrow>
+              </>
+            )}
             {listState ??
               (pending.length === 0 ? (
                 <EmptyState title="No one is waiting.">
@@ -340,7 +423,7 @@ export function Members() {
                   link below to bring people in.
                 </EmptyState>
               ) : (
-                <div className={LIST}>
+                <div className={PEOPLE}>
                   {pending.map((m) => {
                     const approving =
                       approve.isPending &&
@@ -385,21 +468,43 @@ export function Members() {
         ) : shownTab === "members" ? (
           <div className="flex flex-col gap-3">
             {!listState && active.length > 0 && (
-              <Input
-                type="search"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder={`Search ${active.length} members by name, email or phone`}
-                aria-label="Search members"
-              />
-            )}
-            {!listState && active.length > 0 && (
-              <div className="flex items-center justify-between gap-3">
-                <Eyebrow>
-                  {needle
-                    ? `${shownActive.length} of ${active.length} people`
-                    : `${active.length} ${active.length === 1 ? "person" : "people"}`}
-                </Eyebrow>
+              <div className="relative">
+                <Search
+                  aria-hidden
+                  className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 -translate-y-1/2"
+                />
+                <Input
+                  ref={searchRef}
+                  type="search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key !== "ArrowDown") return;
+                    const first =
+                      listRef.current?.querySelector<HTMLElement>(
+                        "[data-row-toggle]",
+                      );
+                    if (!first) return;
+                    e.preventDefault();
+                    first.focus();
+                  }}
+                  placeholder="Search by name, email or phone"
+                  aria-label="Search members"
+                  aria-keyshortcuts="/"
+                  className="h-11 pr-24 pl-9 text-base sm:h-11"
+                />
+                <span className="pointer-events-none absolute top-1/2 right-3 flex -translate-y-1/2 items-center gap-2">
+                  {needle ? (
+                    <span
+                      aria-live="polite"
+                      className="text-muted-foreground text-xs tabular-nums"
+                    >
+                      {shownActive.length} of {active.length}
+                    </span>
+                  ) : (
+                    <Kbd>/</Kbd>
+                  )}
+                </span>
               </div>
             )}
             {listState ??
@@ -413,51 +518,62 @@ export function Members() {
                   Try part of a name, email or phone number.
                 </EmptyState>
               ) : (
-                <div className={LIST}>
+                <div ref={listRef} className={PEOPLE} onKeyDown={walkRows}>
                   {shownActive.map((m) => (
-                    <div key={m.memberId} className="flex flex-col">
-                      <MemberRow
-                        m={m}
-                        label={roleLabel(m)}
-                        open={openId === m.memberId}
-                        onToggle={() => toggle(m.memberId)}
+                    <div key={m.memberId}>
+                      <div
+                        className={cn(
+                          "relative flex flex-col",
+                          openId === m.memberId &&
+                            "edge-rim-card shadow-float my-3 rounded-xl",
+                        )}
                       >
-                        {owner && (
-                          <MemberActions
-                            name={m.name}
-                            busy={rowBusy(m.memberId)}
-                            onSuspend={
-                              m.status === "active"
-                                ? async () => {
-                                    await suspend.mutateAsync({
-                                      memberId: m.memberId,
-                                    });
-                                  }
-                                : undefined
-                            }
-                            onRestore={
-                              m.status === "suspended"
-                                ? () => restore.mutate({ memberId: m.memberId })
-                                : undefined
-                            }
-                            onArchive={async () => {
-                              await archive.mutateAsync({
-                                memberId: m.memberId,
-                              });
-                            }}
-                            onPurge={
-                              canErase
-                                ? async () => {
-                                    await purge.mutateAsync({
-                                      memberId: m.memberId,
-                                    });
-                                  }
-                                : undefined
-                            }
+                        {openId === m.memberId && (
+                          <span
+                            aria-hidden
+                            className="bg-foreground absolute top-5 -left-px h-6 w-0.5 rounded-full shadow-[0_0_10px_color-mix(in_oklab,var(--foreground)_50%,transparent)]"
                           />
                         )}
-                      </MemberRow>
-                      {openId === m.memberId && <MemberDetail m={m} />}
+                        <MemberRow
+                          m={m}
+                          label={roleLabel(m)}
+                          open={openId === m.memberId}
+                          onToggle={() => toggle(m.memberId)}
+                        >
+                          {owner && (
+                            <MemberActions
+                              name={m.name}
+                              busy={rowBusy(m.memberId)}
+                              onSuspend={
+                                m.status === "active"
+                                  ? async () => {
+                                      await suspend.mutateAsync({
+                                        memberId: m.memberId,
+                                      });
+                                    }
+                                  : undefined
+                              }
+                              onRestore={
+                                m.status === "suspended"
+                                  ? () =>
+                                      restore.mutate({ memberId: m.memberId })
+                                  : undefined
+                              }
+                              onArchive={async () => {
+                                await archive.mutateAsync({
+                                  memberId: m.memberId,
+                                });
+                              }}
+                              onPurge={async () => {
+                                await purge.mutateAsync({
+                                  memberId: m.memberId,
+                                });
+                              }}
+                            />
+                          )}
+                        </MemberRow>
+                        {openId === m.memberId && <MemberDetail m={m} />}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -478,18 +594,20 @@ export function Members() {
                 can restore them in one click.
               </EmptyState>
             ) : (
-              <div className={LIST}>
+              <div className={PEOPLE}>
                 {archived.map((m) => (
                   <div
                     key={m.memberId}
-                    className="flex min-h-11 flex-wrap items-center justify-between gap-3 px-4 py-2.5"
+                    className="flex min-h-14 items-center gap-3 px-4 py-2"
                   >
-                    <div className="min-w-0">
+                    <Initials name={m.name} />
+                    <div className="min-w-0 flex-1">
                       <p className="text-foreground truncate font-medium">
                         {m.name}
                       </p>
                       <p className="text-muted-foreground text-sm">
-                        {m.role} · joined {dateFmt.format(new Date(m.joinedAt))}
+                        {m.role === "student" ? "Joined" : `${m.role}, joined`}{" "}
+                        {dateFmt.format(new Date(m.joinedAt))}
                       </p>
                     </div>
                     <MemberActions
@@ -497,7 +615,7 @@ export function Members() {
                       busy={rowBusy(m.memberId)}
                       onRestore={() => restore.mutate({ memberId: m.memberId })}
                       onPurge={
-                        canErase
+                        owner
                           ? async () => {
                               await purge.mutateAsync({ memberId: m.memberId });
                             }

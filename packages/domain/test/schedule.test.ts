@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   describeRecurrence,
-  disciplineTone,
+  disciplineHue,
   formatStartMinutes,
   normalizeDaysOfWeek,
 } from "../src/schedule";
@@ -31,20 +31,23 @@ describe("describeRecurrence", () => {
   });
 });
 
-describe("disciplineTone", () => {
-  it("folds mma in with nogi", () => {
-    expect(disciplineTone("nogi")).toBe("nogi");
-    expect(disciplineTone("mma")).toBe("nogi");
+describe("disciplineHue", () => {
+  const order = ["Gi", "NoGi", "Open mat", "Kids", "Wrestling", "Judo"];
+
+  it("follows the academy's list order", () => {
+    expect(disciplineHue("Gi", order)).toBe(0);
+    expect(disciplineHue("NoGi", order)).toBe(1);
+    expect(disciplineHue("Wrestling", order)).toBe(4);
   });
 
-  it("keeps open mat neutral", () => {
-    expect(disciplineTone("other")).toBe("other");
+  it("matches names without case", () => {
+    expect(disciplineHue("nogi", order)).toBe(1);
   });
 
-  it("treats every gi discipline, and no discipline at all, as gi", () => {
-    expect(disciplineTone("bjj")).toBe("gi");
-    expect(disciplineTone("judo")).toBe("gi");
-    expect(disciplineTone(null)).toBe("gi");
-    expect(disciplineTone("wrestling")).toBe("gi");
+  it("keeps unset, unlisted and past-the-fifth disciplines neutral", () => {
+    expect(disciplineHue(null, order)).toBeNull();
+    expect(disciplineHue("Sambo", order)).toBeNull();
+    expect(disciplineHue("Judo", order)).toBeNull();
+    expect(disciplineHue("Gi", [])).toBeNull();
   });
 });

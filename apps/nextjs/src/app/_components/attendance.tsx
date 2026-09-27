@@ -16,7 +16,7 @@ import { Label } from "@matops/ui/label";
 import { Select } from "@matops/ui/select";
 
 import { useTRPC } from "~/trpc/react";
-import { ClassRoster } from "./class-roster";
+import { ClassRoster, ROSTER_DIALOG } from "./class-roster";
 import { useEntity } from "./entity";
 import { LIST } from "./primitives";
 import { ScreenSkeleton } from "./skeletons";
@@ -219,7 +219,7 @@ export function Attendance() {
         open={selected !== null}
         onOpenChange={(open) => !open && setSelected(null)}
       >
-        <DialogContent>
+        <DialogContent {...ROSTER_DIALOG}>
           {selected && (
             <>
               <DialogTitle>{selected.title}</DialogTitle>
@@ -227,7 +227,13 @@ export function Attendance() {
                 {format.format(new Date(selected.startsAt))} ·{" "}
                 {selected.durationMinutes} min
               </DialogDescription>
-              <ClassRoster key={selected.id} cls={selected} />
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
+                <ClassRoster
+                  key={selected.id}
+                  cls={selected}
+                  expectedRows={selected.review.total}
+                />
+              </div>
             </>
           )}
         </DialogContent>

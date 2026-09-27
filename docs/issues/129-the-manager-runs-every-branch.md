@@ -174,3 +174,7 @@ Not in this note, and not built: a third level under a branch, rooms, resources
 or new branch types; immediate plan replacement, proration, refunds or credit
 transfer; automatic cancellation when coverage ends; email delivery of staff
 invitations; a metrics projection for the overview.
+
+## 2026-09-27 · Superseded in part by ADR 145
+
+Permanent erase (`membership.purge`) is no longer owner-only. An owner or a manager can run it, and a manager cannot erase an owner or anyone who runs the gym. See [145](145-student-asks-to-erase-data.md).

@@ -40,7 +40,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#08090a",
+  themeColor: "#0a0a0b",
   // Extend under the notch / home indicator so the installed app can honour the
   // safe-area insets in the mobile shell (see AppShell).
   viewportFit: "cover",

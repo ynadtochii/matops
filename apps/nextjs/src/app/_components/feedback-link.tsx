@@ -2,9 +2,8 @@
 
 import { usePathname } from "next/navigation";
 
+import { CONTACT_EMAIL } from "./contact";
 import { useEntityMaybe } from "./entity";
-
-const CONTACT_EMAIL = "yevhenii.tech@gmail.com";
 
 /** Report a bug from where it happened, with the context prefilled. */
 export function FeedbackLink({ className }: { className?: string }) {

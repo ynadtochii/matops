@@ -11,7 +11,7 @@ import { getQueryClient, HydrateClient, trpc } from "~/trpc/server";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <Suspense fallback={<PageLoader label="Opening your branch" />}>
+    <Suspense fallback={<PageLoader label="Opening your gym" />}>
       <Authed>{children}</Authed>
     </Suspense>
   );

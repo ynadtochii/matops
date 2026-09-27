@@ -15,8 +15,6 @@ import {
 import { cn } from "@matops/ui";
 import { Badge } from "@matops/ui/badge";
 import { Button } from "@matops/ui/button";
-import { Callout } from "@matops/ui/callout";
-import { Checkbox } from "@matops/ui/checkbox";
 import { Dialog, DialogContent, DialogTitle } from "@matops/ui/dialog";
 import { FieldError } from "@matops/ui/field";
 import { Input } from "@matops/ui/input";
@@ -39,7 +37,6 @@ import { EmptyState, ErrorState } from "./states";
 import { Tabs } from "./tabs";
 
 type Plan = RouterOutputs["accessPlan"]["list"][number];
-type Affected = RouterOutputs["accessPlan"]["coveragePreview"]["affected"];
 
 /**
  * The organization's membership plans (ADR 126).
@@ -81,11 +78,7 @@ export function MembershipsScreen() {
     ...trpc.accessPlan.bookingsToReview.queryOptions({ limit: 50 }),
     enabled: readable,
   });
-  const [editing, setEditing] = useState<Plan | null>(null);
   const [adding, setAdding] = useState(false);
-
-  const nameOf = (id: string) =>
-    entities.find((e) => e.id === id)?.name ?? "A closed branch";
 
   if (!canRunOrganization) {
     return (
@@ -142,7 +135,7 @@ export function MembershipsScreen() {
       {tab === "payments" && (
         <div className="flex min-w-0 flex-col gap-8">
           <ClaimsWaiting />
-          <MonthBoard nameOf={nameOf} />
+          <MonthBoard />
         </div>
       )}
       {tab === "access" && (
@@ -182,11 +175,7 @@ export function MembershipsScreen() {
               <ul className={LIST}>
                 {plans.data.map((p, i) => (
                   <li key={p.id} style={stagger(i)} className={ENTER}>
-                    <PlanCard
-                      plan={p}
-                      nameOf={nameOf}
-                      onEdit={() => setEditing(p)}
-                    />
+                    <PlanCard plan={p} />
                   </li>
                 ))}
               </ul>
@@ -212,12 +201,6 @@ export function MembershipsScreen() {
       )}
 
       <NewPlanDialog open={adding} onOpenChange={setAdding} />
-      {editing && (
-        <CoverageDialog
-          plan={editing}
-          onOpenChange={(open) => !open && setEditing(null)}
-        />
-      )}
     </div>
   );
 }
@@ -352,7 +335,7 @@ function ClaimsWaiting() {
  * A month nobody has ticked is unpaid. There is no third state, so the button
  * says what it will do rather than asking a question.
  */
-function MonthBoard({ nameOf }: { nameOf: (id: string) => string }) {
+function MonthBoard() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const board = useQuery(trpc.accessPlan.monthBoard.queryOptions());
@@ -417,8 +400,6 @@ function MonthBoard({ nameOf }: { nameOf: (id: string) => string }) {
                   {r.amount
                     ? ` · ${formatMoney(r.amount.priceMinor, r.amount.currency)}`
                     : " · no price yet"}
-                  {r.entityIds.length > 0 &&
-                    ` · ${r.entityIds.map(nameOf).join(" · ")}`}
                 </span>
                 {!r.paid && r.paymentRequired && (
                   <span
@@ -541,15 +522,7 @@ function BookingAccessQueue() {
   );
 }
 
-function PlanCard({
-  plan,
-  nameOf,
-  onEdit,
-}: {
-  plan: Plan;
-  nameOf: (id: string) => string;
-  onEdit: () => void;
-}) {
+function PlanCard({ plan }: { plan: Plan }) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const invalidate = () =>
@@ -574,10 +547,6 @@ function PlanCard({
           {plan.priceMinor !== null && plan.currency
             ? `${formatMoney(plan.priceMinor, plan.currency)} a month`
             : "No price yet"}
-          {" · "}
-          {plan.entityIds.length === 0
-            ? "Covers no branch yet"
-            : plan.entityIds.map(nameOf).join(" · ")}
         </span>
         <span className="text-muted-foreground text-xs tabular-nums">
           {plan.activeHolders === 1
@@ -592,11 +561,6 @@ function PlanCard({
         {!plan.archived && (
           <Button size="sm" variant="outline" onClick={() => setPricing(true)}>
             {plan.priceMinor === null ? "Set price" : "Change price"}
-          </Button>
-        )}
-        {!plan.archived && (
-          <Button size="sm" variant="outline" onClick={onEdit}>
-            Choose branches
           </Button>
         )}
         <Button
@@ -745,7 +709,6 @@ function NewPlanDialog({
   const { entities } = useOrganization();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [picked, setPicked] = useState<string[]>([]);
   const [price, setPrice] = useState("");
   const [currency, setCurrency] = useState("EUR");
   const [error, setError] = useState<string | null>(null);
@@ -756,7 +719,6 @@ function NewPlanDialog({
         await queryClient.invalidateQueries(trpc.accessPlan.list.pathFilter());
         setName("");
         setDescription("");
-        setPicked([]);
         setPrice("");
         setError(null);
         onOpenChange(false);
@@ -781,7 +743,7 @@ function NewPlanDialog({
             const parsed = CreateAccessPlanSchema.safeParse({
               name,
               description,
-              entityIds: picked,
+              entityIds: entities.map((e) => e.id),
               priceMinor:
                 typed === "" ? undefined : Math.round(parseFloat(typed) * 100),
               currency: typed === "" ? undefined : currency,
@@ -851,11 +813,6 @@ function NewPlanDialog({
               />
             </div>
           </div>
-          <BranchTicks
-            entities={entities}
-            picked={picked}
-            onChange={setPicked}
-          />
           <div className="flex justify-end">
             <Button
               type="submit"
@@ -868,208 +825,6 @@ function NewPlanDialog({
         </form>
       </DialogContent>
     </Dialog>
-  );
-}
-
-/**
- * Change which branches a plan covers, showing who it reaches first.
- *
- * The preview is the same call the mutation makes, so what the owner reads is
- * what will happen. Adding a branch enrols the plan's live holders there in the
- * same save (ADR 129), so "gains" is work the save does rather than work left
- * behind. A branch row that is suspended, archived or removed is never touched,
- * and comes back as a decision for a person to make.
- */
-function CoverageDialog({
-  plan,
-  onOpenChange,
-}: {
-  plan: Plan;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const trpc = useTRPC();
-  const queryClient = useQueryClient();
-  const { entities } = useOrganization();
-  const [picked, setPicked] = useState<string[]>(plan.entityIds);
-
-  const changed =
-    picked.length !== plan.entityIds.length ||
-    picked.some((id) => !plan.entityIds.includes(id));
-
-  const preview = useQuery(
-    trpc.accessPlan.coveragePreview.queryOptions(
-      { id: plan.id, entityIds: picked },
-      { enabled: changed },
-    ),
-  );
-
-  const save = useMutation(
-    trpc.accessPlan.setCoverage.mutationOptions({
-      onSuccess: async (result) => {
-        await queryClient.invalidateQueries();
-        toast.success(coverageResultMessage(result));
-        onOpenChange(false);
-      },
-      onError: (e) =>
-        toast.error(e.message || "Couldn't save that. Try again."),
-    }),
-  );
-
-  return (
-    <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogTitle>Branches on {plan.name}</DialogTitle>
-        <div className="flex flex-col gap-4">
-          <BranchTicks
-            entities={entities}
-            picked={picked}
-            onChange={setPicked}
-          />
-          {changed && (
-            <AffectedNotice
-              affected={preview.data?.affected}
-              loading={preview.isPending}
-              entities={entities}
-            />
-          )}
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button
-              busy={save.isPending}
-              disabled={!changed || save.isPending}
-              onClick={() =>
-                save.mutate({
-                  id: plan.id,
-                  entityIds: picked,
-                  version: preview.data?.version,
-                })
-              }
-            >
-              Save branches
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/**
- * What a coverage save actually did, in one line. Enrolment is part of the same
- * call now, so the owner is told whether it finished rather than being sent to
- * press a second button (ADR 129).
- */
-function coverageResultMessage(
-  result: RouterOutputs["accessPlan"]["setCoverage"],
-): string {
-  const enrolled = result.enrolled.length;
-  const stuck = result.failed.length + result.needsDecision.length;
-  if (enrolled === 0 && stuck === 0) return "Branches saved";
-  const done =
-    enrolled === 0
-      ? "Branches saved"
-      : enrolled === 1
-        ? "Branches saved. 1 member enrolled"
-        : `Branches saved. ${enrolled} members enrolled`;
-  return stuck === 0
-    ? done
-    : `${done}. ${stuck} still need a decision on the Memberships list`;
-}
-
-function AffectedNotice({
-  affected,
-  loading,
-  entities,
-}: {
-  affected: Affected | undefined;
-  loading: boolean;
-  entities: { id: string; name: string }[];
-}) {
-  const nameOf = (id: string) =>
-    entities.find((e) => e.id === id)?.name ?? "a closed branch";
-
-  if (loading) {
-    return (
-      <p className="text-muted-foreground text-sm">
-        Checking who this affects…
-      </p>
-    );
-  }
-  if (!affected || affected.length === 0) {
-    return (
-      <p className="text-muted-foreground text-sm">
-        Nothing changes for anyone. Members holding this plan keep what they
-        reach through their other memberships.
-      </p>
-    );
-  }
-
-  const gaining = affected.filter((a) => a.gains.length > 0);
-  const losing = affected.filter((a) => a.loses.length > 0);
-
-  return (
-    <Callout
-      tone={losing.length > 0 ? "warning" : "neutral"}
-      title="Who this changes"
-      className="rounded-md"
-    >
-      {gaining.length > 0 && (
-        <p>
-          {gaining.length === 1
-            ? "1 member gains"
-            : `${gaining.length} members gain`}{" "}
-          {[...new Set(gaining.flatMap((a) => a.gains))].map(nameOf).join(", ")}
-          . Saving enrols them there; anyone whose place at that branch is
-          paused or archived is left alone and listed for you to settle.
-        </p>
-      )}
-      {losing.length > 0 && (
-        <p className={cn(gaining.length > 0 && "mt-1.5")}>
-          {losing.length === 1
-            ? "1 member loses"
-            : `${losing.length} members lose`}{" "}
-          {[...new Set(losing.flatMap((a) => a.loses))].map(nameOf).join(", ")}.
-          Nothing else of theirs covers it. Their branch membership, attendance
-          and history stay.
-        </p>
-      )}
-    </Callout>
-  );
-}
-
-function BranchTicks({
-  entities,
-  picked,
-  onChange,
-}: {
-  entities: { id: string; name: string }[];
-  picked: string[];
-  onChange: (next: string[]) => void;
-}) {
-  return (
-    <fieldset className="flex flex-col gap-0.5">
-      <legend className="mb-2 text-sm font-medium">Branches it covers</legend>
-      {entities.map((e) => (
-        <label
-          key={e.id}
-          className="text-foreground-secondary hover:bg-hover hover:text-foreground -mx-2 flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm transition-colors motion-reduce:transition-none sm:min-h-9"
-        >
-          <Checkbox
-            checked={picked.includes(e.id)}
-            onCheckedChange={(checked) =>
-              onChange(
-                checked === true
-                  ? [...picked, e.id]
-                  : picked.filter((id) => id !== e.id),
-              )
-            }
-          />
-          {e.name}
-        </label>
-      ))}
-    </fieldset>
   );
 }
 

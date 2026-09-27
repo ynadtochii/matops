@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { clockParts, dayKey, groupByDay } from "../src/format";
+import { clockParts, dayKey, groupByDay, startsInLabel } from "../src/format";
 
 describe("clockParts", () => {
   it("splits the clock from any AM/PM tail", () => {
@@ -50,5 +50,32 @@ describe("groupByDay", () => {
 
   it("has no days for no rows", () => {
     expect(groupByDay([])).toEqual([]);
+  });
+});
+
+describe("startsInLabel", () => {
+  const now = new Date(2026, 6, 5, 12, 0);
+  const at = (minutes: number) => new Date(now.getTime() + minutes * 60_000);
+
+  it("counts minutes inside the hour", () => {
+    expect(startsInLabel(at(45), now)).toBe("Starts in 45 min");
+  });
+
+  it("rounds a part minute up", () => {
+    expect(startsInLabel(new Date(now.getTime() + 30_000), now)).toBe(
+      "Starts in 1 min",
+    );
+  });
+
+  it("shows hours and minutes", () => {
+    expect(startsInLabel(at(135), now)).toBe("Starts in 2 h 15 min");
+    expect(startsInLabel(at(180), now)).toBe("Starts in 3 h");
+  });
+
+  it("is null once started or more than 12 hours away", () => {
+    expect(startsInLabel(at(0), now)).toBeNull();
+    expect(startsInLabel(at(-10), now)).toBeNull();
+    expect(startsInLabel(at(12 * 60), now)).toBe("Starts in 12 h");
+    expect(startsInLabel(at(12 * 60 + 1), now)).toBeNull();
   });
 });

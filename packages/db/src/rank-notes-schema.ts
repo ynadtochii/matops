@@ -9,9 +9,8 @@ import { entity, entityMembership } from "./entity-schema";
  *
  * Every table here is tenant-scoped: it carries `academy_id` and gets
  * `ENABLE ROW LEVEL SECURITY` + the standard policy in the hand-written tail of
- * the migration (copying the payments `0015` pattern). Discipline is stored as
- * plain TEXT (not the class `discipline` enum) so the rank model stays general —
- * a new belted art is seeded config in `@matops/domain/rank`, no migration.
+ * the migration (copying the payments `0015` pattern). Rank disciplines are
+ * seeded config in `@matops/domain/rank`, independent of scheduling labels.
  *
  * Rank/notes live in their own tables, NOT on Better Auth's `member` table: that
  * table has no RLS and is read on the base connection (docs/issues/12). Keeping

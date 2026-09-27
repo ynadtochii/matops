@@ -143,6 +143,16 @@ export function spotsLeftLabel(capacity: number, bookingCount: number): string {
 }
 
 /**
+ * Who else is coming, for a student who already holds a spot. The count
+ * includes the reader, so one booking is them alone.
+ */
+export function companyLabel(bookingCount: number): string {
+  const others = bookingCount - 1;
+  if (others <= 0) return "Just you so far";
+  return `You and ${others} other${others === 1 ? "" : "s"}`;
+}
+
+/**
  * How full the class is, for a student who already holds a spot ("12/20", or
  * "12 in" when the gym set no cap). Spots-left is the number that helps someone
  * decide to book; once booked, the useful number is who else is coming.

@@ -67,7 +67,7 @@ export function AlertDialogContent({
         className={cn(
           // Enter animation only — see the Overlay note on why close must not
           // depend on an exit animation.
-          "text-foreground data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 bg-raised shadow-float fixed top-1/2 left-1/2 z-50 grid max-h-[85dvh] w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto overscroll-contain rounded-xl p-4 duration-150 ease-out motion-reduce:animate-none sm:p-6",
+          "text-foreground data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 edge-rim-raised shadow-float fixed top-1/2 left-1/2 z-50 grid max-h-[85dvh] w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto overscroll-contain rounded-xl p-4 duration-150 ease-out motion-reduce:animate-none sm:p-6",
           className,
         )}
         {...props}

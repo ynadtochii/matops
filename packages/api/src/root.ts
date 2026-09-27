@@ -6,6 +6,7 @@ import { bookingRouter } from "./router/booking";
 import { checkinRouter } from "./router/checkin";
 import { classRouter } from "./router/class";
 import { dataTransferRouter } from "./router/dataTransfer";
+import { disciplineRouter } from "./router/discipline";
 import { dropInRouter } from "./router/dropin";
 import { entityRouter } from "./router/entity";
 import { inviteRouter } from "./router/invite";
@@ -30,6 +31,7 @@ export const appRouter = createTRPCRouter({
   membership: membershipRouter,
   template: templateRouter,
   class: classRouter,
+  discipline: disciplineRouter,
   dataTransfer: dataTransferRouter,
   booking: bookingRouter,
   attendance: attendanceRouter,

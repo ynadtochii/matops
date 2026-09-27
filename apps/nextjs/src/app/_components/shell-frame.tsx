@@ -229,7 +229,7 @@ export function ShellFrame({
 
         {banners}
 
-        <main id="main" className="min-h-0 flex-1 overflow-y-auto">
+        <main id="main" className="relative min-h-0 flex-1 overflow-y-auto">
           <div
             className={`${columnClass} pt-6 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pt-8 md:pb-8`}
           >

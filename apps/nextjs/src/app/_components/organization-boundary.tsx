@@ -17,12 +17,12 @@ export function OrganizationBoundary({ children }: { children: ReactNode }) {
   const trpc = useTRPC();
   const mine = useQuery(trpc.entity.list.queryOptions());
 
-  if (mine.isPending) return <PageLoader label="Opening your branch" />;
+  if (mine.isPending) return <PageLoader label="Opening your gym" />;
 
   if (mine.isError) {
     return (
       <div className="mx-auto w-full max-w-md p-8">
-        <ErrorState label="your branches" onRetry={() => void mine.refetch()} />
+        <ErrorState label="your gyms" onRetry={() => void mine.refetch()} />
       </div>
     );
   }

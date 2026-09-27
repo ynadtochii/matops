@@ -181,14 +181,11 @@ export function AppShell({
   let content = children;
   if (routeEntityId) {
     if (current.isPending) {
-      content = <PageLoader label="Opening your branch" />;
+      content = <PageLoader label="Opening your gym" />;
     } else if (current.isError) {
       content = (
         <div className="mx-auto w-full max-w-md p-8">
-          <ErrorState
-            label="your branch"
-            onRetry={() => void current.refetch()}
-          />
+          <ErrorState label="your gym" onRetry={() => void current.refetch()} />
         </div>
       );
     } else if (!current.data) {
@@ -319,7 +316,7 @@ function ShellChrome({
             {isPending && (
               <div className="border-border bg-surface-1 text-foreground border-b">
                 <p className={`${columnClass} py-2 text-sm font-medium`}>
-                  Waiting for branch approval. You can browse classes
+                  Waiting for your gym to approve you. You can browse classes
                   {academy.membershipEnforced ? " and memberships" : ""}, but
                   booking is not available yet.
                 </p>

@@ -115,6 +115,7 @@ export const entityMembership = pgTable(
     status: t.text().notNull().default("pending"),
     invitedRole: t.text(),
     joinedAt: t.timestamp({ withTimezone: true }),
+    erasureRequestedAt: t.timestamp({ withTimezone: true }),
     createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: t
       .timestamp({ withTimezone: true })

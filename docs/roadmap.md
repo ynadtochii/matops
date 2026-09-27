@@ -1,6 +1,13 @@
 <!-- matops — live implementation plan + scope matrix. Rules for this file live in delivery.md. -->
 
 
+**Academy-defined disciplines, ADR 144**
+
+| Slice | DB | API | Web | Mobile | Shared | Infra |
+| --- | --- | --- | --- | --- | --- | --- |
+| Optional text, empty academy list, list management and schedule pickers | done (dev migration applied; production deploy pending) | done | done | not changed | done | production deploy |
+| Single template picker with Add as the last row and three-dot edit per name | not needed | not needed | done | not needed | not needed | not needed |
+
 **First release: one academy, approval-only booking, ADR 142**
 
 Plan: [first-release-plan.md](first-release-plan.md). Code built, including the dead-code removal (B1-B7). Expo changed only where removed features reached it (B5, B6). Lint and typecheck pass, and the last full test run passed 1,168 tests. Browser checks were skipped by decision (plan Decision 12). Not released: S7 waits on privacy details, a restore rehearsal and a production check, and `0004` ships in a later deploy than the code.
@@ -26,6 +33,7 @@ Plan: [first-release-plan.md](first-release-plan.md). Code built, including the 
 | Browser checks (S1b to S5) | — | — | skipped | not needed | — | — |
 | S6 contracts and active docs | — | — | — | — | done | — |
 | S7 pilot release checks | — | — | todo | not needed | — | todo |
+| Erase requests (student asks, owner or manager erases), no "More branches", Privacy link, "gym" wording (ADR 145); `0006` applied to dev | done | done | done | not changed | not needed | not needed |
 
 **Design system reference page**
 
@@ -265,7 +273,7 @@ What is built: the identity join loop, the scheduling core with a 180-day horizo
 
 **Open operational items:** **`AUTH_SECRET` needs rotating** on the next deploy (the old auth error hook logged it — ADR 60); the mobile **Google browser→app session hand-off** still does not land ([mobile-google-login-handoff.md](mobile-google-login-handoff.md)); and every mobile wave since v1.8 is **static-gates-green only** — no simulator in this environment, so the checks in [mobile-device-test.md](mobile-device-test.md) are outstanding.
 
-**Before real invitations:** set the legal and privacy variables in Vercel Production and rehearse backup and restore (first-release plan S7). The runbook is [beta-launch-plan.md](beta-launch-plan.md).
+**Before real invitations:** confirm and publish the legal operator's identity and address on `/privacy` and rehearse backup and restore (first-release plan S7). The policy uses the existing support email; no legal/privacy environment variables are required. The runbook is [beta-launch-plan.md](beta-launch-plan.md).
 
 > **Verified live on Neon.**
 >

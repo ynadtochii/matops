@@ -5,13 +5,6 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@matops/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-  DialogTrigger,
-} from "@matops/ui/dialog";
 import { FieldError } from "@matops/ui/field";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
@@ -27,12 +20,8 @@ import { PhoneField } from "./form-fields";
  * confirm the gym name, they add their name + phone, and join as a PENDING
  * student (the owner approves — same gate as the invite link and the mobile join,
  * spec S2). Creating a gym instead lives behind the "Start a gym" link.
- *
- * `compact` drops the logo and the heading, for the dialog a member already in a
- * gym opens to join a second one. The form underneath is the same one, because
- * the two joins are the same act and must not drift.
  */
-export function JoinByCode({ compact = false }: { compact?: boolean }) {
+export function JoinByCode() {
   const trpc = useTRPC();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -80,27 +69,15 @@ export function JoinByCode({ compact = false }: { compact?: boolean }) {
   );
 
   return (
-    <div
-      className={
-        compact
-          ? "flex w-full flex-col gap-4"
-          : "mx-auto flex w-full max-w-sm flex-col gap-8"
-      }
-    >
-      {!compact && (
-        <>
-          <Logo size={30} />
-          <div className="flex flex-col gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight">
-              Join your gym
-            </h1>
-            <p className="text-muted-foreground text-sm text-pretty">
-              Enter the 6-digit join code your gym gave you. They confirm you
-              after you join.
-            </p>
-          </div>
-        </>
-      )}
+    <div className="mx-auto flex w-full max-w-sm flex-col gap-8">
+      <Logo size={30} />
+      <div className="flex flex-col gap-2">
+        <h1 className="text-2xl font-semibold tracking-tight">Join your gym</h1>
+        <p className="text-muted-foreground text-sm text-pretty">
+          Enter the 6-digit join code your gym gave you. They confirm you after
+          you join.
+        </p>
+      </div>
 
       {!found ? (
         <form
@@ -230,37 +207,5 @@ export function JoinByCode({ compact = false }: { compact?: boolean }) {
         </form>
       )}
     </div>
-  );
-}
-
-/**
- * Join a second branch while already signed in (spec FP9, ADR 128).
- *
- * Separate from the branch picker on purpose: that switches between places this
- * person already trains at, and this asks a place they do not train at yet to
- * take them. A student who moves to a second gym, or trains at a friend's mat on
- * Saturdays, has had no way to do this without signing out.
- *
- * The code can name a branch of any gym, including this one. The join lands
- * PENDING and the server follows the person to whichever gym the code belongs
- * to, so nothing here decides where they end up.
- */
-export function JoinAnotherBranch() {
-  return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="self-start">
-          Join another branch
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-sm">
-        <DialogTitle>Join another branch</DialogTitle>
-        <DialogDescription>
-          Enter the 6-digit join code that branch gave you. They confirm you
-          after you join.
-        </DialogDescription>
-        <JoinByCode compact />
-      </DialogContent>
-    </Dialog>
   );
 }

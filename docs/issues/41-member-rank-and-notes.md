@@ -76,3 +76,11 @@ The original G.2 `set` control accepted a rank change in **any** direction — a
 **Escape hatch for mistakes:** the correction path is **clear-then-set**, not demote. `rank.clear` removes the member's rank in a discipline (the append-only `rank_promotion` history is kept); with no current rank, the next `set` is unconstrained. The web O4 panel now surfaces a per-discipline **Clear** control (it existed in the router but was never wired into the UI), seeds the Set form to the member's current rank, and disables belt/stripe options below it — so the guard is a safety net, not the primary UX.
 
 This is behavior hardening inside the existing G.2 slice — no schema change, no new domain, the tenant seam untouched. Covered by new `compareRank` / `isRankRegression` unit tests in `rank.test.ts`.
+
+## 2026-09-27 · BJJ is the only rank system in the first release
+
+The first release is one BJJ academy per gym (ADR 142). The seeded Judo ladder showed up in the Set rank discipline picker, where it did not belong. `RANK_SYSTEMS` in `@matops/domain/rank` now holds BJJ only. The web hides the Discipline picker while there is one system.
+
+The model does not change. `member_rank.discipline` and the history tables keep a free-text discipline key, not an enum, and rank systems stay a keyed map in code. A later slice can let an owner add a discipline and its belt ladder by adding a table that feeds the same map shape. That needs no migration of existing rank rows.
+
+A rank row saved under a key with no system (for example an old `judo` row in dev data) still displays, with the raw key as its label, and staff can still clear it. Staff cannot set a new rank in it.

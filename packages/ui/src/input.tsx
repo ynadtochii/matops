@@ -3,7 +3,7 @@ import { cn } from "@matops/ui";
 export const FIELD =
   "border-input bg-raised text-foreground placeholder:text-foreground-faint w-full min-w-0 rounded-md border px-2.5 text-sm outline-none " +
   "transition-[border-color,box-shadow] duration-150 motion-reduce:transition-none " +
-  "hover:border-field-hover focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-brand-wash " +
+  "hover:border-field-hover focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring-halo " +
   "aria-invalid:border-error disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50";
 
 export function Input({

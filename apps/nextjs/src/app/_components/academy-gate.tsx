@@ -92,7 +92,7 @@ function OpeningScreen({
         await queryClient.invalidateQueries();
         router.refresh();
       },
-      onError: () => toast.error("Couldn't open your branch. Try again."),
+      onError: () => toast.error("Couldn't open your gym. Try again."),
     }),
   );
 

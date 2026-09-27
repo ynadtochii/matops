@@ -1,8 +1,7 @@
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
 
-import type { DisciplineTone, DriftStatus } from "@matops/domain";
+import type { DriftStatus } from "@matops/domain";
 import type { BadgeTone } from "@matops/ui/badge";
-import { disciplineTone } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { Badge } from "@matops/ui/badge";
 
@@ -332,12 +331,16 @@ export function DriftBadge({
  * tinted row: a list of tinted bars would drown the page, and the category is a
  * whisper, not the point.
  */
-const DOT_SKIN: Record<DisciplineTone, string> = {
-  gi: "bg-gi",
-  nogi: "bg-nogi",
-  other: "border-border bg-background border",
-};
+export const DISCIPLINE_BG = [
+  "bg-discipline-1",
+  "bg-discipline-2",
+  "bg-discipline-3",
+  "bg-discipline-4",
+  "bg-discipline-5",
+];
 
-export function disciplineDot(discipline: string | null): string {
-  return DOT_SKIN[disciplineTone(discipline)];
+export function disciplineDot(hue: number | null): string {
+  return hue === null
+    ? "bg-discipline-default"
+    : (DISCIPLINE_BG[hue] ?? "bg-discipline-default");
 }

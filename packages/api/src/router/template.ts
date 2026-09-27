@@ -28,6 +28,7 @@ import {
   UpdateClassTemplateSchema,
 } from "@matops/validators";
 
+import { requireCatalogDiscipline } from "../discipline";
 import { requireInstructor } from "../members";
 import { TEMPLATE_NOT_FOUND } from "../messages";
 import { notifyClassCancelled, notifyClassChanged } from "../notify";
@@ -62,6 +63,7 @@ export const templateRouter = {
     .input(CreateClassTemplateSchema)
     .mutation(async ({ ctx, input }) => {
       await lockAndReadScheduleRevision(ctx.db, ctx.academyId);
+      await requireCatalogDiscipline(ctx.db, ctx.academyId, input.discipline);
       const instructorId = input.instructorId ?? ctx.session.user.id;
       if (instructorId !== ctx.session.user.id) {
         await requireInstructor(ctx, instructorId);
@@ -113,6 +115,7 @@ export const templateRouter = {
     .input(UpdateClassTemplateSchema)
     .mutation(async ({ ctx, input }) => {
       await lockAndReadScheduleRevision(ctx.db, ctx.academyId);
+      await requireCatalogDiscipline(ctx.db, ctx.academyId, input.discipline);
       const [prev] = await ctx.db
         .select()
         .from(classTemplate)
