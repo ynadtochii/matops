@@ -2,8 +2,8 @@ import { eq } from "drizzle-orm";
 
 import type { SeedExec } from "./registry";
 import { provisionOrganization } from "../provision";
-import { entity, organization } from "../schema";
-import { SEED_MARKER } from "./registry";
+import { entity, member, organization } from "../schema";
+import { SEED_MARKER, seedMemberId } from "./registry";
 
 /**
  * Idempotent: every insert either names a deterministic id or does nothing on
@@ -32,6 +32,18 @@ export async function seedPilot(
       createdAt: new Date(),
     })
     .onConflictDoNothing();
+
+  // A linked person requires an organization member in the same gym.
+  await exec
+    .insert(member)
+    .values({
+      id: seedMemberId("pilot", "owner"),
+      organizationId: PILOT_ORG_ID,
+      userId: ownerUserId,
+      role: "owner",
+      createdAt: new Date(),
+    })
+    .onConflictDoNothing({ target: [member.organizationId, member.userId] });
 
   // The default branch takes the organization's own id (ADR 124), so the BJJ
   // academy is provisioned rather than created.
