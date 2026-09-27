@@ -9,6 +9,8 @@ const NOT_MEMBER_DATA: Record<string, string> = {
   class:
     "The gym's own schedule. A class outlives the members who attended it; erasing a member removes their participation rows, not the class.",
   class_template: "The gym's own recurring schedule, not member data.",
+  academy_discipline:
+    "The academy's own list of class names, not member data (ADR 144).",
   drop_in:
     "A lead is not a member. It carries no member_id and is erased with the academy, not with a member (spec O4).",
   drop_in_visit:

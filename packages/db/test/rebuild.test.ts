@@ -32,6 +32,7 @@ describe("rebuildSchedule", () => {
   beforeEach(async () => {
     await pg.exec(`
       DELETE FROM "class_participation";
+      DELETE FROM "drop_in_visit";
       DELETE FROM "drop_in";
       DELETE FROM "class";
       DELETE FROM "class_template";

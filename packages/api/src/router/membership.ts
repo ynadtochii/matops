@@ -609,7 +609,9 @@ export const membershipRouter = {
     .input(MemberActionSchema)
     .mutation(async ({ ctx, input }) => {
       const m = await requireMember(identityScope(ctx), input.memberId);
-      await requireBranchLifecycleChange(ctx, m);
+      if (!isOwner(ctx.membership)) {
+        await requireBranchLifecycleChange(ctx, m);
+      }
       if (m.accountUserId === ctx.session.user.id) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
