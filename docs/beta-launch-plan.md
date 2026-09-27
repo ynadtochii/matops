@@ -124,11 +124,7 @@ Between step 7 and step 9 the live site is broken. Nobody is using it.
 
 #### Two things this leaves behind
 
-- **The demo academy is now dev-only.** Alma beta, the fake students, the 677
-  classes and the five leads all live on `dev`. Demo from a preview deployment
-  rather than seeding fakes back into production. If you ever do want it in
-  production, it needs `ALLOW_PROD_WRITE=1` **and** `SEED_ALLOW=1`, which is two
-  deliberate acts.
+- **The demo academy is dev-only.** Use `pnpm db:seed` (`seed pilot`) to add a demo academy on dev. Never seed against production.
 - **Never use Neon's "Reset from parent" on `dev` after this.** The parent is
   empty now, so it would empty dev. Rebuild dev's test data with
   `pnpm db:seed` instead, which is what it is for.
@@ -353,16 +349,9 @@ fallback if an edge rule cannot express what you need. Do not add Redis.
   member (ADR 84). For a pilot, "email us and we erase you" written on the
   privacy page is acceptable. Say it plainly rather than leaving it silent.
 
-### 3.4 The demo academy lives in the production database
+### 3.4 Demo data stays on dev
 
-"Alma beta" (`seed_org_alma`, code `990001`) and about twenty fake students sit
-in the same database real gyms will use. RLS keeps them apart, so this is not a
-leak. It is a hazard: `seed clear` or `seed fill` against the prod string is one
-mistyped command away, and 1.2 above is what stops it.
-
-Decide now whether the demo stays as your sales demo (fine, keep it) or moves to
-the dev branch (cleaner). Either way it must stop being maintained from a laptop
-pointed at production.
+The Alma beta seed (`seed_org_alma`) is removed. The demo command is now `seed pilot`, and it must run on the dev branch only (the guard in 1.2 prevents production writes). Production has no demo academy; do not seed fake data there.
 
 ### 3.5 Do not ship the mobile app to the beta
 

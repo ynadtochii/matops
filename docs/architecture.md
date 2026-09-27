@@ -75,7 +75,7 @@ We also carry forward three _patterns_ (not code) from the old app: **domain par
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------ | -------------- |
 | Monorepo             | Turborepo + pnpm                                                                                                               | [07]           |
 | Owner web            | Next.js (App Router) + shadcn/ui + Tailwind + TanStack Query → **Vercel**                                                      | input / [11]   |
-| Student mobile       | Expo (React Native) + NativeWind + react-native-reusables → **EAS**                                                            | input / [11]   |
+| Student mobile       | Expo (React Native) + explicit RN styles (ADR 36) → **EAS**                                                                    | input / [11]   |
 | API                  | **tRPC** colocated in Next.js (internal-only; `trpc-to-openapi` hedge)                                                         | [01],[15]      |
 | Auth                 | **Better Auth** + Organization plugin (Expo secure-store, org/role) **+ magic-link**                                           | [02],[14],[26] |
 | Student low-friction | approval before booking (ADR 142); **QR self check-in**; **public drop-in/lead form**                                          | [22]–[26]      |

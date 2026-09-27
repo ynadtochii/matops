@@ -1,7 +1,7 @@
 # matops design language
 
 The look-and-feel rulebook for both apps (web and mobile). Tokens live in
-`tooling/tailwind/theme.css`, with a TypeScript twin in
+`apps/nextjs/src/app/theme.css`, with a TypeScript twin in
 `packages/ui/src/tokens.ts`. **This doc says how to use them.** Read it before
 you build a new screen or component. Exact values are in `theme.css` and are
 not repeated here.
@@ -292,28 +292,21 @@ carries meaning.
 
 ## 4. Components
 
-**Both clients share the style recipe and split the primitive.** Radix drives
-web, RN twins drive mobile, and both read one `cva` recipe of cross-platform
-classes (ADR [32](issues/32-cross-platform-ui.md)). `button-variants.ts` is the
-reference and holds no web-only classes.
+**The web client uses Radix with its own `cva` recipe in `button.tsx`.** The Expo app uses explicit React Native styles in `apps/expo/src/components/ui.tsx`, sharing the same design tokens (ADR 36).
 
 **Shared parts in `packages/ui/src`:**
 
-| Part                                                          | Use                                                                                                                      |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `Button`                                                      | §1.5                                                                                                                     |
-| `Input`, `Textarea`, `Select`                                 | one `FIELD` class: 32px, 6px radius, raised fill, `--input` edge. Focus is a violet edge with a 3px `--brand-wash` halo. |
-| `Checkbox`                                                    | a choice that waits for Save                                                                                             |
-| `Switch`                                                      | a setting that saves the moment it changes                                                                               |
-| `RadioGroup`                                                  | one of a few, all visible                                                                                                |
-| `Tabs`                                                        | switching views inside one surface                                                                                       |
-| `Tooltip`                                                     | a short label for an icon; never the only place a fact lives                                                             |
-| `Badge`                                                       | a status or tag. Tones: neutral, info, success, warning, error. No violet tone                                           |
-| `Callout`                                                     | a notice in the flow. Tones: neutral, info, success, warning, error. Info is blue, never violet.                         |
-| `Avatar`, `Progress`, `Kbd`, `Skeleton`, `Table`, `Separator` | as named                                                                                                                 |
-| `Dialog`, `AlertDialog`                                       | raised surface, 12px radius, float shadow, no edge, over `--backdrop`                                                    |
-| `DropdownMenu`, `toast`                                       | floating surface; menu items 32px on desktop, 44px on touch                                                              |
-| `Logo`, `Mark`                                                | §6                                                                                                                       |
+| Part                          | Use                                                                                                                       |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `Button`                      | §1.5                                                                                                                      |
+| `Input`, `Textarea`, `Select` | one `FIELD` class: 32px, 6px radius, raised fill, `--input` edge. Focus is a violet edge with a 3px `--brand-wash` halo. |
+| `Checkbox`                    | a choice that waits for Save                                                                                              |
+| `Badge`                       | a status or tag. Tones: neutral, info, success, warning, error. No violet tone                                            |
+| `Callout`                     | a notice in the flow. Tones: neutral, info, success, warning, error. Info is blue, never violet.                          |
+| `Separator`                   | a divider between sections                                                                                                |
+| `Dialog`, `AlertDialog`       | raised surface, 12px radius, float shadow, no edge, over `--backdrop`                                                    |
+| `DropdownMenu`, `toast`       | floating surface; menu items 32px on desktop, 44px on touch                                                              |
+| `Logo`, `Mark`                | §6                                                                                                                        |
 
 **App primitives in `apps/nextjs/src/app/_components/primitives.tsx`:**
 
@@ -410,7 +403,7 @@ laid in) in `--brand-foreground` at 85%, each seam running edge to edge. Seam
 path: `M16 0V32 M0 16H32 M8.5 0V16 M16 8.5H32 M0 23.5H16 M23.5 16V32`.
 
 Built once, shared: **`@matops/ui/logo`**, `Mark` (tile) and `Logo` (mark plus
-wordmark); web is inline SVG, mobile is positioned Views (`logo.native.tsx`, no
+wordmark); web is inline SVG, mobile is positioned Views in `apps/expo/src/components/ui.tsx` (no
 `react-native-svg`). The wordmark is "MatOps" in Inter semibold at `text-lg`,
 with "Ops" in `--brand-strong`. ADR 141 did not change the mark or the violet.
 
@@ -436,7 +429,7 @@ use the full `Logo` when the brand must read at a distance. Rationale in ADR 37.
 | Piece                                                                                                                                   | State                                               |
 | --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
 | Tokens (surfaces, text steps, edges, violet, callouts, radius, shadow, type)                                                            | **done**: `theme.css` + `tokens.ts`, ADR 141 step 1 |
-| Shared parts (button, fields, overlays, tabs, tooltip, checkbox, radio, switch, badge, callout, avatar, progress, kbd, skeleton, table) | **done**: `packages/ui`, step 2                     |
+| Shared parts (button, fields, overlays, checkbox, badge, callout, separator, overlays)                                                  | **done**: `packages/ui`, step 2                     |
 | Shell (sidebar, header, branch picker, mobile tab bar, banners)                                                                         | **done**: steps 3a, 3b                              |
 | The nine screen groups (steps 4.1-4.9)                                                                                                  | **done**                                            |
 | Mobile (Inter, larger scale, lists, pills)                                                                                              | **done, static gates only**: step 5                 |

@@ -133,3 +133,15 @@ Kept: the payments code (`bookingGate`, `entity.membership_enforced_at`, plans, 
 **Migration.** `packages/db/migrations/0004_first_release_drops.sql` is structure only. It drops the tables `reception_link`, `curriculum_track`, `curriculum_block_template`, `curriculum_block`, `member_referral` and `member_referral_audit` (their RLS policies and grants go with them) and the enum `referral_action`. It drops the columns `organization.curriculum_enabled`, `organization.referrals_enabled`, `organization.general_branches_enabled`, `academy_profile.curriculum_for_students`, `academy_profile.public_booking_enabled`, `class_template.curriculum_track_id`, `class_template.public_bookable`, `class.public_bookable`, and `drop_in_visit.cancel_token`, `cancel_token_expires_at` and `booked_class_starts_at` with the index `dv_uniq_cancel_token`. It is applied to dev.
 
 **Production order.** A migration runs while the old code still serves. So the code changes ship first, and this migration ships in a later deploy, after no running code reads the dropped tables or columns.
+
+## Addendum, 2026-09-27: further cleanup
+
+Additional code and dependency cuts after the main dead-code batch.
+
+- **Strict capacity removed.** `claimSeatIfStrict` and the `strict` capacity path are deleted. Every class is soft capacity. `claimSeat` always increments. `SESSION_FULL` is gone.
+- **Branch copy removed.** `entity.create` no longer copies a branch (`copyFromEntityId`, `copyBranchSetup` removed). New entities always start from a clean provision.
+- **NativeWind removed from Expo.** The Expo app no longer uses NativeWind, `react-native-css`, `tailwindcss`, `postcss` or `withNativewind`. It uses explicit React Native styles throughout (`apps/expo/src/components/ui.tsx`), as ADR 36 intended. `styles.css`, `postcss.config.mjs` and `nativewind-env.d.ts` are deleted.
+- **Alma beta seed removed.** `seed up`, `seed reset`, `seed:health` and `src/seed.ts` are deleted. The default demo command is `seed pilot`. Root alias `pnpm db:seed` runs `seed pilot`; `db:seed:reset` is removed; `db:seed:down` stays.
+- **Organization commercial columns removed from the Drizzle schema** (`offer`, `pilot_ends_on`, `agreed_price_minor`, `agreed_price_currency`, `billing_contact`, `account_status`). The columns still exist in the database. A new migration in a later deploy must drop them, following the same two-step rule as `0004`.
+- **`tooling/tailwind` and `tooling/github` removed.** `theme.css` is now `apps/nextjs/src/app/theme.css`. The GitHub composite action is `.github/actions/setup/action.yml`. `tooling/eslint/nextjs.ts` is inlined into `apps/nextjs/eslint.config.ts`.
+- **`packages/ui` trimmed.** `avatar`, `kbd`, `progress`, `radio-group`, `skeleton`, `switch`, `table`, `tabs`, `tooltip` and `logo.native.tsx` are removed. `button-variants.ts` is removed; `button.tsx` holds the one `cva` recipe. The `lg` spinner size and the `payment`, `membership` and `schedule` `useInvalidate` groups are removed.

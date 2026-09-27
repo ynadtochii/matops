@@ -2,7 +2,7 @@
 
 **First release**
 
-- [142: First release: approval-only booking](issues/142-first-release-approval-only-booking.md): new academies start with payment admission off, so an approved, active student books with no plan. The flag and `bookingGate` stay, every payment screen follows the flag, and no control turns payment on. The owner can cancel for a student; nobody books for one. `/start` makes the gym and its academy in one form, and one academy opens directly with no gym menu. The 2026-09-27 addenda remove reception, public booking, referrals, curriculum, general spaces, the notifications page and retry, the gym-level screens, the payment switch and `booking.bookFor`, and drop their tables in migration `0004`. Supersedes parts of 135, 128, 129 and 139.
+- [142: First release: approval-only booking](issues/142-first-release-approval-only-booking.md): new academies start with payment admission off, so an approved, active student books with no plan. The flag and `bookingGate` stay, every payment screen follows the flag, and no control turns payment on. The owner can cancel for a student; nobody books for one. `/start` makes the gym and its academy in one form, and one academy opens directly with no gym menu. The 2026-09-27 addenda remove reception, public booking, referrals, curriculum, general spaces, the notifications page and retry, the gym-level screens, the payment switch and `booking.bookFor`, and drop their tables in migration `0004`. A later addendum removes strict capacity, branch copy, NativeWind, the Alma beta seed, `tooling/tailwind`, `tooling/github`, and several `packages/ui` components; organization commercial columns leave the Drizzle schema and need a later drop migration. Supersedes parts of 135, 128, 129 and 139.
 
 **Design**
 
