@@ -63,8 +63,10 @@ export function InstallAppCard() {
       )}
     >
       <div className="flex min-w-0 flex-col gap-1">
-        <p className="font-medium">Keep this on your home screen</p>
-        <p className="text-muted-foreground text-sm">
+        <p className="text-foreground text-sm font-medium">
+          Keep this on your home screen
+        </p>
+        <p className="text-muted-foreground text-sm text-pretty">
           {isIos
             ? "Best experience: tap Share, then Add to Home Screen. It opens full screen and your classes are one tap away."
             : "Best experience: install it and it opens full screen, like an app, with your classes one tap away."}

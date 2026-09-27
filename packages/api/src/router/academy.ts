@@ -3,34 +3,26 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod/v4";
 
 import {
-  eq,
   findAcademyByCode,
   getAcademyCode,
   getAcademySettings,
-  getPublicApiSettings,
   listMembershipsForUser,
-  listPublicClasses,
-  setPublicApiEnabled,
   softDeleteAcademy,
   updateAcademySettings,
 } from "@matops/db";
-import { classTemplate, organization } from "@matops/db/schema";
+import { classTemplate } from "@matops/db/schema";
 import {
   canEnroll,
-  DAY_MS,
   driftingTemplateZones,
   isStudentLensMembership,
   isValidTimeZone,
-  isWebLensMembership,
   matchesDeleteAcademyPhrase,
-  PUBLIC_RANGE_DEFAULT_DAYS,
 } from "@matops/domain";
 import {
   AcademyCodeSchema,
   CreateAcademySchema,
   DeleteAcademySchema,
   IdSchema,
-  PublicBookingEnabledSchema,
   UpdateAcademySettingsSchema,
 } from "@matops/validators";
 
@@ -40,19 +32,9 @@ import {
   branchManagerProcedure,
   ownerIdentityProcedure,
   protectedProcedure,
-  staffIdentityProcedure,
 } from "../trpc";
 
 export const academyRouter = {
-  /**
-   * The academies this signed-in user runs — the WEB lens (owner / instructor,
-   * plus a pending instructor still awaiting approval). Drives the switcher.
-   */
-  listMine: protectedProcedure.query(async ({ ctx }) => {
-    const all = await listMembershipsForUser(ctx.session.user.id, ctx.baseDb);
-    return all.filter(isWebLensMembership);
-  }),
-
   /**
    * The academies this user TRAINS at — the MOBILE (student) lens: active
    * students + members invited as students, awaiting approval. Drives the mobile
@@ -66,10 +48,10 @@ export const academyRouter = {
   /**
    * The post-login gate list (ADR 49): every academy this user has a LIVE tie to
    * — pending or active, any role. Drives where a fresh session lands: 0 → join
-   * by code, 1 → open it automatically, 2+ → pick one. Broader than `listMine`
-   * (the web-lens switcher) on purpose, so a returning student is not re-asked
-   * for a code; it drops `removed`/`suspended` memberships, where the user has no
-   * standing to land on.
+   * by code, 1 → open it automatically, 2+ → pick one. Any role on purpose, so
+   * a returning student is not re-asked for a code; it drops
+   * `removed`/`suspended` memberships, where the user has no standing to land
+   * on.
    *
    * An empty list is not a broken gym (ADR 128). An owner who has made a gym
    * and not yet made its first branch belongs to no branch, and the landing
@@ -113,14 +95,6 @@ export const academyRouter = {
         canEnroll(a),
     );
     if (!academy) return null;
-    const [modules] = await ctx.baseDb
-      .select({
-        curriculumEnabled: organization.curriculumEnabled,
-        referralsEnabled: organization.referralsEnabled,
-      })
-      .from(organization)
-      .where(eq(organization.id, activeOrganizationId))
-      .limit(1);
     return {
       academyId: academy.academyId,
       organizationId: academy.organizationId,
@@ -138,9 +112,6 @@ export const academyRouter = {
       // Which gate this branch runs on, so a screen never offers a setting the
       // server no longer consults (ADR 126).
       membershipEnforced: academy.membershipEnforcedAt !== null,
-      curriculumForStudents: academy.curriculumForStudents,
-      curriculumEnabled: modules?.curriculumEnabled ?? false,
-      referralsEnabled: modules?.referralsEnabled ?? false,
       code: await getAcademyCode(academyId, ctx.baseDb),
     };
   }),
@@ -176,78 +147,6 @@ export const academyRouter = {
         updateAcademySettings(ctx.academyId, input, db),
       );
       return { ok: true as const };
-    }),
-
-  /**
-   * What staff send to someone who asks about training (spec O6): whether the
-   * public booking page is live and the code its URL is built from. Staff, not
-   * owner, because the instructor reading the gym's messages is usually the one
-   * asked. It returns three fields and never the publishable key, which stays
-   * on the owner-only `publicApi` query.
-   *
-   * `hasSharedClass` looks at the same window the visitor's page asks for, so
-   * an empty one means a working link that shows nothing — the one failure a
-   * link on its own cannot reveal.
-   */
-  shareLinks: staffIdentityProcedure.query(async ({ ctx }) => {
-    const { settings, shared } = await ctx.withScope(async (db) => {
-      const settings = await getPublicApiSettings(ctx.academyId, db);
-      const now = new Date();
-      return {
-        settings,
-        shared: settings?.enabled
-          ? await listPublicClasses(
-              ctx.academyId,
-              now,
-              new Date(now.getTime() + PUBLIC_RANGE_DEFAULT_DAYS * DAY_MS),
-              1,
-              db,
-            )
-          : [],
-      };
-    });
-    if (!settings) {
-      throw new TRPCError({ code: "NOT_FOUND", message: "Academy not found" });
-    }
-    return {
-      bookingEnabled: settings.enabled,
-      publicCode: settings.publicCode,
-      hasSharedClass: shared.length > 0,
-    };
-  }),
-
-  /**
-   * The public booking surface (spec O6, ADR 115): the master switch, the
-   * publishable key and the optional origin allowlist. Owner-only.
-   */
-  publicApi: branchManagerIdentityProcedure.query(async ({ ctx }) => {
-    const settings = await ctx.withScope((db) =>
-      getPublicApiSettings(ctx.academyId, db),
-    );
-    if (!settings) {
-      throw new TRPCError({ code: "NOT_FOUND", message: "Academy not found" });
-    }
-    return settings;
-  }),
-
-  /**
-   * Switch public booking on or off. Switching on mints the key the first time;
-   * switching off keeps it, because a gym that pauses for a week should not have
-   * to re-paste a key into its website afterwards.
-   */
-  setPublicApi: branchManagerIdentityProcedure
-    .input(PublicBookingEnabledSchema)
-    .mutation(async ({ ctx, input }) => {
-      const settings = await ctx.withScope((db) =>
-        setPublicApiEnabled(ctx.academyId, input.enabled, db),
-      );
-      if (!settings) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Academy not found",
-        });
-      }
-      return settings;
     }),
 
   /**

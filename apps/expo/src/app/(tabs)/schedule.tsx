@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { ScrollView, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 
@@ -20,11 +20,10 @@ import { ScheduleSkeleton } from "~/components/skeletons";
 import { SuspendedNotice } from "~/components/suspended-notice";
 import {
   Banner,
-  Card,
   EmptyState,
   ErrorState,
-  Eyebrow,
   Heading,
+  List,
   Muted,
   Screen,
   StatusPill,
@@ -55,15 +54,24 @@ function railColor(t: Theme, discipline: string | null, cancelled: boolean) {
   return toneColorOf(t)[disciplineTone(discipline)];
 }
 
-/** The day rule — mono day label between hairlines, with the class count. */
+/** The day rule: the day label over its list, with the class count. */
 function DayRule({ label, meta }: { label: string; meta: string }) {
-  const t = useTheme();
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-      <View style={{ width: 16, height: 1, backgroundColor: t.border }} />
-      <Eyebrow>{label}</Eyebrow>
-      <View style={{ flex: 1, height: 1, backgroundColor: t.border }} />
-      <Eyebrow>{meta}</Eyebrow>
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 10,
+        paddingHorizontal: 2,
+      }}
+    >
+      <Txt size={13} weight={500} tone="secondary">
+        {label}
+      </Txt>
+      <Txt size={13} tone="muted" style={{ fontVariant: ["tabular-nums"] }}>
+        {meta}
+      </Txt>
     </View>
   );
 }
@@ -99,124 +107,110 @@ function ClassCard({
   const { clock, period } = clockParts(new Date(c.startsAt));
   const full = capacityDisplay(c.bookingCount, c.capacity).isOver;
   const card = (
-    <Card
-      variant={cancelled ? "outline" : "filled"}
+    <Pressable
       onPress={onPress}
-      padded={false}
-      style={[
-        { overflow: "hidden" },
-        booked && !cancelled ? { borderColor: t.brand } : null,
+      style={({ pressed }) => [
+        { flexDirection: "row", alignItems: "stretch" },
+        pressed && { backgroundColor: t.hover },
       ]}
     >
-      <View style={{ flexDirection: "row", alignItems: "stretch" }}>
-        <View
-          style={{
-            width: 3,
-            backgroundColor: railColor(t, c.discipline, cancelled),
-          }}
-        />
-        <View
-          style={{
-            flex: 1,
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 12,
-            paddingVertical: 12,
-            paddingHorizontal: 12,
-          }}
-        >
-          <View style={{ width: 48, alignItems: "flex-end" }}>
-            <Txt
-              data
-              size={15}
-              weight={600}
-              tone={cancelled ? "muted" : "default"}
-              style={cancelled ? { textDecorationLine: "line-through" } : null}
-            >
-              {clock}
+      <View
+        style={{
+          width: 3,
+          backgroundColor: railColor(t, c.discipline, cancelled),
+        }}
+      />
+      <View
+        style={{
+          flex: 1,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 12,
+          minHeight: 64,
+          paddingVertical: 12,
+          paddingHorizontal: 12,
+        }}
+      >
+        <View style={{ width: 48, alignItems: "flex-end" }}>
+          <Txt
+            data
+            size={15}
+            weight={500}
+            tone={cancelled ? "muted" : "default"}
+            style={cancelled ? { textDecorationLine: "line-through" } : null}
+          >
+            {clock}
+          </Txt>
+          {period ? (
+            <Txt data size={12} tone="muted">
+              {period}
             </Txt>
-            {period ? (
-              <Txt data size={10} weight={500} tone="muted">
-                {period}
+          ) : null}
+        </View>
+
+        <View style={{ flex: 1, gap: 4 }}>
+          <Txt
+            size={15}
+            weight={500}
+            tone={cancelled ? "muted" : "default"}
+            numberOfLines={1}
+          >
+            {c.title}
+          </Txt>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+              flexWrap: "wrap",
+            }}
+          >
+            {cancelled ? (
+              <StatusPill tone="error" label="Cancelled" />
+            ) : booked ? (
+              <>
+                <StatusPill tone="info" label="Booked" />
+                <Txt
+                  size={13}
+                  tone={full ? "warning" : "muted"}
+                  style={{ fontVariant: ["tabular-nums"] }}
+                >
+                  {fillLabel(c.capacity, c.bookingCount)}
+                </Txt>
+              </>
+            ) : past ? null : (
+              <Txt
+                size={13}
+                tone={full ? "warning" : "muted"}
+                style={{ fontVariant: ["tabular-nums"] }}
+              >
+                {spotsLeftLabel(c.capacity, c.bookingCount)}
+              </Txt>
+            )}
+            {c.discipline ? (
+              <Txt size={13} tone="muted">
+                {c.discipline}
+              </Txt>
+            ) : null}
+            {c.instructorName ? (
+              <Txt size={13} tone="muted" numberOfLines={1}>
+                {c.instructorName}
               </Txt>
             ) : null}
           </View>
-
-          <View style={{ flex: 1, gap: 5 }}>
-            <Txt
-              size={15}
-              weight={500}
-              tone={cancelled ? "muted" : "default"}
-              numberOfLines={1}
-            >
-              {c.title}
-            </Txt>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 8,
-                flexWrap: "wrap",
-              }}
-            >
-              {cancelled ? (
-                <StatusPill tone="error" label="Cancelled" />
-              ) : booked ? (
-                <>
-                  <Txt
-                    data
-                    size={11}
-                    weight={600}
-                    uppercase
-                    tracking={0.8}
-                    tone="brand"
-                  >
-                    Booked
-                  </Txt>
-                  <Txt
-                    data
-                    size={11}
-                    weight={600}
-                    uppercase
-                    tracking={0.8}
-                    tone={full ? "warning" : "muted"}
-                  >
-                    {fillLabel(c.capacity, c.bookingCount)}
-                  </Txt>
-                </>
-              ) : past ? null : (
-                <Txt
-                  data
-                  size={11}
-                  weight={600}
-                  uppercase
-                  tracking={0.8}
-                  tone={full ? "warning" : "muted"}
-                >
-                  {spotsLeftLabel(c.capacity, c.bookingCount)}
-                </Txt>
-              )}
-              {c.discipline ? <Eyebrow>{c.discipline}</Eyebrow> : null}
-              {c.instructorName ? (
-                <Txt size={12} tone="muted" numberOfLines={1}>
-                  {c.instructorName}
-                </Txt>
-              ) : null}
-            </View>
-          </View>
-
-          {cancelled ? (
-            <Chevron />
-          ) : bookable ? (
-            <BookButton c={c} />
-          ) : booked && !past ? (
-            <CancelButton classId={c.id} />
-          ) : (
-            <Chevron />
-          )}
         </View>
+
+        {cancelled ? (
+          <Chevron />
+        ) : bookable ? (
+          <BookButton c={c} />
+        ) : booked && !past ? (
+          <CancelButton classId={c.id} />
+        ) : (
+          <Chevron />
+        )}
       </View>
-    </Card>
+    </Pressable>
   );
 
   // A class that has already started is no longer actionable — it stays
@@ -267,7 +261,7 @@ export default function Schedule() {
 
       {isPending && (
         <View style={{ marginBottom: 16 }}>
-          <Banner tone="brand">
+          <Banner tone="neutral">
             Waiting for approval. You can browse and book; your gym will confirm
             you soon.
           </Banner>
@@ -296,21 +290,23 @@ export default function Schedule() {
           ) : (
             <View style={{ gap: 20 }}>
               {byDay.map(([key, rows]) => (
-                <View key={key} style={{ gap: 10 }}>
+                <View key={key} style={{ gap: 8 }}>
                   <DayRule
                     label={dayFmt.format(new Date(`${key}T12:00:00`))}
                     meta={`${key === todayKey ? "today · " : ""}${rows.length} ${
                       rows.length === 1 ? "class" : "classes"
                     }`}
                   />
-                  {rows.map((c) => (
-                    <ClassCard
-                      key={c.id}
-                      c={c}
-                      now={now}
-                      onPress={() => router.push(`/class/${c.id}`)}
-                    />
-                  ))}
+                  <List>
+                    {rows.map((c) => (
+                      <ClassCard
+                        key={c.id}
+                        c={c}
+                        now={now}
+                        onPress={() => router.push(`/class/${c.id}`)}
+                      />
+                    ))}
+                  </List>
                 </View>
               ))}
             </View>

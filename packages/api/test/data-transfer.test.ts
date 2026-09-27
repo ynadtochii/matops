@@ -210,7 +210,10 @@ describe("data transfer", () => {
       entityId: GYM,
       name: "Archived Export",
     });
-    await h.as(OWNER, GYM).person.archive({ personId: created.personId });
+    await h.exec
+      .update(person)
+      .set({ archivedAt: new Date() })
+      .where(eq(person.id, created.personId));
     const started = await h.as(OWNER, GYM).dataTransfer.startExport({});
     const page = await h.as(OWNER, GYM).dataTransfer.exportPage({
       dataset: "people",

@@ -27,7 +27,6 @@ export async function getAcademyPublic(
 ): Promise<{
   academyId: string;
   name: string;
-  type: string;
   timeZone: string | null;
   country: string | null;
 } | null> {
@@ -35,7 +34,6 @@ export async function getAcademyPublic(
     .select({
       academyId: entity.id,
       name: entity.name,
-      type: entity.type,
       timeZone: entity.timeZone,
       country: entity.country,
     })
@@ -188,20 +186,17 @@ export async function createDropIn(
 
 interface BookVisitorInput extends Omit<CreateDropInInput, "classId"> {
   classId: string;
-  cancelToken: string;
 }
 
 interface BookVisitorResult extends DropInResult {
   visitId: string;
-  cancelToken: string;
 }
 
 /**
- * Book a visitor onto a class from the public API. Idempotent by
- * `(drop_in_id, class_id)`: the same phone posting twice gets the same booking
- * and the same cancel token back, so a double tap on a bad connection is
- * harmless. A cancelled booking is revived and keeps the token the caller was
- * already given.
+ * Book a visitor onto a later class from the wall-QR drop-in form. Idempotent
+ * by `(drop_in_id, class_id)`: the same phone posting twice gets the same
+ * booking back, so a double tap on a bad connection is harmless. A cancelled
+ * booking is revived.
  */
 export async function bookVisitor(
   input: BookVisitorInput,
@@ -211,7 +206,7 @@ export async function bookVisitor(
   const dropInId = await upsertLead(input, exec);
   const now = new Date();
   const [bookedClass] = await exec
-    .select({ startsAt: classInstance.startsAt })
+    .select({ id: classInstance.id })
     .from(classInstance)
     .where(
       and(
@@ -223,12 +218,6 @@ export async function bookVisitor(
     )
     .limit(1);
   if (!bookedClass) throw new Error("Class is no longer open for booking");
-  const cancelTokenExpiresAt = new Date(
-    Math.max(
-      now.getTime() + 30 * 24 * 60 * 60 * 1000,
-      bookedClass.startsAt.getTime() + 24 * 60 * 60 * 1000,
-    ),
-  );
   const [existing] = await exec
     .select({ status: dropInVisit.bookingStatus })
     .from(dropInVisit)
@@ -266,9 +255,6 @@ export async function bookVisitor(
       classId: input.classId,
       bookingStatus: "booked",
       attendanceStatus: "unmarked",
-      cancelToken: input.cancelToken,
-      cancelTokenExpiresAt,
-      bookedClassStartsAt: bookedClass.startsAt,
       bookedAt: now,
     })
     .onConflictDoUpdate({
@@ -277,116 +263,17 @@ export async function bookVisitor(
         bookingStatus: "booked",
         cancelledAt: null,
         bookedAt: sql`coalesce(${dropInVisit.bookedAt}, ${now})`,
-        cancelToken: sql`coalesce(${dropInVisit.cancelToken}, ${input.cancelToken})`,
-        cancelTokenExpiresAt: sql`case when ${dropInVisit.bookingStatus} = 'cancelled' then ${cancelTokenExpiresAt} else coalesce(${dropInVisit.cancelTokenExpiresAt}, ${cancelTokenExpiresAt}) end`,
-        bookedClassStartsAt: sql`case when ${dropInVisit.bookingStatus} = 'cancelled' then ${bookedClass.startsAt} else coalesce(${dropInVisit.bookedClassStartsAt}, ${bookedClass.startsAt}) end`,
       },
     })
-    .returning({ id: dropInVisit.id, cancelToken: dropInVisit.cancelToken });
-  if (!row?.cancelToken)
-    throw new Error("drop_in_visit upsert returned no row");
+    .returning({ id: dropInVisit.id });
+  if (!row) throw new Error("drop_in_visit upsert returned no row");
   if (existing?.status !== "booked") {
     await bumpScheduleRevision(exec, input.academyId);
   }
   return {
     dropInId,
     visitId: row.id,
-    cancelToken: row.cancelToken,
     visitCount: await countPresentVisits(dropInId, exec),
-  };
-}
-
-/**
- * Cancel a visitor booking by its public token. The LEAD survives: someone who
- * cancelled still wanted to train and the gym still wants their number. Scoped
- * to the academy the caller's key names, so one gym's key can never reach
- * another gym's booking even if it learns the token. Returns false when the
- * token is unknown, so the endpoint answers the same either way.
- */
-export async function cancelVisitorBooking(
-  academyId: string,
-  cancelToken: string,
-  exec: DbWriter,
-  now = new Date(),
-): Promise<boolean> {
-  await lockAndReadScheduleRevision(exec, academyId);
-  const rows = await exec
-    .update(dropInVisit)
-    .set({ bookingStatus: "cancelled", cancelledAt: now })
-    .where(
-      and(
-        eq(dropInVisit.academyId, academyId),
-        eq(dropInVisit.cancelToken, cancelToken),
-        eq(dropInVisit.bookingStatus, "booked"),
-        gte(dropInVisit.cancelTokenExpiresAt, now),
-      ),
-    )
-    .returning({ id: dropInVisit.id, classId: dropInVisit.classId });
-  const cancelled = rows[0];
-  if (cancelled?.classId) {
-    await exec
-      .update(classInstance)
-      .set({
-        bookingCount: sql`greatest(${classInstance.bookingCount} - 1, 0)`,
-      })
-      .where(eq(classInstance.id, cancelled.classId));
-    await bumpScheduleRevision(exec, academyId);
-  }
-  return rows.length > 0;
-}
-
-export async function getVisitorBookingStatus(
-  academyId: string,
-  cancelToken: string,
-  exec: DbReader,
-  now = new Date(),
-): Promise<{
-  bookingStatus: string;
-  tokenExpiresAt: Date;
-  class: {
-    id: string;
-    title: string;
-    startsAt: Date;
-    durationMinutes: number;
-    status: string;
-    changed: boolean;
-  };
-} | null> {
-  const [row] = await exec
-    .select({
-      bookingStatus: dropInVisit.bookingStatus,
-      tokenExpiresAt: dropInVisit.cancelTokenExpiresAt,
-      bookedClassStartsAt: dropInVisit.bookedClassStartsAt,
-      classId: classInstance.id,
-      classTitle: classInstance.title,
-      classStartsAt: classInstance.startsAt,
-      classDurationMinutes: classInstance.durationMinutes,
-      classStatus: classInstance.status,
-    })
-    .from(dropInVisit)
-    .innerJoin(classInstance, eq(classInstance.id, dropInVisit.classId))
-    .where(
-      and(
-        eq(dropInVisit.academyId, academyId),
-        eq(dropInVisit.cancelToken, cancelToken),
-        gte(dropInVisit.cancelTokenExpiresAt, now),
-        isNull(classInstance.deletedAt),
-      ),
-    )
-    .limit(1);
-  if (!row?.tokenExpiresAt) return null;
-  return {
-    bookingStatus: row.bookingStatus,
-    tokenExpiresAt: row.tokenExpiresAt,
-    class: {
-      id: row.classId,
-      title: row.classTitle,
-      startsAt: row.classStartsAt,
-      durationMinutes: row.classDurationMinutes,
-      status: row.classStatus,
-      changed:
-        row.bookedClassStartsAt?.getTime() !== row.classStartsAt.getTime(),
-    },
   };
 }
 

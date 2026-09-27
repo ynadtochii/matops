@@ -27,25 +27,19 @@ interface Props {
 export function InstructorOptions({
   value,
   fallbackLabel,
-  noneLabel,
 }: {
   value: string;
   fallbackLabel: string;
-  /** Offer "no coach at all" as a real choice (a general space, ADR 126). */
-  noneLabel?: string;
 }) {
   const trpc = useTRPC();
   const options =
     useQuery(trpc.membership.instructors.queryOptions()).data ?? [];
   return (
     <>
-      {noneLabel !== undefined && <option value="">{noneLabel}</option>}
       {value !== "" && !options.some((i) => i.userId === value) && (
         <option value={value}>{fallbackLabel}</option>
       )}
-      {noneLabel === undefined && value === "" && (
-        <option value="">{fallbackLabel}</option>
-      )}
+      {value === "" && <option value="">{fallbackLabel}</option>}
       {options.map((i) => (
         <option key={i.userId} value={i.userId}>
           {i.name}
@@ -104,7 +98,7 @@ export function CoachSelect({
     <div className="flex max-w-xs items-center gap-2">
       <label
         htmlFor={`coach-${classId}`}
-        className="text-muted-foreground font-mono text-[10px] tracking-wide uppercase"
+        className="text-muted-foreground text-xs"
       >
         Coach
       </label>

@@ -9,22 +9,17 @@
 -- This is destructive and cannot be undone.
 BEGIN;
 
--- Children first: every BJJ table references `entity`, and the payment, rank,
--- note and referral rows reference `entity_membership`, so the order below is
--- the one the foreign keys allow (ADR 124).
+-- Children first: every BJJ table references `entity`, and the payment, rank
+-- and note rows reference `entity_membership`, so the order below is the one
+-- the foreign keys allow (ADR 124).
 DELETE FROM "class_participation";
 DELETE FROM "drop_in_visit";
 DELETE FROM "drop_in";
-DELETE FROM "member_referral_audit";
-DELETE FROM "member_referral";
 DELETE FROM "rank_promotion";
 DELETE FROM "member_note";
 DELETE FROM "member_rank";
 DELETE FROM "notification";
 DELETE FROM "notification_notice";
-DELETE FROM "curriculum_block";
-DELETE FROM "curriculum_block_template";
-DELETE FROM "curriculum_track";
 DELETE FROM "class";
 DELETE FROM "class_template";
 DELETE FROM "academy_invite";

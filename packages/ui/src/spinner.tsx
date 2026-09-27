@@ -1,11 +1,10 @@
 import { cn } from "@matops/ui";
 
 /**
- * Branded loading spinner — a coloured arc that sweeps around a faint track of
- * the same colour. Both strokes use `currentColor`, so the spinner takes the
- * text colour of wherever it sits: violet by default (the wrapper sets
- * `text-brand`), or the button's own label colour when it sits inside a filled
- * button (pass `className="text-current"`). Pure SVG + the Tailwind
+ * Loading spinner: an arc that sweeps around a faint track of the same colour.
+ * Both strokes use `currentColor`, so the spinner takes the text colour of
+ * wherever it sits: muted grey by default, or the button's own label colour
+ * when it sits inside a filled button (pass `className="text-current"`). Pure SVG + the Tailwind
  * `animate-spin` keyframe; no JS timer.
  *
  * Reduced motion: the ring stops turning and shows a static three-quarter arc,
@@ -38,7 +37,7 @@ export function Spinner({
       aria-label={label}
       aria-hidden={label ? undefined : true}
       className={cn(
-        "text-brand animate-spin motion-reduce:animate-none",
+        "text-muted-foreground animate-spin motion-reduce:animate-none",
         className,
       )}
     >

@@ -7,52 +7,19 @@ import {
   count,
   createEntity,
   eq,
-  generalBranchesEnabled,
   getEntityInOrganization,
-  gt,
-  inArray,
   isNull,
   listEntitiesForUser,
   listEntitiesOf,
-  or,
   rebuildSchedule,
   recordMilestone,
-  sql,
   withScope,
 } from "@matops/db";
-import {
-  accessAssignment,
-  accessPlan,
-  accessPlanEntity,
-  classInstance,
-  classParticipation,
-  entity,
-  entityMembership,
-  member,
-  membershipPolicy,
-  organization,
-  person,
-} from "@matops/db/schema";
-import {
-  isActiveMember,
-  isGeneralSpace,
-  isOwner,
-  runsOrganization,
-} from "@matops/domain";
-import {
-  AddStudentToBranchSchema,
-  BranchDecisionSchema,
-  CreateEntitySchema,
-  EntityIdSchema,
-  SetMembershipEnforcedSchema,
-} from "@matops/validators";
+import { entity, entityMembership, organization } from "@matops/db/schema";
+import { isActiveMember, isOwner, runsOrganization } from "@matops/domain";
+import { CreateEntitySchema } from "@matops/validators";
 
-import { studentRosterOf } from "../members";
-import { loadRosterStanding } from "../membership-access";
-import { assignmentAppliesNow } from "../membership-status";
 import {
-  enrolledProcedure,
-  organizationManagerIdentityProcedure,
   organizationMemberProcedure,
   organizationOwnerIdentityProcedure,
 } from "../trpc";
@@ -95,7 +62,14 @@ async function standingAt(
   rows: ScopedEntity[],
   runsOrganization: boolean,
 ): Promise<
-  { id: string; name: string; type: string; role: string; status: string }[]
+  {
+    id: string;
+    name: string;
+    type: string;
+    role: string;
+    status: string;
+    membershipEnforced: boolean;
+  }[]
 > {
   const held = runsOrganization
     ? []
@@ -118,44 +92,8 @@ async function standingAt(
         ? ctx.orgMembership.role
         : (mine?.role ?? "student"),
       status: runsOrganization ? "active" : (mine?.status ?? "pending"),
+      membershipEnforced: e.membershipEnforcedAt !== null,
     };
-  });
-}
-
-/** Refuse somebody who is not part of this gym at all. */
-async function requireOrganizationPerson(
-  ctx: { organizationId: string; baseDb: DbExec },
-  personId: string,
-) {
-  const [row] = await ctx.baseDb
-    .select({ id: person.id, accountUserId: person.accountUserId })
-    .from(person)
-    .where(
-      and(
-        eq(person.organizationId, ctx.organizationId),
-        or(
-          eq(sql`${person.id}::text`, personId),
-          eq(person.accountUserId, personId),
-        ),
-        isNull(person.archivedAt),
-      ),
-    )
-    .limit(1);
-  if (row) return row;
-  const [account] = await ctx.baseDb
-    .select({ userId: member.userId })
-    .from(member)
-    .where(
-      and(
-        eq(member.organizationId, ctx.organizationId),
-        eq(member.userId, personId),
-      ),
-    )
-    .limit(1);
-  if (account) return { id: null, accountUserId: account.userId };
-  throw new TRPCError({
-    code: "NOT_FOUND",
-    message: "That person is not part of this gym",
   });
 }
 
@@ -181,12 +119,7 @@ export const entityRouter = {
           ctx.db,
         );
     const [org] = await ctx.db
-      .select({
-        name: organization.name,
-        generalBranches: organization.generalBranchesEnabled,
-        curriculumEnabled: organization.curriculumEnabled,
-        referralsEnabled: organization.referralsEnabled,
-      })
+      .select({ name: organization.name })
       .from(organization)
       .where(eq(organization.id, ctx.organizationId));
     return {
@@ -200,189 +133,21 @@ export const entityRouter = {
        * at a branch is a different answer and lives on `academy.current`.
        */
       role: ctx.orgMembership.role,
-      // Two answers, not one: `create` refuses a general space unless the gym
-      // is entitled to them, so a client with only "may I add a branch" would
-      // offer a type the server is about to reject (ADR 128).
-      canCreateGeneralBranches: owns && (org?.generalBranches ?? false),
-      curriculumEnabled: org?.curriculumEnabled ?? false,
-      referralsEnabled: org?.referralsEnabled ?? false,
       entities: await standingAt(ctx, rows, runs),
     };
   }),
 
-  addStudentToBranch: organizationManagerIdentityProcedure
-    .input(AddStudentToBranchSchema)
-    .mutation(async ({ ctx, input }) => {
-      const branch = await requireOwnEntity(ctx, input.entityId);
-      const subject = await requireOrganizationPerson(ctx, input.userId);
-
-      await withScope(
-        { organizationId: ctx.organizationId, entityId: branch.id },
-        async (db) => {
-          const [organizationMember] = subject.accountUserId
-            ? await db
-                .select({ role: member.role })
-                .from(member)
-                .where(
-                  and(
-                    eq(member.organizationId, ctx.organizationId),
-                    eq(member.userId, subject.accountUserId),
-                  ),
-                )
-            : [];
-          if (
-            organizationMember?.role === "owner" ||
-            organizationMember?.role === "manager"
-          ) {
-            throw new TRPCError({
-              code: "PRECONDITION_FAILED",
-              message:
-                "This person already runs the whole gym. Change their gym role before giving them a branch role.",
-            });
-          }
-          const [held] = await db
-            .select({
-              id: entityMembership.id,
-              role: entityMembership.role,
-            })
-            .from(entityMembership)
-            .where(
-              and(
-                eq(entityMembership.entityId, branch.id),
-                or(
-                  subject.id
-                    ? eq(entityMembership.personId, subject.id)
-                    : undefined,
-                  subject.accountUserId
-                    ? and(
-                        isNull(entityMembership.personId),
-                        eq(entityMembership.userId, subject.accountUserId),
-                      )
-                    : undefined,
-                ),
-              ),
-            );
-          if (held?.role === "owner") {
-            throw new TRPCError({
-              code: "FORBIDDEN",
-              message: "Owner roles are changed on that branch's Coaches page.",
-            });
-          }
-          if (held) return;
-          await db.insert(entityMembership).values({
-            organizationId: ctx.organizationId,
-            entityId: branch.id,
-            personId: subject.id,
-            userId: subject.accountUserId,
-            role: "student",
-            status: "active",
-            joinedAt: new Date(),
-          });
-        },
-        ctx.baseDb,
-      );
-      return { ok: true as const };
-    }),
-
-  /**
-   * Approve or decline one person's place at one branch, from the gym's person
-   * profile. A request stays a PER-BRANCH decision: approving at the mat says
-   * nothing about the gym floor (ADR 129).
-   */
-  decideAtBranch: organizationManagerIdentityProcedure
-    .input(BranchDecisionSchema)
-    .mutation(async ({ ctx, input }) => {
-      const branch = await requireOwnEntity(ctx, input.entityId);
-      const subject = await requireOrganizationPerson(ctx, input.userId);
-      await withScope(
-        { organizationId: ctx.organizationId, entityId: branch.id },
-        async (db) => {
-          const [held] = await db
-            .select({
-              id: entityMembership.id,
-              role: entityMembership.role,
-              status: entityMembership.status,
-              invitedRole: entityMembership.invitedRole,
-            })
-            .from(entityMembership)
-            .where(
-              and(
-                eq(entityMembership.entityId, branch.id),
-                or(
-                  subject.id
-                    ? eq(entityMembership.personId, subject.id)
-                    : undefined,
-                  subject.accountUserId
-                    ? and(
-                        isNull(entityMembership.personId),
-                        eq(entityMembership.userId, subject.accountUserId),
-                      )
-                    : undefined,
-                ),
-              ),
-            );
-          if (!held) {
-            throw new TRPCError({
-              code: "NOT_FOUND",
-              message: "They do not belong to that branch",
-            });
-          }
-          if (held.role === "owner") {
-            throw new TRPCError({
-              code: "FORBIDDEN",
-              message: "Owners are not decided here.",
-            });
-          }
-          await db
-            .update(entityMembership)
-            .set(
-              input.decision === "approve"
-                ? {
-                    status: "active",
-                    role: held.invitedRole ?? held.role,
-                    joinedAt: new Date(),
-                  }
-                : { status: "removed" },
-            )
-            .where(eq(entityMembership.id, held.id));
-        },
-        ctx.baseDb,
-      );
-      return { ok: true as const };
-    }),
-
-  /** The entity this request named, once the tier has authorized it. */
-  current: enrolledProcedure.query(({ ctx }) => ({
-    id: ctx.entity.id,
-    name: ctx.entity.name,
-    type: ctx.entity.type,
-    role: ctx.membership.role,
-    status: ctx.membership.status,
-  })),
-
   /**
    * Add a branch to the organization (owner only). It gets its own id, slug,
    * public code, schedule and membership rows, so the first academy is
-   * untouched. A BJJ academy also gets its profile and a curriculum track; a
-   * general space gets neither (ADR 126).
+   * untouched, and gets its academy profile.
    *
    * The schema refuses a type nobody implemented before this runs, and the
-   * table's check constraint refuses it again. A general space needs one more
-   * thing: the organization's own `general_branches_enabled` flag, which is off
-   * until the pilot turns it on.
+   * table's check constraint refuses it again.
    */
   create: organizationOwnerIdentityProcedure
     .input(CreateEntitySchema)
     .mutation(async ({ ctx, input }) => {
-      if (
-        isGeneralSpace(input.type) &&
-        !(await generalBranchesEnabled(ctx.organizationId, ctx.baseDb))
-      ) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "General branches are not enabled for this gym",
-        });
-      }
       // A source branch is named by the client, so it is authorized like any
       // other entity the request names: the caller's own organization or
       // nothing. `requireOwnEntity` refuses a foreign id before the write.
@@ -395,6 +160,7 @@ export const entityRouter = {
           type: input.type,
           name: input.name,
           ownerUserId: ctx.session.user.id,
+          timeZone: input.timeZone,
           copyFromEntityId: input.copyFromEntityId,
         },
         ctx.baseDb,
@@ -434,173 +200,5 @@ export const entityRouter = {
         );
       }
       return made;
-    }),
-
-  activationPreview: organizationManagerIdentityProcedure
-    .input(EntityIdSchema)
-    .query(async ({ ctx, input }) => {
-      const branch = await requireOwnEntity(ctx, input.entityId);
-      return withScope(
-        { organizationId: ctx.organizationId, entityId: branch.id },
-        async (db) => {
-          const members = await studentRosterOf({ academyId: branch.id, db });
-          const active = members.filter((m) => m.status === "active");
-          const standing = await loadRosterStanding(db, {
-            entityId: branch.id,
-            people: active.map((m) => ({
-              userId: m.userId,
-              status: m.status,
-              role: m.role,
-            })),
-            now: new Date(),
-          });
-          const notCovered = active.filter(
-            (m) => !standing.get(m.userId)?.covered,
-          );
-          const uncovered = notCovered.map((m) => ({
-            userId: m.userId,
-            name: m.name,
-            role: m.role,
-          }));
-          const blocking = notCovered.length;
-
-          // What switching the gate on would actually take away. ADR 126 §8
-          // recorded this as promised and not built: the preview named the
-          // PEOPLE but not the classes they would lose, which is the half an
-          // owner is judged on by the members who turn up and find no place.
-          const bookings =
-            uncovered.length === 0
-              ? []
-              : await db
-                  .select({
-                    personId: sql<string>`coalesce(${classParticipation.personId}::text, ${classParticipation.studentId})`,
-                    n: count(),
-                  })
-                  .from(classParticipation)
-                  .innerJoin(
-                    classInstance,
-                    eq(classInstance.id, classParticipation.classId),
-                  )
-                  .where(
-                    and(
-                      inArray(
-                        sql<string>`coalesce(${classParticipation.personId}::text, ${classParticipation.studentId})`,
-                        uncovered.map((u) => u.userId),
-                      ),
-                      eq(classParticipation.bookingStatus, "booked"),
-                      gt(classInstance.startsAt, new Date()),
-                      eq(classInstance.status, "scheduled"),
-                    ),
-                  )
-                  .groupBy(
-                    sql`coalesce(${classParticipation.personId}::text, ${classParticipation.studentId})`,
-                  );
-
-          // Readiness: the four things that make switching this branch on a
-          // bad idea today, each as a count the owner can drive to zero
-          // (spec FP8). Named rather than folded into one boolean, because
-          // "not ready" without a reason is not actionable.
-          const covering = await db
-            .select({
-              planId: accessPlan.id,
-              priceMinor: accessPlan.priceMinor,
-            })
-            .from(accessPlanEntity)
-            .innerJoin(accessPlan, eq(accessPlan.id, accessPlanEntity.planId))
-            .where(
-              and(
-                eq(accessPlanEntity.entityId, branch.id),
-                isNull(accessPlan.archivedAt),
-              ),
-            );
-
-          const [policy] = await db
-            .select({ bankDetails: membershipPolicy.bankDetails })
-            .from(membershipPolicy);
-
-          // Somebody a plan covers who has no ACTIVE membership at this branch
-          // is reconciliation still to do: `accessPlan.reconcile` is what
-          // clears it, and switching on before it runs blocks people the gym
-          // believes it has already covered.
-          const holders = covering.length
-            ? await db
-                .select({
-                  userId: accessAssignment.personId,
-                })
-                .from(accessAssignment)
-                .where(
-                  and(
-                    inArray(
-                      accessAssignment.planId,
-                      covering.map((c) => c.planId),
-                    ),
-                    eq(accessAssignment.status, "active"),
-                    assignmentAppliesNow(),
-                  ),
-                )
-            : [];
-          const activeHere = new Set(active.map((m) => m.userId));
-          const pendingEnrolment = [
-            ...new Set(holders.map((h) => h.userId)),
-          ].filter((id) => !activeHere.has(id)).length;
-
-          const readiness = {
-            uncoveredPeople: blocking,
-            unpricedPlans: covering.filter((c) => c.priceMinor === null).length,
-            bankDetails: (policy?.bankDetails ?? "").trim().length > 0,
-            pendingEnrolment,
-          };
-
-          const byUser = new Map(bookings.map((b) => [b.personId, b.n]));
-          return {
-            readiness,
-            ready:
-              readiness.uncoveredPeople === 0 &&
-              readiness.unpricedPlans === 0 &&
-              readiness.bankDetails &&
-              readiness.pendingEnrolment === 0,
-            entityId: branch.id,
-            entityName: branch.name,
-            enforced: branch.membershipEnforcedAt !== null,
-            activeMembers: active.length,
-            uncovered: uncovered.map((u) => ({
-              ...u,
-              futureBookings: byUser.get(u.userId) ?? 0,
-            })),
-            futureBookings: bookings.reduce((n, b) => n + b.n, 0),
-          };
-        },
-        ctx.baseDb,
-      );
-    }),
-
-  setMembershipEnforced: organizationOwnerIdentityProcedure
-    .input(SetMembershipEnforcedSchema)
-    .mutation(async ({ ctx, input }) => {
-      const branch = await requireOwnEntity(ctx, input.entityId);
-      const enforcedAt = input.enforced
-        ? (branch.membershipEnforcedAt ?? new Date())
-        : null;
-      await withScope(
-        { organizationId: ctx.organizationId },
-        (db) =>
-          db
-            .update(entity)
-            .set({ membershipEnforcedAt: enforcedAt })
-            .where(eq(entity.id, branch.id)),
-        ctx.baseDb,
-      );
-      if (enforcedAt !== null) {
-        await recordMilestone(
-          {
-            organizationId: ctx.organizationId,
-            entityId: branch.id,
-            name: "branch_activated",
-            actorRole: "owner",
-          },
-          ctx.baseDb,
-        );
-      }
-      return { enforced: enforcedAt !== null };
     }),
 } satisfies TRPCRouterRecord;

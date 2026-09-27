@@ -6,7 +6,7 @@ import { AlertDialog as AlertDialogPrimitive } from "radix-ui";
 import { cn } from "@matops/ui";
 
 import { Button, buttonClass } from "./button";
-import { FOCUS_RING } from "./motion";
+import { FIELD } from "./input";
 
 /**
  * Confirmation modal for actions that can't be undone — remove a member, cancel
@@ -47,7 +47,7 @@ function AlertDialogOverlay({
         // Enter animation only. A close must never wait on an exit animation's
         // `animationend` — if that event doesn't fire, Radix keeps the node
         // mounted and the modal is stuck. Unmounting immediately is safer.
-        "data-[state=open]:animate-in data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/50 duration-200 ease-out motion-reduce:animate-none",
+        "data-[state=open]:animate-in data-[state=open]:fade-in-0 bg-backdrop fixed inset-0 z-50 duration-150 ease-out motion-reduce:animate-none",
         className,
       )}
       {...props}
@@ -67,7 +67,7 @@ export function AlertDialogContent({
         className={cn(
           // Enter animation only — see the Overlay note on why close must not
           // depend on an exit animation.
-          "bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 fixed top-1/2 left-1/2 z-50 grid max-h-[85dvh] w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto overscroll-contain rounded-lg border p-4 shadow-lg duration-200 ease-out motion-reduce:animate-none sm:p-6",
+          "text-foreground data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 bg-raised shadow-float fixed top-1/2 left-1/2 z-50 grid max-h-[85dvh] w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto overscroll-contain rounded-xl p-4 duration-150 ease-out motion-reduce:animate-none sm:p-6",
           className,
         )}
         {...props}
@@ -83,7 +83,7 @@ export function AlertDialogTitle({
   return (
     <AlertDialogPrimitive.Title
       data-slot="alert-dialog-title"
-      className={cn("text-lg font-semibold tracking-tight", className)}
+      className={cn("text-xl font-semibold", className)}
       {...props}
     />
   );
@@ -229,10 +229,7 @@ export function ConfirmDialog({
             </span>
             <input
               autoComplete="off"
-              className={cn(
-                "border-input bg-background h-9 rounded-md border px-3 text-base md:text-sm",
-                FOCUS_RING,
-              )}
+              className={cn(FIELD, "h-11 sm:h-8")}
               disabled={busy}
               onChange={(e) => setTyped(e.target.value)}
               value={typed}

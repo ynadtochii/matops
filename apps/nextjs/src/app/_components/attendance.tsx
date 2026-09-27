@@ -18,6 +18,7 @@ import { Select } from "@matops/ui/select";
 import { useTRPC } from "~/trpc/react";
 import { ClassRoster } from "./class-roster";
 import { useEntity } from "./entity";
+import { LIST } from "./primitives";
 import { AttendanceSkeleton } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 
@@ -111,7 +112,7 @@ export function Attendance() {
         <p
           id="attendance-date-error"
           role="alert"
-          className="text-error text-sm"
+          className="text-error-text text-sm"
         >
           Choose an end date on or after the start date.
         </p>
@@ -157,21 +158,25 @@ export function Attendance() {
                 : "Use All past classes to see reviewed attendance. New classes appear here after they end."}
             </EmptyState>
           ) : (
-            <ul className="divide-border divide-y">
+            <ul className={LIST}>
               {classes.data.rows.map((cls) => (
                 <li
                   key={cls.id}
-                  className="flex flex-wrap items-center justify-between gap-3 py-4"
+                  className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
                 >
                   <div className="min-w-0 flex-1 space-y-1">
-                    <p className="text-muted-foreground text-xs">
+                    <p className="text-muted-foreground text-xs tabular-nums">
                       {format.format(new Date(cls.startsAt))}
                     </p>
-                    <p className="font-medium break-words">{cls.title}</p>
+                    <p className="text-md font-medium break-words">
+                      {cls.title}
+                    </p>
                     <p className="text-muted-foreground text-sm">
                       {cls.instructorName ?? "No coach assigned"}
                     </p>
-                    <p className="text-sm">{reviewLabel(cls.review)}</p>
+                    <p className="text-foreground-secondary text-sm">
+                      {reviewLabel(cls.review)}
+                    </p>
                   </div>
                   <Button
                     variant="outline"
@@ -195,7 +200,7 @@ export function Attendance() {
               >
                 Previous
               </Button>
-              <p className="text-muted-foreground text-sm">
+              <p className="text-muted-foreground text-sm tabular-nums">
                 Page {Math.floor(offset / 50) + 1} · {classes.data.total}{" "}
                 classes
               </p>

@@ -70,8 +70,8 @@ describe("the scoped membership access reader", () => {
     const made = await createEntity(
       {
         organizationId: ORG,
-        type: "general_space",
-        name: "The Gym",
+        type: "bjj_academy",
+        name: "Second Mat",
         ownerUserId: BOSS,
       },
       h.exec,

@@ -88,8 +88,11 @@ still resolves:
 
 The iOS Simulator has no camera, so none of this can be checked there. Use a
 physical phone: `cd apps/expo && npx expo run:ios --device`, or an EAS
-`development` build. Print or open the poster first: web → **Settings** → the
-venue check-in QR.
+`development` build. Make the poster first. The web no longer shows the venue
+check-in QR (ADR 142), but its URL still works: turn
+`https://<host>/checkin/<academyId>` into a QR code with any QR generator, and
+print it or show it on a second screen. `<academyId>` is the id in the web
+address `/entities/<academyId>`.
 
 Happy path
 - [ ] The tab bar shows **four** tabs: Schedule · My classes · **Scan** · Profile.

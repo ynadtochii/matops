@@ -1,19 +1,22 @@
 # Pilot plan — friends' gyms, remote
 
-**Status: active pilot guide under ADR 135.** Unlike
+**Status: active pilot guide under ADR 135 and ADR 142.** Unlike
 [business-model.md](business-model.md), [revenue-collection.md](revenue-collection.md)
 and [the automatic payments plan](2026-09-24-automatic-payments-final-plan.md), which are not started, this
 is what happens next.
 
 The first academy release now uses a fresh database contract. The current operating facts are:
 
-- Students need branch approval and a staff-assigned plan. There is no student plan shop.
-- The payment register uses monthly unpaid, reported, confirmed, and rejected states. MatOps does not move money.
+- Approval is admission (ADR 142). An approved, active student books with no plan or payment. A new academy starts with payment admission off, and no control in this release turns it on. When a later release turns it on, a student also needs a staff-assigned plan. There is no student plan shop.
+- `/start` is one form: academy name and time zone. It makes the gym and its first academy. An owner with one academy lands on it, with no gym overview or gym menu.
+- The owner can cancel a student's booking from the class roster. Nobody can book for a student; each student books for themselves.
+- Web only for this release. The Expo app is not changed.
+- Where a branch requires payment, the register uses monthly unpaid, reported, confirmed, and rejected states. MatOps does not move money.
 - There are no automatic reminders, calendar sweeps, delivery workers, or job health checks.
 - Owners extend the calendar manually. A rebuild previews exact changes and refuses booked stale classes.
-- Hosted visitor booking lives at `/book/<academy-code>`. There is no external public API, API key, or allowed-origin setup.
-- Email sends a bounded first batch after a class or visitor action. Staff handle remaining and failed recipients in Notifications.
-- Each branch sets a 1-90 day booking window. The default is 7 local calendar days.
+- There is no visitor booking page and no public API. A visitor uses the wall-QR drop-in form at `/checkin/<id>` and becomes a lead.
+- Email sends a bounded first batch after a class or visitor action. There is no retry for failed recipients in this release.
+- The booking window is 7 local calendar days. Its setting is hidden in this release.
 
 Written 2026-08-22 against the working tree at v3.0 (commit `b798d2c`).
 
@@ -24,9 +27,9 @@ Written 2026-08-22 against the working tree at v3.0 (commit `b798d2c`).
 | **Student surface** | Web from day one. Android next. iOS after that |
 | **Target** | A real student books a real class by **Friday 5 September 2026** |
 
-Supersedes the ordering in [beta-readiness.md](beta-readiness.md), which stays
-valid as the gap analysis. That doc was written at v2.7; its deployment and
-migration blockers are now closed, **every other item in it is still open**.
+Supersedes the ordering in an earlier gap analysis written at v2.7. Its
+deployment and migration blockers are closed. [beta-launch-plan.md](beta-launch-plan.md)
+holds what is left.
 
 ---
 
@@ -76,7 +79,7 @@ it.
 | 6 | **Rotate `AUTH_SECRET`** | The old auth error hook logged it (ADR 60). Rotating kills every live session, so it happens **before** the pilot, never during | 15 min |
 | 7 | ~~**Prove Resend works in production**~~ **DONE** | `sendEmail` no-ops silently when the env vars are missing, so a missing key in Vercel looks exactly like "the magic link never arrives", with no error anywhere. Send yourself one from the live site | 15 min |
 | 8 | ~~**Privacy page + a real consent line** on the drop-in form~~ **DONE** (ADR 76; three placeholders still to fill in) | It collects a stranger's name, phone and email behind one line of copy with no link to anything. Friends' gyms in the EU means GDPR, and matops is the processor | 2-3 h |
-| 9 | ~~**Confirm the live deploy is current**~~ **DONE** | `beta-readiness.md` found production at `df77c89` with `/coaches` returning 404. v2.5 through v3.1 have been committed since. Run `next build`, redeploy, click every screen | 30 min |
+| 9 | ~~**Confirm the live deploy is current**~~ **DONE** | The v2.7 gap analysis found production at `df77c89` with `/coaches` returning 404. v2.5 through v3.1 have been committed since. Run `next build`, redeploy, click every screen | 30 min |
 
 **Roughly two days of work.** Items 1, 6, 7 and 9 are minutes and should happen first.
 
@@ -118,15 +121,16 @@ handles new students before deciding.
 Do not skip this. Run the whole thing yourself on the **live deployment**, not
 locally, with a throwaway academy:
 
-- [ ] Start a gym, set time zone and address.
+- [ ] Start your academy (name and time zone), then add the address.
 - [ ] Build a full week of templates. Extend the calendar and inspect the rebuild preview.
-- [ ] Print the join QR. Join as a student from a **different browser** and a
+- [ ] Open Students, then Invite students, then Show QR, and print the join QR poster. Join as a student from a **different browser** and a
       **phone browser**, using a real email, through the real magic link.
-- [ ] Book, cancel, rebook.
-- [ ] Approve the student. Mark an attendance roster. Set a rank.
-- [ ] Set a plan price, assign it to the student, report the month, and confirm it.
-- [ ] Book a visitor through `/book/<academy-code>`, reopen the private return link, and cancel safely.
-- [ ] Change a booked class. Check the saved notice, then send remaining or retry failed email if needed.
+- [ ] Check that the pending student cannot book.
+- [ ] Approve the student. As the student, with no plan, book, cancel, rebook.
+- [ ] Mark an attendance roster. Set a rank.
+- [ ] As the owner, cancel the student's booking from the class roster with "Cancel booking".
+- [ ] Submit the wall-QR drop-in form as a visitor and check the lead on the Leads tab of Students.
+- [ ] Change a booked class. Check that the student gets the notice.
 - [ ] Break something on purpose and confirm **Sentry catches it**.
 - [ ] Delete the throwaway academy.
 
@@ -141,8 +145,8 @@ week. Five is the number where you quietly stop calling.
 
 1. Create their academy with them watching. Time zone, address.
 2. Enter their **real** weekly schedule as templates, together.
-3. Print or send the join QR poster.
-4. Add their head coach.
+3. Print the join QR poster (Students, Invite students, Show QR, Print poster) or send the link.
+4. Add their head coach, if the owner does not teach every class.
 5. Walk the owner through the dashboard queue once, slowly.
 6. Watch them send the join link to one real student, on the call.
 
@@ -323,6 +327,6 @@ Not "does the software work". You know it does. The pilot tests one question:
 > to?**
 
 Everything above exists to make that question answerable. If the answer is yes at
-one gym, matops is a product. If it is no at all three, the schedule grid, the
-rank ladders and the referral tracking do not matter yet, and the parked plans
+one gym, matops is a product. If it is no at all three, the schedule grid and
+the rank ladders do not matter yet, and the parked plans
 stay parked.

@@ -6,14 +6,12 @@ import { useQuery } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
 import {
-  branchWords,
   capacityDisplay,
   classEndsAt,
   dashboardWeekWindow,
   dayPlan,
   daysSince,
   dayWindow,
-  isBjjAcademy,
   isFirstRun,
   isStaff as isStaffOf,
   leadQueues,
@@ -23,6 +21,7 @@ import {
   upcomingClassCount,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
+import { Badge } from "@matops/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -34,13 +33,13 @@ import { FOCUS_RING, FOCUS_RING_INSET, PRESS } from "@matops/ui/motion";
 import { clockParts, dayLongFmt, timeFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { ClassRoster } from "./class-roster";
-import { useEntity, useEntityHref } from "./entity";
+import { useEntity, useEntityHref, useOrganization } from "./entity";
 import { PageHeader } from "./page-header";
 import {
-  cardClass,
   disciplineDot,
   DriftBadge,
   ENTER,
+  LIST,
   Panel,
   panelCell,
   PanelNotice,
@@ -48,6 +47,7 @@ import {
   Section,
   TAP,
 } from "./primitives";
+import { SetupChecklist } from "./setup-checklist";
 import { Bar, SkeletonDayRail, SkeletonQueue, SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 import { StudentScreen } from "./student-screen";
@@ -74,10 +74,6 @@ interface QueueItem {
 }
 
 /**
- * What the overdue members owe in total, but only when a single currency is in
- * play. Two currencies are never added together (the rule spec O9 already sets).
- */
-/**
  * O1 Dashboard — the "run the week" command center (ticket 03). A "needs you"
  * action queue (every item is a blocker that can be driven to zero), a couple of
  * glanceable numbers, today's classes, insights, and who's drifting. Instructors
@@ -87,12 +83,11 @@ export function DashboardScreen() {
   const href = useEntityHref();
   const trpc = useTRPC();
   const c = useEntity();
+  const { canRunOrganization } = useOrganization();
   const [detailId, setDetailId] = useState<string | null>(null);
 
   const isOwner = runsBranch(c);
   const isStaff = isStaffOf(c);
-  const bjj = isBjjAcademy(c.type);
-  const words = branchWords(c.type);
 
   const { today, tomorrow } = useMemo(() => {
     const at = new Date();
@@ -218,7 +213,7 @@ export function DashboardScreen() {
   const queueErrors: { label: string; retry: () => void }[] = [];
   if (attendance.isError)
     queueErrors.push({
-      label: `${words.sessionPlural} to review`,
+      label: "classes to review",
       retry: () => void attendance.refetch(),
     });
   if (memberList.isError)
@@ -261,6 +256,12 @@ export function DashboardScreen() {
       <div className={ENTER}>
         <PageHeader title="Dashboard" subtitle={dayLongFmt.format(today)} />
 
+        {canRunOrganization && (
+          <div className="mb-6 empty:hidden">
+            <SetupChecklist />
+          </div>
+        )}
+
         {/* Needs you — one instrument panel of equal channels on a hairline
             grid; a job at zero is dropped, not drawn empty. The violet lives in
             the counts only: it is a spark, not a surface (design.md §1.1). */}
@@ -269,40 +270,20 @@ export function DashboardScreen() {
         ) : (
           <Panel className={RESOLVE} cols={Math.max(queue.length, 1)}>
             {firstRun ? (
-              <PanelNotice
-                title={`This ${words.branch} is empty. ${
-                  bjj ? "Three" : "Two"
-                } steps to open it.`}
-              >
+              <PanelNotice title="This academy is empty. Two steps to open it.">
                 <Link
                   href={href("/schedule")}
-                  className="text-brand-strong font-medium"
+                  className="text-foreground decoration-muted-foreground font-medium underline underline-offset-4 hover:decoration-current"
                 >
-                  {bjj
-                    ? "1. Add your weekly classes"
-                    : "1. Add your weekly sessions"}
+                  1. Add your weekly classes
                 </Link>
                 {" · "}
                 <Link
                   href={href("/members")}
-                  className="text-brand-strong font-medium"
+                  className="text-foreground decoration-muted-foreground font-medium underline underline-offset-4 hover:decoration-current"
                 >
                   2. Share your join link
                 </Link>
-                {/* The visitor poster is a BJJ path: a general space has no
-                    drop-in form and no public booking (ADR 126), so offering
-                    one would be a step that leads nowhere. */}
-                {bjj && (
-                  <>
-                    {" · "}
-                    <Link
-                      href={href("/members?tab=leads")}
-                      className="text-brand-strong font-medium"
-                    >
-                      3. Print the QR poster
-                    </Link>
-                  </>
-                )}
               </PanelNotice>
             ) : (
               <>
@@ -325,7 +306,7 @@ export function DashboardScreen() {
                       type="button"
                       onClick={() => queueErrors.forEach((e) => e.retry())}
                       className={cn(
-                        "text-brand-strong font-medium underline underline-offset-4",
+                        "text-foreground decoration-muted-foreground font-medium underline underline-offset-4 hover:decoration-current",
                         FOCUS_RING,
                         TAP,
                       )}
@@ -337,8 +318,8 @@ export function DashboardScreen() {
                   queue.length === 0 && (
                     <PanelNotice title="All clear.">
                       {isOwner
-                        ? `Every past ${words.session} reviewed, everyone approved, and no new leads.`
-                        : `Every past ${words.session} reviewed and everyone approved.`}
+                        ? "Every past class reviewed, everyone approved, and no new leads."
+                        : "Every past class reviewed and everyone approved."}
                     </PanelNotice>
                   )
                 )}
@@ -352,9 +333,9 @@ export function DashboardScreen() {
         {numbersLoading ? (
           <Bar className="mt-3 h-3 w-56" />
         ) : (
-          <p className="text-muted-foreground mt-3 font-mono text-[11px] tracking-wider uppercase tabular-nums">
+          <p className="text-muted-foreground mt-3 text-xs tabular-nums">
             {isOwner && `${activeCount} active members · `}
-            {weekCount} {words.sessionPlural} this week
+            {weekCount} classes this week
           </p>
         )}
       </div>
@@ -375,7 +356,7 @@ export function DashboardScreen() {
             meta={
               week.isPending || week.isError
                 ? undefined
-                : `${dayList.length} ${dayList.length === 1 ? words.session : words.sessionPlural}`
+                : `${dayList.length} ${dayList.length === 1 ? "class" : "classes"}`
             }
           >
             {week.isPending ? (
@@ -387,17 +368,17 @@ export function DashboardScreen() {
               />
             ) : dayList.length === 0 ? (
               <EmptyState
-                title={`No ${words.sessionPlural} ${showTomorrow ? "tomorrow" : "today"}.`}
+                title={`No classes ${showTomorrow ? "tomorrow" : "today"}.`}
                 action={
                   <Link
                     href={href("/schedule")}
                     className={cn(
-                      "text-brand-strong text-sm font-medium",
+                      "text-foreground decoration-muted-foreground text-sm font-medium underline underline-offset-4 hover:decoration-current",
                       FOCUS_RING,
                       TAP,
                     )}
                   >
-                    Add a {words.session}
+                    Add a class
                   </Link>
                 }
               >
@@ -454,14 +435,18 @@ export function DashboardScreen() {
                 </EmptyState>
               ) : (
                 <div className={cn("flex flex-col gap-2", RESOLVE)}>
-                  {driftList.slice(0, DRIFT_SHOWN).map((m) => (
-                    <DriftRow key={m.memberId} m={m} today={today} />
-                  ))}
+                  <ul className={LIST}>
+                    {driftList.slice(0, DRIFT_SHOWN).map((m) => (
+                      <li key={m.memberId}>
+                        <DriftRow m={m} today={today} />
+                      </li>
+                    ))}
+                  </ul>
                   {driftList.length > DRIFT_SHOWN && (
                     <Link
                       href={href("/members")}
                       className={cn(
-                        "text-brand-strong self-start text-sm font-medium",
+                        "text-foreground decoration-muted-foreground self-start text-sm font-medium underline underline-offset-4 hover:decoration-current",
                         FOCUS_RING,
                         TAP,
                       )}
@@ -480,7 +465,7 @@ export function DashboardScreen() {
 }
 
 /**
- * One job on the queue: a mono count over a mono label. From `lg` up the strip
+ * One job on the queue: a count over a label. From `lg` up the strip
  * is always one row, so the channels divide the content column evenly however
  * many jobs there are; a label wider than its channel truncates rather than
  * wrapping the tile taller than its neighbours.
@@ -491,19 +476,19 @@ function QueueSegment({ href, count, label, sub }: Omit<QueueItem, "key">) {
       href={href}
       className={cn(
         panelCell,
-        "group hover:bg-muted px-2.5 py-3 transition-[background-color,scale] duration-150",
+        "group hover:bg-hover px-2.5 py-3 transition-[background-color,scale] duration-150",
         FOCUS_RING_INSET,
         PRESS,
       )}
     >
-      <p className="text-brand-strong font-mono text-3xl leading-none tabular-nums">
+      <p className="text-foreground text-2xl leading-none font-medium tabular-nums">
         {count}
       </p>
-      <p className="text-muted-foreground group-hover:text-foreground mt-2 truncate font-mono text-[10px] tracking-wide uppercase transition-colors">
+      <p className="text-muted-foreground group-hover:text-foreground mt-2 truncate text-xs transition-colors motion-reduce:transition-none">
         {label}
       </p>
       {sub && (
-        <p className="text-muted-foreground/70 mt-1 truncate font-mono text-[10px] tabular-nums">
+        <p className="text-muted-foreground text-2xs mt-1 truncate tabular-nums">
           {sub}
         </p>
       )}
@@ -515,10 +500,10 @@ function QueueSegment({ href, count, label, sub }: Omit<QueueItem, "key">) {
 function NowLine({ now }: { now: Date }) {
   return (
     <div className="relative z-10 flex items-center gap-2 py-1" aria-hidden>
-      <span className="bg-brand text-brand-foreground rounded-[2px] px-1 py-px font-mono text-[9px] leading-none tabular-nums">
+      <span className="bg-foreground text-background text-2xs rounded-xs px-1 py-px leading-none tabular-nums">
         {timeFmt.format(now)}
       </span>
-      <span className="bg-brand h-px flex-1" />
+      <span className="bg-foreground h-px flex-1" />
     </div>
   );
 }
@@ -550,7 +535,7 @@ function DayRow({
       type="button"
       onClick={onOpen}
       className={cn(
-        "hover:bg-muted -mx-2.5 flex min-h-11 w-[calc(100%+1.25rem)] items-center gap-3 rounded-sm px-2.5 py-2 text-left text-sm",
+        "hover:bg-hover -mx-2.5 flex min-h-11 w-[calc(100%+1.25rem)] items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm transition-[background-color,scale] motion-reduce:transition-none",
         FOCUS_RING,
         PRESS,
       )}
@@ -562,9 +547,9 @@ function DayRow({
           disciplineDot(c.discipline),
         )}
       />
-      <span className="text-muted-foreground shrink-0 font-mono whitespace-nowrap tabular-nums">
+      <span className="text-muted-foreground shrink-0 whitespace-nowrap tabular-nums">
         {clock}
-        {period && <span className="ml-1 text-[10px]">{period}</span>}
+        {period && <span className="text-2xs ml-1">{period}</span>}
       </span>
       <span
         className={cn(
@@ -574,15 +559,9 @@ function DayRow({
       >
         {c.title}
       </span>
-      {unmarked && (
-        <span className="text-warning border-warning/40 shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium">
-          Needs review
-        </span>
-      )}
+      {unmarked && <Badge tone="warning">Needs review</Badge>}
       {mine ? (
-        <span className="border-brand/40 text-brand-strong shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium">
-          You
-        </span>
+        <Badge>You</Badge>
       ) : (
         c.instructorName && (
           <span className="text-muted-foreground hidden shrink-0 text-xs sm:block">
@@ -592,7 +571,7 @@ function DayRow({
       )}
       <span
         className={cn(
-          "shrink-0 font-mono text-xs tabular-nums",
+          "shrink-0 text-xs tabular-nums",
           full ? "text-warning" : "text-muted-foreground",
         )}
       >
@@ -617,9 +596,8 @@ function DriftRow({ m, today }: { m: DriftMember; today: Date }) {
     <Link
       href={href(`/members?member=${m.memberId}`)}
       className={cn(
-        cardClass({ variant: "outline", interactive: true }),
-        "flex min-h-11 flex-col gap-0.5 p-3",
-        FOCUS_RING,
+        "hover:bg-hover flex min-h-11 flex-col gap-0.5 px-3 py-2.5 text-sm transition-[background-color,scale]",
+        FOCUS_RING_INSET,
         PRESS,
       )}
     >
@@ -627,7 +605,7 @@ function DriftRow({ m, today }: { m: DriftMember; today: Date }) {
         <span className="truncate font-medium">{m.name}</span>
         <DriftBadge drift={m.drift} className="shrink-0" />
       </span>
-      <span className="text-muted-foreground text-sm">
+      <span className="text-muted-foreground text-xs">
         {days != null ? `Last trained ${days} days ago` : "Hasn't trained yet"}
       </span>
     </Link>

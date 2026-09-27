@@ -1,21 +1,23 @@
 "use client";
 
-import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
+import type { BadgeTone } from "@matops/ui/badge";
 import {
   attendanceCounts,
   attendanceWriteAccess,
   bulkMarkTargets,
   classEndsAt,
-  isBjjAcademy,
+  isOwner,
   isStaffRole,
   runsBranch,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
+import { Badge } from "@matops/ui/badge";
 import { Button } from "@matops/ui/button";
+import { Checkbox } from "@matops/ui/checkbox";
 import { Input } from "@matops/ui/input";
 import { FOCUS_RING } from "@matops/ui/motion";
 import { Separator } from "@matops/ui/separator";
@@ -25,7 +27,6 @@ import { AddVisitorSchema } from "@matops/validators";
 
 import { optimistic, rollback } from "~/lib/optimistic";
 import { useTRPC } from "~/trpc/react";
-import { ClassTheme } from "./class-theme";
 import { CoachSelect } from "./coach-select";
 import { useEntity } from "./entity";
 import { PhoneField } from "./form-fields";
@@ -71,7 +72,7 @@ function MarkDot({
     <span
       aria-hidden
       className={cn(
-        "size-2.5 shrink-0 rounded-full border transition-colors",
+        "size-2.5 shrink-0 rounded-full border transition-colors motion-reduce:transition-none",
         filled
           ? kind === "present"
             ? "bg-success border-success"
@@ -112,7 +113,7 @@ function MarkRule({
       aria-valuemax={total}
       aria-valuenow={present + absent}
       aria-label={`${present + absent} of ${total} marked`}
-      className="bg-border relative h-0.5 w-full overflow-hidden rounded-full"
+      className="bg-track relative h-0.5 w-full overflow-hidden rounded-full"
     >
       <span
         className={cn(bar, move, "bg-success")}
@@ -130,7 +131,7 @@ function MarkRule({
 
 function segmentClass(kind: Mark, selected: boolean) {
   return cn(
-    "inline-flex min-h-10 min-w-11 items-center justify-center rounded-sm px-2.5 text-sm transition-colors sm:min-h-8 sm:min-w-0",
+    "inline-flex min-h-10 min-w-11 items-center justify-center rounded-sm px-2.5 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none sm:min-h-8 sm:min-w-0",
     "outline-none",
     FOCUS_RING,
     selected
@@ -138,17 +139,25 @@ function segmentClass(kind: Mark, selected: boolean) {
           "text-foreground font-medium",
           kind === "present" ? "bg-success/15" : "bg-error/15",
         )
-      : "text-muted-foreground hover:text-foreground",
+      : "text-muted-foreground hover:bg-hover hover:text-foreground",
   );
 }
 
-/** A quiet uppercase note beside a name: walk-in, pending, drop-in. */
-function RowTag({ children }: { children: ReactNode }) {
-  return (
-    <span className="text-muted-foreground shrink-0 font-mono text-[10px] tracking-wide uppercase">
-      {children}
-    </span>
-  );
+/** A quiet note beside a name: walk-in, pending, drop-in. */
+function RowTag({
+  tone = "neutral",
+  children,
+}: {
+  tone?: BadgeTone;
+  children: string;
+}) {
+  return <Badge tone={tone}>{children}</Badge>;
+}
+
+function markTone(present: boolean, absent: boolean): BadgeTone {
+  if (present) return "success";
+  if (absent) return "error";
+  return "neutral";
 }
 
 /**
@@ -165,7 +174,6 @@ function RowTag({ children }: { children: ReactNode }) {
 export function ClassRoster({ cls }: { cls: ClassRow }) {
   const trpc = useTRPC();
   const academy = useEntity();
-  const bjj = isBjjAcademy(academy.type);
   const queryClient = useQueryClient();
   const invalidateFor = useInvalidate();
   const classId = cls.id;
@@ -196,17 +204,6 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
     ...trpc.attendance.members.queryOptions(),
     enabled: canMark,
   });
-  // Fired here, not left to <ClassTheme> to start on mount: the roster is behind
-  // a skeleton gate, so a query that only begins once the gate lifts lands a
-  // second later and shoves the whole dialog down. Same query options, so React
-  // Query serves ClassTheme from cache — one request, one layout swap.
-  const theme = useQuery(
-    trpc.curriculum.forClass.queryOptions(
-      { id: classId },
-      { enabled: bjj && academy.curriculumEnabled },
-    ),
-  );
-
   // The week read carries `markedCount`, which the O1 dashboard turns into its
   // "classes to mark" queue. Refetching it per mark would re-run two correlated
   // count subqueries per class row for every tap, so it waits until the roster
@@ -295,6 +292,20 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
     if (failed) onError(failed.reason as { message: string });
   };
 
+  const cancelFor = useMutation(
+    trpc.booking.cancelFor.mutationOptions({
+      onSuccess: () => {
+        toast.success("Booking cancelled");
+        return invalidate();
+      },
+      onError,
+    }),
+  );
+  const canCancelBookings =
+    isOwner(academy) &&
+    cls.status === "scheduled" &&
+    new Date(cls.startsAt).getTime() > now.getTime();
+
   const markAll = useMutation(
     trpc.attendance.markAll.mutationOptions({
       onMutate: (vars) =>
@@ -333,11 +344,7 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
     }),
   );
 
-  if (
-    classList.isPending ||
-    (bjj && academy.curriculumEnabled && theme.isPending)
-  )
-    return <SkeletonRoster />;
+  if (classList.isPending) return <SkeletonRoster />;
   if (classList.isError) {
     return (
       <ErrorState
@@ -386,7 +393,7 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
   return (
     <div className="flex flex-col gap-4">
       {ended && cls.status !== "cancelled" && !cls.deletedAt && (
-        <div className="border-border flex flex-col gap-3 rounded-md border p-3">
+        <div className="border-border bg-surface-1 flex flex-col gap-3 rounded-lg border p-3">
           <p role="status" className="text-sm font-medium">
             {review.reviewed
               ? review.present === 0
@@ -450,15 +457,20 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
             </p>
           )}
           {finish.isError && (
-            <p role="alert" className="text-error text-sm">
+            <p role="alert" className="text-error-text text-sm">
               {finish.error.message}
             </p>
           )}
         </div>
       )}
       {classList.data.corrections.length > 0 && (
-        <details className="border-border rounded-md border p-3">
-          <summary className="cursor-pointer text-sm font-medium">
+        <details className="border-border rounded-lg border p-3">
+          <summary
+            className={cn(
+              "cursor-pointer rounded-sm text-sm font-medium outline-none",
+              FOCUS_RING,
+            )}
+          >
             Change history ({classList.data.corrections.length})
           </summary>
           <ul className="mt-3 flex flex-col gap-3">
@@ -477,17 +489,12 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
         </details>
       )}
       <div className="flex flex-col gap-3">
-        {bjj && (
-          <>
-            {academy.curriculumEnabled && <ClassTheme classId={classId} />}
-            <CoachSelect
-              classId={classId}
-              startsAt={cls.startsAt}
-              instructorId={cls.instructorId ?? ""}
-              instructorName={cls.instructorName}
-            />
-          </>
-        )}
+        <CoachSelect
+          classId={classId}
+          startsAt={cls.startsAt}
+          instructorId={cls.instructorId ?? ""}
+          instructorName={cls.instructorName}
+        />
         {cls.description && (
           <p className="text-muted-foreground text-sm">{cls.description}</p>
         )}
@@ -495,7 +502,7 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
 
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-          <p className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-xs tabular-nums">
+          <p className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-xs tabular-nums">
             {canMark || ended ? (
               <>
                 <span className="flex items-center gap-1.5">
@@ -576,7 +583,7 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
                   {name}
                 </span>
                 {!canMark && ended && (
-                  <RowTag>
+                  <RowTag tone={markTone(present, absent)}>
                     {present ? "present" : absent ? "absent" : "unmarked"}
                   </RowTag>
                 )}
@@ -586,6 +593,24 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
                 {r.bookingStatus === "none" && <RowTag>walk-in</RowTag>}
                 {r.bookingStatus === "booked" &&
                   r.bookingTier === "provisional" && <RowTag>pending</RowTag>}
+                {canCancelBookings && r.bookingStatus === "booked" && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={cancelFor.isPending}
+                    busy={
+                      cancelFor.isPending &&
+                      cancelFor.variables.personId === r.studentId
+                    }
+                    aria-label={`Cancel booking for ${name}`}
+                    onClick={() =>
+                      cancelFor.mutate({ classId, personId: r.studentId })
+                    }
+                  >
+                    Cancel booking
+                  </Button>
+                )}
                 {canMark && (
                   <div
                     role="group"
@@ -656,12 +681,14 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
                     {name}
                   </span>
                   {!canMark && ended && (
-                    <RowTag>
+                    <RowTag tone={markTone(present, absent)}>
                       {present ? "present" : absent ? "absent" : "unmarked"}
                     </RowTag>
                   )}
-                  {d.bookingStatus === "booked" && <RowTag>booked</RowTag>}
-                  <span className="text-muted-foreground shrink-0 font-mono text-xs tabular-nums">
+                  {d.bookingStatus === "booked" && (
+                    <RowTag tone="info">booked</RowTag>
+                  )}
+                  <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
                     {d.phone}
                   </span>
                   {canMark && (
@@ -760,15 +787,13 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
                     <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto">
                       {matchingCandidates.map((m) => (
                         <li key={m.id}>
-                          <label className="hover:bg-muted flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm sm:min-h-9">
-                            <input
-                              type="checkbox"
-                              className="accent-brand size-4"
+                          <label className="hover:bg-hover flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm transition-colors motion-reduce:transition-none sm:min-h-9">
+                            <Checkbox
                               checked={walkInIds.has(m.id)}
-                              onChange={(e) =>
+                              onCheckedChange={(checked) =>
                                 setWalkInIds((prev) => {
                                   const next = new Set(prev);
-                                  if (e.target.checked) next.add(m.id);
+                                  if (checked === true) next.add(m.id);
                                   else next.delete(m.id);
                                   return next;
                                 })

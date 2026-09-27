@@ -62,9 +62,9 @@ describe("buildSeedGraph — pure dataset", () => {
     ).toBe(true);
   });
 
-  it("runs the academy with membership payment enforcement", () => {
+  it("runs the academy approval-only and keeps the membership rows", () => {
     const g = build();
-    expect(g.entities[0]?.membershipEnforcedAt).toBeInstanceOf(Date);
+    expect(g.entities[0]?.membershipEnforcedAt).toBeNull();
     expect(g.memberships.policies).toHaveLength(1);
     expect(g.memberships.plans.length).toBeGreaterThan(0);
     expect(g.memberships.assignments.length).toBeGreaterThan(0);
@@ -206,40 +206,8 @@ describe("buildSeedGraph — pure dataset", () => {
       ...g.promotions,
       ...g.notes,
       ...g.dropIns,
-      ...g.referrals,
-      ...g.referralAudits,
     ];
     expect(scoped.every((r) => ids.has(r.academyId))).toBe(true);
-  });
-
-  it("seeds assigned and unassigned referral examples", () => {
-    const g = build();
-    expect(g.referrals.length).toBeGreaterThan(0);
-    expect(g.referralAudits.length).toBeGreaterThanOrEqual(g.referrals.length);
-    const assignedStudents = new Set(
-      g.referrals.map((row) => row.studentMemberId),
-    );
-    const studentMembers = g.entityMemberships.filter(
-      (member) => member.role === "student" || member.invitedRole === "student",
-    );
-    expect(
-      studentMembers.some((member) => !assignedStudents.has(member.id ?? "")),
-    ).toBe(true);
-  });
-
-  it("covers all three referral audit actions, cleared keeps a null referrer", () => {
-    const g = build();
-    const actions = new Set(g.referralAudits.map((a) => a.action));
-    expect(actions).toContain("assigned");
-    expect(actions).toContain("corrected");
-    expect(actions).toContain("cleared");
-    const clearedStudent = g.referralAudits.find(
-      (a) => a.action === "cleared",
-    )?.studentMemberId;
-    expect(
-      g.referrals.find((r) => r.studentMemberId === clearedStudent)
-        ?.referrerMemberId,
-    ).toBeNull();
   });
 
   it("puts an active member in each of the four drift bands", () => {

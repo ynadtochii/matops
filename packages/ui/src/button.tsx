@@ -21,8 +21,7 @@ const webAdornments =
   "inline-flex shrink-0 whitespace-nowrap outline-none " +
   "transition-[background-color,border-color,color,box-shadow,scale] duration-150 " +
   `${PRESS} ${FOCUS_RING} ` +
-  "disabled:pointer-events-none " +
-  "disabled:bg-muted disabled:text-muted-foreground disabled:border-transparent " +
+  "disabled:pointer-events-none disabled:opacity-50 " +
   "aria-invalid:border-error aria-invalid:ring-error/20 " +
   "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4";
 
@@ -32,24 +31,24 @@ const webAdornments =
  * Native has no hover, so this stays out of the shared recipe.
  */
 const webHover: Record<ButtonVariant, string> = {
-  primary: "hover:bg-primary/90",
-  secondary: "hover:bg-secondary/70",
-  outline: "hover:bg-muted hover:text-foreground",
-  ghost: "hover:bg-muted hover:text-foreground",
+  primary: "shadow-lift hover:bg-primary/90",
+  secondary: "hover:bg-active hover:border-border-strong",
+  outline: "hover:bg-hover hover:border-border-strong",
+  ghost: "hover:bg-hover hover:text-foreground",
   destructive: "hover:bg-destructive/90",
-  "destructive-outline": "hover:border-error/60 hover:bg-error/10",
-  link: "hover:underline",
+  "destructive-outline": "hover:bg-error/20",
+  link: "hover:decoration-current",
 };
 
 /**
- * A 44px floor on every size for touch. The drawn heights (32/36/40px) are all
+ * A 44px floor on every size for touch. The drawn heights (24/32/40px) are all
  * under the target on a phone; desktop keeps the dense original.
  */
 const webSize: Partial<Record<NonNullable<ButtonVariants["size"]>, string>> = {
-  default: "min-h-11 sm:min-h-9",
-  sm: "min-h-11 sm:min-h-8",
+  default: "min-h-11 sm:min-h-8",
+  sm: "min-h-11 sm:min-h-6",
   lg: "min-h-11 sm:min-h-10",
-  icon: "min-h-11 min-w-11 sm:min-h-9 sm:min-w-9",
+  icon: "min-h-11 min-w-11 sm:min-h-8 sm:min-w-8",
 };
 
 /**
@@ -59,7 +58,7 @@ const webSize: Partial<Record<NonNullable<ButtonVariants["size"]>, string>> = {
 export function buttonClass({ variant, size }: ButtonVariants = {}) {
   return cn(
     buttonContainerVariants({ variant, size }),
-    buttonTextVariants({ variant }),
+    buttonTextVariants({ variant, size }),
     webAdornments,
     webHover[variant ?? "primary"],
     webSize[size ?? "default"],

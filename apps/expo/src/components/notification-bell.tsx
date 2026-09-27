@@ -30,7 +30,7 @@ export function NotificationBell() {
       accessibilityLabel={
         count > 0 ? `Notifications, ${count} unread` : "Notifications"
       }
-      hitSlop={10}
+      hitSlop={12}
       onPress={() => router.push("/notifications")}
     >
       <BellIcon color={t.mutedForeground} size={20} />

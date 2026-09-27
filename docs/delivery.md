@@ -125,9 +125,8 @@ matops/
     roadmap.md               # live plan + scope matrix
     delivery.md              # this file — the rulebook
     map.md                   # wayfinder decision map (index of the ADRs)
-    issues/NN-*.md           # the 27 ADRs (decision records)
+    issues/NN-*.md           # the ADRs (143 decision records)
     research/*.md            # deep-dive research reports
-    assets/schema-draft.ts   # reference schema → becomes packages/db
 ```
 
 ---

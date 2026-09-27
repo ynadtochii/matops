@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import { cn } from "@matops/ui";
 
-import { Panel, panelCell } from "./primitives";
+import { LIST, Panel, panelCell } from "./primitives";
 
 export function Bar({ className }: { className?: string }) {
   return (
@@ -45,7 +45,7 @@ function SkeletonRow({
     <div
       aria-hidden
       className={cn(
-        "bg-card flex items-center gap-3 rounded-lg border p-4",
+        "border-border bg-card flex items-center gap-3 rounded-lg border p-4",
         className,
       )}
     >
@@ -63,16 +63,23 @@ export function SkeletonRows({
   action = false,
   lines = 2,
   gap = "gap-2",
+  inList = false,
 }: {
   rows?: number;
   action?: boolean;
   lines?: number;
   gap?: string;
+  inList?: boolean;
 }) {
   return (
-    <div className={cn("flex flex-col", gap)}>
+    <div className={inList ? LIST : cn("flex flex-col", gap)}>
       {Array.from({ length: rows }, (_, i) => (
-        <SkeletonRow key={i} action={action} lines={lines} />
+        <SkeletonRow
+          key={i}
+          action={action}
+          lines={lines}
+          className={inList ? "rounded-none border-0" : undefined}
+        />
       ))}
     </div>
   );
@@ -96,13 +103,13 @@ export function SkeletonLines({
 
 export function SkeletonCard({ lines = 3 }: { lines?: number }) {
   return (
-    <div className="bg-card rounded-lg border p-4">
+    <div className="border-border bg-card rounded-lg border p-4">
       <SkeletonLines n={lines} />
     </div>
   );
 }
 
-export function SkeletonControlPanel() {
+function SkeletonControlPanel() {
   return <SkeletonCard lines={2} />;
 }
 /**
@@ -115,8 +122,8 @@ export function SkeletonQueue({ cells = 3 }: { cells?: number }) {
     <Panel role="status" aria-label="Loading" cols={cells}>
       {Array.from({ length: cells }, (_, i) => (
         <div key={i} aria-hidden className={cn(panelCell, "px-2.5 py-3")}>
-          <Bar className="h-7 w-8" />
-          <Bar className="mt-2 h-2.5 w-20" />
+          <Bar className="h-6 w-8" />
+          <Bar className="mt-2 h-3 w-20" />
         </div>
       ))}
     </Panel>
@@ -146,16 +153,13 @@ export function SkeletonDayRail({ rows = 3 }: { rows?: number }) {
     </div>
   );
 }
-export function SkeletonFeed() {
-  return <SkeletonRows rows={3} />;
-}
 export function SkeletonCoachCards({
   n = 2,
 }: {
   n?: number;
   toggle?: boolean;
 }) {
-  return <SkeletonRows rows={n} action />;
+  return <SkeletonRows rows={n} action inList />;
 }
 export function SkeletonRoster({ rows = 5 }: { rows?: number }) {
   return <SkeletonRows rows={rows} />;
@@ -170,16 +174,13 @@ export function SkeletonClassDays({
   rows?: number;
   action?: boolean;
 }) {
-  return <SkeletonRows rows={rows} action />;
+  return <SkeletonRows rows={rows} action inList />;
 }
 export function SkeletonDuesBody() {
   return <SkeletonCard lines={3} />;
 }
 export function SkeletonMyClassesBody() {
-  return <SkeletonRows />;
-}
-export function SkeletonReferralsBody() {
-  return <SkeletonRows />;
+  return <SkeletonRows action inList />;
 }
 export function SkeletonScheduleWeek() {
   return <SkeletonRows />;
@@ -209,18 +210,17 @@ export function CoachesSkeleton() {
             <Bar className="h-3 w-24" />
           </div>
           <Bar className="h-8 w-64" />
-          <SkeletonRows rows={3} action />
+          <SkeletonRows rows={3} action inList />
         </div>
         <div className="flex flex-col gap-4">
           <Bar className="h-5 w-16" />
-          <SkeletonRows rows={2} action />
+          <SkeletonRows rows={2} action inList />
           <SkeletonInviteCard />
         </div>
       </div>
     </Frame>
   );
 }
-export const ReferralsSkeleton = ScreenSkeleton;
 export const PaymentsSkeleton = ScreenSkeleton;
 export function SettingsSkeleton() {
   return (
@@ -242,7 +242,6 @@ export function SettingsSkeleton() {
     </Frame>
   );
 }
-export const NotificationsSkeleton = ScreenSkeleton;
 export const ProfileSkeleton = ScreenSkeleton;
 export const AttendanceSkeleton = ScreenSkeleton;
 export const ClassDetailSkeleton = ScreenSkeleton;

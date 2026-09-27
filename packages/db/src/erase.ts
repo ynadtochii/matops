@@ -12,8 +12,6 @@ import {
   member,
   memberNote,
   memberRank,
-  memberReferral,
-  memberReferralAudit,
   membershipAccessHold,
   membershipMonth,
   notification,
@@ -32,7 +30,6 @@ interface EraseMemberInput {
   academyId: string;
   memberId: string;
   userId: string;
-  actorId: string;
 }
 
 export async function recomputeBookingCounts(
@@ -59,7 +56,7 @@ export async function eraseMemberData(
   exec: TenantTx,
   input: EraseMemberInput,
 ): Promise<EraseReport> {
-  const { academyId, memberId, userId, actorId } = input;
+  const { academyId, memberId, userId } = input;
   const report: EraseReport = {};
   const del = async (
     label: string,
@@ -105,26 +102,6 @@ export async function eraseMemberData(
         and(
           eq(classParticipation.academyId, academyId),
           eq(classParticipation.studentId, userId),
-        ),
-      ),
-  );
-  await del("member_referral_audit", () =>
-    exec
-      .delete(memberReferralAudit)
-      .where(
-        and(
-          eq(memberReferralAudit.academyId, academyId),
-          eq(memberReferralAudit.studentMemberId, memberId),
-        ),
-      ),
-  );
-  await del("member_referral", () =>
-    exec
-      .delete(memberReferral)
-      .where(
-        and(
-          eq(memberReferral.academyId, academyId),
-          eq(memberReferral.studentMemberId, memberId),
         ),
       ),
   );
@@ -188,55 +165,6 @@ export async function eraseMemberData(
         ),
       ),
   );
-
-  const orphaned = await exec
-    .update(memberReferral)
-    .set({ referrerMemberId: null })
-    .where(
-      and(
-        eq(memberReferral.academyId, academyId),
-        eq(memberReferral.referrerMemberId, memberId),
-      ),
-    )
-    .returning({ studentMemberId: memberReferral.studentMemberId });
-  report.referral_credit_cleared = orphaned.length;
-  if (orphaned.length > 0) {
-    await exec.insert(memberReferralAudit).values(
-      orphaned.map((o) => ({
-        academyId,
-        studentMemberId: o.studentMemberId,
-        oldReferrerMemberId: null,
-        newReferrerMemberId: null,
-        action: "cleared" as const,
-        actorId,
-      })),
-    );
-  }
-
-  // Other students' history still names this person as a referrer. The row is
-  // append-only and belongs to the student it is about, so the credit is
-  // forgotten rather than the row deleted, exactly as the live referral above.
-  const oldCredit = await exec
-    .update(memberReferralAudit)
-    .set({ oldReferrerMemberId: null })
-    .where(
-      and(
-        eq(memberReferralAudit.academyId, academyId),
-        eq(memberReferralAudit.oldReferrerMemberId, memberId),
-      ),
-    )
-    .returning({ id: memberReferralAudit.id });
-  const newCredit = await exec
-    .update(memberReferralAudit)
-    .set({ newReferrerMemberId: null })
-    .where(
-      and(
-        eq(memberReferralAudit.academyId, academyId),
-        eq(memberReferralAudit.newReferrerMemberId, memberId),
-      ),
-    )
-    .returning({ id: memberReferralAudit.id });
-  report.referral_history_cleared = oldCredit.length + newCredit.length;
 
   await recomputeBookingCounts(exec, academyId);
   return report;

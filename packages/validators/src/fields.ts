@@ -1,6 +1,6 @@
 import { z } from "zod/v4";
 
-import { ENTITY_TYPES } from "@matops/domain";
+import { ENTITY_TYPES, isValidTimeZone } from "@matops/domain";
 
 /**
  * Zod schemas shared by the tRPC API and the clients (Phase 1: identity &
@@ -186,18 +186,13 @@ export const CreateAcademySchema = z.object({
 export const CreateEntitySchema = z.object({
   name: lineText(2, 80),
   type: z.enum(ENTITY_TYPES),
+  timeZone: lineText(1, 60)
+    .refine(isValidTimeZone, "Unknown time zone")
+    .optional(),
   /** Copy this branch's schedule and staff into the new one (ADR 128). */
   copyFromEntityId: IdSchema.optional(),
 });
 export type CreateEntityInput = z.infer<typeof CreateEntitySchema>;
-
-/** One branch of the caller's own gym, named from an organization screen. */
-export const EntityIdSchema = z.object({ entityId: IdSchema });
-
-export const SetMembershipEnforcedSchema = z.object({
-  entityId: IdSchema,
-  enforced: z.boolean(),
-});
 
 export const UpdateAcademySettingsSchema = z.object({
   timeZone: lineText(1, 64)
@@ -215,12 +210,6 @@ export const UpdateAcademySettingsSchema = z.object({
   address: blockText(0, 200).optional(),
   mapUrl: z.union([MapUrlSchema, z.literal("")]).optional(),
   bookingWindowDays: z.number().int().min(1).max(90).optional(),
-  curriculumForStudents: z.boolean().optional(),
-});
-
-export const OrganizationModulesSchema = z.object({
-  curriculumEnabled: z.boolean(),
-  referralsEnabled: z.boolean(),
 });
 
 export const DeleteAcademySchema = z.object({
@@ -230,41 +219,6 @@ export const DeleteAcademySchema = z.object({
 /** Roles a shareable invite link may carry — never "owner" (docs/issues/20). */
 export const InviteRoleSchema = z.enum(["student", "instructor"]);
 export type InviteRole = z.infer<typeof InviteRoleSchema>;
-
-export const AddStudentToBranchSchema = z
-  .union([
-    z.object({
-      entityId: IdSchema,
-      personId: IdSchema,
-    }),
-    z.object({
-      entityId: IdSchema,
-      userId: IdSchema,
-    }),
-  ])
-  .transform((input) => ({
-    ...input,
-    userId: "personId" in input ? input.personId : input.userId,
-  }));
-
-/** Approve or decline one person's place at one branch (ADR 129). */
-export const BranchDecisionSchema = z
-  .union([
-    z.object({
-      entityId: IdSchema,
-      personId: IdSchema,
-      decision: z.enum(["approve", "decline"]),
-    }),
-    z.object({
-      entityId: IdSchema,
-      userId: IdSchema,
-      decision: z.enum(["approve", "decline"]),
-    }),
-  ])
-  .transform((input) => ({
-    ...input,
-    userId: "personId" in input ? input.personId : input.userId,
-  }));
 
 /**
  * Student/instructor self-join via an invite link (spec S1/S2, docs/issues/26).

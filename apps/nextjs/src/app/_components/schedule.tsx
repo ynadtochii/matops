@@ -8,6 +8,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import { ChevronLeft, ChevronRight, X } from "lucide-react";
 
 import type { RouterOutputs } from "@matops/api";
 import type { DisciplineTone } from "@matops/domain";
@@ -31,6 +32,7 @@ import {
 import { FieldError } from "@matops/ui/field";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
+import { FOCUS_RING, FOCUS_RING_INSET } from "@matops/ui/motion";
 import { Select } from "@matops/ui/select";
 import { toast } from "@matops/ui/toast";
 
@@ -47,7 +49,7 @@ import { useTRPC } from "~/trpc/react";
 import { ClassRoster } from "./class-roster";
 import { InstructorOptions } from "./coach-select";
 import { useEntity } from "./entity";
-import { RESOLVE, Section } from "./primitives";
+import { LIST, RESOLVE, Section } from "./primitives";
 import { SchedulePoster } from "./schedule-poster";
 import { SkeletonScheduleWeek } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
@@ -64,49 +66,6 @@ const TONE_RAIL: Record<DisciplineTone, string> = {
   nogi: "bg-nogi",
   other: "bg-border",
 };
-
-const ChevronLeft = () => (
-  <svg
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth={1.5}
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className="size-4"
-    aria-hidden
-  >
-    <path d="M10 3.5L5.5 8l4.5 4.5" />
-  </svg>
-);
-const ChevronRight = () => (
-  <svg
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth={1.5}
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className="size-4"
-    aria-hidden
-  >
-    <path d="M6 3.5L10.5 8 6 12.5" />
-  </svg>
-);
-
-const XMark = () => (
-  <svg
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth={1.5}
-    strokeLinecap="round"
-    className="size-4"
-    aria-hidden
-  >
-    <path d="M4.5 4.5l7 7M11.5 4.5l-7 7" />
-  </svg>
-);
 
 const browserTz = () => {
   try {
@@ -127,7 +86,6 @@ interface OneOffForm {
   time: string; // HH:MM
   durationMinutes: number;
   capacity: number;
-  publicBookable: boolean;
   timeZone: string;
 }
 
@@ -139,7 +97,6 @@ const emptyOneOff = (instructorId: string): OneOffForm => ({
   time: "18:00",
   durationMinutes: 60,
   capacity: 20,
-  publicBookable: false,
   timeZone: browserTz(),
 });
 
@@ -249,7 +206,6 @@ export function Schedule({
       startsAtMinutes: timeToMinutes(form.time),
       durationMinutes: form.durationMinutes,
       capacity: form.capacity,
-      publicBookable: form.publicBookable,
       timeZone: form.timeZone,
     });
   };
@@ -330,7 +286,7 @@ export function Schedule({
             aria-label="Previous week"
             onClick={() => setOffset(offset - 1)}
           >
-            <ChevronLeft />
+            <ChevronLeft aria-hidden />
           </Button>
           <Button
             type="button"
@@ -338,7 +294,7 @@ export function Schedule({
             variant="ghost"
             title="Back to this week"
             className={cn(
-              "px-2 font-mono text-xs tracking-wide uppercase tabular-nums",
+              "px-2 tabular-nums",
               offset === 0 ? "text-foreground" : "text-muted-foreground",
             )}
             onClick={() => setOffset(0)}
@@ -351,7 +307,7 @@ export function Schedule({
             aria-label="Next week"
             onClick={() => setOffset(offset + 1)}
           >
-            <ChevronRight />
+            <ChevronRight aria-hidden />
           </Button>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -453,20 +409,6 @@ export function Schedule({
                     required
                   />
                 </div>
-                <label
-                  title="Only classes you share appear on your booking link and in the public API."
-                  className="text-muted-foreground hover:text-foreground flex min-h-11 w-full cursor-pointer items-center gap-2 text-sm"
-                >
-                  <input
-                    type="checkbox"
-                    className="accent-brand size-4"
-                    checked={form.publicBookable}
-                    onChange={(e) =>
-                      setForm({ ...form, publicBookable: e.target.checked })
-                    }
-                  />
-                  Share this class publicly
-                </label>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="cl-instructor">Coach</Label>
                   <Select
@@ -561,10 +503,13 @@ export function Schedule({
                   type="button"
                   aria-label={`Cancel ${c.title}`}
                   title="Cancel class"
-                  className="border-border bg-card text-muted-foreground hover:text-error hover:border-error/50 flex size-5 items-center justify-center rounded-[3px] border text-[11px] leading-none"
+                  className={cn(
+                    "border-border bg-card text-muted-foreground hover:text-error-text hover:border-error/50 flex size-5 items-center justify-center rounded-sm border transition-colors motion-reduce:transition-none",
+                    FOCUS_RING,
+                  )}
                   disabled={cancel.isPending && cancel.variables.id === c.id}
                 >
-                  ×
+                  <X aria-hidden className="size-3" />
                 </button>,
               )
             }
@@ -579,7 +524,7 @@ export function Schedule({
                   `${rows.length} ${rows.length === 1 ? "class" : "classes"}`
                 }
               >
-                <ul className="flex flex-col gap-2">
+                <ul className={LIST}>
                   {rows.map((c) => {
                     const cancelled = c.status === "cancelled";
                     const full = capacityDisplay(
@@ -592,8 +537,8 @@ export function Schedule({
                       <li
                         key={c.id}
                         className={cn(
-                          "border-border flex items-stretch gap-2 overflow-hidden rounded-lg border pr-1",
-                          cancelled ? "border-dashed" : "bg-card",
+                          "flex items-stretch gap-2 pr-1",
+                          cancelled && "bg-background",
                         )}
                       >
                         <span
@@ -605,13 +550,16 @@ export function Schedule({
                         />
                         <button
                           type="button"
-                          className="flex min-w-0 flex-1 items-start gap-3 py-3 pl-1.5 text-left"
+                          className={cn(
+                            "hover:bg-hover flex min-w-0 flex-1 items-start gap-3 py-3 pl-1.5 text-left transition-colors motion-reduce:transition-none",
+                            FOCUS_RING_INSET,
+                          )}
                           onClick={() => setDetailId(c.id)}
                         >
                           <span className="w-11 shrink-0 text-right">
                             <span
                               className={cn(
-                                "block font-mono text-sm leading-5 tabular-nums",
+                                "block text-sm leading-5 tabular-nums",
                                 cancelled &&
                                   "text-muted-foreground line-through",
                               )}
@@ -619,7 +567,7 @@ export function Schedule({
                               {clock}
                             </span>
                             {period && (
-                              <span className="text-muted-foreground block font-mono text-[10px] leading-none">
+                              <span className="text-muted-foreground text-2xs block leading-none">
                                 {period}
                               </span>
                             )}
@@ -633,11 +581,17 @@ export function Schedule({
                             >
                               {c.title}
                             </span>
-                            <span className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-2 font-mono text-[10px] tracking-wide uppercase">
+                            <span className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-2 text-xs">
                               {cancelled && (
-                                <span className="text-error">cancelled</span>
+                                <span className="text-error-text">
+                                  cancelled
+                                </span>
                               )}
-                              {c.discipline && <span>{c.discipline}</span>}
+                              {c.discipline && (
+                                <span className="uppercase">
+                                  {c.discipline}
+                                </span>
+                              )}
                               <span>
                                 {c.bookingCount}/{c.capacity} booked
                               </span>
@@ -645,7 +599,7 @@ export function Schedule({
                                 <span className="text-warning">busy</span>
                               )}
                               {c.pendingCount > 0 && (
-                                <span className="text-brand-strong">
+                                <span className="text-foreground">
                                   +{c.pendingCount} pending
                                 </span>
                               )}
@@ -660,12 +614,12 @@ export function Schedule({
                               size="icon"
                               variant="ghost"
                               aria-label={`Cancel ${c.title}`}
-                              className="text-muted-foreground hover:text-error shrink-0 self-center"
+                              className="text-muted-foreground hover:text-error-text shrink-0 self-center"
                               disabled={
                                 cancel.isPending && cancel.variables.id === c.id
                               }
                             >
-                              <XMark />
+                              <X aria-hidden />
                             </Button>,
                           )}
                       </li>

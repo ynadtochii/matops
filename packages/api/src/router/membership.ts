@@ -583,7 +583,6 @@ export const membershipRouter = {
           academyId: ctx.academyId,
           memberId: input.memberId,
           userId: accountUserId,
-          actorId: ctx.session.user.id,
         }),
       );
       await deleteEntityMembership(ctx.baseDb, ctx.academyId, accountUserId);

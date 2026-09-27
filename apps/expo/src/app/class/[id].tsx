@@ -1,13 +1,8 @@
-import { ScrollView, View } from "react-native";
+import { ScrollView, StyleSheet, View } from "react-native";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 
-import {
-  canBook,
-  capacityDisplay,
-  isBjjAcademy,
-  notBookableMessage,
-} from "@matops/domain";
+import { canBook, capacityDisplay, notBookableMessage } from "@matops/domain";
 
 import { useBookClass, useCancelBooking } from "~/components/book-control";
 import { ClassDetailSkeleton } from "~/components/skeletons";
@@ -43,19 +38,6 @@ export default function ClassDetail() {
   }>();
   const q = useQuery(trpc.class.get.queryOptions({ id }, { retry: false }));
   const academy = useQuery(trpc.academy.current.queryOptions());
-  // Same key as WhoIsIn, which renders below the `q.isPending` gate and so
-  // would not start fetching until the class itself lands.
-  const current = useQuery(trpc.academy.current.queryOptions());
-  const theme = useQuery(
-    trpc.curriculum.forClass.queryOptions(
-      { id },
-      {
-        enabled:
-          current.data?.curriculumEnabled === true &&
-          isBjjAcademy(current.data.type),
-      },
-    ),
-  );
 
   const { onBook, isPending: booking, error: bookError } = useBookClass();
   const { onCancel, isPending: cancelling } = useCancelBooking();
@@ -109,7 +91,7 @@ export default function ClassDetail() {
     booked && !cancelled && !past ? (
       <UIStack gap={8}>
         {provisional && (
-          <Txt size={14} tone="brand">
+          <Txt size={13} tone="secondary">
             Booked · pending approval
           </Txt>
         )}
@@ -155,8 +137,8 @@ export default function ClassDetail() {
           <UIStack gap={20}>
             <Field label="Day" value={dayLongFmt.format(start)} />
             <Field label="Time">
-              <Txt size={16}>
-                <Mono size={16} weight={600}>
+              <Txt size={15}>
+                <Mono size={15} weight={500}>
                   {timeFmt.format(start)}
                 </Mono>
                 {` · ${c.durationMinutes} min`}
@@ -165,26 +147,8 @@ export default function ClassDetail() {
             {/* "Nobody" rather than a dash: a general space runs sessions
                 that nobody teaches, and the web says the same word. */}
             <Field label="Instructor" value={c.instructorName ?? "Nobody"} />
-            {theme.data?.themes.length ? (
-              <Field label="This week">
-                {theme.data.themes.map((on) => (
-                  <View key={on.theme}>
-                    <Txt size={16}>{on.theme}</Txt>
-                    {on.notes ? <Muted>{on.notes}</Muted> : null}
-                    {on.run ? (
-                      <View>
-                        <Mono size={11} tone="brand">
-                          THIS RUN
-                        </Mono>
-                        <Txt>{on.run}</Txt>
-                      </View>
-                    ) : null}
-                  </View>
-                ))}
-              </Field>
-            ) : null}
             <Field label="Capacity">
-              <Mono size={16} tone={over ? "error" : "default"}>
+              <Mono size={15} tone={over ? "error" : "default"}>
                 {capacityLabel}
                 {over ? " · may be busy" : ""}
               </Mono>
@@ -192,7 +156,7 @@ export default function ClassDetail() {
           </UIStack>
 
           {bookError && (
-            <Txt size={14} tone="error">
+            <Txt size={13} tone="error">
               {bookError}
             </Txt>
           )}
@@ -201,7 +165,11 @@ export default function ClassDetail() {
 
       {/* Sticky bottom action bar — the primary action in the thumb zone. */}
       <View
-        style={{ paddingTop: 16, borderTopWidth: 1, borderTopColor: t.border }}
+        style={{
+          paddingTop: 16,
+          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopColor: t.border,
+        }}
       >
         {action}
       </View>

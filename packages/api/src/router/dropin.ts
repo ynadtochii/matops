@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto";
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
@@ -22,7 +21,6 @@ import {
   canPromoteLead,
   canSubmitDropIn,
   CODE_JOIN_ROLE,
-  isBjjAcademy,
   normalizePhone,
   PROMOTE_REFUSAL_REASON,
   visitorClassChoices,
@@ -98,22 +96,14 @@ const nextBookingAt = sql<Date | null>`(
  * connection via `@matops/db` helpers, each pinned to the validated academy id.
  * Owner reads (`list`) go through the RLS-scoped `ctx.db`.
  */
-/**
- * The wall poster is a BJJ thing (ADR 126). A general space has no visitor path
- * in this release, so it answers 404 rather than half-supporting one: a visitor
- * row carries no membership, and a strict room letting in somebody nothing
- * counts is exactly the over-booking capacity exists to stop.
- */
-function requireVisitorBranch<T extends { type: string }>(
-  academy: T | null,
-): T {
-  if (!academy || !isBjjAcademy(academy.type)) {
+function requireVisitorBranch<T>(academy: T | null): T {
+  if (!academy) {
     throw new TRPCError({ code: "NOT_FOUND", message: "Gym not found" });
   }
   return academy;
 }
 
-export async function submitDropIn(
+async function submitDropIn(
   input: ReturnType<typeof DropInSchema.parse>,
   exec: Parameters<typeof listAcademyClassesInWindow>[3],
 ) {
@@ -156,14 +146,7 @@ export async function submitDropIn(
     source: "wall_qr" as const,
   };
   const { visitCount } = book
-    ? await bookVisitor(
-        {
-          ...lead,
-          classId: book.id,
-          cancelToken: randomBytes(24).toString("base64url"),
-        },
-        exec,
-      )
+    ? await bookVisitor({ ...lead, classId: book.id }, exec)
     : await createDropIn({ ...lead, classId: attend?.id ?? null }, exec);
 
   return {

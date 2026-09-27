@@ -9,11 +9,11 @@ import type { RouterOutputs } from "~/utils/api";
 import { useRefreshControl } from "~/components/refresh";
 import { NotificationsSkeleton } from "~/components/skeletons";
 import {
-  Card,
   EmptyState,
   ErrorState,
-  Eyebrow,
   Heading,
+  List,
+  ListRow,
   Screen,
   Txt,
   useTheme,
@@ -83,13 +83,15 @@ export default function Notifications() {
             />
           ) : (
             days.map(([key, rows]) => (
-              <View key={key} style={{ gap: 10 }}>
+              <View key={key} style={{ gap: 8 }}>
                 <DayRule
                   label={dayLongFmt.format(new Date(`${key}T12:00:00`))}
                 />
-                {rows.map((n) => (
-                  <Row key={n.id} n={n} />
-                ))}
+                <List>
+                  {rows.map((n) => (
+                    <Row key={n.id} n={n} />
+                  ))}
+                </List>
               </View>
             ))
           )}
@@ -100,12 +102,11 @@ export default function Notifications() {
 }
 
 function DayRule({ label }: { label: string }) {
-  const t = useTheme();
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-      <View style={{ width: 16, height: 1, backgroundColor: t.border }} />
-      <Eyebrow>{label}</Eyebrow>
-      <View style={{ flex: 1, height: 1, backgroundColor: t.border }} />
+    <View style={{ paddingHorizontal: 2 }}>
+      <Txt size={13} weight={500} tone="secondary">
+        {label}
+      </Txt>
     </View>
   );
 }
@@ -118,7 +119,7 @@ function Row({ n }: { n: FeedItem }) {
     : null;
 
   return (
-    <Card
+    <ListRow
       onPress={
         classId
           ? () =>
@@ -133,23 +134,30 @@ function Row({ n }: { n: FeedItem }) {
               width: 6,
               height: 6,
               borderRadius: 3,
-              backgroundColor: t.brand,
+              backgroundColor: t.foreground,
             }}
           />
         ) : null}
-        <Txt size={15} weight={500} style={{ flex: 1 }} numberOfLines={2}>
+        <Txt
+          size={15}
+          weight={n.readAt === null ? 600 : 500}
+          style={{ flex: 1 }}
+          numberOfLines={2}
+        >
           {n.title}
         </Txt>
-        <Txt data size={11} weight={500} tone="muted">
+        <Txt data size={12} tone="muted">
           {timeFmt.format(new Date(n.createdAt))}
         </Txt>
       </View>
-      <Txt size={14} tone="muted" lineHeight={20} style={{ marginTop: 6 }}>
+      <Txt size={13} tone="muted" lineHeight={19} style={{ marginTop: 4 }}>
         {n.body}
       </Txt>
-      <View style={{ marginTop: 10 }}>
-        <Eyebrow>{notificationKindLabel(n.kind)}</Eyebrow>
+      <View style={{ marginTop: 8 }}>
+        <Txt size={12} weight={500} tone="muted">
+          {notificationKindLabel(n.kind)}
+        </Txt>
       </View>
-    </Card>
+    </ListRow>
   );
 }

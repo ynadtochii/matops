@@ -167,14 +167,14 @@ export function BookButton({ c }: { c: BookableClass }) {
         minHeight: 36,
         minWidth: 64,
         paddingHorizontal: 16,
-        borderRadius: 3,
+        borderRadius: 9999,
         alignItems: "center",
         justifyContent: "center",
         backgroundColor: t.primary,
         opacity: isPending ? 0.5 : pressed ? 0.85 : 1,
       })}
     >
-      <Txt size={14} weight={600} color={t.primaryForeground}>
+      <Txt size={14} weight={500} color={t.primaryForeground}>
         {isPending ? "…" : "Book"}
       </Txt>
     </Pressable>
@@ -200,15 +200,16 @@ export function CancelButton({ classId }: { classId: string }) {
         minHeight: 36,
         minWidth: 64,
         paddingHorizontal: 14,
-        borderRadius: 3,
+        borderRadius: 9999,
         borderWidth: 1,
-        borderColor: t.error,
+        borderColor: `${t.error}4d`,
+        backgroundColor: `${t.error}1a`,
         alignItems: "center",
         justifyContent: "center",
         opacity: isPending ? 0.5 : pressed ? 0.85 : 1,
       })}
     >
-      <Txt size={14} weight={600} tone="error">
+      <Txt size={14} weight={500} tone="error">
         {isPending ? "…" : "Cancel"}
       </Txt>
     </Pressable>

@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { cn } from "@matops/ui";
 import { Logo, Mark } from "@matops/ui/logo";
+import { FOCUS_RING } from "@matops/ui/motion";
 
 import { ENTER, Eyebrow, stagger } from "./primitives";
 
@@ -26,7 +27,7 @@ export function AuthSplit({
 }) {
   return (
     <main className="grid min-h-dvh lg:h-dvh lg:grid-cols-[1.1fr_1fr] lg:overflow-hidden">
-      <aside className="bg-brand-wash relative hidden overflow-hidden lg:flex lg:flex-col lg:justify-between lg:p-14">
+      <aside className="bg-surface-1 border-border relative hidden overflow-hidden border-r lg:flex lg:flex-col lg:justify-between lg:p-14">
         <div className="bg-grid absolute inset-0 opacity-40" aria-hidden />
         <Mark
           size={560}
@@ -36,12 +37,17 @@ export function AuthSplit({
         <Logo size={26} className="relative" />
 
         <div className="relative max-w-md">
-          <p className={cn("text-4xl font-semibold tracking-tight", ENTER)}>
+          <p
+            className={cn(
+              "text-foreground text-4xl font-semibold tracking-tight text-balance",
+              ENTER,
+            )}
+          >
             {headline}
           </p>
           <p
             className={cn(
-              "text-muted-foreground mt-4 max-w-sm text-base leading-relaxed text-pretty",
+              "text-foreground-secondary mt-4 max-w-sm text-base leading-relaxed text-pretty",
               ENTER,
             )}
             style={stagger(1)}
@@ -62,7 +68,7 @@ export function AuthSplit({
         <Eyebrow className="relative">Built for BJJ academies</Eyebrow>
       </aside>
 
-      <div className="flex flex-col justify-center overflow-y-auto p-5 sm:p-6">
+      <div className="bg-background flex flex-col justify-center overflow-y-auto p-4 sm:p-6">
         <div
           className={cn(
             "mx-auto flex w-full max-w-sm flex-col gap-5 sm:gap-6",
@@ -77,7 +83,10 @@ export function AuthSplit({
             By continuing you agree to our{" "}
             <Link
               href="/privacy"
-              className="hover:text-foreground underline underline-offset-4"
+              className={cn(
+                "hover:text-foreground rounded-sm underline underline-offset-4 transition-colors motion-reduce:transition-none",
+                FOCUS_RING,
+              )}
             >
               privacy notice
             </Link>

@@ -32,17 +32,15 @@ const SessionDescription = blockText(0, 500)
  * Recurring class template (spec O3, docs/issues/08). Days are 0=Sun…6=Sat; the
  * start time is LOCAL minutes-from-midnight in `timeZone` (the DST-aware UTC
  * conversion happens later in @matops/domain). `instructorId` is optional on
- * write — at a BJJ academy the router defaults it to the acting staff member,
- * and a general space leaves it unset (ADR 126). `description` is bounded at
- * 500 characters, the same cap the column's check constraint holds.
+ * write: the router defaults it to the acting staff member. `description` is
+ * bounded at 500 characters, the same cap the column's check constraint holds.
  */
 export const CreateClassTemplateSchema = z.object({
   title: lineText(1, 80),
   description: SessionDescription,
   discipline: DisciplineSchema.nullish(),
-  curriculumTrackId: IdSchema.nullish(),
-  // Nullable as well as optional: null is "nobody", which a general space
-  // says out loud, while a missing field on edit leaves the coach alone.
+  // Nullable as well as optional: null is "nobody", while a missing field on
+  // edit leaves the coach alone.
   instructorId: IdSchema.nullish(),
   daysOfWeek: z
     .array(z.number().int().min(0).max(6))
@@ -53,7 +51,6 @@ export const CreateClassTemplateSchema = z.object({
   durationMinutes: z.number().int().min(5).max(600),
   timeZone: TimeZoneSchema,
   capacity: z.number().int().min(0).max(1000),
-  publicBookable: z.boolean().default(false),
 });
 
 /** Edit a template. Same shape as create; the id names the target. */
@@ -89,7 +86,6 @@ export const CreateClassSchema = z.object({
   durationMinutes: z.number().int().min(5).max(600),
   timeZone: TimeZoneSchema,
   capacity: z.number().int().min(0).max(1000),
-  publicBookable: z.boolean().default(false),
 });
 
 /**

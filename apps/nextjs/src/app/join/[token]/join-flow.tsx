@@ -8,6 +8,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button } from "@matops/ui/button";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
+import { FOCUS_RING } from "@matops/ui/motion";
 import { Spinner } from "@matops/ui/spinner";
 import { toast } from "@matops/ui/toast";
 
@@ -19,6 +20,7 @@ import {
   SubmitButton,
 } from "~/app/_components/sign-in";
 import { sendJoinLinkAction } from "~/app/_components/sign-in-actions";
+import { ErrorState } from "~/app/_components/states";
 import { useTRPC } from "~/trpc/react";
 
 export interface JoinProfile {
@@ -67,6 +69,17 @@ export function JoinFlow({
   }
 
   if (invite.isError) {
+    const code = invite.error.data?.code;
+    if (code !== "NOT_FOUND" && code !== "BAD_REQUEST") {
+      return (
+        <div className="w-full max-w-sm">
+          <ErrorState
+            label="your invite"
+            onRetry={() => void invite.refetch()}
+          />
+        </div>
+      );
+    }
     return (
       <div className="flex flex-col items-center gap-3 text-center">
         <h1 className="text-2xl font-semibold tracking-tight">
@@ -163,12 +176,10 @@ function SignUp({
           required
           invalid={state.status === "error"}
         />
-        <SubmitButton className="w-full" pendingLabel="Sending…">
-          Join {academyName}
-        </SubmitButton>
+        <SubmitButton className="w-full">Join {academyName}</SubmitButton>
         <p aria-live="polite" className="text-muted-foreground text-sm">
           {state.status === "error" ? (
-            <span className="text-error">
+            <span className="text-error-text">
               Couldn&apos;t send the link. Check your details and try again.
             </span>
           ) : (
@@ -213,12 +224,14 @@ function ProfileForm({
       }}
     >
       <NameFields defaults={defaults} timeZone={timeZone} country={country} />
-      <Button type="submit" size="lg" disabled={pending}>
-        {pending && <Spinner size="sm" className="text-current" />}
-        {pending ? "Joining\u2026" : `Join ${academyName}`}
+      <Button type="submit" size="lg" disabled={pending} busy={pending}>
+        Join {academyName}
       </Button>
       <p className="text-muted-foreground text-xs">
-        <Link href="/privacy" className="underline underline-offset-2">
+        <Link
+          href="/privacy"
+          className={`hover:text-foreground inline-flex min-h-11 items-center rounded-sm underline underline-offset-2 sm:min-h-0 ${FOCUS_RING}`}
+        >
           What {academyName} stores about you
         </Link>
       </p>

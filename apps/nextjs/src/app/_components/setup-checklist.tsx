@@ -1,5 +1,6 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 
@@ -9,7 +10,7 @@ import { Button } from "@matops/ui/button";
 
 import { useTRPC } from "~/trpc/react";
 import { useOrganization } from "./entity";
-import { cardClass, ENTER, Eyebrow } from "./primitives";
+import { cardClass, ENTER, Eyebrow, XIcon } from "./primitives";
 import { SkeletonCard } from "./skeletons";
 
 /**
@@ -21,16 +22,16 @@ import { SkeletonCard } from "./skeletons";
  * reads as an order of work instead of a wall of failures.
  */
 const LABELS: Record<SetupKey, string> = {
-  gym: "Name your gym",
-  branch: "Add your first branch",
-  location: "Add branch locations and time zones",
+  branch: "Add your academy",
+  location: "Add your academy address and time zone",
   schedule: "Put your weekly classes on the schedule",
-  staff: "Bring an instructor in",
-  bank: "Add the bank details members pay into",
+  invite: "Share your join link with a student",
+  approve: "Approve your first student",
+  booking: "Get your first booking",
   plan: "Make a membership plan",
+  bank: "Add the bank details members pay into",
   assign: "Put your members on a plan",
   ready: "Check every member is covered",
-  invite: "Share your join link",
 };
 
 const Tick = () => (
@@ -49,7 +50,6 @@ const Tick = () => (
 /** Which branch issue a branch-level setup step is really about (ADR 129). */
 const ISSUE_FOR: Partial<Record<SetupKey, BranchIssue>> = {
   schedule: "schedule",
-  staff: "staff",
   ready: "covered",
 };
 
@@ -76,36 +76,88 @@ function hrefFor(
     return id ? entityHref(id, path) : undefined;
   };
   switch (key) {
-    case "gym":
     case "bank":
-      return "/settings";
+      return at("/settings");
     case "branch":
       return undefined;
     case "location":
       return at("/settings");
     case "schedule":
       return at("/schedule");
-    case "staff":
-      return at("/coaches");
     case "invite":
+    case "approve":
       return at("/members");
+    case "booking":
+      return at("/schedule");
     case "plan":
       return "/memberships?tab=plans";
     case "ready":
       return "/memberships?tab=access";
     case "assign":
-      return "/people";
+      return at("/members");
   }
 }
 
-export function SetupChecklist({ compact = false }: { compact?: boolean }) {
-  const trpc = useTRPC();
-  const { entities } = useOrganization();
-  const setup = useQuery(trpc.organization.setup.queryOptions());
+const closedThisSession = new Set<string>();
+const closeListeners = new Set<() => void>();
 
-  // The compact card is a reminder on a screen that has its own job, so it
-  // draws nothing while it loads rather than a skeleton nobody asked for.
-  if (setup.isPending) return compact ? null : <SkeletonCard />;
+function readClosed(key: string): boolean {
+  if (closedThisSession.has(key)) return true;
+  try {
+    return window.localStorage.getItem(key) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function useSetupClosed(organizationId: string): [boolean, () => void] {
+  const key = `matops:setup-closed:${organizationId}`;
+  const closed = useSyncExternalStore(
+    (onChange) => {
+      closeListeners.add(onChange);
+      return () => closeListeners.delete(onChange);
+    },
+    () => readClosed(key),
+    () => false,
+  );
+  const close = () => {
+    closedThisSession.add(key);
+    try {
+      window.localStorage.setItem(key, "1");
+    } catch {
+      // Private windows can refuse storage; the card still closes for this visit.
+    }
+    closeListeners.forEach((listener) => listener());
+  };
+  return [closed, close];
+}
+
+function CloseButton({ onClose }: { onClose: () => void }) {
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      aria-label="Close setup checklist"
+      className="text-muted-foreground -my-1 size-8 p-0"
+      onClick={onClose}
+    >
+      <XIcon />
+    </Button>
+  );
+}
+
+export function SetupChecklist() {
+  const trpc = useTRPC();
+  const { entities, organizationId } = useOrganization();
+  const [closed, close] = useSetupClosed(organizationId);
+  const setup = useQuery({
+    ...trpc.organization.setup.queryOptions(),
+    enabled: !closed,
+  });
+
+  if (closed) return null;
+
+  if (setup.isPending) return <SkeletonCard />;
   if (setup.isError)
     return (
       <div
@@ -129,7 +181,7 @@ export function SetupChecklist({ compact = false }: { compact?: boolean }) {
   const behind = branches.filter((b) => b.issues.length > 0);
   // Finished setup is not a thing to keep looking at. The card goes for good
   // once every item is done, and comes back on its own if one stops being true.
-  if (progress.complete && (!compact || behind.length === 0)) return null;
+  if (progress.complete) return null;
 
   const checklist = (
     <ul className="flex flex-col gap-2">
@@ -146,7 +198,7 @@ export function SetupChecklist({ compact = false }: { compact?: boolean }) {
             aria-hidden
             className={`flex size-5 shrink-0 items-center justify-center rounded-full border ${
               item.done
-                ? "bg-brand-strong border-transparent text-white"
+                ? "bg-foreground text-background border-transparent"
                 : "border-border"
             }`}
           >
@@ -169,54 +221,15 @@ export function SetupChecklist({ compact = false }: { compact?: boolean }) {
     </ul>
   );
 
-  if (compact) {
-    const next = items.find((i) => !i.done && !i.blocked);
-    return (
-      <section
-        className={`${ENTER} border-border flex flex-col gap-3 border-t pt-5`}
-      >
-        <div className="flex items-baseline justify-between gap-3">
-          <h2 className="text-muted-foreground text-sm font-medium">
-            Gym setup
-          </h2>
-          <span className="text-muted-foreground text-xs tabular-nums">
-            {progress.done} of {progress.total}
-          </span>
-        </div>
-        <p className="text-sm">
-          {next ? (
-            <>
-              Next:{" "}
-              <ItemLabel
-                item={next}
-                firstBranchId={firstBranchId}
-                behind={behind}
-                className="text-brand-strong font-medium"
-              />
-            </>
-          ) : (
-            "Open the checklist to review the remaining steps."
-          )}
-        </p>
-        <details>
-          <summary className="focus-visible:outline-ring min-h-11 cursor-pointer content-center text-sm font-medium focus-visible:outline-2">
-            View setup checklist
-          </summary>
-          <div className="flex flex-col gap-5 pt-3">
-            {checklist}
-            <BranchLaunchHealth embedded />
-          </div>
-        </details>
-      </section>
-    );
-  }
-
   return (
     <section className={`${cardClass()} ${ENTER} flex flex-col gap-4`}>
       <div className="flex items-baseline justify-between gap-3">
         <Eyebrow>Setting up</Eyebrow>
-        <span className="text-muted-foreground text-xs tabular-nums">
-          {progress.done} of {progress.total}
+        <span className="flex items-center gap-2">
+          <span className="text-muted-foreground text-xs tabular-nums">
+            {progress.done} of {progress.total}
+          </span>
+          <CloseButton onClose={close} />
         </span>
       </div>
       {checklist}
@@ -252,68 +265,5 @@ function ItemLabel({
     >
       {LABELS[item.key]}
     </Link>
-  );
-}
-
-const ISSUES: Record<BranchIssue, string> = {
-  schedule: "Add classes",
-  staff: "Assign an instructor",
-  membership: "Add membership coverage",
-  covered: "Review member access",
-  public: "Choose classes for public booking",
-};
-
-/**
- * Which branches are not ready to open (spec FP8). A branch with nothing wrong
- * is not listed: the block exists to name work, so a gym where every branch is
- * ready draws nothing at all rather than a row of ticks.
- */
-function BranchLaunchHealth({ embedded = false }: { embedded?: boolean }) {
-  const trpc = useTRPC();
-  const setup = useQuery(trpc.organization.setup.queryOptions());
-
-  if (setup.isPending || setup.isError) return null;
-  const behind = setup.data.branches.filter((b) => b.issues.length > 0);
-  if (behind.length === 0) return null;
-
-  return (
-    <section
-      className={`${embedded ? "border-border border-t pt-4" : cardClass()} ${ENTER} flex flex-col gap-3`}
-    >
-      <h2 className="text-sm font-semibold">Branch setup</h2>
-      <ul className="flex flex-col gap-2">
-        {behind.map((b) => (
-          <li key={b.id} className="flex min-w-0 flex-col gap-1">
-            <Link
-              href={entityHref(b.id)}
-              className="text-sm font-medium hover:underline"
-            >
-              {b.name}
-            </Link>
-            <ul className="flex flex-wrap gap-x-4 gap-y-1">
-              {b.issues.map((issue) => (
-                <li key={issue}>
-                  <Link
-                    href={
-                      issue === "membership"
-                        ? "/memberships?tab=plans"
-                        : issue === "covered"
-                          ? "/memberships?tab=access"
-                          : entityHref(
-                              b.id,
-                              issue === "staff" ? "/coaches" : "/schedule",
-                            )
-                    }
-                    className="text-brand-strong focus-visible:outline-ring inline-flex min-h-11 items-center text-sm underline underline-offset-4 focus-visible:outline-2"
-                  >
-                    {ISSUES[issue]}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </li>
-        ))}
-      </ul>
-    </section>
   );
 }

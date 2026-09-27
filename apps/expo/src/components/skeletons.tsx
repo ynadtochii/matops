@@ -1,7 +1,7 @@
 import { View } from "react-native";
 
 import { useTheme } from "./theme";
-import { Card } from "./ui";
+import { List } from "./ui";
 
 export function Bar({
   width,
@@ -13,24 +13,22 @@ export function Bar({
   const theme = useTheme();
   return (
     <View
-      style={{ width, height, borderRadius: 3, backgroundColor: theme.muted }}
+      style={{ width, height, borderRadius: 4, backgroundColor: theme.muted }}
     />
   );
 }
 
 function SkeletonRows({ rows = 3 }: { rows?: number }) {
   return (
-    <View
-      accessibilityRole="progressbar"
-      accessibilityLabel="Loading"
-      style={{ gap: 10 }}
-    >
-      {Array.from({ length: rows }, (_, i) => (
-        <Card key={i} style={{ gap: 8 }}>
-          <Bar width="70%" />
-          <Bar width="45%" height={11} />
-        </Card>
-      ))}
+    <View accessibilityRole="progressbar" accessibilityLabel="Loading">
+      <List>
+        {Array.from({ length: rows }, (_, i) => (
+          <View key={i} style={{ gap: 8, padding: 14 }}>
+            <Bar width="70%" />
+            <Bar width="45%" height={11} />
+          </View>
+        ))}
+      </List>
     </View>
   );
 }

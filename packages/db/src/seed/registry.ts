@@ -62,14 +62,14 @@ export const SEED_ACADEMY: SeedAcademy = {
 };
 
 /**
- * The general-branches pilot (ADR 126). Listed here so `seed down` removes it
+ * The first-release pilot (ADR 142). Listed here so `seed down` removes it
  * with everything else: teardown resolves each org's entities itself, so the
- * gym and the sauna go with it without being named again.
+ * gym and sauna branches an older pilot run made go with it.
  */
 const PILOT_ACADEMY: SeedAcademy = {
   key: "pilot",
   id: "seed_org_pilot",
-  name: "Pilot Gym",
+  name: "Pilot BJJ",
   slug: "seed-pilot-gym",
   publicCode: "990002",
   timeZone: "Europe/Lisbon",
@@ -105,7 +105,7 @@ export function seedPersonId(memberId: string): string {
 }
 
 /** The seed `entity_membership.id` for one academy + persona. Dues, claims,
- * ranks, notes and referrals key on this, not on `member.id` (ADR 124). */
+ * ranks and notes key on this, not on `member.id` (ADR 124). */
 export const seedMembershipId = (academyKey: string, handle: string): string =>
   seedEntityMembershipId(seedMemberId(academyKey, handle));
 

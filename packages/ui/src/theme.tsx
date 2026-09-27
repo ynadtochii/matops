@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { DesktopIcon, MoonIcon, SunIcon } from "@radix-ui/react-icons";
+import { MonitorIcon, MoonIcon, SunIcon } from "lucide-react";
 import * as z from "zod/v4";
 
 import { Button } from "./button";
@@ -20,12 +20,12 @@ export type ThemeMode = z.output<typeof ThemeModeSchema>;
 export type ResolvedTheme = Exclude<ThemeMode, "auto">;
 
 const getStoredThemeMode = (): ThemeMode => {
-  if (typeof window === "undefined") return "auto";
+  if (typeof window === "undefined") return "dark";
   try {
     const storedTheme = localStorage.getItem(themeKey);
     return ThemeModeSchema.parse(storedTheme);
   } catch {
-    return "auto";
+    return "dark";
   }
 };
 
@@ -79,8 +79,8 @@ const themeDetectorScript = (function () {
       return validThemes.includes(theme as ThemeMode);
     };
 
-    const storedTheme = localStorage.getItem("theme-mode") ?? "auto";
-    const validTheme = isValidTheme(storedTheme) ? storedTheme : "auto";
+    const storedTheme = localStorage.getItem("theme-mode") ?? "dark";
+    const validTheme = isValidTheme(storedTheme) ? storedTheme : "dark";
 
     if (validTheme === "auto") {
       const autoTheme = window.matchMedia("(prefers-color-scheme: dark)")
@@ -162,10 +162,10 @@ export function ThemeToggle() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="icon" className="[&>svg]:size-5">
+        <Button variant="outline" size="icon">
           <SunIcon className="light:block auto:hidden hidden" />
           <MoonIcon className="auto:hidden hidden dark:block" />
-          <DesktopIcon className="light:hidden auto:block dark:hidden" />
+          <MonitorIcon className="light:hidden auto:block dark:hidden" />
           <span className="sr-only">Toggle theme</span>
         </Button>
       </DropdownMenuTrigger>

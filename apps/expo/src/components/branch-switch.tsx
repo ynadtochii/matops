@@ -96,12 +96,12 @@ function BranchSwitchSheet({
         style={{
           flex: 1,
           justifyContent: "flex-end",
-          backgroundColor: "rgba(0,0,0,0.4)",
+          backgroundColor: t.backdrop,
         }}
       >
         <View
           style={{
-            backgroundColor: t.card,
+            backgroundColor: t.floating,
             borderTopLeftRadius: 12,
             borderTopRightRadius: 12,
             padding: 16,
@@ -110,7 +110,7 @@ function BranchSwitchSheet({
           }}
         >
           <Eyebrow>Your branches</Eyebrow>
-          <Stack gap={8}>
+          <Stack gap={4}>
             {branches.map((b) => {
               const isActive = b.academyId === activeId;
               return (
@@ -130,20 +130,22 @@ function BranchSwitchSheet({
                     flexDirection: "row",
                     alignItems: "center",
                     justifyContent: "space-between",
-                    borderRadius: 3,
-                    padding: 16,
-                    backgroundColor: isActive ? t.brand : t.muted,
+                    minHeight: 44,
+                    borderRadius: 8,
+                    paddingVertical: 12,
+                    paddingHorizontal: 14,
+                    backgroundColor: isActive ? t.active : t.surface1,
                   }}
                 >
                   <Txt
-                    size={16}
+                    size={15}
                     weight={isActive ? 500 : 400}
-                    color={isActive ? t.brandForeground : t.foreground}
+                    tone={isActive ? "default" : "secondary"}
                   >
                     {b.name}
                   </Txt>
                   {isActive && (
-                    <Txt size={16} color={t.brandForeground}>
+                    <Txt size={15} tone="default">
                       ✓
                     </Txt>
                   )}
@@ -170,7 +172,7 @@ export function BranchName() {
 
   if (branches.length < 2) {
     return (
-      <Txt size={14} weight={500} numberOfLines={1}>
+      <Txt size={15} weight={500} numberOfLines={1}>
         {label}
       </Txt>
     );
@@ -184,7 +186,7 @@ export function BranchName() {
         onPress={() => setOpen(true)}
         hitSlop={8}
       >
-        <Txt size={14} weight={500} numberOfLines={1}>
+        <Txt size={15} weight={500} numberOfLines={1}>
           {label} ▾
         </Txt>
       </Pressable>

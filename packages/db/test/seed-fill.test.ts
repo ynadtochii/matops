@@ -211,11 +211,21 @@ describe("seed fill/clear — augment a real academy", () => {
       [REAL_CLASS],
     );
     expect(bc).toBe(booked);
-    const assignmentsOnRealPlan = await scalar(
-      `SELECT count(*)::int n FROM "access_assignment" WHERE plan_id = $1`,
-      [REAL_PLAN],
-    );
-    expect(assignmentsOnRealPlan).toBeGreaterThan(0);
+  });
+
+  it("fill adds no payment rows while the academy is approval-only", async () => {
+    for (const table of [
+      "access_plan",
+      "access_assignment",
+      "membership_month",
+    ]) {
+      expect(
+        await scalar(
+          `SELECT count(*)::int n FROM "${table}" WHERE organization_id=$1`,
+          [ACAD],
+        ),
+      ).toBe(table === "access_plan" ? 1 : 0);
+    }
   });
 
   it("clear removes every fake and restores the real academy exactly", async () => {
@@ -241,8 +251,6 @@ describe("seed fill/clear — augment a real academy", () => {
       ["member_rank", "member_id"],
       ["rank_promotion", "member_id"],
       ["member_note", "member_id"],
-      ["member_referral", "student_member_id"],
-      ["member_referral_audit", "student_member_id"],
     ] as const) {
       expect(
         await scalar(
@@ -251,12 +259,6 @@ describe("seed fill/clear — augment a real academy", () => {
         ),
       ).toBe(0);
     }
-    expect(
-      await scalar(
-        `SELECT count(*)::int n FROM "member_referral" WHERE academy_id=$1 AND referrer_member_id LIKE 'seed_%'`,
-        [ACAD],
-      ),
-    ).toBe(0);
   });
 
   it("leaves the real owner, student, plan, class, and its booking untouched", async () => {

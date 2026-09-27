@@ -14,6 +14,7 @@ import { execOn, freshDb } from "@matops/db/testing";
 
 import type { createTRPCContext } from "../src/trpc";
 import { appRouter } from "../src/root";
+import { createTRPCRouter, enrolledProcedure } from "../src/trpc";
 
 export type Ctx = Awaited<ReturnType<typeof createTRPCContext>>;
 
@@ -27,6 +28,11 @@ export interface Harness {
     headers?: Headers,
   ) => ReturnType<typeof caller>;
   ctxFor: (userId: string, academyId: string | null, headers?: Headers) => Ctx;
+  enter: (
+    userId: string,
+    academyId: string | null,
+    headers?: Headers,
+  ) => ReturnType<ReturnType<typeof tierProbe.createCaller>["current"]>;
   /** What `setActiveOrganization` was last told, per user. */
   activeOrgOf: (userId: string) => string | undefined;
 }
@@ -34,6 +40,16 @@ export interface Harness {
 function caller(ctx: Ctx) {
   return appRouter.createCaller(ctx);
 }
+
+const tierProbe = createTRPCRouter({
+  current: enrolledProcedure.query(({ ctx }) => ({
+    id: ctx.entity.id,
+    name: ctx.entity.name,
+    type: ctx.entity.type,
+    role: ctx.membership.role,
+    status: ctx.membership.status,
+  })),
+});
 
 function entityHeaders(academyId: string | null): Headers {
   const headers = new Headers();
@@ -143,6 +159,8 @@ export async function harness(academies?: AcademySpec[]): Promise<Harness> {
     as: (userId, academyId, headers) =>
       caller(ctxFor(userId, academyId, headers)),
     ctxFor,
+    enter: (userId, academyId, headers) =>
+      tierProbe.createCaller(ctxFor(userId, academyId, headers)).current(),
     activeOrgOf: (userId) => activeOrg.get(userId),
   };
 }
@@ -237,8 +255,8 @@ export async function seedAcademies(
     );
   if (orgs.length)
     statements.push(
-      `INSERT INTO "organization" (id, name, slug, created_at, curriculum_enabled, referrals_enabled)
-         VALUES ${orgs.map((row) => row.replace(/\)$/, ", true, true)")).join(",")};`,
+      `INSERT INTO "organization" (id, name, slug, created_at)
+         VALUES ${orgs.join(",")};`,
     );
   if (members.length)
     statements.push(
@@ -288,7 +306,6 @@ export interface ClassSpec {
   durationMinutes?: number;
   capacity?: number;
   status?: "scheduled" | "cancelled";
-  publicBookable?: boolean;
 }
 
 export async function seedClasses(
@@ -297,10 +314,10 @@ export async function seedClasses(
 ): Promise<void> {
   const values = classes.map(
     (c) =>
-      `(${lit(c.id)}, ${lit(c.academyId)}, ${lit(c.instructorId)}, ${lit(c.title ?? "Gi Fundamentals")}, now() + interval '${c.startsInMinutes} minutes', ${c.durationMinutes ?? 60}, ${c.capacity ?? 20}, ${lit(c.status ?? "scheduled")}, ${c.publicBookable ?? false}, now(), now())`,
+      `(${lit(c.id)}, ${lit(c.academyId)}, ${lit(c.instructorId)}, ${lit(c.title ?? "Gi Fundamentals")}, now() + interval '${c.startsInMinutes} minutes', ${c.durationMinutes ?? 60}, ${c.capacity ?? 20}, ${lit(c.status ?? "scheduled")}, now(), now())`,
   );
   await pg.exec(`
-    INSERT INTO "class" (id, academy_id, instructor_id, title, starts_at, duration_minutes, capacity, status, public_bookable, created_at, updated_at)
+    INSERT INTO "class" (id, academy_id, instructor_id, title, starts_at, duration_minutes, capacity, status, created_at, updated_at)
       VALUES ${values.join(",")};
   `);
 }

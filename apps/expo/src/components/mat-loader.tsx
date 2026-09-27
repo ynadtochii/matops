@@ -1,7 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { AccessibilityInfo, Animated, Text, View } from "react-native";
 
-import { mono } from "./fonts";
+import { sans } from "./fonts";
 import { useTheme } from "./theme";
 
 /**
@@ -204,10 +204,8 @@ export function MatLoader({
       {label ? (
         <Text
           style={{
-            fontFamily: mono(500),
-            fontSize: 11,
-            letterSpacing: 1.6,
-            textTransform: "uppercase",
+            fontFamily: sans(500),
+            fontSize: 13,
             color: t.mutedForeground,
           }}
         >

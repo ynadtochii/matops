@@ -1,7 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { createEntity } from "@matops/db";
-
 import type { Harness } from "./helpers";
 import { harness, seedAcademies } from "./helpers";
 
@@ -125,18 +123,17 @@ describe("template timing edit with live bookings", () => {
   });
 });
 
-describe("editing a general space template", () => {
+describe("editing a template's description", () => {
   const ORG = "acad_tpl_gym";
   const BOSS = "u_tpl_gym_owner";
   let h: Harness;
-  let gym: string;
 
   function at(entityId: string): Headers {
     const headers = new Headers();
     headers.set("x-matops-entity", entityId);
     return headers;
   }
-  const staff = () => h.as(BOSS, ORG, at(gym));
+  const staff = () => h.as(BOSS, ORG, at(ORG));
 
   beforeAll(async () => {
     h = await harness();
@@ -147,35 +144,12 @@ describe("editing a general space template", () => {
         members: [{ userId: BOSS, role: "owner", status: "active" }],
       },
     ]);
-    const made = await createEntity(
-      {
-        organizationId: ORG,
-        type: "general_space",
-        name: "The Gym",
-        ownerUserId: BOSS,
-      },
-      h.exec,
-    );
-    gym = made.entityId;
   });
 
   afterAll(() => h.close());
 
   beforeEach(async () => {
     await h.pg.exec(`DELETE FROM "class"; DELETE FROM "class_template";`);
-  });
-
-  it("does not hand the session to whoever saved the edit", async () => {
-    const template = await staff().template.create(base);
-    if (!template) throw new Error("expected a template");
-    expect(template.instructorId).toBeNull();
-
-    const updated = await staff().template.update({
-      ...base,
-      id: template.id,
-      title: "Open gym",
-    });
-    expect(updated.instructorId).toBeNull();
   });
 
   it("pushes a new description onto the classes it already made", async () => {

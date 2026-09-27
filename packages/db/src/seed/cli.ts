@@ -9,8 +9,8 @@
  *
  *   status [code]  show the demo academy (and, with a code, that academy's fakes).
  *
- * The general-branches pilot (ADR 126) — one organization running a BJJ academy,
- * a gym and a sauna, with the three example plans:
+ * The first-release pilot (ADR 142): one organization running one BJJ academy,
+ * approval-only booking, no plans:
  *   pilot   build it, attached to YOUR real user as its owner. Idempotent.
  *           Removed by `down` like the rest of the seed.
  *
@@ -110,12 +110,9 @@ async function main(): Promise<void> {
     }
     const report = await seedPilot(exec, owner.id);
     console.log(`[seed] pilot gym ready for ${address}:`);
-    for (const b of report.branches) {
-      console.log(`  branch  ${b.name}  (${b.type})  ${b.id}`);
-    }
-    for (const p of report.plans) {
-      console.log(`  plan    ${p.name}  covers ${p.covers.length}`);
-    }
+    console.log(
+      `  academy  ${report.academy.name}  (${report.academy.timeZone})  ${report.academy.id}`,
+    );
     return;
   }
 

@@ -88,8 +88,6 @@ export const academyProfile = pgTable("academy_profile", (t) => ({
     .notNull()
     .primaryKey()
     .references(() => entity.id),
-  curriculumForStudents: t.boolean().notNull().default(false),
-  publicBookingEnabled: t.boolean().notNull().default(false),
   createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
   updatedAt: t
     .timestamp({ withTimezone: true })

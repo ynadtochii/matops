@@ -13,14 +13,17 @@ import {
 } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
+import { Badge } from "@matops/ui/badge";
 import { Button } from "@matops/ui/button";
+import { Callout } from "@matops/ui/callout";
+import { FOCUS_RING } from "@matops/ui/motion";
 
 import { dayKey, dayMediumFmt, timeFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { useEntity, useEntityHref } from "./entity";
 import { InstallAppCard } from "./install-app-card";
 import { PageHeader } from "./page-header";
-import { cardClass, disciplineDot, ENTER } from "./primitives";
+import { disciplineDot, ENTER, LIST } from "./primitives";
 import { SkeletonClassDays } from "./skeletons";
 import { EmptyState, ErrorState, SuspendedState } from "./states";
 import { useBooking } from "./use-booking";
@@ -71,17 +74,19 @@ export function StudentScreen() {
         }
       />
       {lockedMessage && (
-        <div className="border-warning/30 bg-warning/10 mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
-          <div className="min-w-0">
-            <p className="font-medium">Booking unavailable</p>
-            <p className="text-muted-foreground mt-1 text-sm">
-              {lockedMessage}
-            </p>
-          </div>
-          <Button asChild variant="outline" size="sm">
-            <Link href={href("/payments")}>View membership</Link>
-          </Button>
-        </div>
+        <Callout tone="warning" title="Booking unavailable" className="mb-6">
+          <p>{lockedMessage}</p>
+          {academy.membershipEnforced && (
+            <Button
+              asChild
+              variant="outline"
+              size="sm"
+              className="mt-2 self-start"
+            >
+              <Link href={href("/payments")}>View membership</Link>
+            </Button>
+          )}
+        </Callout>
       )}
       {week.isPending ? (
         <SkeletonClassDays />
@@ -118,7 +123,7 @@ export function StudentScreen() {
                 )}
               >
                 <div>
-                  <h2 id={`day-${key}`} className="text-base font-semibold">
+                  <h2 id={`day-${key}`} className="text-md font-semibold">
                     {key === todayKey
                       ? "Today"
                       : dayMediumFmt.format(new Date(`${key}T12:00:00`))}
@@ -133,7 +138,9 @@ export function StudentScreen() {
                   </p>
                 </div>
                 <div className="flex min-w-0 flex-col gap-2">
-                  {upcoming.map(renderRow)}
+                  {upcoming.length > 0 && (
+                    <div className={LIST}>{upcoming.map(renderRow)}</div>
+                  )}
                   {upcoming.length === 0 && (
                     <p className="text-muted-foreground py-2 text-sm">
                       No more classes today.
@@ -141,10 +148,15 @@ export function StudentScreen() {
                   )}
                   {earlier.length > 0 && (
                     <details className="group">
-                      <summary className="text-muted-foreground focus-visible:outline-brand cursor-pointer rounded-sm py-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-4">
+                      <summary
+                        className={cn(
+                          "text-muted-foreground hover:text-foreground flex min-h-11 cursor-pointer items-center rounded-sm text-sm transition-colors motion-reduce:transition-none",
+                          FOCUS_RING,
+                        )}
+                      >
                         Earlier today ({earlier.length})
                       </summary>
-                      <div className="flex flex-col gap-2 pt-1">
+                      <div className={cn(LIST, "mt-1")}>
                         {earlier.map(renderRow)}
                       </div>
                     </details>
@@ -187,13 +199,15 @@ function ClassRowCard({
   return (
     <div
       className={cn(
-        cardClass({ interactive: true }),
-        "flex flex-wrap items-center justify-between gap-4 max-sm:flex-col max-sm:items-stretch lg:flex-nowrap",
+        "hover:bg-hover flex flex-wrap items-center justify-between gap-4 px-4 py-3 transition-colors motion-reduce:transition-none max-sm:flex-col max-sm:items-stretch lg:flex-nowrap",
       )}
     >
       <Link
         href={href(`/class/${c.id}`)}
-        className="focus-visible:outline-brand flex min-w-0 flex-1 items-start gap-3 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4"
+        className={cn(
+          "flex min-w-0 flex-1 items-start gap-3 rounded-sm",
+          FOCUS_RING,
+        )}
       >
         <span
           aria-hidden
@@ -204,12 +218,12 @@ function ClassRowCard({
         />
         <span className="flex min-w-0 flex-1 flex-col gap-1">
           <span className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-            <span className="shrink-0 font-mono text-sm font-semibold tabular-nums">
+            <span className="text-md shrink-0 font-medium tabular-nums">
               {timeFmt.format(start)}
             </span>
             <span
               className={cn(
-                "min-w-0 text-base font-semibold break-words",
+                "text-md min-w-0 font-semibold break-words",
                 cancelled && "line-through",
               )}
             >
@@ -217,24 +231,16 @@ function ClassRowCard({
             </span>
           </span>
           <span className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-            {c.discipline && (
-              <span className="font-mono text-[10px] tracking-wide uppercase">
-                {c.discipline}
-              </span>
-            )}
+            {c.discipline && <span className="text-xs">{c.discipline}</span>}
             {c.instructorName && <span>{c.instructorName}</span>}
             {cancelled ? (
-              <span className="text-error font-medium">Cancelled</span>
+              <span className="text-error-text font-medium">Cancelled</span>
             ) : (
-              <span className="font-mono text-xs">
+              <span className="tabular-nums">
                 {spotsLeftLabel(c.capacity, c.bookingCount)}
               </span>
             )}
-            {booked && !cancelled && (
-              <span className="bg-brand-wash text-brand-strong rounded-full px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wide uppercase">
-                Booked
-              </span>
-            )}
+            {booked && !cancelled && <Badge tone="info">Booked</Badge>}
           </span>
         </span>
       </Link>

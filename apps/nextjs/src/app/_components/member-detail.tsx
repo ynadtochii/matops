@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronRight } from "lucide-react";
 
 import {
   compareRank,
@@ -16,9 +17,11 @@ import {
 } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
+import { Badge } from "@matops/ui/badge";
 import { Button } from "@matops/ui/button";
 import { CopyButton } from "@matops/ui/copy-button";
 import { Input } from "@matops/ui/input";
+import { FOCUS_RING } from "@matops/ui/motion";
 import { Select } from "@matops/ui/select";
 import { Textarea } from "@matops/ui/textarea";
 import { toast } from "@matops/ui/toast";
@@ -27,7 +30,7 @@ import type { Member, MemberHistory } from "./members";
 import { dateFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { useEntity, useOrganization } from "./entity";
-import { cardClass, DriftBadge, RESOLVE, Stat, TAP } from "./primitives";
+import { DriftBadge, LIST, RESOLVE, Stat, TAP } from "./primitives";
 import { SkeletonLines, SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 import { Tabs } from "./tabs";
@@ -62,17 +65,11 @@ export function MemberRow({
 }) {
   const name = (
     <>
-      <span className="font-medium">
+      <span className="text-foreground flex flex-wrap items-center gap-x-2 gap-y-1 font-medium">
         {m.name}
-        {m.status === "suspended" && (
-          <span className="text-muted-foreground ml-2 text-xs uppercase">
-            suspended
-          </span>
-        )}
+        {m.status === "suspended" && <Badge>suspended</Badge>}
         {!isStaffRole(m) && m.membership && m.membership.verdict !== "ok" && (
-          <span className="text-error ml-2 text-xs font-medium uppercase">
-            {MEMBERSHIP_TAG[m.membership.verdict]}
-          </span>
+          <Badge tone="error">{MEMBERSHIP_TAG[m.membership.verdict]}</Badge>
         )}
       </span>
       <span className="text-muted-foreground text-sm">
@@ -100,29 +97,24 @@ export function MemberRow({
     </>
   );
   return (
-    <div
-      className={cn(
-        cardClass(),
-        "flex flex-wrap items-center justify-between gap-3",
-        open && "rounded-b-none",
-      )}
-    >
+    <div className="flex min-h-11 flex-wrap items-center justify-between gap-3 px-4 py-2.5">
       {onToggle ? (
         <button
           type="button"
           onClick={onToggle}
           aria-expanded={open}
-          className="flex flex-1 items-center gap-2 text-left"
+          className={cn(
+            "-mx-1.5 flex flex-1 items-center gap-2 rounded-md px-1.5 py-1 text-left",
+            FOCUS_RING,
+          )}
         >
-          <span
+          <ChevronRight
+            aria-hidden
             className={cn(
-              "text-muted-foreground transition-transform duration-200 motion-reduce:transition-none",
+              "text-muted-foreground shrink-0 transition-transform duration-200 motion-reduce:transition-none",
               open && "rotate-90",
             )}
-            aria-hidden
-          >
-            ›
-          </span>
+          />
           <span className="flex flex-col">{name}</span>
         </button>
       ) : (
@@ -143,7 +135,8 @@ export function MemberDetail({ m }: { m: Member }) {
   const trpc = useTRPC();
   // Memberships belong to the owner group, so only an owner sees the tab. A
   // coach reading eligibility for their own branch is a different screen.
-  const owner = runsBranch(useEntity());
+  const entity = useEntity();
+  const owner = runsBranch(entity);
   const [tab, setTab] = useState<
     "overview" | "attendance" | "rank" | "notes" | "membership"
   >("overview");
@@ -152,12 +145,7 @@ export function MemberDetail({ m }: { m: Member }) {
   );
 
   return (
-    <div
-      className={cn(
-        "border-border bg-background rounded-b-lg border border-t-0 p-4",
-        RESOLVE,
-      )}
-    >
+    <div className={cn("border-border bg-surface-1 border-t p-4", RESOLVE)}>
       <Tabs
         label={`${m.name} detail`}
         value={tab}
@@ -168,7 +156,7 @@ export function MemberDetail({ m }: { m: Member }) {
           { id: "attendance", label: "Attendance" },
           { id: "rank", label: "Rank" },
           { id: "notes", label: "Notes" },
-          ...(owner && !isStaffRole(m)
+          ...(owner && entity.membershipEnforced && !isStaffRole(m)
             ? [{ id: "membership" as const, label: "Membership" }]
             : []),
         ]}
@@ -290,17 +278,13 @@ function MembershipTab({ personId, name }: { personId: string; name: string }) {
           Give them one below. It covers every branch the plan names.
         </EmptyState>
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ul className={LIST}>
           {held.data.map((h) => (
-            <li key={h.id} className={cn(cardClass(), "flex flex-wrap gap-3")}>
+            <li key={h.id} className="flex flex-wrap gap-3 p-3">
               <div className="flex min-w-0 flex-1 flex-col gap-1">
-                <span className="font-medium">
+                <span className="text-foreground flex flex-wrap items-center gap-2 font-medium">
                   {h.planName}
-                  {h.status !== "active" && (
-                    <span className="text-muted-foreground ml-2 text-xs uppercase">
-                      {h.status}
-                    </span>
-                  )}
+                  {h.status !== "active" && <Badge>{h.status}</Badge>}
                 </span>
                 <span className="text-muted-foreground text-sm">
                   {h.entityIds.length === 0
@@ -381,7 +365,7 @@ function MembershipTab({ personId, name }: { personId: string; name: string }) {
             <p>Added them at {outcome.enrolled.map(nameOf).join(", ")}.</p>
           )}
           {outcome.needsDecision.map((d) => (
-            <p key={d.entityId} className="text-brand-strong">
+            <p key={d.entityId} className="text-warning">
               Their membership at {nameOf(d.entityId)} is {d.status}. Nothing
               here changed it, so decide about that branch on its own.
             </p>
@@ -393,7 +377,7 @@ function MembershipTab({ personId, name }: { personId: string; name: string }) {
         <div className="flex min-w-48 flex-1 flex-col gap-1.5">
           <label
             htmlFor={`assign-${personId}`}
-            className="text-muted-foreground font-mono text-[10px] tracking-wide uppercase"
+            className="text-muted-foreground text-xs font-medium"
           >
             Give a membership
           </label>
@@ -504,7 +488,7 @@ function RankTab({ memberId }: { memberId: string }) {
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-2">
-        <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+        <span className="text-muted-foreground text-xs font-medium">
           Current rank
         </span>
         {ranks.isPending ? (
@@ -557,7 +541,7 @@ function RankTab({ memberId }: { memberId: string }) {
       </div>
 
       <div className="border-border flex flex-col gap-3 border-t pt-4">
-        <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+        <span className="text-muted-foreground text-xs font-medium">
           Set rank
         </span>
         <div className="flex flex-wrap items-end gap-3">
@@ -638,7 +622,7 @@ function RankTab({ memberId }: { memberId: string }) {
 
       {ranks.data && ranks.data.history.length > 0 && (
         <div className="border-border flex flex-col gap-2 border-t pt-4">
-          <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+          <span className="text-muted-foreground text-xs font-medium">
             Promotion history
           </span>
           {ranks.data.history.map((h) => (
@@ -730,13 +714,12 @@ function NotesTab({ memberId }: { memberId: string }) {
           know.
         </EmptyState>
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className={LIST}>
           {notes.data.map((n) => (
-            <div
-              key={n.id}
-              className={cn(cardClass(), "flex flex-col gap-1 p-3 text-sm")}
-            >
-              <p className="whitespace-pre-wrap">{n.body}</p>
+            <div key={n.id} className="flex flex-col gap-1 p-3 text-sm">
+              <p className="text-foreground-secondary whitespace-pre-wrap">
+                {n.body}
+              </p>
               <div className="text-muted-foreground flex items-center justify-between text-xs">
                 <span>
                   {n.authorName ?? "Staff"} ·{" "}
@@ -826,7 +809,7 @@ function Detail({
   return (
     <div className="border-border flex items-center justify-between gap-2 border-b py-1.5 last:border-0">
       <dt className="text-muted-foreground">{term}</dt>
-      <dd className="flex items-center gap-1 font-medium">
+      <dd className="text-foreground flex items-center gap-1 font-medium">
         <span className="break-all">{value}</span>
         {copy && (
           <CopyButton
@@ -860,7 +843,7 @@ function AttendanceHistory({ history }: { history: MemberHistory["history"] }) {
           key={h.classId}
           className="border-border flex items-center justify-between gap-3 border-b py-2 text-sm last:border-0"
         >
-          <span className="font-medium">{h.title}</span>
+          <span className="text-foreground font-medium">{h.title}</span>
           <span className="text-muted-foreground shrink-0">
             {dateFmt.format(new Date(h.startsAt))}
           </span>
@@ -880,5 +863,3 @@ function AttendanceHistory({ history }: { history: MemberHistory["history"] }) {
     </div>
   );
 }
-
-/** A small payment-status dot + label next to a member's name (spec O7). */

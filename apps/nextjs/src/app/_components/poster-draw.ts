@@ -19,7 +19,6 @@ interface PosterData {
   classes: PosterClass[];
 }
 
-export { POSTER_H, POSTER_W };
 const POSTER_SCALE = 2;
 
 const PAD = 64;
@@ -154,7 +153,7 @@ function clip(ctx: CanvasRenderingContext2D, text: string, max: number) {
 
 function fontStacks() {
   const s = getComputedStyle(document.body);
-  const sans = s.getPropertyValue("--font-geist-sans").trim();
+  const sans = s.getPropertyValue("--font-inter").trim();
   const mono = s.getPropertyValue("--font-geist-mono").trim();
   return {
     sans: `${sans ? `${sans}, ` : ""}system-ui, sans-serif`,

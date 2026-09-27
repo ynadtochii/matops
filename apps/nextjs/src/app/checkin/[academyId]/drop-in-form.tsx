@@ -3,11 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
+import { cn } from "@matops/ui";
 import { Button } from "@matops/ui/button";
 import { FieldError } from "@matops/ui/field";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
-import { Spinner } from "@matops/ui/spinner";
+import { FOCUS_RING } from "@matops/ui/motion";
 import { DropInSchema } from "@matops/validators";
 
 import { ConsentChecks } from "~/app/_components/consents";
@@ -16,6 +17,7 @@ import {
   fieldErrors,
   PhoneField,
 } from "~/app/_components/form-fields";
+import { ErrorState } from "~/app/_components/states";
 import { dayShortFmt, time24Fmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 
@@ -41,15 +43,7 @@ function classLabel(startsAt: Date, now: Date): string {
  * was a button that would not press. Submitting always does something now, and
  * anything wrong is named on the field it belongs to.
  */
-export function DropInForm({
-  academyId,
-  reception = false,
-  onComplete,
-}: {
-  academyId: string;
-  reception?: boolean;
-  onComplete?: () => void;
-}) {
+export function DropInForm({ academyId }: { academyId: string }) {
   const trpc = useTRPC();
   const academy = useQuery(
     trpc.dropIn.academyInfo.queryOptions({ academyId }, { retry: false }),
@@ -71,15 +65,7 @@ export function DropInForm({
     setError(err.message || "Couldn't check you in. Try again.");
     void academy.refetch();
   };
-  const submit = useMutation(
-    reception
-      ? trpc.reception.submitVisitor.mutationOptions({ onError, gcTime: 0 })
-      : trpc.dropIn.submit.mutationOptions({ onError }),
-  );
-
-  useEffect(() => {
-    if (submit.isSuccess) onComplete?.();
-  }, [submit.isSuccess, onComplete]);
+  const submit = useMutation(trpc.dropIn.submit.mutationOptions({ onError }));
 
   useEffect(() => {
     if (Object.keys(errors).length === 0) return;
@@ -97,6 +83,17 @@ export function DropInForm({
     });
 
   if (academy.isError) {
+    const code = academy.error.data?.code;
+    if (code !== "NOT_FOUND" && code !== "BAD_REQUEST") {
+      return (
+        <div className="w-full max-w-sm">
+          <ErrorState
+            label="this check-in page"
+            onRetry={() => void academy.refetch()}
+          />
+        </div>
+      );
+    }
     return (
       <div role="status" className="flex max-w-sm flex-col gap-3 text-center">
         <h1 className="text-2xl font-semibold tracking-tight">Gym not found</h1>
@@ -140,24 +137,26 @@ export function DropInForm({
   const choice = (value: string | null, title: string, hint: string | null) => (
     <label
       key={value ?? "none"}
-      className={`flex cursor-pointer items-center gap-2.5 rounded-md border p-2.5 text-sm transition-colors ${
+      className={cn(
+        "flex min-h-11 cursor-pointer items-center gap-2.5 rounded-md border p-2.5 text-sm transition-colors motion-reduce:transition-none",
         selected === value
-          ? "border-primary bg-primary/5"
+          ? "border-primary bg-active"
           : errors.classId
-            ? "border-error"
-            : "border-input"
-      }`}
+            ? "border-error bg-card"
+            : "border-border bg-card hover:border-border-strong hover:bg-hover",
+      )}
     >
       <input
         type="radio"
         name="di-class"
+        className={cn("accent-brand size-3.5 shrink-0", FOCUS_RING)}
         checked={selected === value}
         onChange={() => {
           setPicked(value);
           clearError("classId");
         }}
       />
-      <span className="min-w-0 flex-1 truncate">{title}</span>
+      <span className="text-foreground min-w-0 flex-1 truncate">{title}</span>
       {hint && (
         <span className="text-muted-foreground shrink-0 text-xs">{hint}</span>
       )}
@@ -168,12 +167,7 @@ export function DropInForm({
     <form
       ref={formRef}
       noValidate
-      autoComplete={reception ? "off" : undefined}
-      className={
-        reception
-          ? "flex w-full max-w-lg flex-col gap-4 [&_button]:min-h-12 [&_input:not([type=checkbox]):not([type=radio])]:min-h-12 [&_label]:min-h-6 [&_label:has(input)]:min-h-12 [&_select]:min-h-12"
-          : "flex w-full max-w-sm flex-col gap-4"
-      }
+      className="flex w-full max-w-sm flex-col gap-4"
       onSubmit={(e) => {
         e.preventDefault();
         setError(null);
@@ -212,7 +206,7 @@ export function DropInForm({
         <h1 className="text-2xl font-semibold tracking-tight">
           Check in{academy.data ? ` at ${academy.data.name}` : ""}
         </h1>
-        <p className="text-muted-foreground text-sm">
+        <p className="text-muted-foreground text-sm text-pretty">
           First time here? Leave your details so the gym can welcome you.
         </p>
       </div>
@@ -226,7 +220,7 @@ export function DropInForm({
             setFirstName(e.target.value);
             clearError("firstName");
           }}
-          autoComplete={reception ? "off" : "given-name"}
+          autoComplete="given-name"
           maxLength={60}
           required
           aria-invalid={errors.firstName ? true : undefined}
@@ -245,7 +239,7 @@ export function DropInForm({
             setLastName(e.target.value);
             clearError("lastName");
           }}
-          autoComplete={reception ? "off" : "family-name"}
+          autoComplete="family-name"
           maxLength={60}
           required
           aria-invalid={errors.lastName ? true : undefined}
@@ -256,7 +250,6 @@ export function DropInForm({
         )}
       </div>
       <PhoneField
-        autoComplete={reception ? "off" : undefined}
         timeZone={timeZone}
         country={country}
         value={phone}
@@ -268,7 +261,6 @@ export function DropInForm({
         error={errors.phone}
       />
       <EmailField
-        autoComplete={reception ? "off" : undefined}
         value={email}
         onChange={(v) => {
           setEmail(v);
@@ -313,21 +305,15 @@ export function DropInForm({
         riskError={errors.risk}
       />
 
-      {error && (
-        <p role="alert" className="text-error text-sm">
-          {error}
-        </p>
-      )}
+      {error && <FieldError>{error}</FieldError>}
 
-      <Button type="submit" size="lg" disabled={submit.isPending}>
-        {submit.isPending && <Spinner size="sm" className="text-current" />}
-        {submit.isPending
-          ? booking
-            ? "Booking…"
-            : "Checking in…"
-          : booking
-            ? "Book my place"
-            : "Check in"}
+      <Button
+        type="submit"
+        size="lg"
+        disabled={submit.isPending}
+        busy={submit.isPending}
+      >
+        {booking ? "Book my place" : "Check in"}
       </Button>
     </form>
   );

@@ -2,11 +2,13 @@
 
 import { useQuery } from "@tanstack/react-query";
 
+import { Badge } from "@matops/ui/badge";
+
 import { useTRPC } from "~/trpc/react";
 import { useEntity } from "./entity";
 import { MembershipChangeNotice, MembershipNotice } from "./membership-notice";
 import { PageHeader } from "./page-header";
-import { Section } from "./primitives";
+import { LIST, Section } from "./primitives";
 import { EmptyState, SuspendedState } from "./states";
 
 export function MyDues() {
@@ -51,27 +53,33 @@ function MembershipSettled() {
 
   return (
     <Section label="Your memberships">
-      <div className="divide-border divide-y">
+      <div className={LIST}>
         {settled.map((membership) => (
           <div
             key={membership.assignmentId}
-            className="flex flex-wrap items-center justify-between gap-3 py-4"
+            className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
           >
-            <div>
-              <h3 className="font-semibold">{membership.planName}</h3>
+            <div className="min-w-0">
+              <h3 className="text-md font-semibold">{membership.planName}</h3>
               <p className="text-muted-foreground mt-1 text-sm">
                 {membership.status === "active"
                   ? "No payment is due for this month."
                   : "This membership is inactive. Contact your gym for help."}
               </p>
             </div>
-            <span className="text-muted-foreground text-sm">
+            <Badge
+              tone={
+                membership.status === "active" && membership.paymentRequired
+                  ? "success"
+                  : "neutral"
+              }
+            >
               {membership.status === "active"
                 ? membership.paymentRequired
                   ? "Up to date"
                   : "Free"
                 : "Inactive"}
-            </span>
+            </Badge>
           </div>
         ))}
       </div>

@@ -1,7 +1,7 @@
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
-import type { DbExec, TenantTx } from "@matops/db";
+import type { DbExec } from "@matops/db";
 import type { Membership } from "@matops/domain";
 import {
   and,
@@ -17,10 +17,8 @@ import {
   insertNotifications,
   isNull,
   lockAndReadScheduleRevision,
-  lockBranchSchedule,
   lt,
   or,
-  overlappingSessions,
   recordActivity,
   recordMilestone,
   sql,
@@ -38,13 +36,9 @@ import {
   buildCancelledMessage,
   buildClassChangeMessage,
   canReassignCoach,
-  capacityPolicyFor,
   classChange,
-  findOverlap,
   formatWhen,
   instantFromLocalDate,
-  instructorForNewSession,
-  isGeneralSpace,
   selfServiceWindow,
 } from "@matops/domain";
 import { sendEmail } from "@matops/notifications";
@@ -59,7 +53,7 @@ import type { TimeZoneCtx } from "../academy-tz";
 import { academyContext, academyTimeZone } from "../academy-tz";
 import { liveClass } from "../classes";
 import { requireInstructor } from "../members";
-import { CLASS_NOT_FOUND, ROOM_TAKEN } from "../messages";
+import { CLASS_NOT_FOUND } from "../messages";
 import { notifyClassCancelled, notifyClassChanged } from "../notify";
 import { enrolledProcedure, staffProcedure } from "../trpc";
 
@@ -247,24 +241,6 @@ export async function notifyBooked(
   return { noticeId: notice.noticeId, delivery };
 }
 
-/**
- * One bookable room per general branch (ADR 126). Takes the branch lock and
- * refuses if anything live is already in the way, both inside the request's own
- * transaction, so two people adding a session at the same minute queue rather
- * than both winning. A BJJ academy runs two mats at once and is not asked.
- */
-async function assertRoomFree(
-  ctx: { db: TenantTx; academyId: string; entity: { type: string } },
-  span: { startsAt: Date; durationMinutes: number },
-): Promise<void> {
-  if (!isGeneralSpace(ctx.entity.type)) return;
-  await lockBranchSchedule(ctx.db, ctx.academyId);
-  const taken = await overlappingSessions(ctx.db, ctx.academyId, [span]);
-  if (findOverlap(span, taken)) {
-    throw new TRPCError({ code: "CONFLICT", message: ROOM_TAKEN });
-  }
-}
-
 export const classRouter = {
   /**
    * Classes in [from, to) for the active academy, soonest first (O2 week view).
@@ -427,18 +403,10 @@ export const classRouter = {
         input.startsAtMinutes,
         input.timeZone,
       );
-      const instructorId = instructorForNewSession(
-        ctx.entity.type,
-        input.instructorId,
-        ctx.session.user.id,
-      );
-      if (instructorId !== null && instructorId !== ctx.session.user.id) {
+      const instructorId = input.instructorId ?? ctx.session.user.id;
+      if (instructorId !== ctx.session.user.id) {
         await requireInstructor(ctx, instructorId);
       }
-      await assertRoomFree(ctx, {
-        startsAt,
-        durationMinutes: input.durationMinutes,
-      });
       const [row] = await ctx.db
         .insert(classInstance)
         .values({
@@ -451,8 +419,7 @@ export const classRouter = {
           startsAt,
           durationMinutes: input.durationMinutes,
           capacity: input.capacity,
-          capacityPolicy: capacityPolicyFor(ctx.entity.type),
-          publicBookable: input.publicBookable,
+          capacityPolicy: "soft",
         })
         .returning();
       if (row) await bumpScheduleRevision(ctx.db, ctx.academyId);

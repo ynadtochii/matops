@@ -1,15 +1,5 @@
 import type { PGlite } from "@electric-sql/pglite";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
-
-import { createEntity } from "@matops/db";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import type { Harness } from "./helpers";
 import {
@@ -276,11 +266,10 @@ describe("class.cancel", () => {
   });
 });
 
-describe("one bookable room per general branch", () => {
+describe("a BJJ academy's schedule", () => {
   const ORG = "acad_room";
   const BOSS = "u_room_owner";
   let h: Harness;
-  let gym: string;
 
   const at = (entityId: string) => {
     const headers = new Headers();
@@ -289,7 +278,7 @@ describe("one bookable room per general branch", () => {
   };
 
   const session = {
-    title: "Open gym",
+    title: "Open mat",
     date: "2026-09-15",
     durationMinutes: 60,
     timeZone: "UTC",
@@ -305,45 +294,11 @@ describe("one bookable room per general branch", () => {
         members: [{ userId: BOSS, role: "owner", status: "active" }],
       },
     ]);
-    const made = await createEntity(
-      {
-        organizationId: ORG,
-        type: "general_space",
-        name: "The Gym",
-        ownerUserId: BOSS,
-      },
-      h.exec,
-    );
-    gym = made.entityId;
   });
 
   afterAll(() => h.close());
 
-  it("takes the first session", async () => {
-    const row = await at(gym).class.create({
-      ...session,
-      startsAtMinutes: 600,
-    });
-    expect(row?.id).toBeTruthy();
-  });
-
-  it("refuses a second session over the same hour", async () => {
-    expect(
-      await rejectionCode(
-        at(gym).class.create({ ...session, startsAtMinutes: 630 }),
-      ),
-    ).toBe("CONFLICT");
-  });
-
-  it("lets a back-to-back session through", async () => {
-    const row = await at(gym).class.create({
-      ...session,
-      startsAtMinutes: 660,
-    });
-    expect(row?.id).toBeTruthy();
-  });
-
-  it("lets a BJJ academy run two mats at once", async () => {
+  it("runs two mats at once", async () => {
     const first = await at(ORG).class.create({
       ...session,
       startsAtMinutes: 600,
@@ -355,25 +310,8 @@ describe("one bookable room per general branch", () => {
     expect([first?.id, second?.id].every(Boolean)).toBe(true);
   });
 
-  it("frees the room again once a session is cancelled", async () => {
-    const row = await at(gym).class.create({
-      ...session,
-      date: "2026-09-18",
-      startsAtMinutes: 600,
-    });
-    if (!row) throw new Error("expected a class");
-    await at(gym).class.cancel({ id: row.id });
-
-    const again = await at(gym).class.create({
-      ...session,
-      date: "2026-09-18",
-      startsAtMinutes: 600,
-    });
-    expect(again?.id).toBeTruthy();
-  });
-
   it("keeps an explicit Nobody on a template edit", async () => {
-    const made = await at(gym).template.create({
+    const made = await at(ORG).template.create({
       title: "Nobody teaches this",
       daysOfWeek: [3],
       startsAtMinutes: 480,
@@ -385,7 +323,7 @@ describe("one bookable room per general branch", () => {
     if (!made) throw new Error("expected a template");
     expect(made.instructorId).toBe(BOSS);
 
-    const cleared = await at(gym).template.update({
+    const cleared = await at(ORG).template.update({
       id: made.id,
       title: "Nobody teaches this",
       daysOfWeek: [3],
@@ -396,62 +334,5 @@ describe("one bookable room per general branch", () => {
       instructorId: null,
     });
     expect(cleared.instructorId).toBeNull();
-  });
-
-  it("refuses a longer duration that would run into the next session", async () => {
-    const early = await at(gym).template.create({
-      title: "Early",
-      daysOfWeek: [1],
-      startsAtMinutes: 480,
-      durationMinutes: 60,
-      timeZone: "UTC",
-      capacity: 20,
-    });
-    if (!early) throw new Error("expected a template");
-    await at(gym).template.create({
-      title: "After it",
-      daysOfWeek: [1],
-      startsAtMinutes: 540,
-      durationMinutes: 60,
-      timeZone: "UTC",
-      capacity: 20,
-    });
-
-    // 08:00 to 09:30 runs into the 09:00 session. A duration change is applied
-    // in place rather than regenerated, so it needs its own room check.
-    expect(
-      await rejectionCode(
-        at(gym).template.update({
-          id: early.id,
-          title: "Early",
-          daysOfWeek: [1],
-          startsAtMinutes: 480,
-          durationMinutes: 90,
-          timeZone: "UTC",
-          capacity: 20,
-        }),
-      ),
-    ).toBe("CONFLICT");
-  });
-
-  it("refuses a recurring template that would clash with a booked session", async () => {
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date("2026-09-14T00:00:00Z"));
-    try {
-      expect(
-        await rejectionCode(
-          at(gym).template.create({
-            title: "Every day",
-            daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
-            startsAtMinutes: 600,
-            durationMinutes: 600,
-            timeZone: "UTC",
-            capacity: 20,
-          }),
-        ),
-      ).toBe("CONFLICT");
-    } finally {
-      vi.useRealTimers();
-    }
   });
 });

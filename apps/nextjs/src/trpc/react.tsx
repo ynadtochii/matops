@@ -4,12 +4,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import {
-  createTRPCClient,
-  httpBatchLink,
-  loggerLink,
-  splitLink,
-} from "@trpc/client";
+import { createTRPCClient, httpBatchLink, loggerLink } from "@trpc/client";
 import { createTRPCContext } from "@trpc/tanstack-react-query";
 import SuperJSON from "superjson";
 
@@ -30,16 +25,16 @@ const getQueryClient = () => {
   }
 };
 
-export const { useTRPC, TRPCProvider } = createTRPCContext<AppRouter>();
+const { useTRPC, TRPCProvider } = createTRPCContext<AppRouter>();
+export { useTRPC };
 
 /**
  * Drop every cached row when the URL names a different academy (ADR 125).
  *
  * The entity travels in a header, not in the query key, so two academies
  * produce identical keys, and the selector switches with a `<Link>`, a soft
- * navigation that keeps the cache. Without this, mat A's six-digit code, join
- * QR and public booking key are served under mat B's URL for as long as their
- * stale time.
+ * navigation that keeps the cache. Without this, mat A's six-digit code and
+ * join QR are served under mat B's URL for as long as their stale time.
  *
  * It runs during render rather than in an effect, and ABOVE the hydration
  * boundary, so the previous academy's rows are gone before the new one's
@@ -87,32 +82,14 @@ export function TRPCReactProvider(props: { children: React.ReactNode }) {
         return headers;
       },
     });
-    const receptionTransport = httpBatchLink<AppRouter>({
-      transformer: SuperJSON,
-      url: getBaseUrl() + "/api/trpc",
-      methodOverride: "POST",
-      headers() {
-        const headers = new Headers();
-        headers.set("x-trpc-source", "nextjs-react");
-        const entityId = entityFromPath(window.location.pathname);
-        if (entityId) headers.set("x-matops-entity", entityId);
-        return headers;
-      },
-    });
     return createTRPCClient<AppRouter>({
       links: [
-        splitLink({
-          condition: (op) => op.path.startsWith("reception."),
-          true: receptionTransport,
-          false: [
-            loggerLink({
-              enabled: (op) =>
-                env.NODE_ENV === "development" ||
-                (op.direction === "down" && op.result instanceof Error),
-            }),
-            transport,
-          ],
+        loggerLink({
+          enabled: (op) =>
+            env.NODE_ENV === "development" ||
+            (op.direction === "down" && op.result instanceof Error),
         }),
+        transport,
       ],
     });
   });

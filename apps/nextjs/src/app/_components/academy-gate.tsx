@@ -4,9 +4,7 @@ import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type { RouterOutputs } from "@matops/api";
 import { postLoginTarget } from "@matops/domain";
-import { Button } from "@matops/ui/button";
 import { Logo } from "@matops/ui/logo";
 import { Spinner } from "@matops/ui/spinner";
 import { toast } from "@matops/ui/toast";
@@ -16,13 +14,11 @@ import { JoinByCode } from "./join-by-code";
 import { PageLoader } from "./mat-loader";
 import { ErrorState } from "./states";
 
-type BranchChoice = RouterOutputs["academy"]["memberships"][number];
-
 /**
  * Better Auth writes `activeOrganizationId` when a gym is created or joined, and
  * never at sign-in, so every fresh session arrives naming no gym and every
  * organization-tier procedure refuses it. This gate is what a returning user
- * lands on: 0 gyms joins by code, 1 opens itself, 2+ asks (ADR 49).
+ * lands on: 0 gyms joins by code, otherwise the first one opens (ADR 49).
  */
 export function AcademyGate() {
   const trpc = useTRPC();
@@ -66,11 +62,7 @@ export function AcademyGate() {
   }
   return (
     <div className="flex min-h-screen items-center justify-center p-6">
-      {target.kind === "pick" ? (
-        <PickAcademy academies={target.gyms} />
-      ) : (
-        <JoinByCode />
-      )}
+      <JoinByCode />
     </div>
   );
 }
@@ -91,7 +83,7 @@ function OpenGym({
     trpc.organization.setActive.mutationOptions({
       onSuccess: async () => {
         await queryClient.invalidateQueries();
-        router.replace("/overview");
+        router.replace("/");
         router.refresh();
       },
       onError: () => toast.error("Couldn't open your gym. Try again."),
@@ -145,60 +137,6 @@ function OpenActive({ academyId, name }: { academyId: string; name: string }) {
       <div className="flex items-center gap-2">
         <Spinner size="sm" />
         <span className="text-muted-foreground text-sm">Opening {name}…</span>
-      </div>
-    </div>
-  );
-}
-
-function PickAcademy({ academies }: { academies: BranchChoice[] }) {
-  const trpc = useTRPC();
-  const router = useRouter();
-  const queryClient = useQueryClient();
-
-  const setActive = useMutation(
-    trpc.academy.setActive.mutationOptions({
-      onSuccess: async () => {
-        await queryClient.invalidateQueries();
-        router.refresh();
-      },
-      onError: () => toast.error("Couldn't open the branch. Try again."),
-    }),
-  );
-
-  return (
-    <div className="mx-auto flex w-full max-w-md flex-col gap-8">
-      <Logo size={30} />
-      <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Choose a gym</h1>
-        <p className="text-muted-foreground text-sm">
-          You belong to a few gyms. Pick the one to open.
-        </p>
-      </div>
-      <div className="flex flex-col gap-2">
-        {academies.map((a) => {
-          const opening =
-            setActive.isPending &&
-            setActive.variables.academyId === a.academyId;
-          return (
-            <Button
-              key={a.organizationId}
-              variant="outline"
-              size="lg"
-              className="justify-between"
-              onClick={() => setActive.mutate({ academyId: a.academyId })}
-              disabled={setActive.isPending}
-            >
-              <span className="truncate">{a.name}</span>
-              {opening ? (
-                <Spinner size="sm" className="text-current" />
-              ) : (
-                <span className="text-muted-foreground text-xs capitalize">
-                  {a.status === "pending" ? "pending" : a.role}
-                </span>
-              )}
-            </Button>
-          );
-        })}
       </div>
     </div>
   );

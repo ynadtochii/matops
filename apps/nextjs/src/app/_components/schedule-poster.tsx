@@ -141,10 +141,8 @@ export function SchedulePoster() {
                 className="absolute inset-0 flex flex-col items-center justify-center gap-3"
                 role="status"
               >
-                <Spinner className="text-muted-foreground" />
-                <p className="text-muted-foreground font-mono text-xs tracking-wide uppercase">
-                  Drawing the poster
-                </p>
+                <Spinner className="text-black/60" />
+                <p className="text-xs text-black/60">Drawing the poster</p>
               </div>
             )}
           </div>
@@ -154,9 +152,9 @@ export function SchedulePoster() {
             </Button>
             <Button
               onClick={() => void download()}
+              busy={saving}
               disabled={saving || drawing}
             >
-              {saving && <Spinner size="sm" className="text-current" />}
               Download PNG
             </Button>
           </div>

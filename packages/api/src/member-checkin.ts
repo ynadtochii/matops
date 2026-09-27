@@ -21,7 +21,6 @@ export async function checkInMember(
   input: Parameters<typeof bookingGate>[1] & {
     classId: string;
     organizationId: string;
-    source?: "reception_self";
   },
 ) {
   await lockAndReadScheduleRevision(db, input.entity.id);
@@ -99,11 +98,6 @@ export async function checkInMember(
       .update(classParticipation)
       .set({
         ...attendance,
-        ...(input.source
-          ? {
-              checkInSource: sql`coalesce(${classParticipation.checkInSource}, ${input.source})`,
-            }
-          : {}),
         ...(willBook
           ? {
               bookingStatus: "booked" as const,
@@ -117,7 +111,6 @@ export async function checkInMember(
     await db.insert(classParticipation).values({
       academyId: input.entity.id,
       classId: input.classId,
-      checkInSource: input.source,
       personOrganizationId: input.membership.personId
         ? input.organizationId
         : null,

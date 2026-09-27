@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { FOCUS_RING } from "@matops/ui/motion";
+
 import { env } from "~/env";
 
 /**
@@ -15,7 +17,7 @@ export const PRIVACY_UPDATED = "30 August 2026";
 
 function Heading({ children }: { children: React.ReactNode }) {
   return (
-    <h3 className="mt-6 mb-2 font-semibold tracking-tight first:mt-0">
+    <h3 className="text-foreground mt-6 mb-2 font-semibold first:mt-0">
       {children}
     </h3>
   );
@@ -23,7 +25,7 @@ function Heading({ children }: { children: React.ReactNode }) {
 
 export function PrivacyText() {
   return (
-    <div className="text-muted-foreground max-w-[58ch] text-sm">
+    <div className="text-foreground-secondary max-w-[58ch] leading-relaxed text-pretty">
       <Heading>Who is responsible</Heading>
       <p>
         MatOps is run by <strong>{env.NEXT_PUBLIC_LEGAL_ENTITY}</strong>,{" "}
@@ -102,7 +104,7 @@ export function PrivacyText() {
 export function RiskText({ academyName }: { academyName: string }) {
   const gym = academyName.trim() === "" ? "The academy" : academyName;
   return (
-    <div className="text-muted-foreground flex max-w-[58ch] flex-col gap-3 text-sm">
+    <div className="text-foreground-secondary flex max-w-[58ch] flex-col gap-3 leading-relaxed text-pretty">
       <p>
         Brazilian Jiu-Jitsu is a full-contact martial art involving physical
         contact, grappling and sparring. Participation carries an inherent risk
@@ -131,7 +133,7 @@ export function BackToMatops() {
     <p className="text-muted-foreground mt-10 text-sm">
       <Link
         href="/"
-        className="inline-flex min-h-11 items-center underline underline-offset-2 sm:min-h-0"
+        className={`hover:text-foreground inline-flex min-h-11 items-center rounded-sm underline underline-offset-2 transition-colors motion-reduce:transition-none sm:min-h-0 ${FOCUS_RING}`}
       >
         Back to MatOps
       </Link>

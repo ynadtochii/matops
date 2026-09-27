@@ -38,7 +38,7 @@ function PolicyDialog({
     <Dialog>
       <DialogTrigger
         type="button"
-        className={`text-muted-foreground hover:text-foreground rounded-sm text-left text-xs underline underline-offset-2 ${FOCUS_RING}`}
+        className={`text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center rounded-sm text-left text-xs underline underline-offset-2 transition-colors motion-reduce:transition-none sm:min-h-0 ${FOCUS_RING}`}
       >
         {link}
       </DialogTrigger>
@@ -72,13 +72,13 @@ function Check({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="flex items-start gap-2 text-sm">
+      <label className="text-foreground flex min-h-11 cursor-pointer items-start gap-2 text-sm sm:min-h-0">
         <input
           id={id}
           type="checkbox"
           checked={checked}
           onChange={(e) => onChange(e.target.checked)}
-          className="mt-1"
+          className={`accent-brand border-control mt-0.5 size-3.5 shrink-0 cursor-pointer rounded-sm ${FOCUS_RING}`}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? `${id}-error` : undefined}
         />
