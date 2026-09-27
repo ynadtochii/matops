@@ -12,7 +12,6 @@ import {
   funnelSummary,
   weeklyOwnerOnly,
   weeklyRetainedUse,
-  weeklyTwoBranchUse,
   weeksBack,
   weekTwoBookers,
 } from "../src/product-report";
@@ -248,45 +247,6 @@ describe("the weekly report", () => {
     const rows = await weeklyRetainedUse(new Date("2026-08-24T00:00:00Z"), db);
     expect(rows).toHaveLength(1);
     expect(rows[0]?.weekStart).toBe("2026-08-24");
-  });
-});
-
-describe("two branches in one week", () => {
-  let pg: PGlite;
-  let db: DbExec;
-  const since = new Date("2026-08-17T00:00:00.000Z");
-
-  beforeAll(async () => {
-    pg = await freshDb([A, B]);
-    db = execOn(pg);
-    await pg.query(
-      `INSERT INTO "entity" (id, organization_id, type, name, slug, is_default, public_code)
-         VALUES ('academy_A2', $1, 'bjj_academy', 'Gym floor', 'gym-floor', false, '654321')`,
-      [A],
-    );
-    for (const entityId of [A, "academy_A2"]) {
-      await insert(pg, {
-        organizationId: A,
-        entityId,
-        kind: "activity",
-        name: "student_booking",
-        occurredAt: "2026-08-18T10:00:00Z",
-      });
-    }
-    await insert(pg, {
-      organizationId: B,
-      entityId: B,
-      kind: "activity",
-      name: "student_booking",
-      occurredAt: "2026-08-18T10:00:00Z",
-    });
-  });
-
-  afterAll(() => pg.close());
-
-  it("counts only the gym whose students used two branches", async () => {
-    const rows = await weeklyTwoBranchUse(since, db);
-    expect(rows).toEqual([{ weekStart: "2026-08-17", organizations: 1 }]);
   });
 });
 

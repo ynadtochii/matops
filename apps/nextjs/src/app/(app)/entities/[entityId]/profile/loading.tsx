@@ -1,5 +1,5 @@
-import { ProfileSkeleton } from "~/app/_components/skeletons";
+import { ScreenSkeleton } from "~/app/_components/skeletons";
 
 export default function Loading() {
-  return <ProfileSkeleton />;
+  return <ScreenSkeleton />;
 }

@@ -4,6 +4,16 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import {
+  CalendarCheck,
+  CalendarDays,
+  ChartNoAxesColumn,
+  CreditCard,
+  LayoutGrid,
+  SlidersHorizontal,
+  User,
+  Users,
+} from "lucide-react";
 
 import type { RouterOutputs } from "@matops/api";
 import {
@@ -24,17 +34,7 @@ import {
   useOrganization,
 } from "./entity";
 import { PageLoader } from "./mat-loader";
-import {
-  CoachesIcon,
-  DashboardIcon,
-  MembersIcon,
-  PaymentsIcon,
-  ProfileIcon,
-  ScheduleIcon,
-  SettingsIcon,
-  ShellFrame,
-  TrainingIcon,
-} from "./shell-frame";
+import { ShellFrame } from "./shell-frame";
 import { ErrorState, NoAccessState } from "./states";
 
 const NARROW_ROUTES = ["/class", "/profile"];
@@ -72,51 +72,51 @@ function branchNavItems(
     {
       path: "/",
       label: isStaff ? "Dashboard" : "Schedule",
-      icon: isStaff ? <DashboardIcon /> : <ScheduleIcon />,
+      icon: isStaff ? <LayoutGrid aria-hidden /> : <CalendarDays aria-hidden />,
       show: true,
     },
     {
       path: "/training",
       label: "My classes",
-      icon: <TrainingIcon />,
+      icon: <CalendarCheck aria-hidden />,
       show: !isStaff,
     },
     {
       path: "/schedule",
       label: "Schedule",
-      icon: <ScheduleIcon />,
+      icon: <CalendarDays aria-hidden />,
       show: canVisit("/schedule", branch),
     },
     {
       path: "/members",
       label: "Students",
-      icon: <MembersIcon />,
+      icon: <Users aria-hidden />,
       show: canVisit("/members", branch),
       badge: badges.students,
     },
     {
       path: "/coaches",
       label: "Coaches",
-      icon: <CoachesIcon />,
+      icon: <ChartNoAxesColumn aria-hidden />,
       show: canVisit("/coaches", branch),
       badge: isOwner ? badges.coaches : undefined,
     },
     {
       path: "/payments",
       label: "Membership",
-      icon: <PaymentsIcon />,
+      icon: <CreditCard aria-hidden />,
       show: !isStaff && branch.membershipEnforced,
     },
     {
       path: "/settings",
       label: "Settings",
-      icon: <SettingsIcon />,
+      icon: <SlidersHorizontal aria-hidden />,
       show: canVisit("/settings", branch),
     },
     {
       path: "/profile",
       label: "Profile",
-      icon: <ProfileIcon />,
+      icon: <User aria-hidden />,
       show: !isStaff,
     },
   ]
@@ -278,7 +278,7 @@ function ShellChrome({
             path: "/memberships",
             href: "/memberships",
             label: "Memberships",
-            icon: <PaymentsIcon />,
+            icon: <CreditCard aria-hidden />,
             show: true,
             badge: badgeFor(summaryStatus, counts?.memberships),
           },

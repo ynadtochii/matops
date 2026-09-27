@@ -36,7 +36,6 @@
     "push": "pnpm with-env drizzle-kit push",
     "report": "pnpm with-env tsx src/report-cli.ts",
     "seed": "pnpm with-env tsx src/seed/cli.ts",
-    "seed:health": "pnpm with-env tsx src/seed.ts",
     "studio": "pnpm with-env drizzle-kit studio",
     "test": "vitest run",
     "test:watch": "vitest",

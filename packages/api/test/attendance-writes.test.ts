@@ -100,7 +100,7 @@ describe("attendance.mark", () => {
 
     await h.as(COACH, A).attendance.mark({
       classId: YESTERDAY,
-      studentId: ANA,
+      personId: ANA,
       status: "present",
     });
 
@@ -126,7 +126,7 @@ describe("attendance.mark", () => {
     const mark = (status: "present" | "absent") =>
       h
         .as(COACH, A)
-        .attendance.mark({ classId: YESTERDAY, studentId: ANA, status });
+        .attendance.mark({ classId: YESTERDAY, personId: ANA, status });
 
     await mark("present");
     await mark("absent");
@@ -145,7 +145,7 @@ describe("attendance.mark", () => {
       await rejectionCode(
         h.as(COACH, A).attendance.mark({
           classId: YESTERDAY,
-          studentId: ANA,
+          personId: ANA,
           status: "present",
         }),
       ),
@@ -162,7 +162,7 @@ describe("attendance.mark", () => {
       rejectionCode(
         h
           .as(COACH, A)
-          .attendance.mark({ classId, studentId: ANA, status: "present" }),
+          .attendance.mark({ classId, personId: ANA, status: "present" }),
       );
 
     expect(await attempt(LONG_AGO)).toBe("PRECONDITION_FAILED");
@@ -179,7 +179,7 @@ describe("attendance.mark", () => {
       await rejectionCode(
         h.as(OWNER, A).attendance.mark({
           classId: LONG_AGO,
-          studentId: ANA,
+          personId: ANA,
           status: "present",
         }),
       ),
@@ -187,7 +187,7 @@ describe("attendance.mark", () => {
 
     await h.as(OWNER, A).attendance.mark({
       classId: LONG_AGO,
-      studentId: ANA,
+      personId: ANA,
       status: "present",
       reason: "The paper register was entered late",
     });
@@ -241,7 +241,7 @@ describe("attendance.mark", () => {
       await rejectionCode(
         h.as(ANA, A).attendance.mark({
           classId: YESTERDAY,
-          studentId: ANA,
+          personId: ANA,
           status: "present",
         }),
       ),
@@ -317,7 +317,7 @@ describe("attendance.addWalkIn", () => {
     const h = await base();
     await h
       .as(COACH, A)
-      .attendance.addWalkIn({ classId: YESTERDAY, studentId: ANA });
+      .attendance.addWalkIn({ classId: YESTERDAY, personId: ANA });
 
     const res = await h.pg.query<{
       booking_status: string;
@@ -346,7 +346,7 @@ describe("attendance.addWalkIn", () => {
     ]);
     await h
       .as(COACH, A)
-      .attendance.addWalkIn({ classId: YESTERDAY, studentId: ANA });
+      .attendance.addWalkIn({ classId: YESTERDAY, personId: ANA });
 
     expect(await marks(h.pg, YESTERDAY)).toEqual([
       { student_id: ANA, attendance_status: "present" },
@@ -622,7 +622,7 @@ describe("attendance review", () => {
     const caller = h.as(OWNER, A).attendance;
     await caller.mark({
       classId: YESTERDAY,
-      studentId: ANA,
+      personId: ANA,
       status: "present",
     });
     const partial = await caller.list({ id: YESTERDAY });
@@ -635,7 +635,7 @@ describe("attendance review", () => {
         }),
       ),
     ).toBe("CONFLICT");
-    await caller.mark({ classId: YESTERDAY, studentId: BO, status: "absent" });
+    await caller.mark({ classId: YESTERDAY, personId: BO, status: "absent" });
     expect(
       await rejectionCode(
         caller.finish({

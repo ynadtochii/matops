@@ -5,7 +5,7 @@ import { isStaff } from "@matops/domain";
 import type { EntityPageProps } from "~/trpc/server";
 import { Attendance } from "~/app/_components/attendance";
 import { PageHeader } from "~/app/_components/page-header";
-import { AttendanceSkeleton } from "~/app/_components/skeletons";
+import { ScreenSkeleton } from "~/app/_components/skeletons";
 import {
   currentAcademy,
   HydrateClient,
@@ -41,7 +41,7 @@ export default async function AttendancePage({ params }: EntityPageProps) {
   setRequestEntity((await params).entityId);
 
   return (
-    <Suspense fallback={<AttendanceSkeleton />}>
+    <Suspense fallback={<ScreenSkeleton />}>
       <AttendanceData />
     </Suspense>
   );

@@ -37,61 +37,18 @@ describe("notification notices", () => {
     const first = await deliverNoticeBatch(
       exec,
       () => Promise.resolve({ sent: true, ok: true }),
-      { noticeId: created.noticeId, mode: "remaining" },
+      { noticeId: created.noticeId },
     );
     const second = await deliverNoticeBatch(
       exec,
       () => Promise.resolve({ sent: true, ok: true }),
-      { noticeId: created.noticeId, mode: "remaining" },
+      { noticeId: created.noticeId },
     );
     expect(first.accepted).toBe(1);
     expect(second.claimed).toBe(0);
   });
 
-  it("retries failed recipients only when requested", async () => {
-    const pg = await freshDb(["academy_A"]);
-    close = () => pg.close();
-    const exec = execOn(pg);
-    const created = await createNotice(
-      {
-        academyId: "academy_A",
-        eventKey: "class_changed:class_1",
-        kind: "class_changed",
-        subject: "Class changed",
-        body: "The class moved.",
-        templateVersion: "1",
-        recipients: [
-          { recipientKey: "user:u_1", email: "student@example.com" },
-        ],
-      },
-      exec,
-    );
-    await deliverNoticeBatch(
-      exec,
-      () => Promise.resolve({ sent: false, ok: false, errorCode: "rejected" }),
-      { noticeId: created.noticeId, mode: "remaining" },
-    );
-    expect(
-      (
-        await deliverNoticeBatch(
-          exec,
-          () => Promise.resolve({ sent: true, ok: true }),
-          { noticeId: created.noticeId, mode: "remaining" },
-        )
-      ).claimed,
-    ).toBe(0);
-    expect(
-      (
-        await deliverNoticeBatch(
-          exec,
-          () => Promise.resolve({ sent: true, ok: true }),
-          { noticeId: created.noticeId, mode: "failed" },
-        )
-      ).accepted,
-    ).toBe(1);
-  });
-
-  it("reports missing email and recipients beyond the batch", async () => {
+  it("reports missing email", async () => {
     const pg = await freshDb(["academy_A"]);
     close = () => pg.close();
     const exec = execOn(pg);
@@ -114,10 +71,10 @@ describe("notification notices", () => {
     const result = await deliverNoticeBatch(
       exec,
       () => Promise.resolve({ sent: true, ok: true }),
-      { noticeId: created.noticeId, mode: "remaining", limit: 1 },
+      { noticeId: created.noticeId },
     );
     const status = await noticeStatus(exec, created.noticeId);
-    expect(result).toMatchObject({ accepted: 1, remaining: 1 });
+    expect(result).toMatchObject({ accepted: 2, remaining: 0 });
     expect(status.counts.noEmail).toBe(1);
   });
 });

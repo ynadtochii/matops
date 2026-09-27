@@ -2,7 +2,12 @@ import { ScrollView, StyleSheet, View } from "react-native";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 
-import { canBook, capacityDisplay, notBookableMessage } from "@matops/domain";
+import {
+  canBook,
+  capacityDisplay,
+  notBookableMessage,
+  timeFmt,
+} from "@matops/domain";
 
 import { useBookClass, useCancelBooking } from "~/components/book-control";
 import { ClassDetailSkeleton } from "~/components/skeletons";
@@ -21,7 +26,7 @@ import {
   useTheme,
 } from "~/components/ui";
 import { trpc } from "~/utils/api";
-import { dayLongFmt, timeFmt } from "~/utils/format";
+import { dayLongFmt } from "~/utils/format";
 
 /**
  * Class detail (spec S5) — title, discipline, day/time, duration, instructor,

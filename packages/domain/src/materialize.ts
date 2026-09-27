@@ -1,5 +1,6 @@
 import { fromZonedTime } from "date-fns-tz";
 
+import { dayKey } from "./format";
 import { DAY_MS } from "./local-date";
 import { MINUTES_PER_DAY } from "./schedule";
 
@@ -23,28 +24,16 @@ interface RecurrenceSpec {
   timeZone: string;
 }
 
-/** The calendar date (Y/M/D) seen in `timeZone` at a given UTC instant. */
 function localDateParts(
   instant: Date,
   timeZone: string,
 ): { year: number; month: number; day: number } {
-  // en-CA yields YYYY-MM-DD; the zone does the shifting.
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(instant);
-  const get = (type: string) =>
-    Number(parts.find((p) => p.type === type)?.value);
-  return { year: get("year"), month: get("month"), day: get("day") };
+  const [y, m, d] = dayKey(instant, timeZone).split("-").map(Number);
+  return { year: y ?? 0, month: m ?? 0, day: d ?? 0 };
 }
 
-/** The local calendar date in `timeZone`, as "YYYY-MM-DD". */
 export function localDateISO(instant: Date, timeZone: string): string {
-  const { year, month, day } = localDateParts(instant, timeZone);
-  const pad = (n: number, w = 2) => String(n).padStart(w, "0");
-  return `${pad(year, 4)}-${pad(month)}-${pad(day)}`;
+  return dayKey(instant, timeZone);
 }
 
 /**

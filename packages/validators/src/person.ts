@@ -10,7 +10,7 @@ const PersonContactSchema = z.object({
 
 export const PreviewCreatePersonSchema = PersonContactSchema;
 
-const DuplicateDecisionSchema = z.discriminatedUnion("kind", [
+export const DuplicateDecisionSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("use_existing"), personId: z.uuid() }),
   z.object({
     kind: z.literal("create_separate"),

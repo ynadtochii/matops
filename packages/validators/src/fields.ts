@@ -189,10 +189,7 @@ export const CreateEntitySchema = z.object({
   timeZone: lineText(1, 60)
     .refine(isValidTimeZone, "Unknown time zone")
     .optional(),
-  /** Copy this branch's schedule and staff into the new one (ADR 128). */
-  copyFromEntityId: IdSchema.optional(),
 });
-export type CreateEntityInput = z.infer<typeof CreateEntitySchema>;
 
 export const UpdateAcademySettingsSchema = z.object({
   timeZone: lineText(1, 64)

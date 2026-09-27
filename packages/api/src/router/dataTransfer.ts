@@ -28,8 +28,8 @@ import {
 } from "@matops/db/schema";
 import { monthOf, parseCsv, resolveAcademyTimeZone } from "@matops/domain";
 import {
+  EXPORT_DATASETS,
   OrganizationExportPageSchema,
-  OrganizationExportStartSchema,
   PreviewCreatePersonSchema,
   StudentImportCommitSchema,
   StudentImportPreviewSchema,
@@ -37,7 +37,7 @@ import {
 
 import { organizationManagerIdentityProcedure } from "../trpc";
 import { assignOne } from "./accessPlan";
-import { enrollStudent } from "./person";
+import { enrollStudent, sameIds } from "./person";
 
 type PreviewInput = typeof StudentImportPreviewSchema._output;
 interface PreviewRow {
@@ -60,17 +60,7 @@ interface PreviewRow {
   errors: { field: string; message: string }[];
 }
 
-const datasets = [
-  "people",
-  "enrollments",
-  "memberships",
-  "membership_months",
-  "payment_history",
-  "attendance",
-  "attendance_corrections",
-] as const;
-
-const exportHeaders: Record<(typeof datasets)[number], string[]> = {
+const exportHeaders: Record<(typeof EXPORT_DATASETS)[number], string[]> = {
   people: [
     "person_id",
     "name",
@@ -483,10 +473,6 @@ async function buildPreview(
   };
 }
 
-function idsEqual(left: string[], right: string[]) {
-  return [...left].sort().join("|") === [...right].sort().join("|");
-}
-
 async function exportRows(
   db: DbReader,
   organizationId: string,
@@ -762,7 +748,7 @@ export const dataTransferRouter = {
               personId = match.personId;
             } else {
               if (
-                !idsEqual(
+                !sameIds(
                   row.duplicates.map((match) => match.personId),
                   decision.reviewedPersonIds,
                 )
@@ -880,16 +866,14 @@ export const dataTransferRouter = {
       }),
     ),
 
-  startExport: organizationManagerIdentityProcedure
-    .input(OrganizationExportStartSchema)
-    .query(() => ({
-      exportedAt: new Date(),
-      datasets: datasets.map((dataset) => ({
-        dataset,
-        fileName: `${dataset.replaceAll("_", "-")}.csv`,
-        headers: exportHeaders[dataset],
-      })),
+  startExport: organizationManagerIdentityProcedure.query(() => ({
+    exportedAt: new Date(),
+    datasets: EXPORT_DATASETS.map((dataset) => ({
+      dataset,
+      fileName: `${dataset.replaceAll("_", "-")}.csv`,
+      headers: exportHeaders[dataset],
     })),
+  })),
 
   exportPage: organizationManagerIdentityProcedure
     .input(OrganizationExportPageSchema)

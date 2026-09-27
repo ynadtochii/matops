@@ -16,7 +16,7 @@ import { useTRPC } from "~/trpc/react";
 import { useEntity, useEntityHref } from "./entity";
 import { PageHeader } from "./page-header";
 import { ENTER, LIST } from "./primitives";
-import { SkeletonMyClassesBody } from "./skeletons";
+import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState, SuspendedState } from "./states";
 import { Tabs } from "./tabs";
 import { useBooking } from "./use-booking";
@@ -70,7 +70,7 @@ export function MyClassesScreen() {
     <>
       {header}
       {mine.isPending ? (
-        <SkeletonMyClassesBody />
+        <SkeletonRows action inList />
       ) : mine.isError ? (
         <ErrorState label="your classes" onRetry={() => void mine.refetch()} />
       ) : (

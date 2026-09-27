@@ -9,7 +9,7 @@ import {
 
 import type { EntityPageProps } from "~/trpc/server";
 import { DashboardScreen } from "~/app/_components/dashboard-screen";
-import { HomeSkeleton } from "~/app/_components/skeletons";
+import { ScreenSkeleton } from "~/app/_components/skeletons";
 import {
   currentAcademy,
   HydrateClient,
@@ -43,7 +43,7 @@ export default async function DashboardPage({ params }: EntityPageProps) {
   setRequestEntity((await params).entityId);
 
   return (
-    <Suspense fallback={<HomeSkeleton />}>
+    <Suspense fallback={<ScreenSkeleton />}>
       <DashboardData />
     </Suspense>
   );

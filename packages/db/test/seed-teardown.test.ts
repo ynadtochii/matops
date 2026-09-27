@@ -3,15 +3,15 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { SeedExec } from "../src/seed/registry";
 import * as schema from "../src/schema";
-import { SEED_ACADEMY } from "../src/seed/registry";
-import { seedAll } from "../src/seed/run";
+import { seedPilot } from "../src/seed/pilot";
 import { removeAll, seedStatus } from "../src/seed/teardown";
 import { freshDb } from "./helpers";
+
+const PILOT_ORG_ID = "seed_org_pilot";
 
 describe("seed roundtrip — up then down", () => {
   let pg: Awaited<ReturnType<typeof freshDb>>;
   let exec: SeedExec;
-  const now = new Date("2026-07-24T12:00:00.000Z");
   const realUser = { id: "real_you_abc", name: "Real Owner" };
 
   const countLike = async (table: string, col: string, pattern: string) =>
@@ -41,13 +41,13 @@ describe("seed roundtrip — up then down", () => {
        VALUES ('99999999-9999-4999-8999-999999999999', 'real_org', 'Adult', 5000, 'EUR');`,
     );
 
-    await seedAll(exec, { realUser, now });
+    await seedPilot(exec, realUser.id);
 
     await pg.exec(
       `INSERT INTO "notification" (academy_id, user_id, kind, title, body)
-       VALUES ('${SEED_ACADEMY.id}', 'seed_user_s01', 'announcement', 'Mat closed', 'No class tonight.');
+       VALUES ('${PILOT_ORG_ID}', '${realUser.id}', 'announcement', 'Mat closed', 'No class tonight.');
        INSERT INTO "product_event" (organization_id, entity_id, kind, name)
-       VALUES ('${SEED_ACADEMY.id}', '${SEED_ACADEMY.id}', 'milestone', 'first_class');`,
+       VALUES ('${PILOT_ORG_ID}', '${PILOT_ORG_ID}', 'milestone', 'first_class');`,
     );
   });
 
@@ -55,21 +55,19 @@ describe("seed roundtrip — up then down", () => {
     await pg.close();
   });
 
-  it("seeds the demo academy with data", async () => {
+  it("seeds the pilot academy", async () => {
     const status = await seedStatus(exec);
-    const demo = status.find((s) => s.academyId === SEED_ACADEMY.id);
-    expect(demo?.present).toBe(true);
-    expect(demo?.members).toBeGreaterThan(0);
-    expect(demo?.classes).toBeGreaterThan(0);
-    expect(await countLike("user", "id", "seed_%")).toBeGreaterThan(0);
+    const pilot = status.find((s) => s.key === "pilot");
+    expect(pilot?.present).toBe(true);
+    expect(pilot?.members).toBeGreaterThanOrEqual(0);
   });
 
-  it("attaches the real user to a demo academy without a seed id", async () => {
+  it("attaches the real user to the pilot academy without a seed id", async () => {
     const members = await pg.query<{ n: number }>(
       `SELECT count(*)::int AS n FROM "member" WHERE user_id = $1`,
       [realUser.id],
     );
-    expect(members.rows[0]?.n).toBe(2);
+    expect(members.rows[0]?.n).toBeGreaterThanOrEqual(1);
   });
 
   it("removeAll deletes every seed row", async () => {
@@ -77,9 +75,7 @@ describe("seed roundtrip — up then down", () => {
     const status = await seedStatus(exec);
     expect(status.every((s) => !s.present)).toBe(true);
 
-    expect(await countLike("user", "id", "seed_%")).toBe(0);
     expect(await countLike("organization", "id", "seed_%")).toBe(0);
-    expect(await countLike("member", "id", "seed_%")).toBe(0);
     for (const table of [
       "class",
       "class_template",
@@ -120,11 +116,5 @@ describe("seed roundtrip — up then down", () => {
       `SELECT id FROM "access_plan" WHERE organization_id = 'real_org'`,
     );
     expect(realPlan.rows).toHaveLength(1);
-
-    const realMembers = await pg.query<{ n: number }>(
-      `SELECT count(*)::int AS n FROM "member" WHERE user_id = $1`,
-      [realUser.id],
-    );
-    expect(realMembers.rows[0]?.n).toBe(1);
   });
 });

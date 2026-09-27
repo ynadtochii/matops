@@ -1,6 +1,7 @@
 import { z } from "zod/v4";
 
 import { IdSchema, lineText } from "./fields";
+import { DuplicateDecisionSchema } from "./person";
 
 const ColumnMapSchema = z.object({
   name: lineText(1, 120),
@@ -27,17 +28,10 @@ export const StudentImportPreviewSchema = z.object({
   defaults: ImportDefaultsSchema,
 });
 
+const rowNumber = z.number().int().min(2).max(501);
 const ImportDecisionSchema = z.discriminatedUnion("kind", [
-  z.object({
-    rowNumber: z.number().int().min(2).max(501),
-    kind: z.literal("use_existing"),
-    personId: z.uuid(),
-  }),
-  z.object({
-    rowNumber: z.number().int().min(2).max(501),
-    kind: z.literal("create_separate"),
-    reviewedPersonIds: z.array(z.uuid()).max(100),
-  }),
+  DuplicateDecisionSchema.options[0].extend({ rowNumber }),
+  DuplicateDecisionSchema.options[1].extend({ rowNumber }),
 ]);
 
 export const StudentImportCommitSchema = StudentImportPreviewSchema.extend({
@@ -46,18 +40,18 @@ export const StudentImportCommitSchema = StudentImportPreviewSchema.extend({
   decisions: z.array(ImportDecisionSchema).max(500),
 });
 
-export const OrganizationExportStartSchema = z.object({});
+export const EXPORT_DATASETS = [
+  "people",
+  "enrollments",
+  "memberships",
+  "membership_months",
+  "payment_history",
+  "attendance",
+  "attendance_corrections",
+] as const;
 
 export const OrganizationExportPageSchema = z.object({
-  dataset: z.enum([
-    "people",
-    "enrollments",
-    "memberships",
-    "membership_months",
-    "payment_history",
-    "attendance",
-    "attendance_corrections",
-  ]),
+  dataset: z.enum(EXPORT_DATASETS),
   exportedAt: z.iso.datetime(),
   cursor: z.string().optional(),
   limit: z.number().int().min(1).max(500).default(500),

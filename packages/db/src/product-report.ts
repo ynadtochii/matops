@@ -156,41 +156,6 @@ export function funnelSummary(rows: MilestoneRow[]): FunnelSummary {
   };
 }
 
-export async function weeklyTwoBranchUse(
-  since: Date,
-  exec: DbReader,
-): Promise<{ weekStart: string; organizations: number }[]> {
-  const perOrgWeek = exec
-    .select({
-      week: sql<string>`date_trunc('week', ${productEvent.occurredAt})::date`.as(
-        "week",
-      ),
-      organizationId: productEvent.organizationId,
-      branches: sql<number>`count(distinct ${productEvent.entityId})::int`.as(
-        "branches",
-      ),
-    })
-    .from(productEvent)
-    .where(
-      and(
-        eq(productEvent.kind, "activity"),
-        inArray(productEvent.name, STUDENT_ACTIVITY),
-        gte(productEvent.occurredAt, since),
-      ),
-    )
-    .groupBy(sql`1`, productEvent.organizationId)
-    .as("per_org_week");
-
-  return exec
-    .select({
-      weekStart: perOrgWeek.week,
-      organizations: sql<number>`count(*) filter (where ${perOrgWeek.branches} >= 2)::int`,
-    })
-    .from(perOrgWeek)
-    .groupBy(perOrgWeek.week)
-    .orderBy(perOrgWeek.week);
-}
-
 export async function weekTwoBookers(exec: DbReader): Promise<number> {
   const created = exec
     .select({

@@ -1,12 +1,6 @@
-/**
- * Projection of a UTC instant onto a local calendar, shared by every
- * academy-zone statistic (`stats.ts`, `coach.ts`).
- *
- * Uses the same `Intl.DateTimeFormat("en-CA")` part-extraction as
- * `materialize.ts` — the zone does the shifting, then plain UTC arithmetic on
- * the parts gives DST-safe day and week indices. Boundaries are always drawn in
- * the ACADEMY zone, never a per-user one (spec §4).
- */
+import { fromZonedTime } from "date-fns-tz";
+
+import { dayKey } from "./format";
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -46,14 +40,8 @@ export function localDate(instant: Date, timeZone: string): LocalDate {
   };
 }
 
-/** The calendar day in `timeZone` as "YYYY-MM-DD" (en-CA already yields that order). */
 export function academyDay(instant: Date, timeZone: string): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(instant);
+  return dayKey(instant, timeZone);
 }
 
 function localDayParts(day: string): [number, number, number] {
@@ -63,35 +51,7 @@ function localDayParts(day: string): [number, number, number] {
 }
 
 export function localMidnight(day: string, timeZone: string): Date {
-  const [year, month, date] = localDayParts(day);
-  const target = Date.UTC(year, month - 1, date);
-  const formatter = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hourCycle: "h23",
-  });
-  const offsetAt = (instant: Date) => {
-    const parts = formatter.formatToParts(instant);
-    const get = (type: string) =>
-      Number(parts.find((part) => part.type === type)?.value);
-    return (
-      Date.UTC(
-        get("year"),
-        get("month") - 1,
-        get("day"),
-        get("hour"),
-        get("minute"),
-        get("second"),
-      ) - instant.getTime()
-    );
-  };
-  const first = new Date(target - offsetAt(new Date(target)));
-  return new Date(target - offsetAt(first));
+  return fromZonedTime(`${day}T00:00:00`, timeZone);
 }
 
 export function addLocalDays(day: string, days: number): string {

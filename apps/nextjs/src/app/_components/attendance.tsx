@@ -19,7 +19,7 @@ import { useTRPC } from "~/trpc/react";
 import { ClassRoster } from "./class-roster";
 import { useEntity } from "./entity";
 import { LIST } from "./primitives";
-import { AttendanceSkeleton } from "./skeletons";
+import { ScreenSkeleton } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 
 type ReviewClass = RouterOutputs["attendance"]["reviewQueue"]["rows"][number];
@@ -117,7 +117,7 @@ export function Attendance() {
           Choose an end date on or after the start date.
         </p>
       ) : classes.isPending ? (
-        <AttendanceSkeleton />
+        <ScreenSkeleton />
       ) : classes.isError ? (
         <ErrorState
           label="attendance reviews"

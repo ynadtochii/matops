@@ -9,11 +9,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   orientation: "portrait",
   icon: "./assets/icon-light.png",
   userInterfaceStyle: "automatic",
-  updates: {
-    fallbackToCacheTimeout: 0,
-  },
   newArchEnabled: true,
-  assetBundlePatterns: ["**/*"],
   ios: {
     bundleIdentifier: "com.matops.app",
     supportsTablet: true,
@@ -30,11 +26,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     },
     edgeToEdgeEnabled: true,
   },
-  // extra: {
-  //   eas: {
-  //     projectId: "your-eas-project-id",
-  //   },
-  // },
   experiments: {
     tsconfigPaths: true,
     typedRoutes: true,

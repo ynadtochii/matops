@@ -2,7 +2,7 @@ import type { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
-  getAcademyMembership,
+  getEntityMembership,
   getMemberById,
   getMemberIdForUser,
   listMembersOf,
@@ -96,8 +96,8 @@ describe("member ids come from entity_membership", () => {
   });
 
   it("hands the academy tier the entity membership id", async () => {
-    const membership = await getAcademyMembership(STUDENT, ORG, execOn(pg));
-    expect(membership?.memberId).toBe("emem_student");
+    const membership = await getEntityMembership(STUDENT, ORG, execOn(pg));
+    expect(membership?.id).toBe("emem_student");
   });
 
   it("refuses a note naming a membership at another entity", async () => {
@@ -119,14 +119,5 @@ describe("member ids come from entity_membership", () => {
       `SELECT count(*)::int n FROM "member_note" WHERE member_id = 'emem_student'`,
     );
     expect(res.rows[0]?.n).toBe(1);
-  });
-
-  it("refuses a membership of a closed academy", async () => {
-    await pg.exec(
-      `UPDATE "entity" SET deleted_at = now() WHERE id = '${secondEntity}'`,
-    );
-    expect(
-      await getAcademyMembership(STUDENT, secondEntity, execOn(pg)),
-    ).toBeNull();
   });
 });

@@ -24,7 +24,7 @@ import { useEntity, useEntityHref } from "./entity";
 import { InstallAppCard } from "./install-app-card";
 import { PageHeader } from "./page-header";
 import { disciplineDot, ENTER, LIST } from "./primitives";
-import { SkeletonClassDays } from "./skeletons";
+import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState, SuspendedState } from "./states";
 import { useBooking } from "./use-booking";
 import { useMinuteClock } from "./use-clock";
@@ -89,7 +89,7 @@ export function StudentScreen() {
         </Callout>
       )}
       {week.isPending ? (
-        <SkeletonClassDays />
+        <SkeletonRows rows={3} action inList />
       ) : week.isError ? (
         <ErrorState label="your schedule" onRetry={() => void week.refetch()} />
       ) : byDay.length === 0 ? (

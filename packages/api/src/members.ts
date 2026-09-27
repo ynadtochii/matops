@@ -62,7 +62,7 @@ export async function requireMember(
  * O10 roster, and `requireInstructor`.
  */
 export async function staffOf(ctx: MemberScope): Promise<MemberRow[]> {
-  return staffAmong(await rosterOf(ctx));
+  return staffAmong(await listMembersOf(ctx.academyId, ctx.db));
 }
 
 /**
@@ -92,15 +92,6 @@ export async function requireInstructor(
   }
 }
 
-/**
- * The academy's full roster. Thirteen call sites passed `ctx.academyId, ctx.db`
- * by hand; this is the same read behind the same context shape the other guards
- * in this file take.
- */
-export async function rosterOf(ctx: MemberScope): Promise<MemberRow[]> {
-  return listMembersOf(ctx.academyId, ctx.db);
-}
-
 /** Display name by `user.id`, for rows that store a user id. */
 export function nameByUser(rows: MemberRow[]): Map<string, string> {
   return new Map(
@@ -108,11 +99,6 @@ export function nameByUser(rows: MemberRow[]): Map<string, string> {
       r.accountUserId ? [[r.accountUserId, r.name] as const] : [],
     ),
   );
-}
-
-/** Display name by `member.id`, for rows that store a member id. */
-export function nameByMember(rows: MemberRow[]): Map<string, string> {
-  return new Map(rows.map((r) => [r.memberId, r.name]));
 }
 
 /** The tenant handles activation needs: the base connection plus an RLS tx. */
@@ -151,7 +137,9 @@ type DirectoryMemberRow = Omit<MemberRow, "memberId"> & {
 export async function directoryRosterOf(
   ctx: MemberScope,
 ): Promise<DirectoryMemberRow[]> {
-  const rows: DirectoryMemberRow[] = (await rosterOf(ctx)).map((row) => ({
+  const rows: DirectoryMemberRow[] = (
+    await listMembersOf(ctx.academyId, ctx.db)
+  ).map((row) => ({
     ...row,
     inheritedRole: false,
   }));

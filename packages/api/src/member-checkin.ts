@@ -13,7 +13,7 @@ import {
 import { classInstance, classParticipation } from "@matops/db/schema";
 import { BOOKING_LOCKED, bookingTier, canCheckIn } from "@matops/domain";
 
-import { claimSeat, SESSION_FULL } from "./classes";
+import { claimSeat } from "./classes";
 import { bookingGate } from "./payments-gate";
 
 export async function checkInMember(
@@ -123,10 +123,7 @@ export async function checkInMember(
   }
 
   if (willBook && tier === "confirmed") {
-    const took = await claimSeat(db, input.classId);
-    if (!took) {
-      throw new TRPCError({ code: "CONFLICT", message: SESSION_FULL });
-    }
+    await claimSeat(db, input.classId);
   }
 
   if (willBook) await bumpScheduleRevision(db, input.entity.id);

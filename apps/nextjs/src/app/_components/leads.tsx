@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Ellipsis } from "lucide-react";
 
 import type { RouterOutputs } from "@matops/api";
 import type { LeadStage, OwnerSettableStage } from "@matops/domain";
@@ -36,7 +37,7 @@ import { toast } from "@matops/ui/toast";
 import { dateYearFmt, dayShortFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { EmailField } from "./form-fields";
-import { cardClass, Eyebrow, LIST, MoreIcon, RESOLVE, TAP } from "./primitives";
+import { cardClass, Eyebrow, LIST, RESOLVE, TAP } from "./primitives";
 import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 import { Tabs } from "./tabs";
@@ -357,7 +358,11 @@ function LeadActions({
           disabled={busy}
           aria-label={`Manage ${name}`}
         >
-          {busy ? <Spinner size="sm" className="text-current" /> : <MoreIcon />}
+          {busy ? (
+            <Spinner size="sm" className="text-current" />
+          ) : (
+            <Ellipsis aria-hidden />
+          )}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">

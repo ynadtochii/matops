@@ -3,7 +3,7 @@ import { ScrollView, View } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { notificationKindLabel } from "@matops/domain";
+import { groupByDay, notificationKindLabel, timeFmt } from "@matops/domain";
 
 import type { RouterOutputs } from "~/utils/api";
 import { useRefreshControl } from "~/components/refresh";
@@ -19,7 +19,7 @@ import {
   useTheme,
 } from "~/components/ui";
 import { trpc } from "~/utils/api";
-import { dayLongFmt, groupByDay, timeFmt } from "~/utils/format";
+import { dayLongFmt } from "~/utils/format";
 
 type FeedItem = RouterOutputs["notification"]["list"][number];
 

@@ -3,6 +3,8 @@ import { View } from "react-native";
 import { Redirect, Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { timeFmt } from "@matops/domain";
+
 import { CheckinSkeleton } from "~/components/skeletons";
 import {
   Banner,
@@ -19,7 +21,6 @@ import {
 import { trpc } from "~/utils/api";
 import { authClient } from "~/utils/auth";
 import { setActiveEntity } from "~/utils/entity-store";
-import { timeFmt } from "~/utils/format";
 
 /**
  * QR walk-in check-in (spec S8, redefined in v1.8 slice 4). The gym's physical QR

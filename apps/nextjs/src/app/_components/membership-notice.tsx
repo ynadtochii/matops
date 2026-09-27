@@ -12,7 +12,7 @@ import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
 import { cardClass, Eyebrow } from "./primitives";
-import { SkeletonDuesBody } from "./skeletons";
+import { SkeletonCard } from "./skeletons";
 import { ErrorState } from "./states";
 
 export function MembershipNotice() {
@@ -34,7 +34,7 @@ export function MembershipNotice() {
   const showPaymentInstructions =
     Boolean(bankDetails) && warned.some((m) => !m.reportedAt);
 
-  if (standing.isPending) return <SkeletonDuesBody />;
+  if (standing.isPending) return <SkeletonCard lines={3} />;
   if (standing.isError) {
     return (
       <ErrorState

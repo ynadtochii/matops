@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Ellipsis } from "lucide-react";
 
 import type { RouterOutputs } from "@matops/api";
 import { isOwner, isPendingCoach, runsBranch } from "@matops/domain";
@@ -24,7 +25,7 @@ import { useTRPC } from "~/trpc/react";
 import { useEntity } from "./entity";
 import { LeadsPipeline } from "./leads";
 import { MemberDetail, MemberRow } from "./member-detail";
-import { Eyebrow, LIST, MoreIcon, RESOLVE } from "./primitives";
+import { Eyebrow, LIST, RESOLVE } from "./primitives";
 import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 import { Tabs } from "./tabs";
@@ -70,7 +71,7 @@ function MemberActions({
             {busy ? (
               <Spinner size="sm" className="text-current" />
             ) : (
-              <MoreIcon />
+              <Ellipsis aria-hidden />
             )}
           </Button>
         </DropdownMenuTrigger>

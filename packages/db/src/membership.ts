@@ -127,63 +127,6 @@ export async function getEntityMembership(
   return rows[0] ?? null;
 }
 
-/**
- * The caller's membership at one entity, in the shape the academy tiers read.
- *
- * Role and status come from `entity_membership`, and `memberId` is that row's
- * id, because every dues, claim, rank and note row keys on it. A
- * closed academy is not a membership, so the entity and its organization must
- * both still be live.
- */
-export async function getAcademyMembership(
-  userId: string,
-  entityId: string,
-  exec: DbReader,
-): Promise<Membership | null> {
-  const rows = await exec
-    .select({
-      memberId: entityMembership.id,
-      role: entityMembership.role,
-      status: entityMembership.status,
-      joinedAt: entityMembership.joinedAt,
-      createdAt: entityMembership.createdAt,
-    })
-    .from(entityMembership)
-    .leftJoin(
-      person,
-      and(
-        eq(person.organizationId, entityMembership.organizationId),
-        eq(person.accountUserId, userId),
-      ),
-    )
-    .innerJoin(entity, eq(entity.id, entityMembership.entityId))
-    .innerJoin(
-      organization,
-      eq(organization.id, entityMembership.organizationId),
-    )
-    .where(
-      and(
-        or(
-          eq(entityMembership.userId, userId),
-          eq(entityMembership.personId, person.id),
-        ),
-        eq(entityMembership.entityId, entityId),
-        isNull(entity.deletedAt),
-        isNull(organization.deletedAt),
-      ),
-    )
-    .limit(1);
-
-  const row = rows[0];
-  if (!row) return null;
-  return {
-    memberId: row.memberId,
-    role: row.role,
-    status: row.status,
-    joinedAt: row.joinedAt ?? row.createdAt,
-  };
-}
-
 /** One entity, as the request tiers need to see it. */
 export interface ScopedEntity {
   id: string;

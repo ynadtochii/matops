@@ -6,28 +6,15 @@ import { entityHref } from "@matops/domain";
 import { PageLoader } from "~/app/_components/mat-loader";
 import { myEntities } from "~/trpc/server";
 
-// A profile shows rank, join date and the mat's address, so the screen lives
-// under the entity. This path exists only to forward an older link.
-export default function ProfileRedirectPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ branch?: string }>;
-}) {
+export default function ProfileRedirectPage() {
   return (
     <Suspense fallback={<PageLoader label="Opening your profile" />}>
-      <ProfileRedirect searchParams={searchParams} />
+      <ProfileRedirect />
     </Suspense>
   );
 }
 
-async function ProfileRedirect({
-  searchParams,
-}: {
-  searchParams: Promise<{ branch?: string }>;
-}) {
+async function ProfileRedirect() {
   const { entities } = await myEntities();
-  const { branch } = await searchParams;
-  const selected =
-    entities.find((entity) => entity.id === branch) ?? entities[0];
-  return redirect(selected ? entityHref(selected.id, "/profile") : "/");
+  return redirect(entities[0] ? entityHref(entities[0].id, "/profile") : "/");
 }

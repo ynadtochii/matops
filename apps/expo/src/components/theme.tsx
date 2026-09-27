@@ -11,10 +11,6 @@ import { tokens } from "@matops/ui/tokens";
  * stays there unless the student picks Light or System in Profile. The three
  * modes mirror the web toggle (light / dark / auto), and the choice persists.
  *
- * We drive the scheme through React Native's `Appearance.setColorScheme`, which
- * both this palette and NativeWind (v5 reads RN's appearance) honour — so the
- * few className-styled colours (e.g. the shared logo's `bg-brand`) always match
- * the explicit-style palette. `auto` clears the override to follow the OS.
  */
 
 export type ThemeMode = "light" | "dark" | "auto";

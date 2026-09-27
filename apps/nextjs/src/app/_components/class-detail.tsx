@@ -16,7 +16,7 @@ import { useTRPC } from "~/trpc/react";
 import { useEntity, useEntityHref, useOrganization } from "./entity";
 import { PageHeader } from "./page-header";
 import { cardClass, ENTER, SectionHeading } from "./primitives";
-import { ClassDetailSkeleton } from "./skeletons";
+import { ScreenSkeleton } from "./skeletons";
 import { ErrorState } from "./states";
 import { useBooking } from "./use-booking";
 import { useMinuteClock } from "./use-clock";
@@ -35,7 +35,7 @@ export function ClassDetail({ classId }: { classId: string }) {
     retry: false,
   });
 
-  if (cls.isPending) return <ClassDetailSkeleton />;
+  if (cls.isPending) return <ScreenSkeleton />;
   if (cls.isError) {
     return (
       <>

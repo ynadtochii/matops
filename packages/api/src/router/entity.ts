@@ -1,21 +1,14 @@
 import type { TRPCRouterRecord } from "@trpc/server";
-import { TRPCError } from "@trpc/server";
 
-import type { DbExec, ScopedEntity, TenantTx } from "@matops/db";
+import type { ScopedEntity, TenantTx } from "@matops/db";
 import {
-  and,
-  count,
   createEntity,
   eq,
-  getEntityInOrganization,
-  isNull,
   listEntitiesForUser,
   listEntitiesOf,
-  rebuildSchedule,
   recordMilestone,
-  withScope,
 } from "@matops/db";
-import { entity, entityMembership, organization } from "@matops/db/schema";
+import { entityMembership, organization } from "@matops/db/schema";
 import { isActiveMember, isOwner, runsOrganization } from "@matops/domain";
 import { CreateEntitySchema } from "@matops/validators";
 
@@ -23,27 +16,6 @@ import {
   organizationMemberProcedure,
   organizationOwnerIdentityProcedure,
 } from "../trpc";
-
-const NOT_YOURS = "That branch is not yours";
-
-/**
- * The branch this call names, or a refusal. Runs BEFORE any scope is opened, so
- * an id belonging to another gym never reaches a read (ADR 124).
- */
-async function requireOwnEntity(
-  ctx: { organizationId: string; baseDb: DbExec },
-  entityId: string,
-): Promise<ScopedEntity> {
-  const found = await getEntityInOrganization(
-    entityId,
-    ctx.organizationId,
-    ctx.baseDb,
-  );
-  if (!found) {
-    throw new TRPCError({ code: "FORBIDDEN", message: NOT_YOURS });
-  }
-  return found;
-}
 
 /**
  * Each branch with what this caller is AT IT (ADR 129).
@@ -148,12 +120,6 @@ export const entityRouter = {
   create: organizationOwnerIdentityProcedure
     .input(CreateEntitySchema)
     .mutation(async ({ ctx, input }) => {
-      // A source branch is named by the client, so it is authorized like any
-      // other entity the request names: the caller's own organization or
-      // nothing. `requireOwnEntity` refuses a foreign id before the write.
-      if (input.copyFromEntityId) {
-        await requireOwnEntity(ctx, input.copyFromEntityId);
-      }
       const made = await createEntity(
         {
           organizationId: ctx.organizationId,
@@ -161,44 +127,18 @@ export const entityRouter = {
           name: input.name,
           ownerUserId: ctx.session.user.id,
           timeZone: input.timeZone,
-          copyFromEntityId: input.copyFromEntityId,
         },
         ctx.baseDb,
       );
-
-      // Copied templates arrive as a plan with no classes under it, and an
-      // owner who copied a schedule expects to see a week. `rebuildSchedule` in
-      // the NEW branch's scope is the same call the Rebuild button makes; at a
-      // branch minutes old it has nothing to delete and only materializes.
-      if (made.created.includes("class_template")) {
-        await withScope(
-          { organizationId: ctx.organizationId, entityId: made.entityId },
-          (db) => rebuildSchedule(db),
-          ctx.baseDb,
-        );
-      }
-
-      const live = await ctx.baseDb
-        .select({ n: count() })
-        .from(entity)
-        .where(
-          and(
-            eq(entity.organizationId, ctx.organizationId),
-            isNull(entity.deletedAt),
-          ),
-        );
-      const nth = live[0]?.n ?? 1;
-      if (nth <= 2) {
-        await recordMilestone(
-          {
-            organizationId: ctx.organizationId,
-            entityId: made.entityId,
-            name: nth === 1 ? "first_branch" : "second_branch",
-            actorRole: "owner",
-          },
-          ctx.baseDb,
-        );
-      }
+      await recordMilestone(
+        {
+          organizationId: ctx.organizationId,
+          entityId: made.entityId,
+          name: "first_branch",
+          actorRole: "owner",
+        },
+        ctx.baseDb,
+      );
       return made;
     }),
 } satisfies TRPCRouterRecord;

@@ -1,5 +1,5 @@
-import { ClassDetailSkeleton } from "~/app/_components/skeletons";
+import { ScreenSkeleton } from "~/app/_components/skeletons";
 
 export default function Loading() {
-  return <ClassDetailSkeleton />;
+  return <ScreenSkeleton />;
 }

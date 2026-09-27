@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Ellipsis } from "lucide-react";
 
 import type { RouterOutputs } from "@matops/api";
 import { isOwner, runsBranch } from "@matops/domain";
@@ -27,7 +28,7 @@ import { toast } from "@matops/ui/toast";
 import { useTRPC } from "~/trpc/react";
 import { useEntity } from "./entity";
 import { InviteLinkCard } from "./invite-link-card";
-import { LIST, MoreIcon, RESOLVE, SectionHeading } from "./primitives";
+import { LIST, RESOLVE, SectionHeading } from "./primitives";
 import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 
@@ -150,7 +151,7 @@ function StaffRow({
               disabled={busy}
               aria-label={`Manage ${m.name}`}
             >
-              <MoreIcon />
+              <Ellipsis aria-hidden />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">

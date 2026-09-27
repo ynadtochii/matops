@@ -8,21 +8,29 @@ import {
   eq,
   isNull,
   lockAndReadScheduleRevision,
+  ne,
   or,
   recordActivity,
   recordMilestone,
+  sql,
 } from "@matops/db";
 import { classInstance, classParticipation } from "@matops/db/schema";
-import { isOwner } from "@matops/domain";
+import {
+  BOOKING_LOCKED,
+  bookingTier,
+  canBook,
+  isOwner,
+  notBookableMessage,
+} from "@matops/domain";
 import {
   BookClassSchema,
-  BookForSchema,
   CancelBookingSchema,
+  CancelForSchema,
 } from "@matops/validators";
 
 import { academyContext } from "../academy-tz";
-import { releaseSeats } from "../classes";
-import { bookForMember } from "../member-booking";
+import { claimSeat, releaseSeats, requireClassFacts } from "../classes";
+import { CLASS_NOT_FOUND } from "../messages";
 import { bookingGate } from "../payments-gate";
 import { enrolledProcedure, memberProcedure, staffProcedure } from "../trpc";
 
@@ -91,22 +99,96 @@ export const bookingRouter = {
     .input(BookClassSchema)
     .mutation(async ({ ctx, input }) => {
       const academy = await academyContext(ctx);
-      const result = await bookForMember(ctx.db, {
-        entity: ctx.entity,
-        membership: ctx.membership,
-        accountUserId: ctx.session.user.id,
-        classId: input.classId,
-        academyId: ctx.academyId,
-        organizationId: ctx.organizationId,
+      await lockAndReadScheduleRevision(ctx.db, ctx.academyId);
+      const cls = await requireClassFacts(ctx.db, input.classId);
+      const bookable = canBook(cls, new Date(), {
         bookingWindowDays: academy.bookingWindowDays,
         timeZone: academy.timeZone,
       });
+      if (bookable.reason === "deleted") {
+        throw new TRPCError({ code: "NOT_FOUND", message: CLASS_NOT_FOUND });
+      }
+      if (bookable.reason) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: notBookableMessage(
+            bookable.reason,
+            academy.bookingWindowDays,
+          ),
+        });
+      }
+      const gate = await bookingGate(ctx.db, {
+        entity: ctx.entity,
+        membership: ctx.membership,
+        accountUserId: ctx.session.user.id,
+        sessionAt: cls.startsAt,
+      });
+      if (gate.locked) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: gate.message ?? BOOKING_LOCKED,
+        });
+      }
+      const tier = gate.provisional
+        ? ("provisional" as const)
+        : bookingTier(ctx.membership);
+
+      if (ctx.membership.personId && ctx.session.user.id) {
+        await ctx.db
+          .update(classParticipation)
+          .set({
+            personOrganizationId: ctx.organizationId,
+            personId: ctx.membership.personId,
+          })
+          .where(
+            and(
+              eq(classParticipation.classId, input.classId),
+              eq(classParticipation.studentId, ctx.session.user.id),
+              isNull(classParticipation.personId),
+            ),
+          );
+      }
+
+      const [transition] = await ctx.db
+        .insert(classParticipation)
+        .values({
+          academyId: ctx.academyId,
+          classId: input.classId,
+          personOrganizationId: ctx.membership.personId
+            ? ctx.organizationId
+            : null,
+          personId: ctx.membership.personId,
+          studentId: ctx.session.user.id,
+          bookingStatus: "booked",
+          bookingTier: tier,
+          cancelledAt: null,
+        })
+        .onConflictDoUpdate({
+          target: ctx.membership.personId
+            ? [classParticipation.classId, classParticipation.personId]
+            : [classParticipation.classId, classParticipation.studentId],
+          targetWhere: ctx.membership.personId
+            ? sql`person_id is not null`
+            : undefined,
+          set: {
+            bookingStatus: "booked",
+            bookingTier: tier,
+            cancelledAt: null,
+          },
+          setWhere: ne(classParticipation.bookingStatus, "booked"),
+        })
+        .returning({ id: classParticipation.id });
+
+      if (transition && tier === "confirmed") {
+        await claimSeat(ctx.db, input.classId);
+      }
+      if (transition) await bumpScheduleRevision(ctx.db, ctx.academyId);
 
       if (ctx.membership.role === "student") {
         ctx.afterCommit(async (exec) => {
           const event = {
             organizationId: ctx.organizationId,
-            entityId: ctx.entityId,
+            entityId: ctx.academyId,
             actorRole: "student" as const,
           };
           await recordMilestone({ ...event, name: "first_booking" }, exec);
@@ -114,12 +196,12 @@ export const bookingRouter = {
         });
       }
 
-      return { ok: true as const, tier: result.tier };
+      return { ok: true as const, tier };
     }),
 
   /** The owner cancels a named person's booking. Idempotent, like `cancel`. */
   cancelFor: staffProcedure
-    .input(BookForSchema)
+    .input(CancelForSchema)
     .mutation(async ({ ctx, input }) => {
       if (!isOwner(ctx.membership)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Owner only" });

@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 
 import { ClassDetail } from "~/app/_components/class-detail";
-import { ClassDetailSkeleton } from "~/app/_components/skeletons";
+import { ScreenSkeleton } from "~/app/_components/skeletons";
 import { HydrateClient, prefetch, setRequestEntity, trpc } from "~/trpc/server";
 
 function ClassData({ id }: { id: string }) {
@@ -23,7 +23,7 @@ export default async function ClassPage({
   setRequestEntity(entityId);
 
   return (
-    <Suspense fallback={<ClassDetailSkeleton />}>
+    <Suspense fallback={<ScreenSkeleton />}>
       <ClassData id={id} />
     </Suspense>
   );

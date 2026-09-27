@@ -162,18 +162,6 @@ const t = initTRPC.context<typeof createTRPCContext>().create({
  */
 export const createTRPCRouter = t.router;
 
-/** Logs how long each procedure took, to the server console. */
-const timingMiddleware = t.middleware(async ({ next, path }) => {
-  const start = Date.now();
-
-  const result = await next();
-
-  const end = Date.now();
-  console.log(`[TRPC] ${path} took ${end - start}ms to execute`);
-
-  return result;
-});
-
 /**
  * Cap an unauthenticated procedure per caller IP. The join QR is on a public
  * wall, so anything behind it can be flooded from one laptop: the drop-in form
@@ -209,9 +197,9 @@ const PUBLIC_DEFAULT_WINDOW_MS = 60_000;
  * tRPC API. It does not guarantee that a user querying is authorized, but you
  * can still access user session data if they are logged in
  */
-export const publicProcedure = t.procedure
-  .use(timingMiddleware)
-  .use(rateLimited(PUBLIC_DEFAULT_MAX, PUBLIC_DEFAULT_WINDOW_MS));
+export const publicProcedure = t.procedure.use(
+  rateLimited(PUBLIC_DEFAULT_MAX, PUBLIC_DEFAULT_WINDOW_MS),
+);
 
 /**
  * Protected (authenticated) procedure
@@ -221,19 +209,17 @@ export const publicProcedure = t.procedure
  *
  * @see https://trpc.io/docs/procedures
  */
-export const protectedProcedure = t.procedure
-  .use(timingMiddleware)
-  .use(({ ctx, next }) => {
-    if (!ctx.session?.user) {
-      throw new TRPCError({ code: "UNAUTHORIZED" });
-    }
-    return next({
-      ctx: {
-        // infers the `session` as non-nullable
-        session: { ...ctx.session, user: ctx.session.user },
-      },
-    });
+export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
+  if (!ctx.session?.user) {
+    throw new TRPCError({ code: "UNAUTHORIZED" });
+  }
+  return next({
+    ctx: {
+      // infers the `session` as non-nullable
+      session: { ...ctx.session, user: ctx.session.user },
+    },
   });
+});
 
 /**
  * ORGANIZATION scope (ADR 124). The caller, their live Better Auth membership,
@@ -439,7 +425,6 @@ const enforceEntity = t.middleware(async ({ ctx, next }) => {
         ctx: {
           db: tx,
           organizationId,
-          entityId: entity.id,
           entity,
           academyId: entity.id,
           membership,
@@ -456,9 +441,7 @@ const enforceEntity = t.middleware(async ({ ctx, next }) => {
 });
 
 /** Any live member of the organization. Sees the overview, never entity rows. */
-export const organizationMemberProcedure = t.procedure
-  .use(timingMiddleware)
-  .use(enforceOrganization);
+export const organizationMemberProcedure = t.procedure.use(enforceOrganization);
 
 /**
  * Somebody who RUNS the gym: an owner, or a manager (spec FP7, ADR 128).
@@ -488,9 +471,7 @@ export const organizationManagerProcedure = organizationMemberProcedure.use(
  * that entity even if a `where` is forgotten (ADR 124, docs/issues/12, 20, 23).
  *
  */
-export const enrolledProcedure = t.procedure
-  .use(timingMiddleware)
-  .use(enforceEntity);
+export const enrolledProcedure = t.procedure.use(enforceEntity);
 
 /** Member — an APPROVED (active) member of the entity. */
 export const memberProcedure = enrolledProcedure.use(({ ctx, next }) => {
@@ -551,7 +532,6 @@ function identityProcedure(allow: (m: Membership) => boolean, denial: string) {
     return next({
       ctx: {
         organizationId,
-        entityId: entity.id,
         entity,
         academyId: entity.id,
         membership,
