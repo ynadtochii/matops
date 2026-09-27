@@ -57,6 +57,13 @@
       "when": 1790540823697,
       "tag": "0007_signup_questions",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790544722134,
+      "tag": "0008_waiver_append_only",
+      "breakpoints": true
     }
   ]
 }

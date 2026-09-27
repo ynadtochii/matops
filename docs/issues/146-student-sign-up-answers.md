@@ -41,3 +41,7 @@ Migration `0007_signup_questions` holds both slices. For slice A it adds `entity
 ### Database
 
 For slice B, migration `0007_signup_questions` adds `entity.waiver_required boolean not null default false` and two academy tables with RLS on `academy_id`. `academy_waiver` has SELECT and INSERT for `matops_app`. `waiver_acceptance` has SELECT, INSERT and DELETE (DELETE for the erase), and no UPDATE, so an acceptance cannot be changed. A composite foreign key ties each acceptance to a version of the same academy. The unique index on `(academy_id, id)` is created before that foreign key, by hand, because drizzle-kit generated them in the wrong order. Seed teardown and `wipe-academies.sql` delete both tables.
+
+## Addendum 2026-09-27: agreement grants
+
+The `GRANT` lines in `0007` did not limit `matops_app`. `0000_baseline` sets default privileges, so every new table already had SELECT, INSERT, UPDATE and DELETE. Migration `0008_waiver_append_only` revokes UPDATE and DELETE on `academy_waiver` and UPDATE on `waiver_acceptance`. `verify` now expects exactly these grants on the two tables. A future table that must not get all four grants needs its own `REVOKE`.
