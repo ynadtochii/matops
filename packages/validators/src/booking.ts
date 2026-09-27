@@ -23,52 +23,24 @@ const AttendanceStatusSchema = z.enum(["present", "absent", "unmarked"]);
 const attendanceReason = blockText(3, 500).optional();
 
 /** Mark one participant present/absent/unmarked on a class (spec O5). */
-export const MarkAttendanceSchema = z
-  .union([
-    z.object({
-      classId: z.uuid(),
-      personId: IdSchema,
-      status: AttendanceStatusSchema,
-      reason: attendanceReason,
-    }),
-    z.object({
-      classId: z.uuid(),
-      studentId: IdSchema,
-      status: AttendanceStatusSchema,
-      reason: attendanceReason,
-    }),
-  ])
-  .transform((input) => ({
-    classId: input.classId,
-    personId: "personId" in input ? input.personId : input.studentId,
-    status: input.status,
-    reason: input.reason,
-  }));
+export const MarkAttendanceSchema = z.object({
+  classId: z.uuid(),
+  personId: IdSchema,
+  status: AttendanceStatusSchema,
+  reason: attendanceReason,
+});
 
-export const BookForSchema = z.object({
+export const CancelForSchema = z.object({
   classId: z.uuid(),
   personId: z.uuid(),
 });
 
 /** Add a walk-in: mark a member present who never booked (spec O5). */
-export const AddWalkInSchema = z
-  .union([
-    z.object({
-      classId: z.uuid(),
-      personId: IdSchema,
-      reason: attendanceReason,
-    }),
-    z.object({
-      classId: z.uuid(),
-      studentId: IdSchema,
-      reason: attendanceReason,
-    }),
-  ])
-  .transform((input) => ({
-    classId: input.classId,
-    personId: "personId" in input ? input.personId : input.studentId,
-    reason: input.reason,
-  }));
+export const AddWalkInSchema = z.object({
+  classId: z.uuid(),
+  personId: IdSchema,
+  reason: attendanceReason,
+});
 
 /**
  * Record a visitor who is not a member, from the class roster (spec O5/O4).

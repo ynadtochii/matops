@@ -153,40 +153,7 @@ export function SkeletonDayRail({ rows = 3 }: { rows?: number }) {
     </div>
   );
 }
-export function SkeletonCoachCards({
-  n = 2,
-}: {
-  n?: number;
-  toggle?: boolean;
-}) {
-  return <SkeletonRows rows={n} action inList />;
-}
-export function SkeletonRoster({ rows = 5 }: { rows?: number }) {
-  return <SkeletonRows rows={rows} />;
-}
-export function SkeletonInviteCard() {
-  return <SkeletonCard lines={2} />;
-}
-export function SkeletonClassDays({
-  rows = 3,
-}: {
-  days?: number;
-  rows?: number;
-  action?: boolean;
-}) {
-  return <SkeletonRows rows={rows} action inList />;
-}
-export function SkeletonDuesBody() {
-  return <SkeletonCard lines={3} />;
-}
-export function SkeletonMyClassesBody() {
-  return <SkeletonRows action inList />;
-}
-export function SkeletonScheduleWeek() {
-  return <SkeletonRows />;
-}
-
-function ScreenSkeleton() {
+export function ScreenSkeleton() {
   return (
     <Frame>
       <SkeletonHeader />
@@ -195,10 +162,6 @@ function ScreenSkeleton() {
   );
 }
 
-export const HomeSkeleton = ScreenSkeleton;
-export const MyClassesSkeleton = ScreenSkeleton;
-export const ScheduleSkeleton = ScreenSkeleton;
-export const MembersSkeleton = ScreenSkeleton;
 export function CoachesSkeleton() {
   return (
     <Frame>
@@ -215,13 +178,12 @@ export function CoachesSkeleton() {
         <div className="flex flex-col gap-4">
           <Bar className="h-5 w-16" />
           <SkeletonRows rows={2} action inList />
-          <SkeletonInviteCard />
+          <SkeletonCard lines={2} />
         </div>
       </div>
     </Frame>
   );
 }
-export const PaymentsSkeleton = ScreenSkeleton;
 export function SettingsSkeleton() {
   return (
     <Frame>
@@ -242,6 +204,3 @@ export function SettingsSkeleton() {
     </Frame>
   );
 }
-export const ProfileSkeleton = ScreenSkeleton;
-export const AttendanceSkeleton = ScreenSkeleton;
-export const ClassDetailSkeleton = ScreenSkeleton;

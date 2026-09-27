@@ -1,22 +1,3 @@
-/**
- * Seed CLI.
- *
- * A separate fake demo academy — "Alma beta", the one the beta test runs on
- * (isolated, deleted by academy id):
- *   up      insert the demo dataset, attached to YOUR real user as its owner.
- *   down    remove the seed academy (never your real user or a real academy).
- *   reset   down, then up.
- *
- *   status [code]  show the demo academy (and, with a code, that academy's fakes).
- *
- * The first-release pilot (ADR 142): one organization running one BJJ academy,
- * approval-only booking, no plans:
- *   pilot   build it, attached to YOUR real user as its owner. Idempotent.
- *           Removed by `down` like the rest of the seed.
- *
- * The email (arg or SEED_EMAIL) is only needed by up/reset. Sign in once at
- * http://localhost:3004 first so your `user` row exists.
- */
 import { eq } from "drizzle-orm";
 
 import { db, pool } from "../client";
@@ -29,10 +10,9 @@ import {
 } from "./augment";
 import { seedPilot } from "./pilot";
 import { assertSeedableTarget, resolveOwnerEmail } from "./registry";
-import { seedAll } from "./run";
 import { removeAll, seedStatus } from "./teardown";
 
-type Command = "up" | "down" | "reset" | "status" | "fill" | "clear" | "pilot";
+type Command = "down" | "status" | "fill" | "clear" | "pilot";
 
 function parseArgs(argv: string[]): {
   command: Command;
@@ -40,26 +20,15 @@ function parseArgs(argv: string[]): {
   code?: string;
 } {
   const rest = argv.slice(2);
-  const known: Command[] = [
-    "up",
-    "down",
-    "reset",
-    "status",
-    "fill",
-    "clear",
-    "pilot",
-  ];
+  const known: Command[] = ["down", "status", "fill", "clear", "pilot"];
   const command = (
-    known.includes(rest[0] as Command) ? rest[0] : "up"
+    known.includes(rest[0] as Command) ? rest[0] : "pilot"
   ) as Command;
-  // The email is the first arg that looks like one (so `seed up you@x.com` works).
   const email = rest.find((a) => a.includes("@"));
-  // The code is the first bare 6-digit arg (the academy public code).
   const code = rest.find((a) => /^\d{6}$/.test(a));
   return { command, email, code };
 }
 
-/** Resolve the academy a `fill`/`clear` targets, or exit with guidance. */
 async function requireAcademy(code: string | undefined) {
   if (!code) {
     throw new Error(
@@ -71,7 +40,6 @@ async function requireAcademy(code: string | undefined) {
   return academy;
 }
 
-/** Look up the real user you attach the demo data to. Never created here. */
 async function resolveRealUser(email: string) {
   const rows = await db
     .select({ id: user.id, name: user.name })
@@ -116,7 +84,6 @@ async function main(): Promise<void> {
     return;
   }
 
-  // --- Fill / clear a REAL academy (the recommended mode) -------------------
   if (command === "fill") {
     const academy = await requireAcademy(code);
     if ((await academyFakeCount(exec, academy.organizationId)) > 0) {
@@ -163,42 +130,8 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (command === "down") {
-    const report = await removeAll(exec);
-    console.log("[seed] removed:", report);
-    return;
-  }
-
-  // up / reset need YOUR real user.
-  const realEmail = resolveOwnerEmail(email);
-  const realUser = await resolveRealUser(realEmail);
-  if (!realUser) {
-    throw new Error(
-      `No user found for ${realEmail}.\n` +
-        `Sign in once at http://localhost:3004 with that email (this creates your\n` +
-        `user row), then re-run:  pnpm -F @matops/db seed ${command} ${realEmail}`,
-    );
-  }
-
-  if (command === "reset") {
-    const removed = await removeAll(exec);
-    console.log("[seed] removed:", removed);
-  } else {
-    // up: refuse to double-seed (child tables without a natural unique key would
-    // duplicate). Rebuild with `reset` instead.
-    const status = await seedStatus(exec);
-    if (status.some((s) => s.present)) {
-      console.log(
-        "[seed] already seeded — run `pnpm -F @matops/db seed reset` to rebuild.",
-      );
-      printStatus(status);
-      return;
-    }
-  }
-
-  const report = await seedAll(exec, { realUser });
-  console.log(`[seed] done for ${realUser.name} <${realEmail}>:`, report);
-  printStatus(await seedStatus(exec));
+  const report = await removeAll(exec);
+  console.log("[seed] removed:", report);
 }
 
 main()

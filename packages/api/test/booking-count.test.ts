@@ -140,7 +140,7 @@ describe("class.booking_count invariant", () => {
   it("a staff walk-in never moves the count", async () => {
     await h
       .as(OWNER, ACAD)
-      .attendance.addWalkIn({ classId: CLASS, studentId: STUDENT });
+      .attendance.addWalkIn({ classId: CLASS, personId: STUDENT });
     expect(await storedBookingCount(h.pg, CLASS)).toBe(0);
     expect(await confirmedBookings(h.pg, CLASS)).toBe(0);
   });

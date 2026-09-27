@@ -91,7 +91,7 @@ export const templateRouter = {
       ctx.afterCommit(async (exec) => {
         const event = {
           organizationId: ctx.organizationId,
-          entityId: ctx.entityId,
+          entityId: ctx.academyId,
           actorRole: eventRole(ctx.membership.role),
         };
         await recordMilestone({ ...event, name: "first_schedule" }, exec);

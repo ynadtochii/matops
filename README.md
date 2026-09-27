@@ -6,7 +6,7 @@ Scaffolded from [`create-t3-turbo`](https://github.com/t3-oss/create-t3-turbo).
 
 ## Stack
 
-Turborepo · pnpm · tRPC v11 · Better Auth (Organization + magic-link) · Drizzle + Postgres (Neon) · Next.js (Vercel) · Expo (EAS) · Tailwind / NativeWind · TanStack Query.
+Turborepo · pnpm · tRPC v11 · Better Auth (Organization + magic-link) · Drizzle + Postgres (Neon) · Next.js (Vercel) · Expo (EAS) · Tailwind · TanStack Query.
 
 ## Layout
 
@@ -22,7 +22,7 @@ packages/
   notifications   push and email transport (Expo Push, Resend)
   validators      shared zod schemas
   ui              shared UI primitives
-tooling/          eslint · github · prettier · tailwind · typescript
+tooling/          eslint · prettier · typescript
 docs/             spec, architecture, roadmap, delivery rulebook, decisions (ADRs)
 ```
 
@@ -44,7 +44,7 @@ There is no public booking page, no public API and no scheduled job. Details: `d
 cp .env.example .env    # then fill in the values (DB_ENV=dev is required)
 pnpm install
 pnpm dev:next           # web on http://localhost:3004 (pnpm dev runs everything)
-pnpm -F @matops/db seed up <your-email>   # demo academy, after signing in once
+pnpm -F @matops/db seed pilot <your-email>   # demo academy, after signing in once
 ```
 
 ## Common commands

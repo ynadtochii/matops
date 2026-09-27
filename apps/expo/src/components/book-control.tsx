@@ -2,13 +2,13 @@ import { useState } from "react";
 import { Alert, Pressable } from "react-native";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
-import { BOOKING_LOCKED, capacityDisplay } from "@matops/domain";
+import { BOOKING_LOCKED, capacityDisplay, timeFmt } from "@matops/domain";
 import { useInvalidate } from "@matops/ui/use-invalidate";
 
 import { useToast } from "~/components/toast";
 import { confirm, Txt, useTheme } from "~/components/ui";
 import { trpc } from "~/utils/api";
-import { dayFmt, timeFmt } from "~/utils/format";
+import { dayFmt } from "~/utils/format";
 import { cancelClassReminder, scheduleClassReminder } from "~/utils/reminders";
 
 /**

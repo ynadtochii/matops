@@ -2,7 +2,7 @@ import { ScrollView, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 
-import { nextClass, splitMyClasses } from "@matops/domain";
+import { nextClass, splitMyClasses, timeFmt } from "@matops/domain";
 
 import type { RouterOutputs } from "~/utils/api";
 import { AppHeader } from "~/components/app-header";
@@ -27,7 +27,7 @@ import {
   Txt,
 } from "~/components/ui";
 import { trpc } from "~/utils/api";
-import { dayLongFmt, timeFmt } from "~/utils/format";
+import { dayLongFmt } from "~/utils/format";
 
 type MyClass = RouterOutputs["booking"]["mine"][number];
 

@@ -44,17 +44,6 @@ export function attendanceWriteAccess(
   return mayCorrectHistory ? "reason-required" : "closed";
 }
 
-/**
- * Can staff mark attendance on this class right now? Allowed for a live,
- * non-deleted class from **today back to the 14-day backfill window** (spec O5).
- * The forward side allows up to ~a day ahead so tonight's not-yet-started class
- * is markable (someone standing in front of you before class); anything further
- * out is not "today / recent past". Cancelled/deleted classes are never markable.
- */
-export function canMarkAttendance(c: MarkableClass, now: Date): boolean {
-  return attendanceWriteAccess(c, now, false) === "allowed";
-}
-
 /** How far back the dashboard hunts for classes nobody ever marked. */
 export const UNMARKED_LOOKBACK_DAYS = 7;
 
@@ -79,9 +68,6 @@ export interface AttendanceCandidate {
  * dashboard queue that can never be cleared, and an owner who learns the queue
  * lies stops reading it. A partly marked class is skipped too — leaving the
  * no-shows unmarked is how coaches normally work.
- *
- * The window is shorter than `ATTENDANCE_BACKFILL_DAYS` so every class it
- * reports is still inside the window `canMarkAttendance` will accept.
  */
 export function needsAttendance(c: AttendanceCandidate, now: Date): boolean {
   if (c.status === "cancelled") return false;

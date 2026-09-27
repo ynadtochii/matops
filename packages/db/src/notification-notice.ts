@@ -39,8 +39,6 @@ type NoticeEmailSender = (payload: {
   errorCode?: string;
 }>;
 
-type NoticeDeliveryMode = "remaining" | "failed";
-
 interface NoticeDeliveryResult {
   claimed: number;
   accepted: number;
@@ -51,7 +49,6 @@ interface NoticeDeliveryResult {
 }
 
 const DEFAULT_BATCH_LIMIT = 20;
-const MAX_BATCH_LIMIT = 100;
 const LEASE_MS = 5 * 60_000;
 
 export async function createNotice(input: CreateNoticeInput, exec: DbWriter) {
@@ -103,32 +100,13 @@ export async function createNotice(input: CreateNoticeInput, exec: DbWriter) {
   return { noticeId: existing.id, recipients };
 }
 
-function eligibleStatus(mode: NoticeDeliveryMode) {
-  return mode === "remaining"
-    ? eq(notificationRecipient.status, "pending")
-    : or(
-        eq(notificationRecipient.status, "failed"),
-        eq(notificationRecipient.status, "unknown"),
-      );
-}
-
 export async function deliverNoticeBatch(
   exec: DbExec,
   send: NoticeEmailSender,
-  options: {
-    noticeId: string;
-    mode: NoticeDeliveryMode;
-    limit?: number;
-    now?: Date;
-    owner?: string;
-  },
+  options: { noticeId: string },
 ): Promise<NoticeDeliveryResult> {
-  const now = options.now ?? new Date();
-  const owner = options.owner ?? randomUUID();
-  const limit = Math.max(
-    1,
-    Math.min(options.limit ?? DEFAULT_BATCH_LIMIT, MAX_BATCH_LIMIT),
-  );
+  const now = new Date();
+  const owner = randomUUID();
   const leaseExpiresAt = new Date(now.getTime() + LEASE_MS);
   const claimed = await exec.transaction(async (tx) => {
     const rows = await tx
@@ -138,10 +116,9 @@ export async function deliverNoticeBatch(
         and(
           eq(notificationRecipient.noticeId, options.noticeId),
           or(
-            eligibleStatus(options.mode),
+            eq(notificationRecipient.status, "pending"),
             and(
               eq(notificationRecipient.status, "processing"),
-              eq(notificationRecipient.leaseMode, options.mode),
               or(
                 isNull(notificationRecipient.leaseExpiresAt),
                 lt(notificationRecipient.leaseExpiresAt, now),
@@ -151,7 +128,7 @@ export async function deliverNoticeBatch(
         ),
       )
       .orderBy(asc(notificationRecipient.createdAt))
-      .limit(limit)
+      .limit(DEFAULT_BATCH_LIMIT)
       .for("update", { skipLocked: true });
     if (rows.length === 0) return rows;
     await tx
@@ -159,7 +136,7 @@ export async function deliverNoticeBatch(
       .set({
         status: "processing",
         leaseOwner: owner,
-        leaseMode: options.mode,
+        leaseMode: "remaining",
         leaseExpiresAt,
         updatedAt: now,
       })

@@ -2,18 +2,7 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
-import {
-  CalendarCheck,
-  CalendarDays,
-  ChartNoAxesColumn,
-  ChevronDown,
-  CreditCard,
-  LayoutGrid,
-  Menu,
-  SlidersHorizontal,
-  User,
-  Users,
-} from "lucide-react";
+import { ChevronDown, Menu } from "lucide-react";
 
 import {
   Collapsible,
@@ -64,16 +53,6 @@ function initials(name: string, email: string): string {
   if (first) return first.slice(0, 2).toUpperCase();
   return email.slice(0, 2).toUpperCase();
 }
-
-export const DashboardIcon = () => <LayoutGrid aria-hidden />;
-export const ScheduleIcon = () => <CalendarDays aria-hidden />;
-export const TrainingIcon = () => <CalendarCheck aria-hidden />;
-export const ProfileIcon = () => <User aria-hidden />;
-export const MembersIcon = () => <Users aria-hidden />;
-export const SettingsIcon = () => <SlidersHorizontal aria-hidden />;
-export const PaymentsIcon = () => <CreditCard aria-hidden />;
-export const CoachesIcon = () => <ChartNoAxesColumn aria-hidden />;
-const MoreIcon = () => <Menu aria-hidden />;
 
 interface ShellFrameProps {
   /** Already filtered by `show` and given an `href`. */
@@ -281,7 +260,7 @@ export function ShellFrame({
           {moreItems.length > 0 && (
             <DropdownMenu>
               <DropdownMenuTrigger className={tabClass(moreActive)}>
-                <TabFace icon={<MoreIcon />} badge={moreBadge} />
+                <TabFace icon={<Menu aria-hidden />} badge={moreBadge} />
                 <span className="max-w-full truncate">More</span>
               </DropdownMenuTrigger>
               <DropdownMenuContent

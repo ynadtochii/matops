@@ -308,7 +308,7 @@ export function OrganizationExportDialog({
     try {
       setStarted(
         await queryClient.fetchQuery(
-          trpc.dataTransfer.startExport.queryOptions({}),
+          trpc.dataTransfer.startExport.queryOptions(),
         ),
       );
     } catch (error) {

@@ -1,14 +1,9 @@
 import type { PGlite } from "@electric-sql/pglite";
-import { eq, isNull } from "drizzle-orm";
+import { isNull } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { createEntity, provisionOrganization } from "../src/provision";
-import {
-  academyProfile,
-  classTemplate,
-  entity,
-  entityMembership,
-} from "../src/schema";
+import { academyProfile, entity, entityMembership } from "../src/schema";
 import { execOn, freshDb } from "./helpers";
 
 const ORG = "org_alma";
@@ -401,107 +396,6 @@ describe("retrying the first branch", () => {
     const rows = await exec.select().from(entity);
     expect(rows.filter((r) => r.isDefault)).toHaveLength(1);
     expect(rows.find((r) => r.isDefault)?.id).toBe(ORG_E);
-  });
-});
-
-describe("copying a branch's setup into a new one", () => {
-  let pg: PGlite;
-  const ORG_F = "org_zeta";
-  const COACH = "u_coach";
-  const STUDENT = "u_student";
-  let sourceId: string;
-  let copyId: string;
-
-  beforeAll(async () => {
-    pg = await freshDb([]);
-    await seedOrganization(pg, ORG_F);
-    await pg.exec(`
-      INSERT INTO "user" (id, name, email, email_verified, created_at, updated_at)
-      VALUES
-        ('${COACH}', 'Coach', 'coach@test.local', true, now(), now()),
-        ('${STUDENT}', 'Student', 'student@test.local', true, now(), now())
-      ON CONFLICT (id) DO NOTHING;
-    `);
-
-    const source = await createEntity(
-      {
-        organizationId: ORG_F,
-        type: "bjj_academy",
-        name: "North Mat",
-        ownerUserId: OWNER,
-      },
-      execOn(pg),
-    );
-    sourceId = source.entityId;
-
-    await pg.query(
-      `INSERT INTO "entity_membership"
-         (organization_id, entity_id, user_id, role, status, joined_at)
-       VALUES ($1, $2, $3, 'instructor', 'active', now()),
-              ($1, $2, $4, 'student', 'active', now())`,
-      [ORG_F, sourceId, COACH, STUDENT],
-    );
-    await pg.query(
-      `INSERT INTO "class_template"
-         (academy_id, instructor_id, title, days_of_week, starts_at_minutes,
-          duration_minutes, time_zone, capacity)
-       VALUES ($1, $2, 'Fundamentals', '{1,3}', 1080, 60, 'Europe/Lisbon', 20)`,
-      [sourceId, COACH],
-    );
-
-    const copy = await createEntity(
-      {
-        organizationId: ORG_F,
-        type: "bjj_academy",
-        name: "South Mat",
-        ownerUserId: OWNER,
-        copyFromEntityId: sourceId,
-      },
-      execOn(pg),
-    );
-    copyId = copy.entityId;
-  });
-
-  afterAll(() => pg.close());
-
-  it("copies the weekly template, as a plan with no classes yet", async () => {
-    const rows = await execOn(pg)
-      .select()
-      .from(classTemplate)
-      .where(eq(classTemplate.academyId, copyId));
-
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({
-      title: "Fundamentals",
-      daysOfWeek: [1, 3],
-      startsAtMinutes: 1080,
-      capacity: 20,
-    });
-    expect(rows[0]?.generatedUntil).toBeNull();
-  });
-
-  it("copies the staff and leaves the students where they are", async () => {
-    const rows = await execOn(pg)
-      .select()
-      .from(entityMembership)
-      .where(eq(entityMembership.entityId, copyId));
-
-    expect(
-      rows
-        .map((r) => ({ userId: r.userId, role: r.role }))
-        .sort((a, b) => (a.userId ?? "").localeCompare(b.userId ?? "")),
-    ).toEqual([
-      { userId: COACH, role: "instructor" },
-      { userId: OWNER, role: "owner" },
-    ]);
-  });
-
-  it("is a normal branch, not a second default", async () => {
-    const rows = await execOn(pg)
-      .select()
-      .from(entity)
-      .where(eq(entity.id, copyId));
-    expect(rows[0]?.isDefault).toBe(false);
   });
 });
 

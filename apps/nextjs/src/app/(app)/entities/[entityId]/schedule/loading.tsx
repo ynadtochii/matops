@@ -1,5 +1,5 @@
-import { ScheduleSkeleton } from "~/app/_components/skeletons";
+import { ScreenSkeleton } from "~/app/_components/skeletons";
 
 export default function Loading() {
-  return <ScheduleSkeleton />;
+  return <ScreenSkeleton />;
 }

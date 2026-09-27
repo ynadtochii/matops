@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Check, Plus, X } from "lucide-react";
 
 import type { RouterOutputs } from "@matops/api";
 import type { BadgeTone } from "@matops/ui/badge";
@@ -30,16 +31,8 @@ import { useTRPC } from "~/trpc/react";
 import { CoachSelect } from "./coach-select";
 import { useEntity } from "./entity";
 import { PhoneField } from "./form-fields";
-import {
-  cardClass,
-  CheckIcon,
-  Eyebrow,
-  PlusIcon,
-  ROSTER_LIST,
-  ROSTER_ROW,
-  XIcon,
-} from "./primitives";
-import { SkeletonRoster } from "./skeletons";
+import { cardClass, Eyebrow, ROSTER_LIST, ROSTER_ROW } from "./primitives";
+import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 import { useMinuteClock } from "./use-clock";
 
@@ -233,8 +226,7 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
       onMutate: (vars) =>
         optimistic(queryClient, listKey(vars.classId), (old) => {
           const rows = old.rows.map((r) =>
-            r.studentId ===
-            ("personId" in vars ? vars.personId : vars.studentId)
+            r.studentId === vars.personId
               ? { ...r, attendanceStatus: vars.status }
               : r,
           );
@@ -344,7 +336,7 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
     }),
   );
 
-  if (classList.isPending) return <SkeletonRoster />;
+  if (classList.isPending) return <SkeletonRows />;
   if (classList.isError) {
     return (
       <ErrorState
@@ -632,7 +624,7 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
                         })
                       }
                     >
-                      <CheckIcon className="sm:hidden" />
+                      <Check aria-hidden className="size-3.5 sm:hidden" />
                       <span className="hidden sm:inline">Present</span>
                     </button>
                     <button
@@ -650,7 +642,7 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
                         })
                       }
                     >
-                      <XIcon className="sm:hidden" />
+                      <X aria-hidden className="size-3.5 sm:hidden" />
                       <span className="hidden sm:inline">Absent</span>
                     </button>
                   </div>
@@ -714,7 +706,7 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
                           })
                         }
                       >
-                        <CheckIcon className="sm:hidden" />
+                        <Check aria-hidden className="size-3.5 sm:hidden" />
                         <span className="hidden sm:inline">Present</span>
                       </button>
                       <button
@@ -732,7 +724,7 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
                           })
                         }
                       >
-                        <XIcon className="sm:hidden" />
+                        <X aria-hidden className="size-3.5 sm:hidden" />
                         <span className="hidden sm:inline">Absent</span>
                       </button>
                     </div>
@@ -753,7 +745,10 @@ export function ClassRoster({ cls }: { cls: ClassRow }) {
               "flex cursor-pointer list-none items-center gap-2 p-3 text-sm font-medium outline-none [&::-webkit-details-marker]:hidden",
             )}
           >
-            <PlusIcon className="text-muted-foreground size-3.5 transition-transform group-open:rotate-45 motion-reduce:transition-none" />
+            <Plus
+              aria-hidden
+              className="text-muted-foreground size-3.5 transition-transform group-open:rotate-45 motion-reduce:transition-none"
+            />
             Add someone who isn&apos;t listed
             <span className="text-muted-foreground ml-auto text-xs font-normal">
               member, staff or visitor

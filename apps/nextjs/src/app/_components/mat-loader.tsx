@@ -1,7 +1,5 @@
 import type { CSSProperties } from "react";
 
-import { cn } from "@matops/ui";
-
 /**
  * The one loading moment that carries the brand: the basketweave mark laying
  * itself, the way a gym lays mats before class (ADR 80). The mark is the one
@@ -24,31 +22,14 @@ const SEAMS: { d: string; len: number }[] = [
   { d: "M23.5 16V32", len: 16 },
 ];
 
-export function MatLoader({
-  size = 56,
-  label,
-  className,
-}: {
-  size?: number;
-  label?: string;
-  className?: string;
-}) {
+export function MatLoader({ label }: { label?: string }) {
   return (
     <div
       role="status"
       aria-label={label ?? "Loading"}
-      className={cn(
-        "mat-loader flex flex-col items-center gap-4 motion-reduce:animate-none",
-        className,
-      )}
+      className="mat-loader flex flex-col items-center gap-4 motion-reduce:animate-none"
     >
-      <svg
-        width={size}
-        height={size}
-        viewBox="0 0 32 32"
-        fill="none"
-        aria-hidden
-      >
+      <svg width={56} height={56} viewBox="0 0 32 32" fill="none" aria-hidden>
         <rect width="32" height="32" rx="7" fill="var(--brand)" />
         {SEAMS.map((seam, i) => (
           <path

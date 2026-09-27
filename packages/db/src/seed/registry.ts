@@ -27,53 +27,28 @@ export type SeedExec = typeof db;
 /** Id prefix stamped on every auth row (`user`/`session`/`account`) the seed creates. */
 export const SEED_MARKER = "seed_";
 
-/** One demo academy the seed populates. `id` is a `text` org id (not a uuid). */
 export interface SeedAcademy {
-  /** Short key used to build deterministic child ids (e.g. "alma"). */
   key: string;
-  /** Better Auth organization id (text PK) — the teardown key for every tenant row. */
   id: string;
   name: string;
   slug: string;
-  /** 6-digit `organization.public_code`; a reserved 99xxxx band keeps demos obvious. */
-  publicCode: string;
   timeZone: string;
-  currency: string;
-  country?: string;
-  address?: string;
-  mapUrl?: string;
 }
 
-/**
- * The single demo academy the beta test runs on. YOU own it; the tester joins
- * through the seeded instructor invite link.
- */
 export const SEED_ACADEMY: SeedAcademy = {
   key: "alma",
   id: "seed_org_alma",
   name: "Alma beta",
   slug: "seed-alma-beta",
-  publicCode: "990001",
   timeZone: "Europe/Kyiv",
-  currency: "EUR",
-  country: "UA",
-  address: "vul. Velyka Vasylkivska 100, Kyiv",
-  mapUrl: "https://maps.google.com/?q=50.4262,30.5196",
 };
 
-/**
- * The first-release pilot (ADR 142). Listed here so `seed down` removes it
- * with everything else: teardown resolves each org's entities itself, so the
- * gym and sauna branches an older pilot run made go with it.
- */
 const PILOT_ACADEMY: SeedAcademy = {
   key: "pilot",
   id: "seed_org_pilot",
   name: "Pilot BJJ",
   slug: "seed-pilot-gym",
-  publicCode: "990002",
   timeZone: "Europe/Lisbon",
-  currency: "EUR",
 };
 
 /** Every seed academy as a list, for the generic teardown. */

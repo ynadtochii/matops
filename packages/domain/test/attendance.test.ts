@@ -11,68 +11,8 @@ import {
   attendanceReviewError,
   attendanceWriteAccess,
   bulkMarkTargets,
-  canMarkAttendance,
   needsAttendance,
 } from "../src/attendance";
-
-describe("canMarkAttendance", () => {
-  const now = new Date("2026-08-15T12:00:00Z");
-  const live = { status: "scheduled", deletedAt: null };
-
-  it("allows today's class", () => {
-    expect(
-      canMarkAttendance(
-        { ...live, startsAt: new Date("2026-08-15T18:00:00Z") },
-        now,
-      ),
-    ).toBe(true);
-  });
-
-  it("allows a class inside the 14-day backfill window", () => {
-    expect(
-      canMarkAttendance(
-        { ...live, startsAt: new Date("2026-08-05T18:00:00Z") },
-        now,
-      ),
-    ).toBe(true);
-  });
-
-  it("rejects a class older than the backfill window", () => {
-    expect(
-      canMarkAttendance(
-        { ...live, startsAt: new Date("2026-07-20T18:00:00Z") },
-        now,
-      ),
-    ).toBe(false);
-  });
-
-  it("rejects a class more than a day in the future", () => {
-    expect(
-      canMarkAttendance(
-        { ...live, startsAt: new Date("2026-08-18T18:00:00Z") },
-        now,
-      ),
-    ).toBe(false);
-  });
-
-  it("rejects a cancelled class", () => {
-    expect(
-      canMarkAttendance(
-        { status: "cancelled", deletedAt: null, startsAt: now },
-        now,
-      ),
-    ).toBe(false);
-  });
-
-  it("rejects a soft-deleted class", () => {
-    expect(
-      canMarkAttendance(
-        { status: "scheduled", deletedAt: new Date(), startsAt: now },
-        now,
-      ),
-    ).toBe(false);
-  });
-});
 
 describe("attendanceWriteAccess", () => {
   const now = new Date("2026-08-15T12:00:00Z");

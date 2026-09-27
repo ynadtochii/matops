@@ -13,6 +13,7 @@ import {
   gte,
   inArray,
   isNull,
+  listMembersOf,
   lt,
   sql,
   withScope,
@@ -22,7 +23,6 @@ import {
   classParticipation,
   entityMembership,
   membershipMonth,
-  notification,
 } from "@matops/db/schema";
 import {
   canEnroll,
@@ -49,7 +49,6 @@ import type { TimeZoneCtx } from "../academy-tz";
 import type { MemberScope } from "../members";
 import { academyTimeZone } from "../academy-tz";
 import {
-  rosterOf,
   staffAmong,
   studentRosterOf,
   nameByUser as userNames,
@@ -159,7 +158,7 @@ async function loadCoachContext(
   const timeZone = await academyTimeZone(ctx);
   const range = coachWindowRange(COACH_WINDOWS[windowKey], now, timeZone);
   const { classes, marks } = await readCoachRows(ctx.db, range);
-  const members = await rosterOf(ctx);
+  const members = await listMembersOf(ctx.academyId, ctx.db);
   return {
     now,
     timeZone,
@@ -183,7 +182,6 @@ const unavailableNavigationCount = { state: "unavailable" as const };
 async function readBranchNavigationCounts(
   organizationId: string,
   entityId: string,
-  userId: string,
   baseDb: DbExec,
 ) {
   return withScope(
@@ -201,18 +199,10 @@ async function readBranchNavigationCounts(
             eq(entityMembership.status, "pending"),
           ),
         );
-      const [unread] = await db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(notification)
-        .where(
-          and(eq(notification.userId, userId), isNull(notification.readAt)),
-        );
       const coaches = pending.filter(isPendingCoach).length;
       return {
         roster: pending.length - coaches,
         coaches,
-        claims: 0,
-        unread: unread?.count ?? 0,
       };
     },
     baseDb,
@@ -359,22 +349,12 @@ export const statsRouter = {
           ? await readBranchNavigationCounts(
               ctx.organizationId,
               branch.id,
-              ctx.session.user.id,
               ctx.baseDb,
             )
           : null;
       const staff = membership ? isStaff(membership) : false;
       const manager = membership ? runsBranch(membership) : false;
-      const active = membership ? isActiveMember(membership) : false;
       return {
-        organizationId: ctx.organizationId,
-        branch:
-          branch && mayOpenBranch
-            ? {
-                id: branch.id,
-                membershipEnforced: branch.membershipEnforcedAt !== null,
-              }
-            : null,
         counts: {
           memberships:
             claims !== null
@@ -387,11 +367,6 @@ export const statsRouter = {
           coaches:
             counts && manager
               ? navigationCount(counts.coaches)
-              : unavailableNavigationCount,
-          branchClaims: unavailableNavigationCount,
-          unread:
-            counts && active
-              ? navigationCount(counts.unread)
               : unavailableNavigationCount,
         },
       };

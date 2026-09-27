@@ -1,7 +1,7 @@
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
-import { and, desc, eq, getMemberIdForUser } from "@matops/db";
+import { and, desc, eq, getMemberIdForUser, listMembersOf } from "@matops/db";
 import { memberRank, rankCorrection, rankPromotion } from "@matops/db/schema";
 import { isRankChange, isRankRegression, isValidRank } from "@matops/domain";
 import {
@@ -10,7 +10,7 @@ import {
   SetMemberRankSchema,
 } from "@matops/validators";
 
-import { nameByUser, requireMember, rosterOf } from "../members";
+import { nameByUser, requireMember } from "../members";
 import { enrolledProcedure, staffProcedure } from "../trpc";
 
 /**
@@ -60,7 +60,7 @@ export const rankRouter = {
         .from(rankCorrection)
         .where(eq(rankCorrection.memberId, input.memberId))
         .orderBy(desc(rankCorrection.correctedAt));
-      const byUser = nameByUser(await rosterOf(ctx));
+      const byUser = nameByUser(await listMembersOf(ctx.academyId, ctx.db));
       return {
         ranks,
         history: history.map((h) => ({

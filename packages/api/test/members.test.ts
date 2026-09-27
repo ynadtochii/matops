@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { MemberRow } from "@matops/db";
 
-import { nameByMember, nameByUser } from "../src/members";
+import { nameByUser } from "../src/members";
 
 const row = (memberId: string, userId: string, name: string): MemberRow => ({
   memberId,
@@ -27,14 +27,7 @@ describe("name maps", () => {
     expect(byUser.get("mem_1")).toBeUndefined();
   });
 
-  it("keys by member id, not user id", () => {
-    const byMember = nameByMember(roster);
-    expect(byMember.get("mem_2")).toBe("Bruno");
-    expect(byMember.get("usr_2")).toBeUndefined();
-  });
-
   it("returns an empty map for an empty roster", () => {
     expect(nameByUser([]).size).toBe(0);
-    expect(nameByMember([]).size).toBe(0);
   });
 });

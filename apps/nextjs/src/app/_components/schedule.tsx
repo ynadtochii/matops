@@ -51,7 +51,7 @@ import { InstructorOptions } from "./coach-select";
 import { useEntity } from "./entity";
 import { LIST, RESOLVE, Section } from "./primitives";
 import { SchedulePoster } from "./schedule-poster";
-import { SkeletonScheduleWeek } from "./skeletons";
+import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 import { WeekGrid } from "./week-grid";
 
@@ -474,7 +474,7 @@ export function Schedule({
       </Dialog>
 
       {week.isPending ? (
-        <SkeletonScheduleWeek />
+        <SkeletonRows />
       ) : week.isError ? (
         <ErrorState
           label="this week's schedule"

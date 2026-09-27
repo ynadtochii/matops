@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 
 import type { EntityPageProps } from "~/trpc/server";
 import { ProfileScreen } from "~/app/_components/profile-screen";
-import { ProfileSkeleton } from "~/app/_components/skeletons";
+import { ScreenSkeleton } from "~/app/_components/skeletons";
 import { getSession } from "~/auth/server";
 import { HydrateClient, prefetch, setRequestEntity, trpc } from "~/trpc/server";
 
@@ -30,7 +30,7 @@ export default async function ProfilePage({ params }: EntityPageProps) {
   setRequestEntity((await params).entityId);
 
   return (
-    <Suspense fallback={<ProfileSkeleton />}>
+    <Suspense fallback={<ScreenSkeleton />}>
       <ProfileData />
     </Suspense>
   );

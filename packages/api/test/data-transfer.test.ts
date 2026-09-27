@@ -132,7 +132,7 @@ describe("data transfer", () => {
       attendanceStatus: "present",
       attendedAt: new Date("2026-08-10T18:00:00Z"),
     });
-    const started = await h.as(MANAGER, GYM).dataTransfer.startExport({});
+    const started = await h.as(MANAGER, GYM).dataTransfer.startExport();
     const paymentHistory = await h.as(MANAGER, GYM).dataTransfer.exportPage({
       dataset: "payment_history",
       exportedAt: started.exportedAt.toISOString(),
@@ -214,7 +214,7 @@ describe("data transfer", () => {
       .update(person)
       .set({ archivedAt: new Date() })
       .where(eq(person.id, created.personId));
-    const started = await h.as(OWNER, GYM).dataTransfer.startExport({});
+    const started = await h.as(OWNER, GYM).dataTransfer.startExport();
     const page = await h.as(OWNER, GYM).dataTransfer.exportPage({
       dataset: "people",
       exportedAt: started.exportedAt.toISOString(),
@@ -236,7 +236,7 @@ describe("data transfer", () => {
       ),
     ).toBe("FORBIDDEN");
     expect(
-      await rejectionCode(h.as(STUDENT, GYM).dataTransfer.startExport({})),
+      await rejectionCode(h.as(STUDENT, GYM).dataTransfer.startExport()),
     ).toBe("FORBIDDEN");
   });
 });

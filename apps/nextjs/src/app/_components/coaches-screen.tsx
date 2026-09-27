@@ -28,7 +28,7 @@ import {
   SectionHeading,
   Stat,
 } from "./primitives";
-import { SkeletonCoachCards } from "./skeletons";
+import { SkeletonRows } from "./skeletons";
 import { Staff } from "./staff";
 import { EmptyState, ErrorState } from "./states";
 import { Tabs } from "./tabs";
@@ -268,7 +268,7 @@ export function CoachesScreen() {
 
             {isOwner ? (
               roster.isPending ? (
-                <SkeletonCoachCards n={3} />
+                <SkeletonRows rows={3} action inList />
               ) : roster.isError ? (
                 <ErrorState
                   label="your coaches"
@@ -287,7 +287,7 @@ export function CoachesScreen() {
                 </div>
               )
             ) : mine.isPending ? (
-              <SkeletonCoachCards n={1} toggle={false} />
+              <SkeletonRows rows={1} action inList />
             ) : mine.isError ? (
               <ErrorState
                 label="your classes"

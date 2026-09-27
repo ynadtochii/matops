@@ -158,7 +158,7 @@ async function promotePaidBookings(
           .for("update");
 
         for (const booking of bookings) {
-          if (!(await claimSeat(db, booking.classId))) continue;
+          await claimSeat(db, booking.classId);
           await db
             .update(classParticipation)
             .set({ bookingTier: "confirmed" })

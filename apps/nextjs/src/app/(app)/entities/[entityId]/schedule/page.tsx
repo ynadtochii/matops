@@ -4,7 +4,7 @@ import { isStaff, scheduleWeekWindow } from "@matops/domain";
 
 import type { EntityPageProps } from "~/trpc/server";
 import { ScheduleScreen } from "~/app/_components/schedule-screen";
-import { ScheduleSkeleton } from "~/app/_components/skeletons";
+import { ScreenSkeleton } from "~/app/_components/skeletons";
 import {
   currentAcademy,
   HydrateClient,
@@ -32,7 +32,7 @@ export default async function SchedulePage({ params }: EntityPageProps) {
   setRequestEntity((await params).entityId);
 
   return (
-    <Suspense fallback={<ScheduleSkeleton />}>
+    <Suspense fallback={<ScreenSkeleton />}>
       <ScheduleData />
     </Suspense>
   );

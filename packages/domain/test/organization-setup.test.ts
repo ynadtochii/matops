@@ -3,9 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { BranchHealthFacts, SetupFacts } from "../src/organization-setup";
 import {
   branchLaunchIssues,
-  matchPeopleByEmail,
   organizationSetup,
-  parseEmailList,
   setupProgress,
 } from "../src/organization-setup";
 
@@ -178,46 +176,5 @@ describe("branchLaunchIssues", () => {
         uncovered: 4,
       }),
     ).toEqual([]);
-  });
-});
-
-describe("parseEmailList", () => {
-  it("takes whatever a spreadsheet hands over", () => {
-    expect(
-      parseEmailList('email\nana@x.com, bea@x.com;"cy@x.com"\n\n'),
-    ).toEqual(["ana@x.com", "bea@x.com", "cy@x.com"]);
-  });
-
-  it("lower-cases and drops repeats, so one person is one line", () => {
-    expect(parseEmailList("Ana@X.com ana@x.com")).toEqual(["ana@x.com"]);
-  });
-
-  it("ignores words that are not addresses, like a header row", () => {
-    expect(parseEmailList("name email\nana@x.com")).toEqual(["ana@x.com"]);
-  });
-
-  it("has nothing to say about an empty paste", () => {
-    expect(parseEmailList("   \n ")).toEqual([]);
-  });
-});
-
-describe("matchPeopleByEmail", () => {
-  const people = [
-    { userId: "u_ana", email: "Ana@x.com" },
-    { userId: "u_bea", email: "bea@x.com" },
-  ];
-
-  it("finds people whatever case the paste used", () => {
-    expect(matchPeopleByEmail(people, ["ana@x.com"])).toEqual({
-      matched: ["u_ana"],
-      unmatched: [],
-    });
-  });
-
-  it("names what it could not find rather than dropping it", () => {
-    expect(matchPeopleByEmail(people, ["bea@x.com", "nobody@x.com"])).toEqual({
-      matched: ["u_bea"],
-      unmatched: ["nobody@x.com"],
-    });
   });
 });

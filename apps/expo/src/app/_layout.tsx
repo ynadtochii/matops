@@ -12,8 +12,6 @@ import { ThemeProvider, useThemeMode } from "~/components/theme";
 import { ToastProvider } from "~/components/toast";
 import { queryClient } from "~/utils/api";
 
-import "../styles.css";
-
 void SplashScreen.preventAutoHideAsync();
 
 /**

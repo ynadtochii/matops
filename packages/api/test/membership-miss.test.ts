@@ -60,7 +60,7 @@ describe("a user who is not in the academy", () => {
       await rejectionCode(
         h.as("usr_owner_a", "org_a").attendance.addWalkIn({
           classId: CLASS_A,
-          studentId: "usr_owner_b",
+          personId: "usr_owner_b",
         }),
       ),
     ).toBe("NOT_FOUND");
@@ -70,7 +70,7 @@ describe("a user who is not in the academy", () => {
     await expect(
       h.as("usr_owner_a", "org_a").attendance.addWalkIn({
         classId: CLASS_A,
-        studentId: "usr_student_a",
+        personId: "usr_student_a",
       }),
     ).resolves.toBeDefined();
   });

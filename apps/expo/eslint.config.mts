@@ -5,7 +5,7 @@ import { designTokensConfig, reactConfig } from "@matops/eslint-config/react";
 
 export default defineConfig(
   {
-    ignores: [".expo/**", "expo-plugins/**"],
+    ignores: [".expo/**"],
   },
   baseConfig,
   reactConfig,

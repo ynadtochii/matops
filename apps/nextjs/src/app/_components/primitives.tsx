@@ -1,5 +1,4 @@
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
-import { Check, ChevronDown, Ellipsis, Plus, X } from "lucide-react";
 
 import type { DisciplineTone, DriftStatus } from "@matops/domain";
 import type { BadgeTone } from "@matops/ui/badge";
@@ -342,21 +341,3 @@ const DOT_SKIN: Record<DisciplineTone, string> = {
 export function disciplineDot(discipline: string | null): string {
   return DOT_SKIN[disciplineTone(discipline)];
 }
-
-export const ChevronDownIcon = ({ className }: { className?: string }) => (
-  <ChevronDown aria-hidden className={className} />
-);
-
-export const MoreIcon = () => <Ellipsis aria-hidden />;
-
-export const PlusIcon = ({ className }: { className?: string }) => (
-  <Plus aria-hidden className={className} />
-);
-
-export const CheckIcon = ({ className }: { className?: string }) => (
-  <Check aria-hidden className={cn("size-3.5", className)} />
-);
-
-export const XIcon = ({ className }: { className?: string }) => (
-  <X aria-hidden className={cn("size-3.5", className)} />
-);

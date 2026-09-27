@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { ChevronDown } from "lucide-react";
 
 import {
   academyMapUrl,
@@ -30,7 +31,6 @@ import { JoinAnotherBranch } from "./join-by-code";
 import { PageHeader } from "./page-header";
 import {
   cardClass,
-  ChevronDownIcon,
   ENTER,
   Eyebrow,
   LIST,
@@ -371,7 +371,10 @@ function MyRank() {
             )}
           >
             Promotion history ({history.length})
-            <ChevronDownIcon className="text-muted-foreground shrink-0 transition-transform duration-150 group-open:rotate-180 motion-reduce:transition-none" />
+            <ChevronDown
+              aria-hidden
+              className="text-muted-foreground shrink-0 transition-transform duration-150 group-open:rotate-180 motion-reduce:transition-none"
+            />
           </summary>
           <div className="flex flex-col gap-3 px-4 pt-1 pb-4">
             {history.map((h) => (

@@ -6,7 +6,12 @@ import { useQuery } from "@tanstack/react-query";
 import type { DisciplineTone } from "@matops/domain";
 import {
   capacityDisplay,
+  clockParts,
+  dayKey,
   disciplineTone,
+  fillLabel,
+  groupByDay,
+  spotsLeftLabel,
   studentWeekWindow,
 } from "@matops/domain";
 
@@ -31,14 +36,7 @@ import {
   useTheme,
 } from "~/components/ui";
 import { trpc } from "~/utils/api";
-import {
-  clockParts,
-  dayFmt,
-  dayKey,
-  fillLabel,
-  groupByDay,
-  spotsLeftLabel,
-} from "~/utils/format";
+import { dayFmt } from "~/utils/format";
 
 type ClassRow = RouterOutputs["class"]["mine"][number];
 

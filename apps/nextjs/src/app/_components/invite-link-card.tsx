@@ -22,7 +22,7 @@ import { shareLink, useCanShare } from "~/lib/share";
 import { useTRPC } from "~/trpc/react";
 import { useEntity } from "./entity";
 import { cardClass } from "./primitives";
-import { SkeletonInviteCard } from "./skeletons";
+import { SkeletonCard } from "./skeletons";
 import { ErrorState } from "./states";
 
 const QrPoster = dynamic(() => import("./qr-poster").then((m) => m.QrPoster));
@@ -78,7 +78,7 @@ export function InviteLinkCard({
     }),
   );
 
-  if (invites.isPending) return <SkeletonInviteCard />;
+  if (invites.isPending) return <SkeletonCard lines={2} />;
   if (invites.isError)
     return (
       <ErrorState

@@ -70,25 +70,13 @@ export const REMINDER_LEAD_MINUTES = 120;
 
 /** What produced an inbox entry. Persisted as text on `notification.kind`. */
 export type NotificationKind =
-  | "class_cancelled"
-  | "class_changed"
-  | "class_reminder"
-  | "dues_reminder"
-  | "membership_due"
-  | "membership_approved"
-  | "membership_update"
-  | "announcement";
+  "class_cancelled" | "class_changed" | "membership_approved";
 
 /** Short label for the inbox row, so both clients spell the kinds the same. */
 const NOTIFICATION_KIND_LABEL: Record<NotificationKind, string> = {
   class_cancelled: "Class cancelled",
   class_changed: "Class updated",
-  class_reminder: "Class reminder",
-  dues_reminder: "Membership dues",
-  membership_due: "Membership dues",
   membership_approved: "Membership",
-  membership_update: "Membership",
-  announcement: "Gym news",
 };
 
 /**

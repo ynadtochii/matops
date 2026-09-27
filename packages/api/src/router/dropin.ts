@@ -8,8 +8,8 @@ import {
   createPendingMembership,
   desc,
   eq,
-  getAcademyMembership,
   getAcademyPublic,
+  getEntityMembership,
   listAcademyClassesInWindow,
   ne,
   resolveAccountByEmail,
@@ -366,25 +366,25 @@ export const dropInRouter = {
         },
         ctx.baseDb,
       );
-      const membership = await getAcademyMembership(
+      const entityMem = await getEntityMembership(
         account.userId,
         ctx.academyId,
         ctx.baseDb,
       );
-      if (!membership) {
+      if (!entityMem) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Couldn't create that membership. Try again.",
         });
       }
 
-      const activated = !account.existed && membership.status === "pending";
+      const activated = !account.existed && entityMem.status === "pending";
       if (activated) {
         await activateMember(ctx, {
-          memberId: membership.memberId,
+          memberId: entityMem.id,
           userId: account.userId,
           granted: approveMembership({
-            status: membership.status,
+            status: entityMem.status,
             invitedRole: CODE_JOIN_ROLE,
           }),
         });

@@ -4,7 +4,7 @@ import { cn } from "@matops/ui";
  * matops mark — a rounded tile of a **basketweave** mat bond (the woven plank
  * pairs real mats are laid in), filled `--brand` with the seams in
  * `--brand-foreground`. The one signature mark; restrained-violet per the
- * design system (docs/design.md §6, ADR 37). `logo.native.tsx` is the RN twin.
+ * design system (docs/design.md §6, ADR 37).
  */
 const SEAMS = "M16 0V32M0 16H32M8.5 0V16M16 8.5H32M0 23.5H16M23.5 16V32";
 

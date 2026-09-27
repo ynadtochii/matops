@@ -223,7 +223,6 @@ export async function notifyBooked(
   ctx.afterCommit(async (exec) => {
     const result = await deliverNoticeBatch(exec, sendEmail, {
       noticeId: notice.noticeId,
-      mode: "remaining",
     });
     Object.assign(delivery, result);
     await send(
@@ -426,7 +425,7 @@ export const classRouter = {
       ctx.afterCommit(async (exec) => {
         const event = {
           organizationId: ctx.organizationId,
-          entityId: ctx.entityId,
+          entityId: ctx.academyId,
           actorRole: eventRole(ctx.membership.role),
         };
         await recordMilestone({ ...event, name: "first_schedule" }, exec);

@@ -1,6 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "@matops/tailwind-config/theme";
+@import "./theme.css";
 
 @source "../../../../packages/ui/src/*.{ts,tsx}";
 
@@ -43,11 +43,6 @@
     linear-gradient(to bottom, var(--border) 1px, transparent 1px);
   background-size: 8px 8px;
 }
-@utility bg-dot {
-  background-image: radial-gradient(var(--border) 1px, transparent 1px);
-  background-size: 16px 16px;
-}
-
 @layer base {
   * {
     @apply border-border;

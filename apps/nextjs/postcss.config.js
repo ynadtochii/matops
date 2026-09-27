@@ -1,1 +1,5 @@
-export { default } from "@matops/tailwind-config/postcss-config";
+export default {
+  plugins: {
+    "@tailwindcss/postcss": {},
+  },
+};

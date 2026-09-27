@@ -45,8 +45,14 @@ import {
   rankPromotion,
   user,
 } from "../schema";
-import { monthsBack } from "./data";
 import { SEED_MARKER } from "./registry";
+
+function monthsBack(month: string, by: number): string {
+  const [y, m] = month.split("-").map(Number);
+  const shifted = new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1 - by, 1));
+  const mm = String(shifted.getUTCMonth() + 1).padStart(2, "0");
+  return `${shifted.getUTCFullYear()}-${mm}-01`;
+}
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FILL_TEMPLATE_MARKER = "[demo seed]";

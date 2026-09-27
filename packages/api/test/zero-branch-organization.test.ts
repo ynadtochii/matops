@@ -29,27 +29,6 @@ async function gymWithNoBranch(): Promise<{
 }
 
 describe("a gym with no branch", () => {
-  it("returns confirmed organization badge zeroes without a selected branch", async () => {
-    const { h, organizationId } = await gymWithNoBranch();
-
-    await expect(
-      h.as(OWNER, null).stats.navigationSummary({
-        organizationId,
-        branchId: null,
-      }),
-    ).resolves.toEqual({
-      organizationId,
-      branch: null,
-      counts: {
-        memberships: { state: "ready", count: 0 },
-        roster: { state: "unavailable" },
-        coaches: { state: "unavailable" },
-        branchClaims: { state: "unavailable" },
-        unread: { state: "unavailable" },
-      },
-    });
-  });
-
   it("answers the membership catalog with no plans", async () => {
     const { h } = await gymWithNoBranch();
 

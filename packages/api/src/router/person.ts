@@ -13,7 +13,7 @@ import { organizationMemberIdentityProcedure } from "../trpc";
 
 const PERSON_ARCHIVED = "Restore this person before changing them";
 
-function sameIds(left: string[], right: string[]) {
+export function sameIds(left: string[], right: string[]) {
   const sortedLeft = [...left].sort();
   const sortedRight = [...right].sort();
   return (

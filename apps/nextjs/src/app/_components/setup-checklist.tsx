@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
+import { X } from "lucide-react";
 
 import type { BranchIssue, SetupKey } from "@matops/domain";
 import { entityHref } from "@matops/domain";
@@ -10,7 +11,7 @@ import { Button } from "@matops/ui/button";
 
 import { useTRPC } from "~/trpc/react";
 import { useOrganization } from "./entity";
-import { cardClass, ENTER, Eyebrow, XIcon } from "./primitives";
+import { cardClass, ENTER, Eyebrow } from "./primitives";
 import { SkeletonCard } from "./skeletons";
 
 /**
@@ -141,7 +142,7 @@ function CloseButton({ onClose }: { onClose: () => void }) {
       className="text-muted-foreground -my-1 size-8 p-0"
       onClick={onClose}
     >
-      <XIcon />
+      <X aria-hidden className="size-3.5" />
     </Button>
   );
 }

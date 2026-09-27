@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import { slugify } from "@matops/domain";
 
@@ -9,7 +9,6 @@ import { generateAcademyCode } from "./academy-code";
 import { organization } from "./auth-schema";
 import { academyProfile, entity, entityMembership } from "./entity-schema";
 import { ensureAccountPerson } from "./person";
-import { classTemplate } from "./scheduling";
 
 interface ProvisionResult {
   organizationId: string;
@@ -159,98 +158,6 @@ export async function provisionOrganization(
 }
 
 /**
- * Copy the two things a new branch can usefully inherit: its recurring schedule
- * and the staff who run it (ADR 128).
- *
- * Nothing else is copied, and the list of what is left out is the point:
- * bookings, attendance, ranks, notes and payment history all belong
- * to the people at the branch they happened at, and a copy of them would be a
- * record of something that never took place.
- *
- * Templates arrive as a plan, not as a schedule: `generated_until` is left null
- * so the caller materializes them into the new branch's own classes.
- *
- * Students are not staff and are not copied. A person joins a branch, and
- * moving one silently would give them a place they never asked for.
- */
-async function copyBranchSetup(
-  input: {
-    fromEntityId: string;
-    toEntityId: string;
-    organizationId: string;
-  },
-  exec: DbWriter,
-): Promise<string[]> {
-  const created: string[] = [];
-
-  const templates = await exec
-    .select()
-    .from(classTemplate)
-    .where(
-      and(
-        eq(classTemplate.academyId, input.fromEntityId),
-        eq(classTemplate.status, "active"),
-        isNull(classTemplate.deletedAt),
-      ),
-    );
-
-  if (templates.length > 0) {
-    await exec.insert(classTemplate).values(
-      templates.map((t) => ({
-        academyId: input.toEntityId,
-        instructorId: t.instructorId,
-        title: t.title,
-        description: t.description,
-        discipline: t.discipline,
-        daysOfWeek: t.daysOfWeek,
-        startsAtMinutes: t.startsAtMinutes,
-        durationMinutes: t.durationMinutes,
-        timeZone: t.timeZone,
-        capacity: t.capacity,
-        capacityPolicy: "soft",
-      })),
-    );
-    created.push("class_template");
-  }
-
-  const staff = await exec
-    .select({
-      userId: entityMembership.userId,
-      personId: entityMembership.personId,
-      role: entityMembership.role,
-    })
-    .from(entityMembership)
-    .where(
-      and(
-        eq(entityMembership.entityId, input.fromEntityId),
-        eq(entityMembership.status, "active"),
-        inArray(entityMembership.role, ["owner", "instructor"]),
-      ),
-    );
-
-  if (staff.length > 0) {
-    const made = await exec
-      .insert(entityMembership)
-      .values(
-        staff.map((m) => ({
-          organizationId: input.organizationId,
-          entityId: input.toEntityId,
-          userId: m.userId,
-          personId: m.personId,
-          role: m.role,
-          status: "active",
-          joinedAt: new Date(),
-        })),
-      )
-      .onConflictDoNothing()
-      .returning({ id: entityMembership.id });
-    if (made.length > 0) created.push("staff");
-  }
-
-  return created;
-}
-
-/**
  * Add a branch to an organization, including its FIRST one (ADR 128).
  *
  * Registration writes no branch any more, so this is the only path that makes
@@ -276,17 +183,7 @@ export async function createEntity(
     name: string;
     ownerUserId?: string;
     timeZone?: string | null;
-    /**
-     * Give the branch a known id instead of a random one. Only the seed passes
-     * this, so its pilot gym is the same row on every run; nothing user-facing
-     * chooses an id, because a guessable one is a worse id.
-     */
     entityId?: string;
-    /**
-     * Take this branch's schedule and staff as a starting point. Owner-chosen
-     * and always optional: an empty branch is the default (ADR 128).
-     */
-    copyFromEntityId?: string;
   },
   exec: DbExec,
 ): Promise<ProvisionResult> {
@@ -353,19 +250,6 @@ export async function createEntity(
       },
       tx,
     );
-
-    if (input.copyFromEntityId && created.includes("entity")) {
-      created.push(
-        ...(await copyBranchSetup(
-          {
-            fromEntityId: input.copyFromEntityId,
-            toEntityId: entityId,
-            organizationId: input.organizationId,
-          },
-          tx,
-        )),
-      );
-    }
 
     return { organizationId: input.organizationId, entityId, created };
   });

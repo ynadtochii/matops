@@ -4,7 +4,6 @@ import {
   organizationMilestones,
   weeklyOwnerOnly,
   weeklyRetainedUse,
-  weeklyTwoBranchUse,
   weeksBack,
   weekTwoBookers,
 } from "./product-report";
@@ -28,15 +27,6 @@ async function main() {
     );
   }
   if (rows.length === 0) console.log("(no student activity yet)");
-
-  const twoBranch = await weeklyTwoBranchUse(since, db);
-  const twoBranchWeeks = twoBranch.filter((w) => w.organizations > 0);
-  console.log("");
-  console.log("Weeks with a gym using two branches:");
-  for (const w of twoBranchWeeks) {
-    console.log(`${w.weekStart}  ${w.organizations}`);
-  }
-  if (twoBranchWeeks.length === 0) console.log("(none)");
 
   const ownerOnly = (await weeklyOwnerOnly(since, db)).filter(
     (w) => w.organizations > 0,

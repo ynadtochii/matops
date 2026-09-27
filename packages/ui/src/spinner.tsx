@@ -15,7 +15,7 @@ import { cn } from "@matops/ui";
  * spinner is the only thing on screen; inline-with-text spinners stay silent
  * (`aria-hidden`) so a screen reader hears the label once, not twice.
  */
-const SIZES = { sm: 14, md: 18, lg: 28 } as const;
+const SIZES = { sm: 14, md: 18 } as const;
 
 export function Spinner({
   size = "md",

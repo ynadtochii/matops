@@ -49,7 +49,7 @@ import {
 
 import { academyTimeZone } from "../academy-tz";
 import { loadAttendanceRoster } from "../attendance-review";
-import { claimSeatIfStrict, requireClassFacts, SESSION_FULL } from "../classes";
+import { requireClassFacts } from "../classes";
 import { directoryRosterOf } from "../members";
 import { staffIdentityProcedure, staffProcedure } from "../trpc";
 
@@ -445,30 +445,12 @@ export const attendanceRouter = {
             ),
           ),
         );
-      // A row only protects a place when it actually holds one. A cancelled
-      // booking gave its place back and a provisional one never took a place,
-      // so admitting either at the desk claims one like anybody else.
-      const holdsSeat =
-        held !== undefined &&
-        held.status !== "cancelled" &&
-        held.tier === "confirmed";
-      let claimed = false;
-      if (!holdsSeat) {
-        const seat = await claimSeatIfStrict(ctx.db, input.classId);
-        if (!seat.took) {
-          throw new TRPCError({ code: "CONFLICT", message: SESSION_FULL });
-        }
-        claimed = seat.strict;
-      }
       const values = {
         personOrganizationId: subjectPersonId ? ctx.organizationId : null,
         personId: subjectPersonId,
         studentId: subject.accountUserId,
-        bookingStatus:
-          claimed && held?.status === "cancelled"
-            ? ("none" as const)
-            : held?.status,
-        bookingTier: claimed ? ("confirmed" as const) : held?.tier,
+        bookingStatus: held?.status,
+        bookingTier: held?.tier,
         attendanceStatus: "present" as const,
         attendedAt: now,
         markedBy: ctx.session.user.id,
@@ -637,14 +619,14 @@ export const attendanceRouter = {
 
 function recordAttendance(ctx: {
   organizationId: string;
-  entityId: string;
+  academyId: string;
   membership: { role: string };
   afterCommit: (task: (exec: DbExec) => Promise<void>) => void;
 }) {
   ctx.afterCommit(async (exec) => {
     const event = {
       organizationId: ctx.organizationId,
-      entityId: ctx.entityId,
+      entityId: ctx.academyId,
       actorRole: eventRole(ctx.membership.role),
     };
     await recordMilestone({ ...event, name: "first_attendance" }, exec);
