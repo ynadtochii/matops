@@ -1,7 +1,8 @@
+import type { QueryKey } from "@tanstack/react-query";
 import type { TRPCQueryOptions } from "@trpc/tanstack-react-query";
 import { cache } from "react";
 import { headers } from "next/headers";
-import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
+import { dehydrate, hashKey, HydrationBoundary } from "@tanstack/react-query";
 import { createTRPCOptionsProxy } from "@trpc/tanstack-react-query";
 
 import type { AppRouter } from "@matops/api";
@@ -60,13 +61,22 @@ export const trpc = createTRPCOptionsProxy<AppRouter>({
   queryClient: getQueryClient,
 });
 
-export function HydrateClient(props: { children: React.ReactNode }) {
+// The request shares one query client, so a layout's snapshot can race in a
+// nested segment's in-flight query. A late hydration then sees it resolved and
+// mismatches the server HTML, which React inside Next's <Activity> never exits.
+export function HydrateClient(props: {
+  children: React.ReactNode;
+  only?: QueryKey;
+}) {
   const queryClient = getQueryClient();
-  return (
-    <HydrationBoundary state={dehydrate(queryClient)}>
-      {props.children}
-    </HydrationBoundary>
+  const onlyHash = props.only && hashKey(props.only);
+  const state = dehydrate(
+    queryClient,
+    onlyHash
+      ? { shouldDehydrateQuery: (query) => query.queryHash === onlyHash }
+      : undefined,
   );
+  return <HydrationBoundary state={state}>{props.children}</HydrationBoundary>;
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function prefetch<T extends ReturnType<TRPCQueryOptions<any>>>(

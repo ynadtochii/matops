@@ -89,13 +89,13 @@ should be paid for, because that is where it buys something.
 Dashboard of the Alma beta academy, dev server, `Accept-Encoding: identity`,
 timing each chunk off the socket. Three runs each.
 
-| | awaited (v4.4) | streamed (v4.5) |
-|---|---:|---:|
-| First byte | 125-206 ms | 125-200 ms |
-| Page header markup in the stream | 630-741 ms | **125-135 ms** |
-| Panel data (`stats.gym`) in the stream | 622-730 ms | 628-823 ms |
-| Last byte | 630-741 ms | 625-823 ms |
-| Bytes | 202.0 kB | 201.1 kB |
+|                                        | awaited (v4.4) | streamed (v4.5) |
+| -------------------------------------- | -------------: | --------------: |
+| First byte                             |     125-206 ms |      125-200 ms |
+| Page header markup in the stream       |     630-741 ms |  **125-135 ms** |
+| Panel data (`stats.gym`) in the stream |     622-730 ms |      628-823 ms |
+| Last byte                              |     630-741 ms |      625-823 ms |
+| Bytes                                  |       202.0 kB |        201.1 kB |
 
 The header arrives about **half a second earlier** and the response costs
 nothing more. Total time is unchanged, which is the point: the browser now spends
@@ -103,18 +103,18 @@ that half second downloading and parsing the bundle instead of waiting.
 
 Every other route shows the same shape. Shell markup, then the tail:
 
-| Route | shell | last byte |
-|---|---:|---:|
-| `/schedule` | 221 ms | 423 ms |
-| `/members` | 130 ms | 612 ms |
-| `/payments` | 201 ms | 681 ms |
-| `/coaches` | 135 ms | 702 ms |
-| `/training` | 139 ms | 355 ms |
-| `/referrals` | 129 ms | 547 ms |
-| `/settings` | 132 ms | 426 ms |
-| `/attendance` | 134 ms | 469 ms |
-| `/notifications` | 131 ms | 436 ms |
-| `/profile` | 134 ms | 328 ms |
+| Route            |  shell | last byte |
+| ---------------- | -----: | --------: |
+| `/schedule`      | 221 ms |    423 ms |
+| `/members`       | 130 ms |    612 ms |
+| `/payments`      | 201 ms |    681 ms |
+| `/coaches`       | 135 ms |    702 ms |
+| `/training`      | 139 ms |    355 ms |
+| `/referrals`     | 129 ms |    547 ms |
+| `/settings`      | 132 ms |    426 ms |
+| `/attendance`    | 134 ms |    469 ms |
+| `/notifications` | 131 ms |    436 ms |
+| `/profile`       | 134 ms |    328 ms |
 
 These are dev-server numbers against the live Neon database, so the absolute
 values are not production. The gap between the two columns is the measurement.
@@ -150,3 +150,32 @@ promise rather than from resolved data, which is a different code path in
 
 **No new LCP number.** Same reason. ADR 85's runtime table has no v4.4 or v4.5
 column.
+
+## Addendum 2026-09-29: the `(app)` layout ships only `entity.list`
+
+Production froze on the first open after Neon had scaled to zero. The tab stayed
+on "Opening your gym" and then crashed (renderer "Code 5", out of memory).
+
+Cause: the request has one query client. The `(app)` layout's `HydrateClient`
+dehydrated all of it, so it also carried `academy.current`, which the
+`[entityId]` layout had started in parallel. The server HTML drew `AppShell` with
+that query pending (the loader). When the database was slow, the `(app)`
+boundary hydrated late, after the streamed promise had resolved, so the client
+drew the route instead. That is a hydration mismatch. Inside Next's `<Activity>`,
+React 19.3 canary does not recover from it: it loops at `OffscreenLane` and never
+commits. Reproduced locally with a 1.5 s delay on every pool connection.
+
+Fix: `HydrateClient` takes `only`, and the `(app)` layout passes the
+`entity.list` key, the one query it awaits. `AppShell` now always hydrates with
+`academy.current` absent and fetches it in the same batch as
+`stats.navigationSummary`. The route under `<main>` is therefore never
+hydrated; the browser renders it after that request. Keep it that way: each
+page's own `HydrateClient` still ships pending queries, so hydrating the route
+would bring the same race back.
+
+Verified on a production build (`next build` and `next start`) with the 1.5 s
+pool delay and scripts held back so hydration ran late. Without the fix the tab
+spun at 100% CPU and its heap grew about 50 MB a second to 1.7 GB. With it, the
+dashboard rendered and the heap stayed near 10 MB. Cost: a warm hard load shows
+the route at about 1.1 s instead of 0.4-0.9 s, because `academy.current` is now
+one extra request after hydration.
