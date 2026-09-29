@@ -2,6 +2,7 @@
 
 ## Unreleased: first release, one academy
 
+- Changed: the `(app)` layout passes `entity.list` to `OrganizationBoundary` as `initialData` instead of a filtered `HydrateClient`, and `HydrateClient` loses its `only` prop. No behavior change (ADR 89 addendum).
 - Fixed: opening the app after the database had gone idle froze the tab on "Opening your gym" until it crashed. The `(app)` layout now sends the browser only `entity.list`, so the shell hydrates the same way however slow the server is (ADR 89 addendum).
 - Every email now uses one HTML layout (`renderEmail` in `@matops/notifications`) with a plain-text copy, one button and a footer. Sign-in: Sign in. Approval: Book a class for a student, Open MatOps for a coach, who no longer gets "You can book classes now". Class cancelled: Find another class (members), Pick another class on the drop-in link (visitors). New coach: View class. The coach-change notice now names the coach instead of saying the class "moved to" the same time. Email subjects name the class and time.
 - Staff can copy a drop-in link for one class from the weekly Schedule. Visitors see that class instead of a picker and complete the existing form. Drop-in booking now covers today and the next two local days; student booking stays at seven days.
