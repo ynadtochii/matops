@@ -172,6 +172,16 @@ export const personFields = {
   phone: PhoneSchema,
 } as const;
 
+export const HEALTH_ANSWER_MAX = 1000;
+
+export const signupAnswerFields = {
+  belt: lineText(1, 40).optional(),
+  stripes: z.number().int().min(0).max(20).optional(),
+  health: blockText(0, HEALTH_ANSWER_MAX).optional(),
+  emailUpdates: z.boolean().optional(),
+  waiverId: z.uuid().optional(),
+} as const;
+
 /**
  * A name, for a gym or a branch: "Start a gym" (spec FP1), the gym rename, and
  * the branch rename all ask for the same thing and hold it to the same bounds.
@@ -229,11 +239,7 @@ export type InviteRole = z.infer<typeof InviteRoleSchema>;
 export const JoinAcademySchema = z.object({
   token: OpaqueTokenSchema,
   ...personFields,
-  belt: lineText(1, 40).optional(),
-  stripes: z.number().int().min(0).max(20).optional(),
-  health: blockText(0, 1000).optional(),
-  emailUpdates: z.boolean().optional(),
-  waiverId: z.uuid().optional(),
+  ...signupAnswerFields,
 });
 
 /**
@@ -270,4 +276,7 @@ export const AcademyCodeSchema = z.object({
  * profile as the invite-link join; the role is always "student" (set server-side),
  * so there is no role field here. Email is already verified via magic-link.
  */
-export const JoinByCodeSchema = AcademyCodeSchema.extend(personFields);
+export const JoinByCodeSchema = AcademyCodeSchema.extend({
+  ...personFields,
+  ...signupAnswerFields,
+});

@@ -6,22 +6,13 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
 import type { SignupAnswers } from "@matops/domain";
-import {
-  academyMapUrl,
-  RANK_SYSTEMS,
-  SIGNUP_DISCIPLINE,
-  SIGNUP_FOR_CHILD,
-  SIGNUP_NEVER_TRAINED,
-} from "@matops/domain";
+import { academyMapUrl } from "@matops/domain";
 import { Button } from "@matops/ui/button";
-import { Checkbox } from "@matops/ui/checkbox";
 import { FieldError } from "@matops/ui/field";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
 import { FOCUS_RING } from "@matops/ui/motion";
-import { Select } from "@matops/ui/select";
 import { Spinner } from "@matops/ui/spinner";
-import { Textarea } from "@matops/ui/textarea";
 import { toast } from "@matops/ui/toast";
 import { EmailSchema, UpdateProfileSchema } from "@matops/validators";
 
@@ -37,6 +28,11 @@ import {
   SubmitButton,
 } from "~/app/_components/sign-in";
 import { sendJoinLinkAction } from "~/app/_components/sign-in-actions";
+import {
+  readSignupAnswers,
+  signupQuestionErrors,
+  SignupQuestions,
+} from "~/app/_components/signup-fields";
 import { ErrorState } from "~/app/_components/states";
 import { useTRPC } from "~/trpc/react";
 
@@ -45,8 +41,6 @@ export interface JoinProfile {
   lastName: string;
   phone: string;
 }
-
-const BJJ = RANK_SYSTEMS[SIGNUP_DISCIPLINE];
 
 type Errors = Partial<Record<string, string>>;
 
@@ -69,16 +63,13 @@ function checkForm(
     email: read("email"),
   };
   const parsed = schema.safeParse(values);
-  const errors: Errors = parsed.success
-    ? {}
-    : fieldErrors(parsed.error.issues, values.phone);
-  if (needs.belt && read("belt") === "") {
-    errors.belt = "Pick your belt";
-  }
-  if (needs.agreement && read("agreement") !== "on") {
-    errors.agreement = "Tick the box to accept the agreement";
-  }
-  return errors;
+  return {
+    ...(parsed.success ? {} : fieldErrors(parsed.error.issues, values.phone)),
+    ...signupQuestionErrors(data, {
+      belt: needs.belt ?? false,
+      agreement: needs.agreement ?? false,
+    }),
+  };
 }
 
 function useFormCheck(check: (form: HTMLFormElement) => Errors) {
@@ -345,13 +336,8 @@ function ProfileForm({
           firstName: read("firstName"),
           lastName: read("lastName"),
           phone: read("phone"),
-          ...(student && {
-            belt: read("belt"),
-            stripes: Number(read("stripes")),
-            health: askHealth ? read("health") : undefined,
-            emailUpdates: read("emailUpdates") === "on",
-            waiverId: agreement?.id,
-          }),
+          ...(student &&
+            readSignupAnswers(data, { askHealth, waiver: agreement })),
         });
       }}
     >
@@ -362,49 +348,12 @@ function ProfileForm({
         errors={errors}
       />
       {student && (
-        <>
-          <TrainingFields
-            academyName={academyName}
-            askHealth={askHealth}
-            beltError={errors.belt}
-          />
-          <label className="flex min-h-11 cursor-pointer items-start gap-3 py-1 text-sm sm:min-h-0">
-            <Checkbox className="mt-0.5" name="emailUpdates" />
-            <span>
-              Keep me updated on changes at {academyName}
-              <span className="text-muted-foreground block text-xs">
-                No spam. Ever. Unsubscribe any time.
-              </span>
-            </span>
-          </label>
-        </>
-      )}
-      {agreement && (
-        <div className="flex flex-col gap-2">
-          <Label id="agreement-label">Agreement</Label>
-          <div
-            role="region"
-            aria-labelledby="agreement-label"
-            tabIndex={0}
-            className={`border-border text-foreground-secondary max-h-48 overflow-y-auto rounded-md border p-3 text-sm whitespace-pre-wrap ${FOCUS_RING}`}
-          >
-            {agreement.body}
-          </div>
-          <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm sm:min-h-0">
-            <Checkbox
-              key={agreement.id}
-              name="agreement"
-              aria-invalid={errors.agreement ? true : undefined}
-              aria-describedby={
-                errors.agreement ? "agreement-error" : undefined
-              }
-            />
-            I have read and agree
-          </label>
-          <FieldError id="agreement-error" className="sr-only">
-            {errors.agreement}
-          </FieldError>
-        </div>
+        <SignupQuestions
+          academyName={academyName}
+          askHealth={askHealth}
+          waiver={agreement}
+          errors={errors}
+        />
       )}
       <Button type="submit" size="lg" disabled={pending} busy={pending}>
         Join {academyName}
@@ -477,80 +426,6 @@ function NameFields({
         error={errors.phone}
         quietError
       />
-    </>
-  );
-}
-
-function TrainingFields({
-  academyName,
-  askHealth,
-  beltError,
-}: {
-  academyName: string;
-  askHealth: boolean;
-  beltError?: string;
-}) {
-  const [belt, setBelt] = useState("");
-  const hasBelt = BJJ?.belts.includes(belt) ?? false;
-  return (
-    <>
-      <div className={hasBelt ? "grid grid-cols-[1fr_auto] gap-3" : "grid"}>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="belt">Your belt</Label>
-          <Select
-            id="belt"
-            name="belt"
-            value={belt}
-            onChange={(e) => setBelt(e.target.value)}
-            required
-            aria-invalid={beltError ? true : undefined}
-            aria-describedby={beltError ? "belt-error" : undefined}
-          >
-            <option value="" disabled>
-              Pick one
-            </option>
-            <option value={SIGNUP_NEVER_TRAINED}>Never trained</option>
-            {BJJ?.belts.map((b) => (
-              <option key={b} value={b}>
-                {b}
-              </option>
-            ))}
-            <option value={SIGNUP_FOR_CHILD}>Enquiring for a child</option>
-          </Select>
-          <FieldError id="belt-error" className="sr-only">
-            {beltError}
-          </FieldError>
-        </div>
-        {hasBelt && (
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="stripes">Stripes</Label>
-            <Select id="stripes" name="stripes" defaultValue="0">
-              {Array.from({ length: (BJJ?.maxStripes ?? 0) + 1 }, (_, n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </Select>
-          </div>
-        )}
-      </div>
-      {askHealth && (
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="health">
-            Any injuries or medical conditions? (optional)
-          </Label>
-          <Textarea
-            id="health"
-            name="health"
-            rows={3}
-            maxLength={1000}
-            aria-describedby="health-help"
-          />
-          <p id="health-help" className="text-muted-foreground text-xs">
-            Only coaches at {academyName} can see this.
-          </p>
-        </div>
-      )}
     </>
   );
 }

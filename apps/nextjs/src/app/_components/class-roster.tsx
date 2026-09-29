@@ -14,6 +14,7 @@ import {
   isOwner,
   isStaffRole,
   runsBranch,
+  signupBeltLabel,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { Badge } from "@matops/ui/badge";
@@ -22,16 +23,13 @@ import { Checkbox } from "@matops/ui/checkbox";
 import { Input } from "@matops/ui/input";
 import { Meter } from "@matops/ui/meter";
 import { FOCUS_RING } from "@matops/ui/motion";
-import { Separator } from "@matops/ui/separator";
 import { toast } from "@matops/ui/toast";
 import { useInvalidate } from "@matops/ui/use-invalidate";
-import { AddVisitorSchema } from "@matops/validators";
 
 import { optimistic, rollback } from "~/lib/optimistic";
 import { useTRPC } from "~/trpc/react";
 import { CoachSelect } from "./coach-select";
 import { useEntity } from "./entity";
-import { PhoneField } from "./form-fields";
 import { cardClass, Eyebrow, ROSTER_LIST, ROSTER_ROW } from "./primitives";
 import { Bar } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
@@ -48,8 +46,6 @@ type ClassRow = Pick<
   | "description"
   | "durationMinutes"
 >;
-
-const BLANK_VISITOR = { firstName: "", lastName: "", phone: "" };
 
 type Mark = "present" | "absent";
 
@@ -151,7 +147,6 @@ export function ClassRoster({
   const now = useMinuteClock();
   const [walkInIds, setWalkInIds] = useState<Set<string>>(new Set());
   const [walkInQuery, setWalkInQuery] = useState("");
-  const [visitor, setVisitor] = useState(BLANK_VISITOR);
   const [correctionReason, setCorrectionReason] = useState("");
 
   const writeAccess = attendanceWriteAccess(
@@ -221,21 +216,6 @@ export function ClassRoster({
 
   const markVisitor = useMutation(
     trpc.attendance.markVisitor.mutationOptions({
-      onError,
-      onSettled: () => invalidate(),
-    }),
-  );
-
-  const addVisitor = useMutation(
-    trpc.attendance.addVisitor.mutationOptions({
-      onSuccess: ({ firstVisit, visitCount }) => {
-        setVisitor(BLANK_VISITOR);
-        toast.success(
-          firstVisit
-            ? "Visitor added to your drop-in leads"
-            : `Visitor added. Visit ${visitCount}`,
-        );
-      },
       onError,
       onSettled: () => invalidate(),
     }),
@@ -401,17 +381,9 @@ export function ClassRoster({
     markAll.isPending ||
     markVisitor.isPending ||
     addWalkIn.isPending ||
-    addVisitor.isPending ||
     finish.isPending;
   const dropIns = classList.data.dropIns;
   const pendingMarks = bulkMarkTargets(rows).length;
-  // Gate on the same schema the server enforces, so a name or phone the API
-  // would reject never gets as far as a failed round trip.
-  const visitorValid = AddVisitorSchema.safeParse({
-    classId,
-    ...visitor,
-  }).success;
-
   return (
     <div className="flex flex-col gap-4">
       {details}
@@ -698,8 +670,18 @@ export function ClassRoster({
               const name = `${d.firstName} ${d.lastName}`.trim();
               return (
                 <li key={d.id} className={ROSTER_ROW}>
-                  <span className="min-w-0 flex-1 truncate text-sm">
-                    {name}
+                  <span className="flex min-w-0 flex-1 flex-col text-sm">
+                    <span className="truncate">{name}</span>
+                    {d.belt && (
+                      <span className="text-muted-foreground text-xs">
+                        {signupBeltLabel(d.belt, d.stripes ?? 0)}
+                      </span>
+                    )}
+                    {d.health && (
+                      <span className="text-foreground text-xs whitespace-pre-wrap">
+                        Health: {d.health}
+                      </span>
+                    )}
                   </span>
                   {!canMark && ended && (
                     <RowTag tone={markTone(present, absent)}>
@@ -780,7 +762,7 @@ export function ClassRoster({
             />
             Add someone who isn&apos;t listed
             <span className="text-muted-foreground ml-auto text-xs font-normal">
-              member, staff or visitor
+              member or staff
             </span>
           </summary>
 
@@ -804,8 +786,8 @@ export function ClassRoster({
                   />
                   {matchingCandidates.length === 0 ? (
                     <p className="text-muted-foreground py-2 text-sm">
-                      No person matches “{walkInQuery}”. Record them as a
-                      visitor below.
+                      No person matches “{walkInQuery}”. A visitor signs up
+                      through the drop-in link.
                     </p>
                   ) : (
                     <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto">
@@ -848,69 +830,6 @@ export function ClassRoster({
                 </>
               )}
             </div>
-
-            <Separator className="my-4" />
-
-            <form
-              className="flex flex-col gap-2"
-              onSubmit={(e) => {
-                e.preventDefault();
-                addVisitor.mutate({
-                  classId,
-                  ...visitor,
-                  reason: reasonRequired ? reason : undefined,
-                });
-              }}
-            >
-              <p className="text-sm font-medium">
-                Visitor who isn&apos;t a member
-              </p>
-              <p className="text-muted-foreground text-sm">
-                Saves them to your drop-in leads, so you can follow up after
-                class.
-              </p>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <Input
-                  value={visitor.firstName}
-                  onChange={(e) =>
-                    setVisitor((v) => ({ ...v, firstName: e.target.value }))
-                  }
-                  placeholder="First name"
-                  aria-label="Visitor first name"
-                  autoComplete="off"
-                />
-                <Input
-                  value={visitor.lastName}
-                  onChange={(e) =>
-                    setVisitor((v) => ({ ...v, lastName: e.target.value }))
-                  }
-                  placeholder="Last name (optional)"
-                  aria-label="Visitor last name"
-                  autoComplete="off"
-                />
-                <PhoneField
-                  timeZone={academy.timeZone}
-                  country={academy.country}
-                  label="Visitor phone"
-                  hideLabel
-                  value={visitor.phone}
-                  onChange={(next) =>
-                    setVisitor((v) => ({ ...v, phone: next }))
-                  }
-                />
-              </div>
-              <Button
-                type="submit"
-                size="sm"
-                className="self-start"
-                busy={addVisitor.isPending}
-                disabled={
-                  addVisitor.isPending || !visitorValid || !correctionReady
-                }
-              >
-                Add visitor
-              </Button>
-            </form>
           </div>
         </details>
       )}

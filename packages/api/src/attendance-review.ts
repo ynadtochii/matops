@@ -17,7 +17,15 @@ type MemberRow = Pick<
 type VisitorRow = Pick<
   typeof dropInVisit.$inferSelect,
   "id" | "bookingStatus" | "attendanceStatus"
-> & { leadId: string; firstName: string; lastName: string; phone: string };
+> & {
+  leadId: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  belt: string | null;
+  stripes: number | null;
+  health: string | null;
+};
 
 export async function loadAttendanceRoster(db: TenantTx, classId: string) {
   const [row] = await db
@@ -47,6 +55,8 @@ export async function loadAttendanceRoster(db: TenantTx, classId: string) {
       SELECT jsonb_agg(jsonb_build_object(
         'id', ${dropInVisit.id}, 'leadId', ${dropIn.id}, 'firstName', ${dropIn.firstName},
         'lastName', ${dropIn.lastName}, 'phone', ${dropIn.phone},
+        'belt', ${dropIn.belt}, 'stripes', ${dropIn.stripes},
+        'health', CASE WHEN ${dropInVisit.bookingStatus} <> 'cancelled' THEN ${dropIn.health} END,
         'bookingStatus', ${dropInVisit.bookingStatus}, 'attendanceStatus', ${dropInVisit.attendanceStatus}
       ) ORDER BY ${dropInVisit.id})
       FROM ${dropInVisit} INNER JOIN ${dropIn} ON ${dropIn.id} = ${dropInVisit.dropInId}

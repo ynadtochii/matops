@@ -10,6 +10,31 @@ import {
   seedParticipations,
 } from "./helpers";
 
+async function seedVisit(
+  pg: PGlite,
+  opts: {
+    academyId: string;
+    classId: string;
+    phone: string;
+    firstName?: string;
+  },
+) {
+  const { academyId, classId, phone, firstName = "Visitor" } = opts;
+  await pg.query(
+    `INSERT INTO "drop_in" (academy_id, first_name, last_name, phone, consent, source)
+       VALUES ($1, $2, '', $3, false, 'staff')
+       ON CONFLICT (academy_id, phone) DO UPDATE SET last_visit_at = now()`,
+    [academyId, firstName, phone],
+  );
+  await pg.query(
+    `INSERT INTO "drop_in_visit" (academy_id, drop_in_id, class_id, booking_status, attendance_status, attended_at)
+       SELECT $1, d.id, $2, 'none', 'present', now()
+         FROM "drop_in" d WHERE d.phone = $3 AND d.academy_id = $1
+       ON CONFLICT (drop_in_id, class_id) DO NOTHING`,
+    [academyId, classId, phone],
+  );
+}
+
 const A = "academy_A";
 const OWNER = "u_owner";
 const MANAGER = "u_manager";
@@ -354,149 +379,6 @@ describe("attendance.addWalkIn", () => {
   });
 });
 
-describe("attendance.addVisitor", () => {
-  it("records a non-member against the class as a lead", async () => {
-    const h = await base();
-    const res = await h.as(COACH, A).attendance.addVisitor({
-      classId: YESTERDAY,
-      firstName: "Dee",
-      lastName: "Reis",
-      phone: "+351911111111",
-    });
-
-    expect(res).toEqual({ firstVisit: true, visitCount: 1 });
-    const rows = await h.pg.query<{
-      first_name: string;
-      consent: boolean;
-      class_id: string;
-      attendance_status: string;
-    }>(
-      `SELECT d.first_name, d.consent, v.class_id, v.attendance_status
-         FROM "drop_in" d JOIN "drop_in_visit" v ON v.drop_in_id = d.id`,
-    );
-    expect(rows.rows[0]).toMatchObject({
-      first_name: "Dee",
-      consent: false,
-      class_id: YESTERDAY,
-      attendance_status: "present",
-    });
-  });
-
-  it("keeps the first class's register when the visitor returns on another day", async () => {
-    const h = await base();
-    const visitor = {
-      firstName: "Dee",
-      lastName: "Reis",
-      phone: "+351911111111",
-    };
-    await h
-      .as(COACH, A)
-      .attendance.addVisitor({ classId: YESTERDAY, ...visitor });
-    await h.as(COACH, A).attendance.addVisitor({ classId: TODAY, ...visitor });
-
-    const rows = await h.pg.query<{ class_id: string }>(
-      `SELECT class_id FROM "drop_in_visit" ORDER BY class_id`,
-    );
-    expect(rows.rows.map((r) => r.class_id).sort()).toEqual(
-      [YESTERDAY, TODAY].sort(),
-    );
-  });
-
-  it("marks a booked visitor absent, so a no-show is not read as present", async () => {
-    const h = await base();
-    await h.as(COACH, A).attendance.addVisitor({
-      classId: YESTERDAY,
-      firstName: "Dee",
-      lastName: "Reis",
-      phone: "+351911111111",
-    });
-    const roster = await h.as(COACH, A).attendance.list({ id: YESTERDAY });
-    const visitId = roster.dropIns[0]?.id ?? "";
-    await h.as(COACH, A).attendance.markVisitor({
-      classId: YESTERDAY,
-      visitId,
-      status: "absent",
-    });
-
-    const rows = await h.pg.query<{ attendance_status: string }>(
-      `SELECT attendance_status FROM "drop_in_visit"`,
-    );
-    expect(rows.rows[0]?.attendance_status).toBe("absent");
-  });
-
-  it("stores the phone the visitor typed, country code and all", async () => {
-    const h = await base();
-    await h.as(COACH, A).attendance.addVisitor({
-      classId: YESTERDAY,
-      firstName: "Dee",
-      lastName: "Reis",
-      phone: "+351 911 111 111",
-    });
-
-    const rows = await h.pg.query<{ phone: string }>(
-      `SELECT phone FROM "drop_in"`,
-    );
-    expect(rows.rows[0]?.phone).toBe("+351911111111");
-  });
-
-  it("refuses to mark a visitor who cancelled their booking", async () => {
-    const h = await base();
-    await h.as(COACH, A).attendance.addVisitor({
-      classId: YESTERDAY,
-      firstName: "Dee",
-      lastName: "Reis",
-      phone: "+351911111111",
-    });
-    const roster = await h.as(COACH, A).attendance.list({ id: YESTERDAY });
-    const visitId = roster.dropIns[0]?.id ?? "";
-    await h.pg.query(
-      `UPDATE "drop_in_visit" SET booking_status = 'cancelled', attendance_status = 'unmarked'`,
-    );
-
-    expect(
-      await rejectionCode(
-        h.as(COACH, A).attendance.markVisitor({
-          classId: YESTERDAY,
-          visitId,
-          status: "present",
-        }),
-      ),
-    ).toBe("NOT_FOUND");
-    const rows = await h.pg.query<{ attendance_status: string }>(
-      `SELECT attendance_status FROM "drop_in_visit"`,
-    );
-    expect(rows.rows[0]?.attendance_status).toBe("unmarked");
-  });
-
-  it("refuses a class outside the backfill window", async () => {
-    const h = await base();
-    expect(
-      await rejectionCode(
-        h.as(COACH, A).attendance.addVisitor({
-          classId: LONG_AGO,
-          firstName: "Dee",
-          lastName: "Reis",
-          phone: "+351911111111",
-        }),
-      ),
-    ).toBe("PRECONDITION_FAILED");
-  });
-
-  it("refuses a student", async () => {
-    const h = await base();
-    expect(
-      await rejectionCode(
-        h.as(ANA, A).attendance.addVisitor({
-          classId: YESTERDAY,
-          firstName: "Dee",
-          lastName: "Reis",
-          phone: "+351911111111",
-        }),
-      ),
-    ).toBe("FORBIDDEN");
-  });
-});
-
 describe("attendance review", () => {
   it("returns the reviewer identity and time to another staff member", async () => {
     const h = await base();
@@ -535,11 +417,11 @@ describe("attendance review", () => {
       },
     ]);
     const caller = h.as(OWNER, A).attendance;
-    await caller.addVisitor({
+    await seedVisit(h.pg, {
+      academyId: A,
       classId: YESTERDAY,
-      firstName: "Visitor",
-      lastName: "",
       phone: "+351911111111",
+      firstName: "Visitor",
     });
     const yesterday = await caller.list({ id: YESTERDAY });
     const today = await caller.list({ id: TODAY });
@@ -685,11 +567,11 @@ describe("attendance review", () => {
   it("includes visitor marks and invalidates a review after a visitor change", async () => {
     const h = await base();
     const caller = h.as(OWNER, A).attendance;
-    await caller.addVisitor({
+    await seedVisit(h.pg, {
+      academyId: A,
       classId: YESTERDAY,
-      firstName: "Visitor",
-      lastName: "",
       phone: "+351911111111",
+      firstName: "Visitor",
     });
     const roster = await caller.list({ id: YESTERDAY });
     expect(roster.review.present).toBe(1);

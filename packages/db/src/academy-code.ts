@@ -3,6 +3,7 @@ import { and, eq, isNull } from "drizzle-orm";
 
 import type { DbReader } from "./tenant";
 import { entity } from "./entity-schema";
+import { currentWaiver } from "./waiver";
 
 /**
  * Academy-code helpers (docs/issues/32). The code is the plain 6-digit number an
@@ -54,6 +55,8 @@ export async function findAcademyByCode(
   address: string | null;
   timeZone: string | null;
   country: string | null;
+  signupHealthQuestion: boolean;
+  waiver: { id: string; body: string; createdAt: Date } | null;
 } | null> {
   const rows = await exec
     .select({
@@ -63,11 +66,19 @@ export async function findAcademyByCode(
       address: entity.address,
       timeZone: entity.timeZone,
       country: entity.country,
+      signupHealthQuestion: entity.signupHealthQuestion,
+      waiverRequired: entity.waiverRequired,
     })
     .from(entity)
     .where(and(eq(entity.publicCode, code), isNull(entity.deletedAt)))
     .limit(1);
-  return rows[0] ?? null;
+  const row = rows[0];
+  if (!row) return null;
+  const { waiverRequired, ...academy } = row;
+  return {
+    ...academy,
+    waiver: waiverRequired ? await currentWaiver(row.academyId, exec) : null,
+  };
 }
 
 /** The shared code for one academy (owner display on the web), or null. */

@@ -1,69 +1,115 @@
+import { createHash } from "node:crypto";
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
+import type { DbExec, DropInAcademy } from "@matops/db";
 import {
   and,
-  bookVisitor,
-  createDropIn,
-  createPendingMembership,
   desc,
   eq,
-  getAcademyPublic,
-  getEntityMembership,
+  getOrCreateDropInLink,
   listAcademyClassesInWindow,
+  lookupReturningLead,
   ne,
-  resolveAccountByEmail,
+  resolveDropInLink,
+  rotateDropInLink,
   sql,
+  submitDropInVisit,
+  takeRateLimit,
 } from "@matops/db";
 import { dropIn } from "@matops/db/schema";
+import { visitorClassChoices, visitorWindow } from "@matops/domain";
 import {
-  approveMembership,
-  canPromoteLead,
-  canSubmitDropIn,
-  CODE_JOIN_ROLE,
-  normalizePhone,
-  PROMOTE_REFUSAL_REASON,
-  visitorClassChoices,
-  visitorFetchWindow,
-} from "@matops/domain";
-import {
-  AcademyPublicSchema,
-  DropInSchema,
+  DropInLookupSchema,
+  DropInSubmitSchema,
+  DropInTokenSchema,
   LeadIdSchema,
-  PromoteLeadSchema,
-  SetLeadEmailSchema,
   SetLeadStageSchema,
 } from "@matops/validators";
 
-import { activateMember } from "../members";
+import { clientIp } from "../rate-limit";
 import {
   branchManagerIdentityProcedure,
   branchManagerProcedure,
   publicProcedure,
   rateLimited,
+  staffIdentityProcedure,
 } from "../trpc";
 
 const LEAD_GONE = "That lead is no longer in your list";
+const LINK_GONE = "This link isn't valid. Ask the gym for a new one.";
+const CONTACT_WINDOW_MS = 10 * 60_000;
+const CONTACT_MAX = 10;
 
-/**
- * The classes a visitor at the gym QR may pick: the ones they can check into
- * now, and the ones they could book instead. Both the page and the submit call
- * it, so what the form offers and what the write accepts cannot drift.
- */
-async function visitorChoices(
-  academyId: string,
-  exec: Parameters<typeof listAcademyClassesInWindow>[3],
-  now: Date,
+async function requireLink(token: string, exec: DbExec) {
+  const academy = await resolveDropInLink(token, exec);
+  if (!academy) {
+    console.warn("[drop-in] unknown or rotated link");
+    throw new TRPCError({ code: "NOT_FOUND", message: LINK_GONE });
+  }
+  return academy;
+}
+
+async function limitContact(
+  ctx: { headers: Headers; baseDb: DbExec },
+  scope: string,
+  token: string,
 ) {
-  const window = visitorFetchWindow(now);
+  const key = createHash("sha256")
+    .update(`${scope}:${clientIp(ctx.headers)}:${token}`)
+    .digest("hex");
+  if (!(await takeRateLimit(key, CONTACT_MAX, CONTACT_WINDOW_MS, ctx.baseDb))) {
+    throw new TRPCError({
+      code: "TOO_MANY_REQUESTS",
+      message: "Too many tries. Wait a few minutes and try again.",
+    });
+  }
+}
+
+async function visitorChoices(academy: DropInAcademy, exec: DbExec) {
+  const now = new Date();
+  const window = visitorWindow(now, academy.timeZone);
   const classes = await listAcademyClassesInWindow(
-    academyId,
+    academy.academyId,
     window.from.getTime(),
     window.to.getTime(),
     exec,
   );
-  return visitorClassChoices(classes, now);
+  const pick = (c: { id: string; title: string; startsAt: Date }) => ({
+    id: c.id,
+    title: c.title,
+    startsAt: c.startsAt,
+  });
+  const choices = visitorClassChoices(classes, now, academy.timeZone);
+  return {
+    now: choices.now.map(pick),
+    upcoming: choices.upcoming.map(pick),
+  };
 }
+
+const REFUSAL: Record<
+  "link" | "class" | "no-match" | "agreement" | "phone-taken",
+  { code: TRPCError["code"]; message: string }
+> = {
+  link: { code: "NOT_FOUND", message: LINK_GONE },
+  class: {
+    code: "PRECONDITION_FAILED",
+    message: "That class changed or is no longer open. Pick another one.",
+  },
+  "no-match": {
+    code: "PRECONDITION_FAILED",
+    message: "We need a few more details. Please fill in the form.",
+  },
+  agreement: {
+    code: "PRECONDITION_FAILED",
+    message: "The agreement changed. Please read it and accept it again.",
+  },
+  "phone-taken": {
+    code: "CONFLICT",
+    message:
+      "This phone number is saved with a different email. Use the email you gave before, or ask the gym.",
+  },
+};
 
 // Correlated subqueries, so the table names are spelled out: drizzle renders a
 // column reference inside a raw template unqualified, which is ambiguous the
@@ -89,126 +135,78 @@ const nextBookingAt = sql<Date | null>`(
 )`;
 
 /**
- * Public drop-in / lead capture (slice 3.5, spec O4/§4; docs/issues/25). The
- * `submit` + `academyInfo` procedures are PUBLIC (unauthenticated) — the one
- * enumerated exception to the tenant seam (docs/issues/12): a no-app visitor
- * scans the gym QR and fills a short form. Writes run on the trusted base
- * connection via `@matops/db` helpers, each pinned to the validated academy id.
- * Owner reads (`list`) go through the RLS-scoped `ctx.db`.
+ * The drop-in link and the lead pipeline (spec O4, ADR 147). `resolve`,
+ * `classes`, `lookup` and `submit` are PUBLIC: the one enumerated exception to
+ * the tenant seam (docs/issues/12). Each one resolves the academy from the live
+ * token on the base connection; no academy id or lead id is ever taken from the
+ * browser. Owner reads (`list`) go through the RLS-scoped `ctx.db`.
  */
-function requireVisitorBranch<T>(academy: T | null): T {
-  if (!academy) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "Gym not found" });
-  }
-  return academy;
-}
-
-async function submitDropIn(
-  input: ReturnType<typeof DropInSchema.parse>,
-  exec: Parameters<typeof listAcademyClassesInWindow>[3],
-) {
-  requireVisitorBranch(await getAcademyPublic(input.academyId, exec));
-  const gate = canSubmitDropIn(input);
-  if (!gate.ok) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message:
-        gate.reason === "no-consent"
-          ? "Please tick the consent box to continue"
-          : "Please enter your name, phone number and email",
-    });
-  }
-
-  const now = new Date();
-  const choices = await visitorChoices(input.academyId, exec, now);
-
-  let attend = choices.now.find((c) => c.id === input.classId) ?? null;
-  const book = attend
-    ? null
-    : (choices.upcoming.find((c) => c.id === input.classId) ?? null);
-  if (input.classId && !attend && !book) {
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message: "That class is no longer open. Please pick another.",
-    });
-  }
-  if (!input.classId && choices.now.length === 1) {
-    attend = choices.now[0] ?? null;
-  }
-
-  const lead = {
-    academyId: input.academyId,
-    firstName: input.firstName,
-    lastName: input.lastName,
-    phone: normalizePhone(input.phone),
-    email: input.email,
-    consent: input.consent,
-    source: "wall_qr" as const,
-  };
-  const { visitCount } = book
-    ? await bookVisitor({ ...lead, classId: book.id }, exec)
-    : await createDropIn({ ...lead, classId: attend?.id ?? null }, exec);
-
-  return {
-    ok: true as const,
-    firstVisit: visitCount <= 1,
-    booked: book !== null,
-    classTitle: (book ?? attend)?.title ?? null,
-  };
-}
-
 export const dropInRouter = {
-  /**
-   * The public drop-in page header, plus the classes to offer. 404 if the id is
-   * unknown. Only id, title and start go out: a visitor picking a class has no
-   * business knowing who teaches it or how full it is.
-   */
-  academyInfo: publicProcedure
+  link: staffIdentityProcedure.query(({ ctx }) =>
+    getOrCreateDropInLink(
+      { academyId: ctx.academyId, createdBy: ctx.session.user.id },
+      ctx.baseDb,
+    ),
+  ),
+
+  rotateLink: branchManagerIdentityProcedure.mutation(({ ctx }) =>
+    rotateDropInLink(
+      { academyId: ctx.academyId, createdBy: ctx.session.user.id },
+      ctx.baseDb,
+    ),
+  ),
+
+  resolve: publicProcedure
     .use(rateLimited(30, 60_000))
-    .input(AcademyPublicSchema)
+    .input(DropInTokenSchema)
     .query(async ({ ctx, input }) => {
-      const academy = requireVisitorBranch(
-        await getAcademyPublic(input.academyId, ctx.baseDb),
-      );
-      const choices = await visitorChoices(
-        input.academyId,
-        ctx.baseDb,
-        new Date(),
-      );
-      const pick = (c: { id: string; title: string; startsAt: Date }) => ({
-        id: c.id,
-        title: c.title,
-        startsAt: c.startsAt,
-      });
+      const academy = await requireLink(input.token, ctx.baseDb);
       return {
         name: academy.name,
         timeZone: academy.timeZone,
         country: academy.country,
-        classesNow: choices.now.map(pick),
-        classesUpcoming: choices.upcoming.map(pick),
+        signupHealthQuestion: academy.signupHealthQuestion,
+        waiver: academy.waiver,
       };
     }),
 
-  /**
-   * Record a drop-in: a lead, plus the class they came for. Consent is required
-   * (validator + `canSubmitDropIn`). Deduped by phone, so a repeat visitor bumps
-   * their visit count.
-   *
-   * The class the visitor picked decides what is written. One that is on now
-   * means they are standing in the room, so it is an attendance. One that is
-   * later is a booking they can still be marked absent against. Picking nothing
-   * is still a lead: someone who walks in to ask about the gym is worth keeping
-   * even though they attended nothing.
-   *
-   * The pick is re-checked here against a freshly resolved list rather than
-   * trusted, so a stale page cannot attach a visitor to a class that has since
-   * ended, been cancelled, or belongs to another gym.
-   */
-  submit: publicProcedure
-    .use(rateLimited(5, 10 * 60_000))
-    .input(DropInSchema)
+  classes: publicProcedure
+    .use(rateLimited(30, 60_000))
+    .input(DropInTokenSchema)
+    .query(async ({ ctx, input }) =>
+      visitorChoices(await requireLink(input.token, ctx.baseDb), ctx.baseDb),
+    ),
+
+  lookup: publicProcedure
+    .input(DropInLookupSchema)
     .mutation(async ({ ctx, input }) => {
-      return submitDropIn(input, ctx.baseDb);
+      await limitContact(ctx, "lookup", input.token);
+      const academy = await requireLink(input.token, ctx.baseDb);
+      const match = await lookupReturningLead(academy, input, ctx.baseDb);
+      if (!match) console.warn("[drop-in] lookup found no usable lead");
+      return { match };
+    }),
+
+  submit: publicProcedure
+    .input(DropInSubmitSchema)
+    .mutation(async ({ ctx, input }) => {
+      await limitContact(ctx, "submit", input.token);
+      const outcome = await submitDropInVisit(input, ctx.baseDb);
+      if (!outcome.ok) {
+        console.warn(`[drop-in] submit refused: ${outcome.reason}`);
+        if (outcome.reason === "answers") {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: outcome.message ?? "Check your answers and try again.",
+          });
+        }
+        throw new TRPCError(REFUSAL[outcome.reason]);
+      }
+      return {
+        mode: outcome.mode,
+        classTitle: outcome.classTitle,
+        startsAt: outcome.startsAt,
+      };
     }),
 
   /**
@@ -229,6 +227,11 @@ export const dropInRouter = {
         source: dropIn.source,
         contactedAt: dropIn.contactedAt,
         convertedUserId: dropIn.convertedUserId,
+        belt: dropIn.belt,
+        stripes: dropIn.stripes,
+        health: dropIn.health,
+        emailUpdates: sql<boolean>`${dropIn.emailUpdatesAt} is not null`,
+        waiverAcceptedAt: dropIn.waiverAcceptedAt,
         visitCount: presentVisits,
         lastVisitAt,
         nextBookingAt,
@@ -278,129 +281,5 @@ export const dropInRouter = {
         .returning({ id: dropIn.id });
       if (!row) throw new TRPCError({ code: "NOT_FOUND", message: LEAD_GONE });
       return { ok: true as const };
-    }),
-
-  /**
-   * Set the email a lead can be promoted on (ADR 118). The front desk records
-   * none, and rows captured before the wall-QR form required one may have none
-   * either, so an owner given an address by voice needs a way to store it.
-   */
-  setEmail: branchManagerProcedure
-    .input(SetLeadEmailSchema)
-    .mutation(async ({ ctx, input }) => {
-      const [row] = await ctx.db
-        .update(dropIn)
-        .set({ email: input.email })
-        .where(eq(dropIn.id, input.id))
-        .returning({ id: dropIn.id });
-      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: LEAD_GONE });
-      return { ok: true as const };
-    }),
-
-  /**
-   * Turn a lead into a member (ADR 118). This is the one place matops makes an
-   * account for someone who has not proved they own the address, so it is
-   * narrow on purpose:
-   *
-   * `canPromoteLead` refuses without consent or an email, and the email must
-   * still equal the one the owner saw on screen, so a lead edited in another
-   * tab cannot be promoted onto an address nobody confirmed.
-   *
-   * A NEW account is activated at once: the owner has met this person, so a
-   * second approval step is ceremony. An EXISTING account is a real person who
-   * never asked to join this gym, so it lands `pending` and they get their say
-   * on the request queue. `createPendingMembership` is idempotent, so a member
-   * who is already active is left exactly as they are and only the lead moves.
-   *
-   * Writes `user` and `member` on the base connection (both are outside the RLS
-   * seam, ADR 66), and the lead itself through a scoped transaction.
-   */
-  promote: branchManagerIdentityProcedure
-    .input(PromoteLeadSchema)
-    .mutation(async ({ ctx, input }) => {
-      const lead = await ctx.withScope(async (db) => {
-        const rows = await db
-          .select({
-            firstName: dropIn.firstName,
-            lastName: dropIn.lastName,
-            phone: dropIn.phone,
-            email: dropIn.email,
-            consent: dropIn.consent,
-            stage: dropIn.stage,
-          })
-          .from(dropIn)
-          .where(eq(dropIn.id, input.id))
-          .limit(1);
-        return rows[0] ?? null;
-      });
-      if (!lead) throw new TRPCError({ code: "NOT_FOUND", message: LEAD_GONE });
-
-      const gate = canPromoteLead(lead);
-      if (!gate.ok) {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: PROMOTE_REFUSAL_REASON[gate.reason],
-        });
-      }
-      if (lead.email !== input.email) {
-        throw new TRPCError({
-          code: "CONFLICT",
-          message: "This lead's email changed. Check it and try again.",
-        });
-      }
-
-      const account = await resolveAccountByEmail(
-        {
-          email: input.email,
-          name: `${lead.firstName} ${lead.lastName}`.trim(),
-          phone: lead.phone,
-        },
-        ctx.baseDb,
-      );
-      await createPendingMembership(
-        {
-          userId: account.userId,
-          organizationId: ctx.organizationId,
-          entityId: ctx.academyId,
-          invitedRole: CODE_JOIN_ROLE,
-        },
-        ctx.baseDb,
-      );
-      const entityMem = await getEntityMembership(
-        account.userId,
-        ctx.academyId,
-        ctx.baseDb,
-      );
-      if (!entityMem) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Couldn't create that membership. Try again.",
-        });
-      }
-
-      const activated = !account.existed && entityMem.status === "pending";
-      if (activated) {
-        await activateMember(ctx, {
-          memberId: entityMem.id,
-          userId: account.userId,
-          granted: approveMembership({
-            status: entityMem.status,
-            invitedRole: CODE_JOIN_ROLE,
-          }),
-        });
-      }
-
-      await ctx.withScope((db) =>
-        db
-          .update(dropIn)
-          .set({ stage: "joined", convertedUserId: account.userId })
-          .where(eq(dropIn.id, input.id)),
-      );
-
-      return {
-        ok: true as const,
-        status: activated ? ("active" as const) : ("pending" as const),
-        existingAccount: account.existed,
-      };
     }),
 } satisfies TRPCRouterRecord;

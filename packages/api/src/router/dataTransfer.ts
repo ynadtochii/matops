@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
-import type { DbReader, PersonDuplicate } from "@matops/db";
+import type { DbReader, DbWriter, PersonDuplicate } from "@matops/db";
 import {
   and,
   asc,
@@ -37,7 +37,51 @@ import {
 
 import { organizationManagerIdentityProcedure } from "../trpc";
 import { assignOne } from "./accessPlan";
-import { enrollStudent, sameIds } from "./person";
+
+function sameIds(left: string[], right: string[]) {
+  const sortedLeft = [...left].sort();
+  const sortedRight = [...right].sort();
+  return (
+    sortedLeft.length === sortedRight.length &&
+    sortedLeft.every((id, index) => id === sortedRight[index])
+  );
+}
+
+async function enrollStudent(
+  exec: DbWriter,
+  input: { organizationId: string; entityId: string; personId: string },
+) {
+  const [held] = await exec
+    .select({ id: entityMembership.id })
+    .from(entityMembership)
+    .where(
+      and(
+        eq(entityMembership.entityId, input.entityId),
+        eq(entityMembership.personId, input.personId),
+      ),
+    )
+    .limit(1);
+  if (held) return { enrollmentId: held.id, createdEnrollment: false };
+  const [created] = await exec
+    .insert(entityMembership)
+    .values({
+      organizationId: input.organizationId,
+      entityId: input.entityId,
+      personId: input.personId,
+      userId: null,
+      role: "student",
+      status: "active",
+      joinedAt: new Date(),
+    })
+    .returning({ id: entityMembership.id });
+  if (!created) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Couldn't enrol the student. Try again.",
+    });
+  }
+  return { enrollmentId: created.id, createdEnrollment: true };
+}
 
 type PreviewInput = typeof StudentImportPreviewSchema._output;
 interface PreviewRow {

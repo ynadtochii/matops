@@ -11,6 +11,7 @@ import {
 import { user } from "./auth-schema";
 import { entity } from "./entity-schema";
 import { person } from "./person-schema";
+import { academyWaiver } from "./waiver-schema";
 
 /**
  * Scheduling domain schema (Phase 2). Owns ONLY the scheduling tables; identity
@@ -365,6 +366,12 @@ export const dropIn = pgTable(
     source: leadSource().notNull().default("wall_qr"),
     contactedAt: t.timestamp({ withTimezone: true }),
     convertedUserId: t.text(), // → user.id once they joined as a member
+    belt: t.text(),
+    stripes: t.integer(),
+    health: t.text(),
+    emailUpdatesAt: t.timestamp({ withTimezone: true }),
+    waiverId: t.uuid(),
+    waiverAcceptedAt: t.timestamp({ withTimezone: true }),
     firstVisitAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
     lastVisitAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
     createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -377,6 +384,13 @@ export const dropIn = pgTable(
   (table) => [
     // Dedupe: one lead per person per academy; repeat visits add a visit row.
     uniqueIndex("di_uniq_academy_phone").on(table.academyId, table.phone),
+    check("di_health_len", sql`char_length(${table.health}) <= 1000`),
+    check("di_stripes_range", sql`${table.stripes} between 0 and 20`),
+    foreignKey({
+      name: "drop_in_waiver",
+      columns: [table.academyId, table.waiverId],
+      foreignColumns: [academyWaiver.academyId, academyWaiver.id],
+    }),
   ],
 );
 

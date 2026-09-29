@@ -29,9 +29,9 @@ const QrPoster = dynamic(() => import("./qr-poster").then((m) => m.QrPoster));
 
 type InviteRole = "student" | "instructor";
 
-function joinUrl(token: string): string {
-  if (typeof window === "undefined") return `/join/${token}`;
-  return `${window.location.origin}/join/${token}`;
+function linkUrl(path: string): string {
+  if (typeof window === "undefined") return path;
+  return `${window.location.origin}${path}`;
 }
 
 /**
@@ -52,12 +52,7 @@ export function InviteLinkCard({
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const invites = useQuery(trpc.invite.list.queryOptions());
-  const academy = useEntity();
-  const academyName = academy.name;
-  const isOwner = runsBranch(academy);
-
-  // Offer the OS share sheet (ADR 42) only where it exists.
-  const shareable = useCanShare();
+  const academyName = useEntity().name;
 
   const invalidate = () =>
     queryClient.invalidateQueries(trpc.invite.list.pathFilter());
@@ -88,27 +83,150 @@ export function InviteLinkCard({
     );
 
   const invite = invites.data.find((i) => i.role === role);
-  const url = invite ? joinUrl(invite.token) : "";
+  return (
+    <LinkCard
+      label={label}
+      hint={hint}
+      url={invite ? linkUrl(`/join/${invite.token}`) : null}
+      create={() => create.mutate({ role })}
+      creating={create.isPending}
+      rotate={() => rotate.mutateAsync({ role })}
+      rotating={rotate.isPending}
+      qr={{
+        title: "Scan to join",
+        description:
+          "Hold this up. They scan it with their phone camera and land on the join form.",
+        caption:
+          role === "instructor" ? "Scan to join as a coach" : "Scan to join",
+        codeLabel: `Join QR code for ${academyName}`,
+      }}
+      share={{
+        title: `Join ${academyName} on MatOps`,
+        text: "Here's your link to join our academy:",
+      }}
+    />
+  );
+}
+
+export function DropInLinkCard() {
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  const link = useQuery(trpc.dropIn.link.queryOptions());
+  const academyName = useEntity().name;
+
+  const invalidate = () =>
+    queryClient.invalidateQueries(trpc.dropIn.link.pathFilter());
+
+  const rotate = useMutation(
+    trpc.dropIn.rotateLink.mutationOptions({
+      onSuccess: async () => {
+        await invalidate();
+        toast.success("Link replaced. The old one no longer works");
+      },
+      onError: () => toast.error("Couldn't rotate the link. Try again."),
+    }),
+  );
+
+  if (link.isPending) return <SkeletonCard lines={2} />;
+  if (link.isError)
+    return (
+      <ErrorState
+        label="the drop-in link"
+        onRetry={() => void link.refetch()}
+      />
+    );
+
+  return (
+    <LinkCard
+      label="Drop-in link"
+      hint="Send it to people who want to try a class. They pick a class and book without an account."
+      url={linkUrl(`/drop-in/${link.data.token}`)}
+      rotate={() => rotate.mutateAsync()}
+      rotating={rotate.isPending}
+      qr={{
+        title: "Scan to try a class",
+        description:
+          "They scan it with their phone camera and pick a class. No account needed.",
+        caption: "Scan to try a class",
+        codeLabel: `Drop-in QR code for ${academyName}`,
+      }}
+      share={{
+        title: `Try a class at ${academyName}`,
+        text: "Pick a class and leave your details here:",
+      }}
+    />
+  );
+}
+
+export function DropInLinkButton() {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline">
+          Share drop-in link
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-lg">
+        <DialogTitle>Drop-in link</DialogTitle>
+        <DialogDescription>
+          Copy or share this link with people who want to try a class.
+        </DialogDescription>
+        <DropInLinkCard />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function LinkCard({
+  label,
+  hint,
+  url,
+  create,
+  creating,
+  rotate,
+  rotating,
+  qr,
+  share,
+}: {
+  label: string;
+  hint: string;
+  url: string | null;
+  create?: () => void;
+  creating?: boolean;
+  rotate: () => Promise<unknown>;
+  rotating: boolean;
+  qr: {
+    title: string;
+    description: string;
+    caption: string;
+    codeLabel: string;
+  };
+  share: { title: string; text: string };
+}) {
+  const academy = useEntity();
+  const isOwner = runsBranch(academy);
+  // Offer the OS share sheet (ADR 42) only where it exists.
+  const shareable = useCanShare();
 
   return (
     <div className={cn(cardClass(), "flex flex-col gap-2")}>
       <div className="flex items-center justify-between gap-2">
         <span className="font-medium">{label}</span>
-        {!isOwner ? null : invite ? (
+        {!isOwner ? null : url ? (
           <ConfirmDialog
             title="Rotate this link?"
             description="The current link stops working for everyone you already sent it to. A new link takes its place."
             confirmLabel="Rotate link"
             variant="destructive"
             onConfirm={async () => {
-              await rotate.mutateAsync({ role });
+              await rotate();
             }}
             trigger={
               <Button
                 variant="destructive-outline"
                 size="sm"
-                busy={rotate.isPending}
-                disabled={rotate.isPending}
+                busy={rotating}
+                disabled={rotating}
               >
                 Rotate
               </Button>
@@ -118,16 +236,16 @@ export function InviteLinkCard({
           <Button
             variant="outline"
             size="sm"
-            busy={create.isPending}
-            disabled={create.isPending}
-            onClick={() => create.mutate({ role })}
+            busy={creating}
+            disabled={creating}
+            onClick={create}
           >
             Create link
           </Button>
         )}
       </div>
       <p className="text-muted-foreground text-sm">{hint}</p>
-      {invite && (
+      {url && (
         <div className="flex flex-wrap gap-2">
           <Input
             readOnly
@@ -140,33 +258,22 @@ export function InviteLinkCard({
               <Button variant="secondary">Show QR</Button>
             </DialogTrigger>
             <DialogContent className="max-w-sm items-center">
-              <DialogTitle>Scan to join</DialogTitle>
+              <DialogTitle>{qr.title}</DialogTitle>
               <DialogDescription className="text-center">
-                Hold this up. They scan it with their phone camera and land on
-                the join form.
+                {qr.description}
               </DialogDescription>
               <QrPoster
                 url={url}
-                title={academyName}
-                caption={
-                  role === "instructor"
-                    ? "Scan to join as a coach"
-                    : "Scan to join"
-                }
-                codeLabel={`Join QR code for ${academyName}`}
+                title={academy.name}
+                caption={qr.caption}
+                codeLabel={qr.codeLabel}
               />
             </DialogContent>
           </Dialog>
           {shareable && (
             <Button
               variant="secondary"
-              onClick={() =>
-                void shareLink({
-                  url,
-                  title: `Join ${academyName} on MatOps`,
-                  text: "Here's your link to join our academy:",
-                })
-              }
+              onClick={() => void shareLink({ url, ...share })}
             >
               Share
             </Button>

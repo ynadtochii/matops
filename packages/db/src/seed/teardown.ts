@@ -25,6 +25,7 @@ import {
   classParticipation,
   classTemplate,
   dropIn,
+  dropInLink,
   dropInVisit,
   entity,
   entityMembership,
@@ -120,6 +121,9 @@ export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
   );
   await del("academy_invite", () =>
     exec.delete(academyInvite).where(inArray(academyInvite.academyId, ids)),
+  );
+  await del("drop_in_link", () =>
+    exec.delete(dropInLink).where(inArray(dropInLink.academyId, ids)),
   );
 
   // What the demo gym wrote while it was being USED: the notification centre

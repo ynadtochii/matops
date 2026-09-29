@@ -1,23 +1,32 @@
-import { and, eq, gte, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { randomBytes } from "node:crypto";
+import { and, eq, gte, isNull, lt, ne, sql } from "drizzle-orm";
 
-import type { LeadSource } from "@matops/domain";
-import { matchLeadByPhone } from "@matops/domain";
+import type { SignupAnswers } from "@matops/domain";
+import {
+  checkSignupAnswers,
+  matchLeadByPhone,
+  resolveAcademyTimeZone,
+  returningLeadGate,
+  visitorClassState,
+} from "@matops/domain";
 
 import type { DbExec } from "./client";
-import type { DbReader, DbWriter } from "./tenant";
+import type { DbReader } from "./tenant";
+import { dropInLink } from "./drop-in-link-schema";
 import { entity } from "./entity-schema";
 import {
   bumpScheduleRevision,
   lockAndReadScheduleRevision,
 } from "./schedule-guard";
 import { classInstance, dropIn, dropInVisit } from "./scheduling";
+import { currentWaiver } from "./waiver";
 
 /**
- * Drop-in / lead helpers (slice 3.5, docs/issues/25). These run on the BASE
- * connection (the trusted table owner, which bypasses RLS) because the drop-in
- * submit is PUBLIC — an unauthenticated visitor has no session and no academy
- * scope. This is an enumerated exception to the tenant seam (docs/issues/12):
- * every function here validates/pins the academy id explicitly.
+ * Drop-in / lead helpers (ADR 147). These run on the BASE connection (the
+ * trusted table owner, which bypasses RLS) because the drop-in form is PUBLIC:
+ * a visitor has no session and no academy scope. This is an enumerated
+ * exception to the tenant seam (docs/issues/12): the academy always comes from
+ * a live link token, and every query here pins that academy id explicitly.
  */
 
 /** Public academy info for the drop-in page header; null if the id is unknown. */
@@ -43,16 +52,11 @@ export async function getAcademyPublic(
   return rows[0] ?? null;
 }
 
-/**
- * The academy's non-deleted classes in a time window, for resolving which class
- * a drop-in is attending (fed to `resolveCheckInClass` in the resolver). Base
- * connection, so pinned explicitly to `academyId`.
- */
 export async function listAcademyClassesInWindow(
   academyId: string,
   fromMs: number,
   toMs: number,
-  exec: DbExec,
+  exec: DbReader,
 ): Promise<
   {
     id: string;
@@ -81,200 +85,392 @@ export async function listAcademyClassesInWindow(
     );
 }
 
-interface CreateDropInInput {
-  academyId: string;
-  firstName: string;
-  lastName: string;
-  phone: string;
-  email: string | null;
-  classId: string | null;
-  consent: boolean;
-  source: LeadSource;
+interface DropInLinkRow {
+  token: string;
+  createdAt: Date;
 }
 
-export interface DropInResult {
-  dropInId: string;
-  visitCount: number;
+function newLinkToken(): string {
+  return randomBytes(18).toString("base64url");
 }
 
-/**
- * Upsert the lead itself, deduped by `(academy_id, phone)`. Contact fields are
- * merged, never replaced: staff recording a visitor at the desk pass no email
- * and may pass an empty last name, and that must not erase what the visitor
- * typed on the form themselves.
- */
-async function upsertLead(
-  input: Omit<CreateDropInInput, "classId">,
-  exec: DbWriter,
-): Promise<string> {
-  const now = new Date();
-  const [row] = await exec
-    .insert(dropIn)
+const linkCols = { token: dropInLink.token, createdAt: dropInLink.createdAt };
+
+export async function getDropInLink(
+  academyId: string,
+  exec: DbReader,
+): Promise<DropInLinkRow | null> {
+  const rows = await exec
+    .select(linkCols)
+    .from(dropInLink)
+    .where(
+      and(eq(dropInLink.academyId, academyId), isNull(dropInLink.revokedAt)),
+    )
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function rotateDropInLink(
+  input: { academyId: string; createdBy: string },
+  exec: DbExec,
+): Promise<DropInLinkRow> {
+  return exec.transaction(async (tx) => {
+    await tx
+      .update(dropInLink)
+      .set({ revokedAt: new Date() })
+      .where(
+        and(
+          eq(dropInLink.academyId, input.academyId),
+          isNull(dropInLink.revokedAt),
+        ),
+      );
+    const [row] = await tx
+      .insert(dropInLink)
+      .values({
+        academyId: input.academyId,
+        token: newLinkToken(),
+        createdBy: input.createdBy,
+      })
+      .returning(linkCols);
+    if (!row) throw new Error("drop_in_link insert returned no row");
+    return row;
+  });
+}
+
+export async function getOrCreateDropInLink(
+  input: { academyId: string; createdBy: string },
+  exec: DbExec,
+): Promise<DropInLinkRow> {
+  const live = await getDropInLink(input.academyId, exec);
+  if (live) return live;
+  await exec
+    .insert(dropInLink)
     .values({
       academyId: input.academyId,
+      token: newLinkToken(),
+      createdBy: input.createdBy,
+    })
+    .onConflictDoNothing();
+  const row = await getDropInLink(input.academyId, exec);
+  if (!row) throw new Error("drop_in_link was not created");
+  return row;
+}
+
+export interface DropInAcademy {
+  academyId: string;
+  name: string;
+  timeZone: string;
+  country: string | null;
+  signupHealthQuestion: boolean;
+  waiver: { id: string; body: string } | null;
+}
+
+export async function resolveDropInLink(
+  token: string,
+  exec: DbReader,
+): Promise<DropInAcademy | null> {
+  const [row] = await exec
+    .select({
+      academyId: entity.id,
+      name: entity.name,
+      timeZone: entity.timeZone,
+      country: entity.country,
+      signupHealthQuestion: entity.signupHealthQuestion,
+      waiverRequired: entity.waiverRequired,
+    })
+    .from(dropInLink)
+    .innerJoin(entity, eq(dropInLink.academyId, entity.id))
+    .where(
+      and(
+        eq(dropInLink.token, token),
+        isNull(dropInLink.revokedAt),
+        isNull(entity.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (!row) return null;
+  const waiver = row.waiverRequired
+    ? await currentWaiver(row.academyId, exec)
+    : null;
+  return {
+    academyId: row.academyId,
+    name: row.name,
+    timeZone: resolveAcademyTimeZone(row.timeZone),
+    country: row.country,
+    signupHealthQuestion: row.signupHealthQuestion,
+    waiver: waiver ? { id: waiver.id, body: waiver.body } : null,
+  };
+}
+
+async function findLeadByPhone(
+  academyId: string,
+  phone: string,
+  exec: DbReader,
+  lock = false,
+) {
+  const query = exec
+    .select({
+      id: dropIn.id,
+      firstName: dropIn.firstName,
+      email: dropIn.email,
+      consent: dropIn.consent,
+      belt: dropIn.belt,
+      waiverId: dropIn.waiverId,
+    })
+    .from(dropIn)
+    .where(and(eq(dropIn.academyId, academyId), eq(dropIn.phone, phone)))
+    .limit(1);
+  const [row] = lock ? await query.for("update") : await query;
+  return row ?? null;
+}
+
+function sameEmail(stored: string | null, typed: string): boolean {
+  return stored !== null && stored.trim().toLowerCase() === typed;
+}
+
+export async function lookupReturningLead(
+  academy: DropInAcademy,
+  contact: { email: string; phone: string },
+  exec: DbReader,
+): Promise<{ firstName: string; needsAgreement: boolean } | null> {
+  const lead = await findLeadByPhone(academy.academyId, contact.phone, exec);
+  if (!lead || !sameEmail(lead.email, contact.email)) return null;
+  const gate = returningLeadGate(lead, academy.waiver?.id ?? null);
+  if (gate === "full") return null;
+  return { firstName: lead.firstName, needsAgreement: gate === "agreement" };
+}
+
+export type DropInSubmission = {
+  token: string;
+  email: string;
+  phone: string;
+  classId: string;
+} & (
+  | { kind: "returning"; waiverId?: string }
+  | ({
+      kind: "new";
+      firstName: string;
+      lastName: string;
+      consent: true;
+    } & SignupAnswers)
+);
+
+export type DropInOutcome =
+  | {
+      ok: true;
+      mode: "attend" | "book";
+      classTitle: string;
+      startsAt: Date;
+      changed: boolean;
+    }
+  | {
+      ok: false;
+      reason:
+        "link" | "class" | "no-match" | "agreement" | "phone-taken" | "answers";
+      message?: string;
+    };
+
+type Tx = Parameters<Parameters<DbExec["transaction"]>[0]>[0];
+
+async function saveNewLead(
+  tx: Tx,
+  academy: DropInAcademy,
+  input: Extract<DropInSubmission, { kind: "new" }>,
+  now: Date,
+): Promise<DropInOutcome | string> {
+  const checked = checkSignupAnswers({
+    healthQuestion: academy.signupHealthQuestion,
+    requiredWaiverId: academy.waiver?.id ?? null,
+    answers: input,
+  });
+  if (!checked.ok) {
+    return { ok: false, reason: "answers", message: checked.message };
+  }
+  const answers = checked.values;
+  const existing = await findLeadByPhone(
+    academy.academyId,
+    input.phone,
+    tx,
+    true,
+  );
+  if (existing) {
+    if (!sameEmail(existing.email, input.email)) {
+      return { ok: false, reason: "phone-taken" };
+    }
+    await tx
+      .update(dropIn)
+      .set({
+        consent: true,
+        belt: sql`coalesce(${dropIn.belt}, ${answers.belt}::text)`,
+        stripes: sql`coalesce(${dropIn.stripes}, ${answers.stripes}::int)`,
+        health: sql`coalesce(${dropIn.health}, ${answers.health}::text)`,
+        emailUpdatesAt: answers.emailUpdates
+          ? sql`coalesce(${dropIn.emailUpdatesAt}, ${now.toISOString()}::timestamptz)`
+          : dropIn.emailUpdatesAt,
+        ...(answers.waiverId && {
+          waiverId: answers.waiverId,
+          waiverAcceptedAt: now,
+        }),
+        lastVisitAt: now,
+      })
+      .where(eq(dropIn.id, existing.id));
+    return existing.id;
+  }
+  const [row] = await tx
+    .insert(dropIn)
+    .values({
+      academyId: academy.academyId,
       firstName: input.firstName,
       lastName: input.lastName,
       phone: input.phone,
       email: input.email,
-      consent: input.consent,
-      source: input.source,
-    })
-    .onConflictDoUpdate({
-      target: [dropIn.academyId, dropIn.phone],
-      set: {
-        firstName: sql`coalesce(nullif(${input.firstName}::text, ''), ${dropIn.firstName})`,
-        lastName: sql`coalesce(nullif(${input.lastName}::text, ''), ${dropIn.lastName})`,
-        email: sql`coalesce(${input.email}::text, ${dropIn.email})`,
-        consent: sql`${dropIn.consent} OR ${input.consent}`,
-        lastVisitAt: now,
-      },
+      consent: true,
+      source: "link",
+      belt: answers.belt,
+      stripes: answers.stripes,
+      health: answers.health,
+      emailUpdatesAt: answers.emailUpdates ? now : null,
+      waiverId: answers.waiverId,
+      waiverAcceptedAt: answers.waiverId ? now : null,
     })
     .returning({ id: dropIn.id });
-  if (!row) throw new Error("drop_in upsert returned no row");
+  if (!row) throw new Error("drop_in insert returned no row");
   return row.id;
 }
 
-/** How many classes this lead actually turned up to (spec O4 activity line). */
-async function countPresentVisits(
-  dropInId: string,
-  exec: DbReader,
-): Promise<number> {
-  const [row] = await exec
-    .select({ n: sql<number>`count(*)::int` })
-    .from(dropInVisit)
-    .where(
-      and(
-        eq(dropInVisit.dropInId, dropInId),
-        eq(dropInVisit.attendanceStatus, "present"),
-      ),
-    );
-  return row?.n ?? 0;
-}
-
-/**
- * Record a visitor who turned up: the lead plus, when a class is known, one
- * `drop_in_visit` marked present. Deduped by phone, so the gym QR form and the
- * staff "Add visitor" box converge on one lead. Returns how many classes the
- * lead has attended (1 = first visit).
- */
-export async function createDropIn(
-  input: CreateDropInInput,
-  exec: DbWriter,
-): Promise<DropInResult> {
-  const dropInId = await upsertLead(input, exec);
-  if (input.classId) {
-    await lockAndReadScheduleRevision(exec, input.academyId);
-    const now = new Date();
-    await exec
-      .insert(dropInVisit)
-      .values({
-        academyId: input.academyId,
-        dropInId,
-        classId: input.classId,
-        bookingStatus: "none",
-        attendanceStatus: "present",
-        attendedAt: now,
-      })
-      .onConflictDoUpdate({
-        target: [dropInVisit.dropInId, dropInVisit.classId],
-        set: { attendanceStatus: "present", attendedAt: now },
-      });
-    await bumpScheduleRevision(exec, input.academyId);
+async function confirmReturningLead(
+  tx: Tx,
+  academy: DropInAcademy,
+  input: Extract<DropInSubmission, { kind: "returning" }>,
+  now: Date,
+): Promise<DropInOutcome | string> {
+  const lead = await findLeadByPhone(academy.academyId, input.phone, tx, true);
+  if (!lead || !sameEmail(lead.email, input.email)) {
+    return { ok: false, reason: "no-match" };
   }
-  return { dropInId, visitCount: await countPresentVisits(dropInId, exec) };
+  const required = academy.waiver?.id ?? null;
+  const gate = returningLeadGate(lead, required);
+  if (gate === "full") return { ok: false, reason: "no-match" };
+  const accepts = gate === "agreement" && input.waiverId === required;
+  if (gate === "agreement" && !accepts) {
+    return { ok: false, reason: "agreement" };
+  }
+  await tx
+    .update(dropIn)
+    .set({
+      lastVisitAt: now,
+      ...(accepts && { waiverId: required, waiverAcceptedAt: now }),
+    })
+    .where(eq(dropIn.id, lead.id));
+  return lead.id;
 }
 
-interface BookVisitorInput extends Omit<CreateDropInInput, "classId"> {
-  classId: string;
-}
+export async function submitDropInVisit(
+  input: DropInSubmission,
+  exec: DbExec,
+  now: Date = new Date(),
+): Promise<DropInOutcome> {
+  return exec.transaction(async (tx) => {
+    const academy = await resolveDropInLink(input.token, tx);
+    if (!academy) return { ok: false, reason: "link" };
+    await lockAndReadScheduleRevision(tx, academy.academyId);
 
-interface BookVisitorResult extends DropInResult {
-  visitId: string;
-}
-
-/**
- * Book a visitor onto a later class from the wall-QR drop-in form. Idempotent
- * by `(drop_in_id, class_id)`: the same phone posting twice gets the same
- * booking back, so a double tap on a bad connection is harmless. A cancelled
- * booking is revived.
- */
-export async function bookVisitor(
-  input: BookVisitorInput,
-  exec: DbWriter,
-): Promise<BookVisitorResult> {
-  await lockAndReadScheduleRevision(exec, input.academyId);
-  const dropInId = await upsertLead(input, exec);
-  const now = new Date();
-  const [bookedClass] = await exec
-    .select({ id: classInstance.id })
-    .from(classInstance)
-    .where(
-      and(
-        eq(classInstance.id, input.classId),
-        eq(classInstance.academyId, input.academyId),
-        eq(classInstance.status, "scheduled"),
-        isNull(classInstance.deletedAt),
-      ),
-    )
-    .limit(1);
-  if (!bookedClass) throw new Error("Class is no longer open for booking");
-  const [existing] = await exec
-    .select({ status: dropInVisit.bookingStatus })
-    .from(dropInVisit)
-    .where(
-      and(
-        eq(dropInVisit.dropInId, dropInId),
-        eq(dropInVisit.classId, input.classId),
-      ),
-    )
-    .limit(1);
-  if (existing?.status !== "booked") {
-    const [seat] = await exec
-      .update(classInstance)
-      .set({ bookingCount: sql`${classInstance.bookingCount} + 1` })
+    const [cls] = await tx
+      .select({
+        id: classInstance.id,
+        title: classInstance.title,
+        startsAt: classInstance.startsAt,
+        durationMinutes: classInstance.durationMinutes,
+        status: classInstance.status,
+      })
+      .from(classInstance)
       .where(
         and(
           eq(classInstance.id, input.classId),
-          eq(classInstance.academyId, input.academyId),
-          eq(classInstance.status, "scheduled"),
+          eq(classInstance.academyId, academy.academyId),
           isNull(classInstance.deletedAt),
-          or(
-            eq(classInstance.capacity, 0),
-            lt(classInstance.bookingCount, classInstance.capacity),
-          ),
         ),
       )
-      .returning({ id: classInstance.id });
-    if (!seat) throw new Error("Class is full");
-  }
-  const [row] = await exec
-    .insert(dropInVisit)
-    .values({
-      academyId: input.academyId,
-      dropInId,
-      classId: input.classId,
-      bookingStatus: "booked",
-      attendanceStatus: "unmarked",
-      bookedAt: now,
-    })
-    .onConflictDoUpdate({
-      target: [dropInVisit.dropInId, dropInVisit.classId],
-      set: {
-        bookingStatus: "booked",
-        cancelledAt: null,
-        bookedAt: sql`coalesce(${dropInVisit.bookedAt}, ${now})`,
-      },
-    })
-    .returning({ id: dropInVisit.id });
-  if (!row) throw new Error("drop_in_visit upsert returned no row");
-  if (existing?.status !== "booked") {
-    await bumpScheduleRevision(exec, input.academyId);
-  }
-  return {
-    dropInId,
-    visitId: row.id,
-    visitCount: await countPresentVisits(dropInId, exec),
-  };
+      .limit(1)
+      .for("update");
+    const mode = cls ? visitorClassState(cls, now, academy.timeZone) : null;
+    if (!cls || !mode) return { ok: false, reason: "class" };
+
+    const leadId =
+      input.kind === "new"
+        ? await saveNewLead(tx, academy, input, now)
+        : await confirmReturningLead(tx, academy, input, now);
+    if (typeof leadId !== "string") return leadId;
+
+    const [visit] = await tx
+      .select({
+        bookingStatus: dropInVisit.bookingStatus,
+        attendanceStatus: dropInVisit.attendanceStatus,
+      })
+      .from(dropInVisit)
+      .where(
+        and(
+          eq(dropInVisit.dropInId, leadId),
+          eq(dropInVisit.classId, cls.id),
+          eq(dropInVisit.academyId, academy.academyId),
+        ),
+      )
+      .limit(1)
+      .for("update");
+
+    let changed = false;
+    if (mode === "book" && visit?.bookingStatus !== "booked") {
+      await tx
+        .insert(dropInVisit)
+        .values({
+          academyId: academy.academyId,
+          dropInId: leadId,
+          classId: cls.id,
+          bookingStatus: "booked",
+          attendanceStatus: "unmarked",
+          bookedAt: now,
+        })
+        .onConflictDoUpdate({
+          target: [dropInVisit.dropInId, dropInVisit.classId],
+          set: { bookingStatus: "booked", cancelledAt: null, bookedAt: now },
+        });
+      await tx
+        .update(classInstance)
+        .set({ bookingCount: sql`${classInstance.bookingCount} + 1` })
+        .where(
+          and(
+            eq(classInstance.id, cls.id),
+            eq(classInstance.academyId, academy.academyId),
+          ),
+        );
+      changed = true;
+    }
+    if (mode === "attend" && visit?.attendanceStatus !== "present") {
+      await tx
+        .insert(dropInVisit)
+        .values({
+          academyId: academy.academyId,
+          dropInId: leadId,
+          classId: cls.id,
+          bookingStatus: "none",
+          attendanceStatus: "present",
+          attendedAt: now,
+        })
+        .onConflictDoUpdate({
+          target: [dropInVisit.dropInId, dropInVisit.classId],
+          set: { attendanceStatus: "present", attendedAt: now },
+        });
+      changed = true;
+    }
+    if (changed) await bumpScheduleRevision(tx, academy.academyId);
+    return {
+      ok: true,
+      mode,
+      classTitle: cls.title,
+      startsAt: cls.startsAt,
+      changed,
+    };
+  });
 }
 
 /**
@@ -301,4 +497,25 @@ export async function linkLeadOnJoin(
     .set({ stage: "joined", convertedUserId: userId })
     .where(eq(dropIn.id, hit.id));
   return true;
+}
+
+export async function takeRateLimit(
+  key: string,
+  max: number,
+  windowMs: number,
+  exec: DbExec,
+): Promise<boolean> {
+  const result = await exec.execute<{ count: number }>(sql`
+    insert into rate_limit (key, count, reset_at)
+    values (${key}, 1, now() + ${`${windowMs} milliseconds`}::interval)
+    on conflict (key) do update set
+      count = case when rate_limit.reset_at <= now() then 1 else rate_limit.count + 1 end,
+      reset_at = case when rate_limit.reset_at <= now() then excluded.reset_at else rate_limit.reset_at end
+    returning count
+  `);
+  const count = Number(result.rows[0]?.count ?? max + 1);
+  if (count === 1) {
+    await exec.execute(sql`delete from rate_limit where reset_at < now()`);
+  }
+  return count <= max;
 }

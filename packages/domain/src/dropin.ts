@@ -1,9 +1,11 @@
+import type { CheckInClass } from "./checkin";
+import { MAX_CLASS_MINUTES } from "./checkin";
+import { academyDay, addLocalDays, localMidnight } from "./local-date";
+
 /**
- * Pure drop-in / lead rules (spec O4/§4; docs/issues/25). No I/O — the public
- * drop-in resolver calls these to gate on consent and to compute the dedupe key.
- * A drop-in is a first-time, no-app visitor captured as a lead + attendance; the
- * write itself (upsert on academy+phone, deduping repeat visits) lives in the
- * resolver / db helper.
+ * Pure drop-in / lead rules (spec O4/§4; ADR 147). No I/O. A drop-in is a
+ * visitor with no account who books or attends a class through the academy's
+ * drop-in link; the write itself lives in the db helper.
  */
 
 /** Normalize a phone to a dedupe key: strip formatting so "+1 (555) 123" and
@@ -15,35 +17,69 @@ export function normalizePhone(phone: string): string {
   return phone.trimStart().startsWith("+") ? `+${digits}` : digits;
 }
 
-type DropInReason = "no-consent" | "no-phone" | "no-name" | "no-email";
+export const VISITOR_BOOKING_DAYS = 7;
 
-export interface DropInResult {
-  ok: boolean;
-  reason?: DropInReason;
+interface VisitorWindow {
+  from: Date;
+  to: Date;
 }
 
-/**
- * Can this drop-in be accepted? Consent is REQUIRED (GDPR, ticket 25): the
- * visitor must tick "OK for the gym to contact me". A usable phone (the dedupe
- * key), a name, and an email are also required. The email is what an owner can
- * later turn into a member account (ADR 118), and a lead without one can only
- * be reached through a channel matops never sees. Field shape is bounded by the
- * validator; this is the business gate the resolver checks before writing.
- */
-export function canSubmitDropIn(input: {
-  consent: boolean;
-  phone: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-}): DropInResult {
-  if (!input.consent) return { ok: false, reason: "no-consent" };
-  if (input.phone.replace(/\D/g, "").length < 3) {
-    return { ok: false, reason: "no-phone" };
+export function visitorWindow(now: Date, timeZone: string): VisitorWindow {
+  const today = academyDay(now, timeZone);
+  return {
+    from: new Date(now.getTime() - MAX_CLASS_MINUTES * 60_000),
+    to: localMidnight(addLocalDays(today, VISITOR_BOOKING_DAYS), timeZone),
+  };
+}
+
+export type VisitorClassState = "attend" | "book";
+
+export function visitorClassState(
+  c: CheckInClass,
+  now: Date,
+  timeZone: string,
+): VisitorClassState | null {
+  if (c.status !== "scheduled") return null;
+  const t = now.getTime();
+  const start = c.startsAt.getTime();
+  const end = start + c.durationMinutes * 60_000;
+  if (start <= t && t < end) return "attend";
+  if (start > t && start < visitorWindow(now, timeZone).to.getTime()) {
+    return "book";
   }
-  if (!input.firstName.trim() || !input.lastName.trim()) {
-    return { ok: false, reason: "no-name" };
+  return null;
+}
+
+export function visitorClassChoices<T extends CheckInClass>(
+  classes: T[],
+  now: Date,
+  timeZone: string,
+): { now: T[]; upcoming: T[] } {
+  const sorted = [...classes].sort(
+    (a, b) => a.startsAt.getTime() - b.startsAt.getTime(),
+  );
+  return {
+    now: sorted.filter((c) => visitorClassState(c, now, timeZone) === "attend"),
+    upcoming: sorted.filter(
+      (c) => visitorClassState(c, now, timeZone) === "book",
+    ),
+  };
+}
+
+export type ReturningLeadGate = "ok" | "agreement" | "full";
+
+export function returningLeadGate(
+  lead: {
+    consent: boolean;
+    email: string | null;
+    belt: string | null;
+    waiverId: string | null;
+  },
+  requiredWaiverId: string | null,
+): ReturningLeadGate {
+  if (!lead.consent || !lead.email || !lead.belt) return "full";
+  if (requiredWaiverId && lead.waiverId !== requiredWaiverId) {
+    return "agreement";
   }
-  if (!input.email.trim()) return { ok: false, reason: "no-email" };
-  return { ok: true };
+  return "ok";
 }

@@ -23,6 +23,58 @@ export interface SignupWrites {
 export type SignupResult =
   { ok: true; writes: SignupWrites } | { ok: false; message: string };
 
+export interface SignupValues {
+  belt: string;
+  stripes: number;
+  health: string | null;
+  emailUpdates: boolean;
+  waiverId: string | null;
+}
+
+export type SignupCheck =
+  { ok: true; values: SignupValues } | { ok: false; message: string };
+
+export function checkSignupAnswers(input: {
+  healthQuestion: boolean;
+  requiredWaiverId: string | null;
+  answers: SignupAnswers;
+}): SignupCheck {
+  const { belt, stripes = 0, health, emailUpdates, waiverId } = input.answers;
+
+  if (belt === undefined || belt === "") {
+    return { ok: false, message: "Pick your belt." };
+  }
+  const choice = belt === SIGNUP_NEVER_TRAINED || belt === SIGNUP_FOR_CHILD;
+  if (!choice && !isValidRank(SIGNUP_DISCIPLINE, belt, stripes)) {
+    return {
+      ok: false,
+      message: "Pick a belt and stripe count from the list.",
+    };
+  }
+
+  if (input.requiredWaiverId && waiverId !== input.requiredWaiverId) {
+    return {
+      ok: false,
+      message: waiverId
+        ? "The agreement changed. Please read it again."
+        : "Read and accept the agreement to continue.",
+    };
+  }
+
+  // A form opened before the owner turned the question off must not store health data.
+  const answer = health?.trim();
+  return {
+    ok: true,
+    values: {
+      belt,
+      stripes: choice ? 0 : stripes,
+      health: input.healthQuestion && answer ? answer : null,
+      emailUpdates: emailUpdates === true,
+      waiverId: input.requiredWaiverId,
+    },
+  };
+}
+
 export function signupWrites(input: {
   role: string;
   healthQuestion: boolean;
@@ -40,38 +92,17 @@ export function signupWrites(input: {
       },
     };
   }
-  const { belt, stripes = 0, health, emailUpdates, waiverId } = input.answers;
+  const checked = checkSignupAnswers(input);
+  if (!checked.ok) return checked;
+  const { belt, stripes, health, emailUpdates, waiverId } = checked.values;
 
-  const choice = belt === SIGNUP_NEVER_TRAINED || belt === SIGNUP_FOR_CHILD;
-  if (
-    belt !== undefined &&
-    !choice &&
-    !isValidRank(SIGNUP_DISCIPLINE, belt, stripes)
-  ) {
-    return {
-      ok: false,
-      message: "Pick a belt and stripe count from the list.",
-    };
-  }
-
-  if (input.requiredWaiverId && waiverId !== input.requiredWaiverId) {
-    return {
-      ok: false,
-      message: waiverId
-        ? "The agreement changed. Please read it again."
-        : "Read and accept the agreement to join.",
-    };
-  }
-
-  // A form opened before the owner turned the question off must not store health data.
-  const answer = health?.trim();
   const notes: string[] = [];
   if (belt === SIGNUP_NEVER_TRAINED) notes.push("Never trained before");
   if (belt === SIGNUP_FOR_CHILD) notes.push("Enquiring for a child");
-  if (input.healthQuestion && answer) notes.push(answer);
+  if (health) notes.push(health);
 
   const rank =
-    belt === undefined || belt === SIGNUP_FOR_CHILD
+    belt === SIGNUP_FOR_CHILD
       ? null
       : belt === SIGNUP_NEVER_TRAINED
         ? {
@@ -80,15 +111,14 @@ export function signupWrites(input: {
             stripes: 0,
           }
         : { discipline: SIGNUP_DISCIPLINE, belt, stripes };
-  return {
-    ok: true,
-    writes: {
-      rank,
-      notes,
-      emailUpdates: emailUpdates === true,
-      waiverId: input.requiredWaiverId,
-    },
-  };
+  return { ok: true, writes: { rank, notes, emailUpdates, waiverId } };
+}
+
+export function signupBeltLabel(belt: string, stripes: number): string {
+  if (belt === SIGNUP_NEVER_TRAINED) return "Never trained";
+  if (belt === SIGNUP_FOR_CHILD) return "Enquiring for a child";
+  if (stripes === 0) return `${belt} belt`;
+  return `${belt} belt, ${stripes} stripe${stripes === 1 ? "" : "s"}`;
 }
 
 export function waiverTemplate(academyName: string): string {

@@ -4,7 +4,6 @@ import {
   AddMemberNoteSchema,
   CreateClassSchema,
   CreateClassTemplateSchema,
-  DropInSchema,
   EmailSchema,
   HttpUrlSchema,
   JoinAcademySchema,
@@ -222,21 +221,6 @@ describe("composed schemas still accept real input", () => {
       lastName: "Lee",
       phone: "+380501112233",
     });
-  });
-
-  it("accepts a normal drop-in and rejects an unticked consent box", () => {
-    const base = {
-      academyId: "acad_1",
-      firstName: "Sam",
-      lastName: "Lee",
-      phone: "5551234567",
-      email: "SAM@EXAMPLE.COM",
-      consent: true as const,
-    };
-    expect(ok(DropInSchema.safeParse(base)).email).toBe("sam@example.com");
-    expect(DropInSchema.safeParse({ ...base, consent: false }).success).toBe(
-      false,
-    );
   });
 });
 

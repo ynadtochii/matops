@@ -4,8 +4,8 @@
  * The join QR goes on a public wall, so `dropIn.submit` is a stranger-writable
  * insert. State is per process: on Vercel Fluid compute a scaled-out instance
  * gets its own counters and a cold start resets them, so this is a flood brake,
- * not a global ceiling. Upgrade path is a `rate_limit` table if a gym ever needs
- * a real one.
+ * not a global ceiling. The drop-in contact lookup and submit use the shared
+ * `rate_limit` table instead (`takeRateLimit`, ADR 147).
  */
 
 interface Bucket {

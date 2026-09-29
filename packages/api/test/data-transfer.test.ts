@@ -152,10 +152,9 @@ describe("data transfer", () => {
   });
 
   it("requires duplicate decisions and rolls back earlier rows", async () => {
-    await h.as(OWNER, GYM).person.createStudent({
-      entityId: GYM,
-      name: "Existing Student",
-    });
+    await h.exec
+      .insert(person)
+      .values({ organizationId: GYM, name: "Existing Student" });
     const input = {
       csv: "name\nUnique Before Failure\nExisting Student\n",
       columns,
@@ -206,14 +205,14 @@ describe("data transfer", () => {
   });
 
   it("exports archived people without using screen filters", async () => {
-    const created = await h.as(OWNER, GYM).person.createStudent({
-      entityId: GYM,
-      name: "Archived Export",
-    });
-    await h.exec
-      .update(person)
-      .set({ archivedAt: new Date() })
-      .where(eq(person.id, created.personId));
+    const [created] = await h.exec
+      .insert(person)
+      .values({
+        organizationId: GYM,
+        name: "Archived Export",
+        archivedAt: new Date(),
+      })
+      .returning({ personId: person.id });
     const started = await h.as(OWNER, GYM).dataTransfer.startExport();
     const page = await h.as(OWNER, GYM).dataTransfer.exportPage({
       dataset: "people",
@@ -221,7 +220,7 @@ describe("data transfer", () => {
       limit: 500,
     });
     expect(page.rows).toContainEqual(
-      expect.arrayContaining([created.personId, "Archived Export"]),
+      expect.arrayContaining([created?.personId, "Archived Export"]),
     );
   });
 

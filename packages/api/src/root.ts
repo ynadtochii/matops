@@ -14,7 +14,6 @@ import { membershipRouter } from "./router/membership";
 import { noteRouter } from "./router/note";
 import { notificationRouter } from "./router/notification";
 import { organizationRouter } from "./router/organization";
-import { personRouter } from "./router/person";
 import { pushTokenRouter } from "./router/pushToken";
 import { rankRouter } from "./router/rank";
 import { statsRouter } from "./router/stats";
@@ -36,7 +35,6 @@ export const appRouter = createTRPCRouter({
   booking: bookingRouter,
   attendance: attendanceRouter,
   checkin: checkinRouter,
-  person: personRouter,
   rank: rankRouter,
   note: noteRouter,
   notification: notificationRouter,

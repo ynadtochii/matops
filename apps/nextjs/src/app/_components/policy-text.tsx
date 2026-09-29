@@ -13,7 +13,7 @@ import { CONTACT_EMAIL } from "./contact";
  * client dialog.
  */
 
-export const PRIVACY_UPDATED = "30 August 2026";
+export const PRIVACY_UPDATED = "28 September 2026";
 
 function Heading({ children }: { children: React.ReactNode }) {
   return (
@@ -47,8 +47,11 @@ export function PrivacyText() {
           paid by bank transfer, outside MatOps.
         </li>
         <li>
-          If you check in as a visitor: your name, phone, email, and that you
-          agreed to be contacted.
+          If you visit through the drop-in link without a membership: your name,
+          email, phone, belt level, any health note you provided, whether you
+          opted into news, and the classes you attended or booked. The gym can
+          see these details; coaches see your health note only for classes you
+          booked.
         </li>
       </ul>
 
@@ -74,8 +77,10 @@ export function PrivacyText() {
       <Heading>How long we keep it</Heading>
       <p>
         While you are a member, and afterwards for as long as your academy keeps
-        its records. When an academy deletes its MatOps account, its data goes
-        with it.
+        its records. If you visit through the drop-in link, your information is
+        kept as long as the academy keeps its records. When an academy deletes
+        its MatOps account, all its data goes with it, including visitor
+        information.
       </p>
 
       <Heading>Your rights</Heading>

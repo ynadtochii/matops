@@ -8,22 +8,16 @@ import type { RouterOutputs } from "@matops/api";
 import type { LeadStage, OwnerSettableStage } from "@matops/domain";
 import type { BadgeTone } from "@matops/ui/badge";
 import {
-  canPromoteLead,
   LEAD_SOURCE_LABEL,
   LEAD_STAGE_LABEL,
   leadFunnel,
   needsFollowUp,
+  signupBeltLabel,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { Badge } from "@matops/ui/badge";
 import { Button } from "@matops/ui/button";
 import { CopyButton, copyText } from "@matops/ui/copy-button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from "@matops/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,7 +30,6 @@ import { toast } from "@matops/ui/toast";
 
 import { dateYearFmt, dayShortFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
-import { EmailField } from "./form-fields";
 import { cardClass, Eyebrow, LIST, RESOLVE, TAP } from "./primitives";
 import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
@@ -99,7 +92,6 @@ export function LeadsPipeline({ initialFilter }: { initialFilter?: string }) {
   const queryClient = useQueryClient();
   const leads = useQuery(trpc.dropIn.list.queryOptions());
   const invites = useQuery(trpc.invite.list.queryOptions());
-  const [promoting, setPromoting] = useState<Lead | null>(null);
   const [filter, setFilter] = useState<StageFilter>(
     FILTERS.some((f) => f.id === initialFilter)
       ? (initialFilter as StageFilter)
@@ -122,24 +114,6 @@ export function LeadsPipeline({ initialFilter }: { initialFilter?: string }) {
       onSettled: () => void invalidate(),
     }),
   );
-  const setEmail = useMutation(
-    trpc.dropIn.setEmail.mutationOptions({ onError }),
-  );
-  const promote = useMutation(
-    trpc.dropIn.promote.mutationOptions({
-      onSuccess: (res) => {
-        setPromoting(null);
-        toast.success(
-          res.status === "active"
-            ? "They're a member. They can sign in with that email."
-            : "That email already has an account, so they're on the requests tab.",
-        );
-      },
-      onError,
-      onSettled: () => void invalidate(),
-    }),
-  );
-
   const rows = useMemo(() => leads.data ?? [], [leads.data]);
   const funnel = useMemo(
     () =>
@@ -168,26 +142,14 @@ export function LeadsPipeline({ initialFilter }: { initialFilter?: string }) {
   if (rows.length === 0) {
     return (
       <EmptyState title="No drop-in leads yet.">
-        Visitors who book from your link, check in at the gym QR, or get added
-        at the desk show up here to follow up.
+        Visitors who book or check in from your drop-in link show up here to
+        follow up.
       </EmptyState>
     );
   }
 
   return (
     <div className="flex flex-col gap-4">
-      <PromoteDialog
-        lead={promoting}
-        busy={setEmail.isPending || promote.isPending}
-        onClose={() => setPromoting(null)}
-        onConfirm={async (id, email) => {
-          if (email !== promoting?.email) {
-            await setEmail.mutateAsync({ id, email });
-          }
-          promote.mutate({ id, email });
-        }}
-      />
-
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <FunnelStat label="Leads" value={funnel.created} />
         <FunnelStat label="Booked" value={funnel.booked} />
@@ -263,6 +225,17 @@ export function LeadsPipeline({ initialFilter }: { initialFilter?: string }) {
                       {activity}
                     </span>
                   )}
+                  {l.belt && (
+                    <span className="text-muted-foreground text-xs">
+                      {signupBeltLabel(l.belt, l.stripes ?? 0)}
+                      {l.emailUpdates ? " · wants email updates" : ""}
+                    </span>
+                  )}
+                  {l.health && (
+                    <span className="text-foreground text-xs whitespace-pre-wrap">
+                      Health: {l.health}
+                    </span>
+                  )}
                   {!l.consent && (
                     <span className="text-warning text-xs">
                       Did not agree to be contacted
@@ -277,7 +250,6 @@ export function LeadsPipeline({ initialFilter }: { initialFilter?: string }) {
                   joinLink={studentLink}
                   onStage={(stage) => setStage.mutate({ id: l.id, stage })}
                   onInvited={() => markInvited.mutate({ id: l.id })}
-                  onPromote={() => setPromoting(l)}
                 />
               </div>
             );
@@ -301,7 +273,6 @@ function LeadActions({
   joinLink,
   onStage,
   onInvited,
-  onPromote,
 }: {
   name: string;
   lead: Lead;
@@ -309,18 +280,10 @@ function LeadActions({
   joinLink: string | null;
   onStage: (stage: OwnerSettableStage) => void;
   onInvited: () => void;
-  onPromote: () => void;
 }) {
   const stage = lead.stage;
   const joined = stage === "joined";
-  // A missing email is the one refusal the dialog can fix, by asking for one.
-  const promotable = canPromoteLead(lead);
   const items = [
-    (promotable.ok || promotable.reason === "no-email") && (
-      <DropdownMenuItem key="promote" onSelect={onPromote}>
-        Make them a member
-      </DropdownMenuItem>
-    ),
     joinLink && !joined && (
       <DropdownMenuItem
         key="link"
@@ -389,81 +352,5 @@ function FunnelStat({ label, value }: { label: string; value: number }) {
         {value}
       </dd>
     </div>
-  );
-}
-
-/**
- * The one place matops makes an account for someone who has not proved they own
- * the address, so the address is what the dialog is about: it is shown back
- * before anything is written, and typed here when the lead has none. A lead who
- * never agreed to be contacted never reaches this dialog.
- */
-function PromoteDialog({
-  lead,
-  busy,
-  onClose,
-  onConfirm,
-}: {
-  lead: Lead | null;
-  busy: boolean;
-  onClose: () => void;
-  onConfirm: (id: string, email: string) => void;
-}) {
-  const [typed, setTyped] = useState("");
-  const email = lead?.email ?? typed;
-  const gate = lead ? canPromoteLead({ ...lead, email: email || null }) : null;
-
-  return (
-    <Dialog
-      open={lead !== null}
-      onOpenChange={(next) => {
-        if (!next) {
-          setTyped("");
-          onClose();
-        }
-      }}
-    >
-      <DialogContent>
-        {lead && (
-          <form
-            className="flex flex-col gap-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              onConfirm(lead.id, email.trim());
-            }}
-          >
-            <DialogTitle>
-              Make {`${lead.firstName} ${lead.lastName}`.trim()} a member?
-            </DialogTitle>
-            <DialogDescription>
-              They sign in with this email. Nothing is sent: tell them yourself
-              that they can sign in now.
-            </DialogDescription>
-
-            {lead.email ? (
-              <p className="border-border bg-surface-2 text-foreground rounded-md border px-3 py-2 font-mono text-sm">
-                {lead.email}
-              </p>
-            ) : (
-              <EmailField
-                value={typed}
-                onChange={setTyped}
-                required
-                hint="Check it with them first. A wrong address makes an account somebody else can sign into."
-              />
-            )}
-
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="ghost" onClick={onClose}>
-                Cancel
-              </Button>
-              <Button type="submit" busy={busy} disabled={busy || !gate?.ok}>
-                Make them a member
-              </Button>
-            </div>
-          </form>
-        )}
-      </DialogContent>
-    </Dialog>
   );
 }

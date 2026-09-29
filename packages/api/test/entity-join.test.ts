@@ -15,7 +15,12 @@ const ORG = "org_a";
 const OWNER = "u_owner";
 const JOINER = "u_joiner";
 
-const PROFILE = { firstName: "Pat", lastName: "Lee", phone: "+351912345678" };
+const PROFILE = {
+  firstName: "Pat",
+  lastName: "Lee",
+  phone: "+351912345678",
+  belt: "White",
+};
 
 describe("joining through an invite link", () => {
   let h: Harness;

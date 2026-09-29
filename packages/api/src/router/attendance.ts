@@ -6,7 +6,6 @@ import {
   and,
   asc,
   attendanceReviewSnapshot,
-  createDropIn,
   desc,
   eq,
   eventRole,
@@ -33,11 +32,9 @@ import {
   attendanceReviewError,
   attendanceWriteAccess,
   bulkMarkTargets,
-  normalizePhone,
   runsBranch,
 } from "@matops/domain";
 import {
-  AddVisitorSchema,
   AddWalkInSchema,
   AttendanceReviewQueueSchema,
   ClassIdSchema,
@@ -51,7 +48,7 @@ import { academyTimeZone } from "../academy-tz";
 import { loadAttendanceRoster } from "../attendance-review";
 import { requireClassFacts } from "../classes";
 import { directoryRosterOf } from "../members";
-import { staffIdentityProcedure, staffProcedure } from "../trpc";
+import { staffProcedure } from "../trpc";
 
 /**
  * Attendance (slice 3.3, spec O5, §4; docs/issues/08, 24). Staff-only (owner or
@@ -506,52 +503,6 @@ export const attendanceRouter = {
         );
       }
       return { ok: true as const };
-    }),
-
-  /**
-   * Record a visitor who is NOT a member on this class (spec O5, slice 3.5's
-   * `drop_in` table). Same lead the public QR form writes, so a person the gym
-   * signs in at the door and a person who fills the form themselves dedupe onto
-   * one row by phone. Staff cannot give contact consent for someone else, so
-   * this writes `consent: false`; the `OR` in `createDropIn` means it never
-   * clears a consent the visitor gave earlier.
-   */
-  addVisitor: staffIdentityProcedure
-    .input(AddVisitorSchema)
-    .mutation(async ({ ctx, input }) => {
-      const correction = await ctx.withScope((db) =>
-        assertMarkable({ ...ctx, db }, input.classId, input.reason),
-      );
-      const { visitCount } = await ctx.baseDb.transaction(async (tx) => {
-        const result = await createDropIn(
-          {
-            academyId: ctx.academyId,
-            firstName: input.firstName,
-            lastName: input.lastName,
-            phone: normalizePhone(input.phone),
-            email: null,
-            classId: input.classId,
-            consent: false,
-            source: "staff",
-          },
-          tx,
-        );
-        await recordHistoricalCorrection(
-          tx,
-          ctx.academyId,
-          input.classId,
-          correction,
-          {
-            kind: "visitor",
-            subjectId: result.dropInId,
-            beforeValue: null,
-            afterValue: "present",
-            actorId: ctx.session.user.id,
-          },
-        );
-        return result;
-      });
-      return { firstVisit: visitCount <= 1, visitCount };
     }),
 
   /**

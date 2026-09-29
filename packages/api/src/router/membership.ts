@@ -108,7 +108,7 @@ async function joinPending(
     firstName: string;
     lastName: string;
     phone: string;
-    signup?: SignupWrites;
+    signup: SignupWrites;
   },
 ) {
   const userId = ctx.session.user.id;
@@ -130,7 +130,7 @@ async function joinPending(
     ctx.baseDb,
   );
   const { signup } = input;
-  if (signup && !result.alreadyMember) {
+  if (!result.alreadyMember) {
     await withScope(
       { organizationId: input.organizationId, entityId: input.academyId },
       (tx) =>
@@ -366,6 +366,15 @@ export const membershipRouter = {
             "No gym found with that join code. Check the six digits with your gym.",
         });
       }
+      const signup = signupWrites({
+        role: CODE_JOIN_ROLE,
+        healthQuestion: academy.signupHealthQuestion,
+        requiredWaiverId: academy.waiver?.id ?? null,
+        answers: input,
+      });
+      if (!signup.ok) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: signup.message });
+      }
       return joinPending(ctx, {
         organizationId: academy.organizationId,
         academyId: academy.academyId,
@@ -373,6 +382,7 @@ export const membershipRouter = {
         firstName: input.firstName,
         lastName: input.lastName,
         phone: input.phone,
+        signup: signup.writes,
       });
     }),
 
