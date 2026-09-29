@@ -43,20 +43,16 @@ interface Match {
 
 function useClassLabel(timeZone: string | undefined) {
   return useMemo(() => {
-    const day = new Intl.DateTimeFormat(undefined, {
+    const fmt = new Intl.DateTimeFormat(undefined, {
       timeZone,
       weekday: "short",
       day: "numeric",
       month: "short",
-    });
-    const time = new Intl.DateTimeFormat(undefined, {
-      timeZone,
       hour: "2-digit",
       minute: "2-digit",
       hourCycle: "h23",
     });
-    return (startsAt: Date) =>
-      `${day.format(startsAt)}, ${time.format(startsAt)}`;
+    return (startsAt: Date) => fmt.format(startsAt);
   }, [timeZone]);
 }
 
@@ -115,7 +111,11 @@ export function DropInForm({ token }: { token: string }) {
       return;
     }
     setErrors({});
-    if (current || lookup.isPending) return;
+    startLookup();
+  };
+
+  const startLookup = () => {
+    if (!parsed || current || lookup.isPending) return;
     setDeclined(false);
     lookup.mutate({ token, ...parsed });
   };
@@ -302,11 +302,7 @@ export function DropInForm({ token }: { token: string }) {
         <div
           className="flex flex-col gap-3"
           onBlur={(e) => {
-            if (e.currentTarget.contains(e.relatedTarget)) return;
-            if (parsed && !current && !lookup.isPending) {
-              setDeclined(false);
-              lookup.mutate({ token, ...parsed });
-            }
+            if (!e.currentTarget.contains(e.relatedTarget)) startLookup();
           }}
         >
           <EmailField

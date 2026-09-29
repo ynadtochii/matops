@@ -256,8 +256,8 @@ export const MemberActionSchema = z.object({
   memberId: IdSchema,
 });
 
-/** Resolve an invite token on the public join screen. */
-export const InviteTokenSchema = z.object({
+/** Resolve a public link token (invite or drop-in). */
+export const LinkTokenSchema = z.object({
   token: OpaqueTokenSchema,
 });
 

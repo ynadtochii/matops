@@ -7,7 +7,7 @@ import {
   PUBLIC_DEFAULT_MAX,
   publicProcedure,
 } from "../src/trpc";
-import { harness, rejectionCode, seedClasses } from "./helpers";
+import { harness, rejectionCode, seedAcademies, seedClasses } from "./helpers";
 
 const A = "academy_A";
 const OWNER = "u_owner";
@@ -214,10 +214,9 @@ describe("dropIn.submit, the token-based visitor booking", () => {
     const h = await base();
     const token = await mintToken(h);
     const CLASS_OTHER = "aaaaaaaa-0000-4000-8000-000000000099";
-    await h.pg.exec(
-      `INSERT INTO "entity" (id, organization_id, type, name, public_code)
-         VALUES ('academy_B', 'academy_B', 'bjj_academy', 'Other', '100099')`,
-    );
+    await seedAcademies(h.pg, [
+      { id: "academy_B", code: "100099", members: [] },
+    ]);
     await seedClasses(h.pg, [
       {
         id: CLASS_OTHER,

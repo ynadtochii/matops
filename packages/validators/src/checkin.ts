@@ -15,8 +15,6 @@ import {
 /** Check in to a class (book-if-needed + mark present), spec S8. */
 export const CheckInSchema = z.object({ classId: z.uuid() });
 
-export const DropInTokenSchema = z.object({ token: OpaqueTokenSchema });
-
 const contactFields = {
   token: OpaqueTokenSchema,
   email: EmailSchema,

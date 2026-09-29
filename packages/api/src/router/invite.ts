@@ -8,7 +8,7 @@ import {
   resolveInviteToken,
   rotateInvite,
 } from "@matops/db";
-import { InviteRoleSchema, InviteTokenSchema } from "@matops/validators";
+import { InviteRoleSchema, LinkTokenSchema } from "@matops/validators";
 
 import {
   branchManagerIdentityProcedure,
@@ -64,7 +64,7 @@ export const inviteRouter = {
    */
   resolve: publicProcedure
     .use(rateLimited(30, 60_000))
-    .input(InviteTokenSchema)
+    .input(LinkTokenSchema)
     .query(async ({ ctx, input }) => {
       const resolved = await resolveInviteToken(input.token, ctx.baseDb);
       if (!resolved) {

@@ -20,7 +20,7 @@ import { visitorClassChoices, visitorWindow } from "@matops/domain";
 import {
   DropInLookupSchema,
   DropInSubmitSchema,
-  DropInTokenSchema,
+  LinkTokenSchema,
   SetLeadStageSchema,
 } from "@matops/validators";
 
@@ -155,7 +155,7 @@ export const dropInRouter = {
 
   resolve: publicProcedure
     .use(rateLimited(30, 60_000))
-    .input(DropInTokenSchema)
+    .input(LinkTokenSchema)
     .query(async ({ ctx, input }) => {
       const academy = await requireLink(input.token, ctx.baseDb);
       return {
@@ -169,7 +169,7 @@ export const dropInRouter = {
 
   classes: publicProcedure
     .use(rateLimited(30, 60_000))
-    .input(DropInTokenSchema)
+    .input(LinkTokenSchema)
     .query(async ({ ctx, input }) =>
       visitorChoices(await requireLink(input.token, ctx.baseDb), ctx.baseDb),
     ),

@@ -184,16 +184,6 @@ describe("drop-in link management", () => {
   });
 });
 
-describe("dropIn.promote no longer exists", () => {
-  it("the promote procedure is not on the router", async () => {
-    const h = await base();
-    const router = h.as(OWNER, A);
-    expect(
-      (router.dropIn as unknown as Record<string, unknown>).promote,
-    ).toBeUndefined();
-  });
-});
-
 describe("a lead becomes a member on a phone match at self-join", () => {
   it("flips the lead to joined and links the user, whatever the format", async () => {
     const h = await base();

@@ -228,16 +228,35 @@ function sameEmail(stored: string | null, typed: string): boolean {
   return stored !== null && stored.trim().toLowerCase() === typed;
 }
 
+async function matchReturningLead(
+  academy: DropInAcademy,
+  contact: { email: string; phone: string },
+  exec: DbReader,
+  lock = false,
+) {
+  const lead = await findLeadByPhone(
+    academy.academyId,
+    contact.phone,
+    exec,
+    lock,
+  );
+  if (!lead || !sameEmail(lead.email, contact.email)) return null;
+  const gate = returningLeadGate(lead, academy.waiver?.id ?? null);
+  return gate === "full" ? null : { lead, gate };
+}
+
 export async function lookupReturningLead(
   academy: DropInAcademy,
   contact: { email: string; phone: string },
   exec: DbReader,
 ): Promise<{ firstName: string; needsAgreement: boolean } | null> {
-  const lead = await findLeadByPhone(academy.academyId, contact.phone, exec);
-  if (!lead || !sameEmail(lead.email, contact.email)) return null;
-  const gate = returningLeadGate(lead, academy.waiver?.id ?? null);
-  if (gate === "full") return null;
-  return { firstName: lead.firstName, needsAgreement: gate === "agreement" };
+  const match = await matchReturningLead(academy, contact, exec);
+  return match
+    ? {
+        firstName: match.lead.firstName,
+        needsAgreement: match.gate === "agreement",
+      }
+    : null;
 }
 
 export type DropInSubmission = {
@@ -261,7 +280,6 @@ export type DropInOutcome =
       mode: "attend" | "book";
       classTitle: string;
       startsAt: Date;
-      changed: boolean;
     }
   | {
       ok: false;
@@ -344,13 +362,10 @@ async function confirmReturningLead(
   input: Extract<DropInSubmission, { kind: "returning" }>,
   now: Date,
 ): Promise<DropInOutcome | string> {
-  const lead = await findLeadByPhone(academy.academyId, input.phone, tx, true);
-  if (!lead || !sameEmail(lead.email, input.email)) {
-    return { ok: false, reason: "no-match" };
-  }
+  const match = await matchReturningLead(academy, input, tx, true);
+  if (!match) return { ok: false, reason: "no-match" };
+  const { lead, gate } = match;
   const required = academy.waiver?.id ?? null;
-  const gate = returningLeadGate(lead, required);
-  if (gate === "full") return { ok: false, reason: "no-match" };
   const accepts = gate === "agreement" && input.waiverId === required;
   if (gate === "agreement" && !accepts) {
     return { ok: false, reason: "agreement" };
@@ -468,7 +483,6 @@ export async function submitDropInVisit(
       mode,
       classTitle: cls.title,
       startsAt: cls.startsAt,
-      changed,
     };
   });
 }

@@ -24,15 +24,13 @@ export interface SignupAnswerState {
   waiverId: string | null;
 }
 
-export function emptyAnswers(): SignupAnswerState {
-  return {
-    belt: "",
-    stripes: 0,
-    health: "",
-    emailUpdates: false,
-    waiverId: null,
-  };
-}
+export const EMPTY_ANSWERS: SignupAnswerState = {
+  belt: "",
+  stripes: 0,
+  health: "",
+  emailUpdates: false,
+  waiverId: null,
+};
 
 const system = RANK_SYSTEMS[SIGNUP_DISCIPLINE];
 const BELTS: string[] = system?.belts ?? [];
@@ -190,7 +188,7 @@ const stripeOptions = Array.from({ length: MAX_STRIPES + 1 }, (_, i) => ({
 interface Props {
   academyName: string;
   signupHealthQuestion: boolean;
-  waiver: { id: string; body: string; createdAt: Date } | null;
+  waiver: { id: string; body: string } | null;
   state: SignupAnswerState;
   onChange: (patch: Partial<SignupAnswerState>) => void;
 }

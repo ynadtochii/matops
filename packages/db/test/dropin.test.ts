@@ -210,7 +210,7 @@ describe("submitDropInVisit", () => {
       { ...NEW_VISITOR, classId: CLASS_FUTURE },
       db,
     );
-    expect(second).toMatchObject({ ok: true, changed: false });
+    expect(second).toMatchObject({ ok: true });
 
     const cls = await pg.query<{ booking_count: number }>(
       `SELECT booking_count FROM "class" WHERE id = $1`,

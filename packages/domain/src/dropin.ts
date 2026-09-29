@@ -55,15 +55,16 @@ export function visitorClassChoices<T extends CheckInClass>(
   now: Date,
   timeZone: string,
 ): { now: T[]; upcoming: T[] } {
+  const choices = { now: [] as T[], upcoming: [] as T[] };
   const sorted = [...classes].sort(
     (a, b) => a.startsAt.getTime() - b.startsAt.getTime(),
   );
-  return {
-    now: sorted.filter((c) => visitorClassState(c, now, timeZone) === "attend"),
-    upcoming: sorted.filter(
-      (c) => visitorClassState(c, now, timeZone) === "book",
-    ),
-  };
+  for (const c of sorted) {
+    const state = visitorClassState(c, now, timeZone);
+    if (state === "attend") choices.now.push(c);
+    if (state === "book") choices.upcoming.push(c);
+  }
+  return choices;
 }
 
 export type ReturningLeadGate = "ok" | "agreement" | "full";

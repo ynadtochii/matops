@@ -4,7 +4,7 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { SignupAnswerState } from "~/components/signup-questions";
-import { emptyAnswers, SignupQuestions } from "~/components/signup-questions";
+import { EMPTY_ANSWERS, SignupQuestions } from "~/components/signup-questions";
 import {
   Button,
   Heading,
@@ -43,7 +43,7 @@ export default function JoinScreen() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
-  const [answers, setAnswers] = useState<SignupAnswerState>(emptyAnswers());
+  const [answers, setAnswers] = useState<SignupAnswerState>(EMPTY_ANSWERS);
   const [error, setError] = useState<string | null>(null);
 
   const join = useMutation(

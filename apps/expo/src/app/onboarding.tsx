@@ -4,7 +4,7 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { SignupAnswerState } from "~/components/signup-questions";
-import { emptyAnswers, SignupQuestions } from "~/components/signup-questions";
+import { EMPTY_ANSWERS, SignupQuestions } from "~/components/signup-questions";
 import {
   Button,
   confirm,
@@ -33,7 +33,7 @@ export default function Onboarding() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
-  const [answers, setAnswers] = useState<SignupAnswerState>(emptyAnswers());
+  const [answers, setAnswers] = useState<SignupAnswerState>(EMPTY_ANSWERS);
   const [error, setError] = useState<string | null>(null);
 
   const found = useQuery(
@@ -67,7 +67,7 @@ export default function Onboarding() {
   const reset = () => {
     setQuery(null);
     setError(null);
-    setAnswers(emptyAnswers());
+    setAnswers(EMPTY_ANSWERS);
   };
 
   const academy = found.data ?? null;
