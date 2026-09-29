@@ -5,24 +5,10 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { magicLink, oAuthProxy, organization } from "better-auth/plugins";
 
 import { db } from "@matops/db/client";
-import { sendEmail } from "@matops/notifications";
+import { renderEmail, sendEmail } from "@matops/notifications";
 
 import { authEnv } from "../env";
 import { ac, roles } from "./permissions";
-
-/**
- * The magic-link URL carries a caller-supplied `callbackURL`, so it is escaped
- * before it goes into an href attribute — an unescaped quote would break out of
- * the attribute and let a crafted sign-in request inject markup into the email.
- */
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
 
 export function initAuth<
   TExtraPlugins extends BetterAuthPlugin[] = [],
@@ -120,8 +106,14 @@ export function initAuth<
           await sendEmail({
             to: email,
             subject: "Your MatOps sign-in link",
-            text: `Sign in to MatOps by opening this link:\n\n${url}\n\nThis link expires shortly. If you didn't request it, you can ignore this email.`,
-            html: `<p>Sign in to MatOps by clicking the link below:</p><p><a href="${escapeHtml(url)}">Sign in to MatOps</a></p><p>This link expires shortly. If you didn't request it, you can ignore this email.</p>`,
+            ...renderEmail({
+              heading: "Sign in to MatOps",
+              paragraphs: [
+                "Press the button to sign in. The link works once and expires shortly.",
+              ],
+              cta: { label: "Sign in", url },
+              footer: `Someone asked to sign in as ${email}. If it wasn't you, ignore this email.`,
+            }),
           });
         },
       }),

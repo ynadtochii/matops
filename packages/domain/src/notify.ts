@@ -42,27 +42,34 @@ export function buildCancelledMessage(input: {
   };
 }
 
-/** Class time or instructor changed → notify booked students. */
+/** A booked class got a new coach. A time change cancels the class instead. */
 export function buildClassChangeMessage(input: {
   academyName: string;
   className: string;
   whenLabel: string;
+  coachName?: string;
 }): PushMessage {
-  const { academyName, className, whenLabel } = input;
+  const { academyName, className, whenLabel, coachName } = input;
   return {
-    title: "Class updated",
-    body: `${className} at ${academyName} moved to ${whenLabel}.`,
+    title: "New coach",
+    body: coachName
+      ? `${coachName} now teaches ${className} on ${whenLabel} at ${academyName}.`
+      : `${className} on ${whenLabel} at ${academyName} has a new coach.`,
   };
 }
 
 /** Membership approved → welcome push to the newly approved member. */
 export function buildApprovalMessage(input: {
   academyName: string;
+  role: string;
 }): PushMessage {
-  return {
-    title: "You're in!",
-    body: `Welcome to ${input.academyName}. You can book classes now.`,
-  };
+  const title = `You're in at ${input.academyName}`;
+  return input.role === "student"
+    ? { title, body: "Your membership is approved. You can book classes now." }
+    : {
+        title,
+        body: "You're approved as a coach. You can see the schedule and take attendance.",
+      };
 }
 
 /** Default reminder lead time (how long before start the reminder fires). */

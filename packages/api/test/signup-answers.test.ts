@@ -225,7 +225,14 @@ describe("sign-up answers (ADR 146)", () => {
       .membership.approve({ memberId: (await joinerMemberId()) ?? "" });
 
     expect(sendEmail).toHaveBeenCalledWith(
-      expect.objectContaining({ to: "joiner@test.local" }),
+      expect.objectContaining({
+        to: "joiner@test.local",
+        subject: expect.stringContaining("You're in at") as string,
+        html: expect.stringContaining(
+          `href="http://localhost:3004/entities/${ACAD}"`,
+        ) as string,
+        text: expect.stringContaining("Book a class") as string,
+      }),
     );
   });
 

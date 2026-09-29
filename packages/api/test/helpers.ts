@@ -150,6 +150,7 @@ export async function harness(academies?: AcademySpec[]): Promise<Harness> {
     } as unknown as Ctx["session"],
     requestedEntityId: headers.get("x-matops-entity") ?? undefined,
     baseDb: exec,
+    appUrl: "http://localhost:3004",
   });
 
   return {

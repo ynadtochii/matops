@@ -83,6 +83,7 @@ export const createTRPCContext = async (opts: {
     // from importing the raw `db` directly, so `ctx.baseDb` stays the only door.
     // See docs/issues/33, 60 and docs/architecture.md §5.
     baseDb: opts.baseDb ?? db,
+    appUrl: opts.auth.options.baseURL,
     // Forwarded so resolvers can call Better Auth server APIs (createOrganization,
     // setActiveOrganization, …) on behalf of the signed-in user.
     headers: opts.headers,

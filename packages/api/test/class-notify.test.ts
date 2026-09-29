@@ -1,4 +1,6 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+
+import type * as Notifications from "@matops/notifications";
 
 import type { Harness } from "./helpers";
 import {
@@ -7,6 +9,21 @@ import {
   seedClasses,
   seedParticipations,
 } from "./helpers";
+
+const sendEmail = vi.hoisted(() =>
+  vi.fn(
+    (_payload: { to: string; subject: string; text: string; html?: string }) =>
+      Promise.resolve({ sent: true, ok: true, outcome: "accepted" as const }),
+  ),
+);
+
+vi.mock("@matops/notifications", async (importOriginal) => ({
+  ...(await importOriginal<typeof Notifications>()),
+  sendEmail,
+}));
+
+const emailTo = (to: string) =>
+  sendEmail.mock.calls.map(([payload]) => payload).find((p) => p.to === to);
 
 const ACAD = "acad_notify";
 const OWNER = "u_notify_owner";
@@ -72,6 +89,17 @@ describe("the booked students hear about a class", () => {
       `${STUDENT}@test.local`,
       "visitor@example.com",
     ]);
+
+    const member = emailTo(`${STUDENT}@test.local`);
+    expect(member?.subject).toMatch(/^Class cancelled: /);
+    expect(member?.html).toContain(
+      `href="http://localhost:3004/entities/${ACAD}"`,
+    );
+    expect(member?.text).toContain("Find another class");
+
+    const visitor = emailTo("visitor@example.com");
+    expect(visitor?.html).toContain("was cancelled");
+    expect(visitor?.html).not.toContain("/entities/");
   });
 
   it("tells them when the coach changes", async () => {
@@ -79,5 +107,14 @@ describe("the booked students hear about a class", () => {
       .as(OWNER, ACAD)
       .class.setInstructor({ id: TO_MOVE, instructorId: COACH });
     expect(await kindsFor(STUDENT)).toContain("class_changed");
+
+    const change = sendEmail.mock.calls
+      .map(([payload]) => payload)
+      .find((p) => p.subject.startsWith("New coach: "));
+    expect(change?.text).toContain("now teaches");
+    expect(change?.text).not.toContain("moved");
+    expect(change?.html).toContain(
+      `href="http://localhost:3004/entities/${ACAD}/class/${TO_MOVE}"`,
+    );
   });
 });
