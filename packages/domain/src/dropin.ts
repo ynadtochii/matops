@@ -1,5 +1,4 @@
 import type { CheckInClass } from "./checkin";
-import { MAX_CLASS_MINUTES } from "./checkin";
 import { academyDay, addLocalDays, localMidnight } from "./local-date";
 
 /**
@@ -17,7 +16,7 @@ export function normalizePhone(phone: string): string {
   return phone.trimStart().startsWith("+") ? `+${digits}` : digits;
 }
 
-export const VISITOR_BOOKING_DAYS = 7;
+export const VISITOR_BOOKING_DAYS = 3;
 
 interface VisitorWindow {
   from: Date;
@@ -27,7 +26,7 @@ interface VisitorWindow {
 export function visitorWindow(now: Date, timeZone: string): VisitorWindow {
   const today = academyDay(now, timeZone);
   return {
-    from: new Date(now.getTime() - MAX_CLASS_MINUTES * 60_000),
+    from: localMidnight(today, timeZone),
     to: localMidnight(addLocalDays(today, VISITOR_BOOKING_DAYS), timeZone),
   };
 }
@@ -42,11 +41,11 @@ export function visitorClassState(
   if (c.status !== "scheduled") return null;
   const t = now.getTime();
   const start = c.startsAt.getTime();
+  const window = visitorWindow(now, timeZone);
+  if (start < window.from.getTime()) return null;
   const end = start + c.durationMinutes * 60_000;
   if (start <= t && t < end) return "attend";
-  if (start > t && start < visitorWindow(now, timeZone).to.getTime()) {
-    return "book";
-  }
+  if (start > t && start < window.to.getTime()) return "book";
   return null;
 }
 

@@ -335,6 +335,7 @@ One row per slice. This is the single answer to _"what's left, on which surface?
 | 3.3   | Attendance marking (staff)                                             | done | done | done | —    | done | —     |
 | 3.4   | QR self check-in (book + attend)                                       | done | done | —    | done | done | — (removed, ADR 147) |
 | 3.5   | Public drop-in / lead form (rotatable link token, questions, rate limit) | done | done | done | —    | done | done (ADR 147) |
+| 3.6   | Class-specific drop-in link and three-local-day visitor window         | —    | —    | done | —    | done | —     |
 | **4** | **Notifications & polish**                                             |      |      |      |      |      |       |
 | 4.1   | `notifications` package (Expo Push + Resend)                           | done | done | —    | done | done | done  |
 | 4.2   | Events (cancel, reminder, approval, class change)                      | done | done | —    | done | done | done¹ |

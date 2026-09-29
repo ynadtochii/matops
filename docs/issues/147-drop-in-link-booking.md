@@ -54,3 +54,7 @@ Migration `0009_drop_in_link` adds:
 - `drop_in` columns: `belt` (text), `stripes` (integer), `health` (text bounded to 1000 chars), `email_updates_at` (timestamp), `waiver_id` (uuid, composite FK to academy_waiver), `waiver_accepted_at` (timestamp).
 
 Seed teardown and `wipe-academies.sql` delete drop_in_link rows. Drop-in answers are erased with the drop_in row.
+
+## 2026-09-29 addendum: share one class
+
+Staff can copy a class-specific link from an eligible class on the weekly Schedule. It uses the live academy token with `?class=<id>`. The public form shows that class instead of a list, then keeps the same visitor questions and submit flow. The class ID controls the display, not access: someone with the link can open the academy-wide form. The server still checks the class belongs to the academy and is eligible when it saves the visit. Visitor booking now covers three local days, including today; member booking stays unchanged at seven days. No migration is needed.

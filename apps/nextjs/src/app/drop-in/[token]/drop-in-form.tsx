@@ -56,7 +56,13 @@ function useClassLabel(timeZone: string | undefined) {
   }, [timeZone]);
 }
 
-export function DropInForm({ token }: { token: string }) {
+export function DropInForm({
+  token,
+  linkedClassId,
+}: {
+  token: string;
+  linkedClassId: string | null;
+}) {
   const trpc = useTRPC();
   const academy = useQuery(
     trpc.dropIn.resolve.queryOptions({ token }, { retry: false }),
@@ -164,7 +170,14 @@ export function DropInForm({ token }: { token: string }) {
   const now = classes.data?.now ?? [];
   const upcoming = classes.data?.upcoming ?? [];
   const all = [...now, ...upcoming];
-  const selected = all.some((c) => c.id === classId) ? classId : null;
+  const linkedClass = linkedClassId
+    ? all.find((c) => c.id === linkedClassId)
+    : null;
+  const selected = linkedClassId
+    ? (linkedClass?.id ?? null)
+    : all.some((c) => c.id === classId)
+      ? classId
+      : null;
   const attending = now.some((c) => c.id === selected);
   const action = attending ? "Check in" : "Book my place";
   const waiver: SignupWaiver | null = academy.data?.waiver ?? null;
@@ -274,7 +287,9 @@ export function DropInForm({ token }: { token: string }) {
           Train at {name}
         </h1>
         <p className="text-muted-foreground text-sm text-pretty">
-          Pick a class and leave your details. No account needed.
+          {linkedClassId
+            ? "Leave your details to join this class. No account needed."
+            : "Pick a class and leave your details. No account needed."}
         </p>
       </div>
 
@@ -283,10 +298,24 @@ export function DropInForm({ token }: { token: string }) {
           label="the classes"
           onRetry={() => void classes.refetch()}
         />
+      ) : classes.isSuccess && linkedClassId && !selected ? (
+        <p role="status" className="text-muted-foreground text-sm">
+          This class is no longer available for drop-ins. Ask the gym for a new
+          link.
+        </p>
       ) : classes.isSuccess && all.length === 0 ? (
         <p role="status" className="text-muted-foreground text-sm">
-          There are no classes in the next seven days. Ask the gym when to come.
+          There are no classes in the next three days. Ask the gym when to come.
         </p>
+      ) : linkedClassId ? (
+        linkedClass && (
+          <div className="border-border bg-card rounded-md border p-3 text-sm">
+            <p className="font-medium">{linkedClass.title}</p>
+            <p className="text-muted-foreground">
+              {label(linkedClass.startsAt)}
+            </p>
+          </div>
+        )
       ) : (
         <fieldset className="flex flex-col gap-1.5">
           <legend className="mb-1.5 text-sm font-medium">
@@ -298,7 +327,7 @@ export function DropInForm({ token }: { token: string }) {
         </fieldset>
       )}
 
-      {all.length > 0 && (
+      {selected !== null || (!linkedClassId && all.length > 0) ? (
         <div
           className="flex flex-col gap-3"
           onBlur={(e) => {
@@ -340,9 +369,9 @@ export function DropInForm({ token }: { token: string }) {
             </Button>
           )}
         </div>
-      )}
+      ) : null}
 
-      {mode === "confirm" && current?.match && (
+      {mode === "confirm" && current?.match && (!linkedClassId || selected) && (
         <form
           noValidate
           className="flex flex-col gap-3"
@@ -379,7 +408,7 @@ export function DropInForm({ token }: { token: string }) {
         </form>
       )}
 
-      {mode === "full" && (
+      {mode === "full" && (!linkedClassId || selected) && (
         <form
           noValidate
           className="flex flex-col gap-3"
