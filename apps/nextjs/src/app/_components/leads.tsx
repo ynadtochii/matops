@@ -17,7 +17,7 @@ import {
 import { cn } from "@matops/ui";
 import { Badge } from "@matops/ui/badge";
 import { Button } from "@matops/ui/button";
-import { CopyButton, copyText } from "@matops/ui/copy-button";
+import { CopyButton } from "@matops/ui/copy-button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,7 +43,6 @@ const FILTERS: { id: StageFilter; label: string }[] = [
   { id: "new", label: LEAD_STAGE_LABEL.new },
   { id: "trained", label: "Trained, not joined" },
   { id: "contacted", label: LEAD_STAGE_LABEL.contacted },
-  { id: "invited", label: LEAD_STAGE_LABEL.invited },
   { id: "joined", label: LEAD_STAGE_LABEL.joined },
   { id: "all", label: "All" },
   { id: "ghosted", label: LEAD_STAGE_LABEL.ghosted },
@@ -91,7 +90,6 @@ export function LeadsPipeline({ initialFilter }: { initialFilter?: string }) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const leads = useQuery(trpc.dropIn.list.queryOptions());
-  const invites = useQuery(trpc.invite.list.queryOptions());
   const [filter, setFilter] = useState<StageFilter>(
     FILTERS.some((f) => f.id === initialFilter)
       ? (initialFilter as StageFilter)
@@ -108,12 +106,6 @@ export function LeadsPipeline({ initialFilter }: { initialFilter?: string }) {
       onSettled: () => void invalidate(),
     }),
   );
-  const markInvited = useMutation(
-    trpc.dropIn.markInvited.mutationOptions({
-      onError,
-      onSettled: () => void invalidate(),
-    }),
-  );
   const rows = useMemo(() => leads.data ?? [], [leads.data]);
   const funnel = useMemo(
     () =>
@@ -123,13 +115,6 @@ export function LeadsPipeline({ initialFilter }: { initialFilter?: string }) {
     [rows],
   );
   const newCount = rows.filter((l) => matchesFilter(l, "new")).length;
-
-  const studentToken =
-    invites.data?.find((i) => i.role === "student")?.token ?? null;
-  const studentLink =
-    studentToken && typeof window !== "undefined"
-      ? `${window.location.origin}/join/${studentToken}`
-      : null;
 
   const shown = rows.filter((l) => matchesFilter(l, filter));
 
@@ -175,9 +160,7 @@ export function LeadsPipeline({ initialFilter }: { initialFilter?: string }) {
       ) : (
         <div key={filter} className={cn(LIST, RESOLVE)}>
           {shown.map((l) => {
-            const busy =
-              (setStage.isPending && setStage.variables.id === l.id) ||
-              (markInvited.isPending && markInvited.variables.id === l.id);
+            const busy = setStage.isPending && setStage.variables.id === l.id;
             const activity = activityLine(l);
             const name = `${l.firstName} ${l.lastName}`.trim();
             return (
@@ -247,9 +230,7 @@ export function LeadsPipeline({ initialFilter }: { initialFilter?: string }) {
                   name={name}
                   lead={l}
                   busy={busy}
-                  joinLink={studentLink}
                   onStage={(stage) => setStage.mutate({ id: l.id, stage })}
-                  onInvited={() => markInvited.mutate({ id: l.id })}
                 />
               </div>
             );
@@ -260,51 +241,23 @@ export function LeadsPipeline({ initialFilter }: { initialFilter?: string }) {
   );
 }
 
-/**
- * Every action on a lead, in one menu. Copying the join link and saying you
- * invited them are separate items on purpose: an owner often copies a link to
- * look at it, or sends it through a channel matops never sees, so the copy is
- * not evidence that the person was asked.
- */
 function LeadActions({
   name,
   lead,
   busy,
-  joinLink,
   onStage,
-  onInvited,
 }: {
   name: string;
   lead: Lead;
   busy: boolean;
-  joinLink: string | null;
   onStage: (stage: OwnerSettableStage) => void;
-  onInvited: () => void;
 }) {
   const stage = lead.stage;
   const joined = stage === "joined";
   const items = [
-    joinLink && !joined && (
-      <DropdownMenuItem
-        key="link"
-        onSelect={() => void copyText(joinLink, "Join link copied")}
-      >
-        Copy join link
-      </DropdownMenuItem>
-    ),
-    stage === "ghosted" && (
-      <DropdownMenuItem key="back" onSelect={() => onStage("contacted")}>
-        Bring back
-      </DropdownMenuItem>
-    ),
-    stage !== "contacted" && stage !== "ghosted" && !joined && (
+    stage !== "contacted" && !joined && (
       <DropdownMenuItem key="contacted" onSelect={() => onStage("contacted")}>
         Mark contacted
-      </DropdownMenuItem>
-    ),
-    stage !== "invited" && stage !== "ghosted" && !joined && (
-      <DropdownMenuItem key="invited" onSelect={onInvited}>
-        Mark invited
       </DropdownMenuItem>
     ),
   ].filter(Boolean);

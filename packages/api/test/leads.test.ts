@@ -138,14 +138,6 @@ describe("a lead is a stage plus what the person actually did", () => {
     expect(queues(rows)).toEqual({ newLeads: 0, trainedNotJoined: 0 });
   });
 
-  it("stamps invited only when the owner says so", async () => {
-    const h = await base();
-    await seedLead(h, { phone: "+351912345678" });
-    const [lead] = await h.as(OWNER, A).dropIn.list();
-    await h.as(OWNER, A).dropIn.markInvited({ id: lead?.id ?? "" });
-    expect((await h.as(OWNER, A).dropIn.list())[0]?.stage).toBe("invited");
-  });
-
   it("keeps the leads list owner-only", async () => {
     const h = await base();
     expect(await rejectionCode(h.as(COACH, A).dropIn.list())).toBe("FORBIDDEN");

@@ -4,13 +4,11 @@ import { TRPCError } from "@trpc/server";
 
 import type { DbExec, DropInAcademy } from "@matops/db";
 import {
-  and,
   desc,
   eq,
   getOrCreateDropInLink,
   listAcademyClassesInWindow,
   lookupReturningLead,
-  ne,
   resolveDropInLink,
   rotateDropInLink,
   sql,
@@ -23,7 +21,6 @@ import {
   DropInLookupSchema,
   DropInSubmitSchema,
   DropInTokenSchema,
-  LeadIdSchema,
   SetLeadStageSchema,
 } from "@matops/validators";
 
@@ -259,25 +256,6 @@ export const dropInRouter = {
             input.stage === "contacted" ? new Date() : dropIn.contactedAt,
         })
         .where(eq(dropIn.id, input.id))
-        .returning({ id: dropIn.id });
-      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: LEAD_GONE });
-      return { ok: true as const };
-    }),
-
-  /**
-   * Stamp a lead `invited` (spec O4). Its own action, not a side effect of
-   * copying the join link: an owner copies a link to look at it, or sends it
-   * through a channel matops never sees, so a copy is evidence of nothing. A
-   * lead who already joined is left alone, so a stray tap cannot undo a real
-   * conversion.
-   */
-  markInvited: branchManagerProcedure
-    .input(LeadIdSchema)
-    .mutation(async ({ ctx, input }) => {
-      const [row] = await ctx.db
-        .update(dropIn)
-        .set({ stage: "invited" })
-        .where(and(eq(dropIn.id, input.id), ne(dropIn.stage, "joined")))
         .returning({ id: dropIn.id });
       if (!row) throw new TRPCError({ code: "NOT_FOUND", message: LEAD_GONE });
       return { ok: true as const };
