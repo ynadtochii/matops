@@ -43,10 +43,22 @@ describe("visitorClassState", () => {
     );
   });
 
-  it("returns book for a future class inside the 7-day window", () => {
+  it("returns book for a future class inside the 3-day window", () => {
     expect(visitorClassState(cls("a", "2026-08-15T21:00:00Z"), now, TZ)).toBe(
       "book",
     );
+  });
+
+  it("offers tomorrow and the last minute of the second following day", () => {
+    expect(
+      visitorClassState(cls("tomorrow", "2026-08-16T00:00:00Z"), now, TZ),
+    ).toBe("book");
+    expect(
+      visitorClassState(cls("last", "2026-08-17T23:59:00Z"), now, TZ),
+    ).toBe("book");
+    expect(
+      visitorClassState(cls("too-late", "2026-08-18T00:00:00Z"), now, TZ),
+    ).toBeNull();
   });
 
   it("returns null for a class that already ended", () => {
@@ -65,9 +77,9 @@ describe("visitorClassState", () => {
     ).toBeNull();
   });
 
-  it("returns null for a class beyond the 7-day window", () => {
+  it("returns null for a class beyond the 3-day window", () => {
     expect(
-      visitorClassState(cls("a", "2026-08-23T10:00:00Z"), now, TZ),
+      visitorClassState(cls("a", "2026-08-18T10:00:00Z"), now, TZ),
     ).toBeNull();
   });
 
@@ -75,11 +87,31 @@ describe("visitorClassState", () => {
     const nyNow = new Date("2026-08-15T18:00:00Z");
     const tz = "America/New_York";
     expect(
-      visitorClassState(cls("inside", "2026-08-22T03:00:00Z"), nyNow, tz),
+      visitorClassState(cls("inside", "2026-08-18T03:00:00Z"), nyNow, tz),
     ).toBe("book");
     expect(
-      visitorClassState(cls("boundary", "2026-08-22T04:00:00Z"), nyNow, tz),
+      visitorClassState(cls("boundary", "2026-08-18T04:00:00Z"), nyNow, tz),
     ).toBeNull();
+  });
+
+  it("excludes yesterday's still-running class after local midnight", () => {
+    const afterMidnight = new Date("2026-08-16T00:15:00Z");
+    expect(
+      visitorClassState(
+        cls("yesterday", "2026-08-15T23:30:00Z", {
+          durationMinutes: 120,
+        }),
+        afterMidnight,
+        TZ,
+      ),
+    ).toBeNull();
+    expect(
+      visitorClassState(
+        cls("today", "2026-08-16T00:00:00Z"),
+        afterMidnight,
+        TZ,
+      ),
+    ).toBe("attend");
   });
 });
 
@@ -97,6 +129,27 @@ describe("visitorClassChoices", () => {
     );
     expect(result.now.map((c) => c.id)).toEqual(["running"]);
     expect(result.upcoming.map((c) => c.id)).toEqual(["later"]);
+  });
+
+  it("lists only unfinished classes today and both following full days", () => {
+    const result = visitorClassChoices(
+      [
+        cls("finished", "2026-08-15T17:00:00Z"),
+        cls("running", "2026-08-15T18:00:00Z"),
+        cls("later-today", "2026-08-15T20:00:00Z"),
+        cls("tomorrow", "2026-08-16T00:00:00Z"),
+        cls("last", "2026-08-17T23:59:00Z"),
+        cls("too-late", "2026-08-18T00:00:00Z"),
+      ],
+      now,
+      TZ,
+    );
+    expect(result.now.map((c) => c.id)).toEqual(["running"]);
+    expect(result.upcoming.map((c) => c.id)).toEqual([
+      "later-today",
+      "tomorrow",
+      "last",
+    ]);
   });
 
   it("sorts upcoming by start time", () => {
@@ -121,9 +174,9 @@ describe("visitorClassChoices", () => {
     expect(result.upcoming).toEqual([]);
   });
 
-  it("excludes a class beyond the 7-day window", () => {
+  it("excludes a class beyond the 3-day window", () => {
     const result = visitorClassChoices(
-      [cls("far", "2026-08-23T10:00:00Z")],
+      [cls("far", "2026-08-18T10:00:00Z")],
       now,
       TZ,
     );

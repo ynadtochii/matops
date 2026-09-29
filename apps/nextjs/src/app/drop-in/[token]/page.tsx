@@ -7,20 +7,31 @@ import { DropInForm } from "./drop-in-form";
 
 export default function DropInPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ token: string }>;
+  searchParams: Promise<{ class?: string }>;
 }) {
   return (
     <main className="container flex min-h-screen flex-col items-center justify-center gap-8 py-16">
       <Logo size={26} />
       <Suspense fallback={<MatLoader label="Opening the form" />}>
-        <DropIn params={params} />
+        <DropIn params={params} searchParams={searchParams} />
       </Suspense>
     </main>
   );
 }
 
-async function DropIn({ params }: { params: Promise<{ token: string }> }) {
-  const { token } = await params;
-  return <DropInForm token={token} />;
+async function DropIn({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ token: string }>;
+  searchParams: Promise<{ class?: string }>;
+}) {
+  const [{ token }, { class: classId }] = await Promise.all([
+    params,
+    searchParams,
+  ]);
+  return <DropInForm token={token} linkedClassId={classId ?? null} />;
 }
