@@ -1,0 +1,41 @@
+# Gym-owned Stripe payments: new design
+
+**Status: design draft, not implemented. Updated 2026-09-29.** This document replaces the 2026-09-24 six-slice automatic-payments plan. Its account-creation-only flow, membership-first order, migration number, route assumptions, and ADR number are withdrawn. Do not use them as implementation instructions. The first paid flow is a single drop-in visit, not a student membership. Finalize the purchase rule under **Decision required** before writing code.
+
+## Goal and ownership
+
+A gym sells an in-person class to its own visitor. The gym owns the Stripe account, receives the charge and payout, pays Stripe's fees, and manages refunds and disputes in its Stripe Dashboard. MatOps supplies booking software and reflects verified payment status. It does not collect visitor funds, store cards, add a payment commission, or sell the gym's class itself. Connecting Stripe must not enable the membership payment gate or block existing approval-only student booking.
+
+MatOps still needs its own eligible Stripe Connect platform account and API credentials to connect gyms and create payments on their behalf. Its platform country and each future gym country must be supported by the chosen Connect setup.
+
+## First release: one-off drop-in payments
+
+1. An authenticated gym owner opens Settings and chooses **Connect Stripe**. Stripe's Connect OAuth authorization lets an owner authorize an **existing Stripe account** or sign up for a **new account** through Stripe. Both paths return the gym's connected account ID to MatOps. Use one authorization route if a sandbox check confirms both paths work for this platform; do not substitute a new account under the owner's existing login for their existing account. Protect the callback with a one-use `state` tied to the signed-in owner and organization. Exchange the code on the server once, then store the connected account ID, mode and connection state. Do not store gym API keys or deprecated OAuth access tokens. [Stripe OAuth reference](https://docs.stripe.com/connect/oauth-reference)
+2. Show **ready to take payments** only when Stripe confirms the connection can charge. Allow incomplete account setup to resume through Stripe. Only an owner manages the connection and one drop-in price and currency for the academy. A gym without a connected, charge-ready account or price keeps the existing free drop-in flow. No Stripe setup is required to run the gym.
+3. The existing public `/drop-in/<token>` form resolves the academy and its eligible classes server-side. Its `dropIn.submit` currently creates or reuses one `drop_in_visit` per lead and class, booking an upcoming class or recording attendance for a class happening now. Do not create another lead or visit model. Decide below whether the visitor pays after that saved visit or before a confirmed booking/attendance. The server, not the public caller, selects the connected account and the price. Save the amount and currency offered for this visit so a later price change does not change its payment.
+4. A visitor opens a Stripe-hosted Checkout Session in `payment` mode, as a guest, on the gym's account. Start with cards only to keep payment confirmation immediate. Tie the session to the visit using server-stored identifiers; never trust a visit ID, academy ID, amount or Stripe account sent by the visitor. Returning from Checkout shows a pending result until MatOps confirms Stripe's status. Closing or failing Checkout must leave a clear way to retry without double-charging.
+5. A Connect webhook reads the raw request body, verifies Stripe's signature, checks live or test mode, and identifies the organization by `event.account`. Only then enter the organization's database scope and apply a matching visit's payment. Repeated delivery, repeated submission and two successful attempts for the same visit must not create two paid visits or silently conceal an extra charge. A successful card payment marks the visit paid once; a refund from the gym's Stripe Dashboard updates the visible status. Keep the Stripe session/payment ID and paid amount for support, not card data. A return URL alone never marks the visit paid. [Direct charges](https://docs.stripe.com/connect/direct-charges.md?platform=web&ui=stripe-hosted)
+6. Staff see whether a visitor paid on the existing class roster and lead record. The owner sees the connection and any payment-processing error in Settings; the Stripe Dashboard is where the owner sees transactions and initiates refunds. A payment must not approve a student, remove a hold or change the membership booking rule.
+
+The connection belongs to the gym organization; the visit and price belong to its academy. Public drop-in requests must resolve academy and organization from the live token. Webhook events cannot rely on a still-live public token, since an owner may rotate the link after Checkout starts.
+
+## Decision required before implementation
+
+**Does a drop-in payment buy the booking, or does it settle a visit already saved?** The existing form immediately books an upcoming class or marks an in-progress class present (`packages/db/src/dropin.ts`, `packages/api/src/router/dropin.ts`). This is a product decision, not a small implementation detail.
+
+- **Pay after submit, recommended for the lean pilot if unpaid visits are allowed.** Preserve the existing form and attendance behavior, then offer Checkout and show paid or unpaid to staff. Abandoned Checkout leaves a valid unpaid booking or visit; staff must accept that and handle payment at the desk. This cannot be described as pay-to-book.
+- **Pay before confirmation, required if an unpaid visitor must not get a place.** Create a pending visit or payment attempt, then confirm booking or attendance after verified payment. Define what happens when the class starts, becomes unavailable, or is cancelled while Checkout is open, and how a paid but unbookable visitor is refunded. This is a larger change to the current public flow.
+
+Do not turn on a required-payment button or label until this choice is settled. Also confirm the pilot gym's required currency and whether cards alone are acceptable. Do not infer global gym onboarding from Portuguese card acceptance.
+
+## Delivery boundary
+
+Build in two complete increments: **owner connection and readiness**, then **one-off visitor payment with webhook-backed status and refund visibility**. Neither increment adds subscription models. First exercise existing-account authorization and new-account signup with test-mode Stripe before locking the connection flow. Configure separate test/live keys, OAuth redirect URLs and Connect webhook destinations. Validate the platform's legal country and Connect availability before implementation.
+
+Use the current schema and migration journal when work begins. The old `0004` migration and ADR 141 references are invalid; ADR 141 already records the design system. A future decision record and roadmap change should describe the actual delivered behavior. Structure-only migrations must add the minimal connection, visit-payment and event-identification fields required by the chosen purchase rule. Keep the existing visit uniqueness by lead and class, tenant-scoped data access and public drop-in rate limits.
+
+Verify connection for an existing gym Stripe account and for new signup; incomplete or revoked connection; a card payment, abandoned Checkout, retry and refund; duplicate and out-of-order webhook delivery; rotated link after Checkout; wrong-account event; repeated public submit; and visitor visibility on the roster. Write focused tests under the existing DB/API conventions, and run a direct test-mode Checkout and webhook scenario before shipping. Do not use live cards for a test. Keep the current first-release payment-off behavior until the feature is ready.
+
+## Later, separate product decisions
+
+One-off student membership months, membership payment admission, recurring subscriptions, saved cards and customer portal, SEPA, MB WAY, plan changes, automated reconciliation, native payment UI, and a second provider are **not part of this release**. Each needs its own user flow and failure rules. The old six-slice order, estimates, migration IDs and subscription semantics no longer apply.
