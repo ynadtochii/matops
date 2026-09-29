@@ -1,7 +1,10 @@
 import { useState } from "react";
+import { ScrollView } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import type { SignupAnswerState } from "~/components/signup-questions";
+import { EMPTY_ANSWERS, SignupQuestions } from "~/components/signup-questions";
 import {
   Button,
   confirm,
@@ -17,21 +20,8 @@ import { trpc } from "~/utils/api";
 import { authClient } from "~/utils/auth";
 import { setActiveEntity } from "~/utils/entity-store";
 
-/** Exactly six digits — matches AcademyCodeSchema / isValidAcademyCode. */
 const CODE_RE = /^\d{6}$/;
 
-/**
- * "Join a gym" (spec S2, docs/issues/32) — shown when a signed-in user has no
- * active academy. Mobile v1 is a plain code lookup: the student types the gym's
- * 6-digit join code → we find the academy → they confirm + fill the minimal profile →
- * a PENDING membership → they land on the schedule with the S3 banner.
- *
- * The same screen serves a member who already trains somewhere and wants to add
- * a second place (`?another=1`, spec FP9). Only the words and the way out
- * change: a person with a gym is offered Cancel rather than Sign out, and the
- * server does the rest, since `joinByCode` already follows them to whichever
- * gym the code names.
- */
 export default function Onboarding() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -43,6 +33,7 @@ export default function Onboarding() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
+  const [answers, setAnswers] = useState<SignupAnswerState>(EMPTY_ANSWERS);
   const [error, setError] = useState<string | null>(null);
 
   const found = useQuery(
@@ -76,6 +67,7 @@ export default function Onboarding() {
   const reset = () => {
     setQuery(null);
     setError(null);
+    setAnswers(EMPTY_ANSWERS);
   };
 
   const academy = found.data ?? null;
@@ -87,6 +79,13 @@ export default function Onboarding() {
 
   const codeValid = CODE_RE.test(code.trim());
 
+  const profileFilled =
+    !!firstName.trim() && !!lastName.trim() && !!phone.trim();
+  const submitReady =
+    profileFilled &&
+    !!answers.belt &&
+    (academy?.waiver ? answers.waiverId === academy.waiver.id : true);
+
   return (
     <Screen center avoidKeyboard>
       <Stack.Screen
@@ -97,9 +96,12 @@ export default function Onboarding() {
         <Logo size={30} />
 
         {query !== null && academy ? (
-          /* Phase 2 — a gym was found: confirm + fill the profile. */
-          <UIStack key="profile" gap={24}>
-            <UIStack gap={8}>
+          <ScrollView
+            contentContainerStyle={{ gap: 24, paddingBottom: 24 }}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            <UIStack key="profile" gap={8}>
               <Heading>Join {academy.name}</Heading>
               {academy.address ? <Muted>{academy.address}</Muted> : null}
               <Muted>Your gym confirms you after you join.</Muted>
@@ -124,32 +126,46 @@ export default function Onboarding() {
                 onChangeText={setPhone}
                 keyboardType="phone-pad"
               />
-              {error && errText(error)}
-              <Button
-                label={join.isPending ? "Joining…" : `Join ${academy.name}`}
-                loading={join.isPending}
-                disabled={
-                  !firstName.trim() || !lastName.trim() || !phone.trim()
-                }
-                onPress={() => {
-                  setError(null);
-                  join.mutate({
-                    code: query,
-                    firstName: firstName.trim(),
-                    lastName: lastName.trim(),
-                    phone: phone.trim(),
-                  });
-                }}
-              />
-              <Button
-                label="Use a different ID"
-                variant="ghost"
-                onPress={reset}
-              />
             </UIStack>
-          </UIStack>
+
+            <SignupQuestions
+              academyName={academy.name}
+              signupHealthQuestion={academy.signupHealthQuestion}
+              waiver={academy.waiver ?? null}
+              state={answers}
+              onChange={(patch) =>
+                setAnswers((prev) => ({ ...prev, ...patch }))
+              }
+            />
+
+            {error && errText(error)}
+
+            <Button
+              label={join.isPending ? "Joining…" : `Join ${academy.name}`}
+              loading={join.isPending}
+              disabled={!submitReady}
+              onPress={() => {
+                setError(null);
+                join.mutate({
+                  code: query,
+                  firstName: firstName.trim(),
+                  lastName: lastName.trim(),
+                  phone: phone.trim(),
+                  belt: answers.belt || undefined,
+                  stripes: answers.stripes,
+                  health: answers.health || undefined,
+                  emailUpdates: answers.emailUpdates,
+                  waiverId: answers.waiverId ?? undefined,
+                });
+              }}
+            />
+            <Button
+              label="Use a different ID"
+              variant="ghost"
+              onPress={reset}
+            />
+          </ScrollView>
         ) : (
-          /* Phase 1: enter the gym's join code. */
           <UIStack key="code" gap={24}>
             <UIStack gap={8}>
               <Heading>

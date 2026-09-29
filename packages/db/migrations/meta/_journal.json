@@ -64,6 +64,13 @@
       "when": 1790544722134,
       "tag": "0008_waiver_append_only",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790595792193,
+      "tag": "0009_drop_in_link",
+      "breakpoints": true
     }
   ]
 }

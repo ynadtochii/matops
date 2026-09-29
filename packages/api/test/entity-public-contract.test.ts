@@ -94,13 +94,6 @@ describe("a public link names one academy, never its sibling", () => {
     expect([found?.academyId, found?.name]).toEqual([south, "South Mat"]);
   });
 
-  it("tells a walk-in which mat the poster belongs to", async () => {
-    const info = await h.as(NOMAD, ORG).dropIn.academyInfo({
-      academyId: south,
-    });
-    expect([info.name, info.timeZone]).toEqual(["South Mat", "Europe/Kyiv"]);
-  });
-
   it("renames one mat and leaves its sibling alone", async () => {
     await h
       .as(

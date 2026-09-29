@@ -125,34 +125,3 @@ export function leadFunnel(leads: LeadRow[]): LeadFunnel {
     joined: leads.filter((l) => l.stage === "joined").length,
   };
 }
-
-type PromoteRefusal = "already-joined" | "no-email" | "no-consent";
-
-interface PromotableLead {
-  stage: LeadStage;
-  email: string | null;
-  consent: boolean;
-}
-
-export const PROMOTE_REFUSAL_REASON: Record<PromoteRefusal, string> = {
-  "already-joined": "This lead is already a member.",
-  "no-email": "Add an email for this lead first.",
-  "no-consent": "This person did not agree to be contacted.",
-};
-
-/**
- * Whether an owner may turn this lead into a member (ADR 118). Promotion makes
- * an account for someone who has not proved they own the address, so the two
- * gates are the two things the owner cannot supply on their behalf: an email to
- * make the account with, and the agreement to be contacted that a person gave
- * on a form. A front-desk visitor is `consent: false` by construction and is
- * refused here, not silently promoted.
- */
-export function canPromoteLead(
-  lead: PromotableLead,
-): { ok: true } | { ok: false; reason: PromoteRefusal } {
-  if (lead.stage === "joined") return { ok: false, reason: "already-joined" };
-  if (!lead.consent) return { ok: false, reason: "no-consent" };
-  if (!lead.email) return { ok: false, reason: "no-email" };
-  return { ok: true };
-}

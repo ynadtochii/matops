@@ -12,13 +12,16 @@ import {
 } from "@matops/ui/dialog";
 
 import { useTRPC } from "~/trpc/react";
-import { CreateStudentDialog } from "./create-student-dialog";
 import {
   OrganizationExportDialog,
   StudentImportDialog,
 } from "./data-transfer-dialogs";
 import { useAnyBranchTakesPayment, useEntity, useOrganization } from "./entity";
-import { InviteLinkCard } from "./invite-link-card";
+import {
+  DropInLinkButton,
+  DropInLinkCard,
+  InviteLinkCard,
+} from "./invite-link-card";
 import { Members } from "./members";
 import { PageHeader } from "./page-header";
 
@@ -31,7 +34,7 @@ export function MembersScreen() {
       <PageHeader
         title="Students"
         subtitle={`Everyone who trains at ${academy.name}.`}
-        action={canRunOrganization ? <StudentActions /> : undefined}
+        action={canRunOrganization ? <StudentActions /> : <DropInLinkButton />}
       />
       <Members />
     </>
@@ -42,9 +45,7 @@ function StudentActions() {
   const trpc = useTRPC();
   const { entities } = useOrganization();
   const payments = useAnyBranchTakesPayment();
-  const [open, setOpen] = useState<
-    "invite" | "add" | "import" | "export" | null
-  >(null);
+  const [open, setOpen] = useState<"invite" | "import" | "export" | null>(null);
   const plans = useQuery({
     ...trpc.accessPlan.list.queryOptions(),
     enabled: payments && open === "import",
@@ -57,9 +58,6 @@ function StudentActions() {
     <div className="flex flex-wrap gap-2">
       <Button size="sm" onClick={() => setOpen("invite")}>
         Invite students
-      </Button>
-      <Button size="sm" variant="outline" onClick={() => setOpen("add")}>
-        Add student
       </Button>
       <Button size="sm" variant="outline" onClick={() => setOpen("import")}>
         Import students
@@ -79,11 +77,9 @@ function StudentActions() {
             label="Student link"
             hint="A forwarded link never opens access on its own."
           />
+          <DropInLinkCard />
         </DialogContent>
       </Dialog>
-      {open === "add" && (
-        <CreateStudentDialog entities={entities} onOpenChange={close} />
-      )}
       {open === "import" && (
         <StudentImportDialog
           entities={entities}

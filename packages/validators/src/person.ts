@@ -1,6 +1,6 @@
 import { z } from "zod/v4";
 
-import { EmailSchema, IdSchema, lineText, PhoneSchema } from "./fields";
+import { EmailSchema, lineText, PhoneSchema } from "./fields";
 
 const PersonContactSchema = z.object({
   name: lineText(1, 120),
@@ -17,8 +17,3 @@ export const DuplicateDecisionSchema = z.discriminatedUnion("kind", [
     reviewedPersonIds: z.array(z.uuid()).max(100),
   }),
 ]);
-
-export const CreateStudentPersonSchema = PersonContactSchema.extend({
-  entityId: IdSchema,
-  duplicateDecision: DuplicateDecisionSchema.optional(),
-});

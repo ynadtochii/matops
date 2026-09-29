@@ -1,6 +1,6 @@
 import { z } from "zod/v4";
 
-import { blockText, IdSchema, lineText, personFields } from "./fields";
+import { blockText, IdSchema } from "./fields";
 
 // ─── Booking (Phase 3) ───────────────────────────────────────────────────────
 
@@ -39,20 +39,6 @@ export const CancelForSchema = z.object({
 export const AddWalkInSchema = z.object({
   classId: z.uuid(),
   personId: IdSchema,
-  reason: attendanceReason,
-});
-
-/**
- * Record a visitor who is not a member, from the class roster (spec O5/O4).
- * Staff type this at the mat, so it asks for the least that still identifies a
- * person: a name and the phone the lead is deduped by. Last name is optional
- * and `consent` is absent by design — the visitor is not at the keyboard, so
- * the gym cannot tick a contact-consent box on their behalf.
- */
-export const AddVisitorSchema = z.object({
-  classId: z.uuid(),
-  ...personFields,
-  lastName: lineText(0, 60).default(""),
   reason: attendanceReason,
 });
 

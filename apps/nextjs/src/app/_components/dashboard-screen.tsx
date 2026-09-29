@@ -34,6 +34,7 @@ import { clockParts, dayLongFmt, timeFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { ClassRoster, ROSTER_DIALOG } from "./class-roster";
 import { useEntity, useEntityHref, useOrganization } from "./entity";
+import { DropInLinkButton } from "./invite-link-card";
 import { PageHeader } from "./page-header";
 import {
   disciplineDot,
@@ -267,7 +268,11 @@ export function DashboardScreen() {
       </Dialog>
 
       <div className={ENTER}>
-        <PageHeader title="Dashboard" subtitle={dayLongFmt.format(today)} />
+        <PageHeader
+          title="Dashboard"
+          subtitle={dayLongFmt.format(today)}
+          action={<DropInLinkButton />}
+        />
 
         {canRunOrganization && (
           <div className="mb-6 empty:hidden">

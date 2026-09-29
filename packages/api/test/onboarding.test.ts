@@ -68,7 +68,12 @@ async function membership(
   return res.rows[0] ?? { role: "none", status: "none", invited_role: null };
 }
 
-const PERSON = { firstName: "Ana", lastName: "Silva", phone: "+351911111111" };
+const PERSON = {
+  firstName: "Ana",
+  lastName: "Silva",
+  phone: "+351911111111",
+  belt: "White",
+};
 
 describe("start a gym", () => {
   it("writes the organization and no branch", async () => {

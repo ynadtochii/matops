@@ -16,7 +16,7 @@ const MIN_MS = 60 * 1000;
  */
 export const MAX_CLASS_MINUTES = 600;
 
-interface CheckInClass {
+export interface CheckInClass {
   id: string;
   startsAt: Date;
   durationMinutes: number;
@@ -48,17 +48,6 @@ export function resolveCheckInClass<T extends CheckInClass>(
     .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
 }
 
-const CHECK_IN_LINK = /\/checkin\/([A-Za-z0-9_-]{1,64})\/?(?:[?#].*)?$/;
-
-/**
- * The academy id inside a scanned check-in QR, or `null` for anything else.
- * Accepts both `https://<host>/checkin/<id>` and `matops://checkin/<id>`. A regex
- * rather than `new URL()`: Hermes does not parse custom schemes.
- */
-export function parseCheckInLink(value: string): string | null {
-  return CHECK_IN_LINK.exec(value.trim())?.[1] ?? null;
-}
-
 interface CheckInWindow {
   from: Date;
   to: Date;
@@ -80,46 +69,4 @@ export function checkInFetchWindow(now: Date): CheckInWindow {
 /** Is this one class checkable into right now? The same rule, for one row. */
 export function canCheckIn(c: CheckInClass, now: Date): boolean {
   return resolveCheckInClass([c], now).length === 1;
-}
-
-const VISITOR_LOOKAHEAD_MINUTES = 24 * 60;
-export const VISITOR_UPCOMING_LIMIT = 6;
-
-export function visitorFetchWindow(now: Date): CheckInWindow {
-  return {
-    from: checkInFetchWindow(now).from,
-    to: new Date(now.getTime() + VISITOR_LOOKAHEAD_MINUTES * MIN_MS),
-  };
-}
-
-interface VisitorClassChoices<T extends CheckInClass> {
-  now: T[];
-  upcoming: T[];
-}
-
-/**
- * What a visitor at the gym QR may pick. `now` is the check-in set, so picking
- * one means they are here and get marked present. `upcoming` is everything
- * later they could book instead, for someone who walks in between classes.
- *
- * A class starting within the next hour is in the check-in window already, so
- * it is dropped from `upcoming` by id: offering the same class twice, once to
- * attend and once to book, is a choice nobody can answer.
- */
-export function visitorClassChoices<T extends CheckInClass>(
-  classes: T[],
-  now: Date,
-): VisitorClassChoices<T> {
-  const open = resolveCheckInClass(classes, now);
-  const openIds = new Set(open.map((c) => c.id));
-  const upcoming = classes
-    .filter(
-      (c) =>
-        c.status !== "cancelled" &&
-        !openIds.has(c.id) &&
-        c.startsAt.getTime() > now.getTime(),
-    )
-    .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())
-    .slice(0, VISITOR_UPCOMING_LIMIT);
-  return { now: open, upcoming };
 }

@@ -12,16 +12,7 @@ import { harness, rejectionCode, seedAcademies, seedClasses } from "./helpers";
 const A = "academy_A";
 const OWNER = "u_owner";
 const COACH = "u_coach";
-const CLASS_NOW = "aaaaaaaa-0000-4000-8000-000000000001";
-const CLASS_LATER = "aaaaaaaa-0000-4000-8000-000000000002";
-
-const VISITOR = {
-  firstName: "Ana",
-  lastName: "Silva",
-  phone: "+351911111111",
-  email: "ana@example.com",
-  consent: true as const,
-};
+const CLASS_FUTURE = "aaaaaaaa-0000-4000-8000-000000000001";
 
 function from(ip: string): Headers {
   return new Headers({ "x-forwarded-for": ip });
@@ -51,416 +42,205 @@ async function base(): Promise<Harness> {
   return h;
 }
 
-interface LeadRow {
-  first_name: string;
-  last_name: string;
-  visit_count: number;
+async function mintToken(h: Harness): Promise<string> {
+  const link = await h.as(OWNER, A).dropIn.link();
+  return link.token;
 }
 
-async function leads(h: Harness): Promise<LeadRow[]> {
-  const res = await h.pg.query<LeadRow>(
-    `SELECT d.first_name, d.last_name,
-            (SELECT count(*)::int FROM "drop_in_visit" v
-              WHERE v.drop_in_id = d.id AND v.attendance_status = 'present') AS visit_count
-       FROM "drop_in" d`,
-  );
-  return res.rows;
-}
-
-async function visitClasses(h: Harness): Promise<(string | null)[]> {
-  const res = await h.pg.query<{ class_id: string }>(
-    `SELECT class_id FROM "drop_in_visit"`,
-  );
-  return res.rows.map((r) => r.class_id);
-}
-
-interface VisitRow {
-  class_id: string;
-  booking_status: string;
-  attendance_status: string;
-}
-
-async function visits(h: Harness): Promise<VisitRow[]> {
-  const res = await h.pg.query<VisitRow>(
-    `SELECT class_id, booking_status, attendance_status FROM "drop_in_visit"`,
-  );
-  return res.rows;
-}
-
-describe("dropIn.submit, the stranger-writable insert behind the wall poster", () => {
-  it("takes a walk-in's details with no account at all", async () => {
+describe("dropIn.resolve, the unauthenticated token-to-academy lookup", () => {
+  it("returns the academy name and timezone for a valid token", async () => {
     const h = await base();
-    const res = await h
-      .as("nobody", null, from("1.1.1.1"))
-      .dropIn.submit({ academyId: A, ...VISITOR });
-
-    expect(res).toEqual({
-      ok: true,
-      firstVisit: true,
-      booked: false,
-      classTitle: null,
-    });
-    expect(await leads(h)).toMatchObject([
-      { first_name: "Ana", visit_count: 0 },
-    ]);
+    const token = await mintToken(h);
+    const result = await h.as("nobody", null).dropIn.resolve({ token });
+    expect(typeof result.name).toBe("string");
   });
 
-  it("refuses a visitor with no email, the address a member account needs", async () => {
-    const h = await base();
-    const { email: _drop, ...noEmail } = VISITOR;
-
-    expect(
-      await rejectionCode(
-        h.as("nobody", null, from("1.1.1.1")).dropIn.submit({
-          academyId: A,
-          ...noEmail,
-        } as typeof VISITOR & {
-          academyId: string;
-        }),
-      ),
-    ).toBe("BAD_REQUEST");
-  });
-
-  it("keeps a returning walk-in on one row instead of making a second", async () => {
-    const h = await base();
-    const caller = h.as("nobody", null, from("1.1.1.1"));
-    await caller.dropIn.submit({ academyId: A, ...VISITOR });
-    await caller.dropIn.submit({
-      academyId: A,
-      ...VISITOR,
-      lastName: "Silva-Costa",
-    });
-
-    const rows = await leads(h);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]?.last_name).toBe("Silva-Costa");
-  });
-
-  it("does not count a second form fill for the same class as a second visit", async () => {
-    const h = await base();
-    await seedClasses(h.pg, [
-      {
-        id: CLASS_NOW,
-        academyId: A,
-        instructorId: COACH,
-        startsInMinutes: -10,
-        durationMinutes: 60,
-      },
-    ]);
-    const caller = h.as("nobody", null, from("1.1.1.1"));
-    await caller.dropIn.submit({ academyId: A, ...VISITOR });
-    const second = await caller.dropIn.submit({ academyId: A, ...VISITOR });
-
-    expect(second.firstVisit).toBe(true);
-    expect((await leads(h))[0]?.visit_count).toBe(1);
-  });
-
-  it("counts a second visit when it is a different class", async () => {
-    const h = await base();
-    await seedClasses(h.pg, [
-      {
-        id: CLASS_NOW,
-        academyId: A,
-        instructorId: COACH,
-        startsInMinutes: -10,
-        durationMinutes: 30,
-      },
-      {
-        id: CLASS_LATER,
-        academyId: A,
-        instructorId: COACH,
-        startsInMinutes: 45,
-        durationMinutes: 60,
-      },
-    ]);
-    const caller = h.as("nobody", null, from("1.1.1.1"));
-    await caller.dropIn.submit({
-      academyId: A,
-      ...VISITOR,
-      classId: CLASS_NOW,
-    });
-    await h.pg.exec(
-      `UPDATE "class" SET starts_at = now() - interval '80 minutes' WHERE id = '${"CLASS_NOW_ID"}';`.replace(
-        "CLASS_NOW_ID",
-        CLASS_NOW,
-      ),
-    );
-    const second = await caller.dropIn.submit({
-      academyId: A,
-      ...VISITOR,
-      classId: CLASS_LATER,
-    });
-
-    expect(second.firstVisit).toBe(false);
-    expect((await leads(h))[0]?.visit_count).toBe(2);
-    expect(await leads(h)).toHaveLength(1);
-  });
-
-  it("attaches the class that is on right now", async () => {
-    const h = await base();
-    await seedClasses(h.pg, [
-      {
-        id: CLASS_NOW,
-        academyId: A,
-        instructorId: COACH,
-        startsInMinutes: -10,
-        durationMinutes: 60,
-      },
-    ]);
-    await h
-      .as("nobody", null, from("1.1.1.1"))
-      .dropIn.submit({ academyId: A, ...VISITOR });
-
-    expect(await visitClasses(h)).toEqual([CLASS_NOW]);
-  });
-
-  it("records no visit when nothing is on", async () => {
-    const h = await base();
-    await h
-      .as("nobody", null, from("1.1.1.1"))
-      .dropIn.submit({ academyId: A, ...VISITOR });
-    expect(await visitClasses(h)).toEqual([]);
-  });
-
-  it("keeps a visitor on the first class's register after a second class", async () => {
-    const h = await base();
-    await seedClasses(h.pg, [
-      {
-        id: CLASS_NOW,
-        academyId: A,
-        instructorId: COACH,
-        startsInMinutes: -10,
-        durationMinutes: 30,
-      },
-      {
-        id: CLASS_LATER,
-        academyId: A,
-        instructorId: COACH,
-        startsInMinutes: 45,
-        durationMinutes: 60,
-      },
-    ]);
-    const caller = h.as("nobody", null, from("1.1.1.1"));
-    await caller.dropIn.submit({
-      academyId: A,
-      ...VISITOR,
-      classId: CLASS_NOW,
-    });
-    await h.pg.exec(
-      `UPDATE "class" SET starts_at = now() - interval '80 minutes' WHERE id = '${CLASS_NOW}';`,
-    );
-    await caller.dropIn.submit({
-      academyId: A,
-      ...VISITOR,
-      classId: CLASS_LATER,
-    });
-
-    expect((await visitClasses(h)).sort()).toEqual(
-      [CLASS_NOW, CLASS_LATER].sort(),
-    );
-  });
-
-  it("records the class the visitor picked when two are on at once", async () => {
-    const h = await base();
-    await seedClasses(h.pg, [
-      {
-        id: CLASS_NOW,
-        academyId: A,
-        instructorId: COACH,
-        startsInMinutes: -10,
-        durationMinutes: 60,
-      },
-      {
-        id: CLASS_LATER,
-        academyId: A,
-        instructorId: COACH,
-        startsInMinutes: 45,
-        durationMinutes: 60,
-      },
-    ]);
-    await h
-      .as("nobody", null, from("1.1.1.1"))
-      .dropIn.submit({ academyId: A, ...VISITOR, classId: CLASS_LATER });
-
-    expect(await visitClasses(h)).toEqual([CLASS_LATER]);
-  });
-
-  it("still takes the lead when the visitor picks no class at all", async () => {
-    const h = await base();
-    await seedClasses(h.pg, [
-      {
-        id: CLASS_NOW,
-        academyId: A,
-        instructorId: COACH,
-        startsInMinutes: -10,
-        durationMinutes: 60,
-      },
-      {
-        id: CLASS_LATER,
-        academyId: A,
-        instructorId: COACH,
-        startsInMinutes: 45,
-        durationMinutes: 60,
-      },
-    ]);
-    await h
-      .as("nobody", null, from("1.1.1.1"))
-      .dropIn.submit({ academyId: A, ...VISITOR });
-
-    expect(await leads(h)).toHaveLength(1);
-    expect(await visitClasses(h)).toEqual([]);
-  });
-
-  it("books a class later today rather than marking them present", async () => {
-    const h = await base();
-    await seedClasses(h.pg, [
-      {
-        id: CLASS_LATER,
-        academyId: A,
-        instructorId: COACH,
-        startsInMinutes: 300,
-        durationMinutes: 60,
-      },
-    ]);
-    const res = await h
-      .as("nobody", null, from("1.1.1.1"))
-      .dropIn.submit({ academyId: A, ...VISITOR, classId: CLASS_LATER });
-
-    expect(res.booked).toBe(true);
-    expect(await visits(h)).toMatchObject([
-      {
-        class_id: CLASS_LATER,
-        booking_status: "booked",
-        attendance_status: "unmarked",
-      },
-    ]);
-  });
-
-  it("refuses a class the page was never entitled to offer", async () => {
-    const h = await base();
-    await seedAcademies(h.pg, [
-      { id: "academy_B", code: "100002", members: [] },
-    ]);
-    await seedClasses(h.pg, [
-      {
-        id: CLASS_NOW,
-        academyId: "academy_B",
-        instructorId: COACH,
-        startsInMinutes: -10,
-        durationMinutes: 60,
-      },
-    ]);
-    expect(
-      await rejectionCode(
-        h
-          .as("nobody", null, from("1.1.1.1"))
-          .dropIn.submit({ academyId: A, ...VISITOR, classId: CLASS_NOW }),
-      ),
-    ).toBe("PRECONDITION_FAILED");
-    expect(await visitClasses(h)).toEqual([]);
-  });
-
-  it("refuses a class that ended while the form sat open", async () => {
-    const h = await base();
-    await seedClasses(h.pg, [
-      {
-        id: CLASS_NOW,
-        academyId: A,
-        instructorId: COACH,
-        startsInMinutes: -400,
-        durationMinutes: 60,
-      },
-    ]);
-    expect(
-      await rejectionCode(
-        h
-          .as("nobody", null, from("1.1.1.1"))
-          .dropIn.submit({ academyId: A, ...VISITOR, classId: CLASS_NOW }),
-      ),
-    ).toBe("PRECONDITION_FAILED");
-    expect(await leads(h)).toHaveLength(0);
-  });
-
-  it("refuses a gym that does not exist, writing nothing", async () => {
+  it("returns NOT_FOUND for an unknown token", async () => {
     const h = await base();
     expect(
       await rejectionCode(
-        h
-          .as("nobody", null, from("1.1.1.1"))
-          .dropIn.submit({ academyId: "org_nope", ...VISITOR }),
+        h.as("nobody", null).dropIn.resolve({ token: "not-a-real-token" }),
       ),
     ).toBe("NOT_FOUND");
-    expect(await leads(h)).toHaveLength(0);
   });
 
-  it("keeps a stranger's lead out of another gym's list", async () => {
+  it("returns NOT_FOUND for a rotated token", async () => {
     const h = await base();
-    await h
-      .as("nobody", null, from("1.1.1.1"))
-      .dropIn.submit({ academyId: A, ...VISITOR });
-
-    const mine = await h.as(OWNER, A).dropIn.list();
-    expect(mine).toHaveLength(1);
-    expect(await rejectionCode(h.as(COACH, A).dropIn.list())).toBe("FORBIDDEN");
+    const first = await mintToken(h);
+    await h.as(OWNER, A).dropIn.rotateLink();
+    expect(
+      await rejectionCode(
+        h.as("nobody", null).dropIn.resolve({ token: first }),
+      ),
+    ).toBe("NOT_FOUND");
   });
 });
 
-describe("the rate limit, driven through a real procedure", () => {
-  it("lets five walk-ins through from one address, then refuses the sixth", async () => {
+describe("dropIn.classes, the unauthenticated class listing", () => {
+  it("returns now and upcoming arrays for a valid token", async () => {
     const h = await base();
-    const caller = h.as("nobody", null, from("9.9.9.9"));
-    const codes: string[] = [];
-    for (let i = 0; i < 6; i++) {
-      codes.push(
-        await rejectionCode(
-          caller.dropIn.submit({
-            academyId: A,
-            ...VISITOR,
-            phone: `+35191111111${i}`,
-          }),
-        ),
-      );
-    }
-    expect(codes.slice(0, 5)).toEqual(Array(5).fill("resolved without error"));
-    expect(codes[5]).toBe("TOO_MANY_REQUESTS");
+    const token = await mintToken(h);
+    const result = await h.as("nobody", null).dropIn.classes({ token });
+    expect(Array.isArray(result.now)).toBe(true);
+    expect(Array.isArray(result.upcoming)).toBe(true);
   });
 
-  it("keys on the address, so one flooder cannot lock out the gym", async () => {
+  it("returns NOT_FOUND for an unknown token", async () => {
     const h = await base();
-    const flooder = h.as("nobody", null, from("9.9.9.9"));
-    for (let i = 0; i < 6; i++) {
+    expect(
       await rejectionCode(
-        flooder.dropIn.submit({
-          academyId: A,
-          ...VISITOR,
-          phone: `+35191111111${i}`,
-        }),
-      );
-    }
-
-    await expect(
-      h
-        .as("nobody", null, from("8.8.8.8"))
-        .dropIn.submit({ academyId: A, ...VISITOR }),
-    ).resolves.toMatchObject({ ok: true });
+        h.as("nobody", null).dropIn.classes({ token: "ghost-token" }),
+      ),
+    ).toBe("NOT_FOUND");
   });
 
-  it("keys on the path too, so one capped route does not cap another", async () => {
+  it("lists a future class in upcoming", async () => {
     const h = await base();
-    const ip = from("7.7.7.7");
-    for (let i = 0; i < 6; i++) {
-      await rejectionCode(
-        h.as("nobody", null, ip).dropIn.submit({
-          academyId: A,
-          ...VISITOR,
-          phone: `+35191111111${i}`,
-        }),
-      );
-    }
+    const token = await mintToken(h);
+    await seedClasses(h.pg, [
+      {
+        id: CLASS_FUTURE,
+        academyId: A,
+        instructorId: COACH,
+        startsInMinutes: 120,
+        durationMinutes: 60,
+      },
+    ]);
+    const result = await h.as("nobody", null).dropIn.classes({ token });
+    expect(result.upcoming.map((c) => c.id)).toContain(CLASS_FUTURE);
+  });
+});
 
-    await expect(
-      h.as(OWNER, A, ip).academy.findByCode({ code: "100001" }),
-    ).resolves.toMatchObject({ academyId: A });
+describe("dropIn.lookup, the unauthenticated phone+email check", () => {
+  it("returns null match when no lead has that phone", async () => {
+    const h = await base();
+    const token = await mintToken(h);
+    const result = await h.as("nobody", null, from("2.2.2.1")).dropIn.lookup({
+      token,
+      phone: "+351999000111",
+      email: "nobody@example.com",
+    });
+    expect(result.match).toBeNull();
+  });
+
+  it("returns a match for a known phone and email", async () => {
+    const h = await base();
+    const token = await mintToken(h);
+    await h.pg.query(
+      `INSERT INTO "drop_in" (academy_id, first_name, last_name, phone, email, consent, belt, source)
+         VALUES ($1, 'Ana', 'Silva', '+351911111111', 'ana@example.com', true, 'Blue', 'link')`,
+      [A],
+    );
+    const result = await h.as("nobody", null, from("2.2.2.2")).dropIn.lookup({
+      token,
+      phone: "+351911111111",
+      email: "ana@example.com",
+    });
+    expect(result.match).toMatchObject({ firstName: "Ana" });
+  });
+
+  it("returns NOT_FOUND for an unknown token", async () => {
+    const h = await base();
+    expect(
+      await rejectionCode(
+        h.as("nobody", null, from("2.2.2.3")).dropIn.lookup({
+          token: "no-such-token",
+          phone: "+351911111111",
+          email: "x@x.com",
+        }),
+      ),
+    ).toBe("NOT_FOUND");
+  });
+});
+
+describe("dropIn.submit, the token-based visitor booking", () => {
+  it("books a new visitor on a future class", async () => {
+    const h = await base();
+    const token = await mintToken(h);
+    await seedClasses(h.pg, [
+      {
+        id: CLASS_FUTURE,
+        academyId: A,
+        instructorId: COACH,
+        startsInMinutes: 90,
+        durationMinutes: 60,
+      },
+    ]);
+    const result = await h.as("nobody", null, from("3.3.3.1")).dropIn.submit({
+      kind: "new",
+      token,
+      phone: "+351911111111",
+      email: "ana@example.com",
+      firstName: "Ana",
+      lastName: "Silva",
+      consent: true,
+      classId: CLASS_FUTURE,
+      belt: "White",
+    });
+    expect(result).toMatchObject({ mode: "book" });
+  });
+
+  it("returns NOT_FOUND for a rotated token", async () => {
+    const h = await base();
+    const first = await mintToken(h);
+    await h.as(OWNER, A).dropIn.rotateLink();
+    await seedClasses(h.pg, [
+      {
+        id: CLASS_FUTURE,
+        academyId: A,
+        instructorId: COACH,
+        startsInMinutes: 90,
+        durationMinutes: 60,
+      },
+    ]);
+    expect(
+      await rejectionCode(
+        h.as("nobody", null, from("3.3.3.2")).dropIn.submit({
+          kind: "new",
+          token: first,
+          phone: "+351911111111",
+          email: "ana@example.com",
+          firstName: "Ana",
+          lastName: "Silva",
+          consent: true,
+          classId: CLASS_FUTURE,
+          belt: "White",
+        }),
+      ),
+    ).toBe("NOT_FOUND");
+  });
+
+  it("returns PRECONDITION_FAILED for a class that belongs to another academy", async () => {
+    const h = await base();
+    const token = await mintToken(h);
+    const CLASS_OTHER = "aaaaaaaa-0000-4000-8000-000000000099";
+    await seedAcademies(h.pg, [
+      { id: "academy_B", code: "100099", members: [] },
+    ]);
+    await seedClasses(h.pg, [
+      {
+        id: CLASS_OTHER,
+        academyId: "academy_B",
+        instructorId: COACH,
+        startsInMinutes: 90,
+        durationMinutes: 60,
+      },
+    ]);
+    expect(
+      await rejectionCode(
+        h.as("nobody", null, from("3.3.3.3")).dropIn.submit({
+          kind: "new",
+          token,
+          phone: "+351911111111",
+          email: "ana@example.com",
+          firstName: "Ana",
+          lastName: "Silva",
+          consent: true,
+          classId: CLASS_OTHER,
+          belt: "White",
+        }),
+      ),
+    ).toBe("PRECONDITION_FAILED");
   });
 });
 

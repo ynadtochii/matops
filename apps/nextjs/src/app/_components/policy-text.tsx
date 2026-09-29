@@ -13,7 +13,7 @@ import { CONTACT_EMAIL } from "./contact";
  * client dialog.
  */
 
-export const PRIVACY_UPDATED = "30 August 2026";
+export const PRIVACY_UPDATED = "28 September 2026";
 
 function Heading({ children }: { children: React.ReactNode }) {
   return (
@@ -47,8 +47,11 @@ export function PrivacyText() {
           paid by bank transfer, outside MatOps.
         </li>
         <li>
-          If you check in as a visitor: your name, phone, email, and that you
-          agreed to be contacted.
+          If you visit through the drop-in link without a membership: your name,
+          email, phone, belt level, any health note you provided, whether you
+          opted into news, and the classes you attended or booked. The gym can
+          see these details; coaches see your health note only for classes you
+          booked.
         </li>
       </ul>
 
@@ -74,8 +77,10 @@ export function PrivacyText() {
       <Heading>How long we keep it</Heading>
       <p>
         While you are a member, and afterwards for as long as your academy keeps
-        its records. When an academy deletes its MatOps account, its data goes
-        with it.
+        its records. If you visit through the drop-in link, your information is
+        kept as long as the academy keeps its records. When an academy deletes
+        its MatOps account, all its data goes with it, including visitor
+        information.
       </p>
 
       <Heading>Your rights</Heading>
@@ -88,38 +93,6 @@ export function PrivacyText() {
 
       <Heading>Cookies</Heading>
       <p>One, to keep you signed in. No advertising or analytics cookies.</p>
-    </div>
-  );
-}
-
-/**
- * The training risk notice. Grappling is full contact, so someone stepping onto
- * the mat for the first time is told what that means before they tick the box,
- * not after. The academy is named because the limit of liability is the
- * academy's, not matops'.
- */
-export function RiskText({ academyName }: { academyName: string }) {
-  const gym = academyName.trim() === "" ? "The academy" : academyName;
-  return (
-    <div className="text-foreground-secondary flex max-w-[58ch] flex-col gap-3 leading-relaxed text-pretty">
-      <p>
-        Brazilian Jiu-Jitsu is a full-contact martial art involving physical
-        contact, grappling and sparring. Participation carries an inherent risk
-        of injury.
-      </p>
-      <p>
-        You agree to train within your limits, to tap out immediately when
-        required, and to tell your coach about any relevant injuries or medical
-        conditions before class.
-      </p>
-      <p>
-        {gym} and its coaches accept no liability for injuries sustained during
-        training, except in cases of negligence.
-      </p>
-      <p>
-        This is not the gym&apos;s waiver. You sign that at the desk before your
-        first session.
-      </p>
     </div>
   );
 }

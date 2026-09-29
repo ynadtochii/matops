@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import type { LeadRow } from "../src/leads";
 import {
-  canPromoteLead,
   leadFunnel,
   leadQueues,
   matchLeadByPhone,
@@ -116,43 +115,5 @@ describe("leadFunnel", () => {
       trained: 2,
       joined: 1,
     });
-  });
-});
-describe("canPromoteLead", () => {
-  const promotable = {
-    stage: "contacted" as const,
-    email: "pat@example.com",
-    consent: true,
-  };
-
-  it("promotes a lead who gave an email and agreed to be contacted", () => {
-    expect(canPromoteLead(promotable)).toEqual({ ok: true });
-  });
-
-  it("refuses a lead with no email, because there is no account to make", () => {
-    expect(canPromoteLead({ ...promotable, email: null })).toEqual({
-      ok: false,
-      reason: "no-email",
-    });
-  });
-
-  it("refuses a front-desk visitor, who never agreed to be contacted", () => {
-    expect(canPromoteLead({ ...promotable, consent: false })).toEqual({
-      ok: false,
-      reason: "no-consent",
-    });
-  });
-
-  it("refuses a lead who is already a member", () => {
-    expect(canPromoteLead({ ...promotable, stage: "joined" })).toEqual({
-      ok: false,
-      reason: "already-joined",
-    });
-  });
-
-  it("names the missing agreement before the missing email", () => {
-    expect(
-      canPromoteLead({ ...promotable, email: null, consent: false }),
-    ).toEqual({ ok: false, reason: "no-consent" });
   });
 });

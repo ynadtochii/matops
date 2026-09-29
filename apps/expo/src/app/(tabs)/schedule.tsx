@@ -215,8 +215,6 @@ function ClassCard({
     </Pressable>
   );
 
-  // A class that has already started is no longer actionable — it stays
-  // readable (and tappable for the roster) but drops out of the scan.
   return past && !cancelled ? (
     <View style={{ opacity: 0.5 }}>{card}</View>
   ) : (

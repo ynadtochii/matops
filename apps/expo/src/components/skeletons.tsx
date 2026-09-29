@@ -45,9 +45,6 @@ export function SkeletonCard({
 export function RankSkeleton() {
   return <SkeletonRows rows={2} />;
 }
-export function CheckinSkeleton({ rows = 2 }: { rows?: number }) {
-  return <SkeletonRows rows={rows} />;
-}
 export function ScheduleSkeleton({ days = 3 }: { days?: number }) {
   return <SkeletonRows rows={days} />;
 }
