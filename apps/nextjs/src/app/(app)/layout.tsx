@@ -7,7 +7,7 @@ import { PageLoader } from "~/app/_components/mat-loader";
 import { OrganizationBoundary } from "~/app/_components/organization-boundary";
 import { getSession } from "~/auth/server";
 import { EntityCacheBoundary } from "~/trpc/react";
-import { getQueryClient, HydrateClient, trpc } from "~/trpc/server";
+import { getQueryClient, trpc } from "~/trpc/server";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -23,17 +23,22 @@ async function Authed({ children }: { children: React.ReactNode }) {
   if (!session.session.activeOrganizationId) return <AcademyGate />;
 
   const queryClient = getQueryClient();
-  const organization = trpc.entity.list.queryOptions();
-  await queryClient.prefetchQuery(organization);
+  const options = trpc.entity.list.queryOptions();
+  await queryClient.prefetchQuery(options);
+  const organization = queryClient.getQueryState(options.queryKey);
 
+  // Not HydrateClient: the request shares one query client, so a snapshot here
+  // can catch the entity layout's in-flight `academy.current`. A late hydration
+  // then mismatches the server HTML and the tab freezes (ADR 89 addendum).
   return (
-    <HydrateClient only={organization.queryKey}>
-      <OrganizationBoundary>
-        <EntityCacheBoundary />
-        <AppShell user={{ name: session.user.name, email: session.user.email }}>
-          {children}
-        </AppShell>
-      </OrganizationBoundary>
-    </HydrateClient>
+    <OrganizationBoundary
+      initialData={organization?.data}
+      initialDataUpdatedAt={organization?.dataUpdatedAt}
+    >
+      <EntityCacheBoundary />
+      <AppShell user={{ name: session.user.name, email: session.user.email }}>
+        {children}
+      </AppShell>
+    </OrganizationBoundary>
   );
 }

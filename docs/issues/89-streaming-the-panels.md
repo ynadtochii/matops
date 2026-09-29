@@ -165,8 +165,9 @@ drew the route instead. That is a hydration mismatch. Inside Next's `<Activity>`
 React 19.3 canary does not recover from it: it loops at `OffscreenLane` and never
 commits. Reproduced locally with a 1.5 s delay on every pool connection.
 
-Fix: `HydrateClient` takes `only`, and the `(app)` layout passes the
-`entity.list` key, the one query it awaits. `AppShell` now always hydrates with
+Fix: the `(app)` layout drops `HydrateClient`. It passes `entity.list`, the one
+query it awaits, to `OrganizationBoundary` as `initialData` with the server's
+`dataUpdatedAt`, so nothing else can ride along. `AppShell` now always hydrates with
 `academy.current` absent and fetches it in the same batch as
 `stats.navigationSummary`. The route under `<main>` is therefore never
 hydrated; the browser renders it after that request. Keep it that way: each
