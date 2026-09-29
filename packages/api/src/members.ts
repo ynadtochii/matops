@@ -104,6 +104,7 @@ export function nameByUser(rows: MemberRow[]): Map<string, string> {
 /** The tenant handles activation needs: the base connection plus an RLS tx. */
 interface ActivateScope {
   academyId: string;
+  appUrl: string;
   baseDb: DbExec;
   withScope: <T>(fn: (tx: TenantTx) => Promise<T>) => Promise<T>;
 }
@@ -124,7 +125,12 @@ export async function activateMember(
   );
   // Welcome push to the newly approved member (§4/S3, docs/issues/17).
   await notifyMembershipApproved(
-    { academyId: ctx.academyId, userId: input.userId },
+    {
+      academyId: ctx.academyId,
+      userId: input.userId,
+      role: input.granted.role,
+      appUrl: ctx.appUrl,
+    },
     ctx.baseDb,
   );
 }

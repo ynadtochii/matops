@@ -31,6 +31,7 @@ type NoticeEmailSender = (payload: {
   to: string;
   subject: string;
   text: string;
+  html?: string;
   idempotencyKey: string;
 }) => Promise<{
   sent: boolean;
@@ -103,7 +104,10 @@ export async function createNotice(input: CreateNoticeInput, exec: DbWriter) {
 export async function deliverNoticeBatch(
   exec: DbExec,
   send: NoticeEmailSender,
-  options: { noticeId: string },
+  options: {
+    noticeId: string;
+    render?: Record<"member" | "visitor", { html: string; text: string }>;
+  },
 ): Promise<NoticeDeliveryResult> {
   const now = new Date();
   const owner = randomUUID();
@@ -215,10 +219,13 @@ export async function deliverNoticeBatch(
     let providerId: string | undefined;
     let errorCode: string | undefined;
     try {
+      const rendered =
+        options.render?.[recipient.visitId ? "visitor" : "member"];
       const result = await send({
         to: recipient.email,
         subject: notice.subject,
-        text: notice.body,
+        text: rendered?.text ?? notice.body,
+        ...(rendered ? { html: rendered.html } : {}),
         idempotencyKey: recipient.id,
       });
       providerId = result.providerId;

@@ -1,9 +1,8 @@
 # Pilot plan — friends' gyms, remote
 
-**Status: active pilot guide under ADR 135 and ADR 142.** Unlike
-[business-model.md](business-model.md), [revenue-collection.md](revenue-collection.md)
-and [the automatic payments plan](2026-09-24-automatic-payments-final-plan.md), which are not started, this
-is what happens next.
+**Status: active pilot guide under ADR 135 and ADR 142.** Unlike the
+[business model](business-model.md) and [gym-owned Stripe design draft](stripe-gym-payments-design.md),
+which are not implemented, this is what happens next.
 
 The first academy release now uses a fresh database contract. The current operating facts are:
 
@@ -197,8 +196,9 @@ are broken promises.
   Class reminders exist on the phone app, on the device (ADR 54). This is the
   first thing a gym owner asks about, so say it first.
 - **Dues are manual bank transfer.** The student taps "I paid", the owner
-  confirms by hand. No card charging (ADR 40; card payment is
-  planned in [the automatic payments plan](2026-09-24-automatic-payments-final-plan.md), not started).
+  confirms by hand. No card charging (ADR 40; the
+  [gym-owned Stripe design draft](stripe-gym-payments-design.md)
+  starts with drop-in visits, not dues).
 - **No hard capacity caps and no waitlists.** Over-capacity booking asks "book
   anyway?" and allows it.
 - **Owner-only admin**, unless item 12 above is done.
@@ -208,8 +208,7 @@ are broken promises.
 ## What to measure
 
 **The primary number:** *weekly active academies*, meaning an academy with at
-least one booking or attendance mark in the last seven days. Same number named in
-[revenue-collection.md](revenue-collection.md).
+least one booking or attendance mark in the last seven days.
 
 **v7.6 built this, so it is no longer a spreadsheet.** `pnpm -F @matops/db report`
 prints the weekly count from the `product_event` table, along with the funnel

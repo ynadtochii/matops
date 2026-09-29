@@ -34,15 +34,38 @@ describe("message builders", () => {
     expect(m.body).toContain("Sat 15 Aug, 18:00");
   });
 
-  it("change → push", () => {
-    const m = buildClassChangeMessage(base);
-    expect(m.title).toBe("Class updated");
-    expect(m.body).toContain("Fundamentals");
+  it("change names the new coach and keeps the time", () => {
+    const m = buildClassChangeMessage({ ...base, coachName: "Ana" });
+    expect(m.title).toBe("New coach");
+    expect(m.body).toBe(
+      "Ana now teaches Fundamentals on Sat 15 Aug, 18:00 at Kyiv BJJ.",
+    );
+    expect(m.body).not.toContain("moved");
   });
 
-  it("approval → welcome push naming the academy", () => {
-    const m = buildApprovalMessage({ academyName: "Kyiv BJJ" });
-    expect(m.title).toBe("You're in!");
-    expect(m.body).toContain("Kyiv BJJ");
+  it("change without a coach name still says the coach changed", () => {
+    const m = buildClassChangeMessage(base);
+    expect(m.body).toBe(
+      "Fundamentals on Sat 15 Aug, 18:00 at Kyiv BJJ has a new coach.",
+    );
+  });
+
+  it("approval tells a student they can book", () => {
+    const m = buildApprovalMessage({
+      academyName: "Kyiv BJJ",
+      role: "student",
+    });
+    expect(m.title).toBe("You're in at Kyiv BJJ");
+    expect(m.body).toContain("book classes");
+  });
+
+  it("approval tells a coach about the schedule, not booking", () => {
+    const m = buildApprovalMessage({
+      academyName: "Kyiv BJJ",
+      role: "instructor",
+    });
+    expect(m.title).toBe("You're in at Kyiv BJJ");
+    expect(m.body).toContain("coach");
+    expect(m.body).not.toContain("book");
   });
 });

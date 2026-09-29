@@ -1,6 +1,6 @@
 import type { DbExec } from "@matops/db";
 import type { NotificationKind, PushMessage } from "@matops/domain";
-import type { BatchPush } from "@matops/notifications";
+import type { BatchPush, RenderedEmail } from "@matops/notifications";
 import {
   eq,
   getAcademyPublic,
@@ -8,13 +8,8 @@ import {
   insertNotifications,
 } from "@matops/db";
 import { user } from "@matops/db/schema";
-import {
-  buildApprovalMessage,
-  buildCancelledMessage,
-  buildClassChangeMessage,
-  formatWhen,
-} from "@matops/domain";
-import { sendEmail, sendPush } from "@matops/notifications";
+import { buildApprovalMessage } from "@matops/domain";
+import { renderEmail, sendEmail, sendPush } from "@matops/notifications";
 
 /**
  * API-side notification helpers (Phase 4, docs/issues/17, 34). Routers gather
@@ -123,62 +118,70 @@ async function academyName(academyId: string, exec: DbExec): Promise<string> {
   }
 }
 
-interface ClassEventInput {
+export async function pushClassNotice(
+  input: {
+    academyId: string;
+    kind: "class_cancelled" | "class_changed";
+    push: PushMessage;
+    classId: string;
+    studentIds: string[];
+  },
+  exec: DbExec,
+): Promise<void> {
+  await deliver(
+    each(input.studentIds, {
+      academyId: input.academyId,
+      kind: input.kind,
+      push: input.push,
+      data: { type: "class", classId: input.classId },
+      link: `/class/${input.classId}`,
+    }),
+    exec,
+    sendPush,
+    false,
+  );
+}
+
+// Visitors have no account, so a class link would only show them a sign-in page.
+export function classNoticeEmails(input: {
+  kind: "class_cancelled" | "class_changed";
+  message: PushMessage;
+  appUrl: string;
   academyId: string;
-  className: string;
-  startsAt: Date;
-  /** IANA zone for the local time label; UTC when the class carries none. */
-  timeZone?: string;
+  academyName: string;
   classId: string;
-  studentIds: string[];
-}
-
-/** Class cancelled → push every booked student (highest stakes, §4). */
-export async function notifyClassCancelled(
-  input: ClassEventInput,
-  exec: DbExec,
-): Promise<void> {
-  const push = buildCancelledMessage({
-    academyName: await academyName(input.academyId, exec),
-    className: input.className,
-    whenLabel: formatWhen(input.startsAt, input.timeZone),
-  });
-  await deliver(
-    each(input.studentIds, {
-      academyId: input.academyId,
-      kind: "class_cancelled",
-      push,
-      data: { type: "class", classId: input.classId },
-      link: `/class/${input.classId}`,
+  className: string;
+  dropInToken?: string;
+}): { member: RenderedEmail; visitor: RenderedEmail } {
+  const base = {
+    heading: input.message.title,
+    paragraphs: [input.message.body],
+    footer: `You got this email because you booked ${input.className} at ${input.academyName}.`,
+  };
+  const academyUrl = `${input.appUrl}/entities/${input.academyId}`;
+  return {
+    member: renderEmail({
+      ...base,
+      cta:
+        input.kind === "class_cancelled"
+          ? { label: "Find another class", url: academyUrl }
+          : {
+              label: "View class",
+              url: `${academyUrl}/class/${input.classId}`,
+            },
     }),
-    exec,
-    sendPush,
-    false,
-  );
-}
-
-/** Class time/instructor changed → push booked students (§4). */
-export async function notifyClassChanged(
-  input: ClassEventInput,
-  exec: DbExec,
-): Promise<void> {
-  const push = buildClassChangeMessage({
-    academyName: await academyName(input.academyId, exec),
-    className: input.className,
-    whenLabel: formatWhen(input.startsAt, input.timeZone),
-  });
-  await deliver(
-    each(input.studentIds, {
-      academyId: input.academyId,
-      kind: "class_changed",
-      push,
-      data: { type: "class", classId: input.classId },
-      link: `/class/${input.classId}`,
+    visitor: renderEmail({
+      ...base,
+      ...(input.kind === "class_cancelled" && input.dropInToken
+        ? {
+            cta: {
+              label: "Pick another class",
+              url: `${input.appUrl}/drop-in/${input.dropInToken}`,
+            },
+          }
+        : {}),
     }),
-    exec,
-    sendPush,
-    false,
-  );
+  };
 }
 
 /** Membership approved → welcome push and email to the newly approved member. */
@@ -186,12 +189,13 @@ export async function notifyMembershipApproved(
   input: {
     academyId: string;
     userId: string;
+    role: string;
+    appUrl: string;
   },
   exec: DbExec,
 ): Promise<void> {
-  const push = buildApprovalMessage({
-    academyName: await academyName(input.academyId, exec),
-  });
+  const name = await academyName(input.academyId, exec);
+  const push = buildApprovalMessage({ academyName: name, role: input.role });
   await deliver(
     each([input.userId], {
       academyId: input.academyId,
@@ -209,7 +213,19 @@ export async function notifyMembershipApproved(
       .where(eq(user.id, input.userId))
       .limit(1);
     if (row?.email) {
-      await sendEmail({ to: row.email, subject: push.title, text: push.body });
+      await sendEmail({
+        to: row.email,
+        subject: push.title,
+        ...renderEmail({
+          heading: push.title,
+          paragraphs: [push.body],
+          cta: {
+            label: input.role === "student" ? "Book a class" : "Open MatOps",
+            url: `${input.appUrl}/entities/${input.academyId}`,
+          },
+          footer: `You got this email because ${name} approved your request to join.`,
+        }),
+      });
     }
   } catch (err) {
     console.error("[notify] approval email failed", err);

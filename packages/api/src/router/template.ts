@@ -31,7 +31,6 @@ import {
 import { requireCatalogDiscipline } from "../discipline";
 import { requireInstructor } from "../members";
 import { TEMPLATE_NOT_FOUND } from "../messages";
-import { notifyClassCancelled, notifyClassChanged } from "../notify";
 import { branchManagerProcedure, staffProcedure } from "../trpc";
 import { notifyBooked } from "./class";
 
@@ -207,12 +206,7 @@ export const templateRouter = {
               ),
             );
           for (const item of cancelled) {
-            await notifyBooked(
-              ctx,
-              item,
-              "class_cancelled",
-              notifyClassCancelled,
-            );
+            await notifyBooked(ctx, item, "class_cancelled");
           }
         }
       } else if (strategy === "update-in-place") {
@@ -232,10 +226,11 @@ export const templateRouter = {
             title: classInstance.title,
             startsAt: classInstance.startsAt,
             updatedAt: classInstance.updatedAt,
+            instructorId: classInstance.instructorId,
           });
         if (row.instructorId !== prev.instructorId) {
           for (const item of affected) {
-            await notifyBooked(ctx, item, "class_changed", notifyClassChanged);
+            await notifyBooked(ctx, item, "class_changed");
           }
         }
       }
@@ -308,7 +303,7 @@ export const templateRouter = {
           updatedAt: classInstance.updatedAt,
         });
       for (const item of cancelled) {
-        await notifyBooked(ctx, item, "class_cancelled", notifyClassCancelled);
+        await notifyBooked(ctx, item, "class_cancelled");
       }
       await bumpScheduleRevision(ctx.db, ctx.academyId);
       return { ok: true as const };

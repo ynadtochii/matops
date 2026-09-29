@@ -23,7 +23,7 @@ The first release is **one BJJ academy per gym** with **approval-only booking**.
 
 Docs of record: `docs/architecture.md` (§0 as built, §5 tenancy) · `docs/spec.md` (behavior, per ID) · `docs/roadmap.md` (status matrix) · `CHANGELOG.md` · `docs/map.md` (ADR index).
 
-Business reference, **not build plans**: `docs/business-model.md` · `docs/revenue-collection.md` · `docs/2026-09-24-automatic-payments-final-plan.md` (student card payments through the gym's own Stripe, not started). Near term: an unpriced pilot with a few test academies.
+Business reference, **not a build plan**: `docs/business-model.md`. The [gym-owned Stripe design draft](docs/stripe-gym-payments-design.md) starts with one-off drop-in payments, is not implemented, and leaves the pay-to-book rule open. Near term: an unpriced pilot with a few test academies.
 
 ## Run it
 

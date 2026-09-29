@@ -12,6 +12,7 @@ import {
   deliverNoticeBatch,
   eq,
   eventRole,
+  getDropInLink,
   getTableColumns,
   gte,
   insertNotifications,
@@ -55,7 +56,7 @@ import { liveClass } from "../classes";
 import { requireCatalogDiscipline } from "../discipline";
 import { requireInstructor } from "../members";
 import { CLASS_NOT_FOUND } from "../messages";
-import { notifyClassCancelled, notifyClassChanged } from "../notify";
+import { classNoticeEmails, pushClassNotice } from "../notify";
 import { enrolledProcedure, staffProcedure } from "../trpc";
 
 /**
@@ -88,22 +89,26 @@ function assertCanReassignCoach(
 interface NotifyScope {
   db: TimeZoneCtx["db"];
   academyId: string;
+  appUrl: string;
   afterCommit: (task: (exec: DbExec) => Promise<void>) => void;
 }
 
 /**
- * Tell every booked student that a class moved or changed coach (§4,
- * docs/issues/17). Shared by the full edit and the K.2 coach reassignment so
- * the two can never drift apart. Callers decide WHETHER to notify via
- * `classChange`; this only sends.
+ * Tell every booked student and visitor that a class was cancelled or got a
+ * new coach (§4, docs/issues/17). Shared by the class and template routers so
+ * the paths can never drift apart. Callers decide WHETHER to notify; this only
+ * sends.
  */
-type ClassNotifier = typeof notifyClassChanged;
-
 export async function notifyBooked(
   ctx: NotifyScope,
-  row: { id: string; title: string; startsAt: Date; updatedAt: Date },
+  row: {
+    id: string;
+    title: string;
+    startsAt: Date;
+    updatedAt: Date;
+    instructorId?: string | null;
+  },
   kind: "class_changed" | "class_cancelled",
-  send: ClassNotifier,
 ): Promise<{
   noticeId: string;
   delivery: {
@@ -147,15 +152,21 @@ export async function notifyBooked(
     .from(entity)
     .where(eq(entity.id, ctx.academyId))
     .limit(1);
-  const messageInput = {
-    academyName: academy?.name ?? "your gym",
-    className: row.title,
-    whenLabel: formatWhen(row.startsAt, timeZone),
-  };
+  const [coach] =
+    kind === "class_changed" && row.instructorId
+      ? await ctx.db
+          .select({ name: user.name })
+          .from(user)
+          .where(eq(user.id, row.instructorId))
+          .limit(1)
+      : [];
+  const academyName = academy?.name ?? "your gym";
+  const whenLabel = formatWhen(row.startsAt, timeZone);
+  const messageInput = { academyName, className: row.title, whenLabel };
   const message =
     kind === "class_cancelled"
       ? buildCancelledMessage(messageInput)
-      : buildClassChangeMessage(messageInput);
+      : buildClassChangeMessage({ ...messageInput, coachName: coach?.name });
   const eventKey = `${kind}:${row.id}:${row.updatedAt.toISOString()}`;
   const recipients = [
     ...booked.flatMap((recipient) => {
@@ -182,9 +193,9 @@ export async function notifyBooked(
       academyId: ctx.academyId,
       eventKey,
       kind,
-      subject: message.title,
+      subject: `${message.title}: ${row.title}, ${whenLabel}`,
       body: message.body,
-      templateVersion: "1",
+      templateVersion: "2",
       recipients,
     },
     ctx.db,
@@ -222,16 +233,27 @@ export async function notifyBooked(
     ).length,
   };
   ctx.afterCommit(async (exec) => {
+    const dropInLink =
+      visitors.length > 0 ? await getDropInLink(ctx.academyId, exec) : null;
     const result = await deliverNoticeBatch(exec, sendEmail, {
       noticeId: notice.noticeId,
+      render: classNoticeEmails({
+        kind,
+        message,
+        appUrl: ctx.appUrl,
+        academyId: ctx.academyId,
+        academyName,
+        classId: row.id,
+        className: row.title,
+        dropInToken: dropInLink?.token,
+      }),
     });
     Object.assign(delivery, result);
-    await send(
+    await pushClassNotice(
       {
         academyId: ctx.academyId,
-        className: row.title,
-        startsAt: row.startsAt,
-        timeZone,
+        kind,
+        push: message,
         classId: row.id,
         studentIds,
       },
@@ -478,7 +500,7 @@ export const classRouter = {
         now,
       );
       const notice = change.shouldNotify
-        ? await notifyBooked(ctx, row, "class_changed", notifyClassChanged)
+        ? await notifyBooked(ctx, row, "class_changed")
         : null;
       return { ...row, notice };
     }),
@@ -511,12 +533,7 @@ export const classRouter = {
         });
       }
       await bumpScheduleRevision(ctx.db, ctx.academyId);
-      const notice = await notifyBooked(
-        ctx,
-        row,
-        "class_cancelled",
-        notifyClassCancelled,
-      );
+      const notice = await notifyBooked(ctx, row, "class_cancelled");
       return { ok: true as const, notice };
     }),
 } satisfies TRPCRouterRecord;

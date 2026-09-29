@@ -1,10 +1,9 @@
 /**
  * @matops/notifications — thin, serverless notification transport (docs/issues/
  * 17, 34). Two HTTPS senders, no DB dependency, no always-on service:
- *   - `sendPush(tokens, payload)` → Expo Push API → APNs/FCM. Every gym message
- *     goes this way, plus the inbox row the API writes.
- *   - `sendEmail(payload)` → Resend. ONE caller: the sign-in magic link in
- *     `@matops/auth`. No gym message goes out by email (v3.8, docs/issues/77).
+ *   - `sendPush(tokens, payload)` → Expo Push API → APNs/FCM.
+ *   - `sendEmail(payload)` → Resend: the sign-in link, the approval email and
+ *     the class notices. `renderEmail` wraps each one in the shared HTML layout.
  *
  * Message *text* is built by pure functions in `@matops/domain` (buildCancelled
  * Message, …); recipient resolution (userIds → tokens) lives in the API
@@ -13,5 +12,6 @@
  * fail the mutation that fired it.
  */
 
+export * from "./email";
 export * from "./expo-push";
 export * from "./resend";
