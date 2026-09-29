@@ -23,10 +23,11 @@ async function Authed({ children }: { children: React.ReactNode }) {
   if (!session.session.activeOrganizationId) return <AcademyGate />;
 
   const queryClient = getQueryClient();
-  await queryClient.prefetchQuery(trpc.entity.list.queryOptions());
+  const organization = trpc.entity.list.queryOptions();
+  await queryClient.prefetchQuery(organization);
 
   return (
-    <HydrateClient>
+    <HydrateClient only={organization.queryKey}>
       <OrganizationBoundary>
         <EntityCacheBoundary />
         <AppShell user={{ name: session.user.name, email: session.user.email }}>
