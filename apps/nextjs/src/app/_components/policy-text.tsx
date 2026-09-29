@@ -97,38 +97,6 @@ export function PrivacyText() {
   );
 }
 
-/**
- * The training risk notice. Grappling is full contact, so someone stepping onto
- * the mat for the first time is told what that means before they tick the box,
- * not after. The academy is named because the limit of liability is the
- * academy's, not matops'.
- */
-export function RiskText({ academyName }: { academyName: string }) {
-  const gym = academyName.trim() === "" ? "The academy" : academyName;
-  return (
-    <div className="text-foreground-secondary flex max-w-[58ch] flex-col gap-3 leading-relaxed text-pretty">
-      <p>
-        Brazilian Jiu-Jitsu is a full-contact martial art involving physical
-        contact, grappling and sparring. Participation carries an inherent risk
-        of injury.
-      </p>
-      <p>
-        You agree to train within your limits, to tap out immediately when
-        required, and to tell your coach about any relevant injuries or medical
-        conditions before class.
-      </p>
-      <p>
-        {gym} and its coaches accept no liability for injuries sustained during
-        training, except in cases of negligence.
-      </p>
-      <p>
-        This is not the gym&apos;s waiver. You sign that at the desk before your
-        first session.
-      </p>
-    </div>
-  );
-}
-
 /** The footer link back out of the standalone privacy page. */
 export function BackToMatops() {
   return (

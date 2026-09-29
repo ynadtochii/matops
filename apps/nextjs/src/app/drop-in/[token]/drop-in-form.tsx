@@ -5,6 +5,13 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { cn } from "@matops/ui";
 import { Button } from "@matops/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  DialogTrigger,
+} from "@matops/ui/dialog";
 import { FieldError } from "@matops/ui/field";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
@@ -12,12 +19,12 @@ import { FOCUS_RING } from "@matops/ui/motion";
 import { DropInLookupSchema, NameSchema } from "@matops/validators";
 
 import type { SignupWaiver } from "~/app/_components/signup-fields";
-import { ConsentChecks } from "~/app/_components/consents";
 import {
   EmailField,
   fieldErrors,
   PhoneField,
 } from "~/app/_components/form-fields";
+import { PRIVACY_UPDATED, PrivacyText } from "~/app/_components/policy-text";
 import {
   AgreementField,
   readSignupAnswers,
@@ -74,8 +81,6 @@ export function DropInForm({ token }: { token: string }) {
     match: Match | null;
   } | null>(null);
   const [declined, setDeclined] = useState(false);
-  const [contact, setContact] = useState(false);
-  const [risk, setRisk] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
   const [error, setError] = useState<string | null>(null);
 
@@ -199,6 +204,11 @@ export function DropInForm({ token }: { token: string }) {
     </label>
   );
 
+  const clearFieldError = (e: React.FormEvent<HTMLFormElement>) => {
+    const field = (e.target as HTMLInputElement).name;
+    if (errors[field]) setErrors((prev) => ({ ...prev, [field]: undefined }));
+  };
+
   const requireClass = (): string | null => {
     if (selected) return selected;
     setErrors((prev) => ({ ...prev, classId: "Pick a class first." }));
@@ -235,10 +245,6 @@ export function DropInForm({ token }: { token: string }) {
     };
     if (!first.success) found.firstName = "Enter your first name";
     if (!last.success) found.lastName = "Enter your last name";
-    if (!contact) found.consent = "Please tick the consent box to continue";
-    if (!risk) {
-      found.risk = "Tick the box to confirm you understand the training risks.";
-    }
     setErrors(found);
     if (Object.keys(found).length > 0 || !first.success || !last.success) {
       requestAnimationFrame(() =>
@@ -288,7 +294,7 @@ export function DropInForm({ token }: { token: string }) {
           </legend>
           {now.map((c) => choice(c, "On now"))}
           {upcoming.map((c) => choice(c, label(c.startsAt)))}
-          {errors.classId && <FieldError>{errors.classId}</FieldError>}
+          <FieldError className="sr-only">{errors.classId}</FieldError>
         </fieldset>
       )}
 
@@ -312,6 +318,7 @@ export function DropInForm({ token }: { token: string }) {
             placeholder="you@example.com"
             required
             error={errors.email}
+            quietError
           />
           <PhoneField
             timeZone={academy.data?.timeZone ?? null}
@@ -323,6 +330,7 @@ export function DropInForm({ token }: { token: string }) {
             }}
             required
             error={errors.phone}
+            quietError
           />
           {mode === "contact" && (
             <Button
@@ -342,6 +350,7 @@ export function DropInForm({ token }: { token: string }) {
         <form
           noValidate
           className="flex flex-col gap-3"
+          onChange={clearFieldError}
           onSubmit={(e) => {
             e.preventDefault();
             submitReturning(e.currentTarget);
@@ -378,6 +387,7 @@ export function DropInForm({ token }: { token: string }) {
         <form
           noValidate
           className="flex flex-col gap-3"
+          onChange={clearFieldError}
           onSubmit={(e) => {
             e.preventDefault();
             submitNew(e.currentTarget);
@@ -396,9 +406,9 @@ export function DropInForm({ token }: { token: string }) {
                 errors.firstName ? "firstName-error" : undefined
               }
             />
-            {errors.firstName && (
-              <FieldError id="firstName-error">{errors.firstName}</FieldError>
-            )}
+            <FieldError id="firstName-error" className="sr-only">
+              {errors.firstName}
+            </FieldError>
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="lastName">Last name</Label>
@@ -411,9 +421,9 @@ export function DropInForm({ token }: { token: string }) {
               aria-invalid={errors.lastName ? true : undefined}
               aria-describedby={errors.lastName ? "lastName-error" : undefined}
             />
-            {errors.lastName && (
-              <FieldError id="lastName-error">{errors.lastName}</FieldError>
-            )}
+            <FieldError id="lastName-error" className="sr-only">
+              {errors.lastName}
+            </FieldError>
           </div>
           <SignupQuestions
             academyName={name}
@@ -421,15 +431,24 @@ export function DropInForm({ token }: { token: string }) {
             waiver={waiver}
             errors={errors}
           />
-          <ConsentChecks
-            academyName={name}
-            contact={contact}
-            onContact={setContact}
-            contactError={errors.consent}
-            risk={risk}
-            onRisk={setRisk}
-            riskError={errors.risk}
-          />
+          <p className="text-muted-foreground text-xs">
+            By continuing, you agree that {name} can contact you about training.{" "}
+            <Dialog>
+              <DialogTrigger
+                type="button"
+                className={`hover:text-foreground rounded-sm underline underline-offset-2 ${FOCUS_RING}`}
+              >
+                What the gym stores about you
+              </DialogTrigger>
+              <DialogContent>
+                <DialogTitle>Privacy at MatOps</DialogTitle>
+                <DialogDescription>
+                  Last updated {PRIVACY_UPDATED}.
+                </DialogDescription>
+                <PrivacyText />
+              </DialogContent>
+            </Dialog>
+          </p>
           <Button
             type="submit"
             size="lg"
