@@ -1,9 +1,15 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import { Logo } from "@matops/ui/logo";
 
 import { MatLoader } from "~/app/_components/mat-loader";
 import { DropInForm } from "./drop-in-form";
+
+export const metadata: Metadata = {
+  title: "Drop in",
+  robots: { index: false, follow: false },
+};
 
 export default function DropInPage({
   params,

@@ -10,6 +10,7 @@ import { getSession } from "~/auth/server";
 import { getQueryClient, trpc } from "~/trpc/server";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/start" },
   title: "Start your academy",
   description:
     "Name your academy and start running it: classes, students, bookings and attendance.",

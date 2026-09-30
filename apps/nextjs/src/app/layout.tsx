@@ -5,22 +5,20 @@ import { cn } from "@matops/ui";
 import { ThemeProvider } from "@matops/ui/theme";
 import { Toaster } from "@matops/ui/toast";
 
-import { env } from "~/env";
+import { SITE_DESCRIPTION, SITE_URL } from "~/lib/site";
 import { TRPCReactProvider } from "~/trpc/react";
 
 import "~/app/styles.css";
 
 export const metadata: Metadata = {
-  metadataBase: new URL(
-    env.VERCEL_ENV === "production"
-      ? "https://matops.app"
-      : "http://localhost:3004",
-  ),
+  metadataBase: new URL(SITE_URL),
   title: { default: "MatOps", template: "%s · MatOps" },
-  description: "Schedule, members, and attendance for grappling academies.",
+  description: SITE_DESCRIPTION,
   openGraph: {
+    type: "website",
+    locale: "en",
     title: "MatOps",
-    description: "Schedule, members, and attendance for grappling academies.",
+    description: SITE_DESCRIPTION,
     siteName: "MatOps",
   },
   twitter: {
