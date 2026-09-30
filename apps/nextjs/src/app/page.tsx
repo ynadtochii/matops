@@ -14,7 +14,7 @@ import { CONSENT_COOKIE, parseConsent } from "~/lib/consent";
 import { SITE_DESCRIPTION } from "~/lib/site";
 import { myEntities } from "~/trpc/server";
 
-const TITLE = "MatOps: class booking and attendance for BJJ academies";
+const TITLE = "MatOps: BJJ gym management software";
 
 export const metadata: Metadata = {
   title: { absolute: TITLE },

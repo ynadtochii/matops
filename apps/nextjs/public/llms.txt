@@ -1,17 +1,17 @@
 # MatOps
 
-> MatOps is admin software for Brazilian jiu-jitsu (BJJ) academies. Owners and coaches run the class schedule, students and attendance on the web. Students book classes from the MatOps app or the web.
+> MatOps is gym management software for Brazilian jiu-jitsu (BJJ) academies. Owners and coaches run the class schedule, students and attendance on the web. Students book classes from the MatOps app or the web.
 
-MatOps is in an early pilot with a small number of academies. There is no public pricing yet.
+MatOps is in an early pilot and opens to a few academies at a time. Gyms request a demo from the MatOps website. Pricing depends on the academy.
 
 ## What it does
 
-- Weekly class schedule built from templates, with classes colored by discipline (for example Gi, No-Gi, Kids). The schedule can be printed as a poster.
-- Students join an academy with an invite link or a 6-digit join code. The owner approves each student before they can book.
-- Approved students book and cancel classes from their phone. Class size is a soft limit: staff see when a class is over, and nobody is refused.
-- When staff cancel or change a booked class, every booked student gets an email and a push notification.
-- Coaches take attendance, and staff record belts and stripes.
-- A drop-in link lets visitors fill in a short form and book or mark themselves present at a class.
+- A weekly class schedule that the academy builds once and can print for the gym wall.
+- Students join an academy with an invite link or join code. The owner approves each student before they can book.
+- Approved students book and cancel classes from their phone or the web.
+- When staff cancel or change a booked class, every booked student hears about it.
+- Coaches take attendance, and staff keep belts up to date.
+- A drop-in link lets visitors fill in a short form and book a class.
 
 ## Who it is for
 
@@ -21,7 +21,7 @@ MatOps is in an early pilot with a small number of academies. There is no public
 
 ## Links
 
-- [Home](https://matops.app/): what MatOps does, with screenshots of the schedule
-- [Start a gym](https://matops.app/start): create an academy (name and time zone)
+- [Home](https://matops.app/): what MatOps does, with a picture of the schedule and common questions
+- [Features](https://matops.app/features): each feature in a short section, and pricing
 - [Sign in](https://matops.app/sign-in): email sign-in link, no password
 - [Privacy notice](https://matops.app/privacy): what MatOps stores and how to have it removed

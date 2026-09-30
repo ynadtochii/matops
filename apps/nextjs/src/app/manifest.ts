@@ -14,7 +14,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "MatOps",
     short_name: "MatOps",
     description:
-      "Book your classes, run your schedule, take attendance. For grappling academies.",
+      "BJJ gym management software: classes, bookings and attendance.",
     start_url: "/",
     scope: "/",
     display: "standalone",

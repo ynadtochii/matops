@@ -13,7 +13,7 @@ import {
 
 import { cn } from "@matops/ui";
 import { buttonClass } from "@matops/ui/button";
-import { Logo, Mark } from "@matops/ui/logo";
+import { Mark } from "@matops/ui/logo";
 import { FOCUS_RING } from "@matops/ui/motion";
 
 import type { Consent } from "~/lib/consent";
@@ -26,8 +26,40 @@ import {
 } from "~/lib/site";
 import { display, MatFloor } from "./auth-door";
 import { ConsentBanner, CookieSettingsButton } from "./consent-banner";
+import { PRICING_HREF, REQUEST_DEMO_HREF } from "./contact";
 import { blockSkin, hueSkin } from "./discipline-skin";
 import { ENTER, stagger } from "./primitives";
+import { FOOTER_LINK, SiteFooter, SiteHeader } from "./site-chrome";
+
+const FAQ: { q: string; a: string; link?: { href: string; label: string } }[] =
+  [
+    {
+      q: "What is MatOps?",
+      a: "MatOps is gym management software built for Brazilian jiu-jitsu (BJJ) academies. Owners and coaches run the class schedule, approve students and take attendance. Students book classes from their phone.",
+    },
+    {
+      q: "Is MatOps only for BJJ?",
+      a: "It is built for BJJ first, with belts and classes grouped the way a BJJ academy runs them. Other grappling gyms with a similar timetable can use it too.",
+    },
+    {
+      q: "How do students book classes?",
+      a: "Students join your academy with your invite link or join code. Once you approve them, they book and cancel classes on their phone or on the web.",
+    },
+    {
+      q: "Can I track attendance and belts?",
+      a: "Yes. Coaches mark who came to each class, and you keep each student's belt up to date.",
+    },
+    {
+      q: "How much does MatOps cost?",
+      a: "Pricing depends on your academy.",
+      link: { href: PRICING_HREF, label: "Ask for a price" },
+    },
+    {
+      q: "How do I start using MatOps?",
+      a: "We are opening MatOps to a few gyms at a time. Request a demo and we will set up your academy with you.",
+      link: { href: REQUEST_DEMO_HREF, label: "Request a demo" },
+    },
+  ];
 
 const JSON_LD = {
   "@context": "https://schema.org",
@@ -36,6 +68,7 @@ const JSON_LD = {
       "@type": "Organization",
       "@id": `${SITE_URL}/#organization`,
       name: "MatOps",
+      alternateName: "Mat Ops",
       url: SITE_URL,
       logo: `${SITE_URL}/icon-512.png`,
     },
@@ -43,6 +76,7 @@ const JSON_LD = {
       "@type": "WebSite",
       "@id": `${SITE_URL}/#website`,
       name: "MatOps",
+      alternateName: "Mat Ops",
       url: SITE_URL,
       publisher: { "@id": `${SITE_URL}/#organization` },
     },
@@ -52,16 +86,22 @@ const JSON_LD = {
       url: SITE_URL,
       description: SITE_DESCRIPTION,
       applicationCategory: "BusinessApplication",
+      applicationSubCategory: "Gym management software",
+      keywords:
+        "BJJ gym management software, jiu-jitsu gym software, BJJ academy software, BJJ class booking, BJJ attendance tracking",
       operatingSystem: "Web",
       publisher: { "@id": `${SITE_URL}/#organization` },
     },
+    {
+      "@type": "FAQPage",
+      mainEntity: FAQ.map(({ q, a }) => ({
+        "@type": "Question",
+        name: q,
+        acceptedAnswer: { "@type": "Answer", text: a },
+      })),
+    },
   ],
 };
-
-const FOOTER_LINK = cn(
-  "hover:text-foreground rounded-sm transition-colors motion-reduce:transition-none",
-  FOCUS_RING,
-);
 
 export function Landing({ consent }: { consent: Consent | null }) {
   return (
@@ -81,14 +121,7 @@ export function Landing({ consent }: { consent: Consent | null }) {
           __html: JSON.stringify(JSON_LD).replace(/</g, "\\u003c"),
         }}
       />
-      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
-        <Link href="/" className={cn("rounded-md", FOCUS_RING)}>
-          <Logo size={24} />
-        </Link>
-        <Link href="/sign-in" className={buttonClass({ variant: "ghost" })}>
-          Sign in
-        </Link>
-      </header>
+      <SiteHeader />
 
       <main className="flex-1">
         <section className="relative isolate px-4 pt-12 sm:px-6 sm:pt-20">
@@ -115,19 +148,20 @@ export function Landing({ consent }: { consent: Consent | null }) {
               )}
               style={stagger(1)}
             >
-              Classes, students, bookings and attendance for a BJJ academy. Your
-              students book from their phone. You stay on the mat.
+              MatOps is management software for BJJ academies: classes,
+              students, bookings and attendance. Your students book from their
+              phone. You stay on the mat.
             </p>
             <div
               className={cn("mt-8 flex flex-wrap justify-center gap-2", ENTER)}
               style={stagger(2)}
             >
-              <Link
-                href="/start"
+              <a
+                href={REQUEST_DEMO_HREF}
                 className={buttonClass({ variant: "primary", size: "lg" })}
               >
-                Start a gym
-              </Link>
+                Request a demo
+              </a>
               <Link
                 href="/sign-in"
                 className={buttonClass({ variant: "secondary", size: "lg" })}
@@ -145,7 +179,7 @@ export function Landing({ consent }: { consent: Consent | null }) {
           <ul className="grid gap-14 lg:grid-cols-3 lg:gap-8">
             <Point
               title="You approve who trains"
-              body="Students join with your link or a 6-digit code. Nobody books a class until you approve them."
+              body="Students join with your link or code. Nobody books a class until you approve them."
             >
               <Requests />
             </Point>
@@ -157,11 +191,42 @@ export function Landing({ consent }: { consent: Consent | null }) {
             </Point>
             <Point
               title="Changes reach everyone booked"
-              body="Cancel or change a class and every student booked gets an email and a push. No group chat needed."
+              body="Cancel or change a class and every student booked hears about it. No group chat needed."
             >
               <Notice />
             </Point>
           </ul>
+        </section>
+
+        <section className="border-border border-t px-4 py-24 sm:px-6 sm:py-28">
+          <div className="mx-auto grid max-w-6xl gap-10 lg:grid-cols-[1fr_2fr] lg:gap-16">
+            <h2 className="text-2xl font-semibold tracking-tight">Questions</h2>
+            <dl className="divide-border divide-y">
+              {FAQ.map(({ q, a, link }) => (
+                <div key={q} className="py-5 first:pt-0 last:pb-0">
+                  <dt className="text-base font-medium">{q}</dt>
+                  <dd className="text-muted-foreground mt-2 max-w-[65ch] text-base leading-relaxed text-pretty">
+                    {a}
+                    {link && (
+                      <>
+                        {" "}
+                        <a
+                          href={link.href}
+                          className={cn(
+                            "text-foreground decoration-muted-foreground rounded-sm underline underline-offset-4 hover:decoration-current",
+                            FOCUS_RING,
+                          )}
+                        >
+                          {link.label}
+                        </a>
+                        .
+                      </>
+                    )}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </div>
         </section>
 
         <section className="border-border border-t px-4 py-24 sm:px-6 sm:py-28">
@@ -172,21 +237,21 @@ export function Landing({ consent }: { consent: Consent | null }) {
                 "text-4xl leading-[1.05] tracking-[-0.01em] text-balance sm:text-5xl",
               )}
             >
-              Open your gym in a minute.
+              See MatOps on your own schedule.
             </h2>
             <p className="text-muted-foreground mt-4 max-w-sm text-base leading-relaxed text-pretty">
-              Name your academy, pick its time zone, and share the join link
-              with your students.
+              We are opening MatOps to a few gyms at a time. Request a demo, and
+              we will set up your academy with you.
             </p>
-            <Link
-              href="/start"
+            <a
+              href={REQUEST_DEMO_HREF}
               className={cn(
                 "mt-8",
                 buttonClass({ variant: "primary", size: "lg" }),
               )}
             >
-              Start a gym
-            </Link>
+              Request a demo
+            </a>
             <p className="text-muted-foreground mt-6 text-sm">
               Training at a gym on MatOps?{" "}
               <Link
@@ -203,17 +268,9 @@ export function Landing({ consent }: { consent: Consent | null }) {
         </section>
       </main>
 
-      <footer className="border-border border-t">
-        <div className="text-muted-foreground mx-auto flex max-w-6xl items-center justify-between px-4 py-6 text-xs sm:px-6">
-          <Logo size={18} withWordmark={false} />
-          <div className="flex items-center gap-4">
-            <CookieSettingsButton className={FOOTER_LINK} />
-            <Link href="/privacy" className={FOOTER_LINK}>
-              Privacy
-            </Link>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter>
+        <CookieSettingsButton className={FOOTER_LINK} />
+      </SiteFooter>
     </div>
   );
 }

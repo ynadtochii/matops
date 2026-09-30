@@ -7,6 +7,6 @@ export const SITE_URL = INDEXABLE
   : "http://localhost:3004";
 
 export const SITE_DESCRIPTION =
-  "Class schedule, student bookings and attendance for BJJ academies. Students book from their phone, and you approve who trains.";
+  "MatOps is BJJ gym management software. Run your class schedule, approve students, take bookings and track attendance for your jiu-jitsu academy.";
 
 export const GA_MEASUREMENT_ID = "G-FX62B9MRFV";

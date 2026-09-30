@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { FOCUS_RING } from "@matops/ui/motion";
 
 import { getSession } from "~/auth/server";
 import { AuthDoor } from "../_components/auth-door";
+import { REQUEST_DEMO_HREF } from "../_components/contact";
 import { PageLoader } from "../_components/mat-loader";
 import { SignIn } from "../_components/sign-in";
 
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/sign-in" },
   title: "Sign in",
   description:
-    "Sign in to MatOps. Schedule, members, attendance and dues for a BJJ academy.",
+    "Sign in to MatOps, the management software for BJJ gyms: schedule, students, bookings and attendance.",
 };
 
 /**
@@ -54,16 +54,16 @@ async function SignInGate() {
 
       <SignIn callbackURL="/" />
 
-      {/* Owners start here. A rare, deliberate action, so it is its own link
-          off the sign-in form, not offered to everyone after login (ADR 49). */}
+      {/* Gym creation is invite-only (ADR 149): an owner requests a demo, and
+          the invited owner gets the /start link directly. */}
       <p className="text-muted-foreground text-sm">
         Running a gym?{" "}
-        <Link
-          href="/start"
+        <a
+          href={REQUEST_DEMO_HREF}
           className={`text-foreground decoration-muted-foreground inline-flex min-h-11 items-center rounded-sm font-medium underline underline-offset-4 hover:decoration-current sm:min-h-0 ${FOCUS_RING}`}
         >
-          Start a gym
-        </Link>
+          Request a demo
+        </a>
       </p>
     </AuthDoor>
   );
