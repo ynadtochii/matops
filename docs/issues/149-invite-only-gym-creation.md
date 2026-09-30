@@ -20,3 +20,7 @@ Anyone could sign in and create a gym. The operator wants to pick the first acad
 - A user who signs in first and is added later just reloads `/start`; no data changes.
 - When MatOps charges for gyms, the same hook can allow "paid or listed".
 - The router tests use a fake `authApi`, so they do not run this hook. The rule is covered by `packages/domain/test/gym-creator.test.ts`.
+
+## Addendum 2026-09-30: Request a demo
+
+The public link is now **Request a demo** (`REQUEST_DEMO_HREF`, subject "MatOps demo for my gym"), not Request access. Public pages no longer print the contact email: the FAQ, `/features` and `llms.txt` use "Request a demo" and "Ask for a price" links instead. The address stays inside the `mailto:` link, and the privacy notice keeps it, because a privacy notice must name a contact.

@@ -2,16 +2,16 @@
 
 > MatOps is gym management software for Brazilian jiu-jitsu (BJJ) academies. Owners and coaches run the class schedule, students and attendance on the web. Students book classes from the MatOps app or the web.
 
-MatOps is in an early pilot and opens to a few academies at a time. Gyms ask for access by email: yevhenii.tech@gmail.com. Pricing depends on the academy; ask by email for a price.
+MatOps is in an early pilot and opens to a few academies at a time. Gyms request a demo from the MatOps website. Pricing depends on the academy.
 
 ## What it does
 
-- Weekly class schedule built from templates, with classes colored by discipline (for example Gi, No-Gi, Kids). The schedule can be printed as a poster.
-- Students join an academy with an invite link or a 6-digit join code. The owner approves each student before they can book.
-- Approved students book and cancel classes from their phone. Class size is a soft limit: staff see when a class is over, and nobody is refused.
-- When staff cancel or change a booked class, every booked student gets an email and a push notification.
-- Coaches take attendance, and staff record belts and stripes.
-- A drop-in link lets visitors fill in a short form and book or mark themselves present at a class.
+- A weekly class schedule that the academy builds once and can print for the gym wall.
+- Students join an academy with an invite link or join code. The owner approves each student before they can book.
+- Approved students book and cancel classes from their phone or the web.
+- When staff cancel or change a booked class, every booked student hears about it.
+- Coaches take attendance, and staff keep belts up to date.
+- A drop-in link lets visitors fill in a short form and book a class.
 
 ## Who it is for
 

@@ -6,7 +6,7 @@ import { canCreateGym } from "@matops/domain";
 import { buttonClass } from "@matops/ui/button";
 
 import { AuthDoor } from "~/app/_components/auth-door";
-import { REQUEST_ACCESS_HREF } from "~/app/_components/contact";
+import { REQUEST_DEMO_HREF } from "~/app/_components/contact";
 import { CreateGym } from "~/app/_components/create-gym";
 import { MatLoader } from "~/app/_components/mat-loader";
 import { SignIn } from "~/app/_components/sign-in";
@@ -92,15 +92,15 @@ function InviteOnly({ email }: { email: string }) {
           MatOps is invite-only for now
         </h1>
         <p className="text-muted-foreground text-sm text-pretty">
-          We are opening MatOps to a few gyms at a time. Ask for access and we
+          We are opening MatOps to a few gyms at a time. Request a demo and we
           will add {email} to the list. Then come back to this page.
         </p>
       </div>
       <a
-        href={REQUEST_ACCESS_HREF}
+        href={REQUEST_DEMO_HREF}
         className={buttonClass({ variant: "primary" })}
       >
-        Request access
+        Request a demo
       </a>
     </div>
   );

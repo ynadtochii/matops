@@ -6,7 +6,7 @@ import { FOCUS_RING } from "@matops/ui/motion";
 
 import { getSession } from "~/auth/server";
 import { AuthDoor } from "../_components/auth-door";
-import { REQUEST_ACCESS_HREF } from "../_components/contact";
+import { REQUEST_DEMO_HREF } from "../_components/contact";
 import { PageLoader } from "../_components/mat-loader";
 import { SignIn } from "../_components/sign-in";
 
@@ -54,15 +54,15 @@ async function SignInGate() {
 
       <SignIn callbackURL="/" />
 
-      {/* Gym creation is invite-only (ADR 149): an owner asks for access, and
+      {/* Gym creation is invite-only (ADR 149): an owner requests a demo, and
           the invited owner gets the /start link directly. */}
       <p className="text-muted-foreground text-sm">
         Running a gym?{" "}
         <a
-          href={REQUEST_ACCESS_HREF}
+          href={REQUEST_DEMO_HREF}
           className={`text-foreground decoration-muted-foreground inline-flex min-h-11 items-center rounded-sm font-medium underline underline-offset-4 hover:decoration-current sm:min-h-0 ${FOCUS_RING}`}
         >
-          Request access
+          Request a demo
         </a>
       </p>
     </AuthDoor>
