@@ -15,6 +15,7 @@ export function authEnv() {
       // Google" on web + mobile.
       GOOGLE_CLIENT_ID: z.string().min(1).optional(),
       GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
+      GYM_CREATOR_EMAILS: z.string().optional(),
     },
     runtimeEnv: process.env,
     skipValidation:

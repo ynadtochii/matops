@@ -5,6 +5,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { magicLink, oAuthProxy, organization } from "better-auth/plugins";
 
 import { db } from "@matops/db/client";
+import { canCreateGym } from "@matops/domain";
 import { renderEmail, sendEmail } from "@matops/notifications";
 
 import { authEnv } from "../env";
@@ -21,6 +22,7 @@ export function initAuth<
   // only), so dev + CI without Google creds still work.
   googleClientId?: string;
   googleClientSecret?: string;
+  gymCreatorEmails?: string;
   extraPlugins?: TExtraPlugins;
 }) {
   const socialProviders =
@@ -82,6 +84,10 @@ export function initAuth<
         // no longer creates a branch: the owner picks the first one's type and
         // name from `/overview`, and `entity.create` provisions it (ADR 128).
         creatorRole: "owner",
+        // Better Auth also serves /organization/create to any signed-in user,
+        // so the gate lives here rather than in the tRPC procedure.
+        allowUserToCreateOrganization: (user) =>
+          canCreateGym(user.email, options.gymCreatorEmails),
       }),
       magicLink({
         sendMagicLink: async ({ email, token, url }) => {

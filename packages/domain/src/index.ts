@@ -29,6 +29,7 @@ export * from "./entity";
 export * from "./format";
 export * from "./freshness";
 export * from "./grid";
+export * from "./gym-creator";
 export * from "./leads";
 export * from "./local-date";
 export * from "./materialize";

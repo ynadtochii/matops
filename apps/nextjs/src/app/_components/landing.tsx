@@ -26,6 +26,7 @@ import {
 } from "~/lib/site";
 import { display, MatFloor } from "./auth-door";
 import { ConsentBanner, CookieSettingsButton } from "./consent-banner";
+import { REQUEST_ACCESS_HREF } from "./contact";
 import { blockSkin, hueSkin } from "./discipline-skin";
 import { ENTER, stagger } from "./primitives";
 
@@ -128,12 +129,12 @@ export function Landing({ consent }: { consent: Consent | null }) {
               className={cn("mt-8 flex flex-wrap justify-center gap-2", ENTER)}
               style={stagger(2)}
             >
-              <Link
-                href="/start"
+              <a
+                href={REQUEST_ACCESS_HREF}
                 className={buttonClass({ variant: "primary", size: "lg" })}
               >
-                Start a gym
-              </Link>
+                Request access
+              </a>
               <Link
                 href="/sign-in"
                 className={buttonClass({ variant: "secondary", size: "lg" })}
@@ -181,18 +182,18 @@ export function Landing({ consent }: { consent: Consent | null }) {
               Open your gym in a minute.
             </h2>
             <p className="text-muted-foreground mt-4 max-w-sm text-base leading-relaxed text-pretty">
-              Name your academy, pick its time zone, and share the join link
-              with your students.
+              We are opening MatOps to a few gyms at a time. Ask for access, and
+              we will set you up to name your academy and share the join link.
             </p>
-            <Link
-              href="/start"
+            <a
+              href={REQUEST_ACCESS_HREF}
               className={cn(
                 "mt-8",
                 buttonClass({ variant: "primary", size: "lg" }),
               )}
             >
-              Start a gym
-            </Link>
+              Request access
+            </a>
             <p className="text-muted-foreground mt-6 text-sm">
               Training at a gym on MatOps?{" "}
               <Link

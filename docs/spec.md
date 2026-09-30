@@ -62,6 +62,7 @@ See [ADR 132](issues/132-staff-roster-isolation.md).
 - **FP7: A manager runs the daily work.** The gym can have managers beside its owners (MB1). Every rule is enforced where the work happens, so hiding a menu item is decoration and never the check.
 - **FP8: Setup is guided, not guessed.** The academy carries a setup list the server works out from what exists: the academy, its address and time zone, a weekly schedule, a shared join link, a first approved student and a first booking. There is no gym-name step and no instructor step, because a teaching owner is the staff. Plan, bank details, assignment and readiness steps appear only while payment is on. Each item opens the screen that finishes it. The list shows at the top of the dashboard for owners and managers, and hides when it is done or closed.
 - **FP9: One set of words.** A **gym** is the business somebody owns. The **academy** is the place it runs. A **class** is one dated thing on the schedule. Nothing is called an organization or an entity in front of a person: those are the words in the database, not the words in a gym.
+- **FP10: Starting a gym is invite-only.** Only a signed-in user whose email is on the operator's list (`GYM_CREATOR_EMAILS`, comma-separated) can create a gym. An unset or empty list lets nobody in. The check runs in Better Auth, so it also covers the raw `/api/auth/organization/create` endpoint. A signed-in user who is not on the list sees "MatOps is invite-only for now" and a **Request access** email link on `/start`, not the form. The landing page and sign-in offer **Request access** instead of `Start a gym`, and the operator sends the `/start` link to each invited owner. An owner whose gym has no academy still finishes it (FP2), because that step creates no gym (ADR 149).
 
 ---
 
@@ -108,8 +109,8 @@ _(Everyone joins **pending and view-only**. The invite link carries the intended
 
 - **Email and magic link** (passwordless), plus **Continue with Google** on the **web** when the server has OAuth credentials set (ADR 35). **Mobile is magic-link only**: the iOS browser-to-app session return does not land (`docs/mobile-google-login-handoff.md`).
 - **Fields:** first name, last name, phone, **email (required)**. Email is the sign-in identity. Nothing else.
-- **The web door is one screen, no scroll** (`/sign-in`). A brand panel beside the form on a desktop, the form alone on a phone. No marketing section and no pricing: owners, instructors and students all sign in here, so the copy stays role-neutral. `Start a gym` is the one secondary link off it (FP1), and `/start` is the same shell. Both link the **privacy notice**, because both ask for an email.
-- **Signed out, `/` is a short landing page**: the headline, `Start a gym` and `Sign in`, a static picture of the week schedule, three points (approval, booking from the phone, class change notices) and a closing `Start a gym`. Signed in, `/` opens the first academy as before.
+- **The web door is one screen, no scroll** (`/sign-in`). A brand panel beside the form on a desktop, the form alone on a phone. No marketing section and no pricing: owners, instructors and students all sign in here, so the copy stays role-neutral. `Request access` (an email link, FP10) is the one secondary link off it, and `/start` is the same shell. Both link the **privacy notice**, because both ask for an email.
+- **Signed out, `/` is a short landing page**: the headline, `Request access` (FP10) and `Sign in`, a static picture of the week schedule, three points (approval, booking from the phone, class change notices) and a closing `Request access`. Signed in, `/` opens the first academy as before.
 - **Landing analytics (ADR 148).** In production the landing page loads Google Analytics with analytics storage denied until the visitor accepts. A small banner offers Accept and Decline with equal weight and links the privacy notice; `Cookie settings` in the footer reopens it. The choice is kept six months. No other page loads analytics.
 
 ### S2 · Join an academy
@@ -221,7 +222,7 @@ Not built. The design is in `docs/home-widget-implementation.md`.
 
 **Owner onboarding is quick too.** Same sign-in. Schedule setup has quick tools: **duplicate a template**, **copy a day**, and a "typical week" starter.
 
-**Signing in lands you in your academy (ADR 49, ADR 142).** Creating a gym is a separate **"Start a gym"** link on the sign-in page (`/start`), which makes you the owner at once (FP1). On a normal sign-in, `/` opens the first academy you can reach. An owner whose gym has no academy goes to `/start` in resume mode (FP2). Someone with no academy at all gets **"Join your gym"**: type the 6-digit join code, add name and phone, and land **pending** as a student.
+**Signing in lands you in your academy (ADR 49, ADR 142).** Creating a gym happens at `/start`, which makes you the owner at once (FP1). It is invite-only: the sign-in page offers **"Request access"**, and the operator sends `/start` to invited owners (FP10). On a normal sign-in, `/` opens the first academy you can reach. An owner whose gym has no academy goes to `/start` in resume mode (FP2). Someone with no academy at all gets **"Join your gym"**: type the 6-digit join code, add name and phone, and land **pending** as a student.
 
 ### O0 · One gym, one academy _(ADR 124, ADR 142)_
 
