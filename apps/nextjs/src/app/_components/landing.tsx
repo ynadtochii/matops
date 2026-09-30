@@ -13,7 +13,7 @@ import {
 
 import { cn } from "@matops/ui";
 import { buttonClass } from "@matops/ui/button";
-import { Logo, Mark } from "@matops/ui/logo";
+import { Mark } from "@matops/ui/logo";
 import { FOCUS_RING } from "@matops/ui/motion";
 
 import type { Consent } from "~/lib/consent";
@@ -26,9 +26,39 @@ import {
 } from "~/lib/site";
 import { display, MatFloor } from "./auth-door";
 import { ConsentBanner, CookieSettingsButton } from "./consent-banner";
-import { REQUEST_ACCESS_HREF } from "./contact";
+import { CONTACT_EMAIL, PRICING_HREF, REQUEST_ACCESS_HREF } from "./contact";
 import { blockSkin, hueSkin } from "./discipline-skin";
 import { ENTER, stagger } from "./primitives";
+import { FOOTER_LINK, SiteFooter, SiteHeader } from "./site-chrome";
+
+const FAQ: { q: string; a: string; href?: string }[] = [
+  {
+    q: "What is MatOps?",
+    a: "MatOps is gym management software built for Brazilian jiu-jitsu (BJJ) academies. Owners and coaches run the class schedule, approve students and take attendance. Students book classes from their phone.",
+  },
+  {
+    q: "Is MatOps only for BJJ?",
+    a: "It is built for BJJ first. Classes are grouped by discipline, like Gi, No-Gi and Kids, and every student has a belt and stripes. Other grappling gyms with the same kind of timetable can use it too.",
+  },
+  {
+    q: "How do students book classes?",
+    a: "Students join your academy with your invite link or a 6-digit join code. Once you approve them, they book and cancel classes up to seven days ahead, on their phone or on the web.",
+  },
+  {
+    q: "Can I track attendance and belts?",
+    a: "Yes. Coaches mark who came to each class, and you record each student's belt and stripes.",
+  },
+  {
+    q: "How much does MatOps cost?",
+    a: `Pricing depends on your academy. Email ${CONTACT_EMAIL} to ask for a price.`,
+    href: PRICING_HREF,
+  },
+  {
+    q: "How do I start using MatOps?",
+    a: `We are opening MatOps to a few gyms at a time. Email ${CONTACT_EMAIL} with your gym's name and city to ask for access.`,
+    href: REQUEST_ACCESS_HREF,
+  },
+];
 
 const JSON_LD = {
   "@context": "https://schema.org",
@@ -61,13 +91,16 @@ const JSON_LD = {
       operatingSystem: "Web",
       publisher: { "@id": `${SITE_URL}/#organization` },
     },
+    {
+      "@type": "FAQPage",
+      mainEntity: FAQ.map(({ q, a }) => ({
+        "@type": "Question",
+        name: q,
+        acceptedAnswer: { "@type": "Answer", text: a },
+      })),
+    },
   ],
 };
-
-const FOOTER_LINK = cn(
-  "hover:text-foreground rounded-sm transition-colors motion-reduce:transition-none",
-  FOCUS_RING,
-);
 
 export function Landing({ consent }: { consent: Consent | null }) {
   return (
@@ -87,14 +120,7 @@ export function Landing({ consent }: { consent: Consent | null }) {
           __html: JSON.stringify(JSON_LD).replace(/</g, "\\u003c"),
         }}
       />
-      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
-        <Link href="/" className={cn("rounded-md", FOCUS_RING)}>
-          <Logo size={24} />
-        </Link>
-        <Link href="/sign-in" className={buttonClass({ variant: "ghost" })}>
-          Sign in
-        </Link>
-      </header>
+      <SiteHeader />
 
       <main className="flex-1">
         <section className="relative isolate px-4 pt-12 sm:px-6 sm:pt-20">
@@ -172,6 +198,22 @@ export function Landing({ consent }: { consent: Consent | null }) {
         </section>
 
         <section className="border-border border-t px-4 py-24 sm:px-6 sm:py-28">
+          <div className="mx-auto grid max-w-6xl gap-10 lg:grid-cols-[1fr_2fr] lg:gap-16">
+            <h2 className="text-2xl font-semibold tracking-tight">Questions</h2>
+            <dl className="divide-border divide-y">
+              {FAQ.map(({ q, a, href }) => (
+                <div key={q} className="py-5 first:pt-0 last:pb-0">
+                  <dt className="text-base font-medium">{q}</dt>
+                  <dd className="text-muted-foreground mt-2 max-w-[65ch] text-base leading-relaxed text-pretty">
+                    <Answer text={a} href={href} />
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        </section>
+
+        <section className="border-border border-t px-4 py-24 sm:px-6 sm:py-28">
           <div className="mx-auto flex max-w-xl flex-col items-center text-center">
             <h2
               className={cn(
@@ -210,18 +252,30 @@ export function Landing({ consent }: { consent: Consent | null }) {
         </section>
       </main>
 
-      <footer className="border-border border-t">
-        <div className="text-muted-foreground mx-auto flex max-w-6xl items-center justify-between px-4 py-6 text-xs sm:px-6">
-          <Logo size={18} withWordmark={false} />
-          <div className="flex items-center gap-4">
-            <CookieSettingsButton className={FOOTER_LINK} />
-            <Link href="/privacy" className={FOOTER_LINK}>
-              Privacy
-            </Link>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter>
+        <CookieSettingsButton className={FOOTER_LINK} />
+      </SiteFooter>
     </div>
+  );
+}
+
+function Answer({ text, href }: { text: string; href?: string }) {
+  const [before, after] = text.split(CONTACT_EMAIL);
+  if (!href || after === undefined) return text;
+  return (
+    <>
+      {before}
+      <a
+        href={href}
+        className={cn(
+          "text-foreground decoration-muted-foreground rounded-sm underline underline-offset-4 hover:decoration-current",
+          FOCUS_RING,
+        )}
+      >
+        {CONTACT_EMAIL}
+      </a>
+      {after}
+    </>
   );
 }
 
