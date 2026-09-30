@@ -2,8 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ImageResponse } from "next/og";
 
-export const alt =
-  "MatOps: class schedule, bookings and attendance for BJJ academies";
+export const alt = "MatOps: BJJ gym management software";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -79,7 +78,7 @@ export default async function OpenGraphImage() {
           Run the mat, not the paperwork.
         </div>
         <div style={{ fontSize: 32, color: "#8a8c93" }}>
-          Class schedule, bookings and attendance for BJJ academies.
+          BJJ gym management software.
         </div>
       </div>
 

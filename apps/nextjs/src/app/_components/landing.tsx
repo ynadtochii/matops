@@ -36,6 +36,7 @@ const JSON_LD = {
       "@type": "Organization",
       "@id": `${SITE_URL}/#organization`,
       name: "MatOps",
+      alternateName: "Mat Ops",
       url: SITE_URL,
       logo: `${SITE_URL}/icon-512.png`,
     },
@@ -43,6 +44,7 @@ const JSON_LD = {
       "@type": "WebSite",
       "@id": `${SITE_URL}/#website`,
       name: "MatOps",
+      alternateName: "Mat Ops",
       url: SITE_URL,
       publisher: { "@id": `${SITE_URL}/#organization` },
     },
@@ -52,6 +54,9 @@ const JSON_LD = {
       url: SITE_URL,
       description: SITE_DESCRIPTION,
       applicationCategory: "BusinessApplication",
+      applicationSubCategory: "Gym management software",
+      keywords:
+        "BJJ gym management software, jiu-jitsu gym software, BJJ academy software, BJJ class booking, BJJ attendance tracking",
       operatingSystem: "Web",
       publisher: { "@id": `${SITE_URL}/#organization` },
     },
@@ -115,8 +120,9 @@ export function Landing({ consent }: { consent: Consent | null }) {
               )}
               style={stagger(1)}
             >
-              Classes, students, bookings and attendance for a BJJ academy. Your
-              students book from their phone. You stay on the mat.
+              MatOps is management software for BJJ academies: classes,
+              students, bookings and attendance. Your students book from their
+              phone. You stay on the mat.
             </p>
             <div
               className={cn("mt-8 flex flex-wrap justify-center gap-2", ENTER)}

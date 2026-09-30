@@ -14,7 +14,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/sign-in" },
   title: "Sign in",
   description:
-    "Sign in to MatOps. Schedule, members, attendance and dues for a BJJ academy.",
+    "Sign in to MatOps, the management software for BJJ gyms: schedule, students, bookings and attendance.",
 };
 
 /**

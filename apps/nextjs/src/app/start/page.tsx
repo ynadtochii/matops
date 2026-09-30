@@ -13,7 +13,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/start" },
   title: "Start your academy",
   description:
-    "Name your academy and start running it: classes, students, bookings and attendance.",
+    "Start your BJJ gym on MatOps. Name your academy and run its classes, students, bookings and attendance.",
 };
 
 /**
