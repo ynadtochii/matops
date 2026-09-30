@@ -11,6 +11,7 @@ import {
 } from "../_components/policy-text";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/privacy" },
   title: "Privacy",
   description: "What MatOps stores about you, why, and how to get it removed.",
 };

@@ -11,6 +11,7 @@ import { PageLoader } from "../_components/mat-loader";
 import { SignIn } from "../_components/sign-in";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/sign-in" },
   title: "Sign in",
   description:
     "Sign in to MatOps. Schedule, members, attendance and dues for a BJJ academy.",

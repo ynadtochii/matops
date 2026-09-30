@@ -109,6 +109,8 @@ _(Everyone joins **pending and view-only**. The invite link carries the intended
 - **Email and magic link** (passwordless), plus **Continue with Google** on the **web** when the server has OAuth credentials set (ADR 35). **Mobile is magic-link only**: the iOS browser-to-app session return does not land (`docs/mobile-google-login-handoff.md`).
 - **Fields:** first name, last name, phone, **email (required)**. Email is the sign-in identity. Nothing else.
 - **The web door is one screen, no scroll** (`/sign-in`). A brand panel beside the form on a desktop, the form alone on a phone. No marketing section and no pricing: owners, instructors and students all sign in here, so the copy stays role-neutral. `Start a gym` is the one secondary link off it (FP1), and `/start` is the same shell. Both link the **privacy notice**, because both ask for an email.
+- **Signed out, `/` is a short landing page**: the headline, `Start a gym` and `Sign in`, a static picture of the week schedule, three points (approval, booking from the phone, class change notices) and a closing `Start a gym`. Signed in, `/` opens the first academy as before.
+- **Landing analytics (ADR 148).** In production the landing page loads Google Analytics with analytics storage denied until the visitor accepts. A small banner offers Accept and Decline with equal weight and links the privacy notice; `Cookie settings` in the footer reopens it. The choice is kept six months. No other page loads analytics.
 
 ### S2 · Join an academy
 
