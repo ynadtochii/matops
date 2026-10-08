@@ -2,16 +2,16 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 
-import { canCreateGym } from "@matops/domain";
-import { buttonClass } from "@matops/ui/button";
+// import { canCreateGym } from "@matops/domain";
+// import { buttonClass } from "@matops/ui/button";
 
 import { AuthDoor } from "~/app/_components/auth-door";
-import { REQUEST_DEMO_HREF } from "~/app/_components/contact";
+// import { REQUEST_DEMO_HREF } from "~/app/_components/contact";
 import { CreateGym } from "~/app/_components/create-gym";
 import { MatLoader } from "~/app/_components/mat-loader";
 import { SignIn } from "~/app/_components/sign-in";
 import { getSession } from "~/auth/server";
-import { env } from "~/env";
+// import { env } from "~/env";
 import { getQueryClient, trpc } from "~/trpc/server";
 
 export const metadata: Metadata = {
@@ -56,11 +56,13 @@ async function StartForm() {
       trpc.organization.mine.queryOptions(),
     );
     if (owned.length === 0) {
-      return canCreateGym(session.user.email, env.GYM_CREATOR_EMAILS) ? (
-        <CreateGym />
-      ) : (
-        <InviteOnly email={session.user.email} />
-      );
+      // Gym creation is open to everyone for now. Restore to make it invite-only (ADR 149).
+      // return canCreateGym(session.user.email, env.GYM_CREATOR_EMAILS) ? (
+      //   <CreateGym />
+      // ) : (
+      //   <InviteOnly email={session.user.email} />
+      // );
+      return <CreateGym />;
     }
     if (!session.session.activeOrganizationId) redirect("/");
     const gym = await getQueryClient().fetchQuery(
@@ -84,24 +86,24 @@ async function StartForm() {
   );
 }
 
-function InviteOnly({ email }: { email: string }) {
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          MatOps is invite-only for now
-        </h1>
-        <p className="text-muted-foreground text-sm text-pretty">
-          We are opening MatOps to a few gyms at a time. Request a demo and we
-          will add {email} to the list. Then come back to this page.
-        </p>
-      </div>
-      <a
-        href={REQUEST_DEMO_HREF}
-        className={buttonClass({ variant: "primary" })}
-      >
-        Request a demo
-      </a>
-    </div>
-  );
-}
+// function InviteOnly({ email }: { email: string }) {
+//   return (
+//     <div className="flex flex-col gap-6">
+//       <div className="flex flex-col gap-2">
+//         <h1 className="text-2xl font-semibold tracking-tight">
+//           MatOps is invite-only for now
+//         </h1>
+//         <p className="text-muted-foreground text-sm text-pretty">
+//           We are opening MatOps to a few gyms at a time. Request a demo and we
+//           will add {email} to the list. Then come back to this page.
+//         </p>
+//       </div>
+//       <a
+//         href={REQUEST_DEMO_HREF}
+//         className={buttonClass({ variant: "primary" })}
+//       >
+//         Request a demo
+//       </a>
+//     </div>
+//   );
+// }
