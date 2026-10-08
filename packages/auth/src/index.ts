@@ -5,7 +5,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { magicLink, oAuthProxy, organization } from "better-auth/plugins";
 
 import { db } from "@matops/db/client";
-import { canCreateGym } from "@matops/domain";
+// import { canCreateGym } from "@matops/domain";
 import { renderEmail, sendEmail } from "@matops/notifications";
 
 import { authEnv } from "../env";
@@ -86,8 +86,9 @@ export function initAuth<
         creatorRole: "owner",
         // Better Auth also serves /organization/create to any signed-in user,
         // so the gate lives here rather than in the tRPC procedure.
-        allowUserToCreateOrganization: (user) =>
-          canCreateGym(user.email, options.gymCreatorEmails),
+        // Gym creation is open to everyone for now. Restore to make it invite-only (ADR 149).
+        // allowUserToCreateOrganization: (user) =>
+        //   canCreateGym(user.email, options.gymCreatorEmails),
       }),
       magicLink({
         sendMagicLink: async ({ email, token, url }) => {
