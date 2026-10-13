@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto";
 import { and, eq, gte, isNull, lt, ne, sql } from "drizzle-orm";
 
 import type { SignupAnswers } from "@matops/domain";
@@ -11,9 +10,11 @@ import {
 } from "@matops/domain";
 
 import type { DbExec } from "./client";
+import type { LiveLinkRow } from "./live-link";
 import type { DbReader } from "./tenant";
 import { dropInLink } from "./drop-in-link-schema";
 import { entity } from "./entity-schema";
+import { getLiveLink, getOrCreateLiveLink, rotateLiveLink } from "./live-link";
 import {
   bumpScheduleRevision,
   lockAndReadScheduleRevision,
@@ -85,75 +86,25 @@ export async function listAcademyClassesInWindow(
     );
 }
 
-interface DropInLinkRow {
-  token: string;
-  createdAt: Date;
-}
-
-function newLinkToken(): string {
-  return randomBytes(18).toString("base64url");
-}
-
-const linkCols = { token: dropInLink.token, createdAt: dropInLink.createdAt };
-
-export async function getDropInLink(
+export function getDropInLink(
   academyId: string,
   exec: DbReader,
-): Promise<DropInLinkRow | null> {
-  const rows = await exec
-    .select(linkCols)
-    .from(dropInLink)
-    .where(
-      and(eq(dropInLink.academyId, academyId), isNull(dropInLink.revokedAt)),
-    )
-    .limit(1);
-  return rows[0] ?? null;
+): Promise<LiveLinkRow | null> {
+  return getLiveLink(dropInLink, academyId, exec);
 }
 
-export async function rotateDropInLink(
+export function rotateDropInLink(
   input: { academyId: string; createdBy: string },
   exec: DbExec,
-): Promise<DropInLinkRow> {
-  return exec.transaction(async (tx) => {
-    await tx
-      .update(dropInLink)
-      .set({ revokedAt: new Date() })
-      .where(
-        and(
-          eq(dropInLink.academyId, input.academyId),
-          isNull(dropInLink.revokedAt),
-        ),
-      );
-    const [row] = await tx
-      .insert(dropInLink)
-      .values({
-        academyId: input.academyId,
-        token: newLinkToken(),
-        createdBy: input.createdBy,
-      })
-      .returning(linkCols);
-    if (!row) throw new Error("drop_in_link insert returned no row");
-    return row;
-  });
+): Promise<LiveLinkRow> {
+  return rotateLiveLink(dropInLink, input, exec);
 }
 
-export async function getOrCreateDropInLink(
+export function getOrCreateDropInLink(
   input: { academyId: string; createdBy: string },
   exec: DbExec,
-): Promise<DropInLinkRow> {
-  const live = await getDropInLink(input.academyId, exec);
-  if (live) return live;
-  await exec
-    .insert(dropInLink)
-    .values({
-      academyId: input.academyId,
-      token: newLinkToken(),
-      createdBy: input.createdBy,
-    })
-    .onConflictDoNothing();
-  const row = await getDropInLink(input.academyId, exec);
-  if (!row) throw new Error("drop_in_link was not created");
-  return row;
+): Promise<LiveLinkRow> {
+  return getOrCreateLiveLink(dropInLink, input, exec);
 }
 
 export interface DropInAcademy {

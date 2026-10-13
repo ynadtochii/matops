@@ -6,6 +6,7 @@ import { bookingRouter } from "./router/booking";
 import { checkinRouter } from "./router/checkin";
 import { classRouter } from "./router/class";
 import { dataTransferRouter } from "./router/dataTransfer";
+import { deskRouter } from "./router/desk";
 import { disciplineRouter } from "./router/discipline";
 import { dropInRouter } from "./router/dropin";
 import { entityRouter } from "./router/entity";
@@ -38,6 +39,7 @@ export const appRouter = createTRPCRouter({
   rank: rankRouter,
   note: noteRouter,
   notification: notificationRouter,
+  desk: deskRouter,
   dropIn: dropInRouter,
   pushToken: pushTokenRouter,
   stats: statsRouter,

@@ -7,6 +7,7 @@ import { AcademyDangerZone } from "./academy-danger-zone";
 import { AcademyIdentity } from "./academy-identity";
 import { AcademyLocation } from "./academy-location";
 import { useEntity, useOrganization } from "./entity";
+import { DeskLinkSection } from "./invite-link-card";
 import { MembershipSettings } from "./membership-settings";
 import { PageHeader } from "./page-header";
 import { ENTER } from "./primitives";
@@ -23,6 +24,7 @@ export function SettingsScreen() {
         <AcademyIdentity name={academy.name} code={academy.code} />
         <AcademyLocation address={academy.address} mapUrl={academy.mapUrl} />
         <SignupQuestions />
+        <DeskLinkSection />
         {canRunOrganization && academy.membershipEnforced && (
           <MembershipSettings />
         )}

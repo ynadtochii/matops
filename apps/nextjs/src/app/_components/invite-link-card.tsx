@@ -21,7 +21,7 @@ import { toast } from "@matops/ui/toast";
 import { shareLink, useCanShare } from "~/lib/share";
 import { useTRPC } from "~/trpc/react";
 import { useEntity } from "./entity";
-import { cardClass } from "./primitives";
+import { cardClass, SectionHeading } from "./primitives";
 import { SkeletonCard } from "./skeletons";
 import { ErrorState } from "./states";
 
@@ -158,6 +158,56 @@ export function DropInLinkCard() {
   );
 }
 
+export function DeskLinkSection() {
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  const link = useQuery(trpc.desk.link.queryOptions());
+  const academyName = useEntity().name;
+
+  const rotate = useMutation(
+    trpc.desk.rotateLink.mutationOptions({
+      onSuccess: async () => {
+        await queryClient.invalidateQueries(trpc.desk.link.pathFilter());
+        toast.success("Link replaced. The old one no longer works");
+      },
+      onError: () => toast.error("Couldn't rotate the link. Try again."),
+    }),
+  );
+
+  return (
+    <section className="flex flex-col gap-4">
+      <div>
+        <SectionHeading>Front desk tablet</SectionHeading>
+        <p className="text-muted-foreground mt-1 max-w-2xl text-sm text-pretty">
+          Open this link on a tablet at the desk. Students tap their name to
+          check in to the class. The page does nothing else. Keep the link
+          private, and rotate it if someone else gets it.
+        </p>
+      </div>
+      {link.isPending ? (
+        <SkeletonCard lines={2} />
+      ) : link.isError ? (
+        <ErrorState label="the desk link" onRetry={() => void link.refetch()} />
+      ) : (
+        <LinkCard
+          label="Desk link"
+          hint="Do not sign in to MatOps on the tablet. Use Guided Access (iPad) or screen pinning (Android) to keep it on this page."
+          url={linkUrl(`/desk/${link.data.token}`)}
+          rotate={() => rotate.mutateAsync()}
+          rotating={rotate.isPending}
+          qr={{
+            title: "Open on the tablet",
+            description:
+              "Scan this with the tablet camera to open the desk page.",
+            caption: "Front desk check-in",
+            codeLabel: `Desk link QR code for ${academyName}`,
+          }}
+        />
+      )}
+    </section>
+  );
+}
+
 export function DropInLinkButton() {
   return (
     <Dialog>
@@ -201,7 +251,7 @@ function LinkCard({
     caption: string;
     codeLabel: string;
   };
-  share: { title: string; text: string };
+  share?: { title: string; text: string };
 }) {
   const academy = useEntity();
   const isOwner = runsBranch(academy);
@@ -270,7 +320,7 @@ function LinkCard({
               />
             </DialogContent>
           </Dialog>
-          {shareable && (
+          {shareable && share && (
             <Button
               variant="secondary"
               onClick={() => void shareLink({ url, ...share })}

@@ -181,6 +181,16 @@ No blank waiting screen. A pending student sees the schedule with a note that th
 - **The poster** could encode the public **`/drop-in/<token>`** URL for a human-readable link printed on paper or sent over text. The drop-in page identifies the academy by resolving the token server-side before any query.
 - Works **even if the class is full**; soft capacity shows red but never refuses.
 
+### S8b · Desk check-in tablet _(ADR 150)_
+
+- **One secret link per academy** at `/desk/<token>`. Owners and managers find it in Settings ("Front desk tablet") with copy, QR and Rotate. The first read creates it. Instructors and students cannot read it. Rotating stops the old link on its next request; an unknown and a replaced link get the same "This link was replaced or turned off" message.
+- **The page does one thing.** It has no links and no sign-in. It reads the academy only from the token, never from a session, so a browser signed in to MatOps gets nothing more from it.
+- **Class first.** It opens on the class open for check-in now, or else the next class today. If two classes are open at once, it asks which. Buttons list today's classes that have not ended. When no class is left today, the page shows tomorrow's classes under "No more classes today. Tomorrow:", and says "Check-in opens tomorrow at" a time. **The first class in the list is open for check-in at any time today, until it ends. Once it starts, the next class opens too**, so latecomers to the running class and early arrivals for the next one can both check in. Classes that start at the same time count as one step. A later class says "Check-in opens at" the start of the class before it. Tomorrow's classes never open early. The desk uses this rule instead of the 60-minute check-in window.
+- **Then the name.** Booked members show as name buttons, already present ones greyed with a tick. "Not on the list? Type your name" finds any other active member after 2 letters (at most 10 results), as a walk-in. Names show as first name and last initial, or the full name when two would look the same. No contact, health or status data is shown.
+- **Tapping a name** marks the member present and books them if they had no booking (the same write as S8 check-in: approval, class state and soft capacity apply). It records `check_in_source = reception_self`. Pending, suspended or archived members see "Please talk to the desk". A second tap changes nothing.
+- **Undo.** The success screen shows "Not you? Undo" for 10 seconds. The server allows undo for 30 seconds, only for a desk check-in that no staff member has marked since. Undo clears attendance and cancels the booking if the tap made it. Later fixes happen in Attendance (O5).
+- **Rate limit:** 600 desk requests per 10 minutes per link (Postgres counter), plus the per-IP limit on every public procedure.
+
 ### S9 · Membership _(only while payment is on, FR1)_
 
 With payment off, the web hides this screen and `/payments` says payments are not in use. With it on:

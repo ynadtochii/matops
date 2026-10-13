@@ -54,3 +54,20 @@ export const LeadIdSchema = z.object({ id: z.uuid() });
 export const SetLeadStageSchema = LeadIdSchema.extend({
   stage: z.enum(OWNER_SETTABLE_STAGES),
 });
+
+export const DeskRosterSchema = z.object({ classId: z.uuid() });
+
+export const DeskSearchSchema = z.object({
+  classId: z.uuid(),
+  query: z.string().trim().max(60),
+});
+
+export const DeskCheckInSchema = z.object({
+  classId: z.uuid(),
+  memberId: z.string().min(1).max(100),
+});
+
+export const DeskUndoSchema = z.object({
+  participationId: z.uuid(),
+  booked: z.boolean(),
+});
