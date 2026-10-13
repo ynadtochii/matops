@@ -23,7 +23,7 @@ The first release is **one BJJ academy per gym** with **approval-only booking**.
 
 Docs of record: `docs/architecture.md` (§0 as built, §5 tenancy) · `docs/spec.md` (behavior, per ID) · `docs/roadmap.md` (status matrix) · `CHANGELOG.md` · `docs/map.md` (ADR index).
 
-Business reference, **not a build plan**: `docs/business-model.md`. The [gym-owned Stripe first integration design](docs/stripe-gym-payments-design.md) makes drop-in payment optional academy-wide. Paid mode offers hosted Checkout only for future classes at least 45 minutes away and books after verified payment; Free mode keeps the existing drop-in flow. MatOps does not issue refunds; the gym resolves any paid but unbookable class in Stripe. Template/class overrides are later work. None of this is implemented. Near term: an unpriced pilot with a few test academies.
+Business reference, **not a build plan**: `docs/business-model.md`. The [gym-owned Stripe payments design](docs/stripe-gym-payments-design.md) follows MAAT: MatOps creates each gym's own Stripe account (full Dashboard, no MatOps fee), students buy card memberships (Stripe Billing) and class packs on hosted Checkout, manual dues (ADR 40) stay, and free trial classes default to 0. MatOps owns membership status and the booking rule; refunds, pauses, retries, invoices and tax stay in the gym's Stripe Dashboard. `/drop-in/<token>` stays free. None of this is implemented, nothing ships until it passes locally in Stripe test mode, and the old `stripe` branch is not a base. Near term: an unpriced pilot with a few test academies.
 
 ## Run it
 
