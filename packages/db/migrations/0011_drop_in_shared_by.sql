@@ -1,0 +1,3 @@
+ALTER TABLE "drop_in" ADD COLUMN "shared_by_membership_id" text;--> statement-breakpoint
+ALTER TABLE "drop_in" ADD CONSTRAINT "drop_in_shared_by_membership_id_entity_membership_id_fk" FOREIGN KEY ("shared_by_membership_id") REFERENCES "public"."entity_membership"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "di_by_sharer" ON "drop_in" USING btree ("shared_by_membership_id") WHERE "drop_in"."shared_by_membership_id" is not null;

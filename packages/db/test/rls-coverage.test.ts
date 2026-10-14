@@ -8,6 +8,8 @@ const NO_RLS_BY_DESIGN: Record<string, string> = {
     "The public join screen resolves a token with no active academy, so a policy on app.academy_id would match nothing (docs/issues/28). Migration 0020 revokes every matops_app grant on the table instead, which is stricter than a policy.",
   drop_in_link:
     "The public drop-in form resolves a token before any academy scope is known, so a policy on app.academy_id would match nothing. The migration revokes every matops_app grant on the table instead (ADR 147).",
+  desk_link:
+    "The desk tablet resolves its token before any academy scope is known, so a policy on app.academy_id would match nothing. The migration revokes every matops_app grant on the table instead (ADR 150).",
 };
 
 const NO_ENTITY_KEY_BY_DESIGN = ["tenant_probe"];

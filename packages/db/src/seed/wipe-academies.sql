@@ -26,6 +26,7 @@ DELETE FROM "class";
 DELETE FROM "class_template";
 DELETE FROM "academy_invite";
 DELETE FROM "drop_in_link";
+DELETE FROM "desk_link";
 DELETE FROM "tenant_probe";
 DELETE FROM "invitation";
 DELETE FROM "entity_membership";

@@ -71,6 +71,20 @@
       "when": 1790595792193,
       "tag": "0009_drop_in_link",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791919301494,
+      "tag": "0010_desk_link",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791990646176,
+      "tag": "0011_drop_in_shared_by",
+      "breakpoints": true
     }
   ]
 }

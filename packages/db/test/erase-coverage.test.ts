@@ -14,13 +14,15 @@ const NOT_MEMBER_DATA: Record<string, string> = {
   academy_waiver:
     "The academy's own agreement text. A member's acceptance of it is in waiver_acceptance (ADR 146).",
   drop_in:
-    "A lead is not a member. It carries no member_id and is erased with the academy, not with a member (spec O4).",
+    "A lead is not a member and is erased with the academy, not with a member (spec O4). Its shared_by_membership_id clears through ON DELETE SET NULL when the sharer's membership row goes (ADR 151).",
   drop_in_visit:
     "A visitor's class, which belongs to a lead and not to a member. Erased with the academy, like the lead itself (ADR 115).",
   academy_invite:
     "A shareable link belongs to the academy and to the role, not to whoever used it.",
   drop_in_link:
     "The drop-in booking link belongs to the academy. It holds no member data and is erased with the academy, not with a member (ADR 147).",
+  desk_link:
+    "The desk tablet link belongs to the academy. It holds no member data and is erased with the academy, not with a member (ADR 150).",
   academy_profile: "The place's own settings row. Not member data (ADR 124).",
   tenant_probe:
     "The seed:health probe row. Not member data and not reachable by a member.",

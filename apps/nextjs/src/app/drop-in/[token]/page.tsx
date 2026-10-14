@@ -16,7 +16,7 @@ export default function DropInPage({
   searchParams,
 }: {
   params: Promise<{ token: string }>;
-  searchParams: Promise<{ class?: string }>;
+  searchParams: Promise<{ class?: string; by?: string }>;
 }) {
   return (
     <main className="container flex min-h-screen flex-col items-center justify-center gap-8 py-16">
@@ -33,11 +33,13 @@ async function DropIn({
   searchParams,
 }: {
   params: Promise<{ token: string }>;
-  searchParams: Promise<{ class?: string }>;
+  searchParams: Promise<{ class?: string; by?: string }>;
 }) {
-  const [{ token }, { class: classId }] = await Promise.all([
+  const [{ token }, { class: classId, by }] = await Promise.all([
     params,
     searchParams,
   ]);
-  return <DropInForm token={token} linkedClassId={classId ?? null} />;
+  return (
+    <DropInForm token={token} linkedClassId={classId ?? null} sharedBy={by} />
+  );
 }

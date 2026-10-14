@@ -236,7 +236,7 @@ export function ClassRoster({
     await invalidate();
     const added = results.filter((r) => r.status === "fulfilled").length;
     if (added > 0) {
-      toast.success(`Added ${added} walk-in${added === 1 ? "" : "s"}`);
+      toast.success(`Added ${added} ${added === 1 ? "person" : "people"}`);
     }
     const failed = results.find((r) => r.status === "rejected");
     if (failed) onError(failed.reason as { message: string });
@@ -383,6 +383,9 @@ export function ClassRoster({
     addWalkIn.isPending ||
     finish.isPending;
   const dropIns = classList.data.dropIns;
+  const visitorWalkIns = dropIns.filter(
+    (d) => d.bookingStatus === "none",
+  ).length;
   const pendingMarks = bulkMarkTargets(rows).length;
   return (
     <div className="flex flex-col gap-4">
@@ -529,8 +532,8 @@ export function ClassRoster({
             {counts.provisional > 0 && (
               <span>{counts.provisional} pending</span>
             )}
-            {counts.walkIn > 0 && <span>{counts.walkIn} walk-in</span>}
             {dropIns.length > 0 && <span>{dropIns.length} drop-in</span>}
+            {visitorWalkIns > 0 && <span>{visitorWalkIns} walk-in</span>}
           </p>
           {canMark && pendingMarks > 0 && (
             <Button
@@ -567,7 +570,7 @@ export function ClassRoster({
       {rows.length === 0 ? (
         <EmptyState title="No members listed.">
           {canMark
-            ? "Add any members who attended as walk-ins below."
+            ? "Add any members who attended without booking below."
             : "This class has no member attendance records."}
         </EmptyState>
       ) : (
@@ -589,7 +592,6 @@ export function ClassRoster({
                 {r.role && isStaffRole({ role: r.role }) && (
                   <RowTag>{r.role}</RowTag>
                 )}
-                {r.bookingStatus === "none" && <RowTag>walk-in</RowTag>}
                 {r.bookingStatus === "booked" &&
                   r.bookingTier === "provisional" && <RowTag>pending</RowTag>}
                 {canCancelBookings && r.bookingStatus === "booked" && (
@@ -691,6 +693,7 @@ export function ClassRoster({
                   {d.bookingStatus === "booked" && (
                     <RowTag tone="info">booked</RowTag>
                   )}
+                  {d.bookingStatus === "none" && <RowTag>walk-in</RowTag>}
                   <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
                     {d.phone}
                   </span>

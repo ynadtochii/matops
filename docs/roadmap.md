@@ -36,6 +36,7 @@ Plan: [first-release-plan.md](first-release-plan.md). Code built, including the 
 | Erase requests (student asks, owner or manager erases), no "More branches", Privacy link, "gym" wording (ADR 145); `0006` applied to dev | done | done | done | not changed | not needed | not needed |
 | Sign-up answers slice A: belt, health note, email opt-in, approval email (ADR 146); `0007` applied to dev 2026-09-27 | done | done | done | not changed | done | todo |
 | Sign-up answers slice B: versioned agreement, required at join, acceptance recorded (ADR 146); in `0007`, applied to dev 2026-09-27 | done | done | done | not changed | done | todo |
+| Desk check-in tablet: secret rotatable `/desk/<token>`, class then name, check-in with 10-second undo (ADR 150, S8b); `0010` not applied yet | done | done | done | not needed | done | todo |
 | Invite-only gym creation: `GYM_CREATOR_EMAILS` allowlist in Better Auth, Request a demo on landing and sign-in (ADR 149, FP10); no migration | not needed | done | done | not changed | done | todo |
 
 **Design system reference page**
@@ -337,6 +338,8 @@ One row per slice. This is the single answer to _"what's left, on which surface?
 | 3.4   | QR self check-in (book + attend)                                       | done | done | —    | done | done | — (removed, ADR 147) |
 | 3.5   | Public drop-in / lead form (rotatable link token, questions, rate limit) | done | done | done | —    | done | done (ADR 147) |
 | 3.6   | Class-specific drop-in link and three-local-day visitor window         | —    | —    | done | —    | done | —     |
+| 3.7   | Students share a class drop-in link (web; seven-day class link)        | —    | done | done | todo | done | —     |
+| 3.8   | Drop-in sharer credit ("Brought by" on a lead, ADR 151)                | done | done | done | —    | done | —     |
 | **4** | **Notifications & polish**                                             |      |      |      |      |      |       |
 | 4.1   | `notifications` package (Expo Push + Resend)                           | done | done | —    | done | done | done  |
 | 4.2   | Events (cancel, reminder, approval, class change)                      | done | done | —    | done | done | done¹ |

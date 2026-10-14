@@ -24,6 +24,7 @@ export * from "./class-edit";
 export * from "./coach";
 export * from "./csv";
 export * from "./dashboard";
+export * from "./desk";
 export * from "./dropin";
 export * from "./entity";
 export * from "./format";

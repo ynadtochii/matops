@@ -1,7 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { and, createEntity, eq } from "@matops/db";
-import { entityMembership } from "@matops/db/schema";
+import {
+  accessAssignment,
+  accessPlanPrice,
+  entityMembership,
+} from "@matops/db/schema";
 
 import type { Harness } from "./helpers";
 import { harness, personId, rejectionCode, seedAcademies } from "./helpers";
@@ -292,8 +296,17 @@ describe("marking a membership month paid", () => {
     const made = await owner().accessPlan.assign({
       userId: SAM,
       planId: plan.id,
+      startMonth: "2026-09-01",
     });
     assignment = made.id;
+    await h.exec
+      .update(accessAssignment)
+      .set({ startsOn: "2026-09-01" })
+      .where(eq(accessAssignment.id, assignment));
+    await h.exec
+      .update(accessPlanPrice)
+      .set({ effectiveMonth: "2026-09-01" })
+      .where(eq(accessPlanPrice.planId, plan.id));
   });
 
   afterAll(() => h.close());

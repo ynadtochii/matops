@@ -117,8 +117,6 @@ interface AttendanceCounts {
   confirmed: number;
   /** Provisional bookings (pending members, "pending approval"). */
   provisional: number;
-  /** Walk-ins — attended without a booking (`booking_status = none`). */
-  walkIn: number;
 }
 
 /**
@@ -134,15 +132,13 @@ export function attendanceCounts(rows: ParticipationRow[]): AttendanceCounts {
     unmarked: 0,
     confirmed: 0,
     provisional: 0,
-    walkIn: 0,
   };
   for (const r of rows) {
     if (r.attendanceStatus === "present") c.present++;
     else if (r.attendanceStatus === "absent") c.absent++;
     else c.unmarked++;
 
-    if (r.bookingStatus === "none") c.walkIn++;
-    else if (r.bookingStatus === "booked") c[r.bookingTier]++;
+    if (r.bookingStatus === "booked") c[r.bookingTier]++;
   }
   return c;
 }
@@ -179,4 +175,50 @@ export function attendanceReviewError(
   if (!nobodyAttended && snapshot.present === 0)
     return "Confirm that nobody attended this class.";
   return null;
+}
+
+export interface ClassAttendee {
+  studentId: string;
+  name: string | null;
+  bookingStatus: string;
+}
+
+export interface AttendeeView {
+  names: string[];
+  othersCount: number;
+  namesHidden: boolean;
+}
+
+/**
+ * Who a student may see on a class (spec S5, §4 schedule privacy, ADR 55). Only
+ * an APPROVED viewer sees names; they then see every booked member by name,
+ * pending ones included, because a pending member trains on the same mat. What
+ * stays a count is the people who are not members: drop-in leads, plus anyone
+ * with no name on file. A pending viewer sees counts alone, with `namesHidden`
+ * set so the UI can say why. The viewer is never listed to themselves.
+ */
+export function visibleAttendees(
+  attendees: ClassAttendee[],
+  dropInCount: number,
+  viewer: { id: string; approved: boolean },
+): AttendeeView {
+  const booked = attendees.filter(
+    (a) => a.bookingStatus === "booked" && a.studentId !== viewer.id,
+  );
+  if (!viewer.approved) {
+    return {
+      names: [],
+      othersCount: booked.length + dropInCount,
+      namesHidden: booked.length > 0,
+    };
+  }
+  const names = booked
+    .map((a) => a.name?.trim())
+    .filter((n): n is string => !!n)
+    .sort((a, b) => a.localeCompare(b));
+  return {
+    names,
+    othersCount: booked.length - names.length + dropInCount,
+    namesHidden: false,
+  };
 }

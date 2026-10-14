@@ -21,6 +21,8 @@ export async function checkInMember(
   input: Parameters<typeof bookingGate>[1] & {
     classId: string;
     organizationId: string;
+    source?: string;
+    checkWindow?: boolean;
   },
 ) {
   await lockAndReadScheduleRevision(db, input.entity.id);
@@ -37,7 +39,7 @@ export async function checkInMember(
       message: "That class isn't running",
     });
   }
-  if (!canCheckIn(cls, new Date())) {
+  if (input.checkWindow !== false && !canCheckIn(cls, new Date())) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
       message: "No class to check into right now",
@@ -90,10 +92,25 @@ export async function checkInMember(
     existing?.attendanceStatus === "present" &&
     existing.bookingStatus !== "cancelled"
   ) {
-    return { ok: true as const, tier: existing.bookingTier, booked: false };
+    return {
+      ok: true as const,
+      tier: existing.bookingTier,
+      booked: false,
+      participationId: existing.id,
+    };
   }
-  const attendance = { attendanceStatus: "present" as const, attendedAt: now };
+  const attendance = {
+    attendanceStatus: "present" as const,
+    attendedAt: now,
+    ...(input.source
+      ? {
+          checkInSource: sql`coalesce(${classParticipation.checkInSource}, ${input.source})`,
+        }
+      : {}),
+  };
+  let participationId: string;
   if (existing) {
+    participationId = existing.id;
     await db
       .update(classParticipation)
       .set({
@@ -108,18 +125,26 @@ export async function checkInMember(
       })
       .where(eq(classParticipation.id, existing.id));
   } else {
-    await db.insert(classParticipation).values({
-      academyId: input.entity.id,
-      classId: input.classId,
-      personOrganizationId: input.membership.personId
-        ? input.organizationId
-        : null,
-      personId: input.membership.personId,
-      studentId: me,
-      bookingStatus: "booked",
-      bookingTier: tier,
-      ...attendance,
-    });
+    const [inserted] = await db
+      .insert(classParticipation)
+      .values({
+        academyId: input.entity.id,
+        classId: input.classId,
+        personOrganizationId: input.membership.personId
+          ? input.organizationId
+          : null,
+        personId: input.membership.personId,
+        studentId: me,
+        bookingStatus: "booked",
+        bookingTier: tier,
+        attendanceStatus: "present",
+        attendedAt: now,
+        checkInSource: input.source ?? null,
+      })
+      .returning({ id: classParticipation.id });
+    if (!inserted)
+      throw new Error("class_participation insert returned no row");
+    participationId = inserted.id;
   }
 
   if (willBook && tier === "confirmed") {
@@ -128,5 +153,5 @@ export async function checkInMember(
 
   if (willBook) await bumpScheduleRevision(db, input.entity.id);
 
-  return { ok: true as const, tier, booked: willBook };
+  return { ok: true as const, tier, booked: willBook, participationId };
 }

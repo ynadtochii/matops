@@ -58,3 +58,16 @@ Seed teardown and `wipe-academies.sql` delete drop_in_link rows. Drop-in answers
 ## 2026-09-29 addendum: share one class
 
 Staff can copy a class-specific link from an eligible class on the weekly Schedule. It uses the live academy token with `?class=<id>`. The public form shows that class instead of a list, then keeps the same visitor questions and submit flow. The class ID controls the display, not access: someone with the link can open the academy-wide form. The server still checks the class belongs to the academy and is eligible when it saves the visit. Visitor booking now covers three local days, including today; member booking stays unchanged at seven days. No migration is needed.
+
+## 2026-10-13 addendum: students share a class
+
+Approved, active students can copy a class link from the web: a copy icon on each schedule row and a "Copy link for a friend" button on the class page. The Expo app does not have it yet.
+
+- **Access.** `dropIn.link` moves from staff to any active member (`memberIdentityProcedure`). A student gets the same live token as staff. Pending students are refused. Rotation stays with owners and managers. There is no owner switch: the owner rotates the link if it spreads too far. As before, anyone with a class link can remove `?class=` and open the general form.
+- **Seven days for a class link.** Students see seven days of classes, so a class link now works for any eligible class up to seven local days out (`VISITOR_LINK_DAYS`). The general list keeps three days (`VISITOR_LIST_DAYS`), because a seven-day list was too long for a stranger to read. `dropIn.classes` takes an optional `classId`: with it, the server looks seven days ahead and returns only that class. `dropIn.submit` accepts any eligible class within seven days. Staff Schedule links follow the same seven-day rule.
+- **No credit for the sharer.** The lead does not record which student shared the link. Referrals stay removed (ADR 142).
+- No migration.
+
+## 2026-10-14 addendum: sharer credit
+
+The "No credit for the sharer" bullet above is superseded by ADR [151](151-drop-in-sharer-credit.md): a lead now keeps the first member whose link brought them. Referrals stay removed.

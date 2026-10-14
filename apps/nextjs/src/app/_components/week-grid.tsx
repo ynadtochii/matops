@@ -261,7 +261,7 @@ export function WeekGrid({
                 {d.items.map(({ row, start, startMin, lane, lanes }) => {
                   const cancelled = row.status === "cancelled";
                   const full = capacityDisplay(
-                    row.bookingCount,
+                    row.headCount,
                     row.capacity,
                   ).isOver;
                   const top =
@@ -315,7 +315,7 @@ export function WeekGrid({
                               : "text-muted-foreground",
                           )}
                         >
-                          {row.bookingCount}/{row.capacity}
+                          {row.headCount}/{row.capacity}
                           {row.pendingCount > 0 && (
                             <span className="text-foreground">
                               {" "}

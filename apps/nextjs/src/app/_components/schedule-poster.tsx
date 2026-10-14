@@ -18,12 +18,6 @@ import { useEntity } from "./entity";
 import { POSTER_H, POSTER_W } from "./poster-size";
 import { useDisciplineHue } from "./use-discipline-hue";
 
-const updatedFmt = new Intl.DateTimeFormat("en-GB", {
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-});
-
 const fileSlug = (name: string) =>
   name
     .toLowerCase()
@@ -70,7 +64,6 @@ export function SchedulePoster() {
     drawPoster(canvas, {
       academyName: name,
       joinCode: code,
-      updatedLabel: `Updated ${updatedFmt.format(new Date())}`,
       disciplines,
       classes,
     });

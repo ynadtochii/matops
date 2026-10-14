@@ -15,7 +15,6 @@ interface PosterClass {
 interface PosterData {
   academyName: string;
   joinCode: string;
-  updatedLabel: string;
   disciplines: string[];
   classes: PosterClass[];
 }
@@ -316,11 +315,6 @@ export function drawPoster(
   ctx.fillStyle = QUIET;
   ctx.font = `400 15px ${sans}`;
   ctx.fillText("Book your spot in the MatOps app", PAD + 22, footY + 3);
-
-  ctx.textAlign = "right";
-  ctx.font = `500 15px ${mono}`;
-  ctx.fillText(data.updatedLabel, POSTER_W - PAD, footY - 21);
-  ctx.textAlign = "left";
 }
 
 export async function posterBlob(
