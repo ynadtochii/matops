@@ -296,6 +296,7 @@ describe("marking a membership month paid", () => {
     const made = await owner().accessPlan.assign({
       userId: SAM,
       planId: plan.id,
+      startMonth: "2026-09-01",
     });
     assignment = made.id;
     await h.exec
