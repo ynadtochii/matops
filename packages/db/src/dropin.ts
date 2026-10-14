@@ -6,6 +6,7 @@ import {
   matchLeadByPhone,
   resolveAcademyTimeZone,
   returningLeadGate,
+  VISITOR_LINK_DAYS,
   visitorClassState,
 } from "@matops/domain";
 
@@ -13,7 +14,7 @@ import type { DbExec } from "./client";
 import type { LiveLinkRow } from "./live-link";
 import type { DbReader } from "./tenant";
 import { dropInLink } from "./drop-in-link-schema";
-import { entity } from "./entity-schema";
+import { entity, entityMembership } from "./entity-schema";
 import { getLiveLink, getOrCreateLiveLink, rotateLiveLink } from "./live-link";
 import {
   bumpScheduleRevision,
@@ -215,6 +216,7 @@ export type DropInSubmission = {
   email: string;
   phone: string;
   classId: string;
+  sharedBy?: string;
 } & (
   | { kind: "returning"; waiverId?: string }
   | ({
@@ -331,6 +333,37 @@ async function confirmReturningLead(
   return lead.id;
 }
 
+/**
+ * Credit the member whose link brought this lead, once: the first sharer stays.
+ * A sharer from another academy, or one that no longer exists, is ignored, so a
+ * bad `by` in a link never costs the visitor their booking.
+ */
+async function creditSharer(
+  tx: Tx,
+  academyId: string,
+  leadId: string,
+  membershipId: string,
+): Promise<void> {
+  const [sharer] = await tx
+    .select({ id: entityMembership.id })
+    .from(entityMembership)
+    .where(
+      and(
+        eq(entityMembership.id, membershipId),
+        eq(entityMembership.entityId, academyId),
+      ),
+    )
+    .limit(1);
+  if (!sharer) {
+    console.warn("[drop-in] sharer ignored");
+    return;
+  }
+  await tx
+    .update(dropIn)
+    .set({ sharedByMembershipId: sharer.id })
+    .where(and(eq(dropIn.id, leadId), isNull(dropIn.sharedByMembershipId)));
+}
+
 export async function submitDropInVisit(
   input: DropInSubmission,
   exec: DbExec,
@@ -359,7 +392,9 @@ export async function submitDropInVisit(
       )
       .limit(1)
       .for("update");
-    const mode = cls ? visitorClassState(cls, now, academy.timeZone) : null;
+    const mode = cls
+      ? visitorClassState(cls, now, academy.timeZone, VISITOR_LINK_DAYS)
+      : null;
     if (!cls || !mode) return { ok: false, reason: "class" };
 
     const leadId =
@@ -367,6 +402,9 @@ export async function submitDropInVisit(
         ? await saveNewLead(tx, academy, input, now)
         : await confirmReturningLead(tx, academy, input, now);
     if (typeof leadId !== "string") return leadId;
+    if (input.sharedBy) {
+      await creditSharer(tx, academy.academyId, leadId, input.sharedBy);
+    }
 
     const [visit] = await tx
       .select({

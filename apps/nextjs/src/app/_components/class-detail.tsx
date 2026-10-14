@@ -13,11 +13,12 @@ import { FOCUS_RING } from "@matops/ui/motion";
 
 import { dayLongFmt, timeFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
+import { ClassDropInLink } from "./class-drop-in-link";
 import { useEntity, useEntityHref, useOrganization } from "./entity";
 import { PageHeader } from "./page-header";
 import { cardClass, ENTER, SectionHeading } from "./primitives";
-import { ScreenSkeleton } from "./skeletons";
-import { ErrorState } from "./states";
+import { ScreenSkeleton, SkeletonCard } from "./skeletons";
+import { EmptyState, ErrorState } from "./states";
 import { useBooking } from "./use-booking";
 import { useMinuteClock } from "./use-clock";
 
@@ -169,6 +170,7 @@ export function ClassDetail({ classId }: { classId: string }) {
                   </Button>
                 ))}
             </div>
+            <ClassDropInLink cls={c} label="Copy link for a friend" />
             {!cancelled && !past && !booked && lockedMessage && (
               <p role="status" className="border-border border-t pt-4 text-sm">
                 {lockedMessage}
@@ -212,6 +214,7 @@ export function ClassDetail({ classId }: { classId: string }) {
 
         <section className={cn(ENTER, "space-y-4 delay-200")}>
           <SectionHeading>Who's booked</SectionHeading>
+          <Attendees classId={classId} booked={booked && !cancelled} />
         </section>
       </div>
     </>
@@ -245,6 +248,41 @@ function Detail({
           </span>
         )}
       </dd>
+    </div>
+  );
+}
+
+function Attendees({ classId, booked }: { classId: string; booked: boolean }) {
+  const trpc = useTRPC();
+  const view = useQuery(trpc.class.attendees.queryOptions({ id: classId }));
+
+  if (view.isPending) return <SkeletonCard lines={2} />;
+  if (view.isError) {
+    return <ErrorState label="who's in" onRetry={() => void view.refetch()} />;
+  }
+
+  const { names, othersCount, namesHidden } = view.data;
+  if (names.length === 0 && othersCount === 0) {
+    return (
+      <EmptyState title={booked ? "Just you so far" : "No bookings yet"} />
+    );
+  }
+
+  return (
+    <div className={cardClass()}>
+      {names.length > 0 && <p className="text-sm">{names.join(", ")}</p>}
+      {othersCount > 0 && (
+        <p className="text-muted-foreground mt-1 text-sm">
+          {names.length > 0
+            ? `+${othersCount} ${othersCount === 1 ? "other" : "others"}`
+            : `${othersCount} booked`}
+        </p>
+      )}
+      {namesHidden && (
+        <p className="text-muted-foreground mt-1 text-sm">
+          Names show once your gym approves you.
+        </p>
+      )}
     </div>
   );
 }

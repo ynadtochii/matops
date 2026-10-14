@@ -34,6 +34,18 @@ function linkUrl(path: string): string {
   return `${window.location.origin}${path}`;
 }
 
+export function dropInPath(
+  token: string,
+  sharedBy: string | null,
+  classId?: string,
+): string {
+  const query = new URLSearchParams();
+  if (classId) query.set("class", classId);
+  if (sharedBy) query.set("by", sharedBy);
+  const search = query.toString();
+  return `/drop-in/${token}${search ? `?${search}` : ""}`;
+}
+
 /**
  * One shareable invite link for a role — create / rotate / copy / share. The
  * link grants nothing until an owner approves (docs/issues/20). Self-contained:
@@ -140,7 +152,8 @@ export function DropInLinkCard() {
     <LinkCard
       label="Drop-in link"
       hint="Send it to people who want to try a class. They pick a class and book without an account."
-      url={linkUrl(`/drop-in/${link.data.token}`)}
+      url={linkUrl(dropInPath(link.data.token, link.data.sharedBy))}
+      qrUrl={linkUrl(dropInPath(link.data.token, null))}
       rotate={() => rotate.mutateAsync()}
       rotating={rotate.isPending}
       qr={{
@@ -231,6 +244,7 @@ function LinkCard({
   label,
   hint,
   url,
+  qrUrl = url,
   create,
   creating,
   rotate,
@@ -241,6 +255,7 @@ function LinkCard({
   label: string;
   hint: string;
   url: string | null;
+  qrUrl?: string | null;
   create?: () => void;
   creating?: boolean;
   rotate: () => Promise<unknown>;
@@ -295,7 +310,7 @@ function LinkCard({
         )}
       </div>
       <p className="text-muted-foreground text-sm">{hint}</p>
-      {url && (
+      {url && qrUrl && (
         <div className="flex flex-wrap gap-2">
           <Input
             readOnly
@@ -313,7 +328,7 @@ function LinkCard({
                 {qr.description}
               </DialogDescription>
               <QrPoster
-                url={url}
+                url={qrUrl}
                 title={academy.name}
                 caption={qr.caption}
                 codeLabel={qr.codeLabel}

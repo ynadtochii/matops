@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   normalizePhone,
   returningLeadGate,
+  VISITOR_LINK_DAYS,
   visitorClassChoices,
   visitorClassState,
 } from "../src/dropin";
@@ -80,6 +81,33 @@ describe("visitorClassState", () => {
   it("returns null for a class beyond the 3-day window", () => {
     expect(
       visitorClassState(cls("a", "2026-08-18T10:00:00Z"), now, TZ),
+    ).toBeNull();
+  });
+
+  it("offers a class up to the end of the sixth following day with the link window", () => {
+    expect(
+      visitorClassState(
+        cls("five-days", "2026-08-20T10:00:00Z"),
+        now,
+        TZ,
+        VISITOR_LINK_DAYS,
+      ),
+    ).toBe("book");
+    expect(
+      visitorClassState(
+        cls("last", "2026-08-21T23:59:00Z"),
+        now,
+        TZ,
+        VISITOR_LINK_DAYS,
+      ),
+    ).toBe("book");
+    expect(
+      visitorClassState(
+        cls("too-late", "2026-08-22T00:00:00Z"),
+        now,
+        TZ,
+        VISITOR_LINK_DAYS,
+      ),
     ).toBeNull();
   });
 

@@ -12,6 +12,7 @@ import {
   attendanceWriteAccess,
   bulkMarkTargets,
   needsAttendance,
+  visibleAttendees,
 } from "../src/attendance";
 
 describe("attendanceWriteAccess", () => {
@@ -83,7 +84,6 @@ describe("attendanceCounts", () => {
       unmarked: 1,
       confirmed: 2,
       provisional: 1,
-      walkIn: 1,
     });
   });
 
@@ -94,7 +94,6 @@ describe("attendanceCounts", () => {
       unmarked: 0,
       confirmed: 0,
       provisional: 0,
-      walkIn: 0,
     });
   });
 });
@@ -229,5 +228,84 @@ describe("attendance review", () => {
     expect(attendanceReviewError(snapshot, "current", true)).toContain(
       "present",
     );
+  });
+});
+
+describe("visibleAttendees", () => {
+  const attendee = (
+    studentId: string,
+    name: string | null,
+    bookingStatus = "booked",
+  ) => ({ studentId, name, bookingStatus });
+
+  const me = { id: "me", approved: true };
+
+  it("names booked members alphabetically, never the viewer", () => {
+    const v = visibleAttendees(
+      [
+        attendee("u2", "Carla Mota"),
+        attendee("me", "My Self"),
+        attendee("u1", "Alex Silva"),
+      ],
+      0,
+      me,
+    );
+    expect(v.names).toEqual(["Alex Silva", "Carla Mota"]);
+    expect(v.othersCount).toBe(0);
+    expect(v.namesHidden).toBe(false);
+  });
+
+  it("names pending members too, and counts drop-ins", () => {
+    const v = visibleAttendees(
+      [
+        attendee("u1", "Alex Silva"),
+        attendee("u2", "Pending Pete"),
+        attendee("u3", "Pending Pam"),
+      ],
+      2,
+      me,
+    );
+    expect(v.names).toEqual(["Alex Silva", "Pending Pam", "Pending Pete"]);
+    expect(v.othersCount).toBe(2);
+  });
+
+  it("counts an attendee with no name rather than naming them", () => {
+    const v = visibleAttendees(
+      [attendee("u1", null), attendee("u2", "   ")],
+      0,
+      me,
+    );
+    expect(v.names).toEqual([]);
+    expect(v.othersCount).toBe(2);
+  });
+
+  it("gives a pending viewer counts only, and says names are hidden", () => {
+    const v = visibleAttendees(
+      [attendee("u1", "Alex Silva"), attendee("u2", "Bruno Reis")],
+      1,
+      { id: "me", approved: false },
+    );
+    expect(v.names).toEqual([]);
+    expect(v.othersCount).toBe(3);
+    expect(v.namesHidden).toBe(true);
+  });
+
+  it("does not claim names are hidden when nobody else is on the class", () => {
+    const v = visibleAttendees([attendee("me", "My Self")], 0, {
+      id: "me",
+      approved: false,
+    });
+    expect(v.othersCount).toBe(0);
+    expect(v.namesHidden).toBe(false);
+  });
+
+  it("ignores cancelled bookings", () => {
+    const v = visibleAttendees(
+      [attendee("u1", "Alex Silva", "cancelled"), attendee("u2", "Bruno Reis")],
+      0,
+      me,
+    );
+    expect(v.names).toEqual(["Bruno Reis"]);
+    expect(v.othersCount).toBe(0);
   });
 });

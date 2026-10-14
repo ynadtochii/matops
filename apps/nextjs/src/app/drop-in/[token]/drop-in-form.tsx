@@ -16,7 +16,11 @@ import { FieldError } from "@matops/ui/field";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
 import { FOCUS_RING } from "@matops/ui/motion";
-import { DropInLookupSchema, NameSchema } from "@matops/validators";
+import {
+  DropInClassesSchema,
+  DropInLookupSchema,
+  NameSchema,
+} from "@matops/validators";
 
 import type { SignupWaiver } from "~/app/_components/signup-fields";
 import {
@@ -59,17 +63,22 @@ function useClassLabel(timeZone: string | undefined) {
 export function DropInForm({
   token,
   linkedClassId,
+  sharedBy,
 }: {
   token: string;
   linkedClassId: string | null;
+  sharedBy?: string;
 }) {
   const trpc = useTRPC();
   const academy = useQuery(
     trpc.dropIn.resolve.queryOptions({ token }, { retry: false }),
   );
+  const linkedQueryId = DropInClassesSchema.shape.classId.safeParse(
+    linkedClassId ?? undefined,
+  ).data;
   const classes = useQuery(
     trpc.dropIn.classes.queryOptions(
-      { token },
+      { token, classId: linkedQueryId },
       { retry: false, staleTime: 30_000, enabled: academy.isSuccess },
     ),
   );
@@ -243,6 +252,7 @@ export function DropInForm({
       token,
       ...parsed,
       classId: id,
+      sharedBy,
       waiverId: current.match.needsAgreement ? waiver?.id : undefined,
     });
   };
@@ -270,6 +280,7 @@ export function DropInForm({
       token,
       ...parsed,
       classId: id,
+      sharedBy,
       firstName: first.data,
       lastName: last.data,
       consent: true,

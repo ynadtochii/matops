@@ -6,6 +6,7 @@ import {
   harness,
   seedAcademies,
   seedClasses,
+  seedParticipations,
   storedBookingCount,
 } from "./helpers";
 
@@ -153,5 +154,75 @@ describe("class.booking_count invariant", () => {
     });
     expect(row?.bookingCount).toBe(await confirmedBookings(h.pg, CLASS));
     expect(row?.bookingCount).toBe(1);
+  });
+});
+
+describe("class.week headCount counts walk-ins marked present", () => {
+  const WALKER = "u_walker_book";
+  const RETURNER = "u_returner_book";
+  let h: Harness;
+
+  beforeAll(async () => {
+    h = await harness();
+    await seedAcademies(h.pg, [
+      {
+        id: ACAD,
+        code: "700001",
+        members: [
+          { userId: OWNER, role: "owner", status: "active" },
+          { userId: STUDENT, role: "student", status: "active" },
+          { userId: WALKER, role: "student", status: "active" },
+          { userId: RETURNER, role: "student", status: "active" },
+        ],
+      },
+    ]);
+    await seedClasses(h.pg, [
+      { id: CLASS, academyId: ACAD, instructorId: OWNER, startsInMinutes: 30 },
+    ]);
+  });
+
+  afterAll(() => h.close());
+
+  const headCount = async () => {
+    const now = Date.now();
+    const rows = await h.as(OWNER, ACAD).class.week({
+      from: new Date(now - 86_400_000).toISOString(),
+      to: new Date(now + 86_400_000).toISOString(),
+    });
+    return rows.find((c) => c.id === CLASS)?.headCount;
+  };
+
+  it("adds present walk-ins and drop-ins to the booked count, once each", async () => {
+    await h.as(STUDENT, ACAD).booking.book({ classId: CLASS });
+    expect(await headCount()).toBe(1);
+
+    await seedParticipations(h.pg, [
+      {
+        classId: CLASS,
+        academyId: ACAD,
+        studentId: WALKER,
+        bookingStatus: "none",
+        attendanceStatus: "present",
+      },
+      {
+        classId: CLASS,
+        academyId: ACAD,
+        studentId: RETURNER,
+        bookingStatus: "cancelled",
+        attendanceStatus: "present",
+      },
+    ]);
+    await h.pg.exec(`
+      INSERT INTO "drop_in" (id, academy_id, first_name, last_name, phone, consent)
+        VALUES ('bbbbbbbb-0000-4000-8000-000000000001', '${ACAD}', 'Ana', 'Silva', '+351911111111', true);
+      INSERT INTO "drop_in_visit" (academy_id, drop_in_id, class_id, booking_status, attendance_status)
+        VALUES ('${ACAD}', 'bbbbbbbb-0000-4000-8000-000000000001', '${CLASS}', 'none', 'present');
+    `);
+    expect(await headCount()).toBe(4);
+
+    await h.pg.exec(
+      `UPDATE "class_participation" SET attendance_status = 'present' WHERE student_id = '${STUDENT}'`,
+    );
+    expect(await headCount()).toBe(4);
   });
 });

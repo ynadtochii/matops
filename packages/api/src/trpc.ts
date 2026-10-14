@@ -603,6 +603,10 @@ export const organizationMemberIdentityProcedure = protectedProcedure.use(
   },
 );
 
+export const memberIdentityProcedure = identityProcedure(
+  () => true,
+  "Your membership is pending approval",
+);
 export const staffIdentityProcedure = identityProcedure(isStaff, "Staff only");
 export const ownerIdentityProcedure = identityProcedure(isOwner, "Owner only");
 export const branchManagerIdentityProcedure = identityProcedure(

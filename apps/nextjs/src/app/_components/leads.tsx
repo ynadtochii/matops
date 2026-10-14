@@ -208,6 +208,11 @@ export function LeadsPipeline({ initialFilter }: { initialFilter?: string }) {
                       {activity}
                     </span>
                   )}
+                  {l.sharedBy && (
+                    <span className="text-muted-foreground text-xs">
+                      Brought by {l.sharedBy.name} · {l.sharedBy.kind}
+                    </span>
+                  )}
                   {l.belt && (
                     <span className="text-muted-foreground text-xs">
                       {signupBeltLabel(l.belt, l.stripes ?? 0)}

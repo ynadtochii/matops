@@ -259,7 +259,7 @@ export function DashboardScreen() {
                 <ClassRoster
                   key={detail.id}
                   cls={detail}
-                  expectedRows={detail.bookingCount}
+                  expectedRows={detail.headCount}
                 />
               </div>
             </>
@@ -545,7 +545,7 @@ function DayRow({
   now: Date;
   onOpen: () => void;
 }) {
-  const full = capacityDisplay(c.bookingCount, c.capacity).isOver;
+  const full = capacityDisplay(c.headCount, c.capacity).isOver;
   const ended = classEndsAt(c) <= now.getTime();
   const { clock, period } = clockParts(c.startsAt);
   const { hueOf } = useDisciplineHue();
@@ -594,7 +594,7 @@ function DayRow({
           full ? "text-warning" : "text-muted-foreground",
         )}
       >
-        {c.bookingCount}/{c.capacity}
+        {c.headCount}/{c.capacity}
         {c.pendingCount > 0 ? ` · +${c.pendingCount}` : ""}
       </span>
     </button>

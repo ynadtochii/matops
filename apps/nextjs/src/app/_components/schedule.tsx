@@ -17,13 +17,11 @@ import {
   GRID_WEEK_STARTS_ON,
   groupByDay,
   scheduleWeekWindow,
-  visitorClassState,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Badge } from "@matops/ui/badge";
 import { Button } from "@matops/ui/button";
-import { CopyButton } from "@matops/ui/copy-button";
 import {
   Dialog,
   DialogContent,
@@ -47,6 +45,7 @@ import {
 } from "~/lib/format";
 import { optimistic, rollback } from "~/lib/optimistic";
 import { useTRPC } from "~/trpc/react";
+import { ClassDropInLink } from "./class-drop-in-link";
 import { ClassRoster, ROSTER_DIALOG } from "./class-roster";
 import { InstructorOptions } from "./coach-select";
 import { useEntity } from "./entity";
@@ -58,29 +57,6 @@ import { useDisciplineHue } from "./use-discipline-hue";
 import { WeekGrid } from "./week-grid";
 
 type ClassRow = RouterOutputs["class"]["week"][number];
-
-function ClassDropInLink({ cls }: { cls: ClassRow }) {
-  const trpc = useTRPC();
-  const link = useQuery(trpc.dropIn.link.queryOptions());
-
-  if (link.isError) {
-    return (
-      <Button size="sm" variant="ghost" onClick={() => void link.refetch()}>
-        Retry drop-in link
-      </Button>
-    );
-  }
-  if (!link.data) return null;
-
-  return (
-    <CopyButton
-      value={`${window.location.origin}/drop-in/${link.data.token}?class=${cls.id}`}
-      label="Copy drop-in link"
-      toastMessage="Class link copied"
-      variant="ghost"
-    />
-  );
-}
 
 const browserTz = () => {
   try {
@@ -298,16 +274,7 @@ export function Schedule({
                   {timeFmt.format(new Date(detail.startsAt))} for{" "}
                   {detail.durationMinutes} min
                 </DialogDescription>
-                {visitorClassState(
-                  {
-                    id: detail.id,
-                    status: detail.status,
-                    startsAt: new Date(detail.startsAt),
-                    durationMinutes: detail.durationMinutes,
-                  },
-                  new Date(),
-                  me.timeZone ?? "UTC",
-                ) && <ClassDropInLink cls={detail} />}
+                <ClassDropInLink cls={detail} />
                 {detailTemplate && onOpenTemplate && (
                   <Button
                     type="button"
@@ -330,7 +297,7 @@ export function Schedule({
               <ClassRoster
                 key={detail.id}
                 cls={detail}
-                expectedRows={detail.bookingCount}
+                expectedRows={detail.headCount}
               />
             </div>
           </>
@@ -631,7 +598,7 @@ export function Schedule({
                   {rows.map((c) => {
                     const cancelled = c.status === "cancelled";
                     const full = capacityDisplay(
-                      c.bookingCount,
+                      c.headCount,
                       c.capacity,
                     ).isOver;
                     const hue = hueOf(c.discipline);
@@ -692,7 +659,7 @@ export function Schedule({
                               )}
                               {c.discipline && <span>{c.discipline}</span>}
                               <span>
-                                {c.bookingCount}/{c.capacity} booked
+                                {c.headCount}/{c.capacity}
                               </span>
                               {full && (
                                 <span className="text-warning">busy</span>

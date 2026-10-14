@@ -31,6 +31,7 @@ import {
   weekdayFmt,
 } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
+import { ClassDropInLink } from "./class-drop-in-link";
 import { useEntity, useEntityHref } from "./entity";
 import { InstallAppCard } from "./install-app-card";
 import { PageHeader } from "./page-header";
@@ -450,7 +451,7 @@ function FeaturedClass({
       <Link
         href={href(`/class/${c.id}`)}
         className={cn(
-          "text-md mt-2 self-start rounded-sm font-semibold break-words hover:underline",
+          "text-md mt-2 self-start rounded-sm font-semibold break-words after:absolute after:inset-0 hover:underline",
           FOCUS_RING,
         )}
       >
@@ -478,7 +479,12 @@ function FeaturedClass({
           />
         )}
       </div>
-      <BookControl c={c} variant="primary" className="mt-4 w-full" {...props} />
+      <BookControl
+        c={c}
+        variant="primary"
+        className="relative z-10 mt-4 w-full"
+        {...props}
+      />
     </div>
   );
 }
@@ -593,7 +599,7 @@ function ClassRowCard({
           <Link
             href={href(`/class/${c.id}`)}
             className={cn(
-              "text-md rounded-sm font-semibold break-words hover:underline",
+              "text-md rounded-sm font-semibold break-words after:absolute after:inset-0 hover:underline",
               FOCUS_RING,
               cancelled && "text-muted-foreground line-through",
             )}
@@ -630,7 +636,20 @@ function ClassRowCard({
               />
             )}
           </div>
-          {!past && <BookControl c={c} className="w-full lg:w-36" {...props} />}
+          {!past && (
+            <div className="relative z-10 flex items-center gap-2">
+              <BookControl
+                c={c}
+                className="flex-1 lg:w-36 lg:flex-none"
+                {...props}
+              />
+              <ClassDropInLink
+                cls={c}
+                label={`Copy a link for a friend to join ${c.title}`}
+                iconOnly
+              />
+            </div>
+          )}
         </div>
       )}
     </div>
