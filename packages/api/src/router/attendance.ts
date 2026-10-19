@@ -32,6 +32,7 @@ import {
   attendanceReviewError,
   attendanceWriteAccess,
   bulkMarkTargets,
+  publicFileUrl,
   runsBranch,
 } from "@matops/domain";
 import {
@@ -65,7 +66,12 @@ export const attendanceRouter = {
     const members = await directoryRosterOf(ctx);
     return members
       .filter((m) => m.status === "active")
-      .map((m) => ({ id: m.personId, name: m.name, role: m.role }));
+      .map((m) => ({
+        id: m.personId,
+        name: m.name,
+        role: m.role,
+        avatarUrl: publicFileUrl(ctx.appUrl, m.avatarKey),
+      }));
   }),
 
   /**
@@ -81,6 +87,12 @@ export const attendanceRouter = {
     const roster = await directoryRosterOf(ctx);
     const roleByUser = new Map(
       roster.map((person) => [person.userId, person.role]),
+    );
+    const avatarByStudent = new Map(
+      roster.map((person) => [
+        person.userId,
+        publicFileUrl(ctx.appUrl, person.avatarKey),
+      ]),
     );
     const corrections = await ctx.db
       .select({
@@ -101,6 +113,7 @@ export const attendanceRouter = {
       rows: rows.map((row) => ({
         ...row,
         role: roleByUser.get(row.studentId) ?? null,
+        avatarUrl: avatarByStudent.get(row.studentId) ?? null,
       })),
       dropIns,
       counts: attendanceCounts(rows),

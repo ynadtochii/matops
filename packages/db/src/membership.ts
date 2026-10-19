@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 import { canRemoveOrDemote } from "@matops/domain";
 
@@ -9,6 +10,7 @@ import { member, organization, user } from "./auth-schema";
 import { entity, entityMembership } from "./entity-schema";
 import { ensureAccountPerson } from "./person";
 import { person } from "./person-schema";
+import { storedFile } from "./stored-file-schema";
 
 /** The statuses `canEnroll` admits, as a SQL filter (docs/issues/23). */
 const ENROLLABLE_STATUSES = ["pending", "active"];
@@ -306,6 +308,8 @@ interface UserAcademy {
   bookingWindowDays: number;
   /** Set once shared memberships decide access here (ADR 126). */
   membershipEnforcedAt: Date | null;
+  iconKey: string | null;
+  avatarKey: string | null;
   role: string;
   status: string;
   invitedRole: string | null;
@@ -332,6 +336,8 @@ export async function listMembershipsForUser(
   userId: string,
   exec: DbReader,
 ): Promise<UserAcademy[]> {
+  const iconFile = alias(storedFile, "icon_file");
+  const avatarFile = alias(storedFile, "avatar_file");
   const entityCols = {
     academyId: entity.id,
     organizationId: entity.organizationId,
@@ -344,6 +350,7 @@ export async function listMembershipsForUser(
     mapUrl: entity.mapUrl,
     bookingWindowDays: entity.bookingWindowDays,
     membershipEnforcedAt: entity.membershipEnforcedAt,
+    iconKey: iconFile.objectKey,
   };
 
   const owned = await exec
@@ -351,6 +358,7 @@ export async function listMembershipsForUser(
     .from(member)
     .innerJoin(entity, eq(entity.organizationId, member.organizationId))
     .innerJoin(organization, eq(organization.id, entity.organizationId))
+    .leftJoin(iconFile, eq(iconFile.id, entity.iconFileId))
     .where(
       and(
         eq(member.userId, userId),
@@ -369,10 +377,13 @@ export async function listMembershipsForUser(
       invitedRole: entityMembership.invitedRole,
       joinedAt: entityMembership.joinedAt,
       createdAt: entityMembership.createdAt,
+      avatarKey: avatarFile.objectKey,
     })
     .from(entityMembership)
     .innerJoin(entity, eq(entity.id, entityMembership.entityId))
     .innerJoin(organization, eq(organization.id, entity.organizationId))
+    .leftJoin(iconFile, eq(iconFile.id, entity.iconFileId))
+    .leftJoin(avatarFile, eq(avatarFile.id, entityMembership.avatarFileId))
     .where(
       and(
         eq(entityMembership.userId, userId),
@@ -393,6 +404,7 @@ export async function listMembershipsForUser(
       role: "owner",
       status: "active",
       invitedRole: held?.invitedRole ?? null,
+      avatarKey: held?.avatarKey ?? null,
       joinedAt: held?.joinedAt ?? r.joinedAt,
     });
   }
@@ -425,6 +437,7 @@ export interface MemberRow {
   phone: string | null;
   erasureRequestedAt: Date | null;
   createdAt: Date;
+  avatarKey: string | null;
 }
 
 /** Every member of one entity, newest first, with the user profile joined. */
@@ -448,10 +461,12 @@ export async function listMembersOf(
       phone: sql<string | null>`coalesce(${person.phone}, ${user.phone})`,
       erasureRequestedAt: entityMembership.erasureRequestedAt,
       createdAt: entityMembership.createdAt,
+      avatarKey: storedFile.objectKey,
     })
     .from(entityMembership)
     .leftJoin(person, eq(entityMembership.personId, person.id))
     .leftJoin(user, eq(entityMembership.userId, user.id))
+    .leftJoin(storedFile, eq(storedFile.id, entityMembership.avatarFileId))
     .where(eq(entityMembership.entityId, entityId));
 
   return rows.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());

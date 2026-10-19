@@ -18,6 +18,7 @@ import { organizationRouter } from "./router/organization";
 import { pushTokenRouter } from "./router/pushToken";
 import { rankRouter } from "./router/rank";
 import { statsRouter } from "./router/stats";
+import { storageRouter } from "./router/storage";
 import { templateRouter } from "./router/template";
 import { createTRPCRouter } from "./trpc";
 
@@ -43,6 +44,7 @@ export const appRouter = createTRPCRouter({
   dropIn: dropInRouter,
   pushToken: pushTokenRouter,
   stats: statsRouter,
+  storage: storageRouter,
 });
 
 // export type definition of API

@@ -26,6 +26,7 @@ import {
 import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
+import { Avatar } from "./avatar";
 import { useEntity } from "./entity";
 import { InviteLinkCard } from "./invite-link-card";
 import { LIST, RESOLVE, SectionHeading } from "./primitives";
@@ -132,6 +133,12 @@ function StaffRow({
 
   return (
     <div className="flex items-start gap-3 px-4 py-3">
+      <Avatar
+        edge
+        name={m.name}
+        src={m.avatarUrl}
+        className="text-2xs size-8"
+      />
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <p className="truncate font-medium">{m.name}</p>
         <p className="text-muted-foreground truncate text-xs">{m.email}</p>

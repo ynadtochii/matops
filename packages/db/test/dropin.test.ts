@@ -484,6 +484,7 @@ describe("lookupReturningLead", () => {
     country: null,
     signupHealthQuestion: false,
     waiver: null,
+    iconKey: null,
   };
 
   beforeEach(async () => {
