@@ -4,9 +4,10 @@ import { z } from "zod/v4";
 
 import { authEnv } from "@matops/auth/env";
 import { notificationsEnv } from "@matops/notifications/env";
+import { storageEnv } from "@matops/storage/env";
 
 export const env = createEnv({
-  extends: [authEnv(), notificationsEnv(), vercel()],
+  extends: [authEnv(), notificationsEnv(), storageEnv(), vercel()],
   shared: {
     NODE_ENV: z
       .enum(["development", "production", "test"])

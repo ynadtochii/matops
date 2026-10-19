@@ -166,7 +166,7 @@ No blank waiting screen. A pending student sees the schedule with a note that th
 
 ### S7 · Profile / account
 
-**On the web** (ADR 67, ADR 73, ADR 145): `/profile` holds the identity edit (name and phone; email read-only), the academy with its **address** and **Open in maps** link, **My rank** with the promotion timeline, appearance, feedback and **Privacy** links, and sign out. There is no join-another-gym control on the web. A student (not staff) also sees **Your data** with **Ask to erase**: it records a request (`membership.requestErasure`) and deletes nothing. The request shows its date and can be withdrawn. An owner or manager answers it with **Delete permanently** (O4). A suspended student is told to ask the gym directly. A student also sees **Emails** with **Email me news from {Academy}**, which turns the news opt-in from sign-up on or off (ADR 146). Membership and class emails always arrive.
+**On the web** (ADR 67, ADR 73, ADR 145, ADR 152): `/profile` holds a **Profile picture** (same as O11, a pending student can set one too), the identity edit (name and phone; email read-only), the academy with its **address** and **Open in maps** link, **My rank** with the promotion timeline, appearance, feedback and **Privacy** links, and sign out. There is no join-another-gym control on the web. A student (not staff) also sees **Your data** with **Ask to erase**: it records a request (`membership.requestErasure`) and deletes nothing. The request shows its date and can be withdrawn. An owner or manager answers it with **Delete permanently** (O4). A suspended student is told to ask the gym directly. A student also sees **Emails** with **Email me news from {Academy}**, which turns the news opt-in from sign-up on or off (ADR 146). Membership and class emails always arrive.
 
 - Name, phone, email, current academy, with the gym's **address** and an **Open in Maps** link under it when the owner has set one (ADR 68). The link opens the owner's pinned map when there is one, otherwise the phone's own map app on the address (ADR 71). **Name and phone are editable**; email is read-only. A **settings icon** in the app header opens Settings (S12).
 - **My rank** (ADR 41): your rank per discipline (for example _BJJ, Blue, 2 stripes_) plus a short **promotion timeline**. **Read-only**: only the gym sets rank. Empty until a coach sets it.
@@ -317,6 +317,7 @@ Not built. The design is in `docs/home-widget-implementation.md`.
 Owner or manager. Instructors do not see it.
 
 - **Academy name:** can be **renamed**; it is a label, not unique. Renaming the academy renames the gym too (FR6). Identity is the **join code**, a unique, permanent 6-digit number shown read-only. Every screen calls it the **join code** (ADR 137).
+- **Academy icon** (ADR 152): optional. Upload, replace or remove a JPEG, PNG or WebP image; the browser shrinks it to 512 px and saves it as WebP (PNG if the browser can't). It shows in the sidebar next to the academy name, above the heading on the join and drop-in pages, and in place of the MatOps mark on the front desk tablet. With no icon, those places look as before. Up to 2 MB after shrinking, and 1 GB of files per academy.
 - **Time zone** (ADR 68): one IANA zone, picked from a list. Every class time, week boundary and statistic uses it. A **new** template inherits it; existing templates keep their zone, and Settings names any that disagree.
 - **Address** (ADR 68): free text, up to 200 characters. Students see it on Profile and on the join confirm step.
 - **Map link** (ADR 71): an **optional** share link from Google Maps, Apple Maps, OpenStreetMap or Waze. Only those four hosts are accepted. The field is disabled until an address is typed. A **Check the pin** link opens exactly what the student's tap will open.
@@ -357,11 +358,12 @@ With payment off, the Memberships item is hidden and `/memberships` and `/entiti
 ### O11 · Profile _(the person, not the gym; ADR 67)_
 
 - **Settings is the academy; Profile is you.** Every signed-in person reaches **Profile** from the sidebar footer avatar; on a phone the avatar sits in the header. It is a route with **no nav item**.
+- **Profile picture** (ADR 152): upload, replace or remove a photo (JPEG, PNG or WebP; the browser shrinks it to 512 px). It replaces the initials in the sidebar footer and the phone header, and shows next to your name in Students (members, requests, archived), the class roster and walk-in picker, Coaches, and on the front desk tablet. It belongs to your membership at this academy, so another gym never sees it. A manager with no membership row at the academy has no photo there.
 - **Your details:** name and phone are editable, email is read-only. Same `account.updateProfile` procedure the app uses.
 - **In this academy:** the academy the URL names, your role there (or "pending approval"), and the month you joined. Read-only.
 - **Appearance and sign out** live here and in the desktop sidebar (ADR 123).
 - **Something broken?** (ADR 76): a feedback link on Profile opens an email with the academy, your role and the screen already filled in.
-- **Not in this release:** avatar upload, email change, password or passkey management, notification preferences, and any bio.
+- **Not in this release:** email change, password or passkey management, notification preferences, and any bio.
 
 **On a phone the bottom bar holds five slots** (ADR 123): past that the tail moves into a **More** menu, and the badges of the hidden items add up onto that tab. A student has at most four items and never sees More.
 

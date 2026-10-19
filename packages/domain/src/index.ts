@@ -48,3 +48,4 @@ export * from "./schedule";
 export * from "./signup";
 export * from "./slug";
 export * from "./stats";
+export * from "./storage";

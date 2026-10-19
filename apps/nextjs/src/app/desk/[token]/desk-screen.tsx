@@ -15,6 +15,7 @@ import { Meter } from "@matops/ui/meter";
 import { FOCUS_RING, PRESS } from "@matops/ui/motion";
 import { Spinner } from "@matops/ui/spinner";
 
+import { AcademyIcon, Avatar } from "~/app/_components/avatar";
 import { MatLoader } from "~/app/_components/mat-loader";
 import { ErrorState } from "~/app/_components/states";
 import { useTRPC } from "~/trpc/react";
@@ -25,6 +26,7 @@ const MIN_MS = 60_000;
 interface Person {
   memberId: string;
   name: string;
+  avatarUrl: string | null;
   present: boolean;
 }
 
@@ -197,7 +199,15 @@ export function DeskScreen({ token }: { token: string }) {
     <div className="flex min-h-dvh flex-col gap-6 px-4 py-5 sm:px-8 lg:py-8">
       <header className="flex items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3">
-          <Logo size={28} withWordmark={false} />
+          {classes.data.academy.iconUrl ? (
+            <AcademyIcon
+              src={classes.data.academy.iconUrl}
+              name={classes.data.academy.name}
+              className="size-8"
+            />
+          ) : (
+            <Logo size={28} withWordmark={false} />
+          )}
           <span className="truncate text-2xl font-semibold">
             {classes.data.academy.name}
           </span>
@@ -494,13 +504,20 @@ function NameTile({
         locked && !busy && !person.present && "opacity-60",
       )}
     >
-      <span
-        className={cn(
-          "text-xl leading-snug font-medium break-words",
-          person.present && "text-muted-foreground",
-        )}
-      >
-        {person.name}
+      <span className="flex min-w-0 items-center gap-3">
+        <Avatar
+          src={person.avatarUrl}
+          name={person.name}
+          className={cn("size-10 text-sm", person.present && "opacity-60")}
+        />
+        <span
+          className={cn(
+            "min-w-0 text-xl leading-snug font-medium break-words",
+            person.present && "text-muted-foreground",
+          )}
+        >
+          {person.name}
+        </span>
       </span>
       {busy ? (
         <Spinner />

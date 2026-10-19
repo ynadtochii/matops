@@ -21,6 +21,7 @@ import {
   lockAndReadScheduleRevision,
 } from "./schedule-guard";
 import { classInstance, dropIn, dropInVisit } from "./scheduling";
+import { storedFile } from "./stored-file-schema";
 import { currentWaiver } from "./waiver";
 
 /**
@@ -115,6 +116,7 @@ export interface DropInAcademy {
   country: string | null;
   signupHealthQuestion: boolean;
   waiver: { id: string; body: string } | null;
+  iconKey: string | null;
 }
 
 export async function resolveDropInLink(
@@ -129,9 +131,11 @@ export async function resolveDropInLink(
       country: entity.country,
       signupHealthQuestion: entity.signupHealthQuestion,
       waiverRequired: entity.waiverRequired,
+      iconKey: storedFile.objectKey,
     })
     .from(dropInLink)
     .innerJoin(entity, eq(dropInLink.academyId, entity.id))
+    .leftJoin(storedFile, eq(storedFile.id, entity.iconFileId))
     .where(
       and(
         eq(dropInLink.token, token),
@@ -151,6 +155,7 @@ export async function resolveDropInLink(
     country: row.country,
     signupHealthQuestion: row.signupHealthQuestion,
     waiver: waiver ? { id: waiver.id, body: waiver.body } : null,
+    iconKey: row.iconKey,
   };
 }
 

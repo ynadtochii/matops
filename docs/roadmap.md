@@ -37,6 +37,9 @@ Plan: [first-release-plan.md](first-release-plan.md). Code built, including the 
 | Sign-up answers slice A: belt, health note, email opt-in, approval email (ADR 146); `0007` applied to dev 2026-09-27 | done | done | done | not changed | done | todo |
 | Sign-up answers slice B: versioned agreement, required at join, acceptance recorded (ADR 146); in `0007`, applied to dev 2026-09-27 | done | done | done | not changed | done | todo |
 | Desk check-in tablet: secret rotatable `/desk/<token>`, class then name, check-in with 10-second undo (ADR 150, S8b); `0010` not applied yet | done | done | done | not needed | done | todo |
+| File storage on R2 (ADR 152, plan `file-storage-plan.md`): `packages/storage`, `stored_file` + `0012` (applied to dev 2026-10-16), upload procedures, `/files` route, academy icon in Settings, sidebar and public pages (O6) | done | done | done | todo (avatar, F9) | done | todo |
+| File storage: avatars on web Profile, Students, rosters, Coaches and desk (F8) | done | done | done | not changed | done | — |
+| File storage: Expo avatar (F9), receipts behind the payment flag (F10) | done | todo | todo | todo | todo | — |
 | Invite-only gym creation: `GYM_CREATOR_EMAILS` allowlist in Better Auth, Request a demo on landing and sign-in (ADR 149, FP10); no migration | not needed | done | done | not changed | done | todo |
 
 **Design system reference page**

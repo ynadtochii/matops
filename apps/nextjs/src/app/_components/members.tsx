@@ -24,9 +24,10 @@ import { toast } from "@matops/ui/toast";
 
 import { dateFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
+import { Avatar } from "./avatar";
 import { useEntity } from "./entity";
 import { LeadsPipeline } from "./leads";
-import { Initials, MemberDetail, MemberRow } from "./member-detail";
+import { MemberDetail, MemberRow } from "./member-detail";
 import { Eyebrow, RESOLVE } from "./primitives";
 import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
@@ -600,7 +601,12 @@ export function Members() {
                     key={m.memberId}
                     className="flex min-h-14 items-center gap-3 px-4 py-2"
                   >
-                    <Initials name={m.name} />
+                    <Avatar
+                      edge
+                      name={m.name}
+                      src={m.avatarUrl}
+                      className="text-2xs size-8"
+                    />
                     <div className="min-w-0 flex-1">
                       <p className="text-foreground truncate font-medium">
                         {m.name}

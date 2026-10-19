@@ -49,6 +49,7 @@ import type { TimeZoneCtx } from "../academy-tz";
 import type { MemberScope } from "../members";
 import { academyTimeZone } from "../academy-tz";
 import {
+  avatarByUser,
   staffAmong,
   studentRosterOf,
   nameByUser as userNames,
@@ -151,7 +152,7 @@ async function readCoachRows(
  * member so a coach who has left still shows their own.
  */
 async function loadCoachContext(
-  ctx: MemberScope & { db: TenantDb },
+  ctx: MemberScope & { db: TenantDb; appUrl: string },
   windowKey: CoachWindowKey,
 ) {
   const now = new Date();
@@ -169,6 +170,7 @@ async function loadCoachContext(
       m.accountUserId ? [m.accountUserId] : [],
     ),
     nameByUser: userNames(members),
+    avatarByUser: avatarByUser(members, ctx.appUrl),
   };
 }
 
@@ -383,8 +385,15 @@ export const statsRouter = {
   coaches: branchManagerProcedure
     .input(CoachStatsSchema)
     .query(async ({ ctx, input }) => {
-      const { now, range, classes, marks, instructorIds, nameByUser } =
-        await loadCoachContext(ctx, input.window);
+      const {
+        now,
+        range,
+        classes,
+        marks,
+        instructorIds,
+        nameByUser,
+        avatarByUser,
+      } = await loadCoachContext(ctx, input.window);
       const active = new Set(instructorIds);
       return {
         range,
@@ -397,6 +406,7 @@ export const statsRouter = {
         }).map((row) => ({
           ...row,
           name: nameByUser.get(row.instructorId) ?? "Former coach",
+          avatarUrl: avatarByUser.get(row.instructorId) ?? null,
           onStaff: active.has(row.instructorId),
         })),
       };
@@ -419,12 +429,13 @@ export const statsRouter = {
           message: "Only an owner can read another coach's figures",
         });
       }
-      const { now, timeZone, range, classes, marks, nameByUser } =
+      const { now, timeZone, range, classes, marks, nameByUser, avatarByUser } =
         await loadCoachContext(ctx, input.window);
       const base = { classes, marks, now, range };
       return {
         instructorId,
         name: nameByUser.get(instructorId) ?? "Former coach",
+        avatarUrl: avatarByUser.get(instructorId) ?? null,
         range,
         workload: coachWorkloadFor(base, instructorId),
         breakdown: coachBreakdown({ ...base, instructorId, timeZone }),

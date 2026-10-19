@@ -24,6 +24,7 @@
     "@matops/db": "workspace:*",
     "@matops/domain": "workspace:*",
     "@matops/notifications": "workspace:*",
+    "@matops/storage": "workspace:*",
     "@matops/ui": "workspace:*",
     "@matops/validators": "workspace:*",
     "@next/third-parties": "^16.3.5",

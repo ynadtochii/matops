@@ -234,6 +234,9 @@ importers:
       '@matops/notifications':
         specifier: workspace:*
         version: link:../../packages/notifications
+      '@matops/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       '@matops/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -349,6 +352,9 @@ importers:
       '@matops/notifications':
         specifier: workspace:*
         version: link:../notifications
+      '@matops/storage':
+        specifier: workspace:*
+        version: link:../storage
       '@matops/validators':
         specifier: workspace:*
         version: link:../validators
@@ -540,6 +546,46 @@ importers:
       prettier:
         specifier: 'catalog:'
         version: 3.9.5
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@22.20.1)(jiti@2.7.0)(lightningcss@1.30.1)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0)
+
+  packages/storage:
+    dependencies:
+      '@t3-oss/env-core':
+        specifier: ^0.13.8
+        version: 0.13.11(typescript@5.9.3)(zod@4.4.3)
+      aws4fetch:
+        specifier: ^1.0.20
+        version: 1.0.20
+      zod:
+        specifier: 'catalog:'
+        version: 4.4.3
+    devDependencies:
+      '@matops/eslint-config':
+        specifier: workspace:*
+        version: link:../../tooling/eslint
+      '@matops/prettier-config':
+        specifier: workspace:*
+        version: link:../../tooling/prettier
+      '@matops/tsconfig':
+        specifier: workspace:*
+        version: link:../../tooling/typescript
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.20.1
+      eslint:
+        specifier: 'catalog:'
+        version: 9.39.5(jiti@2.7.0)
+      prettier:
+        specifier: 'catalog:'
+        version: 3.9.5
+      tsx:
+        specifier: ^4.19.2
+        version: 4.23.1
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -4190,6 +4236,9 @@ packages:
     resolution: {integrity: sha512-wvUjBtSGN7+7SjNpq/9M2Tg350UZD3q62IFZLbRAR1bSMlCo1ZaeW+BJ+D090e4hIIZLBcTDWe4Mh4jvUDajzQ==}
     engines: {node: '>= 0.4'}
 
+  aws4fetch@1.0.20:
+    resolution: {integrity: sha512-/djoAN709iY65ETD6LKCtyyEI04XIBP5xVvfmNxsEP0uJB5tyaGBztSryRr4HqMStr9R06PisQE7m9zDTXKu6g==}
+
   babel-jest@29.7.0:
     resolution: {integrity: sha512-BrvGY3xZSwEcCzKvKsCi2GgHqDqsYkOP4/by5xCgIwGXQxIEh+8ew3gmrE1y7XRR6LHZIj6yLYnUi/mm2KXKBg==}
     engines: {node: ^14.15.0 || ^16.10.0 || >=18.0.0}
@@ -5090,7 +5139,6 @@ packages:
   eslint@9.39.5:
     resolution: {integrity: sha512-DgZS62aPLXKlnxILS/AYCoRvHaZeXceIzlXPkkGGzJWSow1aEk0lbTlxUSlyjC8jcaKxAdOnTDz+o1JFSBsyjw==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
-    deprecated: This version is no longer supported. Please see https://eslint.org/version-support for other options.
     hasBin: true
     peerDependencies:
       jiti: '*'
@@ -11727,9 +11775,9 @@ snapshots:
       mime-types: 3.0.2
       negotiator: 1.0.0
 
-  acorn-jsx@5.3.2(acorn@8.17.0):
+  acorn-jsx@5.3.2(acorn@8.18.0):
     dependencies:
-      acorn: 8.17.0
+      acorn: 8.18.0
 
   acorn@8.17.0: {}
 
@@ -11899,6 +11947,8 @@ snapshots:
   available-typed-arrays@1.0.7:
     dependencies:
       possible-typed-array-names: 1.1.0
+
+  aws4fetch@1.0.20: {}
 
   babel-jest@29.7.0(@babel/core@7.29.7):
     dependencies:
@@ -12860,7 +12910,7 @@ snapshots:
 
   eslint@9.39.5(jiti@2.7.0):
     dependencies:
-      '@eslint-community/eslint-utils': 4.9.1(eslint@9.39.5(jiti@2.7.0))
+      '@eslint-community/eslint-utils': 4.10.1(eslint@9.39.5(jiti@2.7.0))
       '@eslint-community/regexpp': 4.12.2
       '@eslint/config-array': 0.21.2
       '@eslint/config-helpers': 0.4.2
@@ -12901,8 +12951,8 @@ snapshots:
 
   espree@10.4.0:
     dependencies:
-      acorn: 8.17.0
-      acorn-jsx: 5.3.2(acorn@8.17.0)
+      acorn: 8.18.0
+      acorn-jsx: 5.3.2(acorn@8.18.0)
       eslint-visitor-keys: 4.2.1
 
   esprima@4.0.1: {}
