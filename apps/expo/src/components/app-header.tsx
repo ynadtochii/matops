@@ -15,16 +15,17 @@ export function AppHeader({ right }: { right?: ReactNode }) {
       style={{
         flexDirection: "row",
         alignItems: "center",
-        gap: 10,
-        paddingHorizontal: 16,
-        paddingVertical: 10,
+        gap: 4,
+        paddingLeft: 16,
+        paddingRight: 8,
+        minHeight: 56,
         backgroundColor: t.card,
         borderBottomWidth: StyleSheet.hairlineWidth,
         borderBottomColor: t.border,
       }}
     >
       <Mark size={22} />
-      <View style={{ flex: 1, minWidth: 0 }}>
+      <View style={{ flex: 1, minWidth: 0, marginLeft: 6 }}>
         <Txt size={15} weight={500} numberOfLines={1}>
           {name}
         </Txt>

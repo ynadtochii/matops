@@ -1,35 +1,50 @@
 import { useEffect, useRef, useState } from "react";
-import { Linking, Platform, Pressable, ScrollView, View } from "react-native";
+import {
+  Linking,
+  Platform,
+  Pressable,
+  ScrollView,
+  Switch,
+  View,
+} from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import * as WebBrowser from "expo-web-browser";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronDown, SlidersHorizontal } from "lucide-react-native";
 
 import {
   academyMapUrl,
+  dateYearFmt,
   disciplineLabel,
+  feedbackMailto,
   formatMoney,
   formatRank,
+  monthYearFmt,
 } from "@matops/domain";
 import { UpdateProfileSchema } from "@matops/validators";
 
 import { AppHeader } from "~/components/app-header";
-import { SettingsIcon } from "~/components/icons";
 import { OverdueBanner } from "~/components/overdue-banner";
 import { useRefreshControl } from "~/components/refresh";
 import { RankSkeleton } from "~/components/skeletons";
+import { useToast } from "~/components/toast";
 import {
-  Banner,
   Button,
+  Callout,
   Card,
   confirm,
   CopyField,
+  EmptyState,
   ErrorState,
   Eyebrow,
-  Field,
   Heading,
+  IconButton,
+  List,
   Loading,
-  Mono,
   Muted,
   Screen,
+  SectionHeading,
+  SettingsRow,
   Stack,
   TextField,
   Txt,
@@ -37,12 +52,8 @@ import {
 } from "~/components/ui";
 import { trpc } from "~/utils/api";
 import { authClient } from "~/utils/auth";
+import { getBaseUrl } from "~/utils/base-url";
 
-/**
- * Editable personal details (spec S7, slice B.3). Name + phone are editable;
- * email stays read-only. After a save the Better Auth session is refetched with
- * `disableCookieCache` so the new values show at once.
- */
 function ProfileDetails({
   name,
   phone,
@@ -54,6 +65,7 @@ function ProfileDetails({
   email: string;
   onSaved: () => void;
 }) {
+  const toast = useToast();
   const [editing, setEditing] = useState(false);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -65,6 +77,7 @@ function ProfileDetails({
       onSuccess: () => {
         setEditing(false);
         setError(null);
+        toast.show("Profile saved");
         onSaved();
       },
       onError: (err) => setError(err.message || "Couldn't save. Try again."),
@@ -80,7 +93,6 @@ function ProfileDetails({
     setEditing(true);
   };
 
-  // The same rules the server enforces, so Save and the API agree.
   const canSave = UpdateProfileSchema.safeParse({
     firstName,
     lastName,
@@ -89,22 +101,45 @@ function ProfileDetails({
 
   if (!editing) {
     return (
-      <Stack gap={20}>
-        <Field label="Name" value={name || "—"} />
-        <Field label="Phone" value={phone || "—"} data />
-        <Field label="Email" value={email} />
-        <Button label="Edit profile" variant="outline" onPress={startEdit} />
-      </Stack>
+      <List>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            padding: 16,
+          }}
+        >
+          <View style={{ flex: 1, gap: 4 }}>
+            <Eyebrow>Name</Eyebrow>
+            <Txt size={15} weight={500}>
+              {name || "Not provided"}
+            </Txt>
+          </View>
+          <Button label="Edit details" variant="outline" onPress={startEdit} />
+        </View>
+        <View style={{ gap: 4, padding: 16 }}>
+          <Eyebrow>Phone</Eyebrow>
+          <Txt size={15}>{phone || "Not provided"}</Txt>
+        </View>
+        <View style={{ gap: 4, padding: 16 }}>
+          <Eyebrow>Email</Eyebrow>
+          <Txt size={15}>{email}</Txt>
+          <Muted>This is your sign-in, so it cannot be changed here.</Muted>
+        </View>
+      </List>
     );
   }
 
   return (
-    <Stack gap={16}>
+    <Card style={{ gap: 16 }}>
       <TextField
         label="First name"
         value={firstName}
         onChangeText={setFirstName}
         autoCapitalize="words"
+        textContentType="givenName"
         autoFocus
       />
       <TextField
@@ -112,14 +147,15 @@ function ProfileDetails({
         value={lastName}
         onChangeText={setLastName}
         autoCapitalize="words"
+        textContentType="familyName"
       />
       <TextField
         label="Phone"
         value={phoneValue}
         onChangeText={setPhoneValue}
         keyboardType="phone-pad"
+        textContentType="telephoneNumber"
       />
-      <Field label="Email" value={email} />
       {error ? (
         <Txt size={13} tone="error">
           {error}
@@ -127,7 +163,7 @@ function ProfileDetails({
       ) : null}
       <Stack row gap={8}>
         <Button
-          label={update.isPending ? "Saving…" : "Save"}
+          label="Save changes"
           loading={update.isPending}
           disabled={!canSave}
           onPress={() =>
@@ -141,26 +177,14 @@ function ProfileDetails({
         <Button
           label="Cancel"
           variant="ghost"
+          disabled={update.isPending}
           onPress={() => setEditing(false)}
         />
       </Stack>
-    </Stack>
+    </Card>
   );
 }
 
-/**
- * Membership dues (spec S9, ADR 40) — manual bank transfer. Shows what you owe +
- * status, the gym's requisites with a fixed reference code to copy, and an
- * "I paid" button that raises a claim the owner confirms. No card on file.
- */
-/**
- * What the person owes on their shared memberships, and by when (ADR 126).
- *
- * Silent when every month is settled. The wording is `membershipWarning` from
- * the domain, the same sentence the web shows, so the two clients cannot drift
- * about the same situation. One notice per membership, never one per covered
- * branch.
- */
 function MembershipNotice() {
   const t = useTheme();
   const standing = useQuery(trpc.accessPlan.mine.queryOptions());
@@ -177,19 +201,19 @@ function MembershipNotice() {
     <Stack gap={16}>
       {warned.map((m) => (
         <Stack key={m.assignmentId} gap={8}>
-          <Banner tone={m.warning?.verdict === "blocked" ? "error" : "warning"}>
-            <Txt size={15} weight={500} style={{ color: t.foreground }}>
-              {m.warning?.headline}
-            </Txt>
-            <Txt size={13} tone="muted">
+          <Callout
+            tone={m.warning?.verdict === "blocked" ? "error" : "warning"}
+            title={m.warning?.headline}
+          >
+            <Txt size={13} tone="secondary">
               {m.warning?.detail}
             </Txt>
             {m.amount ? (
-              <Txt size={15} style={{ color: t.foreground }}>
+              <Txt size={15} tabular style={{ color: t.foreground }}>
                 {formatMoney(m.amount.priceMinor, m.amount.currency)}
               </Txt>
             ) : null}
-          </Banner>
+          </Callout>
           {bankDetails ? (
             <Stack gap={12}>
               <CopyField label="Bank details" value={bankDetails} />
@@ -199,12 +223,12 @@ function MembershipNotice() {
                 data
               />
               {m.reportedAt ? (
-                <Txt size={13} tone="muted">
+                <Muted>
                   Payment submitted. Waiting for your gym to confirm.
-                </Txt>
+                </Muted>
               ) : (
                 <Button
-                  label={claim.isPending ? "Submitting…" : "I paid"}
+                  label="I paid"
                   loading={claim.isPending}
                   onPress={() =>
                     confirm({
@@ -221,9 +245,7 @@ function MembershipNotice() {
               )}
             </Stack>
           ) : (
-            <Txt size={13} tone="muted">
-              Ask your gym for their bank details to pay.
-            </Txt>
+            <Muted>Ask your gym for their bank details to pay.</Muted>
           )}
         </Stack>
       ))}
@@ -231,10 +253,6 @@ function MembershipNotice() {
   );
 }
 
-/**
- * The plan waiting for the 1st (ADR 129), in the same words the web uses.
- * Not a warning: this month is unaffected and there is nothing to pay early.
- */
 function MembershipChangeNotice() {
   const standing = useQuery(trpc.accessPlan.mine.queryOptions());
   const changing = (standing.data?.memberships ?? []).filter((m) => m.next);
@@ -243,59 +261,59 @@ function MembershipChangeNotice() {
   return (
     <Stack gap={8}>
       {changing.map((m) => (
-        <Card key={m.assignmentId} variant="outline" style={{ gap: 4 }}>
+        <Card key={m.assignmentId} style={{ gap: 4 }}>
           <Eyebrow>Your plan changes</Eyebrow>
-          <Txt size={13} tone="muted">
-            {m.planName} runs to the end of this month. {m.next?.planName}{" "}
-            starts on 1 {m.next?.effectiveMonthLabel}
-            {m.next?.amount
-              ? ` at ${formatMoney(m.next.amount.priceMinor, m.next.amount.currency)} a month`
-              : ""}
-            .
-          </Txt>
+          <Muted>
+            {`${m.planName} runs to the end of this month. ${m.next?.planName} starts on 1 ${m.next?.effectiveMonthLabel}${
+              m.next?.amount
+                ? ` at ${formatMoney(m.next.amount.priceMinor, m.next.amount.currency)} a month`
+                : ""
+            }.`}
+          </Muted>
         </Card>
       ))}
     </Stack>
   );
 }
 
-/**
- * My ranks (spec S7, slice G.3 — ADR 41). Read-only: the student sees their rank
- * in each discipline plus a short promotion timeline. Only the gym sets rank.
- */
-function MyRanks() {
+function MyRank() {
   const t = useTheme();
   const ranks = useQuery(trpc.rank.mine.queryOptions());
+  const [showHistory, setShowHistory] = useState(false);
 
   if (ranks.isPending) return <RankSkeleton />;
   if (ranks.isError) {
     return (
-      <ErrorState label="your ranks" onRetry={() => void ranks.refetch()} />
+      <ErrorState label="your rank" onRetry={() => void ranks.refetch()} />
     );
   }
 
   const { ranks: list, history } = ranks.data;
   if (list.length === 0) {
     return (
-      <Txt size={13} tone="muted">
-        Your gym hasn’t set your rank yet.
-      </Txt>
+      <EmptyState
+        title="Your gym hasn't set your rank yet."
+        body="Only a coach can set it."
+      />
     );
   }
 
   return (
-    <Card variant="outline" style={{ gap: 12 }}>
+    <List>
       {list.map((r) => (
         <View
           key={r.discipline}
           style={{
             flexDirection: "row",
+            flexWrap: "wrap",
             alignItems: "center",
             justifyContent: "space-between",
             gap: 12,
+            paddingHorizontal: 16,
+            paddingVertical: 12,
           }}
         >
-          <Txt size={15} tone="muted">
+          <Txt size={13} tone="muted">
             {disciplineLabel(r.discipline)}
           </Txt>
           <Txt size={15} weight={500}>
@@ -303,58 +321,188 @@ function MyRanks() {
           </Txt>
         </View>
       ))}
-      {history.length > 0 && (
-        <View
-          style={{
-            gap: 6,
-            borderTopWidth: 1,
-            borderTopColor: t.border,
-            paddingTop: 12,
-          }}
-        >
-          <Eyebrow>Promotions</Eyebrow>
-          {history.slice(0, 5).map((h) => (
-            <View
-              key={h.id}
+      {history.length > 0 ? (
+        <View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ expanded: showHistory }}
+            onPress={() => setShowHistory((v) => !v)}
+            style={({ pressed }) => ({
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              minHeight: 44,
+              paddingHorizontal: 16,
+              backgroundColor: pressed ? t.hover : "transparent",
+            })}
+          >
+            <Txt size={13} weight={500} tone="secondary">
+              {`Promotion history (${history.length})`}
+            </Txt>
+            <ChevronDown
+              size={16}
+              color={t.mutedForeground}
               style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 8,
+                transform: [{ rotate: showHistory ? "180deg" : "0deg" }],
               }}
-            >
-              <Txt size={15}>
-                {disciplineLabel(h.discipline)} ·{" "}
-                {formatRank({
-                  discipline: h.discipline,
-                  belt: h.toBelt,
-                  stripes: h.toStripes,
-                })}
-              </Txt>
-              <Mono size={13} tone="muted">
-                {new Date(h.promotedAt).toLocaleDateString()}
-              </Mono>
+            />
+          </Pressable>
+          {showHistory ? (
+            <View style={{ gap: 12, paddingHorizontal: 16, paddingBottom: 16 }}>
+              {history.map((h) => (
+                <View
+                  key={h.id}
+                  style={{
+                    flexDirection: "row",
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 12,
+                  }}
+                >
+                  <Txt size={13}>
+                    {`${disciplineLabel(h.discipline)} · ${formatRank({
+                      discipline: h.discipline,
+                      belt: h.toBelt,
+                      stripes: h.toStripes,
+                    })}`}
+                  </Txt>
+                  <Txt size={12} tone="muted" tabular>
+                    {dateYearFmt.format(new Date(h.promotedAt))}
+                  </Txt>
+                </View>
+              ))}
             </View>
-          ))}
+          ) : null}
         </View>
-      )}
-    </Card>
+      ) : null}
+    </List>
   );
 }
 
-/** Gear glyph for the header — opens Settings (S12). Emoji renders from the
- * system font, independent of Inter, so no icon-font dependency is added. */
-function SettingsButton({ onPress }: { onPress: () => void }) {
+function EmailUpdates({ academyName }: { academyName: string }) {
   const t = useTheme();
+  const toast = useToast();
+  const queryClient = useQueryClient();
+  const current = useQuery(trpc.membership.emailUpdates.queryOptions());
+  const save = useMutation(
+    trpc.membership.setEmailUpdates.mutationOptions({
+      onSuccess: async (_, input) => {
+        await queryClient.invalidateQueries(
+          trpc.membership.emailUpdates.pathFilter(),
+        );
+        toast.show(input.emailUpdates ? "Emails on" : "Emails off");
+      },
+      onError: (err) => toast.show(err.message || "Couldn't save. Try again."),
+    }),
+  );
+
+  if (current.isPending) return <RankSkeleton />;
+  if (current.isError) {
+    return (
+      <ErrorState
+        label="your email choice"
+        onRetry={() => void current.refetch()}
+      />
+    );
+  }
+
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Settings"
-      hitSlop={12}
-      onPress={onPress}
-    >
-      <SettingsIcon color={t.mutedForeground} size={20} />
-    </Pressable>
+    <List>
+      <SettingsRow
+        title={`Keep me updated on changes at ${academyName}`}
+        description="Emails about your membership and your booked classes always arrive."
+      >
+        <Switch
+          accessibilityLabel={`Keep me updated on changes at ${academyName}`}
+          value={current.data.optedInAt !== null}
+          disabled={save.isPending}
+          onValueChange={(on) => save.mutate({ emailUpdates: on })}
+          trackColor={{ true: t.primary, false: t.track }}
+          thumbColor="#ffffff"
+        />
+      </SettingsRow>
+    </List>
+  );
+}
+
+function EraseRequest({ academyName }: { academyName: string }) {
+  const toast = useToast();
+  const queryClient = useQueryClient();
+  const request = useQuery(trpc.membership.erasureRequest.queryOptions());
+  const refresh = () =>
+    queryClient.invalidateQueries(trpc.membership.erasureRequest.pathFilter());
+  const onError = (err: { message: string }) =>
+    toast.show(err.message || "Couldn't send that. Try again.");
+  const ask = useMutation(
+    trpc.membership.requestErasure.mutationOptions({
+      onSuccess: async () => {
+        await refresh();
+        toast.show(`Request sent to ${academyName}`);
+      },
+      onError,
+    }),
+  );
+  const withdraw = useMutation(
+    trpc.membership.withdrawErasureRequest.mutationOptions({
+      onSuccess: async () => {
+        await refresh();
+        toast.show("Request withdrawn");
+      },
+      onError,
+    }),
+  );
+
+  if (request.isPending) return <RankSkeleton />;
+  if (request.isError) {
+    return (
+      <ErrorState
+        label="your erase request"
+        onRetry={() => void request.refetch()}
+      />
+    );
+  }
+
+  const { requestedAt } = request.data;
+  const busy = ask.isPending || withdraw.isPending;
+  const what =
+    "your bookings, attendance, rank and notes. Your sign-in goes too, unless you belong to another gym.";
+
+  return (
+    <List>
+      {requestedAt ? (
+        <View style={{ gap: 12, padding: 16 }}>
+          <Txt size={15} weight={500}>
+            Erase request sent
+          </Txt>
+          <Muted>
+            {`You asked on ${dateYearFmt.format(new Date(requestedAt))}. The owner or a manager will erase ${what}`}
+          </Muted>
+          <Button
+            label="Withdraw request"
+            variant="outline"
+            loading={withdraw.isPending}
+            disabled={busy}
+            onPress={() => withdraw.mutate()}
+          />
+        </View>
+      ) : (
+        <View style={{ gap: 12, padding: 16 }}>
+          <Txt size={15} weight={500}>
+            Erase my data
+          </Txt>
+          <Muted>{`Ask ${academyName} to erase ${what}`}</Muted>
+          <Button
+            label="Ask to erase"
+            variant="outline"
+            loading={ask.isPending}
+            disabled={busy}
+            onPress={() => ask.mutate()}
+          />
+        </View>
+      )}
+    </List>
   );
 }
 
@@ -362,57 +510,64 @@ function AcademyAddress({
   address,
   pinned,
 }: {
-  address: string;
+  address: string | null;
   pinned: string | null;
 }) {
   const webUrl = academyMapUrl(address, pinned);
   const mapUrl =
-    pinned || !webUrl
+    pinned || !webUrl || !address
       ? webUrl
       : Platform.select({
           ios: `maps://?q=${encodeURIComponent(address)}`,
           android: `geo:0,0?q=${encodeURIComponent(address)}`,
           default: webUrl,
         });
+  if (!address && !mapUrl) return null;
   return (
     <View style={{ gap: 2 }}>
-      <Txt size={13} tone="muted">
-        {address}
-      </Txt>
+      {address ? <Muted>{address}</Muted> : null}
       {mapUrl ? (
-        <Txt
-          size={13}
-          style={{ textDecorationLine: "underline" }}
-          onPress={() => {
+        <FooterLink
+          label="Open in maps"
+          onPress={() =>
             void Linking.openURL(mapUrl).catch(
               () => void Linking.openURL(webUrl ?? mapUrl),
-            );
-          }}
-        >
-          Open in Maps
-        </Txt>
+            )
+          }
+        />
       ) : null}
     </View>
   );
 }
 
-/**
- * Profile / account (spec S7) — identity (name/phone/email), rank, membership
- * dues, and joining another branch. Switching between branches is the branch
- * name in the header (ADR 129). Appearance, notifications,
- * and sign out moved to Settings (S12, v1.8 slice 5), reached via the header gear.
- * The overdue strip (S11) can deep-link here with `?focus=dues` to land on the
- * pay section. This is the mobile student lens (docs/issues/18).
- */
+function FooterLink({
+  label,
+  onPress,
+}: {
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="link"
+      onPress={onPress}
+      style={{ minHeight: 44, justifyContent: "center" }}
+    >
+      <Txt size={13} tone="muted" style={{ textDecorationLine: "underline" }}>
+        {label}
+      </Txt>
+    </Pressable>
+  );
+}
+
 export default function Profile() {
+  const t = useTheme();
   const router = useRouter();
   const { focus } = useLocalSearchParams<{ focus?: string }>();
   const { data: session, refetch: refetchSession } = authClient.useSession();
   const current = useQuery(trpc.academy.current.queryOptions());
-
   const refreshControl = useRefreshControl();
 
-  // Best-effort scroll to the dues section when arriving from the overdue strip.
   const scrollRef = useRef<ScrollView>(null);
   const duesY = useRef<number | null>(null);
   useEffect(() => {
@@ -421,101 +576,177 @@ export default function Profile() {
     }
   }, [focus, session]);
 
-  if (!session) {
-    return <Loading />;
-  }
+  if (!session) return <Loading />;
 
   const user = session.user;
   const phone =
     typeof user.phone === "string" && user.phone.length > 0 ? user.phone : "";
-  // Suspended → the enrolled rank + dues reads are rejected by the server. Hide
-  // those sections behind a calm banner, but keep Profile itself (sign out /
-  // switch academy stay reachable). §4.
-  const suspended = current.data?.status === "suspended";
-  // Dues (and the gym's bank details) are for approved members only, so the
-  // server rejects the read while a join is still pending. Hide the section
-  // rather than showing an error where nothing is wrong yet.
-  const approved = current.data?.status === "active";
-  // Which gate this branch runs on, so no screen offers a setting the server
-  // stopped reading (ADR 126, ADR 127).
+  const academy = current.data;
+  const suspended = academy?.status === "suspended";
+  const showDues =
+    academy?.status === "active" && academy.membershipEnforced === true;
 
   return (
     <Screen
       header={
         <AppHeader
-          right={<SettingsButton onPress={() => router.push("/settings")} />}
+          right={
+            <IconButton
+              label="Settings"
+              onPress={() => router.push("/settings")}
+            >
+              <SlidersHorizontal size={20} color={t.mutedForeground} />
+            </IconButton>
+          }
         />
       }
+      style={{ paddingBottom: 0 }}
     >
       <OverdueBanner />
-
-      <View style={{ marginBottom: 16 }}>
-        <Heading>{user.name || user.email}</Heading>
-      </View>
-
       <ScrollView
         ref={scrollRef}
         style={{ flex: 1 }}
-        contentContainerStyle={{ gap: 24, paddingBottom: 24 }}
+        contentContainerStyle={{ gap: 32, paddingBottom: 24 }}
         showsVerticalScrollIndicator={false}
         refreshControl={refreshControl}
       >
-        <ProfileDetails
-          name={user.name || ""}
-          phone={phone}
-          email={user.email}
-          onSaved={() =>
-            refetchSession({ query: { disableCookieCache: true } })
-          }
-        />
+        <View style={{ gap: 4 }}>
+          <Heading>Profile</Heading>
+          <Muted>Manage your account and view your training details.</Muted>
+        </View>
 
-        <Field label="Current branch">
-          <Txt size={15}>{current.data?.name ?? "—"}</Txt>
-          {current.data?.address ? (
-            <AcademyAddress
-              address={current.data.address}
-              pinned={current.data.mapUrl}
-            />
-          ) : null}
-        </Field>
+        <Stack gap={16}>
+          <SectionHeading>Account details</SectionHeading>
+          <ProfileDetails
+            name={user.name || ""}
+            phone={phone}
+            email={user.email}
+            onSaved={() =>
+              refetchSession({ query: { disableCookieCache: true } })
+            }
+          />
+        </Stack>
 
-        {suspended ? (
-          <Banner tone="warning">
-            Your membership is paused. Contact your gym to restore your access.
-          </Banner>
-        ) : (
-          <>
-            <Stack gap={8}>
-              <Eyebrow>My rank</Eyebrow>
-              <MyRanks />
-            </Stack>
-
-            {approved && (
-              <View
-                style={{ gap: 8 }}
-                onLayout={(e) => (duesY.current = e.nativeEvent.layout.y)}
-              >
-                <Eyebrow>Membership</Eyebrow>
-                <MembershipNotice />
-                <MembershipChangeNotice />
+        {academy ? (
+          <Stack gap={16}>
+            <SectionHeading>Your training</SectionHeading>
+            <Card style={{ gap: 12 }}>
+              <View style={{ gap: 4 }}>
+                <Txt size={17} weight={600}>
+                  {academy.name}
+                </Txt>
+                <Muted>
+                  {academy.status === "pending"
+                    ? "Awaiting approval"
+                    : suspended
+                      ? "Membership suspended"
+                      : academy.role.charAt(0).toUpperCase() +
+                        academy.role.slice(1)}
+                </Muted>
+                <Muted>
+                  {`Joined ${monthYearFmt.format(new Date(academy.joinedAt))}`}
+                </Muted>
               </View>
-            )}
-          </>
-        )}
+              {academy.address || academy.mapUrl ? (
+                <View
+                  style={{
+                    borderTopWidth: 1,
+                    borderTopColor: t.border,
+                    paddingTop: 12,
+                  }}
+                >
+                  <AcademyAddress
+                    address={academy.address}
+                    pinned={academy.mapUrl}
+                  />
+                </View>
+              ) : null}
+            </Card>
+          </Stack>
+        ) : null}
 
-        <Stack gap={8}>
-          <Eyebrow>Another branch</Eyebrow>
+        {showDues ? (
+          <View
+            style={{ gap: 16 }}
+            onLayout={(e) => (duesY.current = e.nativeEvent.layout.y)}
+          >
+            <SectionHeading>Membership</SectionHeading>
+            <MembershipNotice />
+            <MembershipChangeNotice />
+          </View>
+        ) : null}
+
+        <Stack gap={16}>
+          <SectionHeading>Your rank</SectionHeading>
+          {suspended ? (
+            <Callout tone="warning">
+              Your membership is paused. Contact your gym to restore your
+              access.
+            </Callout>
+          ) : (
+            <MyRank />
+          )}
+        </Stack>
+
+        {academy && !suspended ? (
+          <Stack gap={16}>
+            <SectionHeading>Emails</SectionHeading>
+            <EmailUpdates academyName={academy.name} />
+          </Stack>
+        ) : null}
+
+        {academy ? (
+          <Stack gap={16}>
+            <SectionHeading>Your data</SectionHeading>
+            {suspended ? (
+              <Muted>{`To have your data erased, ask ${academy.name} directly.`}</Muted>
+            ) : (
+              <EraseRequest academyName={academy.name} />
+            )}
+          </Stack>
+        ) : null}
+
+        <Stack gap={16}>
+          <SectionHeading>Another gym</SectionHeading>
           <Muted>
             Train somewhere else too? Ask them for their 6-digit join code and
-            join it here. Switching between the places you already train at is
-            the branch name at the top of the screen.
+            join here.
           </Muted>
           <Button
-            label="Join another branch"
+            label="Join another gym"
             variant="outline"
             onPress={() => router.push("/onboarding?another=1")}
           />
         </Stack>
+
+        <View
+          style={{
+            flexDirection: "row",
+            flexWrap: "wrap",
+            columnGap: 20,
+            borderTopWidth: 1,
+            borderTopColor: t.border,
+            paddingTop: 12,
+          }}
+        >
+          <FooterLink
+            label="Something broken? Tell us"
+            onPress={() =>
+              void Linking.openURL(
+                feedbackMailto({
+                  academy: academy ?? null,
+                  screen: "app/profile",
+                }),
+              )
+            }
+          />
+          <FooterLink
+            label="Privacy"
+            onPress={() =>
+              void WebBrowser.openBrowserAsync(`${getBaseUrl()}/privacy`)
+            }
+          />
+        </View>
       </ScrollView>
     </Screen>
   );

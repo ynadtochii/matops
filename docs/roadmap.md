@@ -1,6 +1,19 @@
 <!-- matops — live implementation plan + scope matrix. Rules for this file live in delivery.md. -->
 
 
+**Expo app follows the student web, plan [expo-web-alignment-plan.md](expo-web-alignment-plan.md)**
+
+| Slice | DB | API | Web | Mobile | Shared | Infra |
+| --- | --- | --- | --- | --- | --- | --- |
+| E0 device baseline (`pnpm dev:ios`, `mobile-device-test.md`) | not needed | not needed | not needed | done (app runs, 2026-10-19) | not needed | not needed |
+| E1 bug fixes: pending booking gate and copy, dues behind the payment flag, join code copy, stale comments | not needed | not needed | not needed | done | not needed | not needed |
+| E2 missing features: email updates, erase request, "Joined", full rank history, feedback and Privacy, status card, Who's booked, share a class (ADR 147 addendum) | not needed | not needed | not changed | done | done (`dropInPath`, `feedbackMailto` in domain) | not needed |
+| E2 photos: academy icon and avatars in the app | not needed | needs ADR 152 on `dev` | not changed | todo | not needed | not needed |
+| E3 redesign: web shapes, badges, tokens, Inter times, Schedule carousel and day chips, My classes tabs, class and Profile layout (ADR 141 addendum) | not needed | not needed | not changed | done | done (`tokens.ts`, date formats in domain) | not needed |
+| E4 native batch: Lucide icons (`react-native-svg`), black Android icon background | not needed | not needed | not needed | done (needs a new dev client) | not needed | todo (store build) |
+| E4 photo upload (F9) | not needed | needs ADR 152 on `dev` | not needed | todo | not needed | not needed |
+| E5 release: store build, remove the `checkin` router after old builds age out | not needed | todo | not needed | todo | not needed | todo |
+
 **Academy-defined disciplines, ADR 144**
 
 | Slice | DB | API | Web | Mobile | Shared | Infra |

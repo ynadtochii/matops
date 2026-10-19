@@ -1,52 +1,99 @@
-import { ScrollView, StyleSheet, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 
 import {
   canBook,
   capacityDisplay,
+  dayLongFmt,
   notBookableMessage,
   timeFmt,
 } from "@matops/domain";
 
-import { useBookClass, useCancelBooking } from "~/components/book-control";
-import { ClassDetailSkeleton } from "~/components/skeletons";
+import { BookControl, useBooking } from "~/components/book-control";
+import { ClassShare } from "~/components/class-share";
+import { ClassDetailSkeleton, SkeletonCard } from "~/components/skeletons";
 import {
-  Banner,
-  Button,
+  Card,
+  EmptyState,
   ErrorState,
   Eyebrow,
-  Field,
   Heading,
-  Mono,
   Muted,
   Screen,
+  SectionHeading,
   Txt,
   Stack as UIStack,
   useTheme,
 } from "~/components/ui";
+import { useMinuteClock } from "~/components/use-clock";
 import { trpc } from "~/utils/api";
-import { dayLongFmt } from "~/utils/format";
 
-/**
- * Class detail (spec S5) — title, discipline, day/time, duration, instructor,
- * capacity, and Book / Cancel. Enrolled tier, so a PENDING member may book too
- * (tagged "pending approval"). Booking is never blocked; at/over capacity the
- * count turns red and Book asks to confirm (shared `useBookClass`, v1.8 slice 1).
- * The primary action sits in a sticky bottom bar (thumb zone, slice 6); full info
- * scrolls above it. Booking here is now optional — the schedule row books inline.
- */
+function Detail({
+  term,
+  value,
+  note,
+  alert,
+}: {
+  term: string;
+  value: string;
+  note?: string;
+  alert?: boolean;
+}) {
+  return (
+    <View style={{ gap: 4 }}>
+      <Eyebrow>{term}</Eyebrow>
+      <Txt size={15} lineHeight={21}>
+        {value}
+        {note ? (
+          <Txt size={12} tone={alert ? "error" : "muted"}>
+            {`  ${note}`}
+          </Txt>
+        ) : null}
+      </Txt>
+    </View>
+  );
+}
+
+function Attendees({ classId, booked }: { classId: string; booked: boolean }) {
+  const view = useQuery(trpc.class.attendees.queryOptions({ id: classId }));
+
+  if (view.isPending) return <SkeletonCard lines={2} />;
+  if (view.isError) {
+    return <ErrorState label="who's in" onRetry={() => void view.refetch()} />;
+  }
+
+  const { names, othersCount, namesHidden } = view.data;
+  if (names.length === 0 && othersCount === 0) {
+    return (
+      <EmptyState title={booked ? "Just you so far" : "No bookings yet"} />
+    );
+  }
+
+  return (
+    <Card style={{ gap: 4 }}>
+      {names.length > 0 ? <Txt size={15}>{names.join(", ")}</Txt> : null}
+      {othersCount > 0 ? (
+        <Muted>
+          {names.length > 0
+            ? `+${othersCount} ${othersCount === 1 ? "other" : "others"}`
+            : `${othersCount} booked`}
+        </Muted>
+      ) : null}
+      {namesHidden ? (
+        <Muted>Names show once your gym approves you.</Muted>
+      ) : null}
+    </Card>
+  );
+}
+
 export default function ClassDetail() {
   const t = useTheme();
-  const { id } = useLocalSearchParams<{
-    id: string;
-  }>();
+  const { id } = useLocalSearchParams<{ id: string }>();
   const q = useQuery(trpc.class.get.queryOptions({ id }, { retry: false }));
   const academy = useQuery(trpc.academy.current.queryOptions());
-
-  const { onBook, isPending: booking, error: bookError } = useBookClass();
-  const { onCancel, isPending: cancelling } = useCancelBooking();
-  const busy = booking || cancelling;
+  const booking = useBooking();
+  const now = useMinuteClock();
 
   if (q.isPending) {
     return (
@@ -67,117 +114,121 @@ export default function ClassDetail() {
   }
 
   const c = q.data;
-  const cancelled = c.status === "cancelled";
   const start = new Date(c.startsAt);
-  const { label: capacityLabel, isOver: over } = capacityDisplay(
-    c.bookingCount,
-    c.capacity,
-  );
+  const cancelled = c.status === "cancelled";
   const booked = c.myBooking === "booked";
   const provisional = booked && c.myBookingTier === "provisional";
-  const past = start.getTime() <= new Date().getTime();
+  const past = start.getTime() <= now.getTime();
+  const windowDays = academy.data?.bookingWindowDays ?? 7;
   const bookable = canBook(
     { status: c.status, startsAt: start, deletedAt: null },
-    new Date(),
+    now,
     {
-      bookingWindowDays: academy.data?.bookingWindowDays ?? 7,
+      bookingWindowDays: windowDays,
       timeZone: academy.data?.timeZone ?? "UTC",
     },
   );
   const refusal =
     bookable.reason && bookable.reason !== "deleted"
-      ? notBookableMessage(
-          bookable.reason,
-          academy.data?.bookingWindowDays ?? 7,
-        )
+      ? notBookableMessage(bookable.reason, windowDays)
       : null;
-
-  const action =
-    booked && !cancelled && !past ? (
-      <UIStack gap={8}>
-        {provisional && (
-          <Txt size={13} tone="secondary">
-            Booked · pending approval
-          </Txt>
-        )}
-        <Button
-          label={cancelling ? "Cancelling…" : "Cancel booking"}
-          variant="destructive"
-          loading={cancelling}
-          disabled={busy}
-          onPress={() => onCancel(c.id)}
-        />
-      </UIStack>
-    ) : refusal ? (
-      <Muted>{refusal}.</Muted>
-    ) : (
-      <Button
-        label={booking ? "Booking…" : "Book"}
-        loading={booking}
-        disabled={busy}
-        onPress={() => onBook(c)}
-      />
-    );
+  const cap = capacityDisplay(c.bookingCount, c.capacity);
+  const open = !cancelled && !past;
 
   return (
     <Screen>
       <Stack.Screen options={{ title: "Class" }} />
-
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 16 }}
+        contentContainerStyle={{ gap: 32, paddingBottom: 24 }}
         showsVerticalScrollIndicator={false}
       >
-        <UIStack gap={24}>
-          <UIStack gap={6}>
-            <Heading>{c.title}</Heading>
-            {c.discipline ? <Eyebrow>{c.discipline}</Eyebrow> : null}
-            {c.description ? <Txt size={15}>{c.description}</Txt> : null}
-          </UIStack>
+        <UIStack gap={4}>
+          <Heading>{c.title}</Heading>
+          <Muted>{`${dayLongFmt.format(start)} · ${timeFmt.format(start)}`}</Muted>
+        </UIStack>
 
-          {cancelled && (
-            <Banner tone="warning">This class is cancelled.</Banner>
-          )}
-
-          <UIStack gap={20}>
-            <Field label="Day" value={dayLongFmt.format(start)} />
-            <Field label="Time">
-              <Txt size={15}>
-                <Mono size={15} weight={500}>
-                  {timeFmt.format(start)}
-                </Mono>
-                {` · ${c.durationMinutes} min`}
-              </Txt>
-            </Field>
-            {/* "Nobody" rather than a dash: a general space runs sessions
-                that nobody teaches, and the web says the same word. */}
-            <Field label="Instructor" value={c.instructorName ?? "Nobody"} />
-            <Field label="Capacity">
-              <Mono size={15} tone={over ? "error" : "default"}>
-                {capacityLabel}
-                {over ? " · may be busy" : ""}
-              </Mono>
-            </Field>
-          </UIStack>
-
-          {bookError && (
-            <Txt size={13} tone="error">
-              {bookError}
+        <Card style={{ gap: 16 }}>
+          <UIStack gap={4}>
+            <Txt size={17} weight={600}>
+              {cancelled
+                ? "Class cancelled"
+                : past
+                  ? "Booking closed"
+                  : booked
+                    ? provisional
+                      ? "Waiting for approval"
+                      : "You're booked"
+                    : "Book your place"}
             </Txt>
-          )}
+            <Muted>
+              {cancelled
+                ? "This class will not take place. Choose another session from the schedule."
+                : past
+                  ? `${refusal ?? "This class has started"}.`
+                  : provisional
+                    ? "Your booking is saved. Your gym still needs to approve it."
+                    : booked
+                      ? "Cancel your booking if your plans change."
+                      : cap.isOver
+                        ? "This class looks full. Your gym still allows bookings."
+                        : `${cap.label} · ${c.durationMinutes} min`}
+            </Muted>
+          </UIStack>
+          {open && (booked || bookable.ok) ? (
+            <BookControl
+              c={c}
+              booked={booked}
+              booking={booking}
+              variant={cap.isOver ? "secondary" : "primary"}
+            />
+          ) : null}
+          <ClassShare cls={c} />
+          {open && !booked && booking.lockedMessage ? (
+            <View
+              accessibilityRole="text"
+              style={{
+                borderTopWidth: 1,
+                borderTopColor: t.border,
+                paddingTop: 16,
+              }}
+            >
+              <Txt size={13}>{booking.lockedMessage}</Txt>
+            </View>
+          ) : null}
+        </Card>
+
+        <UIStack gap={16}>
+          <SectionHeading>Class details</SectionHeading>
+          <Card style={{ gap: 16 }}>
+            <Detail
+              term="Time"
+              value={`${timeFmt.format(start)} · ${c.durationMinutes} min`}
+            />
+            <Detail term="Discipline" value={c.discipline ?? "Not specified"} />
+            <Detail
+              term="Instructor"
+              value={c.instructorName ?? "Not assigned yet"}
+            />
+            <Detail
+              term="Availability"
+              value={cap.label}
+              note={
+                cap.isOver && bookable.ok ? "Bookings still allowed" : undefined
+              }
+              alert={cap.isOver}
+            />
+            {c.description ? (
+              <Detail term="About this class" value={c.description} />
+            ) : null}
+          </Card>
+        </UIStack>
+
+        <UIStack gap={16}>
+          <SectionHeading>Who&apos;s booked</SectionHeading>
+          <Attendees classId={c.id} booked={booked && !cancelled} />
         </UIStack>
       </ScrollView>
-
-      {/* Sticky bottom action bar — the primary action in the thumb zone. */}
-      <View
-        style={{
-          paddingTop: 16,
-          borderTopWidth: StyleSheet.hairlineWidth,
-          borderTopColor: t.border,
-        }}
-      >
-        {action}
-      </View>
     </Screen>
   );
 }

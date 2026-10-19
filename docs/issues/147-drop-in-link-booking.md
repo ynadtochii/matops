@@ -71,3 +71,7 @@ Approved, active students can copy a class link from the web: a copy icon on eac
 ## 2026-10-14 addendum: sharer credit
 
 The "No credit for the sharer" bullet above is superseded by ADR [151](151-drop-in-sharer-credit.md): a lead now keeps the first member whose link brought them. Referrals stay removed.
+
+## 2026-10-19 addendum: the app shares a class too
+
+The Expo app now has the same share action as the web: an icon on each schedule row and "Share link for a friend" on the class page, for an approved, active student, on a class a visitor can still join. The app opens the phone's share sheet (React Native `Share`, no native module) instead of copying. The link is the same `dropInPath(token, sharedBy, classId)` on the web origin, so ADR 151 sharer credit works the same way. `dropInPath` moved from the web into `@matops/domain` so both clients build one link. No API change.

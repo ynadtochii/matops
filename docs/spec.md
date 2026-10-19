@@ -137,32 +137,33 @@ No blank waiting screen. A pending student sees the schedule with a note that th
 **On the web too** (ADR 57, ADR 73): a student signed in on the web gets the same week, grouped by day, Today first, with **Book** and **Cancel** on the row and the same "looks full, book anyway?" confirm. It reads `class.mine` and the `booking` router, the same calls the app makes. The web student has **Schedule**, **My classes** (`/training`, S6) and **Profile** (`/profile`, S7), plus **Membership** (`/payments`, S9) only while payment is on, in the same shell the owner uses, plus the **class detail** screen (`/class/<id>`, S5). The in-app QR scan (S8) and push and class reminders stay app-only. A **suspended** member sees the calm notice here as well.
 
 - The next seven days of classes, grouped by day (Today first). Each row: **title, time, instructor, "N spots left"**. The window rolls with the day.
-- **Inline book:** each upcoming, bookable row has a compact **Book** control, so booking is **one tap from the list** (plus the "looks full, book anyway?" confirm when over capacity). A booked row shows the **Booked** pill; cancelled and past rows show no control.
-- **Day carousel (web):** above the list, one card per class still to come on the next day that has one (today, or the next day with classes). Each card has the time, length, title, coach, a "Starts in …" countdown inside 12 hours, a capacity bar with "N spots left" (or "You and N others" once booked) and **Book** or **Cancel**. It opens on the student's first booked class. Arrows and dots appear when the cards do not all fit.
-- **Day strip (web):** a sticky row of the days with classes, each with its class count and a dot when the student is booked that day. It jumps to that day in the list.
-- **Share with a friend (web):** an approved, active student sees a copy icon next to **Book** or **Cancel** on each row a visitor can still join (today and the next six local days, not cancelled, not ended). It copies the class drop-in link (S8). Pending students do not see it.
+- **Inline book:** each upcoming, bookable row has a **Book class** button with a capacity bar, so booking is **one tap from the list** (plus the "looks full, book anyway?" confirm when over capacity). A booked row shows the **Booked** badge and **Cancel booking**; cancelled and past rows show no control. Cancel asks no question, because the student can book again.
+- **Booking unavailable:** a pending student sees a warning note ("{Academy} has not approved you yet. You can browse classes while you wait.") and every Book button is off. The app and the web show the same words.
+- **Day carousel (web and app):** above the list, one card per class still to come on the next day that has one (today, or the next day with classes). Each card has the time, length, title, coach, a "Starts in …" countdown inside 12 hours, a capacity bar with "N spots left" (or "You and N others" once booked) and **Book** or **Cancel**. It opens on the student's first booked class. Arrows and dots appear when the cards do not all fit.
+- **Day strip (web and app):** a sticky row of the days with classes, each with its class count and a dot when the student is booked that day. It jumps to that day in the list.
+- **Share with a friend (web and app):** an approved, active student sees a share icon next to **Book** or **Cancel** on each row a visitor can still join (today and the next six local days, not cancelled, not ended). The web copies the class drop-in link (S8); the app opens the phone's share sheet with it. Pending students do not see it.
 - Tap a class to open **S5**.
-- Empty state: "No classes scheduled this week."
+- Empty state: "No classes this week."
 
 ### S5 · Class detail + book/cancel
 
-**On the web too** (ADR 73): `/class/<id>`, reached from any row on the schedule or on My classes. Same read (`class.get`), same capacity label, same soft-capacity confirm. A cancelled class says booking is closed and a class that already started says so, so the screen is never a dead end.
+**On the web too** (ADR 73): `/class/<id>`, reached from any row on the schedule or on My classes. Same read (`class.get`), same capacity label, same soft-capacity confirm, same layout in both clients: a status card ("Book your place", "You're booked", "Waiting for approval", "Booking closed", "Class cancelled") with the action, then **Class details** and **Who's booked**. A cancelled class says booking is closed and a class that already started says so, so the screen is never a dead end.
 
-- Title, discipline, day and time, duration, instructor, capacity ("8 / 12").
+- Title, day and time, then Time, Discipline, Instructor ("Not assigned yet" when empty), Availability and About this class.
 - **You can book up to 7 days ahead** (ADR 79). Classes exist six months out so the owner can plan and print a poster, but a booking further ahead is refused. Both clients ask the same `canBook` rule the server does, so a direct link to a class further out shows "You can book up to 7 days ahead" and no Book button.
-- **Booking requires approval and an active membership at the academy.** A plan and payment count only while payment is on (FR1). Nobody books for a student (FR3). Primary action, in a **sticky bottom bar** on the phone:
+- **Booking requires approval and an active membership at the academy.** A plan and payment count only while payment is on (FR1). Nobody books for a student (FR3). The action sits in the status card:
   - Not booked: **Book** (success **toast**, for example "Booked, Tue 18:00"). Pending members cannot book (SP1).
   - At or over capacity: the count shows **red** ("**22/20, may be busy**") and Book asks **"This class looks full. Book anyway?"**
   - Booked: **Cancel booking** (also toasts).
-- **Who's booked (web):** an **approved** student sees every booked member by name, alphabetically, pending members included, and never themselves (ADR 55). Drop-in visitors and anyone with no name on file show only as a count ("+2 others"). A **pending** student sees counts only, plus "Names show once your gym approves you." A class only they booked reads "Just you so far". Staff see everyone on the roster (O5). Built by `class.attendees` and the pure `visibleAttendees`.
+- **Who's booked (web and app):** an **approved** student sees every booked member by name, alphabetically, pending members included, and never themselves (ADR 55). Drop-in visitors and anyone with no name on file show only as a count ("+2 others"). A **pending** student sees counts only, plus "Names show once your gym approves you." A class only they booked reads "Just you so far". Staff see everyone on the roster (O5). Built by `class.attendees` and the pure `visibleAttendees`.
 - Cancelled class: shown read-only as **Cancelled**.
-- **Copy link for a friend (web):** an approved, active student sees this button on a class a visitor can still join. It copies the same class drop-in link as the S4 row (S8).
+- **Link for a friend (web and app):** an approved, active student sees this button on a class a visitor can still join. The web copies the same class drop-in link as the S4 row (S8); the app shares it.
 
 ### S6 · My classes
 
 **On the web too** (ADR 73): `/training`, with Upcoming (with Cancel) and Attended. Reads `booking.mine` and splits it with the same pure `splitMyClasses` / `nextClass` the app calls. A class the gym cancelled shows no Cancel control.
 
-- The app shows a **next-class card** at the top (the soonest upcoming booked class), then **Upcoming** and **Past** (attended, read-only).
+- Both clients show **Upcoming** and **Attended** tabs with counts. The soonest upcoming class carries a **Next class** badge. Attended says "Classes appear here after your gym records your attendance." An empty Upcoming offers **Find a class**.
 
 ### S7 · Profile / account
 
@@ -170,6 +171,7 @@ No blank waiting screen. A pending student sees the schedule with a note that th
 
 - Name, phone, email, current academy, with the gym's **address** and an **Open in Maps** link under it when the owner has set one (ADR 68). The link opens the owner's pinned map when there is one, otherwise the phone's own map app on the address (ADR 71). **Name and phone are editable**; email is read-only. A **settings icon** in the app header opens Settings (S12).
 - **My rank** (ADR 41): your rank per discipline (for example _BJJ, Blue, 2 stripes_) plus a short **promotion timeline**. **Read-only**: only the gym sets rank. Empty until a coach sets it.
+- **The app shows the same sections as the web** (Account details, Your training with "Joined", Your rank with the full promotion history, Emails, Your data, and the feedback and **Privacy** links). Appearance and sign out sit in Settings (S12). The app also keeps **Join another gym** (S2).
 - **Membership** (S9) lives here in the app, only while payment is on.
 - **Academy picker** (app only, MB8): shown only if the student belongs to more than one academy. The phone remembers the last academy only as a preference inside the list of academies you still train at (ADR 125).
 
@@ -177,7 +179,7 @@ No blank waiting screen. A pending student sees the schedule with a note that th
 
 - **A student who booked can open the app or web and taps Booked to attend.** Attendance is at the class detail or roster after the class finishes (O5).
 - **A first-time visitor or walk-in without a membership uses the drop-in link,** a public `/drop-in/<token>` page. One token per academy. Any staff member can copy and share it from the Dashboard or Students ("Share drop-in link"); the first read creates it. Only owners and managers rotate it. A visitor types email and phone, the server checks for one lead with both values matching in that academy and shows only the first name ("Are you {name}?"). No match or one-field match opens the full form. Accepting the match skips the full form; clicking No or no match opens it. Returning leads with up-to-date agreement answers do not refill.
-- **The visitor picks a class.** The form shows only title, date and time. It offers every unfinished class that started today, future classes later today, and all scheduled classes on the next two days, in the academy's local time. A class that started yesterday is not offered after midnight. Staff can copy a class-specific drop-in link from the weekly Schedule, and approved, active students from their web schedule and class page (S4, S5). A class link works for any eligible class up to seven local days out (today and the next six), while the list without a class keeps three days. It shows only that class, without a picker, and gives an unavailable message if the class is no longer offered. The class ID in the link changes the display, not access: the academy link still permits booking any eligible class. Picking a class on now marks the visitor present (`present` on `drop_in_visit`). Picking a future class books them (`booked` on `drop_in_visit`, `unmarked` on `class_participation`). No eligible class means no submission. Soft capacity never refuses a visitor booking.
+- **The visitor picks a class.** The form shows only title, date and time. It offers every unfinished class that started today, future classes later today, and all scheduled classes on the next two days, in the academy's local time. A class that started yesterday is not offered after midnight. Staff can copy a class-specific drop-in link from the weekly Schedule, and approved, active students from their schedule and class page, on the web and in the app (S4, S5). A class link works for any eligible class up to seven local days out (today and the next six), while the list without a class keeps three days. It shows only that class, without a picker, and gives an unavailable message if the class is no longer offered. The class ID in the link changes the display, not access: the academy link still permits booking any eligible class. Picking a class on now marks the visitor present (`present` on `drop_in_visit`). Picking a future class books them (`booked` on `drop_in_visit`, `unmarked` on `class_participation`). No eligible class means no submission. Soft capacity never refuses a visitor booking.
 - **Visitors answer the same questions as student join** (S2): **belt and stripes** (required, same choices), optional **injuries and medical conditions** when the academy asks it (staff-only; bounded to 1000 chars; removed by erase), **"Keep me updated"** (unticked by default), and the current **required agreement** with a required **"I have read and agree"** tick when it is on. These answers stay on `drop_in`, never copied to a member. The visitor cannot read them back. Staff see **belt and stripes** on the class roster, and **health only for this academy's staff on the class the visitor booked** (not for cancelled visits).
 - **Rate limiting:** lookups and submits are limited to 10 tries per 10 minutes per link, shared across all instances (Postgres counter keyed by IP + token SHA-256 hash). Rejected lookups, invalid links and refused submits log with `console.warn`, no contact data.
 - **The poster** could encode the public **`/drop-in/<token>`** URL for a human-readable link printed on paper or sent over text. The drop-in page identifies the academy by resolving the token server-side before any query.
@@ -225,9 +227,9 @@ Not built. The design is in `docs/home-widget-implementation.md`.
 - **Only a class row opens something**: it opens the class.
 - **The web has no notifications page.** Nobody can post gym news in this release.
 
-**Every app tab screen wears the same top bar:** the mark, the academy you are in, then the icons (the notification bell, plus the settings icon on Profile). Icons are the web shell's own glyphs redrawn for React Native, never emoji.
+**Every app tab screen wears the same top bar:** the mark, the academy you are in, then the icons (the notification bell, plus the settings icon on Profile). Icons are the web's Lucide icons (`lucide-react-native`), never emoji.
 
-**The app has four tabs: Schedule, Training (My classes), Scan and Profile.** The web student has the same set minus Scan (ADR 73).
+**The app has three tabs: Schedule, My classes and Profile.** The web student has the same set, plus Membership while payment is on (ADR 73).
 
 ---
 

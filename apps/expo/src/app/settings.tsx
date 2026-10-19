@@ -116,7 +116,7 @@ function AppearanceControl() {
         padding: 2,
         borderWidth: 1,
         borderColor: t.border,
-        borderRadius: 9999,
+        borderRadius: 5,
         backgroundColor: t.surface1,
       }}
     >
@@ -132,7 +132,7 @@ function AppearanceControl() {
             style={{
               flex: 1,
               minHeight: 40,
-              borderRadius: 9999,
+              borderRadius: 4,
               alignItems: "center",
               justifyContent: "center",
               backgroundColor: active ? t.active : "transparent",

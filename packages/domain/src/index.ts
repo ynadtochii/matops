@@ -22,6 +22,7 @@ export * from "./calendar";
 export * from "./checkin";
 export * from "./class-edit";
 export * from "./coach";
+export * from "./contact";
 export * from "./csv";
 export * from "./dashboard";
 export * from "./desk";

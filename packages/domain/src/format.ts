@@ -8,6 +8,48 @@ export const timeFmt = new Intl.DateTimeFormat(undefined, {
   minute: "2-digit",
 });
 
+/** "Mon" */
+export const weekdayFmt = new Intl.DateTimeFormat(undefined, {
+  weekday: "short",
+});
+
+/** "21" */
+export const dayNumFmt = new Intl.DateTimeFormat(undefined, { day: "numeric" });
+
+/** "Mon, Jul 21" */
+export const dayShortFmt = new Intl.DateTimeFormat(undefined, {
+  weekday: "short",
+  month: "short",
+  day: "numeric",
+});
+
+/** "Monday, Jul 21" */
+export const dayMediumFmt = new Intl.DateTimeFormat(undefined, {
+  weekday: "long",
+  month: "short",
+  day: "numeric",
+});
+
+/** "Monday, July 21" */
+export const dayLongFmt = new Intl.DateTimeFormat(undefined, {
+  weekday: "long",
+  month: "long",
+  day: "numeric",
+});
+
+/** "Jul 21, 2026" */
+export const dateYearFmt = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
+
+/** "Jul 2026" */
+export const monthYearFmt = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  year: "numeric",
+});
+
 /**
  * Clock split into the numerals and the AM/PM tail, so a column of times lines
  * up on the digits. The separator can be a narrow no-break space, so split on

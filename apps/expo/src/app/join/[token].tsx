@@ -79,7 +79,7 @@ export default function JoinScreen() {
             </Muted>
           </UIStack>
           <Button
-            label="Enter a gym ID"
+            label="Enter a join code"
             onPress={() => router.replace("/onboarding")}
           />
         </UIStack>
