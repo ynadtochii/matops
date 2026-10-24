@@ -1,5 +1,6 @@
 import type { StorageClient } from "@matops/storage";
 import { isPublicFileKey, PUBLIC_FILE_CACHE_CONTROL } from "@matops/domain";
+import { StorageError } from "@matops/storage";
 
 const CONTENT_TYPES: Record<string, string> = {
   jpg: "image/jpeg",
@@ -19,7 +20,17 @@ export async function publicFileResponse(
   storage: StorageClient | null,
 ): Promise<Response> {
   if (!isPublicFileKey(key) || !storage) return notFound();
-  const object = await storage.get(key);
+  let object;
+  try {
+    object = await storage.get(key);
+  } catch (error) {
+    if (!(error instanceof StorageError)) throw error;
+    console.error("[files] storage read failed", error);
+    return new Response("Storage unavailable", {
+      status: 502,
+      headers: { "Cache-Control": "no-store" },
+    });
+  }
   if (!object) return notFound();
   const extension = key.slice(key.lastIndexOf(".") + 1);
   return new Response(object.body, {

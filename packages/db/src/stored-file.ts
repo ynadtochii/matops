@@ -77,7 +77,7 @@ export async function deleteStoredFiles(
 }
 
 export async function stalePendingFiles(
-  input: { academyId: string; uploadedBy: string; before: Date },
+  input: { academyId: string; before: Date },
   exec: DbReader,
 ): Promise<StoredObjectRef[]> {
   return exec
@@ -86,7 +86,6 @@ export async function stalePendingFiles(
     .where(
       and(
         eq(storedFile.academyId, input.academyId),
-        eq(storedFile.uploadedBy, input.uploadedBy),
         eq(storedFile.status, "pending"),
         lt(storedFile.createdAt, input.before),
       ),

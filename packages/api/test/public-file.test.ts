@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
+import { StorageError } from "@matops/storage";
 import { createFakeStorage } from "@matops/storage/testing";
 
 import { publicFileResponse } from "../src/public-file";
@@ -56,5 +57,16 @@ describe("publicFileResponse", () => {
   it("returns 404 when storage is not set up", async () => {
     const res = await publicFileResponse(AVATAR, null);
     expect(res.status).toBe(404);
+  });
+
+  it("returns an uncached 502 when storage fails", async () => {
+    const storage = createFakeStorage();
+    storage.get = () => Promise.reject(new StorageError("get", AVATAR, 500));
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const res = await publicFileResponse(AVATAR, storage);
+
+    expect(res.status).toBe(502);
+    expect(res.headers.get("cache-control")).toBe("no-store");
   });
 });

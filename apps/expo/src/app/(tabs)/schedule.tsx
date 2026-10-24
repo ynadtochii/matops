@@ -118,13 +118,15 @@ export default function Schedule() {
   const suspended = current.data?.status === "suspended";
   const week = useQuery(
     trpc.class.mine.queryOptions(studentWeekWindow(now), {
-      enabled: !suspended,
+      enabled: !!current.data && !suspended,
     }),
   );
   const byDay = useMemo(() => groupByDay(week.data ?? []), [week.data]);
   const refreshControl = useRefreshControl();
   const scroll = useRef<ScrollView>(null);
   const sectionY = useRef(new Map<string, number>());
+  const listY = useRef(0);
+  const chipsHeight = useRef(0);
 
   if (suspended) return <SuspendedNotice name={current.data?.name} />;
 
@@ -140,7 +142,7 @@ export default function Schedule() {
   return (
     <Screen header={<AppHeader />} style={{ paddingBottom: 0 }}>
       <OverdueBanner />
-      {week.isPending ? (
+      {week.isPending && !current.isError ? (
         <ScheduleSkeleton />
       ) : (
         <ScrollView
@@ -166,10 +168,12 @@ export default function Schedule() {
                 </Callout>
               </View>
             ) : null}
-            {week.isError ? (
+            {week.isError || current.isError ? (
               <ErrorState
                 label="your schedule"
-                onRetry={() => void week.refetch()}
+                onRetry={() =>
+                  void (current.isError ? current.refetch() : week.refetch())
+                }
               />
             ) : byDay.length === 0 ? (
               <EmptyState
@@ -193,15 +197,23 @@ export default function Schedule() {
               days={byDay}
               todayKey={todayKey}
               tomorrowKey={tomorrowKey}
+              onHeight={(h) => (chipsHeight.current = h)}
               onPick={(key) => {
                 const y = sectionY.current.get(key);
-                if (y != null) scroll.current?.scrollTo({ y, animated: true });
+                if (y == null) return;
+                scroll.current?.scrollTo({
+                  y: Math.max(0, listY.current + y - chipsHeight.current),
+                  animated: true,
+                });
               }}
             />
           ) : null}
 
           {byDay.length > 0 ? (
-            <View style={{ gap: 32, paddingTop: 8 }}>
+            <View
+              style={{ gap: 32, paddingTop: 8 }}
+              onLayout={(e) => (listY.current = e.nativeEvent.layout.y)}
+            >
               {byDay.map(([key, rows]) => (
                 <DaySection
                   key={key}
@@ -248,6 +260,8 @@ function DayCarousel({
     ),
   );
   const [index, setIndex] = useState(firstBooked);
+  const placed = useRef(false);
+  const current = Math.min(index, classes.length - 1);
 
   return (
     <View style={{ marginBottom: 24 }}>
@@ -272,9 +286,11 @@ function DayCarousel({
         showsHorizontalScrollIndicator={false}
         snapToInterval={step}
         decelerationRate="fast"
-        onLayout={() =>
-          track.current?.scrollTo({ x: firstBooked * step, animated: false })
-        }
+        onLayout={() => {
+          if (placed.current) return;
+          placed.current = true;
+          track.current?.scrollTo({ x: firstBooked * step, animated: false });
+        }}
         onMomentumScrollEnd={(e) =>
           setIndex(Math.round(e.nativeEvent.contentOffset.x / step))
         }
@@ -311,9 +327,9 @@ function DayCarousel({
               key={c.id}
               style={{
                 height: 4,
-                width: i === index ? 16 : 6,
+                width: i === current ? 16 : 6,
                 borderRadius: 2,
-                backgroundColor: i === index ? t.foreground : t.track,
+                backgroundColor: i === current ? t.foreground : t.track,
               }}
             />
           ))}
@@ -430,16 +446,21 @@ function DayChips({
   days,
   todayKey,
   tomorrowKey,
+  onHeight,
   onPick,
 }: {
   days: [string, ClassRow[]][];
   todayKey: string;
   tomorrowKey: string;
+  onHeight: (height: number) => void;
   onPick: (key: string) => void;
 }) {
   const t = useTheme();
   return (
-    <View style={{ backgroundColor: t.background, paddingVertical: 8 }}>
+    <View
+      style={{ backgroundColor: t.background, paddingVertical: 8 }}
+      onLayout={(e) => onHeight(e.nativeEvent.layout.height)}
+    >
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}

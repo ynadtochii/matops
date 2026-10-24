@@ -122,7 +122,7 @@ describe("stored_file (ADR 152)", () => {
     expect(file?.status).toBe("ready");
   });
 
-  it("finds the uploader's stale pending files only", async () => {
+  it("finds the academy's stale pending files from any uploader", async () => {
     const old = pendingInput("academy_A", USER_A2);
     const fresh = pendingInput("academy_A", USER_A2);
     const oldReady = pendingInput("academy_A", USER_A2);
@@ -142,14 +142,19 @@ describe("stored_file (ADR 152)", () => {
       stalePendingFiles(
         {
           academyId: "academy_A",
-          uploadedBy: USER_A2,
           before: new Date(Date.now() - 24 * 60 * 60 * 1000),
         },
         tx,
       ),
     );
 
-    expect(stale).toEqual([{ id: old.id, objectKey: old.objectKey }]);
+    expect(stale).toHaveLength(2);
+    expect(stale).toEqual(
+      expect.arrayContaining([
+        { id: old.id, objectKey: old.objectKey },
+        { id: otherUser.id, objectKey: otherUser.objectKey },
+      ]),
+    );
   });
 
   it("sums the bytes of one academy", async () => {

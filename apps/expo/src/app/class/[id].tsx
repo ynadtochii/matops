@@ -12,6 +12,7 @@ import {
 
 import { BookControl, useBooking } from "~/components/book-control";
 import { ClassShare } from "~/components/class-share";
+import { useRefreshControl } from "~/components/refresh";
 import { ClassDetailSkeleton, SkeletonCard } from "~/components/skeletons";
 import {
   Card,
@@ -94,8 +95,9 @@ export default function ClassDetail() {
   const academy = useQuery(trpc.academy.current.queryOptions());
   const booking = useBooking();
   const now = useMinuteClock();
+  const refreshControl = useRefreshControl();
 
-  if (q.isPending) {
+  if (q.isPending || academy.isPending) {
     return (
       <Screen>
         <Stack.Screen options={{ title: "Class" }} />
@@ -119,18 +121,15 @@ export default function ClassDetail() {
   const booked = c.myBooking === "booked";
   const provisional = booked && c.myBookingTier === "provisional";
   const past = start.getTime() <= now.getTime();
-  const windowDays = academy.data?.bookingWindowDays ?? 7;
-  const bookable = canBook(
-    { status: c.status, startsAt: start, deletedAt: null },
-    now,
-    {
-      bookingWindowDays: windowDays,
-      timeZone: academy.data?.timeZone ?? "UTC",
-    },
-  );
+  const bookable = academy.data
+    ? canBook({ status: c.status, startsAt: start, deletedAt: null }, now, {
+        bookingWindowDays: academy.data.bookingWindowDays,
+        timeZone: academy.data.timeZone ?? "UTC",
+      })
+    : null;
   const refusal =
-    bookable.reason && bookable.reason !== "deleted"
-      ? notBookableMessage(bookable.reason, windowDays)
+    academy.data && bookable?.reason && bookable.reason !== "deleted"
+      ? notBookableMessage(bookable.reason, academy.data.bookingWindowDays)
       : null;
   const cap = capacityDisplay(c.bookingCount, c.capacity);
   const open = !cancelled && !past;
@@ -142,6 +141,7 @@ export default function ClassDetail() {
         style={{ flex: 1 }}
         contentContainerStyle={{ gap: 32, paddingBottom: 24 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={refreshControl}
       >
         <UIStack gap={4}>
           <Heading>{c.title}</Heading>
@@ -175,7 +175,7 @@ export default function ClassDetail() {
                         : `${cap.label} · ${c.durationMinutes} min`}
             </Muted>
           </UIStack>
-          {open && (booked || bookable.ok) ? (
+          {open && (booked || bookable?.ok) ? (
             <BookControl
               c={c}
               booked={booked}
@@ -214,7 +214,9 @@ export default function ClassDetail() {
               term="Availability"
               value={cap.label}
               note={
-                cap.isOver && bookable.ok ? "Bookings still allowed" : undefined
+                cap.isOver && bookable?.ok
+                  ? "Bookings still allowed"
+                  : undefined
               }
               alert={cap.isOver}
             />

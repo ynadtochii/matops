@@ -38,6 +38,15 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     "expo-secure-store",
     "expo-web-browser",
     [
+      "expo-image-picker",
+      {
+        photosPermission:
+          "MatOps uses your photos so you can choose a profile picture.",
+        cameraPermission: false,
+        microphonePermission: false,
+      },
+    ],
+    [
       // Dark-first: launch on the canonical pure-black surface.
       "expo-splash-screen",
       {

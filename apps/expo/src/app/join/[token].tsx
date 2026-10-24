@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { ScrollView } from "react-native";
+import { ScrollView, View } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { SignupAnswerState } from "~/components/signup-questions";
+import { AcademyIcon } from "~/components/avatar";
 import { EMPTY_ANSWERS, SignupQuestions } from "~/components/signup-questions";
 import {
   Button,
@@ -87,7 +88,8 @@ export default function JoinScreen() {
     );
   }
 
-  const { academyName, role, signupHealthQuestion, waiver } = invite.data;
+  const { academyName, academyIconUrl, role, signupHealthQuestion, waiver } =
+    invite.data;
   const roleLabel = role === "instructor" ? "an instructor" : "a student";
   const showQuestions = role === "student";
   const answerBlock = showQuestions
@@ -114,6 +116,16 @@ export default function JoinScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <UIStack gap={8}>
+          {academyIconUrl ? (
+            <View style={{ marginBottom: 8 }}>
+              <AcademyIcon
+                src={academyIconUrl}
+                name={academyName}
+                size={56}
+                label={`${academyName} logo`}
+              />
+            </View>
+          ) : null}
           <Heading>Join {academyName}</Heading>
           <Muted>
             You&apos;re joining as {roleLabel}. Your gym confirms you after you

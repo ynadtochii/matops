@@ -14,6 +14,7 @@ import { ChevronDown, SlidersHorizontal } from "lucide-react-native";
 
 import {
   academyMapUrl,
+  CONTACT_EMAIL,
   dateYearFmt,
   disciplineLabel,
   feedbackMailto,
@@ -25,6 +26,7 @@ import { UpdateProfileSchema } from "@matops/validators";
 
 import { AppHeader } from "~/components/app-header";
 import { OverdueBanner } from "~/components/overdue-banner";
+import { ProfilePicture } from "~/components/profile-picture";
 import { useRefreshControl } from "~/components/refresh";
 import { RankSkeleton } from "~/components/skeletons";
 import { useToast } from "~/components/toast";
@@ -567,6 +569,7 @@ export default function Profile() {
   const { data: session, refetch: refetchSession } = authClient.useSession();
   const current = useQuery(trpc.academy.current.queryOptions());
   const refreshControl = useRefreshControl();
+  const toast = useToast();
 
   const scrollRef = useRef<ScrollView>(null);
   const duesY = useRef<number | null>(null);
@@ -614,6 +617,8 @@ export default function Profile() {
           <Heading>Profile</Heading>
           <Muted>Manage your account and view your training details.</Muted>
         </View>
+
+        <ProfilePicture name={user.name || ""} email={user.email} />
 
         <Stack gap={16}>
           <SectionHeading>Account details</SectionHeading>
@@ -676,17 +681,19 @@ export default function Profile() {
           </View>
         ) : null}
 
-        <Stack gap={16}>
-          <SectionHeading>Your rank</SectionHeading>
-          {suspended ? (
-            <Callout tone="warning">
-              Your membership is paused. Contact your gym to restore your
-              access.
-            </Callout>
-          ) : (
-            <MyRank />
-          )}
-        </Stack>
+        {academy ? (
+          <Stack gap={16}>
+            <SectionHeading>Your rank</SectionHeading>
+            {suspended ? (
+              <Callout tone="warning">
+                Your membership is paused. Contact your gym to restore your
+                access.
+              </Callout>
+            ) : (
+              <MyRank />
+            )}
+          </Stack>
+        ) : null}
 
         {academy && !suspended ? (
           <Stack gap={16}>
@@ -737,6 +744,10 @@ export default function Profile() {
                   academy: academy ?? null,
                   screen: "app/profile",
                 }),
+              ).catch(() =>
+                toast.show(
+                  `Couldn't open your email app. Write to ${CONTACT_EMAIL}.`,
+                ),
               )
             }
           />

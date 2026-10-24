@@ -119,6 +119,7 @@ export const academyRouter = {
       code: await getAcademyCode(academyId, ctx.baseDb),
       iconUrl: publicFileUrl(ctx.appUrl, academy.iconKey),
       avatarUrl: publicFileUrl(ctx.appUrl, academy.avatarKey),
+      uploadsEnabled: ctx.storage !== null,
     };
   }),
 

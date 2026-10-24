@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { useTRPC } from "~/trpc/react";
 import { AcademyIcon } from "./avatar";
+import { useEntity } from "./entity";
 import { ImageUploadRow } from "./image-upload-row";
 import { LIST, SectionHeading } from "./primitives";
 
@@ -16,8 +17,10 @@ export function AcademyIconSettings({
 }) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
+  const { uploadsEnabled } = useEntity();
   const removeIcon = useMutation(trpc.storage.removeIcon.mutationOptions());
 
+  if (!uploadsEnabled && iconUrl === null) return null;
   return (
     <section className="flex flex-col gap-4">
       <SectionHeading>Academy icon</SectionHeading>

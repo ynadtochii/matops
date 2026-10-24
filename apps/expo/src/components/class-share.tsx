@@ -8,6 +8,7 @@ import {
   visitorClassState,
 } from "@matops/domain";
 
+import { useToast } from "~/components/toast";
 import { Button, IconButton, useTheme } from "~/components/ui";
 import { trpc } from "~/utils/api";
 import { getBaseUrl } from "~/utils/base-url";
@@ -28,6 +29,7 @@ export function ClassShare({
   iconOnly?: boolean;
 }) {
   const t = useTheme();
+  const toast = useToast();
   const academy = useQuery(trpc.academy.current.queryOptions()).data;
   const shareable =
     academy?.status === "active" &&
@@ -41,17 +43,34 @@ export function ClassShare({
     trpc.dropIn.link.queryOptions(undefined, { enabled: shareable }),
   );
 
-  if (!shareable || !link.data) return null;
+  if (!shareable) return null;
+  if (link.isError) {
+    return (
+      <Button
+        label="Retry link"
+        variant="ghost"
+        accessibilityLabel={`Retry the friend link for ${cls.title}`}
+        onPress={() => void link.refetch()}
+      />
+    );
+  }
+  const data = link.data;
+  if (!data) return null;
 
-  const url = `${getBaseUrl()}${dropInPath(link.data.token, link.data.sharedBy, cls.id)}`;
-  const share = () =>
-    void Share.share(Platform.OS === "ios" ? { url } : { message: url });
+  const share = async () => {
+    try {
+      const url = `${getBaseUrl()}${dropInPath(data.token, data.sharedBy, cls.id)}`;
+      await Share.share(Platform.OS === "ios" ? { url } : { message: url });
+    } catch {
+      toast.show("Couldn't share the link. Try again.");
+    }
+  };
 
   if (iconOnly) {
     return (
       <IconButton
         label={`Share a link for a friend to join ${cls.title}`}
-        onPress={share}
+        onPress={() => void share()}
       >
         <Share2 size={18} color={t.mutedForeground} />
       </IconButton>
@@ -62,7 +81,7 @@ export function ClassShare({
       label="Share link for a friend"
       variant="ghost"
       icon={<Share2 size={16} color={t.mutedForeground} />}
-      onPress={share}
+      onPress={() => void share()}
     />
   );
 }

@@ -1,6 +1,6 @@
 # 152 · File storage on Cloudflare R2: avatars, academy icons and payment receipts
 
-**Status:** accepted, not built · **Date:** 2026-10-16 · **Area:** new `packages/storage`, `packages/db` (`stored-file-schema.ts`, migration `0012_stored_file`, `erase.ts`), `packages/domain` (`storage.ts`), `packages/api` (`router/storage.ts`, `trpc.ts` context), `apps/nextjs` (Settings, Profile, rosters, the claim review), `apps/expo` (Profile) · **Builds on:** [124](124-the-organization-owns-typed-entities.md) (tenancy), [40](40-manual-transfer-payments.md) (the optional proof screenshot), [130](130-students-choose-a-membership.md) (claims), [142](142-first-release-approval-only-booking.md) (payment flag), [145](145-student-asks-to-erase-data.md) (erasure)
+**Status:** accepted, partly built (avatars and the academy icon on web are on `dev`; receipts F10 are not built, see addendum 4) · **Date:** 2026-10-16 · **Area:** new `packages/storage`, `packages/db` (`stored-file-schema.ts`, migration `0012_stored_file`, `erase.ts`), `packages/domain` (`storage.ts`), `packages/api` (`router/storage.ts`, `trpc.ts` context), `apps/nextjs` (Settings, Profile, rosters, the claim review), `apps/expo` (Profile) · **Builds on:** [124](124-the-organization-owns-typed-entities.md) (tenancy), [40](40-manual-transfer-payments.md) (the optional proof screenshot), [130](130-students-choose-a-membership.md) (claims), [142](142-first-release-approval-only-booking.md) (payment flag), [145](145-student-asks-to-erase-data.md) (erasure)
 
 ## Context
 
@@ -119,3 +119,11 @@ This replaces decision 11 and the retention parts of decisions 5, 10 and the Dat
 
 - The code knows only `avatar` and `academy_icon`, with JPEG, PNG and WebP. `presignGet`, the receipt rule, PDF sniffing, `receiptExpiresAt`, `receiptCutoff` and `expiredReceipts` are removed. They come back with the receipts screen (plan F10).
 - The database is unchanged: the `stored_file` kind check still allows `payment_receipt`, `membership_month.proof_file_id` stays, and erase still deletes any receipt rows.
+
+## Addendum 2026-10-24 (5): review fixes after the merge into `dev`
+
+- **Upload buttons follow the server.** `academy.current` returns `uploadsEnabled` (false when the `R2_*` vars are missing). Web hides Upload and Replace when it is false, and hides the whole photo section when there is no image either. This is what decision 13 asked for.
+- **Abandoned uploads are swept for the whole academy.** `createUpload` deletes every `pending` row of the academy older than 24 hours, not only the caller's. So one person's abandoned uploads no longer hold quota for everyone.
+- **A second `completeUpload` for the same file** no longer deletes the file it just linked.
+- **`/files` downloads.** The 5-second R2 timeout now covers only the wait for headers, not the body stream. An R2 error returns `502` with `no-store` instead of an uncaught `500`.
+- **Known and accepted:** the CDN and browsers may keep serving an erased or replaced avatar for up to 30 days to anyone who has the URL (the `immutable` cache). A deleted academy keeps its `stored_file` rows and objects. The presigned PUT URL stays valid for 5 minutes after `completeUpload`; `nosniff` and `CSP: sandbox` limit what a swapped file can do.

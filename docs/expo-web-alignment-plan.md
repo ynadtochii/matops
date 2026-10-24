@@ -1,6 +1,6 @@
 # Expo app: align with the student web (plan)
 
-Status: built on `dev`, 2026-10-19, except photos (the academy icon, avatars and F9 upload wait for ADR 152 file storage to reach `dev`) and E5. Decisions 1 to 4 were taken as recommended. Typecheck, lint and format pass; nothing was run on a device after the change.
+Status: built on `dev`, 2026-10-19, except E5. Photos (display and F9 upload) followed on 2026-10-24, after ADR 152 reached `dev`. Decisions 1 to 4 were taken as recommended. Typecheck, lint and format pass; nothing was run on a device after either change. Photo upload needs a new dev client build before anyone can try it.
 
 The Expo app is for students only. There is no staff app, and this plan does not add one. The goal: a student sees the same information, can do the same things, and sees the same design in the app as on the web, on a phone. The reference is the student web at phone width (the mobile top bar and bottom tabs in `app-shell.tsx` and `shell-frame.tsx`).
 
@@ -58,12 +58,12 @@ Each step keeps the Definition of Done: spec, roadmap row and CHANGELOG line in 
   - Remove stale comments: the stats card (`training.tsx:107`, `suspended-notice.tsx:8`), the branch switcher (`profile.tsx:401,510`), NativeWind (`theme.tsx:60`), violet (`ui.tsx:34`), "Nobody" (`class/[id].tsx:152`), and the old mobile pointer in `theme.css:12-13`.
   - Delete the unused kit pieces `Stat`, `OrDivider`, `SectionHeading` and `CountBadge` in `ui.tsx`.
 
-- [x] **E2. Missing student features (JS only, no API change).** Photos are not done: they need ADR 152 on `dev`. Every procedure already exists.
+- [x] **E2. Missing student features (JS only, no API change).** Every procedure already exists. Photos were added on 2026-10-24 (`components/avatar.tsx`).
   - Profile: email updates opt-in (`membership.emailUpdates`, `membership.setEmailUpdates`).
   - Profile: ask to erase my data, and withdraw the request (`membership.erasureRequest`, `requestErasure`, `withdrawErasureRequest`). Same wording as web (ADR 145).
   - Profile: "Joined Mon YYYY", the full rank history with the shared date format, the rank empty state "Only a coach can set it", and Feedback and Privacy links.
   - Class detail: the status card ("You're booked", "Booking closed", "Waiting for approval"), Instructor "Not assigned yet", and "Who's booked" (`class.attendees`, names hidden while pending).
-  - Show photos (display only, RN `Image`, no native module): the academy icon in the header and on join, the avatar in the header and on Profile, and photos in "Who's booked" if the web shows them there.
+  - Show photos (display only, RN `Image`, no native module): the academy icon in the header and on join, the avatar in the header and on Profile. "Who's booked" has no photos on the web either, so the app has none there.
   - Drop-in share (if decision 2 is yes): a share action on each schedule row and on class detail, through `dropIn.link` and RN `Share`.
 
 - [x] **E3. Redesign (JS only).** Follow the web student screens at phone width.
@@ -78,8 +78,8 @@ Each step keeps the Definition of Done: spec, roadmap row and CHANGELOG line in 
   - One minute clock, like the web `useMinuteClock`, so "Starts in" and past classes update.
   - Move date helpers that both apps repeat (`apps/expo/src/utils/format.ts` and `apps/nextjs/src/lib/format`) into `@matops/domain` when the code is the same. Only move what is really shared.
 
-- [ ] **E4. Native build (one batch).** Done: Lucide icons and the black Android icon background. Left: F9 photo upload, and a new dev client build to try them.
-  - F9 photo upload: `expo-image-picker`, `expo-image-manipulator` (resize to 512, re-encode, removes EXIF), upload through `storage.createUpload` and `completeUpload`, remove through `storage.removeAvatar`. ADR 152 and `docs/file-storage-plan.md` F9.
+- [ ] **E4. Native build (one batch).** Done: Lucide icons, the black Android icon background, and the F9 photo upload code (2026-10-24). Left: a new dev client build, then a device check of the upload.
+  - [x] F9 photo upload (`components/profile-picture.tsx`, the `expo-image-picker` plugin in `app.config.ts`). It shows only when `academy.current.uploadsEnabled` is true. The native modules load on demand, so an old dev client still opens Profile, but the upload fails there with the fallback toast. Not run on a device: `expo-image-picker`, `expo-image-manipulator` (resize to 512, re-encode, removes EXIF), upload through `storage.createUpload` and `completeUpload`, remove through `storage.removeAvatar`. ADR 152 and `docs/file-storage-plan.md` F9.
   - Icons: `react-native-svg` and `lucide-react-native`. Replace `components/icons.tsx` with the same icons the web uses.
   - Monochrome splash and Android adaptive icon background.
   - Build the Android dev client, then walk E0's checklist again. iOS follows when the Apple account exists.

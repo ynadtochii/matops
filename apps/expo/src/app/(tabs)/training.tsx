@@ -114,7 +114,9 @@ export default function Training() {
   const current = useQuery(trpc.academy.current.queryOptions());
   const suspended = current.data?.status === "suspended";
   const mine = useQuery(
-    trpc.booking.mine.queryOptions(undefined, { enabled: !suspended }),
+    trpc.booking.mine.queryOptions(undefined, {
+      enabled: !!current.data && !suspended,
+    }),
   );
   const { cancel, busyFor } = useBooking();
   const refreshControl = useRefreshControl();
@@ -139,7 +141,7 @@ export default function Training() {
         <Muted>Manage your bookings and review the classes you attended.</Muted>
       </View>
 
-      {mine.isPending ? (
+      {mine.isPending && !current.isError ? (
         <MyClassesSkeleton />
       ) : (
         <ScrollView
@@ -148,10 +150,12 @@ export default function Training() {
           showsVerticalScrollIndicator={false}
           refreshControl={refreshControl}
         >
-          {mine.isError ? (
+          {mine.isError || current.isError ? (
             <ErrorState
               label="your classes"
-              onRetry={() => void mine.refetch()}
+              onRetry={() =>
+                void (current.isError ? current.refetch() : mine.refetch())
+              }
             />
           ) : (
             <>

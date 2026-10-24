@@ -6,6 +6,7 @@ import { useRef, useState } from "react";
 import { Button } from "@matops/ui/button";
 import { toast } from "@matops/ui/toast";
 
+import { useEntity } from "./entity";
 import { useFileUpload } from "./file-upload";
 import { SettingsRow } from "./primitives";
 
@@ -30,6 +31,7 @@ export function ImageUploadRow({
   hasImage: boolean;
   onRemove: () => Promise<unknown>;
 }) {
+  const { uploadsEnabled } = useEntity();
   const input = useRef<HTMLInputElement>(null);
   const { upload, pending } = useFileUpload();
   const [removing, setRemoving] = useState(false);
@@ -63,22 +65,26 @@ export function ImageUploadRow({
     <SettingsRow title={title} description={description}>
       <div className="flex items-center gap-3">
         {preview}
-        <input
-          ref={input}
-          type="file"
-          accept={ACCEPT}
-          className="sr-only"
-          tabIndex={-1}
-          aria-hidden
-          onChange={(event) => void choose(event.target.files?.[0])}
-        />
-        <Button
-          variant="outline"
-          disabled={busy}
-          onClick={() => input.current?.click()}
-        >
-          {pending ? "Saving…" : hasImage ? "Replace" : "Upload"}
-        </Button>
+        {uploadsEnabled && (
+          <>
+            <input
+              ref={input}
+              type="file"
+              accept={ACCEPT}
+              className="sr-only"
+              tabIndex={-1}
+              aria-hidden
+              onChange={(event) => void choose(event.target.files?.[0])}
+            />
+            <Button
+              variant="outline"
+              disabled={busy}
+              onClick={() => input.current?.click()}
+            >
+              {pending ? "Saving…" : hasImage ? "Replace" : "Upload"}
+            </Button>
+          </>
+        )}
         {hasImage && (
           <Button variant="ghost" disabled={busy} onClick={() => void remove()}>
             {removing ? "Removing…" : "Remove"}

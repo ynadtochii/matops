@@ -195,17 +195,28 @@ export const attendanceRouter = {
           AND ${dropInVisit.attendanceStatus} = 'unmarked'))`;
     const targets = await ctx.db
       .with(classes)
-      .select({ id: classes.id })
+      .select({
+        id: classes.id,
+        startsAt: classes.startsAt,
+        status: classes.status,
+        deletedAt: classes.deletedAt,
+      })
       .from(classes)
       .where(and(needsReview, sql`NOT ${unmarkedWalkIn}`))
       .orderBy(asc(classes.startsAt), asc(classes.id))
       .limit(MARK_ALL_CLASSES_LIMIT);
     let reviewed = 0;
     let present = 0;
-    for (const { id } of targets) {
+    const now = new Date();
+    for (const target of targets) {
+      const id = target.id;
+      const correction =
+        attendanceWriteAccess(target, now, true) === "reason-required"
+          ? MARK_ALL_CLASSES_REASON
+          : undefined;
       present +=
-        (await markBookedPresent(ctx, id, undefined)) +
-        (await markBookedVisitorsPresent(ctx, id));
+        (await markBookedPresent(ctx, id, correction)) +
+        (await markBookedVisitorsPresent(ctx, id, correction));
       const [row] = await ctx.db
         .select({ snapshot: attendanceReviewSnapshot() })
         .from(classInstance)
@@ -217,11 +228,17 @@ export const attendanceRouter = {
           id,
           row.snapshot.fingerprint,
           row.snapshot.present === 0,
-          undefined,
+          correction,
         );
         reviewed++;
       } catch (error) {
-        if (error instanceof TRPCError && error.code === "CONFLICT") continue;
+        if (
+          error instanceof TRPCError &&
+          (error.code === "CONFLICT" ||
+            error.code === "PRECONDITION_FAILED" ||
+            error.code === "NOT_FOUND")
+        )
+          continue;
         throw error;
       }
     }
@@ -567,6 +584,7 @@ async function assertMarkable(
 }
 
 const MARK_ALL_CLASSES_LIMIT = 200;
+const MARK_ALL_CLASSES_REASON = "Mark all attendance";
 
 interface StaffCtx {
   db: TenantTx;
@@ -655,7 +673,11 @@ async function markBookedPresent(
   return changed.length;
 }
 
-async function markBookedVisitorsPresent(ctx: StaffCtx, classId: string) {
+async function markBookedVisitorsPresent(
+  ctx: StaffCtx,
+  classId: string,
+  correction: string | undefined,
+) {
   const changed = await ctx.db
     .update(dropInVisit)
     .set({
@@ -671,6 +693,17 @@ async function markBookedVisitorsPresent(ctx: StaffCtx, classId: string) {
       ),
     )
     .returning({ id: dropInVisit.id });
+  await Promise.all(
+    changed.map((row) =>
+      recordHistoricalCorrection(ctx.db, ctx.academyId, classId, correction, {
+        kind: "visitor",
+        subjectId: row.id,
+        beforeValue: "unmarked",
+        afterValue: "present",
+        actorId: ctx.session.user.id,
+      }),
+    ),
+  );
   return changed.length;
 }
 

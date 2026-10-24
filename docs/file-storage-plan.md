@@ -2,9 +2,9 @@
 
 ADR: [152](issues/152-file-storage-on-r2.md) and its two 2026-10-16 addenda. Goal: a person can upload an avatar, an owner or manager can upload an academy icon, and a student can attach a receipt to a reported month. Files live in one private R2 bucket per environment. The DB keeps the key, and every response turns it into a link the client renders.
 
-## Status (2026-10-19, paused): handoff for the next agent
+## Status (2026-10-24): merged into `dev`
 
-**Branch:** `feat/file-storage-r2`, cut from `dev`. Not merged into `dev` yet. Merge it into `dev` first; merging `dev` into `main` is the production deploy.
+**Branch:** `feat/file-storage-r2` was merged into `dev` on 2026-10-24 (`9f15ed0`). Merging `dev` into `main` is the production deploy. Review fixes are in ADR 152 addendum 5.
 
 **Done:** F0 (dev bucket, CORS, lifecycle rule, token), F1 to F8, and the docs for them. Migration `0012` is on dev. The academy icon and profile photos work on the web (checked by the user in the browser for the icon upload only).
 

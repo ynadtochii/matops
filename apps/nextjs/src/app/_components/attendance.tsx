@@ -34,7 +34,7 @@ function classCount(count: number) {
 function markAllSummary(result: MarkAllResult) {
   const title =
     result.reviewed === 0
-      ? "No classes were marked"
+      ? "No classes could be reviewed"
       : `Reviewed ${classCount(result.reviewed)}, ${result.present} marked present`;
   const notes = [
     result.remaining > 0 &&
@@ -69,7 +69,8 @@ export function Attendance() {
     trpc.attendance.markAllClasses.mutationOptions({
       onSuccess: (result) => {
         const { title, description } = markAllSummary(result);
-        toast.success(title, { description });
+        if (result.reviewed === 0) toast.info(title, { description });
+        else toast.success(title, { description });
       },
       onError: (err) =>
         toast.error(

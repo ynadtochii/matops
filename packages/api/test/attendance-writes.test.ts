@@ -694,10 +694,17 @@ describe("attendance.markAllClasses", () => {
       reviewed: true,
       present: 0,
     });
-    const corrections = await h.pg.query(
-      `SELECT 1 FROM "attendance_correction"`,
+    const corrections = await h.pg.query<{
+      class_id: string;
+      kind: string;
+      reason: string;
+    }>(
+      `SELECT class_id, kind, reason FROM "attendance_correction" ORDER BY kind`,
     );
-    expect(corrections.rows).toHaveLength(0);
+    expect(corrections.rows).toEqual([
+      { class_id: LONG_AGO, kind: "member", reason: "Mark all attendance" },
+      { class_id: LONG_AGO, kind: "review", reason: "Mark all attendance" },
+    ]);
   });
 
   it("marks booked visitors present", async () => {

@@ -119,7 +119,6 @@ export const storageRouter = {
       const stale = await stalePendingFiles(
         {
           academyId: ctx.academyId,
-          uploadedBy: userId,
           before: pendingUploadCutoff(new Date()),
         },
         ctx.db,
@@ -226,7 +225,7 @@ export const storageRouter = {
               { entityId: ctx.academyId, fileId: file.id },
               ctx.db,
             );
-      await dropPrevious(ctx, previousId);
+      await dropPrevious(ctx, previousId === file.id ? null : previousId);
       return { url: publicFileUrl(ctx.appUrl, file.objectKey) };
     }),
 

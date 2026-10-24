@@ -10,10 +10,10 @@ ADR 133 made every ended class wait for an explicit review. Staff who do not mar
 
 1. **One button on Attendance: Mark all attendance.** It shows while any class needs review. There is no preview and no confirm step.
 2. **It does what a review by hand does.** For each class it marks every booked, unmarked student present (`markAll`), marks every booked, unmarked drop-in visitor present, then finishes the review (`finish`) with the new roster fingerprint. A class where nobody is present finishes as **Nobody attended**. Explicit absents, cancelled bookings and walk-ins stay as they are. `markAll` and `finish` share the same helpers, so a single review is unchanged.
-3. **All past classes, any age.** The button ignores the date filter and the 14-day editing limit, for every staff role, and asks for no reason. No `attendance_correction` rows are written. A review by hand of an older class still needs an owner or manager and a reason.
+3. **All past classes, any age.** The button ignores the date filter and the 14-day editing limit, for every staff role, and asks for no reason. For a class older than 14 days it still writes `attendance_correction` rows with the fixed reason "Mark all attendance", one per changed person and one for the review, so old changes keep a trace. A review by hand of an older class still needs an owner or manager and a reason.
 4. **200 classes per press, oldest first.** Each press runs in one request transaction. The reply gives `remaining`, and the toast tells staff to press again.
 5. **A class with an unmarked walk-in is left for a review by hand.** Nobody booked that row, so the button cannot resolve it. It is not picked, so it never blocks the next 200. The toast counts these classes (`byHand`).
-6. **A roster change while the button runs** fails that class's fingerprint check. That class is skipped and stays in the queue.
+6. **A change while the button runs.** If another request changes a class's roster, or cancels or deletes the class, that class is skipped and the rest of the batch still saves. When nothing could be reviewed, the toast is information, not success.
 
 ## Consequences
 

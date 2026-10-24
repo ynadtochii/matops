@@ -80,9 +80,15 @@ export function createR2Storage(
         headers,
         aws: { datetime: amzDate(now()) },
       });
-      return await fetchImpl(request, {
-        signal: AbortSignal.timeout(5_000),
-      });
+      // A signal on fetch also aborts the body stream, so it may only cover
+      // the wait for headers: /files streams the body to slow clients.
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5_000);
+      try {
+        return await fetchImpl(request, { signal: controller.signal });
+      } finally {
+        clearTimeout(timer);
+      }
     } catch (cause) {
       throw new StorageError(operation, key, undefined, { cause });
     }
