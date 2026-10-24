@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
 import type { RouterOutputs } from "@matops/api";
 import { Button } from "@matops/ui/button";
@@ -14,6 +14,8 @@ import {
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
 import { Select } from "@matops/ui/select";
+import { toast } from "@matops/ui/toast";
+import { useInvalidate } from "@matops/ui/use-invalidate";
 
 import { useTRPC } from "~/trpc/react";
 import { ClassRoster, ROSTER_DIALOG } from "./class-roster";
@@ -23,6 +25,25 @@ import { ScreenSkeleton } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 
 type ReviewClass = RouterOutputs["attendance"]["reviewQueue"]["rows"][number];
+type MarkAllResult = RouterOutputs["attendance"]["markAllClasses"];
+
+function classCount(count: number) {
+  return `${count} ${count === 1 ? "class" : "classes"}`;
+}
+
+function markAllSummary(result: MarkAllResult) {
+  const title =
+    result.reviewed === 0
+      ? "No classes were marked"
+      : `Reviewed ${classCount(result.reviewed)}, ${result.present} marked present`;
+  const notes = [
+    result.remaining > 0 &&
+      `${classCount(result.remaining)} left. Press Mark all attendance again.`,
+    result.byHand > 0 &&
+      `${classCount(result.byHand)} with an unmarked walk-in need a review by hand.`,
+  ].filter(Boolean);
+  return { title, description: notes.join(" ") || undefined };
+}
 
 function reviewLabel(review: ReviewClass["review"]) {
   if (review.reviewed) {
@@ -43,6 +64,21 @@ export function Attendance() {
   const [offset, setOffset] = useState(0);
   const [selected, setSelected] = useState<ReviewClass | null>(null);
   const validDates = !from || !to || from <= to;
+  const invalidateFor = useInvalidate();
+  const markAll = useMutation(
+    trpc.attendance.markAllClasses.mutationOptions({
+      onSuccess: (result) => {
+        const { title, description } = markAllSummary(result);
+        toast.success(title, { description });
+      },
+      onError: (err) =>
+        toast.error(
+          err.message ||
+            "Couldn't mark attendance. Check your connection and try again.",
+        ),
+      onSettled: () => invalidateFor("attendance"),
+    }),
+  );
   const classes = useQuery({
     ...trpc.attendance.reviewQueue.queryOptions({
       status,
@@ -131,19 +167,31 @@ export function Attendance() {
                 ? "All past classes reviewed"
                 : `${classes.data.needsReview} ${classes.data.needsReview === 1 ? "class needs" : "classes need"} attendance review`}
             </p>
-            {(from || to) && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setFrom("");
-                  setTo("");
-                  setOffset(0);
-                }}
-              >
-                Clear dates
-              </Button>
-            )}
+            <div className="flex flex-wrap items-center gap-2">
+              {classes.data.needsReview > 0 && (
+                <Button
+                  size="sm"
+                  busy={markAll.isPending}
+                  disabled={markAll.isPending}
+                  onClick={() => markAll.mutate()}
+                >
+                  Mark all attendance
+                </Button>
+              )}
+              {(from || to) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setFrom("");
+                    setTo("");
+                    setOffset(0);
+                  }}
+                >
+                  Clear dates
+                </Button>
+              )}
+            </div>
           </div>
           {classes.data.rows.length === 0 ? (
             <EmptyState

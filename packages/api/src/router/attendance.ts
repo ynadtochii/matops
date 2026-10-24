@@ -112,34 +112,8 @@ export const attendanceRouter = {
   reviewQueue: staffProcedure
     .input(AttendanceReviewQueueSchema)
     .query(async ({ ctx, input }) => {
-      const now = new Date();
       const zone = await academyTimeZone(ctx);
-      const classes = ctx.db.$with("attendance_review_classes").as(
-        ctx.db
-          .select({
-            ...getTableColumns(classInstance),
-            instructorName: user.name,
-            snapshot: attendanceReviewSnapshot().as("snapshot"),
-            pendingCount:
-              sql<number>`(SELECT count(*)::int FROM ${classParticipation}
-          WHERE ${classParticipation.classId} = ${classInstance.id}
-          AND ${classParticipation.bookingStatus} = 'booked'
-          AND ${classParticipation.bookingTier} = 'provisional')`.as(
-                "pending_count",
-              ),
-          })
-          .from(classInstance)
-          .leftJoin(user, eq(user.id, classInstance.instructorId))
-          .where(
-            and(
-              isNull(classInstance.deletedAt),
-              eq(classInstance.status, "scheduled"),
-              sql`${classInstance.startsAt} + ${classInstance.durationMinutes} * interval '1 minute' <= ${now}`,
-            ),
-          ),
-      );
-      const reviewed = sql<boolean>`${classes.attendanceReviewedAt} IS NOT NULL AND ${classes.attendanceReviewFingerprint} = ${classes.snapshot}->>'fingerprint'`;
-      const needsReview = sql<boolean>`NOT coalesce((${reviewed}), false)`;
+      const { classes, needsReview } = endedClasses(ctx.db, new Date());
       const filters = and(
         input.status === "needs_review" ? needsReview : undefined,
         input.from
@@ -184,63 +158,76 @@ export const attendanceRouter = {
     .input(FinishAttendanceSchema)
     .mutation(async ({ ctx, input }) => {
       const correction = await assertMarkable(ctx, input.id, input.reason);
-      const data = await loadAttendanceRoster(ctx.db, input.id);
-      if (!data)
-        throw new TRPCError({ code: "NOT_FOUND", message: "Class not found." });
-      const now = new Date();
-      if (
-        data.deletedAt ||
-        data.status === "cancelled" ||
-        data.startsAt.getTime() + data.durationMinutes * 60000 > now.getTime()
-      ) {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: "Attendance can only be finished after a live class ends.",
-        });
-      }
-      const error = attendanceReviewError(
-        data.snapshot,
+      await finishReview(
+        ctx,
+        input.id,
         input.fingerprint,
         input.nobodyAttended,
-      );
-      if (error) throw new TRPCError({ code: "CONFLICT", message: error });
-      const [saved] = await ctx.db
-        .update(classInstance)
-        .set({
-          attendanceReviewedAt: now,
-          attendanceReviewedBy: ctx.session.user.id,
-          attendanceReviewFingerprint: input.fingerprint,
-        })
-        .where(
-          and(
-            eq(classInstance.id, input.id),
-            isNull(classInstance.deletedAt),
-            eq(classInstance.status, "scheduled"),
-            sql`${classInstance.startsAt} + ${classInstance.durationMinutes} * interval '1 minute' <= ${now}`,
-            sql`${attendanceReviewSnapshot()}->>'fingerprint' = ${input.fingerprint}`,
-          ),
-        )
-        .returning({ id: classInstance.id });
-      if (!saved)
-        throw new TRPCError({
-          code: "CONFLICT",
-          message: "Attendance changed. Review the latest list and try again.",
-        });
-      await recordHistoricalCorrection(
-        ctx.db,
-        ctx.academyId,
-        input.id,
         correction,
-        {
-          kind: "review",
-          subjectId: null,
-          beforeValue: data.savedFingerprint,
-          afterValue: input.fingerprint,
-          actorId: ctx.session.user.id,
-        },
       );
       return { ok: true as const };
     }),
+
+  markAllClasses: staffProcedure.mutation(async ({ ctx }) => {
+    const { classes, needsReview } = endedClasses(ctx.db, new Date());
+    const unmarkedWalkIn = sql<boolean>`(EXISTS (
+        SELECT 1 FROM ${classParticipation}
+        WHERE ${classParticipation.classId} = ${classes.id}
+          AND ${classParticipation.bookingStatus} = 'none'
+          AND ${classParticipation.attendanceStatus} = 'unmarked')
+      OR EXISTS (
+        SELECT 1 FROM ${dropInVisit}
+        WHERE ${dropInVisit.classId} = ${classes.id}
+          AND ${dropInVisit.bookingStatus} = 'none'
+          AND ${dropInVisit.attendanceStatus} = 'unmarked'))`;
+    const targets = await ctx.db
+      .with(classes)
+      .select({ id: classes.id })
+      .from(classes)
+      .where(and(needsReview, sql`NOT ${unmarkedWalkIn}`))
+      .orderBy(asc(classes.startsAt), asc(classes.id))
+      .limit(MARK_ALL_CLASSES_LIMIT);
+    let reviewed = 0;
+    let present = 0;
+    for (const { id } of targets) {
+      present +=
+        (await markBookedPresent(ctx, id, undefined)) +
+        (await markBookedVisitorsPresent(ctx, id));
+      const [row] = await ctx.db
+        .select({ snapshot: attendanceReviewSnapshot() })
+        .from(classInstance)
+        .where(eq(classInstance.id, id));
+      if (!row) continue;
+      try {
+        await finishReview(
+          ctx,
+          id,
+          row.snapshot.fingerprint,
+          row.snapshot.present === 0,
+          undefined,
+        );
+        reviewed++;
+      } catch (error) {
+        if (error instanceof TRPCError && error.code === "CONFLICT") continue;
+        throw error;
+      }
+    }
+    const [left] = await ctx.db
+      .with(classes)
+      .select({
+        remaining: sql<number>`count(*) FILTER (WHERE NOT ${unmarkedWalkIn})::int`,
+        byHand: sql<number>`count(*) FILTER (WHERE ${unmarkedWalkIn})::int`,
+      })
+      .from(classes)
+      .where(needsReview);
+    if (present > 0) recordAttendance(ctx);
+    return {
+      reviewed,
+      present,
+      remaining: left?.remaining ?? 0,
+      byHand: left?.byHand ?? 0,
+    };
+  }),
 
   /** Mark an existing participant present/absent/unmarked (spec O5). */
   mark: staffProcedure
@@ -334,55 +321,9 @@ export const attendanceRouter = {
     .input(MarkAllAttendanceSchema)
     .mutation(async ({ ctx, input }) => {
       const correction = await assertMarkable(ctx, input.id, input.reason);
-      const rows = await ctx.db
-        .select({
-          id: classParticipation.id,
-          studentId: sql<string>`coalesce(${classParticipation.personId}::text, ${classParticipation.studentId})`,
-          bookingStatus: classParticipation.bookingStatus,
-          attendanceStatus: classParticipation.attendanceStatus,
-        })
-        .from(classParticipation)
-        .where(eq(classParticipation.classId, input.id));
-      const targets = bulkMarkTargets(rows);
-      if (targets.length === 0) return { marked: 0 };
-      const changed = await ctx.db
-        .update(classParticipation)
-        .set({
-          attendanceStatus: "present",
-          attendedAt: new Date(),
-          markedBy: ctx.session.user.id,
-          checkInSource: sql`coalesce(${classParticipation.checkInSource}, 'staff')`,
-        })
-        .where(
-          and(
-            eq(classParticipation.classId, input.id),
-            eq(classParticipation.attendanceStatus, "unmarked"),
-            inArray(
-              sql<string>`coalesce(${classParticipation.personId}::text, ${classParticipation.studentId})`,
-              targets,
-            ),
-          ),
-        )
-        .returning({ id: classParticipation.id });
-      await Promise.all(
-        changed.map((row) =>
-          recordHistoricalCorrection(
-            ctx.db,
-            ctx.academyId,
-            input.id,
-            correction,
-            {
-              kind: "member",
-              subjectId: row.id,
-              beforeValue: "unmarked",
-              afterValue: "present",
-              actorId: ctx.session.user.id,
-            },
-          ),
-        ),
-      );
-      if (changed.length > 0) recordAttendance(ctx);
-      return { marked: changed.length };
+      const marked = await markBookedPresent(ctx, input.id, correction);
+      if (marked > 0) recordAttendance(ctx);
+      return { marked };
     }),
 
   /**
@@ -610,6 +551,172 @@ async function assertMarkable(
     });
   }
   return access === "reason-required" ? reason : undefined;
+}
+
+const MARK_ALL_CLASSES_LIMIT = 200;
+
+interface StaffCtx {
+  db: TenantTx;
+  academyId: string;
+  session: { user: { id: string } };
+}
+
+function endedClasses(db: TenantTx, now: Date) {
+  const classes = db.$with("attendance_review_classes").as(
+    db
+      .select({
+        ...getTableColumns(classInstance),
+        instructorName: user.name,
+        snapshot: attendanceReviewSnapshot().as("snapshot"),
+        pendingCount:
+          sql<number>`(SELECT count(*)::int FROM ${classParticipation}
+          WHERE ${classParticipation.classId} = ${classInstance.id}
+          AND ${classParticipation.bookingStatus} = 'booked'
+          AND ${classParticipation.bookingTier} = 'provisional')`.as(
+            "pending_count",
+          ),
+      })
+      .from(classInstance)
+      .leftJoin(user, eq(user.id, classInstance.instructorId))
+      .where(
+        and(
+          isNull(classInstance.deletedAt),
+          eq(classInstance.status, "scheduled"),
+          sql`${classInstance.startsAt} + ${classInstance.durationMinutes} * interval '1 minute' <= ${now}`,
+        ),
+      ),
+  );
+  const reviewed = sql<boolean>`${classes.attendanceReviewedAt} IS NOT NULL AND ${classes.attendanceReviewFingerprint} = ${classes.snapshot}->>'fingerprint'`;
+  return {
+    classes,
+    needsReview: sql<boolean>`NOT coalesce((${reviewed}), false)`,
+  };
+}
+
+async function markBookedPresent(
+  ctx: StaffCtx,
+  classId: string,
+  correction: string | undefined,
+) {
+  const rows = await ctx.db
+    .select({
+      id: classParticipation.id,
+      studentId: sql<string>`coalesce(${classParticipation.personId}::text, ${classParticipation.studentId})`,
+      bookingStatus: classParticipation.bookingStatus,
+      attendanceStatus: classParticipation.attendanceStatus,
+    })
+    .from(classParticipation)
+    .where(eq(classParticipation.classId, classId));
+  const targets = bulkMarkTargets(rows);
+  if (targets.length === 0) return 0;
+  const changed = await ctx.db
+    .update(classParticipation)
+    .set({
+      attendanceStatus: "present",
+      attendedAt: new Date(),
+      markedBy: ctx.session.user.id,
+      checkInSource: sql`coalesce(${classParticipation.checkInSource}, 'staff')`,
+    })
+    .where(
+      and(
+        eq(classParticipation.classId, classId),
+        eq(classParticipation.attendanceStatus, "unmarked"),
+        inArray(
+          sql<string>`coalesce(${classParticipation.personId}::text, ${classParticipation.studentId})`,
+          targets,
+        ),
+      ),
+    )
+    .returning({ id: classParticipation.id });
+  await Promise.all(
+    changed.map((row) =>
+      recordHistoricalCorrection(ctx.db, ctx.academyId, classId, correction, {
+        kind: "member",
+        subjectId: row.id,
+        beforeValue: "unmarked",
+        afterValue: "present",
+        actorId: ctx.session.user.id,
+      }),
+    ),
+  );
+  return changed.length;
+}
+
+async function markBookedVisitorsPresent(ctx: StaffCtx, classId: string) {
+  const changed = await ctx.db
+    .update(dropInVisit)
+    .set({
+      attendanceStatus: "present",
+      attendedAt: new Date(),
+      markedBy: ctx.session.user.id,
+    })
+    .where(
+      and(
+        eq(dropInVisit.classId, classId),
+        eq(dropInVisit.bookingStatus, "booked"),
+        eq(dropInVisit.attendanceStatus, "unmarked"),
+      ),
+    )
+    .returning({ id: dropInVisit.id });
+  return changed.length;
+}
+
+async function finishReview(
+  ctx: StaffCtx,
+  classId: string,
+  fingerprint: string,
+  nobodyAttended: boolean,
+  correction: string | undefined,
+) {
+  const data = await loadAttendanceRoster(ctx.db, classId);
+  if (!data)
+    throw new TRPCError({ code: "NOT_FOUND", message: "Class not found." });
+  const now = new Date();
+  if (
+    data.deletedAt ||
+    data.status === "cancelled" ||
+    data.startsAt.getTime() + data.durationMinutes * 60000 > now.getTime()
+  ) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Attendance can only be finished after a live class ends.",
+    });
+  }
+  const error = attendanceReviewError(
+    data.snapshot,
+    fingerprint,
+    nobodyAttended,
+  );
+  if (error) throw new TRPCError({ code: "CONFLICT", message: error });
+  const [saved] = await ctx.db
+    .update(classInstance)
+    .set({
+      attendanceReviewedAt: now,
+      attendanceReviewedBy: ctx.session.user.id,
+      attendanceReviewFingerprint: fingerprint,
+    })
+    .where(
+      and(
+        eq(classInstance.id, classId),
+        isNull(classInstance.deletedAt),
+        eq(classInstance.status, "scheduled"),
+        sql`${classInstance.startsAt} + ${classInstance.durationMinutes} * interval '1 minute' <= ${now}`,
+        sql`${attendanceReviewSnapshot()}->>'fingerprint' = ${fingerprint}`,
+      ),
+    )
+    .returning({ id: classInstance.id });
+  if (!saved)
+    throw new TRPCError({
+      code: "CONFLICT",
+      message: "Attendance changed. Review the latest list and try again.",
+    });
+  await recordHistoricalCorrection(ctx.db, ctx.academyId, classId, correction, {
+    kind: "review",
+    subjectId: null,
+    beforeValue: data.savedFingerprint,
+    afterValue: fingerprint,
+    actorId: ctx.session.user.id,
+  });
 }
 
 async function recordHistoricalCorrection(
