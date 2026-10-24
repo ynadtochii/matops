@@ -30,6 +30,7 @@ import { toast } from "@matops/ui/toast";
 import type { Member, MemberHistory } from "./members";
 import { dateFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
+import { Avatar } from "./avatar";
 import { useEntity, useOrganization } from "./entity";
 import { DriftBadge, LIST, RESOLVE, TAP } from "./primitives";
 import { SkeletonLines, SkeletonRows } from "./skeletons";
@@ -50,23 +51,6 @@ const MEMBERSHIP_TAG: Record<string, string> = {
   suspended: "suspended",
 };
 
-export function Initials({ name }: { name: string }) {
-  const letters = name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
-  return (
-    <span
-      aria-hidden
-      className="edge-lit-surface-2 text-foreground-secondary text-2xs flex size-8 shrink-0 items-center justify-center rounded-full font-semibold"
-    >
-      {letters || "?"}
-    </span>
-  );
-}
-
 export function MemberRow({
   m,
   label,
@@ -83,7 +67,12 @@ export function MemberRow({
 }) {
   const name = (
     <>
-      <Initials name={m.name} />
+      <Avatar
+        edge
+        name={m.name}
+        src={m.avatarUrl}
+        className="text-2xs size-8"
+      />
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           <span className="text-foreground truncate font-medium">{m.name}</span>

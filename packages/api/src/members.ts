@@ -10,7 +10,7 @@ import {
   setMemberRoleStatus,
 } from "@matops/db";
 import { entity, member, user } from "@matops/db/schema";
-import { isStaff, isStudentMember } from "@matops/domain";
+import { isStaff, isStudentMember, publicFileUrl } from "@matops/domain";
 
 import { notifyMembershipApproved } from "./notify";
 
@@ -90,6 +90,19 @@ export async function requireInstructor(
   if (!staff.some((r) => r.accountUserId === userId)) {
     throw new TRPCError({ code: "NOT_FOUND", message: "Instructor not found" });
   }
+}
+
+export function avatarByUser(
+  rows: MemberRow[],
+  appUrl: string,
+): Map<string, string | null> {
+  return new Map(
+    rows.flatMap((r) =>
+      r.accountUserId
+        ? [[r.accountUserId, publicFileUrl(appUrl, r.avatarKey)] as const]
+        : [],
+    ),
+  );
 }
 
 /** Display name by `user.id`, for rows that store a user id. */
@@ -183,6 +196,7 @@ export async function directoryRosterOf(
         status: "active",
         invitedRole: null,
         erasureRequestedAt: null,
+        avatarKey: null,
         inheritedRole: true,
       });
     }

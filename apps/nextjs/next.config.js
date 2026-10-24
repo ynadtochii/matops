@@ -13,6 +13,7 @@ const config = {
     "@matops/api",
     "@matops/auth",
     "@matops/db",
+    "@matops/storage",
     "@matops/ui",
     "@matops/validators",
   ],

@@ -28,6 +28,7 @@ import { useInvalidate } from "@matops/ui/use-invalidate";
 
 import { optimistic, rollback } from "~/lib/optimistic";
 import { useTRPC } from "~/trpc/react";
+import { Avatar } from "./avatar";
 import { CoachSelect } from "./coach-select";
 import { useEntity } from "./entity";
 import { cardClass, Eyebrow, ROSTER_LIST, ROSTER_ROW } from "./primitives";
@@ -581,6 +582,11 @@ export function ClassRoster({
             const name = r.name ?? "Member";
             return (
               <li key={r.studentId} className={ROSTER_ROW}>
+                <Avatar
+                  src={r.avatarUrl}
+                  name={name}
+                  className="text-2xs size-6"
+                />
                 <span className="min-w-0 flex-1 truncate text-sm" title={name}>
                   {name}
                 </span>
@@ -672,6 +678,7 @@ export function ClassRoster({
               const name = `${d.firstName} ${d.lastName}`.trim();
               return (
                 <li key={d.id} className={ROSTER_ROW}>
+                  <Avatar name={name} className="text-2xs size-6" />
                   <span className="flex min-w-0 flex-1 flex-col text-sm">
                     <span className="truncate">{name}</span>
                     {d.belt && (
@@ -807,6 +814,11 @@ export function ClassRoster({
                                   return next;
                                 })
                               }
+                            />
+                            <Avatar
+                              src={m.avatarUrl}
+                              name={m.name}
+                              className="text-2xs size-6"
                             />
                             {m.name}
                             {isStaffRole(m) && <RowTag>{m.role}</RowTag>}

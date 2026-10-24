@@ -20,6 +20,7 @@ import {
   classParticipation,
   entityMembership,
   person,
+  storedFile,
   user,
 } from "@matops/db/schema";
 import {
@@ -31,6 +32,7 @@ import {
   deskSearch,
   deskWindow,
   isActiveMember,
+  publicFileUrl,
 } from "@matops/domain";
 import {
   DeskCheckInSchema,
@@ -53,6 +55,7 @@ interface DeskMember {
   role: string;
   status: string;
   joinedAt: Date;
+  avatarKey: string | null;
 }
 
 async function activeMembers(db: TenantTx, academyId: string) {
@@ -67,10 +70,12 @@ async function activeMembers(db: TenantTx, academyId: string) {
       role: entityMembership.role,
       status: entityMembership.status,
       joinedAt: sql<Date>`coalesce(${entityMembership.joinedAt}, ${entityMembership.createdAt})`,
+      avatarKey: storedFile.objectKey,
     })
     .from(entityMembership)
     .leftJoin(person, eq(entityMembership.personId, person.id))
     .leftJoin(user, eq(entityMembership.userId, user.id))
+    .leftJoin(storedFile, eq(storedFile.id, entityMembership.avatarFileId))
     .where(
       and(
         eq(entityMembership.entityId, academyId),
@@ -155,7 +160,11 @@ export const deskRouter = {
       opensAt: c.opensAt,
     }));
     return {
-      academy: { name: ctx.desk.name, timeZone: ctx.desk.timeZone },
+      academy: {
+        name: ctx.desk.name,
+        timeZone: ctx.desk.timeZone,
+        iconUrl: publicFileUrl(ctx.appUrl, ctx.desk.iconKey),
+      },
       tomorrow: shown.tomorrow,
       classes,
       defaultClassId: deskDefaultClass(classes)?.id ?? null,
@@ -174,6 +183,7 @@ export const deskRouter = {
         .map(({ member, row }) => ({
           memberId: member.id,
           name: names.get(member.id) ?? "",
+          avatarUrl: publicFileUrl(ctx.appUrl, member.avatarKey),
           present: present(row),
         }))
         .sort((a, b) => a.name.localeCompare(b.name));
@@ -188,6 +198,7 @@ export const deskRouter = {
       return deskSearch(members, input.query).map((m) => ({
         memberId: m.id,
         name: names.get(m.id) ?? "",
+        avatarUrl: publicFileUrl(ctx.appUrl, m.avatarKey),
         present: present(participantFor(m, rows)),
       }));
     }),

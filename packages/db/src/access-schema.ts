@@ -1,3 +1,4 @@
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import {
   check,
@@ -10,6 +11,7 @@ import {
 import { organization, user } from "./auth-schema";
 import { entity } from "./entity-schema";
 import { person } from "./person-schema";
+import { storedFile } from "./stored-file-schema";
 
 /**
  * Membership plans and who holds them (ADR 126).
@@ -384,6 +386,9 @@ export const membershipMonth = pgTable(
     currency: t.text(),
     deadline: t.timestamp({ withTimezone: true }),
     calendarTimeZone: t.text(),
+    proofFileId: t.uuid().references((): AnyPgColumn => storedFile.id, {
+      onDelete: "set null",
+    }),
     createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: t
       .timestamp({ withTimezone: true })

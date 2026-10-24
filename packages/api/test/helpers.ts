@@ -3,6 +3,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { TRPCError } from "@trpc/server";
 
 import type { DbExec } from "@matops/db/client";
+import type { FakeStorage } from "@matops/storage/testing";
 import { eq, provisionOrganization } from "@matops/db";
 import {
   entity,
@@ -11,6 +12,7 @@ import {
   organization,
 } from "@matops/db/schema";
 import { execOn, freshDb } from "@matops/db/testing";
+import { createFakeStorage } from "@matops/storage/testing";
 
 import type { createTRPCContext } from "../src/trpc";
 import { appRouter } from "../src/root";
@@ -35,6 +37,7 @@ export interface Harness {
   ) => ReturnType<ReturnType<typeof tierProbe.createCaller>["current"]>;
   /** What `setActiveOrganization` was last told, per user. */
   activeOrgOf: (userId: string) => string | undefined;
+  storage: FakeStorage;
 }
 
 function caller(ctx: Ctx) {
@@ -127,6 +130,7 @@ export async function harness(academies?: AcademySpec[]): Promise<Harness> {
   const exec = execOn(pg);
 
   const activeOrg = new Map<string, string>();
+  const storage = createFakeStorage();
 
   const ctxFor = (
     userId: string,
@@ -150,6 +154,7 @@ export async function harness(academies?: AcademySpec[]): Promise<Harness> {
     } as unknown as Ctx["session"],
     requestedEntityId: headers.get("x-matops-entity") ?? undefined,
     baseDb: exec,
+    storage,
     appUrl: "http://localhost:3004",
   });
 
@@ -163,6 +168,7 @@ export async function harness(academies?: AcademySpec[]): Promise<Harness> {
     enter: (userId, academyId, headers) =>
       tierProbe.createCaller(ctxFor(userId, academyId, headers)).current(),
     activeOrgOf: (userId) => activeOrg.get(userId),
+    storage,
   };
 }
 

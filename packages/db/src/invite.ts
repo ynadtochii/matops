@@ -4,6 +4,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import type { DbExec } from "./client";
 import { entity } from "./entity-schema";
 import { academyInvite } from "./invite-schema";
+import { storedFile } from "./stored-file-schema";
 import { currentWaiver } from "./waiver";
 
 /**
@@ -139,6 +140,7 @@ export async function resolveInviteToken(
   signupHealthQuestion: boolean;
   waiver: { id: string; body: string; createdAt: Date } | null;
   role: string;
+  academyIconKey: string | null;
 } | null> {
   const rows = await exec
     .select({
@@ -152,9 +154,11 @@ export async function resolveInviteToken(
       academyCountry: entity.country,
       signupHealthQuestion: entity.signupHealthQuestion,
       waiverRequired: entity.waiverRequired,
+      academyIconKey: storedFile.objectKey,
     })
     .from(academyInvite)
     .innerJoin(entity, eq(academyInvite.academyId, entity.id))
+    .leftJoin(storedFile, eq(storedFile.id, entity.iconFileId))
     .where(
       and(
         eq(academyInvite.token, token),

@@ -18,6 +18,7 @@ import { toast } from "@matops/ui/toast";
 
 import { monthDayFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
+import { Avatar } from "./avatar";
 import { useEntity } from "./entity";
 import { PageHeader } from "./page-header";
 import {
@@ -44,9 +45,17 @@ const WINDOW_TABS: { id: CoachWindowKey; label: string }[] = [
 function CoachWorkloadRow({ row }: { row: CoachRow }) {
   return (
     <div className="grid items-center gap-4 p-4 sm:grid-cols-[minmax(0,1.5fr)_minmax(15rem,2fr)]">
-      <div className="min-w-0">
-        <p className="truncate font-medium">{row.name}</p>
-        {!row.onStaff && <Eyebrow>No longer staff</Eyebrow>}
+      <div className="flex min-w-0 items-center gap-3">
+        <Avatar
+          edge
+          name={row.name}
+          src={row.avatarUrl}
+          className="text-2xs size-8"
+        />
+        <div className="min-w-0">
+          <p className="truncate font-medium">{row.name}</p>
+          {!row.onStaff && <Eyebrow>No longer staff</Eyebrow>}
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-4">
@@ -134,11 +143,19 @@ function PendingCoaches() {
               key={m.memberId}
               className="flex min-h-11 flex-wrap items-center justify-between gap-3 px-4 py-3"
             >
-              <div className="min-w-0">
-                <p className="truncate font-medium">{m.name}</p>
-                <p className="text-muted-foreground truncate text-sm">
-                  {m.email} · wants to join as instructor
-                </p>
+              <div className="flex min-w-0 items-center gap-3">
+                <Avatar
+                  edge
+                  name={m.name}
+                  src={m.avatarUrl}
+                  className="text-2xs size-8"
+                />
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{m.name}</p>
+                  <p className="text-muted-foreground truncate text-sm">
+                    {m.email} · wants to join as instructor
+                  </p>
+                </div>
               </div>
               <div className="flex gap-2">
                 <Button
@@ -299,6 +316,7 @@ export function CoachesScreen() {
                   row={{
                     ...mine.data.workload,
                     name: mine.data.name,
+                    avatarUrl: mine.data.avatarUrl,
                     onStaff: true,
                   }}
                 />

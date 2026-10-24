@@ -1,3 +1,4 @@
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import {
   check,
@@ -9,6 +10,7 @@ import {
 
 import { organization, user } from "./auth-schema";
 import { person } from "./person-schema";
+import { storedFile } from "./stored-file-schema";
 
 /**
  * The organization/entity foundation (ADR 124).
@@ -54,6 +56,9 @@ export const entity = pgTable(
     membershipEnforcedAt: t.timestamp({ withTimezone: true }),
     signupHealthQuestion: t.boolean().notNull().default(false),
     waiverRequired: t.boolean().notNull().default(false),
+    iconFileId: t.uuid().references((): AnyPgColumn => storedFile.id, {
+      onDelete: "set null",
+    }),
     createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: t
       .timestamp({ withTimezone: true })
@@ -119,6 +124,9 @@ export const entityMembership = pgTable(
     joinedAt: t.timestamp({ withTimezone: true }),
     erasureRequestedAt: t.timestamp({ withTimezone: true }),
     emailUpdatesAt: t.timestamp({ withTimezone: true }),
+    avatarFileId: t.uuid().references((): AnyPgColumn => storedFile.id, {
+      onDelete: "set null",
+    }),
     createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: t
       .timestamp({ withTimezone: true })
