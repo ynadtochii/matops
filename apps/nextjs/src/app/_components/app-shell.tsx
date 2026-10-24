@@ -350,6 +350,7 @@ function ShellChrome({
         ) : undefined
       }
     >
+      <title>{activeBranch?.name ?? "MatOps"}</title>
       {academy && !canVisit(within, academy) ? <NoAccessState /> : children}
     </ShellFrame>
   );

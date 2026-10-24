@@ -2,6 +2,7 @@
 
 ## Unreleased: first release, one academy
 
+- The browser tab shows the academy name inside the signed-in app (spec FR6). The shell renders the only `<title>`; `(app)/layout.tsx` sets `title: null` so the root "MatOps" title no longer races it on client navigation. Public pages keep their MatOps titles.
 - Academy first, not MatOps (spec FR6). Inside an academy the sidebar and the phone header show the academy icon (or its first letter) and name in place of the MatOps logo, and link home. The home page heading is the academy name for staff and students. The Templates empty state no longer says "MatOps fills the calendar".
 - Fix: the student card (`membership.memberHistory`) showed 0 sessions and "No attended sessions yet" for students with attendance. It matched `class_participation.student_id` against the person id; it now matches `coalesce(person_id, student_id)` like the roster visit count.
 - Expo app photos (ADR 152 F9, plan E2 and E4). The header shows the academy icon and your photo, which opens Profile; the join screen shows the academy icon. Profile has a Profile picture section: pick from the library, square crop, shrink to 512 px JPEG, upload, replace or remove. New native packages `expo-image-picker`, `expo-image-manipulator` and `expo-file-system`, so the app needs a new dev client build. Not run on a device yet.
