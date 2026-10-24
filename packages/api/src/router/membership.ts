@@ -513,7 +513,10 @@ export const membershipRouter = {
         )
         .where(
           and(
-            eq(classParticipation.studentId, m.userId),
+            eq(
+              sql`coalesce(${classParticipation.personId}::text, ${classParticipation.studentId})`,
+              m.userId,
+            ),
             eq(classParticipation.attendanceStatus, "present"),
           ),
         )

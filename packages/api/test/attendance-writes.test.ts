@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { Harness } from "./helpers";
 import {
   harness,
+  memberId,
   rejectionCode,
   seedAcademies,
   seedClasses,
@@ -141,6 +142,25 @@ describe("attendance.mark", () => {
     expect(res.rows[0]?.attendance_status).toBe("present");
     expect(res.rows[0]?.marked_by).toBe(COACH);
     expect(res.rows[0]?.attended_at).not.toBeNull();
+  });
+
+  it("counts the marked class in the member's history", async () => {
+    const h = await base();
+    await seedParticipations(h.pg, [
+      { classId: YESTERDAY, academyId: A, studentId: ANA },
+    ]);
+    await h.as(COACH, A).attendance.mark({
+      classId: YESTERDAY,
+      personId: ANA,
+      status: "present",
+    });
+
+    const detail = await h
+      .as(OWNER, A)
+      .membership.memberHistory({ memberId: memberId(A, ANA) });
+    expect(detail.history.map((c) => c.classId)).toEqual([YESTERDAY]);
+    expect(detail.stats.total).toBe(1);
+    expect(detail.lastAttendance).not.toBeNull();
   });
 
   it("clears the attended time when the mark is changed to absent", async () => {
