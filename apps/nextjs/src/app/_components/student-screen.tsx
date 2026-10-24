@@ -84,7 +84,7 @@ export function StudentScreen() {
   if (suspended) {
     return (
       <>
-        <PageHeader title="Schedule" />
+        <PageHeader title={academy.name} />
         <SuspendedState />
       </>
     );
@@ -107,7 +107,7 @@ export function StudentScreen() {
   return (
     <>
       <PageHeader
-        title="Schedule"
+        title={academy.name}
         subtitle={`Find and book a class for the next ${academy.bookingWindowDays} days.`}
         action={
           <Button asChild variant="outline">

@@ -245,7 +245,7 @@ export function Templates({
         />
       ) : templates.length === 0 ? (
         <EmptyState title="No recurring classes yet.">
-          Create a weekly template and MatOps fills the calendar for you.
+          Create a weekly template and its classes fill your calendar.
         </EmptyState>
       ) : (
         <div className={cn(LIST, RESOLVE)}>

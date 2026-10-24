@@ -269,7 +269,7 @@ export function DashboardScreen() {
 
       <div className={ENTER}>
         <PageHeader
-          title="Dashboard"
+          title={c.name}
           subtitle={dayLongFmt.format(today)}
           action={<DropInLinkButton />}
         />

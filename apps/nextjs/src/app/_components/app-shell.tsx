@@ -300,19 +300,17 @@ function ShellChrome({
       isCurrent={isCurrent}
       homeHref={href("/")}
       profileHref={entityId ? href("/profile") : "/profile"}
-      selector={
-        <span className="text-foreground flex h-8 min-w-0 items-center gap-2 px-1.5 text-sm font-medium">
-          {academy?.iconUrl && (
-            <AcademyIcon
-              src={academy.iconUrl}
-              name={academy.name}
-              className="size-5"
-            />
-          )}
-          <span className="truncate">
+      brand={
+        <>
+          <AcademyIcon
+            src={academy?.iconUrl}
+            name={activeBranch?.name ?? "Your academy"}
+            className="size-8 text-sm"
+          />
+          <span className="text-foreground truncate text-sm font-semibold md:text-base">
             {activeBranch?.name ?? "Your academy"}
           </span>
-        </span>
+        </>
       }
       user={{ ...user, avatarUrl: academy?.avatarUrl ?? null }}
       branchLabel={activeBranch?.name}
