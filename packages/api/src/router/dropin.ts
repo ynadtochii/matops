@@ -18,6 +18,7 @@ import {
 import { dropIn, entityMembership, person, user } from "@matops/db/schema";
 import {
   isStaffRole,
+  publicFileUrl,
   VISITOR_LINK_DAYS,
   VISITOR_LIST_DAYS,
   visitorClassChoices,
@@ -178,6 +179,7 @@ export const dropInRouter = {
         country: academy.country,
         signupHealthQuestion: academy.signupHealthQuestion,
         waiver: academy.waiver,
+        iconUrl: publicFileUrl(ctx.appUrl, academy.iconKey),
       };
     }),
 

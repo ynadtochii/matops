@@ -4,6 +4,7 @@ import { isOwner } from "@matops/domain";
 import { cn } from "@matops/ui";
 
 import { AcademyDangerZone } from "./academy-danger-zone";
+import { AcademyIconSettings } from "./academy-icon-settings";
 import { AcademyIdentity } from "./academy-identity";
 import { AcademyLocation } from "./academy-location";
 import { useEntity, useOrganization } from "./entity";
@@ -22,6 +23,7 @@ export function SettingsScreen() {
       <PageHeader title="Settings" subtitle={`Settings for ${academy.name}.`} />
       <div className={cn("flex flex-col gap-10", ENTER)}>
         <AcademyIdentity name={academy.name} code={academy.code} />
+        <AcademyIconSettings name={academy.name} iconUrl={academy.iconUrl} />
         <AcademyLocation address={academy.address} mapUrl={academy.mapUrl} />
         <SignupQuestions />
         <DeskLinkSection />

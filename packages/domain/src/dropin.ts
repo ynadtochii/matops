@@ -16,6 +16,18 @@ export function normalizePhone(phone: string): string {
   return phone.trimStart().startsWith("+") ? `+${digits}` : digits;
 }
 
+export function dropInPath(
+  token: string,
+  sharedBy: string | null,
+  classId?: string,
+): string {
+  const query = [
+    classId && `class=${encodeURIComponent(classId)}`,
+    sharedBy && `by=${encodeURIComponent(sharedBy)}`,
+  ].filter(Boolean);
+  return `/drop-in/${token}${query.length > 0 ? `?${query.join("&")}` : ""}`;
+}
+
 export const VISITOR_LIST_DAYS = 3;
 export const VISITOR_LINK_DAYS = 7;
 

@@ -211,7 +211,12 @@ describe("desk.roster and desk.search", () => {
       classId: RUNNING,
     });
     expect(roster).toEqual([
-      { memberId: memberId(A, ANA), name: "Ana S.", present: false },
+      {
+        memberId: memberId(A, ANA),
+        name: "Ana S.",
+        avatarUrl: null,
+        present: false,
+      },
     ]);
   });
 

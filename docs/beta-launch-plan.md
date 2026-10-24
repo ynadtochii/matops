@@ -231,6 +231,28 @@ I cannot write `.env` files. These are yours:
 - **Vercel, Preview**: `POSTGRES_URL` = the dev branch, so a preview of a
   feature branch reads the same database you migrated by hand.
 
+### 1.3c File storage on Cloudflare R2 (ADR 152)
+
+Done for dev on 2026-10-16. Repeat the prod half before the first real upload.
+
+- **Buckets:** `matops-private-dev` and `matops-private-prod`, both with
+  jurisdiction **EU** (it cannot be changed later). No public bucket, no custom
+  domain, `r2.dev` access disabled.
+- **CORS on each bucket:** `AllowedMethods: ["PUT"]`, `AllowedHeaders:
+  ["content-type", "cache-control"]`, `ExposeHeaders: ["ETag"]`,
+  `MaxAgeSeconds: 3600`. Origins: `http://localhost:3004` (plus the dev branch
+  preview URL) on dev, `https://matops.app` on prod.
+- **Lifecycle rule on each bucket:** prefix `receipt/`, delete after 61 days.
+  Keep the default "abort incomplete multipart uploads" rule.
+- **API tokens:** one Account API token per environment, **Object Read &
+  Write**, limited to that environment's bucket.
+- **Env:** `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
+  `R2_BUCKET`. Dev values in `.env` and Vercel Preview; prod values in Vercel
+  Production only. Add the four names to `.env.example`.
+- **Check:** `pnpm -F @matops/storage smoke` (dev buckets only; it refuses a
+  bucket name that does not end in `-dev`). It must show a 403 for a PUT whose
+  size differs from the signed one.
+
 ### 1.4 Make CI a real gate
 
 CI cannot protect production while it is permanently red. Two gates are red on a

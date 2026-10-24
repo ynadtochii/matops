@@ -19,6 +19,7 @@ import {
   person,
   rankCorrection,
   rankPromotion,
+  storedFile,
   user,
   waiverAcceptance,
 } from "./schema";
@@ -26,6 +27,11 @@ import {
 type EraseExec = DbExec | TenantTx;
 
 type EraseReport = Record<string, number>;
+
+interface EraseResult {
+  report: EraseReport;
+  objectKeys: string[];
+}
 
 interface EraseMemberInput {
   academyId: string;
@@ -56,7 +62,7 @@ export async function recomputeBookingCounts(
 export async function eraseMemberData(
   exec: TenantTx,
   input: EraseMemberInput,
-): Promise<EraseReport> {
+): Promise<EraseResult> {
   const { academyId, memberId, userId } = input;
   const report: EraseReport = {};
   const del = async (
@@ -177,8 +183,21 @@ export async function eraseMemberData(
       ),
   );
 
+  // The academy icon stays: it belongs to the academy, not to whoever uploaded it.
+  const files = await exec
+    .delete(storedFile)
+    .where(
+      and(
+        eq(storedFile.academyId, academyId),
+        eq(storedFile.uploadedBy, userId),
+        inArray(storedFile.kind, ["avatar", "payment_receipt"]),
+      ),
+    )
+    .returning({ objectKey: storedFile.objectKey });
+  report.stored_file = files.length;
+
   await recomputeBookingCounts(exec, academyId);
-  return report;
+  return { report, objectKeys: files.map((file) => file.objectKey) };
 }
 
 /**

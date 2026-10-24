@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  dropInPath,
   normalizePhone,
   returningLeadGate,
   VISITOR_LINK_DAYS,
@@ -251,5 +252,25 @@ describe("returningLeadGate", () => {
 
   it("returns ok when the waiver id matches the required one", () => {
     expect(returningLeadGate({ ...base, waiverId: "w1" }, "w1")).toBe("ok");
+  });
+});
+
+describe("dropInPath", () => {
+  it("is the bare link with no class and no sharer", () => {
+    expect(dropInPath("tok", null)).toBe("/drop-in/tok");
+  });
+
+  it("names the class and the sharer", () => {
+    expect(dropInPath("tok", "m1", "c1")).toBe("/drop-in/tok?class=c1&by=m1");
+  });
+
+  it("keeps the sharer without a class", () => {
+    expect(dropInPath("tok", "m1")).toBe("/drop-in/tok?by=m1");
+  });
+
+  it("encodes unsafe characters", () => {
+    expect(dropInPath("tok", "a b", "c&d")).toBe(
+      "/drop-in/tok?class=c%26d&by=a%20b",
+    );
   });
 });

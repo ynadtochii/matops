@@ -2,13 +2,16 @@
 
 import { useQuery } from "@tanstack/react-query";
 
-import { VISITOR_LINK_DAYS, visitorClassState } from "@matops/domain";
+import {
+  dropInPath,
+  VISITOR_LINK_DAYS,
+  visitorClassState,
+} from "@matops/domain";
 import { Button } from "@matops/ui/button";
 import { CopyButton } from "@matops/ui/copy-button";
 
 import { useTRPC } from "~/trpc/react";
 import { useEntity } from "./entity";
-import { dropInPath } from "./invite-link-card";
 
 interface ShareableClass {
   id: string;

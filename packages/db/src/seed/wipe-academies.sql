@@ -27,6 +27,8 @@ DELETE FROM "class_template";
 DELETE FROM "academy_invite";
 DELETE FROM "drop_in_link";
 DELETE FROM "desk_link";
+-- Rows only. The objects stay in the R2 bucket as orphans; fine on dev.
+DELETE FROM "stored_file";
 DELETE FROM "tenant_probe";
 DELETE FROM "invitation";
 DELETE FROM "entity_membership";

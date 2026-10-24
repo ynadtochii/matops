@@ -1,216 +1,218 @@
-import { ScrollView, View } from "react-native";
+import { useState } from "react";
+import { Pressable, ScrollView, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 
-import { nextClass, splitMyClasses, timeFmt } from "@matops/domain";
+import {
+  dayMediumFmt,
+  nextClass,
+  splitMyClasses,
+  timeFmt,
+} from "@matops/domain";
 
 import type { RouterOutputs } from "~/utils/api";
 import { AppHeader } from "~/components/app-header";
-import { useCancelBooking } from "~/components/book-control";
+import { useBooking } from "~/components/book-control";
 import { OverdueBanner } from "~/components/overdue-banner";
 import { useRefreshControl } from "~/components/refresh";
 import { MyClassesSkeleton } from "~/components/skeletons";
 import { SuspendedNotice } from "~/components/suspended-notice";
 import {
+  Badge,
   Button,
-  Card,
   EmptyState,
   ErrorState,
-  Eyebrow,
   Heading,
   List,
-  ListRow,
-  Mono,
   Muted,
   Screen,
-  StatusPill,
+  Tabs,
   Txt,
 } from "~/components/ui";
+import { useMinuteClock } from "~/components/use-clock";
 import { trpc } from "~/utils/api";
-import { dayLongFmt } from "~/utils/format";
 
 type MyClass = RouterOutputs["booking"]["mine"][number];
 
-/** The next upcoming class, shown large at the top of the tab (slice B.2 / C). */
-function NextClassCard({ c, onPress }: { c: MyClass; onPress: () => void }) {
-  const start = new Date(c.startsAt);
-  return (
-    <View style={{ gap: 8 }}>
-      <Eyebrow>Next class</Eyebrow>
-      <Card variant="hero" onPress={onPress} style={{ gap: 4 }}>
-        <Txt size={17} weight={600} tracking={-0.25}>
-          {c.title}
-        </Txt>
-        <Mono size={13} weight={400} tone="secondary">
-          {dayLongFmt.format(start)} · {timeFmt.format(start)}
-        </Mono>
-        {c.bookingTier === "provisional" ? (
-          <Txt size={13} tone="secondary">
-            Pending approval
-          </Txt>
-        ) : null}
-      </Card>
-    </View>
-  );
-}
-
-/** One row in the Upcoming or Past list. */
 function ClassRow({
   c,
+  next,
   onPress,
   action,
 }: {
   c: MyClass;
+  next: boolean;
   onPress: () => void;
   action?: React.ReactNode;
 }) {
   const start = new Date(c.startsAt);
   const cancelled = c.status === "cancelled";
   return (
-    <ListRow>
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-        }}
+    <View style={{ gap: 12, paddingHorizontal: 16, paddingVertical: 12 }}>
+      <Pressable
+        accessibilityRole="button"
+        onPress={onPress}
+        style={{ gap: 4 }}
       >
-        <View style={{ flex: 1, gap: 4 }}>
-          <Txt size={15} weight={500} onPress={onPress}>
-            <Mono size={15} weight={500}>
-              {timeFmt.format(start)}
-            </Mono>
-            {`  ${c.title}`}
+        <View
+          style={{
+            flexDirection: "row",
+            flexWrap: "wrap",
+            alignItems: "center",
+            columnGap: 12,
+            rowGap: 4,
+          }}
+        >
+          <Txt size={15} weight={500} tabular>
+            {timeFmt.format(start)}
           </Txt>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <Mono size={13} tone="muted">
-              {dayLongFmt.format(start)}
-            </Mono>
-            {cancelled ? (
-              <StatusPill tone="error" label="Cancelled" />
-            ) : c.bookingTier === "provisional" ? (
-              <Txt size={12} tone="secondary">
-                Pending approval
-              </Txt>
-            ) : null}
-          </View>
+          <Txt
+            size={15}
+            weight={600}
+            style={
+              cancelled ? { textDecorationLine: "line-through" } : undefined
+            }
+          >
+            {c.title}
+          </Txt>
+          {next ? <Badge label="Next class" tone="lit" /> : null}
         </View>
-        {action}
-      </View>
-    </ListRow>
+        <View
+          style={{
+            flexDirection: "row",
+            flexWrap: "wrap",
+            alignItems: "center",
+            columnGap: 12,
+            rowGap: 4,
+          }}
+        >
+          <Txt size={13} tone="muted">
+            {dayMediumFmt.format(start)}
+          </Txt>
+          {c.discipline ? (
+            <Txt size={12} tone="muted">
+              {c.discipline}
+            </Txt>
+          ) : null}
+          {cancelled ? (
+            <Txt size={13} weight={500} tone="error">
+              Cancelled
+            </Txt>
+          ) : c.bookingTier === "provisional" ? (
+            <Badge label="Pending approval" />
+          ) : null}
+        </View>
+      </Pressable>
+      {action}
+    </View>
   );
 }
 
-/**
- * Training tab (spec S6 "My classes" + slice B.2, ADR 39). The student's own
- * view: the next class up top, a "My Training" stats card, then Upcoming
- * (still booked) and Past (attended) lists. `splitMyClasses` / `nextClass`
- * divide the `booking.mine` data; cancel reuses `booking.cancel`.
- */
 export default function Training() {
   const router = useRouter();
+  const [view, setView] = useState<"upcoming" | "attended">("upcoming");
   const current = useQuery(trpc.academy.current.queryOptions());
-  // Suspended members have no enrolled access — gate the query + show a notice.
   const suspended = current.data?.status === "suspended";
   const mine = useQuery(
-    trpc.booking.mine.queryOptions(undefined, { enabled: !suspended }),
+    trpc.booking.mine.queryOptions(undefined, {
+      enabled: !!current.data && !suspended,
+    }),
   );
-
-  const { onCancel, pendingClassId } = useCancelBooking();
-
+  const { cancel, busyFor } = useBooking();
   const refreshControl = useRefreshControl();
-  const now = new Date();
-  const { upcoming, past } = splitMyClasses(mine.data ?? [], now);
-  const next = nextClass(upcoming, now);
-  const rest = next
-    ? upcoming.filter((c) => c.classId !== next.classId)
-    : upcoming;
-
-  const openClass = (id: string) =>
-    router.push({ pathname: "/class/[id]", params: { id } });
+  const now = useMinuteClock();
 
   if (suspended) return <SuspendedNotice name={current.data?.name} />;
 
-  return (
-    <Screen header={<AppHeader />}>
-      <OverdueBanner />
+  const { upcoming, past } = splitMyClasses(mine.data ?? [], now);
+  const next = nextClass(
+    upcoming.filter((c) => c.status !== "cancelled"),
+    now,
+  );
+  const classes = view === "upcoming" ? upcoming : past;
+  const openClass = (id: string) =>
+    router.push({ pathname: "/class/[id]", params: { id } });
 
-      <View style={{ marginBottom: 16 }}>
+  return (
+    <Screen header={<AppHeader />} style={{ paddingBottom: 0 }}>
+      <OverdueBanner />
+      <View style={{ gap: 4, marginBottom: 16 }}>
         <Heading>My classes</Heading>
-        <Muted>What you booked, and what you have trained.</Muted>
+        <Muted>Manage your bookings and review the classes you attended.</Muted>
       </View>
 
-      {mine.isPending ? (
+      {mine.isPending && !current.isError ? (
         <MyClassesSkeleton />
       ) : (
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={{ gap: 24, paddingBottom: 24 }}
+          contentContainerStyle={{ gap: 20, paddingBottom: 24 }}
           showsVerticalScrollIndicator={false}
           refreshControl={refreshControl}
         >
-          {mine.isError ? (
+          {mine.isError || current.isError ? (
             <ErrorState
               label="your classes"
-              onRetry={() => void mine.refetch()}
+              onRetry={() =>
+                void (current.isError ? current.refetch() : mine.refetch())
+              }
             />
           ) : (
             <>
-              {next ? (
-                <NextClassCard
-                  c={next}
-                  onPress={() => openClass(next.classId)}
-                />
+              <Tabs
+                value={view}
+                onChange={setView}
+                tabs={[
+                  { id: "upcoming", label: `Upcoming (${upcoming.length})` },
+                  { id: "attended", label: `Attended (${past.length})` },
+                ]}
+              />
+              {view === "attended" ? (
+                <Muted>
+                  Classes appear here after your gym records your attendance.
+                </Muted>
               ) : null}
-
-              {upcoming.length === 0 ? (
-                <View style={{ gap: 8 }}>
-                  <Eyebrow>Upcoming</Eyebrow>
+              {classes.length === 0 ? (
+                view === "upcoming" ? (
                   <EmptyState
-                    title="Nothing booked yet."
-                    body="Book a class from the schedule and it shows up here."
+                    title="No upcoming bookings"
+                    body="Choose your next session from the schedule."
+                    action={
+                      <Button
+                        label="Find a class"
+                        onPress={() => router.navigate("/schedule")}
+                      />
+                    }
                   />
-                </View>
-              ) : rest.length > 0 ? (
-                <View style={{ gap: 8 }}>
-                  <Eyebrow>Upcoming</Eyebrow>
-                  <List>
-                    {rest.map((c) => (
-                      <ClassRow
-                        key={c.classId}
-                        c={c}
-                        onPress={() => openClass(c.classId)}
-                        action={
-                          c.status === "cancelled" ? undefined : (
-                            <Button
-                              label="Cancel"
-                              variant="destructive"
-                              loading={pendingClassId === c.classId}
-                              onPress={() => onCancel(c.classId)}
-                            />
-                          )
-                        }
-                      />
-                    ))}
-                  </List>
-                </View>
-              ) : null}
-
-              {past.length > 0 ? (
-                <View style={{ gap: 8 }}>
-                  <Eyebrow>Past</Eyebrow>
-                  <List>
-                    {past.map((c) => (
-                      <ClassRow
-                        key={c.classId}
-                        c={c}
-                        onPress={() => openClass(c.classId)}
-                      />
-                    ))}
-                  </List>
-                </View>
-              ) : null}
+                ) : (
+                  <EmptyState
+                    title="No attendance recorded yet"
+                    body="Your gym records attendance after each class."
+                  />
+                )
+              ) : (
+                <List>
+                  {classes.map((c) => (
+                    <ClassRow
+                      key={c.classId}
+                      c={c}
+                      next={view === "upcoming" && c.classId === next?.classId}
+                      onPress={() => openClass(c.classId)}
+                      action={
+                        view === "upcoming" && c.status !== "cancelled" ? (
+                          <Button
+                            label="Cancel booking"
+                            variant="outline"
+                            loading={busyFor(c.classId)}
+                            accessibilityLabel={`Cancel booking for ${c.title} on ${dayMediumFmt.format(new Date(c.startsAt))}`}
+                            onPress={() => cancel(c.classId)}
+                          />
+                        ) : undefined
+                      }
+                    />
+                  ))}
+                </List>
+              )}
             </>
           )}
         </ScrollView>

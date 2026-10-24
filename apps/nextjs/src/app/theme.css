@@ -8,10 +8,9 @@
  *     their meaning; depth comes from lit edges, measured from lazy.so
  *   - Inter for UI, Geist Mono for code and data
  *
- * One source of truth for BOTH platforms:
- *   - web    apps/nextjs/src/app/styles.css   @import "./theme.css"
- *   - mobile apps/expo/src/styles.css          @import "@matops/tailwind-config/theme"
- * Change a value here and both the web and mobile app follow.
+ * Web: apps/nextjs/src/app/styles.css imports this file.
+ * Mobile: packages/ui/src/tokens.ts is a hand-kept copy for React Native.
+ * Change a value here, then change the same value there.
  *
  * Usage rules (how, not just what) live in docs/design.md.
  * ======================================================================== */

@@ -22,7 +22,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     package: "com.matops.app",
     adaptiveIcon: {
       foregroundImage: "./assets/icon-light.png",
-      backgroundColor: "#1F104A",
+      backgroundColor: "#000000",
     },
     edgeToEdgeEnabled: true,
   },
@@ -37,6 +37,15 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     "expo-font",
     "expo-secure-store",
     "expo-web-browser",
+    [
+      "expo-image-picker",
+      {
+        photosPermission:
+          "MatOps uses your photos so you can choose a profile picture.",
+        cameraPermission: false,
+        microphonePermission: false,
+      },
+    ],
     [
       // Dark-first: launch on the canonical pure-black surface.
       "expo-splash-screen",

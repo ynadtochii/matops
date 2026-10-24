@@ -57,7 +57,7 @@ export function ThemeProvider({ children }: React.PropsWithChildren) {
     };
   }, []);
 
-  // Apply the scheme to RN (and thus NativeWind). `auto` = clear the override.
+  // Apply the scheme to RN. `auto` = clear the override.
   // This only syncs an external system (Appearance) — no React state changes.
   React.useEffect(() => {
     Appearance.setColorScheme(mode === "auto" ? null : mode);

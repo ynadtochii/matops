@@ -17,6 +17,7 @@ const row = (memberId: string, userId: string, name: string): MemberRow => ({
   phone: null,
   erasureRequestedAt: null,
   createdAt: new Date("2026-01-01T00:00:00Z"),
+  avatarKey: null,
 });
 
 const roster = [row("mem_1", "usr_1", "Ana"), row("mem_2", "usr_2", "Bruno")];

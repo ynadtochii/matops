@@ -15,6 +15,7 @@ import type { Auth } from "@matops/auth";
 import type { TenantTx } from "@matops/db";
 import type { DbExec } from "@matops/db/client";
 import type { Membership } from "@matops/domain";
+import type { StorageClient } from "@matops/storage";
 import {
   getEntityInOrganization,
   getEntityMembership,
@@ -34,6 +35,7 @@ import {
   runsBranch,
   runsOrganization,
 } from "@matops/domain";
+import { storage } from "@matops/storage";
 import { LinkTokenSchema } from "@matops/validators";
 
 import { clientIp, take } from "./rate-limit";
@@ -62,6 +64,7 @@ export const createTRPCContext = async (opts: {
    * nothing and gets the singleton pool. See docs/issues/60.
    */
   baseDb?: DbExec;
+  storage?: StorageClient | null;
 }) => {
   const authApi = opts.auth.api;
   const session = await authApi.getSession({
@@ -87,6 +90,7 @@ export const createTRPCContext = async (opts: {
     // from importing the raw `db` directly, so `ctx.baseDb` stays the only door.
     // See docs/issues/33, 60 and docs/architecture.md §5.
     baseDb: opts.baseDb ?? db,
+    storage: opts.storage === undefined ? storage() : opts.storage,
     appUrl: opts.auth.options.baseURL,
     // Forwarded so resolvers can call Better Auth server APIs (createOrganization,
     // setActiveOrganization, …) on behalf of the signed-in user.

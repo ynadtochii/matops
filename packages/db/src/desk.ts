@@ -8,6 +8,7 @@ import type { DbReader } from "./tenant";
 import { deskLink } from "./drop-in-link-schema";
 import { entity } from "./entity-schema";
 import { getOrCreateLiveLink, rotateLiveLink } from "./live-link";
+import { storedFile } from "./stored-file-schema";
 
 export function getOrCreateDeskLink(
   input: { academyId: string; createdBy: string },
@@ -29,6 +30,7 @@ export interface DeskAcademy {
   name: string;
   timeZone: string;
   membershipEnforcedAt: Date | null;
+  iconKey: string | null;
 }
 
 export async function resolveDeskLink(
@@ -42,9 +44,11 @@ export async function resolveDeskLink(
       name: entity.name,
       timeZone: entity.timeZone,
       membershipEnforcedAt: entity.membershipEnforcedAt,
+      iconKey: storedFile.objectKey,
     })
     .from(deskLink)
     .innerJoin(entity, eq(deskLink.academyId, entity.id))
+    .leftJoin(storedFile, eq(storedFile.id, entity.iconFileId))
     .where(
       and(
         eq(deskLink.token, token),

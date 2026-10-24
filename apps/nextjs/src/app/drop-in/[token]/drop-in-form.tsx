@@ -23,6 +23,7 @@ import {
 } from "@matops/validators";
 
 import type { SignupWaiver } from "~/app/_components/signup-fields";
+import { AcademyIcon } from "~/app/_components/avatar";
 import {
   EmailField,
   fieldErrors,
@@ -294,6 +295,13 @@ export function DropInForm({
   return (
     <div className="flex w-full max-w-sm flex-col gap-5">
       <div className="flex flex-col gap-1">
+        {academy.data?.iconUrl && (
+          <AcademyIcon
+            src={academy.data.iconUrl}
+            name={name}
+            className="mb-2 size-14"
+          />
+        )}
         <h1 className="text-2xl font-semibold tracking-tight">
           Train at {name}
         </h1>

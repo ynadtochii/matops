@@ -18,6 +18,7 @@ import {
 import { Logo } from "@matops/ui/logo";
 import { ThemeToggle } from "@matops/ui/theme";
 
+import { Avatar } from "./avatar";
 import { FeedbackLink } from "./feedback-link";
 import { SignOutButton } from "./sign-out";
 
@@ -41,19 +42,6 @@ export type NavBadge =
 
 const MAX_TABS = 5;
 
-/** Two-letter avatar fallback: initials of the first two name words, else the
- * first two letters of the name, else the email — never blank. */
-function initials(name: string, email: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  const first = words[0];
-  const second = words[1];
-  if (first && second) {
-    return (first.charAt(0) + second.charAt(0)).toUpperCase();
-  }
-  if (first) return first.slice(0, 2).toUpperCase();
-  return email.slice(0, 2).toUpperCase();
-}
-
 interface ShellFrameProps {
   /** Already filtered by `show` and given an `href`. */
   items: NavItem[];
@@ -61,7 +49,7 @@ interface ShellFrameProps {
   homeHref: string;
   profileHref: string;
   selector: ReactNode;
-  user: { name: string; email: string };
+  user: { name: string; email: string; avatarUrl?: string | null };
   /** The heading over the ungrouped items: the current branch's name. */
   branchLabel?: string;
   /** The word under the name in the footer: a role, or "pending". */
@@ -185,9 +173,12 @@ export function ShellFrame({
               isCurrent("/profile") ? "bg-active" : "hover:bg-hover"
             }`}
           >
-            <div className="bg-active text-foreground-secondary flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold uppercase">
-              {initials(user.name, user.email)}
-            </div>
+            <Avatar
+              src={user.avatarUrl}
+              name={user.name}
+              email={user.email}
+              className="size-7"
+            />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{user.name}</p>
               <p className="text-muted-foreground text-xs capitalize">
@@ -221,9 +212,14 @@ export function ShellFrame({
             href={profileHref}
             aria-label="Profile"
             aria-current={isCurrent("/profile") ? "page" : undefined}
-            className="bg-active text-foreground-secondary relative flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold uppercase after:absolute after:-inset-1.5 after:content-['']"
+            className="relative flex size-8 shrink-0 rounded-full after:absolute after:-inset-1.5 after:content-['']"
           >
-            {initials(user.name, user.email)}
+            <Avatar
+              src={user.avatarUrl}
+              name={user.name}
+              email={user.email}
+              className="size-8"
+            />
           </Link>
         </header>
 

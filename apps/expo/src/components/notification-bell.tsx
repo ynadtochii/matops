@@ -1,8 +1,8 @@
 import { Pressable, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
+import { Bell } from "lucide-react-native";
 
-import { BellIcon } from "~/components/icons";
 import { useTheme } from "~/components/ui";
 import { trpc } from "~/utils/api";
 
@@ -30,16 +30,23 @@ export function NotificationBell() {
       accessibilityLabel={
         count > 0 ? `Notifications, ${count} unread` : "Notifications"
       }
-      hitSlop={12}
       onPress={() => router.push("/notifications")}
+      style={({ pressed }) => ({
+        width: 44,
+        height: 44,
+        borderRadius: 5,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: pressed ? t.hover : "transparent",
+      })}
     >
-      <BellIcon color={t.mutedForeground} size={20} />
+      <Bell size={20} color={t.mutedForeground} />
       {count > 0 ? (
         <View
           style={{
             position: "absolute",
-            top: 0,
-            right: 0,
+            top: 10,
+            right: 10,
             width: 9,
             height: 9,
             borderRadius: 5,

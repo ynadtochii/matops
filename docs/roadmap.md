@@ -1,6 +1,19 @@
 <!-- matops — live implementation plan + scope matrix. Rules for this file live in delivery.md. -->
 
 
+**Expo app follows the student web, plan [expo-web-alignment-plan.md](expo-web-alignment-plan.md)**
+
+| Slice | DB | API | Web | Mobile | Shared | Infra |
+| --- | --- | --- | --- | --- | --- | --- |
+| E0 device baseline (`pnpm dev:ios`, `mobile-device-test.md`) | not needed | not needed | not needed | done (app runs, 2026-10-19) | not needed | not needed |
+| E1 bug fixes: pending booking gate and copy, dues behind the payment flag, join code copy, stale comments | not needed | not needed | not needed | done | not needed | not needed |
+| E2 missing features: email updates, erase request, "Joined", full rank history, feedback and Privacy, status card, Who's booked, share a class (ADR 147 addendum) | not needed | not needed | not changed | done | done (`dropInPath`, `feedbackMailto` in domain) | not needed |
+| E2 photos: academy icon and avatars in the app (header, join, Profile) | not needed | done (`uploadsEnabled` on `academy.current`) | done (photo rows hide without storage) | done (needs a new dev client, not run on a device) | not needed | not needed |
+| E3 redesign: web shapes, badges, tokens, Inter times, Schedule carousel and day chips, My classes tabs, class and Profile layout (ADR 141 addendum) | not needed | not needed | not changed | done | done (`tokens.ts`, date formats in domain) | not needed |
+| E4 native batch: Lucide icons (`react-native-svg`), black Android icon background | not needed | not needed | not needed | done (needs a new dev client) | not needed | todo (store build) |
+| E4 photo upload (F9): pick, crop, 512 px JPEG, upload, remove | not needed | done | not needed | done (needs a new dev client, not run on a device) | not needed | todo (store build) |
+| E5 release: store build, remove the `checkin` router after old builds age out | not needed | todo | not needed | todo | not needed | todo |
+
 **Academy-defined disciplines, ADR 144**
 
 | Slice | DB | API | Web | Mobile | Shared | Infra |
@@ -37,6 +50,10 @@ Plan: [first-release-plan.md](first-release-plan.md). Code built, including the 
 | Sign-up answers slice A: belt, health note, email opt-in, approval email (ADR 146); `0007` applied to dev 2026-09-27 | done | done | done | not changed | done | todo |
 | Sign-up answers slice B: versioned agreement, required at join, acceptance recorded (ADR 146); in `0007`, applied to dev 2026-09-27 | done | done | done | not changed | done | todo |
 | Desk check-in tablet: secret rotatable `/desk/<token>`, class then name, check-in with 10-second undo (ADR 150, S8b); `0010` not applied yet | done | done | done | not needed | done | todo |
+| Mark all attendance: one button reviews up to 200 ended classes per press, oldest first, any age (ADR 153, O5); no migration | done | done | done | not needed | done | todo |
+| File storage on R2 (ADR 152, plan `file-storage-plan.md`): `packages/storage`, `stored_file` + `0012` (applied to dev 2026-10-16), upload procedures, `/files` route, academy icon in Settings, sidebar and public pages (O6) | done | done | done | todo (avatar, F9) | done | todo |
+| File storage: avatars on web Profile, Students, rosters, Coaches and desk (F8) | done | done | done | not changed | done | — |
+| File storage: Expo avatar (F9), receipts behind the payment flag (F10) | done | todo | todo | todo | todo | — |
 | Invite-only gym creation: `GYM_CREATOR_EMAILS` allowlist in Better Auth, Request a demo on landing and sign-in (ADR 149, FP10); no migration | not needed | done | done | not changed | done | todo |
 
 **Design system reference page**

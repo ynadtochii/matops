@@ -397,6 +397,10 @@ The platform has no real users. So the whole app switches at once on the branch
 - This supersedes the violet list in the sections above and in ADR 37 (active
   nav, links, pending, counts).
 
+### The app takes the web shapes (2026-10-19)
+
+Step 5 kept pill buttons and 12px cards on the phone. They now follow the web: 8px cards and lists, 5px buttons and fields, 4px badges, a lit edge and soft shadow on primary and secondary buttons and on the featured card, and a neutral **Booked** badge with a check instead of an info-blue pill. Times use Inter with tabular figures; Geist Mono stays for codes only. Icons are Lucide through `lucide-react-native` and `react-native-svg`, which needs a new dev client and store build. `packages/ui/src/tokens.ts` gains `cardEdge`, `edgeLit`, `edgeRim`, `meter` and `ringHalo`. React Native has no gradient border, so the lit edges and the meter fill are one solid color each. The phone keeps its larger type scale (15px body). Plan: [expo-web-alignment-plan.md](../expo-web-alignment-plan.md).
+
 ## Consequences
 
 - Every new screen gets sizes, weights, edges and radii from tokens. The last

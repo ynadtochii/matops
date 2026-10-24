@@ -7,6 +7,8 @@
  * `StatusBar`, `ActivityIndicator`.
  *
  * Keep in sync with theme.css (ADR 141, 143). See docs/design.md §1.1.
+ * React Native has no gradient border, so `edgeLit`, `edgeRim` and `meter` are
+ * one solid color each, picked from the middle of the web gradient.
  */
 
 export const tokens = {
@@ -50,10 +52,15 @@ export const tokens = {
     disciplineDefault: "#bdbbc0",
     border: "#e9e8ea",
     borderStrong: "#dcdbdd",
+    cardEdge: "#e9e8ea",
+    edgeLit: "#0000001a",
+    edgeRim: "#00000017",
+    meter: "#56555c",
     input: "#908c93",
     fieldHover: "#817d84",
     control: "#908c93",
     ring: "#282a30",
+    ringHalo: "#0000000f",
     info: "#1257c7",
     warning: "#a34500",
     error: "#c8102b",
@@ -99,10 +106,15 @@ export const tokens = {
     disciplineDefault: "#ffffff",
     border: "#26272c",
     borderStrong: "#323338",
+    cardEdge: "transparent",
+    edgeLit: "#ffffff1c",
+    edgeRim: "#ffffff2b",
+    meter: "#b5b6ba",
     input: "#323338",
     fieldHover: "#43444a",
     control: "#43444a",
     ring: "#b5b6ba",
+    ringHalo: "#ffffff14",
     info: "#2b7fff",
     warning: "#ff6900",
     error: "#fb2c36",

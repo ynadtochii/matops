@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { runsBranch } from "@matops/domain";
+import { dropInPath, runsBranch } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
@@ -32,18 +32,6 @@ type InviteRole = "student" | "instructor";
 function linkUrl(path: string): string {
   if (typeof window === "undefined") return path;
   return `${window.location.origin}${path}`;
-}
-
-export function dropInPath(
-  token: string,
-  sharedBy: string | null,
-  classId?: string,
-): string {
-  const query = new URLSearchParams();
-  if (classId) query.set("class", classId);
-  if (sharedBy) query.set("by", sharedBy);
-  const search = query.toString();
-  return `/drop-in/${token}${search ? `?${search}` : ""}`;
 }
 
 /**
