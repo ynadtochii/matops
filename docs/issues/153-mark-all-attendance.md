@@ -1,4 +1,4 @@
-# 152 · Mark all attendance: review every past class with one button
+# 153 · Mark all attendance: review every past class with one button
 
 **Status:** accepted, built (tests written, not run; no migration) · **Date:** 2026-10-24 · **Area:** `packages/api` (`router/attendance.ts`), `apps/nextjs` (`attendance.tsx`) · **Changes in part:** [133](133-explicit-attendance-review.md) (a review is an explicit act per class), the O5 14-day editing limit for this button only
 
