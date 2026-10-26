@@ -50,13 +50,13 @@ The tenant model (organization, entity, `entity_membership`, `person`, academy a
 
 ### Planned Stripe payments (not built)
 
-The [gym-owned Stripe payments design](stripe-gym-payments-design.md) follows MAAT's model. MatOps creates each gym's own Stripe account (controller properties, full Dashboard, the gym pays Stripe's fees) and finishes setup through Account Links. Payments are direct charges on that account, and MatOps takes no fee.
+The [first release slices](stripe-one-time-payments.md) set the build order. The [full design](stripe-gym-payments-design.md), modelled on MAAT, is the reference for later slices.
 
-- **Products.** A gym sells card memberships (Stripe Billing, `subscription` Checkout, billed from the day of the first payment, optional trial days) and class packs (one-off `payment` Checkout, a number of classes with an optional expiry). Manual memberships and monthly dues (ADR 40) stay alongside them.
-- **Booking rule.** While `membership_enforced_at` is set, a student books when a card membership, a manual membership, a class pack with a class left, or a free trial class (owner sets the number, default 0) admits them. A card membership is one more covering membership in `membershipAccess`. Each booking records what admitted it, so pack and trial use are counted from bookings. Past due admits unless the owner turns on "Block booking while past due". Only staff cancel memberships.
-- **Moving providers.** After Stripe imports a gym's saved cards and SEPA mandates, the owner uploads a CSV that maps students to Stripe customers. MatOps creates the subscriptions from the next billing date.
-- **Webhooks.** One Connect endpoint checks the signature on the raw body, fetches the current object from Stripe, and writes it in one short transaction keyed by the event id. No Stripe call runs inside a database transaction, and every create call sends an idempotency key. "Resync from Stripe" repairs a missed event.
-- Refunds, pauses, retries, invoices, tax and payouts happen in the gym's Stripe Dashboard. `/drop-in/<token>` stays free.
+- **Connect.** The owner connects the gym's own Stripe account, existing or new, through Connect OAuth (`read_write`). MatOps stores only the account id and calls Stripe with its platform key and the `Stripe-Account` header. No OAuth tokens or gym keys are stored. One account per gym, enforced by a unique index.
+- **Payments.** Direct charges on the gym's account, with no application fee and no transfer, so MatOps never holds the money. The first payment is a one-off Checkout for the current membership month, cards only. Subscriptions and local methods come in later slices.
+- **Month write.** The Stripe confirmation and "Mark paid" share one write: lock, version, price snapshot, audit, and the after-commit booking promotion. Hold release stays with the owner.
+- **Webhooks.** One Connect endpoint checks the signature on the raw body, finds the gym with one named base-connection read (`resolveStripeAccount`, a planned §5 exception), fetches the current object from Stripe, and writes it in one short transaction. Writes are safe to repeat, so there is no event table. No Stripe call runs inside a database transaction, and every create call sends an idempotency key. "Check with Stripe" repairs a missed event.
+- Refunds, receipts, disputes, payouts and the gym's own invoices stay in the gym's Stripe Dashboard. `/drop-in/<token>` stays free.
 
 ### Operations
 

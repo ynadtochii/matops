@@ -1,6 +1,6 @@
 # Gym-owned Stripe payments
 
-**Status: design only, not implemented. Updated 2026-10-12.** This design copies the structure and flow of [MAAT](https://maatapp.com/), a gym app for BJJ and MMA academies that runs gym payments through Stripe. It replaces the 2026-09-29 drop-in-only draft. The old `stripe` branch (commit `f8100f0`) is not a base for this work. **Nothing ships to production until the full acceptance list in section 9 passes locally in Stripe test mode.** The first release is smaller: [one-time payments for membership months](stripe-one-time-payments.md). This document is the reference for later releases.
+**Status: design only, not implemented. Updated 2026-10-12.** This design copies the structure and flow of [MAAT](https://maatapp.com/), a gym app for BJJ and MMA academies that runs gym payments through Stripe. It replaces the 2026-09-29 drop-in-only draft. The old `stripe` branch (commit `f8100f0`) is not a base for this work. **Nothing ships to production until the full acceptance list in section 9 passes locally in Stripe test mode.** The build order is set by the [first release slices](stripe-one-time-payments.md), and this document is the reference for later slices. **Connecting changed on 2026-10-26:** the gym connects its own existing or new Stripe account through Connect OAuth. MatOps no longer creates accounts with controller settings and Account Links, so read this document's connect sections as superseded.
 
 ## Summary
 

@@ -1,6 +1,6 @@
 # Payment providers for gym payments
 
-Checked official provider documents on 2026-09-28. MatOps plans to sell software globally, starting with Portuguese gyms. A student's in-person class or gym membership must be charged by the gym as merchant, not by MatOps. The [gym-owned Stripe design](../stripe-gym-payments-design.md) (updated 2026-10-12) covers card memberships through Stripe Billing, class packs and a provider import, on a Stripe account MatOps creates for each gym. Merchant countries matter separately from buyer countries: a Portuguese gym accepting foreign cards does not prove a provider can onboard a gym abroad.
+Checked official provider documents on 2026-09-28. MatOps plans to sell software globally, starting with Portuguese gyms. A student's in-person class or gym membership must be charged by the gym as merchant, not by MatOps. The [gym-owned Stripe design](../stripe-gym-payments-design.md) (updated 2026-10-12) covers card memberships through Stripe Billing, class packs and a provider import, on the gym's own Stripe account, connected through Connect OAuth. The build order is in the [first release slices](../stripe-one-time-payments.md). Merchant countries matter separately from buyer countries: a Portuguese gym accepting foreign cards does not prove a provider can onboard a gym abroad.
 
 Prices below are published Portugal merchant examples, not all-in partner offers. Card type, buyer country, currency conversion, refunds, disputes, tax, subscriptions and partner terms can change the total.
 
