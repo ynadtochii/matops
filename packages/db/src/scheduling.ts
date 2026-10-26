@@ -9,7 +9,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { user } from "./auth-schema";
-import { entity } from "./entity-schema";
+import { entity, entityMembership } from "./entity-schema";
 import { person } from "./person-schema";
 import { academyWaiver } from "./waiver-schema";
 
@@ -372,6 +372,9 @@ export const dropIn = pgTable(
     emailUpdatesAt: t.timestamp({ withTimezone: true }),
     waiverId: t.uuid(),
     waiverAcceptedAt: t.timestamp({ withTimezone: true }),
+    sharedByMembershipId: t
+      .text()
+      .references(() => entityMembership.id, { onDelete: "set null" }),
     firstVisitAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
     lastVisitAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
     createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -384,6 +387,9 @@ export const dropIn = pgTable(
   (table) => [
     // Dedupe: one lead per person per academy; repeat visits add a visit row.
     uniqueIndex("di_uniq_academy_phone").on(table.academyId, table.phone),
+    index("di_by_sharer")
+      .on(table.sharedByMembershipId)
+      .where(sql`${table.sharedByMembershipId} is not null`),
     check("di_health_len", sql`char_length(${table.health}) <= 1000`),
     check("di_stripes_range", sql`${table.stripes} between 0 and 20`),
     foreignKey({

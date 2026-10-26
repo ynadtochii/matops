@@ -73,16 +73,15 @@ export default function SignIn() {
       <Stack gap={24}>
         <Logo size={32} />
         <Stack gap={8}>
-          <Heading>Run the mat.</Heading>
+          <Heading>Sign in</Heading>
           <Muted>
-            We&apos;ll email you a one-tap sign-in link. No password to
-            remember.
+            Use the email your gym has for you. No password to remember.
           </Muted>
         </Stack>
 
         {sent ? (
           <Stack gap={16}>
-            <Card variant="outline" style={{ gap: 4 }}>
+            <Card style={{ gap: 4 }}>
               <Title>Check your email</Title>
               <Muted>
                 Open the sign-in link we sent to {email.trim()}. The link

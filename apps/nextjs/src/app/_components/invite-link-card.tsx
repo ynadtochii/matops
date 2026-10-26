@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { runsBranch } from "@matops/domain";
+import { dropInPath, runsBranch } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
@@ -21,7 +21,7 @@ import { toast } from "@matops/ui/toast";
 import { shareLink, useCanShare } from "~/lib/share";
 import { useTRPC } from "~/trpc/react";
 import { useEntity } from "./entity";
-import { cardClass } from "./primitives";
+import { cardClass, SectionHeading } from "./primitives";
 import { SkeletonCard } from "./skeletons";
 import { ErrorState } from "./states";
 
@@ -140,7 +140,8 @@ export function DropInLinkCard() {
     <LinkCard
       label="Drop-in link"
       hint="Send it to people who want to try a class. They pick a class and book without an account."
-      url={linkUrl(`/drop-in/${link.data.token}`)}
+      url={linkUrl(dropInPath(link.data.token, link.data.sharedBy))}
+      qrUrl={linkUrl(dropInPath(link.data.token, null))}
       rotate={() => rotate.mutateAsync()}
       rotating={rotate.isPending}
       qr={{
@@ -155,6 +156,56 @@ export function DropInLinkCard() {
         text: "Pick a class and leave your details here:",
       }}
     />
+  );
+}
+
+export function DeskLinkSection() {
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  const link = useQuery(trpc.desk.link.queryOptions());
+  const academyName = useEntity().name;
+
+  const rotate = useMutation(
+    trpc.desk.rotateLink.mutationOptions({
+      onSuccess: async () => {
+        await queryClient.invalidateQueries(trpc.desk.link.pathFilter());
+        toast.success("Link replaced. The old one no longer works");
+      },
+      onError: () => toast.error("Couldn't rotate the link. Try again."),
+    }),
+  );
+
+  return (
+    <section className="flex flex-col gap-4">
+      <div>
+        <SectionHeading>Front desk tablet</SectionHeading>
+        <p className="text-muted-foreground mt-1 max-w-2xl text-sm text-pretty">
+          Open this link on a tablet at the desk. Students tap their name to
+          check in to the class. The page does nothing else. Keep the link
+          private, and rotate it if someone else gets it.
+        </p>
+      </div>
+      {link.isPending ? (
+        <SkeletonCard lines={2} />
+      ) : link.isError ? (
+        <ErrorState label="the desk link" onRetry={() => void link.refetch()} />
+      ) : (
+        <LinkCard
+          label="Desk link"
+          hint="Do not sign in to MatOps on the tablet. Use Guided Access (iPad) or screen pinning (Android) to keep it on this page."
+          url={linkUrl(`/desk/${link.data.token}`)}
+          rotate={() => rotate.mutateAsync()}
+          rotating={rotate.isPending}
+          qr={{
+            title: "Open on the tablet",
+            description:
+              "Scan this with the tablet camera to open the desk page.",
+            caption: "Front desk check-in",
+            codeLabel: `Desk link QR code for ${academyName}`,
+          }}
+        />
+      )}
+    </section>
   );
 }
 
@@ -181,6 +232,7 @@ function LinkCard({
   label,
   hint,
   url,
+  qrUrl = url,
   create,
   creating,
   rotate,
@@ -191,6 +243,7 @@ function LinkCard({
   label: string;
   hint: string;
   url: string | null;
+  qrUrl?: string | null;
   create?: () => void;
   creating?: boolean;
   rotate: () => Promise<unknown>;
@@ -201,7 +254,7 @@ function LinkCard({
     caption: string;
     codeLabel: string;
   };
-  share: { title: string; text: string };
+  share?: { title: string; text: string };
 }) {
   const academy = useEntity();
   const isOwner = runsBranch(academy);
@@ -245,7 +298,7 @@ function LinkCard({
         )}
       </div>
       <p className="text-muted-foreground text-sm">{hint}</p>
-      {url && (
+      {url && qrUrl && (
         <div className="flex flex-wrap gap-2">
           <Input
             readOnly
@@ -263,14 +316,14 @@ function LinkCard({
                 {qr.description}
               </DialogDescription>
               <QrPoster
-                url={url}
+                url={qrUrl}
                 title={academy.name}
                 caption={qr.caption}
                 codeLabel={qr.codeLabel}
               />
             </DialogContent>
           </Dialog>
-          {shareable && (
+          {shareable && share && (
             <Button
               variant="secondary"
               onClick={() => void shareLink({ url, ...share })}

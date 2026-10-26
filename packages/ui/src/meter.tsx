@@ -75,10 +75,13 @@ export function Meter({
       {glow && tip && (
         <span
           aria-hidden
-          className={cn("pointer-events-none absolute inset-0", move)}
+          className={cn(
+            "pointer-events-none absolute inset-y-0 right-full w-full",
+            move,
+          )}
           style={{ transform: `translateX(${(tip.from + tip.share) * 100}%)` }}
         >
-          <span className="absolute top-1/2 left-0 hidden h-0 w-3 -translate-x-1/2 shadow-[0_0_10px_3px_color-mix(in_oklab,var(--color-foreground)_28%,transparent)] dark:block" />
+          <span className="absolute top-1/2 right-0 hidden h-0 w-3 translate-x-1/2 shadow-[0_0_10px_3px_color-mix(in_oklab,var(--color-foreground)_28%,transparent)] dark:block" />
         </span>
       )}
     </div>

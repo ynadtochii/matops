@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { z } from "zod/v4";
 
@@ -14,6 +15,11 @@ const CarriedProfileSchema = z.object({
   lastName: NameSchema,
   phone: PhoneSchema,
 });
+
+export const metadata: Metadata = {
+  title: "Join your gym",
+  robots: { index: false, follow: false },
+};
 
 type Query = Record<string, string | string[] | undefined>;
 

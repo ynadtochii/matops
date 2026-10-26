@@ -24,6 +24,7 @@ import {
   classInstance,
   classParticipation,
   classTemplate,
+  deskLink,
   dropIn,
   dropInLink,
   dropInVisit,
@@ -42,6 +43,7 @@ import {
   productEvent,
   rankPromotion,
   session,
+  storedFile,
   user,
   waiverAcceptance,
 } from "../schema";
@@ -124,6 +126,12 @@ export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
   );
   await del("drop_in_link", () =>
     exec.delete(dropInLink).where(inArray(dropInLink.academyId, ids)),
+  );
+  await del("desk_link", () =>
+    exec.delete(deskLink).where(inArray(deskLink.academyId, ids)),
+  );
+  await del("stored_file", () =>
+    exec.delete(storedFile).where(inArray(storedFile.academyId, ids)),
   );
 
   // What the demo gym wrote while it was being USED: the notification centre

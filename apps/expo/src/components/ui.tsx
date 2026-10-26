@@ -28,23 +28,37 @@ export { useTheme } from "./theme";
 export type { Theme } from "./theme";
 
 /**
- * The student app's UI kit — the mobile twin of the web `@matops/ui` +
- * `_components/primitives`. It renders the same design language on native:
- * Inter for text, **Geist Mono for data** (times, counts, prices: the "mat
- * clock", docs/design.md §3), the signature violet used only for identity,
- * radius by nesting (ADR 141), flat cards on a hairline border, and tinted
- * callouts. Colours come from `useTheme()` (design tokens for the
- * resolved scheme), so the whole kit follows the dark-first theme.
+ * The student app's UI kit, the mobile twin of the web `@matops/ui` and
+ * `_components/primitives`. Same shapes as the web (ADR 141): 8px cards and
+ * lists, 5px controls, 4px badges, lit edges and a soft lift instead of
+ * pills. Inter for text with tabular figures for times and counts; Geist Mono
+ * only for codes. Colours come from `useTheme()`.
  *
  * Styling is explicit React Native, not NativeWind classes: NativeWind v5
  * (preview) drops spacing / flex / foreground colours on native (ADR 36), which
  * left labels unreadable. Explicit styles + tokens keep every screen correct.
  */
 
-const RADIUS_CARD = 12;
-const RADIUS_ROW = 8;
-const RADIUS_FIELD = 6;
+const RADIUS_CARD = 8;
+const RADIUS_CONTROL = 5;
+const RADIUS_BADGE = 4;
 const PILL = 9999;
+
+const LIFT: ViewStyle = {
+  shadowColor: "#000000",
+  shadowOpacity: 0.12,
+  shadowRadius: 2,
+  shadowOffset: { width: 0, height: 1 },
+  elevation: 1,
+};
+
+const FLOAT: ViewStyle = {
+  shadowColor: "#000000",
+  shadowOpacity: 0.18,
+  shadowRadius: 12,
+  shadowOffset: { width: 0, height: 4 },
+  elevation: 4,
+};
 
 type Tone =
   | "default"
@@ -86,8 +100,9 @@ interface TxtProps {
   tone?: Tone;
   /** Explicit colour, overrides `tone`. */
   color?: string;
-  /** Geist Mono — for any machine/data value. Defaults on = tabular figures. */
+  /** Geist Mono, for codes and references. */
   data?: boolean;
+  tabular?: boolean;
   uppercase?: boolean;
   tracking?: number;
   lineHeight?: number;
@@ -98,8 +113,8 @@ interface TxtProps {
   style?: StyleProp<TextStyle>;
 }
 
-/** The one text primitive: every label/value flows through it so Inter is
- * applied consistently and data values pick up Geist Mono + tabular figures. */
+/** The one text primitive: every label and value flows through it, so Inter is
+ * applied everywhere. */
 export function Txt({
   children,
   size = 15,
@@ -107,6 +122,7 @@ export function Txt({
   tone = "default",
   color,
   data = false,
+  tabular = false,
   uppercase = false,
   tracking,
   lineHeight,
@@ -128,7 +144,7 @@ export function Txt({
           fontSize: size,
           color: color ?? toneColor(t, tone),
         },
-        data && { fontVariant: ["tabular-nums"] },
+        (data || tabular) && { fontVariant: ["tabular-nums"] },
         uppercase && { textTransform: "uppercase" },
         tracking != null && { letterSpacing: tracking },
         lineHeight != null && { lineHeight },
@@ -182,7 +198,7 @@ export function Eyebrow({ children }: { children: ReactNode }) {
   );
 }
 
-/** A data value in Geist Mono (times, counts, prices, capacity, streaks). */
+/** A code or reference in Geist Mono. */
 export function Mono({
   children,
   size = 15,
@@ -200,18 +216,6 @@ export function Mono({
     <Txt data size={size} weight={weight} tone={tone} color={color}>
       {children}
     </Txt>
-  );
-}
-
-/** A big mono stat over a mono label — the web `Stat` (members/dashboard). */
-export function Stat({ value, label }: { value: string; label: string }) {
-  return (
-    <View style={{ flex: 1, gap: 2 }}>
-      <Mono size={22} weight={500}>
-        {value}
-      </Mono>
-      <Eyebrow>{label}</Eyebrow>
-    </View>
   );
 }
 
@@ -315,33 +319,18 @@ export function Loading({ label }: { label?: string }) {
   );
 }
 
-/** A horizontal "or" divider (two rules + a label). */
-export function OrDivider() {
-  const t = useTheme();
-  return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-      <View style={{ flex: 1, height: 1, backgroundColor: t.border }} />
-      <Txt size={13} tone="muted">
-        or
-      </Txt>
-      <View style={{ flex: 1, height: 1, backgroundColor: t.border }} />
-    </View>
-  );
-}
-
 /* ----------------------------------------------------------------- card --- */
 
-type CardVariant = "filled" | "outline" | "hero";
+type CardVariant = "flat" | "raised";
 
 /**
- * A surface. `filled` = a card surface for a static list item (the default);
- * `outline` = flush on the page background (navigate / act); `hero` = the one
- * featured raised surface per screen. Flat: depth comes from the border,
- * never a shadow (design.md §1.4).
+ * A surface (web `cardClass`). `flat` sits on its own edge, a line in light
+ * and none in dark. `raised` is the one featured panel per screen: a lit rim
+ * and a float shadow.
  */
 export function Card({
   children,
-  variant = "filled",
+  variant = "flat",
   onPress,
   padded = true,
   style,
@@ -353,17 +342,21 @@ export function Card({
   style?: StyleProp<ViewStyle>;
 }) {
   const t = useTheme();
-  const base: ViewStyle = {
-    backgroundColor:
-      variant === "hero"
-        ? t.raised
-        : variant === "outline"
-          ? "transparent"
-          : t.card,
-    borderWidth: 1,
-    borderColor: variant === "hero" ? t.borderStrong : t.border,
-    borderRadius: RADIUS_CARD,
-  };
+  const base: ViewStyle =
+    variant === "raised"
+      ? {
+          ...FLOAT,
+          backgroundColor: t.raised,
+          borderWidth: 1,
+          borderColor: t.edgeRim,
+          borderRadius: RADIUS_CARD,
+        }
+      : {
+          backgroundColor: t.card,
+          borderWidth: 1,
+          borderColor: t.cardEdge,
+          borderRadius: RADIUS_CARD,
+        };
   const box = [base, padded && { padding: 16 }, style];
 
   if (onPress) {
@@ -448,99 +441,143 @@ export function ListRow({
 type CalloutTone = "info" | "warning" | "error" | "success" | "neutral";
 
 /**
- * A status strip on a light tint of its callout accent, with a matching
- * hairline edge (the web `Callout`). Body copy stays neutral. `neutral` is the
- * S3 pending banner. Kept named `Banner` too for the existing call sites.
+ * A status strip on a light tint of its accent, with a matching edge (the web
+ * `Callout`). Body copy stays neutral; `title` is the one bold line.
  */
-function Callout({
+export function Callout({
   children,
-  tone = "info",
+  title,
+  tone = "neutral",
 }: {
-  children: ReactNode;
+  children?: ReactNode;
+  title?: string;
   tone?: CalloutTone;
 }) {
   const t = useTheme();
   const hue =
-    tone === "neutral"
-      ? t.border
-      : tone === "warning"
-        ? t.warning
-        : tone === "error"
-          ? t.error
-          : tone === "success"
-            ? t.success
-            : t.info;
+    tone === "warning"
+      ? t.warning
+      : tone === "error"
+        ? t.error
+        : tone === "success"
+          ? t.success
+          : tone === "info"
+            ? t.info
+            : null;
   return (
     <View
+      accessibilityRole={tone === "error" ? "alert" : undefined}
       style={{
-        flexDirection: "row",
-        backgroundColor: tone === "neutral" ? t.surface1 : `${hue}14`,
-        borderRadius: RADIUS_ROW,
+        gap: 2,
+        backgroundColor: hue ? `${hue}12` : t.surface1,
+        borderRadius: RADIUS_CARD,
         borderWidth: 1,
-        borderColor: tone === "neutral" ? t.border : `${hue}4d`,
+        borderColor: hue ? `${hue}4d` : t.border,
         padding: 12,
       }}
     >
-      <Txt size={13} tone="secondary" lineHeight={19} style={{ flex: 1 }}>
-        {children}
-      </Txt>
+      {title ? (
+        <Txt size={13} weight={500} lineHeight={19}>
+          {title}
+        </Txt>
+      ) : null}
+      {typeof children === "string" ? (
+        <Txt size={13} tone="secondary" lineHeight={19}>
+          {children}
+        </Txt>
+      ) : (
+        children
+      )}
     </View>
   );
 }
 
-/** Back-compat alias — the older `tone` names map onto the callout accents. */
-export function Banner({
-  children,
-  tone = "info",
-}: {
-  children: ReactNode;
-  tone?: CalloutTone;
-}) {
-  return <Callout tone={tone}>{children}</Callout>;
-}
-
 /* --------------------------------------------------------------- status --- */
 
-export function StatusPill({
-  tone,
+type BadgeTone = "neutral" | "info" | "lit" | "success" | "warning" | "error";
+
+export function Badge({
   label,
+  tone = "neutral",
+  icon,
 }: {
-  tone: "success" | "warning" | "error" | "info" | "neutral";
   label: string;
+  tone?: BadgeTone;
+  icon?: ReactNode;
 }) {
   const t = useTheme();
   const hue =
-    tone === "success"
-      ? t.success
-      : tone === "warning"
-        ? t.warning
-        : tone === "error"
-          ? t.error
-          : tone === "info"
-            ? t.info
+    tone === "info"
+      ? t.info
+      : tone === "success"
+        ? t.success
+        : tone === "warning"
+          ? t.warning
+          : tone === "error"
+            ? t.error
             : null;
+  const edge =
+    tone === "lit" ? `${t.foreground}59` : hue ? `${hue}4d` : t.borderStrong;
+  const fill =
+    tone === "lit" ? `${t.foreground}12` : hue ? `${hue}1a` : t.surface2;
   const text =
-    tone === "error"
-      ? t.errorText
-      : tone === "neutral"
-        ? t.foregroundSecondary
-        : (hue ?? t.foreground);
+    tone === "lit"
+      ? t.foreground
+      : tone === "error"
+        ? t.errorText
+        : (hue ?? t.foregroundSecondary);
   return (
     <View
       style={{
         flexDirection: "row",
         alignItems: "center",
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: PILL,
+        gap: 4,
+        minHeight: 22,
+        paddingHorizontal: 6,
+        borderRadius: RADIUS_BADGE,
         borderWidth: 1,
-        borderColor: hue ? `${hue}4d` : t.border,
-        backgroundColor: hue ? `${hue}1a` : t.secondary,
+        borderColor: edge,
+        backgroundColor: fill,
       }}
     >
+      {icon}
       <Txt size={12} weight={500} color={text}>
         {label}
       </Txt>
+    </View>
+  );
+}
+
+export function Meter({
+  value,
+  max,
+  label,
+}: {
+  value: number;
+  max: number;
+  label: string;
+}) {
+  const t = useTheme();
+  const share = max > 0 ? Math.max(0, Math.min(value / max, 1)) : 0;
+  return (
+    <View
+      accessibilityRole="progressbar"
+      accessibilityLabel={label}
+      accessibilityValue={{ min: 0, max, now: Math.min(value, max) }}
+      style={{
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: t.track,
+        overflow: "hidden",
+      }}
+    >
+      <View
+        style={{
+          width: `${share * 100}%`,
+          height: "100%",
+          backgroundColor: t.meter,
+        }}
+      />
     </View>
   );
 }
@@ -561,7 +598,7 @@ export function CountBadge({ count }: { count: number }) {
         justifyContent: "center",
       }}
     >
-      <Txt size={12} weight={600} style={{ fontVariant: ["tabular-nums"] }}>
+      <Txt size={12} weight={600} tabular>
         {count}
       </Txt>
     </View>
@@ -609,9 +646,9 @@ export function Field({
       <Eyebrow>{label}</Eyebrow>
       {children ??
         (data ? (
-          <Mono size={15}>{value ?? "—"}</Mono>
+          <Mono size={15}>{value ?? "Not provided"}</Mono>
         ) : (
-          <Txt size={15}>{value ?? "—"}</Txt>
+          <Txt size={15}>{value ?? "Not provided"}</Txt>
         ))}
     </View>
   );
@@ -619,7 +656,38 @@ export function Field({
 
 /* --------------------------------------------------------------- inputs --- */
 
-type ButtonVariant = "primary" | "outline" | "ghost" | "destructive";
+type ButtonVariant =
+  | "primary"
+  | "secondary"
+  | "outline"
+  | "ghost"
+  | "destructive"
+  | "destructive-outline";
+
+function buttonColors(t: Theme, variant: ButtonVariant) {
+  switch (variant) {
+    case "primary":
+      return { bg: t.primary, edge: t.primary, text: t.primaryForeground };
+    case "secondary":
+      return { bg: t.surface2, edge: t.edgeLit, text: t.secondaryForeground };
+    case "outline":
+      return { bg: "transparent", edge: t.borderStrong, text: t.foreground };
+    case "ghost":
+      return {
+        bg: "transparent",
+        edge: "transparent",
+        text: t.mutedForeground,
+      };
+    case "destructive":
+      return {
+        bg: t.destructive,
+        edge: t.destructive,
+        text: t.destructiveForeground,
+      };
+    case "destructive-outline":
+      return { bg: `${t.error}1a`, edge: `${t.error}4d`, text: t.errorText };
+  }
+}
 
 export function Button({
   label,
@@ -627,6 +695,9 @@ export function Button({
   variant = "primary",
   disabled = false,
   loading = false,
+  icon,
+  accessibilityLabel,
+  style,
 }: {
   label: string;
   onPress: () => void;
@@ -634,63 +705,165 @@ export function Button({
   disabled?: boolean;
   /** Shows a spinner + disables while a mutation is in flight. */
   loading?: boolean;
+  icon?: ReactNode;
+  accessibilityLabel?: string;
+  style?: StyleProp<ViewStyle>;
 }) {
   const t = useTheme();
-  const bg =
-    variant === "primary"
-      ? t.primary
-      : variant === "destructive"
-        ? `${t.error}1a`
-        : "transparent";
-  const edge =
-    variant === "primary"
-      ? t.primary
-      : variant === "destructive"
-        ? `${t.error}4d`
-        : variant === "outline"
-          ? t.borderStrong
-          : "transparent";
-  const textColor =
-    variant === "primary"
-      ? t.primaryForeground
-      : variant === "destructive"
-        ? t.errorText
-        : variant === "ghost"
-          ? t.mutedForeground
-          : t.foreground;
+  const c = buttonColors(t, variant);
   const isDisabled = disabled || loading;
+  const lifted = variant === "primary" || variant === "secondary";
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
       accessibilityState={{ disabled: isDisabled, busy: loading }}
       disabled={isDisabled}
       onPress={onPress}
       style={({ pressed }) => [
+        lifted && LIFT,
         {
           minHeight: 44,
-          borderRadius: PILL,
+          borderRadius: RADIUS_CONTROL,
           borderWidth: 1,
-          borderColor: edge,
-          paddingHorizontal: 18,
+          borderColor: c.edge,
+          paddingHorizontal: 14,
           paddingVertical: 10,
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "center",
-          gap: 8,
-          backgroundColor: bg,
+          gap: 6,
+          backgroundColor: c.bg,
           opacity: isDisabled ? 0.5 : pressed ? 0.85 : 1,
         },
         pressed &&
           !isDisabled &&
-          variant !== "primary" &&
-          variant !== "destructive" && { backgroundColor: t.hover },
+          (variant === "outline" || variant === "ghost") && {
+            backgroundColor: t.hover,
+          },
+        style,
       ]}
     >
-      {loading ? <ActivityIndicator size="small" color={textColor} /> : null}
-      <Text style={{ fontFamily: sans(500), fontSize: 15, color: textColor }}>
+      {loading ? <ActivityIndicator size="small" color={c.text} /> : icon}
+      <Text style={{ fontFamily: sans(500), fontSize: 15, color: c.text }}>
         {label}
       </Text>
     </Pressable>
+  );
+}
+
+export function IconButton({
+  label,
+  onPress,
+  children,
+  disabled = false,
+}: {
+  label: string;
+  onPress: () => void;
+  children: ReactNode;
+  disabled?: boolean;
+}) {
+  const t = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        width: 44,
+        height: 44,
+        borderRadius: RADIUS_CONTROL,
+        alignItems: "center",
+        justifyContent: "center",
+        opacity: disabled ? 0.5 : 1,
+        backgroundColor: pressed ? t.hover : "transparent",
+      })}
+    >
+      {children}
+    </Pressable>
+  );
+}
+
+export function Tabs<T extends string>({
+  value,
+  onChange,
+  tabs,
+}: {
+  value: T;
+  onChange: (next: T) => void;
+  tabs: { id: T; label: string }[];
+}) {
+  const t = useTheme();
+  return (
+    <View
+      accessibilityRole="tablist"
+      style={{
+        flexDirection: "row",
+        gap: 4,
+        borderBottomWidth: 1,
+        borderBottomColor: t.border,
+      }}
+    >
+      {tabs.map((tab) => {
+        const active = tab.id === value;
+        return (
+          <Pressable
+            key={tab.id}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
+            onPress={() => onChange(tab.id)}
+            style={{
+              minHeight: 44,
+              paddingHorizontal: 12,
+              justifyContent: "center",
+              borderBottomWidth: 2,
+              borderBottomColor: active ? t.foreground : "transparent",
+              marginBottom: -1,
+            }}
+          >
+            <Txt
+              size={15}
+              weight={500}
+              tabular
+              tone={active ? "default" : "muted"}
+            >
+              {tab.label}
+            </Txt>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+export function SettingsRow({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children?: ReactNode;
+}) {
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 16,
+        padding: 16,
+      }}
+    >
+      <View style={{ flex: 1, gap: 2 }}>
+        <Txt size={15} weight={500}>
+          {title}
+        </Txt>
+        {description ? <Muted>{description}</Muted> : null}
+      </View>
+      {children}
+    </View>
   );
 }
 
@@ -731,7 +904,7 @@ export function TextField({
         accessibilityLabel={label}
         style={{
           minHeight: 44,
-          borderRadius: RADIUS_FIELD,
+          borderRadius: RADIUS_CONTROL,
           borderWidth: 1,
           borderColor: focused ? t.ring : t.input,
           paddingHorizontal: 12,

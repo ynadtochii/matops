@@ -28,6 +28,7 @@ import {
 
 import type { NavBadge, NavItem } from "./shell-frame";
 import { useTRPC } from "~/trpc/react";
+import { AcademyIcon } from "./avatar";
 import {
   EntityProvider,
   useAnyBranchTakesPayment,
@@ -299,12 +300,19 @@ function ShellChrome({
       isCurrent={isCurrent}
       homeHref={href("/")}
       profileHref={entityId ? href("/profile") : "/profile"}
-      selector={
-        <span className="text-foreground flex h-8 items-center truncate px-1.5 text-sm font-medium">
-          {activeBranch?.name ?? "Your academy"}
-        </span>
+      brand={
+        <>
+          <AcademyIcon
+            src={academy?.iconUrl}
+            name={activeBranch?.name ?? "Your academy"}
+            className="size-8 text-sm"
+          />
+          <span className="text-foreground truncate text-sm font-semibold md:text-base">
+            {activeBranch?.name ?? "Your academy"}
+          </span>
+        </>
       }
-      user={user}
+      user={{ ...user, avatarUrl: academy?.avatarUrl ?? null }}
       branchLabel={activeBranch?.name}
       roleLabel={
         isPending ? "pending" : (activeBranch?.role ?? organization.role)
@@ -342,6 +350,7 @@ function ShellChrome({
         ) : undefined
       }
     >
+      <title>{activeBranch?.name ?? "MatOps"}</title>
       {academy && !canVisit(within, academy) ? <NoAccessState /> : children}
     </ShellFrame>
   );

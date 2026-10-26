@@ -17,6 +17,7 @@ import { toast } from "@matops/ui/toast";
 import { EmailSchema, UpdateProfileSchema } from "@matops/validators";
 
 import type { MagicLinkState } from "~/app/_components/sign-in-actions";
+import { AcademyIcon } from "~/app/_components/avatar";
 import {
   EmailField,
   fieldErrors,
@@ -170,12 +171,20 @@ export function JoinFlow({
     signupHealthQuestion,
     waiver,
     role,
+    academyIconUrl,
   } = invite.data;
   const mapUrl = academyMapUrl(academyAddress, pinnedMapUrl);
 
   return (
     <div className="flex w-full max-w-sm flex-col gap-5">
       <div className="flex flex-col gap-1 text-center sm:-mx-12">
+        {academyIconUrl && (
+          <AcademyIcon
+            src={academyIconUrl}
+            name={academyName}
+            className="mx-auto mb-2 size-14"
+          />
+        )}
         <h1 className="text-2xl font-semibold tracking-tight">
           Join {academyName}
         </h1>

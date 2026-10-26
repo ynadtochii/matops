@@ -13,6 +13,7 @@ const A = "org_a";
 const OWNER = "u_owner";
 const COACH = "u_coach";
 const JOINER = "u_joiner";
+const PENDING = "u_pending";
 
 const TODAY = "aaaaaaaa-0000-4000-8000-00000000010a";
 
@@ -34,6 +35,7 @@ async function base(): Promise<Harness> {
         { userId: OWNER, role: "owner", status: "active" },
         { userId: COACH, role: "instructor", status: "active" },
         { userId: JOINER, role: "student", status: "active", name: "Ana" },
+        { userId: PENDING, role: "student", status: "pending" },
       ],
     },
   ]);
@@ -160,9 +162,24 @@ describe("drop-in link management", () => {
     expect(second.token).toBe(first.token);
   });
 
-  it("students cannot read the link", async () => {
+  it("active students read the same link as staff", async () => {
     const h = await base();
-    expect(await rejectionCode(h.as(JOINER, A).dropIn.link())).toBe(
+    const staff = await h.as(OWNER, A).dropIn.link();
+    const student = await h.as(JOINER, A).dropIn.link();
+    expect(student.token).toBe(staff.token);
+  });
+
+  it("pending students cannot read the link", async () => {
+    const h = await base();
+    expect(await rejectionCode(h.as(PENDING, A).dropIn.link())).toBe(
+      "FORBIDDEN",
+    );
+  });
+
+  it("students are forbidden from rotating a link", async () => {
+    const h = await base();
+    await h.as(OWNER, A).dropIn.link();
+    expect(await rejectionCode(h.as(JOINER, A).dropIn.rotateLink())).toBe(
       "FORBIDDEN",
     );
   });

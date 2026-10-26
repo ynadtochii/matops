@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { Harness } from "./helpers";
 import {
   harness,
+  memberId,
   rejectionCode,
   seedAcademies,
   seedClasses,
@@ -141,6 +142,25 @@ describe("attendance.mark", () => {
     expect(res.rows[0]?.attendance_status).toBe("present");
     expect(res.rows[0]?.marked_by).toBe(COACH);
     expect(res.rows[0]?.attended_at).not.toBeNull();
+  });
+
+  it("counts the marked class in the member's history", async () => {
+    const h = await base();
+    await seedParticipations(h.pg, [
+      { classId: YESTERDAY, academyId: A, studentId: ANA },
+    ]);
+    await h.as(COACH, A).attendance.mark({
+      classId: YESTERDAY,
+      personId: ANA,
+      status: "present",
+    });
+
+    const detail = await h
+      .as(OWNER, A)
+      .membership.memberHistory({ memberId: memberId(A, ANA) });
+    expect(detail.history.map((c) => c.classId)).toEqual([YESTERDAY]);
+    expect(detail.stats.total).toBe(1);
+    expect(detail.lastAttendance).not.toBeNull();
   });
 
   it("clears the attended time when the mark is changed to absent", async () => {
@@ -650,5 +670,148 @@ describe("attendance review", () => {
         }),
       ),
     ).toBe("NOT_FOUND");
+  });
+});
+
+describe("attendance.markAllClasses", () => {
+  it("marks booked people present and reviews every ended class of any age", async () => {
+    const h = await base();
+    await seedParticipations(h.pg, [
+      { classId: YESTERDAY, academyId: A, studentId: ANA },
+      {
+        classId: YESTERDAY,
+        academyId: A,
+        studentId: CY,
+        attendanceStatus: "absent",
+      },
+      { classId: LONG_AGO, academyId: A, studentId: ANA },
+      {
+        classId: LONG_AGO,
+        academyId: A,
+        studentId: BO,
+        bookingStatus: "cancelled",
+      },
+      { classId: NEXT_WEEK, academyId: A, studentId: BO },
+    ]);
+
+    const res = await h.as(COACH, A).attendance.markAllClasses();
+
+    expect(res).toEqual({ reviewed: 3, present: 2, remaining: 0, byHand: 0 });
+    expect(await marks(h.pg, YESTERDAY)).toEqual([
+      { student_id: ANA, attendance_status: "present" },
+      { student_id: CY, attendance_status: "absent" },
+    ]);
+    expect(await marks(h.pg, LONG_AGO)).toEqual([
+      { student_id: ANA, attendance_status: "present" },
+      { student_id: BO, attendance_status: "unmarked" },
+    ]);
+    expect(await marks(h.pg, NEXT_WEEK)).toEqual([
+      { student_id: BO, attendance_status: "unmarked" },
+    ]);
+    const caller = h.as(OWNER, A).attendance;
+    expect((await caller.reviewQueue({})).needsReview).toBe(0);
+    expect((await caller.list({ id: TODAY })).review).toMatchObject({
+      reviewed: true,
+      present: 0,
+    });
+    const corrections = await h.pg.query<{
+      class_id: string;
+      kind: string;
+      reason: string;
+    }>(
+      `SELECT class_id, kind, reason FROM "attendance_correction" ORDER BY kind`,
+    );
+    expect(corrections.rows).toEqual([
+      { class_id: LONG_AGO, kind: "member", reason: "Mark all attendance" },
+      { class_id: LONG_AGO, kind: "review", reason: "Mark all attendance" },
+    ]);
+  });
+
+  it("marks booked visitors present", async () => {
+    const h = await base();
+    await h.pg.query(
+      `INSERT INTO "drop_in" (academy_id, first_name, last_name, phone, consent, source)
+         VALUES ($1, 'Visitor', '', '+351922222222', false, 'staff')`,
+      [A],
+    );
+    await h.pg.query(
+      `INSERT INTO "drop_in_visit" (academy_id, drop_in_id, class_id, booking_status, attendance_status)
+         SELECT $1, d.id, $2, 'booked', 'unmarked' FROM "drop_in" d WHERE d.phone = '+351922222222'`,
+      [A, YESTERDAY],
+    );
+
+    const res = await h.as(OWNER, A).attendance.markAllClasses();
+
+    expect(res.present).toBe(1);
+    const roster = await h.as(OWNER, A).attendance.list({ id: YESTERDAY });
+    expect(roster.dropIns[0]?.attendanceStatus).toBe("present");
+    expect(roster.review.reviewed).toBe(true);
+  });
+
+  it("leaves a class with an unmarked walk-in for a review by hand", async () => {
+    const h = await base();
+    await seedParticipations(h.pg, [
+      {
+        classId: YESTERDAY,
+        academyId: A,
+        studentId: ANA,
+        bookingStatus: "none",
+      },
+    ]);
+
+    const res = await h.as(OWNER, A).attendance.markAllClasses();
+
+    expect(res).toEqual({ reviewed: 2, present: 0, remaining: 0, byHand: 1 });
+    const queue = await h.as(OWNER, A).attendance.reviewQueue({});
+    expect(queue.rows.map((row) => row.id)).toEqual([YESTERDAY]);
+  });
+
+  it("reviews at most 200 classes per press, oldest first", async () => {
+    const h = await base();
+    await seedClasses(
+      h.pg,
+      Array.from({ length: 200 }, (_, i) => ({
+        id: `bbbbbbbb-0000-4000-8000-${String(i).padStart(12, "0")}`,
+        academyId: A,
+        instructorId: COACH,
+        startsInMinutes: -(40 * 1440) - i,
+      })),
+    );
+    const caller = h.as(OWNER, A).attendance;
+
+    const first = await caller.markAllClasses();
+
+    expect(first).toMatchObject({ reviewed: 200, remaining: 3 });
+    const queue = await caller.reviewQueue({});
+    expect(queue.rows.map((row) => row.id)).toEqual([
+      LONG_AGO,
+      YESTERDAY,
+      TODAY,
+    ]);
+    expect(await caller.markAllClasses()).toMatchObject({
+      reviewed: 3,
+      remaining: 0,
+    });
+  });
+
+  it("refuses students and leaves other academies alone", async () => {
+    const h = await base();
+    expect(await rejectionCode(h.as(ANA, A).attendance.markAllClasses())).toBe(
+      "FORBIDDEN",
+    );
+    await seedAcademies(h.pg, [
+      {
+        id: "academy_B",
+        code: "100002",
+        members: [{ userId: "u_other", role: "owner", status: "active" }],
+      },
+    ]);
+
+    const res = await h.as("u_other", "academy_B").attendance.markAllClasses();
+
+    expect(res.reviewed).toBe(0);
+    expect((await h.as(OWNER, A).attendance.reviewQueue({})).needsReview).toBe(
+      3,
+    );
   });
 });

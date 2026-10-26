@@ -19,6 +19,7 @@ import {
   isStudentLensMembership,
   isValidTimeZone,
   matchesDeleteAcademyPhrase,
+  publicFileUrl,
 } from "@matops/domain";
 import {
   AcademyCodeSchema,
@@ -116,6 +117,9 @@ export const academyRouter = {
       // server no longer consults (ADR 126).
       membershipEnforced: academy.membershipEnforcedAt !== null,
       code: await getAcademyCode(academyId, ctx.baseDb),
+      iconUrl: publicFileUrl(ctx.appUrl, academy.iconKey),
+      avatarUrl: publicFileUrl(ctx.appUrl, academy.avatarKey),
+      uploadsEnabled: ctx.storage !== null,
     };
   }),
 

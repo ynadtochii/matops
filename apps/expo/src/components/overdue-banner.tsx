@@ -1,6 +1,7 @@
 import { Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
+import { ChevronRight } from "lucide-react-native";
 
 import { Txt, useTheme } from "~/components/ui";
 import { trpc } from "~/utils/api";
@@ -9,9 +10,10 @@ export function OverdueBanner() {
   const t = useTheme();
   const router = useRouter();
   const current = useQuery(trpc.academy.current.queryOptions());
-  const approved = current.data?.status === "active";
+  const enabled =
+    current.data?.status === "active" && current.data.membershipEnforced;
   const memberships = useQuery(
-    trpc.accessPlan.mine.queryOptions(undefined, { enabled: approved }),
+    trpc.accessPlan.mine.queryOptions(undefined, { enabled }),
   );
 
   const warning = memberships.data?.memberships.find(
@@ -45,9 +47,7 @@ export function OverdueBanner() {
       <Txt size={13} weight={500} tone="secondary" style={{ flex: 1 }}>
         {strip}
       </Txt>
-      <Txt size={16} tone="error">
-        ›
-      </Txt>
+      <ChevronRight size={16} color={t.errorText} />
     </Pressable>
   );
 }

@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto";
 import { and, eq, gte, isNull, lt, ne, sql } from "drizzle-orm";
 
 import type { SignupAnswers } from "@matops/domain";
@@ -7,18 +6,22 @@ import {
   matchLeadByPhone,
   resolveAcademyTimeZone,
   returningLeadGate,
+  VISITOR_LINK_DAYS,
   visitorClassState,
 } from "@matops/domain";
 
 import type { DbExec } from "./client";
+import type { LiveLinkRow } from "./live-link";
 import type { DbReader } from "./tenant";
 import { dropInLink } from "./drop-in-link-schema";
-import { entity } from "./entity-schema";
+import { entity, entityMembership } from "./entity-schema";
+import { getLiveLink, getOrCreateLiveLink, rotateLiveLink } from "./live-link";
 import {
   bumpScheduleRevision,
   lockAndReadScheduleRevision,
 } from "./schedule-guard";
 import { classInstance, dropIn, dropInVisit } from "./scheduling";
+import { storedFile } from "./stored-file-schema";
 import { currentWaiver } from "./waiver";
 
 /**
@@ -85,75 +88,25 @@ export async function listAcademyClassesInWindow(
     );
 }
 
-interface DropInLinkRow {
-  token: string;
-  createdAt: Date;
-}
-
-function newLinkToken(): string {
-  return randomBytes(18).toString("base64url");
-}
-
-const linkCols = { token: dropInLink.token, createdAt: dropInLink.createdAt };
-
-export async function getDropInLink(
+export function getDropInLink(
   academyId: string,
   exec: DbReader,
-): Promise<DropInLinkRow | null> {
-  const rows = await exec
-    .select(linkCols)
-    .from(dropInLink)
-    .where(
-      and(eq(dropInLink.academyId, academyId), isNull(dropInLink.revokedAt)),
-    )
-    .limit(1);
-  return rows[0] ?? null;
+): Promise<LiveLinkRow | null> {
+  return getLiveLink(dropInLink, academyId, exec);
 }
 
-export async function rotateDropInLink(
+export function rotateDropInLink(
   input: { academyId: string; createdBy: string },
   exec: DbExec,
-): Promise<DropInLinkRow> {
-  return exec.transaction(async (tx) => {
-    await tx
-      .update(dropInLink)
-      .set({ revokedAt: new Date() })
-      .where(
-        and(
-          eq(dropInLink.academyId, input.academyId),
-          isNull(dropInLink.revokedAt),
-        ),
-      );
-    const [row] = await tx
-      .insert(dropInLink)
-      .values({
-        academyId: input.academyId,
-        token: newLinkToken(),
-        createdBy: input.createdBy,
-      })
-      .returning(linkCols);
-    if (!row) throw new Error("drop_in_link insert returned no row");
-    return row;
-  });
+): Promise<LiveLinkRow> {
+  return rotateLiveLink(dropInLink, input, exec);
 }
 
-export async function getOrCreateDropInLink(
+export function getOrCreateDropInLink(
   input: { academyId: string; createdBy: string },
   exec: DbExec,
-): Promise<DropInLinkRow> {
-  const live = await getDropInLink(input.academyId, exec);
-  if (live) return live;
-  await exec
-    .insert(dropInLink)
-    .values({
-      academyId: input.academyId,
-      token: newLinkToken(),
-      createdBy: input.createdBy,
-    })
-    .onConflictDoNothing();
-  const row = await getDropInLink(input.academyId, exec);
-  if (!row) throw new Error("drop_in_link was not created");
-  return row;
+): Promise<LiveLinkRow> {
+  return getOrCreateLiveLink(dropInLink, input, exec);
 }
 
 export interface DropInAcademy {
@@ -163,6 +116,7 @@ export interface DropInAcademy {
   country: string | null;
   signupHealthQuestion: boolean;
   waiver: { id: string; body: string } | null;
+  iconKey: string | null;
 }
 
 export async function resolveDropInLink(
@@ -177,9 +131,11 @@ export async function resolveDropInLink(
       country: entity.country,
       signupHealthQuestion: entity.signupHealthQuestion,
       waiverRequired: entity.waiverRequired,
+      iconKey: storedFile.objectKey,
     })
     .from(dropInLink)
     .innerJoin(entity, eq(dropInLink.academyId, entity.id))
+    .leftJoin(storedFile, eq(storedFile.id, entity.iconFileId))
     .where(
       and(
         eq(dropInLink.token, token),
@@ -199,6 +155,7 @@ export async function resolveDropInLink(
     country: row.country,
     signupHealthQuestion: row.signupHealthQuestion,
     waiver: waiver ? { id: waiver.id, body: waiver.body } : null,
+    iconKey: row.iconKey,
   };
 }
 
@@ -264,6 +221,7 @@ export type DropInSubmission = {
   email: string;
   phone: string;
   classId: string;
+  sharedBy?: string;
 } & (
   | { kind: "returning"; waiverId?: string }
   | ({
@@ -380,6 +338,37 @@ async function confirmReturningLead(
   return lead.id;
 }
 
+/**
+ * Credit the member whose link brought this lead, once: the first sharer stays.
+ * A sharer from another academy, or one that no longer exists, is ignored, so a
+ * bad `by` in a link never costs the visitor their booking.
+ */
+async function creditSharer(
+  tx: Tx,
+  academyId: string,
+  leadId: string,
+  membershipId: string,
+): Promise<void> {
+  const [sharer] = await tx
+    .select({ id: entityMembership.id })
+    .from(entityMembership)
+    .where(
+      and(
+        eq(entityMembership.id, membershipId),
+        eq(entityMembership.entityId, academyId),
+      ),
+    )
+    .limit(1);
+  if (!sharer) {
+    console.warn("[drop-in] sharer ignored");
+    return;
+  }
+  await tx
+    .update(dropIn)
+    .set({ sharedByMembershipId: sharer.id })
+    .where(and(eq(dropIn.id, leadId), isNull(dropIn.sharedByMembershipId)));
+}
+
 export async function submitDropInVisit(
   input: DropInSubmission,
   exec: DbExec,
@@ -408,7 +397,9 @@ export async function submitDropInVisit(
       )
       .limit(1)
       .for("update");
-    const mode = cls ? visitorClassState(cls, now, academy.timeZone) : null;
+    const mode = cls
+      ? visitorClassState(cls, now, academy.timeZone, VISITOR_LINK_DAYS)
+      : null;
     if (!cls || !mode) return { ok: false, reason: "class" };
 
     const leadId =
@@ -416,6 +407,9 @@ export async function submitDropInVisit(
         ? await saveNewLead(tx, academy, input, now)
         : await confirmReturningLead(tx, academy, input, now);
     if (typeof leadId !== "string") return leadId;
+    if (input.sharedBy) {
+      await creditSharer(tx, academy.academyId, leadId, input.sharedBy);
+    }
 
     const [visit] = await tx
       .select({

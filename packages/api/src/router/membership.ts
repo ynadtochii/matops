@@ -53,6 +53,7 @@ import {
   isStaffRole,
   isStudentMember,
   isSuspended,
+  publicFileUrl,
   signupWrites,
   trainingStats,
 } from "@matops/domain";
@@ -74,6 +75,7 @@ import {
 } from "../members";
 import { loadRosterStanding } from "../membership-access";
 import { LAST_OWNER } from "../messages";
+import { deleteStoredObjects } from "../stored-objects";
 import {
   branchManagerIdentityProcedure,
   branchManagerProcedure,
@@ -449,6 +451,7 @@ export const membershipRouter = {
           // branch, so the member profile needs the user id to read it (ADR 126).
           userId: r.userId,
           name: r.name,
+          avatarUrl: publicFileUrl(ctx.appUrl, r.avatarKey),
           email: r.email,
           phone: r.phone,
           role: r.role,
@@ -477,6 +480,7 @@ export const membershipRouter = {
     return rows.filter(isArchived).map((r) => ({
       memberId: r.memberId,
       name: r.name,
+      avatarUrl: publicFileUrl(ctx.appUrl, r.avatarKey),
       email: r.email,
       phone: r.phone,
       role: r.role,
@@ -509,7 +513,10 @@ export const membershipRouter = {
         )
         .where(
           and(
-            eq(classParticipation.studentId, m.userId),
+            eq(
+              sql`coalesce(${classParticipation.personId}::text, ${classParticipation.studentId})`,
+              m.userId,
+            ),
             eq(classParticipation.attendanceStatus, "present"),
           ),
         )
@@ -704,13 +711,14 @@ export const membershipRouter = {
           ctx.baseDb,
         ),
       );
-      const report = await ctx.withScope((db) =>
+      const { report, objectKeys } = await ctx.withScope((db) =>
         eraseMemberData(db, {
           academyId: ctx.academyId,
           memberId: input.memberId,
           userId: accountUserId,
         }),
       );
+      await deleteStoredObjects(ctx.storage, objectKeys);
       await deleteEntityMembership(ctx.baseDb, ctx.academyId, accountUserId);
       // The organization membership is what lets them into the gym's OTHER
       // mats, so it only goes once the last entity membership has (ADR 124).
@@ -834,6 +842,7 @@ export const membershipRouter = {
       userId: r.userId,
       inheritedRole: r.inheritedRole,
       name: r.name,
+      avatarUrl: publicFileUrl(ctx.appUrl, r.avatarKey),
       email: r.email,
       role: r.role,
       status: r.status,

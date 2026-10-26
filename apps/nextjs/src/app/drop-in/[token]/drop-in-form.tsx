@@ -16,9 +16,14 @@ import { FieldError } from "@matops/ui/field";
 import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
 import { FOCUS_RING } from "@matops/ui/motion";
-import { DropInLookupSchema, NameSchema } from "@matops/validators";
+import {
+  DropInClassesSchema,
+  DropInLookupSchema,
+  NameSchema,
+} from "@matops/validators";
 
 import type { SignupWaiver } from "~/app/_components/signup-fields";
+import { AcademyIcon } from "~/app/_components/avatar";
 import {
   EmailField,
   fieldErrors,
@@ -59,17 +64,22 @@ function useClassLabel(timeZone: string | undefined) {
 export function DropInForm({
   token,
   linkedClassId,
+  sharedBy,
 }: {
   token: string;
   linkedClassId: string | null;
+  sharedBy?: string;
 }) {
   const trpc = useTRPC();
   const academy = useQuery(
     trpc.dropIn.resolve.queryOptions({ token }, { retry: false }),
   );
+  const linkedQueryId = DropInClassesSchema.shape.classId.safeParse(
+    linkedClassId ?? undefined,
+  ).data;
   const classes = useQuery(
     trpc.dropIn.classes.queryOptions(
-      { token },
+      { token, classId: linkedQueryId },
       { retry: false, staleTime: 30_000, enabled: academy.isSuccess },
     ),
   );
@@ -243,6 +253,7 @@ export function DropInForm({
       token,
       ...parsed,
       classId: id,
+      sharedBy,
       waiverId: current.match.needsAgreement ? waiver?.id : undefined,
     });
   };
@@ -270,6 +281,7 @@ export function DropInForm({
       token,
       ...parsed,
       classId: id,
+      sharedBy,
       firstName: first.data,
       lastName: last.data,
       consent: true,
@@ -283,6 +295,13 @@ export function DropInForm({
   return (
     <div className="flex w-full max-w-sm flex-col gap-5">
       <div className="flex flex-col gap-1">
+        {academy.data?.iconUrl && (
+          <AcademyIcon
+            src={academy.data.iconUrl}
+            name={name}
+            className="mb-2 size-14"
+          />
+        )}
         <h1 className="text-2xl font-semibold tracking-tight">
           Train at {name}
         </h1>

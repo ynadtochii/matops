@@ -16,18 +16,35 @@ export function normalizePhone(phone: string): string {
   return phone.trimStart().startsWith("+") ? `+${digits}` : digits;
 }
 
-export const VISITOR_BOOKING_DAYS = 3;
+export function dropInPath(
+  token: string,
+  sharedBy: string | null,
+  classId?: string,
+): string {
+  const query = [
+    classId && `class=${encodeURIComponent(classId)}`,
+    sharedBy && `by=${encodeURIComponent(sharedBy)}`,
+  ].filter(Boolean);
+  return `/drop-in/${token}${query.length > 0 ? `?${query.join("&")}` : ""}`;
+}
+
+export const VISITOR_LIST_DAYS = 3;
+export const VISITOR_LINK_DAYS = 7;
 
 interface VisitorWindow {
   from: Date;
   to: Date;
 }
 
-export function visitorWindow(now: Date, timeZone: string): VisitorWindow {
+export function visitorWindow(
+  now: Date,
+  timeZone: string,
+  days = VISITOR_LIST_DAYS,
+): VisitorWindow {
   const today = academyDay(now, timeZone);
   return {
     from: localMidnight(today, timeZone),
-    to: localMidnight(addLocalDays(today, VISITOR_BOOKING_DAYS), timeZone),
+    to: localMidnight(addLocalDays(today, days), timeZone),
   };
 }
 
@@ -37,11 +54,12 @@ export function visitorClassState(
   c: CheckInClass,
   now: Date,
   timeZone: string,
+  days = VISITOR_LIST_DAYS,
 ): VisitorClassState | null {
   if (c.status !== "scheduled") return null;
   const t = now.getTime();
   const start = c.startsAt.getTime();
-  const window = visitorWindow(now, timeZone);
+  const window = visitorWindow(now, timeZone, days);
   if (start < window.from.getTime()) return null;
   const end = start + c.durationMinutes * 60_000;
   if (start <= t && t < end) return "attend";
@@ -53,13 +71,14 @@ export function visitorClassChoices<T extends CheckInClass>(
   classes: T[],
   now: Date,
   timeZone: string,
+  days = VISITOR_LIST_DAYS,
 ): { now: T[]; upcoming: T[] } {
   const choices = { now: [] as T[], upcoming: [] as T[] };
   const sorted = [...classes].sort(
     (a, b) => a.startsAt.getTime() - b.startsAt.getTime(),
   );
   for (const c of sorted) {
-    const state = visitorClassState(c, now, timeZone);
+    const state = visitorClassState(c, now, timeZone, days);
     if (state === "attend") choices.now.push(c);
     if (state === "book") choices.upcoming.push(c);
   }

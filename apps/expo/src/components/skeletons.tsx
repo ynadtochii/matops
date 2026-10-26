@@ -33,12 +33,7 @@ function SkeletonRows({ rows = 3 }: { rows?: number }) {
   );
 }
 
-export function SkeletonCard({
-  lines = 3,
-}: {
-  lines?: number;
-  variant?: "filled" | "outline";
-}) {
+export function SkeletonCard({ lines = 3 }: { lines?: number }) {
   return <SkeletonRows rows={lines} />;
 }
 

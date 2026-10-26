@@ -99,7 +99,7 @@ function OptionGroup({
       <Eyebrow>{label}</Eyebrow>
       <View
         style={{
-          borderRadius: 12,
+          borderRadius: 8,
           borderWidth: 1,
           borderColor: t.border,
           backgroundColor: t.card,

@@ -15,9 +15,17 @@ import {
   submitDropInVisit,
   takeRateLimit,
 } from "@matops/db";
-import { dropIn } from "@matops/db/schema";
-import { visitorClassChoices, visitorWindow } from "@matops/domain";
+import { dropIn, entityMembership, person, user } from "@matops/db/schema";
 import {
+  isStaffRole,
+  publicFileUrl,
+  VISITOR_LINK_DAYS,
+  VISITOR_LIST_DAYS,
+  visitorClassChoices,
+  visitorWindow,
+} from "@matops/domain";
+import {
+  DropInClassesSchema,
   DropInLookupSchema,
   DropInSubmitSchema,
   LinkTokenSchema,
@@ -28,9 +36,9 @@ import { clientIp } from "../rate-limit";
 import {
   branchManagerIdentityProcedure,
   branchManagerProcedure,
+  memberIdentityProcedure,
   publicProcedure,
   rateLimited,
-  staffIdentityProcedure,
 } from "../trpc";
 
 const LEAD_GONE = "That lead is no longer in your list";
@@ -63,21 +71,27 @@ async function limitContact(
   }
 }
 
-async function visitorChoices(academy: DropInAcademy, exec: DbExec) {
+async function visitorChoices(
+  academy: DropInAcademy,
+  classId: string | undefined,
+  exec: DbExec,
+) {
   const now = new Date();
-  const window = visitorWindow(now, academy.timeZone);
-  const classes = await listAcademyClassesInWindow(
+  const days = classId ? VISITOR_LINK_DAYS : VISITOR_LIST_DAYS;
+  const window = visitorWindow(now, academy.timeZone, days);
+  const listed = await listAcademyClassesInWindow(
     academy.academyId,
     window.from.getTime(),
     window.to.getTime(),
     exec,
   );
+  const classes = classId ? listed.filter((c) => c.id === classId) : listed;
   const pick = (c: { id: string; title: string; startsAt: Date }) => ({
     id: c.id,
     title: c.title,
     startsAt: c.startsAt,
   });
-  const choices = visitorClassChoices(classes, now, academy.timeZone);
+  const choices = visitorClassChoices(classes, now, academy.timeZone, days);
   return {
     now: choices.now.map(pick),
     upcoming: choices.upcoming.map(pick),
@@ -139,12 +153,13 @@ const nextBookingAt = sql<Date | null>`(
  * browser. Owner reads (`list`) go through the RLS-scoped `ctx.db`.
  */
 export const dropInRouter = {
-  link: staffIdentityProcedure.query(({ ctx }) =>
-    getOrCreateDropInLink(
+  link: memberIdentityProcedure.query(async ({ ctx }) => ({
+    ...(await getOrCreateDropInLink(
       { academyId: ctx.academyId, createdBy: ctx.session.user.id },
       ctx.baseDb,
-    ),
-  ),
+    )),
+    sharedBy: ctx.entityMembership?.id ?? null,
+  })),
 
   rotateLink: branchManagerIdentityProcedure.mutation(({ ctx }) =>
     rotateDropInLink(
@@ -164,14 +179,19 @@ export const dropInRouter = {
         country: academy.country,
         signupHealthQuestion: academy.signupHealthQuestion,
         waiver: academy.waiver,
+        iconUrl: publicFileUrl(ctx.appUrl, academy.iconKey),
       };
     }),
 
   classes: publicProcedure
     .use(rateLimited(30, 60_000))
-    .input(LinkTokenSchema)
+    .input(DropInClassesSchema)
     .query(async ({ ctx, input }) =>
-      visitorChoices(await requireLink(input.token, ctx.baseDb), ctx.baseDb),
+      visitorChoices(
+        await requireLink(input.token, ctx.baseDb),
+        input.classId,
+        ctx.baseDb,
+      ),
     ),
 
   lookup: publicProcedure
@@ -211,8 +231,8 @@ export const dropInRouter = {
    * Stage is stored; activity is derived from `drop_in_visit` on every read, so
    * the two can never disagree.
    */
-  list: branchManagerProcedure.query(({ ctx }) => {
-    return ctx.db
+  list: branchManagerProcedure.query(async ({ ctx }) => {
+    const rows = await ctx.db
       .select({
         id: dropIn.id,
         firstName: dropIn.firstName,
@@ -234,9 +254,29 @@ export const dropInRouter = {
         nextBookingAt,
         createdAt: dropIn.createdAt,
         lastSeenAt: dropIn.lastVisitAt,
+        sharerName: sql<string | null>`coalesce(${person.name}, ${user.name})`,
+        sharerRole: entityMembership.role,
       })
       .from(dropIn)
+      .leftJoin(
+        entityMembership,
+        eq(entityMembership.id, dropIn.sharedByMembershipId),
+      )
+      .leftJoin(person, eq(person.id, entityMembership.personId))
+      .leftJoin(user, eq(user.id, entityMembership.userId))
       .orderBy(desc(dropIn.lastVisitAt));
+    return rows.map(({ sharerName, sharerRole, ...lead }) => ({
+      ...lead,
+      sharedBy:
+        sharerName && sharerRole
+          ? {
+              name: sharerName,
+              kind: isStaffRole({ role: sharerRole })
+                ? ("coach" as const)
+                : ("student" as const),
+            }
+          : null,
+    }));
   }),
 
   /**

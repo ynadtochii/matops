@@ -54,3 +54,7 @@ a forwarded invite plus a self-join must not turn into a member directory.
   that is a suspend, not a pending.
 - **Spec §4 and S5 are amended, not rewritten.** The locked-scope note in
   map.md still records the original rule; this ADR is the supersede.
+
+## 2026-10-13 addendum: restored on the web
+
+The first-release cut removed `class.attendees` and the student list, which left an empty "Who's booked" heading on the web class page. The rule in this ADR is restored as it was: `visibleAttendees` in `packages/domain/src/attendance.ts`, `class.attendees` (enrolled tier) in the class router, and the list on the web class page. The Expo class screen does not show it yet.

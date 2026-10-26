@@ -89,7 +89,7 @@ export default function Onboarding() {
   return (
     <Screen center avoidKeyboard>
       <Stack.Screen
-        options={{ title: another ? "Join another branch" : "Join a gym" }}
+        options={{ title: another ? "Join another gym" : "Join a gym" }}
       />
 
       <UIStack gap={24}>
@@ -168,12 +168,10 @@ export default function Onboarding() {
         ) : (
           <UIStack key="code" gap={24}>
             <UIStack gap={8}>
-              <Heading>
-                {another ? "Join another branch" : "Join a gym"}
-              </Heading>
+              <Heading>{another ? "Join another gym" : "Join a gym"}</Heading>
               <Muted>
                 {another
-                  ? "Ask that branch for its 6-digit join code, then enter it here."
+                  ? "Ask that gym for its 6-digit join code, then enter it here."
                   : "Ask your gym for its 6-digit join code, then enter it here."}
               </Muted>
             </UIStack>

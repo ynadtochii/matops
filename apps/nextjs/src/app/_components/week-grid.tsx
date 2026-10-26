@@ -15,6 +15,7 @@ import { cn } from "@matops/ui";
 import { FOCUS_RING_INSET } from "@matops/ui/motion";
 
 import { time24Fmt, weekdayFmt } from "~/lib/format";
+import { blockSkin, hueSkin } from "./discipline-skin";
 import { useMinuteClock } from "./use-clock";
 import { useDisciplineHue } from "./use-discipline-hue";
 
@@ -22,28 +23,6 @@ type ClassRow = RouterOutputs["class"]["week"][number];
 
 const HOUR_H = 64;
 const GAP_H = 26;
-
-const HUE_SKIN = [
-  "border-l-discipline-1 bg-[color-mix(in_oklab,var(--color-discipline-1)_8%,var(--color-card))] glow-edge-discipline-1",
-  "border-l-discipline-2 bg-[color-mix(in_oklab,var(--color-discipline-2)_8%,var(--color-card))] glow-edge-discipline-2",
-  "border-l-discipline-3 bg-[color-mix(in_oklab,var(--color-discipline-3)_8%,var(--color-card))] glow-edge-discipline-3",
-  "border-l-discipline-4 bg-[color-mix(in_oklab,var(--color-discipline-4)_8%,var(--color-card))] glow-edge-discipline-4",
-  "border-l-discipline-5 bg-[color-mix(in_oklab,var(--color-discipline-5)_8%,var(--color-card))] glow-edge-discipline-5",
-];
-const DEFAULT_SKIN =
-  "border-l-discipline-default bg-[color-mix(in_oklab,var(--color-discipline-default)_8%,var(--color-card))] glow-edge-discipline-default";
-
-const hueSkin = (hue: number | null) =>
-  cn(
-    "border-border border border-l-[3px]",
-    hue === null ? DEFAULT_SKIN : HUE_SKIN[hue],
-  );
-
-function blockSkin(hue: number | null, cancelled: boolean) {
-  if (cancelled)
-    return "border border-dashed border-error/40 bg-[color-mix(in_oklab,var(--color-error)_5%,var(--color-card))] text-muted-foreground";
-  return hueSkin(hue);
-}
 
 interface Placed {
   row: ClassRow;
@@ -282,7 +261,7 @@ export function WeekGrid({
                 {d.items.map(({ row, start, startMin, lane, lanes }) => {
                   const cancelled = row.status === "cancelled";
                   const full = capacityDisplay(
-                    row.bookingCount,
+                    row.headCount,
                     row.capacity,
                   ).isOver;
                   const top =
@@ -336,7 +315,7 @@ export function WeekGrid({
                               : "text-muted-foreground",
                           )}
                         >
-                          {row.bookingCount}/{row.capacity}
+                          {row.headCount}/{row.capacity}
                           {row.pendingCount > 0 && (
                             <span className="text-foreground">
                               {" "}

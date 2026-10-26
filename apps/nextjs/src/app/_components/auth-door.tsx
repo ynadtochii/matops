@@ -8,7 +8,7 @@ import { FOCUS_RING } from "@matops/ui/motion";
 
 import { ENTER, stagger } from "./primitives";
 
-const display = Instrument_Serif({ subsets: ["latin"], weight: "400" });
+export const display = Instrument_Serif({ subsets: ["latin"], weight: "400" });
 
 export function AuthDoor({
   headline,
@@ -85,7 +85,7 @@ export function AuthDoor({
 const WEAVE =
   "M0 0H160M0 40H80M0 80H160M80 120H160M0 0V160M40 80V160M80 0V160M120 0V80";
 
-function MatFloor() {
+export function MatFloor() {
   return (
     <div
       aria-hidden

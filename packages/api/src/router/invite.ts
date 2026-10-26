@@ -8,6 +8,7 @@ import {
   resolveInviteToken,
   rotateInvite,
 } from "@matops/db";
+import { publicFileUrl } from "@matops/domain";
 import { InviteRoleSchema, LinkTokenSchema } from "@matops/validators";
 
 import {
@@ -73,6 +74,10 @@ export const inviteRouter = {
           message: "This invite isn't valid. Ask your gym for a new link.",
         });
       }
-      return resolved;
+      const { academyIconKey, ...invite } = resolved;
+      return {
+        ...invite,
+        academyIconUrl: publicFileUrl(ctx.appUrl, academyIconKey),
+      };
     }),
 } satisfies TRPCRouterRecord;

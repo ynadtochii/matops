@@ -7,3 +7,4 @@ export * from "./push";
 export * from "./rank";
 export * from "./person";
 export * from "./data-transfer";
+export * from "./storage";

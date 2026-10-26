@@ -21,6 +21,7 @@ export const auth = initAuth({
   secret: env.AUTH_SECRET,
   googleClientId: env.GOOGLE_CLIENT_ID,
   googleClientSecret: env.GOOGLE_CLIENT_SECRET,
+  gymCreatorEmails: env.GYM_CREATOR_EMAILS,
   extraPlugins: [nextCookies()],
 });
 

@@ -6,6 +6,7 @@ import { bookingRouter } from "./router/booking";
 import { checkinRouter } from "./router/checkin";
 import { classRouter } from "./router/class";
 import { dataTransferRouter } from "./router/dataTransfer";
+import { deskRouter } from "./router/desk";
 import { disciplineRouter } from "./router/discipline";
 import { dropInRouter } from "./router/dropin";
 import { entityRouter } from "./router/entity";
@@ -17,6 +18,7 @@ import { organizationRouter } from "./router/organization";
 import { pushTokenRouter } from "./router/pushToken";
 import { rankRouter } from "./router/rank";
 import { statsRouter } from "./router/stats";
+import { storageRouter } from "./router/storage";
 import { templateRouter } from "./router/template";
 import { createTRPCRouter } from "./trpc";
 
@@ -38,9 +40,11 @@ export const appRouter = createTRPCRouter({
   rank: rankRouter,
   note: noteRouter,
   notification: notificationRouter,
+  desk: deskRouter,
   dropIn: dropInRouter,
   pushToken: pushTokenRouter,
   stats: statsRouter,
+  storage: storageRouter,
 });
 
 // export type definition of API

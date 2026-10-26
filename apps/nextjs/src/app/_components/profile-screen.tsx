@@ -37,6 +37,7 @@ import {
   SectionHeading,
   SettingsRow,
 } from "./primitives";
+import { ProfilePicture } from "./profile-picture";
 import { SignOutButton } from "./sign-out";
 import { SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState, SuspendedState } from "./states";
@@ -226,6 +227,7 @@ export function ProfileScreen({
       />
       <div className="grid items-start gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.8fr)] xl:gap-10">
         <div className={cn("flex min-w-0 flex-col gap-8", ENTER)}>
+          <ProfilePicture name={name} email={email} />
           <section className="flex flex-col gap-4" aria-label="Account details">
             <SectionHeading>Account details</SectionHeading>
             <ProfileDetails name={name} email={email} phone={phone} />

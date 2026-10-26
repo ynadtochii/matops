@@ -6,6 +6,7 @@
  * tl;dr - this is where all the tRPC server stuff is created and plugged in.
  * The pieces you will need to use are documented accordingly near the end
  */
+import { createHash } from "node:crypto";
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import { z, ZodError } from "zod/v4";
@@ -14,10 +15,13 @@ import type { Auth } from "@matops/auth";
 import type { TenantTx } from "@matops/db";
 import type { DbExec } from "@matops/db/client";
 import type { Membership } from "@matops/domain";
+import type { StorageClient } from "@matops/storage";
 import {
   getEntityInOrganization,
   getEntityMembership,
   getMembership,
+  resolveDeskLink,
+  takeRateLimit,
   withScope,
 } from "@matops/db";
 import { db } from "@matops/db/client";
@@ -31,6 +35,8 @@ import {
   runsBranch,
   runsOrganization,
 } from "@matops/domain";
+import { storage } from "@matops/storage";
+import { LinkTokenSchema } from "@matops/validators";
 
 import { clientIp, take } from "./rate-limit";
 
@@ -58,6 +64,7 @@ export const createTRPCContext = async (opts: {
    * nothing and gets the singleton pool. See docs/issues/60.
    */
   baseDb?: DbExec;
+  storage?: StorageClient | null;
 }) => {
   const authApi = opts.auth.api;
   const session = await authApi.getSession({
@@ -83,6 +90,7 @@ export const createTRPCContext = async (opts: {
     // from importing the raw `db` directly, so `ctx.baseDb` stays the only door.
     // See docs/issues/33, 60 and docs/architecture.md §5.
     baseDb: opts.baseDb ?? db,
+    storage: opts.storage === undefined ? storage() : opts.storage,
     appUrl: opts.auth.options.baseURL,
     // Forwarded so resolvers can call Better Auth server APIs (createOrganization,
     // setActiveOrganization, …) on behalf of the signed-in user.
@@ -599,9 +607,56 @@ export const organizationMemberIdentityProcedure = protectedProcedure.use(
   },
 );
 
+export const memberIdentityProcedure = identityProcedure(
+  () => true,
+  "Your membership is pending approval",
+);
 export const staffIdentityProcedure = identityProcedure(isStaff, "Staff only");
 export const ownerIdentityProcedure = identityProcedure(isOwner, "Owner only");
 export const branchManagerIdentityProcedure = identityProcedure(
   runsBranch,
   "Owners and managers only",
 );
+
+export const DESK_LINK_GONE =
+  "This link was replaced or turned off. Ask the owner for the new link.";
+const DESK_MAX = 600;
+const DESK_WINDOW_MS = 10 * 60_000;
+
+// The academy comes from the live token alone, never from the session or
+// x-matops-entity, so a signed-in browser cannot widen what the desk page reaches.
+export const deskProcedure = publicProcedure
+  .input(LinkTokenSchema)
+  .use(async ({ ctx, input, next }) => {
+    const key = createHash("sha256")
+      .update(`desk:${input.token}`)
+      .digest("hex");
+    if (!(await takeRateLimit(key, DESK_MAX, DESK_WINDOW_MS, ctx.baseDb))) {
+      throw new TRPCError({
+        code: "TOO_MANY_REQUESTS",
+        message: "Too many tries. Wait a few minutes and try again.",
+      });
+    }
+    const desk = await resolveDeskLink(input.token, ctx.baseDb);
+    if (!desk) {
+      console.warn("[desk] unknown or rotated link");
+      throw new TRPCError({ code: "NOT_FOUND", message: DESK_LINK_GONE });
+    }
+    return runScoped(
+      ctx.baseDb,
+      { organizationId: desk.organizationId, entityId: desk.id },
+      async (tx) => {
+        const attempt = await next({
+          ctx: {
+            db: tx,
+            desk,
+            academyId: desk.id,
+            baseDb: undefined,
+            session: null,
+          },
+        });
+        if (!attempt.ok) throw attempt.error;
+        return attempt;
+      },
+    );
+  });

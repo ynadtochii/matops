@@ -12,6 +12,8 @@ export * from "./invite";
 export * from "./academy-code";
 // Drop-in / lead helpers (public gym QR form) — see ./dropin.ts.
 export * from "./dropin";
+export * from "./desk";
+export * from "./live-link";
 // Class materialization (templates → concrete classes) — see ./materialize.ts.
 export * from "./materialize";
 // Push-token helpers (Expo push registration / target resolution) — ./push-token.ts.
@@ -32,3 +34,4 @@ export * from "./attendance-review";
 export * from "./person";
 export * from "./signup";
 export * from "./waiver";
+export * from "./stored-file";

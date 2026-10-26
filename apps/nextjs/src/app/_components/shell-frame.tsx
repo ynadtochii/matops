@@ -15,9 +15,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@matops/ui/dropdown-menu";
-import { Logo } from "@matops/ui/logo";
 import { ThemeToggle } from "@matops/ui/theme";
 
+import { Avatar } from "./avatar";
 import { FeedbackLink } from "./feedback-link";
 import { SignOutButton } from "./sign-out";
 
@@ -41,27 +41,14 @@ export type NavBadge =
 
 const MAX_TABS = 5;
 
-/** Two-letter avatar fallback: initials of the first two name words, else the
- * first two letters of the name, else the email — never blank. */
-function initials(name: string, email: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  const first = words[0];
-  const second = words[1];
-  if (first && second) {
-    return (first.charAt(0) + second.charAt(0)).toUpperCase();
-  }
-  if (first) return first.slice(0, 2).toUpperCase();
-  return email.slice(0, 2).toUpperCase();
-}
-
 interface ShellFrameProps {
   /** Already filtered by `show` and given an `href`. */
   items: NavItem[];
   isCurrent: (path: string) => boolean;
   homeHref: string;
   profileHref: string;
-  selector: ReactNode;
-  user: { name: string; email: string };
+  brand: ReactNode;
+  user: { name: string; email: string; avatarUrl?: string | null };
   /** The heading over the ungrouped items: the current branch's name. */
   branchLabel?: string;
   /** The word under the name in the footer: a role, or "pending". */
@@ -90,7 +77,7 @@ export function ShellFrame({
   isCurrent,
   homeHref,
   profileHref,
-  selector,
+  brand,
   user,
   branchLabel = "Branch",
   roleLabel,
@@ -125,17 +112,15 @@ export function ShellFrame({
       >
         Skip to content
       </a>
-      {/* Desktop sidebar — the logo, the branch picker and the footer are pinned;
-          only the nav list scrolls, so the picker cannot move under the pointer. */}
+      {/* Desktop sidebar — the academy and the footer are pinned; only the nav
+          list scrolls. */}
       <aside className="bg-sidebar border-sidebar-border hidden h-full w-60 shrink-0 flex-col overflow-hidden border-r p-2 md:flex">
         <Link
           href={homeHref}
-          className="flex items-center gap-2 px-1.5 pt-1.5 pb-3"
+          className="hover:bg-hover mb-3 flex min-w-0 items-center gap-2.5 rounded-md p-1.5 transition-colors"
         >
-          <Logo size={20} />
+          {brand}
         </Link>
-
-        <div className="mb-2">{selector}</div>
 
         {items.length > 1 && (
           <nav
@@ -185,9 +170,12 @@ export function ShellFrame({
               isCurrent("/profile") ? "bg-active" : "hover:bg-hover"
             }`}
           >
-            <div className="bg-active text-foreground-secondary flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold uppercase">
-              {initials(user.name, user.email)}
-            </div>
+            <Avatar
+              src={user.avatarUrl}
+              name={user.name}
+              email={user.email}
+              className="size-7"
+            />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{user.name}</p>
               <p className="text-muted-foreground text-xs capitalize">
@@ -210,20 +198,23 @@ export function ShellFrame({
         <header className="bg-sidebar border-sidebar-border flex items-center gap-0.5 border-b px-2 pt-[calc(0.5rem+env(safe-area-inset-top))] pb-2 md:hidden">
           <Link
             href={homeHref}
-            aria-label="Home"
-            className="-m-1.5 flex size-11 shrink-0 items-center justify-center p-1.5 md:m-0 md:size-auto md:p-0"
+            className="flex min-h-11 min-w-0 flex-1 items-center gap-2 px-1.5"
           >
-            <Logo size={20} withWordmark={false} />
+            {brand}
           </Link>
-          <div className="min-w-0 flex-1">{selector}</div>
           {headerExtra}
           <Link
             href={profileHref}
             aria-label="Profile"
             aria-current={isCurrent("/profile") ? "page" : undefined}
-            className="bg-active text-foreground-secondary relative flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold uppercase after:absolute after:-inset-1.5 after:content-['']"
+            className="relative flex size-8 shrink-0 rounded-full after:absolute after:-inset-1.5 after:content-['']"
           >
-            {initials(user.name, user.email)}
+            <Avatar
+              src={user.avatarUrl}
+              name={user.name}
+              email={user.email}
+              className="size-8"
+            />
           </Link>
         </header>
 

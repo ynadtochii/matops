@@ -13,7 +13,7 @@ import { CONTACT_EMAIL } from "./contact";
  * client dialog.
  */
 
-export const PRIVACY_UPDATED = "28 September 2026";
+export const PRIVACY_UPDATED = "30 September 2026";
 
 function Heading({ children }: { children: React.ReactNode }) {
   return (
@@ -92,7 +92,28 @@ export function PrivacyText() {
       </p>
 
       <Heading>Cookies</Heading>
-      <p>One, to keep you signed in. No advertising or analytics cookies.</p>
+      <ul className="list-disc space-y-1 pl-5">
+        <li>One, to keep you signed in.</li>
+        <li>
+          One that remembers whether you accepted analytics cookies on the
+          MatOps home page. It lasts six months, then we ask again.
+        </li>
+        <li>
+          If you accept, Google Analytics sets its own cookies (named _ga) on
+          the home page only. They count visits and show how people find MatOps.
+          Google processes this data for us and keeps it for 14 months.
+        </li>
+        <li>
+          If you decline, no analytics cookies are set. Google still gets an
+          anonymous count of the visit, with no cookie and nothing that
+          identifies you.
+        </li>
+      </ul>
+      <p className="mt-2">
+        Analytics never runs inside the app after you sign in. No advertising
+        cookies. To change your choice, use Cookie settings at the bottom of the
+        home page.
+      </p>
     </div>
   );
 }

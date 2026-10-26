@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 
@@ -8,6 +9,10 @@ import { OrganizationBoundary } from "~/app/_components/organization-boundary";
 import { getSession } from "~/auth/server";
 import { EntityCacheBoundary } from "~/trpc/react";
 import { getQueryClient, trpc } from "~/trpc/server";
+
+// The shell renders the tab title from the academy name. A second, static
+// title here would race it on every client navigation.
+export const metadata: Metadata = { title: null };
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -20,7 +25,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 async function Authed({ children }: { children: React.ReactNode }) {
   const session = await getSession();
   if (!session) redirect("/sign-in");
-  if (!session.session.activeOrganizationId) return <AcademyGate />;
+  if (!session.session.activeOrganizationId) {
+    return (
+      <>
+        <title>MatOps</title>
+        <AcademyGate />
+      </>
+    );
+  }
 
   const queryClient = getQueryClient();
   const options = trpc.entity.list.queryOptions();

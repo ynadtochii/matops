@@ -5,7 +5,7 @@ import { EmptyState, Heading, Mark, Screen } from "./ui";
 /**
  * Shown on the student tabs when the signed-in member's tie to the active
  * academy is `suspended`. A suspended member keeps a row (history is kept) but
- * every enrolled query — schedule, dues, stats — is rejected by the server. So
+ * every enrolled query (schedule, dues, rank) is rejected by the server. So
  * rather than let each tab surface a scary "couldn't load" error, the tab
  * screens short-circuit to this calm notice. `academy.current` is a plain
  * protected query (not enrolled), so it still resolves for a suspended member

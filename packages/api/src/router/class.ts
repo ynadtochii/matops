@@ -19,6 +19,7 @@ import {
   isNull,
   lockAndReadScheduleRevision,
   lt,
+  ne,
   or,
   recordActivity,
   recordMilestone,
@@ -40,7 +41,9 @@ import {
   classChange,
   formatWhen,
   instantFromLocalDate,
+  isActiveMember,
   selfServiceWindow,
+  visibleAttendees,
 } from "@matops/domain";
 import { sendEmail } from "@matops/notifications";
 import {
@@ -290,6 +293,17 @@ export const classRouter = {
           WHERE ${classParticipation.classId} = ${classInstance.id}
             AND ${classParticipation.attendanceStatus} <> 'unmarked'
         )`,
+        headCount: sql<number>`${classInstance.bookingCount} + (
+          SELECT count(*)::int FROM ${classParticipation}
+          WHERE ${classParticipation.classId} = ${classInstance.id}
+            AND ${classParticipation.attendanceStatus} = 'present'
+            AND ${classParticipation.bookingStatus} <> 'booked'
+        ) + (
+          SELECT count(*)::int FROM ${dropInVisit}
+          WHERE ${dropInVisit.classId} = ${classInstance.id}
+            AND ${dropInVisit.attendanceStatus} = 'present'
+            AND ${dropInVisit.bookingStatus} <> 'booked'
+        )`,
       })
       .from(classInstance)
       .leftJoin(user, eq(user.id, classInstance.instructorId))
@@ -415,6 +429,36 @@ export const classRouter = {
    * Who else is on a class (spec S5, §4 schedule privacy, ADR 55). Enrolled tier,
    * so a pending member may call it — they just get counts back.
    */
+  attendees: enrolledProcedure
+    .input(ClassIdSchema)
+    .query(async ({ ctx, input }) => {
+      const rows = await ctx.db
+        .select({
+          studentId: sql<string>`coalesce(${classParticipation.personId}::text, ${classParticipation.studentId})`,
+          name: sql<string | null>`coalesce(${person.name}, ${user.name})`,
+          bookingStatus: classParticipation.bookingStatus,
+        })
+        .from(classParticipation)
+        .leftJoin(person, eq(person.id, classParticipation.personId))
+        .leftJoin(user, eq(user.id, classParticipation.studentId))
+        .where(eq(classParticipation.classId, input.id));
+
+      const [dropIns] = await ctx.db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(dropInVisit)
+        .where(
+          and(
+            eq(dropInVisit.classId, input.id),
+            ne(dropInVisit.bookingStatus, "cancelled"),
+          ),
+        );
+
+      return visibleAttendees(rows, dropIns?.count ?? 0, {
+        id: ctx.membership.personId ?? ctx.session.user.id,
+        approved: isActiveMember(ctx.membership),
+      });
+    }),
+
   /** Create a one-off class (`template_id` null). Local date+time → UTC instant. */
   create: staffProcedure
     .input(CreateClassSchema)

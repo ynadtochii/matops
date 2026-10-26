@@ -30,6 +30,22 @@ describe("DropInSubmitSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  it("keeps a sharer id", () => {
+    const result = DropInSubmitSchema.safeParse({
+      ...newBase,
+      sharedBy: "emem_1",
+    });
+    expect(result.data?.sharedBy).toBe("emem_1");
+  });
+
+  it("drops a broken sharer id instead of refusing the visit", () => {
+    for (const sharedBy of ["", "x".repeat(65), 42, ["a", "b"]]) {
+      const result = DropInSubmitSchema.safeParse({ ...newBase, sharedBy });
+      expect(result.success).toBe(true);
+      expect(result.data?.sharedBy).toBeUndefined();
+    }
+  });
+
   it("rejects an unknown kind", () => {
     const result = DropInSubmitSchema.safeParse({ ...newBase, kind: "other" });
     expect(result.success).toBe(false);
