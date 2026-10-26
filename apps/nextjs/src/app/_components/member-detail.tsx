@@ -179,7 +179,7 @@ export function MemberDetail({ m }: { m: Member }) {
           { id: "attendance", label: "Attendance" },
           { id: "rank", label: "Rank" },
           { id: "notes", label: "Notes" },
-          ...(owner && entity.membershipEnforced && !isStaffRole(m)
+          ...(owner && !isStaffRole(m)
             ? [{ id: "membership" as const, label: "Membership" }]
             : []),
         ]}

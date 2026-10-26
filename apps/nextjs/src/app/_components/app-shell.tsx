@@ -29,11 +29,7 @@ import {
 import type { NavBadge, NavItem } from "./shell-frame";
 import { useTRPC } from "~/trpc/react";
 import { AcademyIcon } from "./avatar";
-import {
-  EntityProvider,
-  useAnyBranchTakesPayment,
-  useOrganization,
-} from "./entity";
+import { EntityProvider, useOrganization } from "./entity";
 import { PageLoader } from "./mat-loader";
 import { ShellFrame } from "./shell-frame";
 import { ErrorState, NoAccessState } from "./states";
@@ -238,7 +234,6 @@ function ShellChrome({
 }) {
   const trpc = useTRPC();
   const organization = useOrganization();
-  const anyBranchTakesPayment = useAnyBranchTakesPayment();
   const activeBranch = academy ?? selectedBranch;
   const entityId = academy?.academyId ?? selectedBranch?.id;
   const within = pathWithinEntity(pathname);
@@ -270,7 +265,7 @@ function ShellChrome({
   const isSettings = (item: NavItem) => item.path === "/settings";
   const items: NavItem[] = [
     ...branchItems.filter((item) => !isSettings(item)),
-    ...(organization.canRunOrganization && anyBranchTakesPayment
+    ...(organization.canRunOrganization
       ? [
           {
             path: "/memberships",

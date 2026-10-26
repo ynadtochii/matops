@@ -223,6 +223,8 @@ export const UpdateAcademySettingsSchema = z.object({
 
 export const SaveWaiverSchema = z.object({ body: blockText(20, 5000) });
 
+export const SetMembershipEnforcedSchema = z.object({ enforced: z.boolean() });
+
 export const DeleteAcademySchema = z.object({
   confirm: lineText(1, 120),
 });

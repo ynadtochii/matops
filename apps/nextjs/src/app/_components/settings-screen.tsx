@@ -9,7 +9,10 @@ import { AcademyIdentity } from "./academy-identity";
 import { AcademyLocation } from "./academy-location";
 import { useEntity, useOrganization } from "./entity";
 import { DeskLinkSection } from "./invite-link-card";
-import { MembershipSettings } from "./membership-settings";
+import {
+  MembershipPaymentsSwitch,
+  MembershipSettings,
+} from "./membership-settings";
 import { PageHeader } from "./page-header";
 import { ENTER } from "./primitives";
 import { SignupQuestions } from "./signup-questions";
@@ -27,9 +30,8 @@ export function SettingsScreen() {
         <AcademyLocation address={academy.address} mapUrl={academy.mapUrl} />
         <SignupQuestions />
         <DeskLinkSection />
-        {canRunOrganization && academy.membershipEnforced && (
-          <MembershipSettings />
-        )}
+        {isOwner(academy) && <MembershipPaymentsSwitch />}
+        {canRunOrganization && <MembershipSettings />}
         {isOwner(academy) && (
           <div className="border-border border-t pt-8">
             <AcademyDangerZone name={academy.name} />

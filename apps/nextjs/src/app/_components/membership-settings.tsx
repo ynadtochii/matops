@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { cn } from "@matops/ui";
+import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
 import { Label } from "@matops/ui/label";
 import { Textarea } from "@matops/ui/textarea";
@@ -12,6 +13,7 @@ import { toast } from "@matops/ui/toast";
 import { MembershipPolicySchema } from "@matops/validators";
 
 import { useTRPC } from "~/trpc/react";
+import { useEntity } from "./entity";
 import {
   ENTER,
   LIST,
@@ -52,6 +54,103 @@ function SettingsSection({
   );
 }
 
+const SWITCH_BLURB =
+  "Set up plans and bank details first. Students see them only after you turn payments on.";
+
+function uncoveredLine(names: string[]) {
+  if (names.length === 0) return "Every active student has a plan.";
+  const shown = names.slice(0, 5).join(", ");
+  const rest = names.length - Math.min(names.length, 5);
+  const who = names.length === 1 ? "student has" : "students have";
+  return `${names.length} ${who} no plan yet and will stop being able to book: ${shown}${rest > 0 ? ` and ${rest} more` : ""}.`;
+}
+
+/** The owner's switch for `entity.membership_enforced_at` (ADR 154). */
+export function MembershipPaymentsSwitch() {
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  const academy = useEntity();
+  const on = academy.membershipEnforced;
+  const uncovered = useQuery({
+    ...trpc.accessPlan.uncovered.queryOptions(),
+    enabled: !on,
+  });
+  const flip = useMutation(
+    trpc.academy.setMembershipEnforced.mutationOptions({
+      onSuccess: async (result) => {
+        await queryClient.invalidateQueries();
+        toast.success(
+          result.enforced
+            ? "Membership payments are on"
+            : "Membership payments are off",
+        );
+      },
+      onError: (e) =>
+        toast.error(e.message || "Couldn't change that. Try again."),
+    }),
+  );
+  const names =
+    uncovered.data?.groups
+      .find((g) => g.entityId === academy.academyId)
+      ?.people.map((p) => p.name) ?? [];
+
+  return (
+    <SettingsSection index={3} title="Membership payments" blurb={SWITCH_BLURB}>
+      <div className={LIST}>
+        <SettingsRow
+          title={on ? "On" : "Off"}
+          description={
+            on
+              ? "Students need a plan and a paid month to book."
+              : "Approved students book without a plan or payment."
+          }
+        >
+          {on ? (
+            <ConfirmDialog
+              title="Turn membership payments off?"
+              description="Students book without a plan again. Plans, months and payment records stay."
+              confirmLabel="Turn off"
+              variant="primary"
+              onConfirm={async () => {
+                await flip.mutateAsync({ enforced: false });
+              }}
+              trigger={
+                <Button size="sm" variant="outline" busy={flip.isPending}>
+                  Turn off
+                </Button>
+              }
+            />
+          ) : (
+            <ConfirmDialog
+              title="Turn membership payments on?"
+              description={
+                <>
+                  Students then need a plan and a paid month to book. Classes
+                  already booked stay booked.{" "}
+                  {uncovered.isPending
+                    ? "Checking which students have a plan."
+                    : uncovered.isError
+                      ? "Couldn't check which students have a plan."
+                      : uncoveredLine(names)}
+                </>
+              }
+              confirmLabel="Turn on"
+              onConfirm={async () => {
+                await flip.mutateAsync({ enforced: true });
+              }}
+              trigger={
+                <Button size="sm" busy={flip.isPending}>
+                  Turn on
+                </Button>
+              }
+            />
+          )}
+        </SettingsRow>
+      </div>
+    </SettingsSection>
+  );
+}
+
 const MEMBERSHIP_BLURB =
   "Members see these bank details wherever they are told to pay.";
 
@@ -82,13 +181,13 @@ export function MembershipSettings() {
 
   if (policy.isPending)
     return (
-      <SettingsSection index={3} title="Memberships" blurb={MEMBERSHIP_BLURB}>
+      <SettingsSection index={4} title="Memberships" blurb={MEMBERSHIP_BLURB}>
         <SkeletonRows rows={3} lines={2} inList />
       </SettingsSection>
     );
   if (policy.isError) {
     return (
-      <SettingsSection index={3} title="Memberships" blurb={MEMBERSHIP_BLURB}>
+      <SettingsSection index={4} title="Memberships" blurb={MEMBERSHIP_BLURB}>
         <ErrorState
           label="your membership settings"
           onRetry={() => void policy.refetch()}
@@ -99,7 +198,7 @@ export function MembershipSettings() {
 
   const saved = policy.data;
   return (
-    <SettingsSection index={3} title="Memberships" blurb={MEMBERSHIP_BLURB}>
+    <SettingsSection index={4} title="Memberships" blurb={MEMBERSHIP_BLURB}>
       <form
         className={LIST}
         onSubmit={(e) => {

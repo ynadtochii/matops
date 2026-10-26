@@ -2,6 +2,7 @@
 
 ## Unreleased: first release, one academy
 
+- Owner switch for membership payments (ADR 154, spec FP5, FR2). Settings has a Membership payments section: the owner turns payment admission on or off for the academy (`academy.setMembershipEnforced`). Turning on asks for confirmation and names the active students with no plan. Owners and managers now see Memberships, bank details and the Membership tab on a student while payment is off, so they can set up first. Students see no change until payment is on. Stripe plan slice 0.
 - The browser tab shows the academy name inside the signed-in app (spec FR6). The shell renders the only `<title>`; `(app)/layout.tsx` sets `title: null` so the root "MatOps" title no longer races it on client navigation. Public pages keep their MatOps titles.
 - Academy first, not MatOps (spec FR6). Inside an academy the sidebar and the phone header show the academy icon (or its first letter) and name in place of the MatOps logo, and link home. The home page heading is the academy name for staff and students. The Templates empty state no longer says "MatOps fills the calendar".
 - Fix: the student card (`membership.memberHistory`) showed 0 sessions and "No attended sessions yet" for students with attendance. It matched `class_participation.student_id` against the person id; it now matches `coalesce(person_id, student_id)` like the roster visit count.

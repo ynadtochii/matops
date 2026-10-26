@@ -52,7 +52,7 @@ type MembershipTab = "payments" | "access" | "plans";
 export function MembershipsScreen() {
   const { entities, canRunOrganization, role } = useOrganization();
   const inUse = useAnyBranchTakesPayment();
-  const readable = canRunOrganization && inUse;
+  const readable = canRunOrganization;
   const trpc = useTRPC();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
@@ -90,15 +90,6 @@ export function MembershipsScreen() {
     );
   }
 
-  if (!inUse) {
-    return (
-      <div className="flex flex-col gap-8">
-        <PageHeader title="Memberships" />
-        <EmptyState title="This gym does not take payments in MatOps." />
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
@@ -111,6 +102,14 @@ export function MembershipsScreen() {
           )
         }
       />
+
+      {!inUse && (
+        <p className="text-muted-foreground text-sm">
+          Membership payments are off. Students do not see plans or months, and
+          they book without paying. Turn payments on in Settings when you are
+          ready.
+        </p>
+      )}
 
       <Tabs
         label="Membership views"

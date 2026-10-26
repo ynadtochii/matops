@@ -54,6 +54,7 @@ Plan: [first-release-plan.md](first-release-plan.md). Code built, including the 
 | File storage on R2 (ADR 152, plan `file-storage-plan.md`): `packages/storage`, `stored_file` + `0012` (applied to dev 2026-10-16), upload procedures, `/files` route, academy icon in Settings, sidebar and public pages (O6) | done | done | done | todo (avatar, F9) | done | todo |
 | File storage: avatars on web Profile, Students, rosters, Coaches and desk (F8) | done | done | done | not changed | done | — |
 | File storage: Expo avatar (F9), receipts behind the payment flag (F10) | done | todo | todo | todo | todo | — |
+| Owner switch for membership payments: Settings turns `membership_enforced_at` on or off; owner setup screens show while off (ADR 154, FP5, FR2; Stripe slice 0); no migration | not needed | done | done | not changed | done | todo |
 | Invite-only gym creation: `GYM_CREATOR_EMAILS` allowlist in Better Auth, Request a demo on landing and sign-in (ADR 149, FP10); no migration | not needed | done | done | not changed | done | todo |
 
 **Design system reference page**

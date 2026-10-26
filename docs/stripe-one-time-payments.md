@@ -35,6 +35,8 @@ Each slice is released on its own after its local acceptance passes.
 
 ## 4. Slice 0: payment flag switch
 
+**Built 2026-10-26 (ADR 154).** Owners and managers can also set up plans, prices, assignments and bank details while payment is off.
+
 Pay now lives on the membership notice, which shows only while `entity.membership_enforced_at` is set. Today no screen sets it (ADR 142). Slices 1 and 2 can be tested locally by setting it in the dev database, but they cannot reach a real gym without this slice.
 
 - **Settings:** an owner switch, **Track membership payments**. On sets `membership_enforced_at`. Off sets it back to null.
@@ -207,7 +209,7 @@ Run on a laptop against the dev database:
 
 - Use test values in `.env`.
 - Forward webhooks with `stripe listen --forward-connect-to localhost:3004/api/stripe/webhook`.
-- To test slice 2 before slice 0 exists, set `membership_enforced_at` in the dev database.
+- Turn membership payments on in Settings (slice 0) before testing slice 2.
 
 Production needs live values and a registered Connect webhook endpoint, and only after every item of that slice passes.
 
@@ -279,7 +281,7 @@ Each is a separate decision. The [full Stripe design](stripe-gym-payments-design
 
 ## 12. Open questions
 
-1. **Slice 0. Decide before slice 2 reaches a real gym.** Turning on the payment flag turns on dues enforcement (ADR 40) for that gym. Decide whether owners get the switch or it stays a direct database change.
+1. **Slice 0.** Decided and built: owners get the switch (ADR 154). Turning it on turns on dues enforcement (ADR 40) for that gym.
 2. **Portuguese invoices.** Stripe sends receipts. Portuguese businesses may need invoices from tax-authority-certified software. Confirm with an accountant before a Portuguese gym takes live payments.
 3. **Country support.** Confirm that Stripe supports the platform country and each gym's country for OAuth-connected accounts.
 4. **OAuth's future.** Stripe does not recommend OAuth for new platforms. Check before slice 1 that the MatOps platform can turn it on, and watch for changes.

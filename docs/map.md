@@ -8,6 +8,7 @@
 
 **First release**
 
+- [154: Owner switch for membership payments](issues/154-owner-payment-switch.md): the owner turns payment admission on or off in Settings (`academy.setMembershipEnforced`). Turning on names the students with no plan. Owners and managers set up Memberships, bank details and plans while payment is off; students still see payment only while it is on.
 - [153: Mark all attendance](issues/153-mark-all-attendance.md): one button on Attendance reviews up to 200 ended classes per press, oldest first, of any age and with no reason asked. Each class gets the same steps as a review by hand: booked students and visitors become present, then the review is finished (Nobody attended when nobody is present). A class with an unmarked walk-in is left for a review by hand.
 - [152: File storage on Cloudflare R2](issues/152-file-storage-on-r2.md) (accepted, partly built: avatars and icon on web; receipts not built): avatars, academy icons and payment receipts in R2 through the S3 API. One private bucket per environment; avatars and icons are served by the app at `/files/<key>` (2026-10-16 addendum). Clients upload straight to R2 with a presigned URL, and the API checks the size and magic bytes before marking the file ready. One `stored_file` table under RLS. Receipts are read through 5-minute signed URLs, follow the payment flag, and expire 61 days after upload through one R2 lifecycle rule. Migration `0012`.
 - [151: Drop-in sharer credit](issues/151-drop-in-sharer-credit.md): a link a member copies carries `by=<membership id>`, and the lead keeps the first sharer. Owners and managers see "Brought by {name} · student|coach" in the leads list. The QR stays plain, and a bad `by` never blocks a visit.
@@ -27,7 +28,6 @@
 - [140: The owner screens design pass](issues/140-the-owner-screens-design-pass.md): one pass per owner screen inside the existing design system. Found four repeating patterns, three of them bugs: a screen-wide `busy` that deadened every row, a failed query drawn as nothing to do, buttons that renamed themselves mid-request, and primitives copied instead of imported. **Partly superseded by [142](issues/142-first-release-approval-only-booking.md):** the gym-level screens it covered are removed.
 - [139: Reception permanent link and staff reception](issues/139-reception-permanent-link.md): one permanent entrance link per branch, name search before class choice, Book until an hour before and Check in after, and a second reception screen for signed-in staff. Supersedes 138's daily activation. **Superseded by [142](issues/142-first-release-approval-only-booking.md):** reception is removed.
 - [138: Reception class check-in](issues/138-reception-class-checkin.md): the first design, with a daily device token and the class chosen first. History; superseded by 139, and reception is removed by 142.
-
 
 # Map: matops — MVP rebuild (product spec + architecture)
 
