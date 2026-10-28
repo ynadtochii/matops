@@ -25,6 +25,7 @@ import { toast } from "@matops/ui/toast";
 import {
   CreateAccessPlanSchema,
   SetAccessPlanPriceSchema,
+  SetPlanPaymentLinkSchema,
 } from "@matops/validators";
 
 import { dateFmt } from "~/lib/format";
@@ -133,6 +134,7 @@ export function MembershipsScreen() {
 
       {tab === "payments" && (
         <div className="flex min-w-0 flex-col gap-8">
+          <CardPaymentsToCheck />
           <ClaimsWaiting />
           <MonthBoard />
         </div>
@@ -211,6 +213,72 @@ export function MembershipsScreen() {
  * doors reach one record. Reject clears the claim and changes nothing else, so
  * the member can send the money and say so again.
  */
+/**
+ * Card payments the gym's Stripe reported that MatOps could not match to a
+ * month on its own (ADR 157): no reference, a different amount, a rejected
+ * month, or a month already paid.
+ */
+function CardPaymentsToCheck() {
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  const rows = useQuery(trpc.cardPayment.toReview.queryOptions());
+  const dismiss = useMutation(
+    trpc.cardPayment.dismiss.mutationOptions({
+      onSuccess: () =>
+        queryClient.invalidateQueries(trpc.cardPayment.toReview.pathFilter()),
+      onError: (e) =>
+        toast.error(e.message || "Couldn't hide that payment. Try again."),
+    }),
+  );
+
+  if (rows.isPending || rows.isError || rows.data.length === 0) return null;
+
+  return (
+    <section className="flex min-w-0 flex-col gap-4">
+      <SectionHeading count={rows.data.length}>
+        Card payments to check
+      </SectionHeading>
+      <p className="text-muted-foreground -mt-2 text-sm">
+        Your Stripe reported these payments, but MatOps did not mark a month
+        paid. Check them in Stripe, mark the month by hand if needed, then hide
+        them.
+      </p>
+      <ul className={LIST}>
+        {rows.data.map((p) => (
+          <li
+            key={p.id}
+            className="flex min-h-11 flex-wrap items-center gap-3 px-4 py-3"
+          >
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="truncate font-medium">
+                {p.name ?? "Unknown student"}
+                {" · "}
+                {formatMoney(p.amountMinor, p.currency)}
+                {p.month ? ` · ${formatMonth(p.month, "UTC")}` : ""}
+              </span>
+              <span className="text-muted-foreground text-sm">
+                {p.outcome === "paid_twice" && <Badge>Paid twice</Badge>}{" "}
+                {p.reason}
+              </span>
+              <span className="text-muted-foreground text-xs tabular-nums">
+                {dateFmt.format(new Date(p.createdAt))}
+              </span>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              busy={dismiss.isPending && dismiss.variables.id === p.id}
+              onClick={() => dismiss.mutate({ id: p.id })}
+            >
+              Hide
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function ClaimsWaiting() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
@@ -533,10 +601,12 @@ function PlanCard({ plan }: { plan: Plan }) {
     }),
   );
   const [pricing, setPricing] = useState(false);
+  const [linking, setLinking] = useState(false);
 
   return (
     <div className="flex flex-wrap gap-3 px-4 py-3">
       <PriceDialog plan={plan} open={pricing} onOpenChange={setPricing} />
+      {linking && <PaymentLinkDialog plan={plan} onOpenChange={setLinking} />}
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="flex flex-wrap items-center gap-2 font-medium">
           {plan.name}
@@ -551,6 +621,7 @@ function PlanCard({ plan }: { plan: Plan }) {
           {plan.activeHolders === 1
             ? "1 member holds it"
             : `${plan.activeHolders} members hold it`}
+          {plan.paymentLinkUrl ? " · Card payment link set" : ""}
         </span>
       </div>
       <div className="flex flex-wrap items-center justify-end gap-2">
@@ -560,6 +631,11 @@ function PlanCard({ plan }: { plan: Plan }) {
         {!plan.archived && (
           <Button size="sm" variant="outline" onClick={() => setPricing(true)}>
             {plan.priceMinor === null ? "Set price" : "Change price"}
+          </Button>
+        )}
+        {!plan.archived && plan.priceMinor !== null && (
+          <Button size="sm" variant="outline" onClick={() => setLinking(true)}>
+            Payment link
           </Button>
         )}
         <Button
@@ -609,6 +685,7 @@ function PriceDialog({
     plan.priceMinor === null ? "" : (plan.priceMinor / 100).toFixed(2),
   );
   const [currency, setCurrency] = useState(plan.currency ?? "EUR");
+  const [link, setLink] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const save = useMutation(
@@ -638,9 +715,14 @@ function PriceDialog({
               priceMinor: Math.round(parseFloat(amount.trim()) * 100),
               currency,
               effectiveMonth: earliest,
+              paymentLinkUrl: link.trim() === "" ? undefined : link,
             });
             if (!parsed.success) {
-              setError("Give the price as a number, like 45 or 45.50.");
+              setError(
+                parsed.error.issues.some((i) => i.path[0] === "paymentLinkUrl")
+                  ? "Paste a Stripe payment link that starts with https://buy.stripe.com/"
+                  : "Give the price as a number, like 45 or 45.50.",
+              );
               return;
             }
             setError(null);
@@ -673,6 +755,25 @@ function PriceDialog({
               />
             </div>
           </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={`price-link-${plan.id}`}>
+              Stripe payment link for this price (optional)
+            </Label>
+            {plan.paymentLinkUrl && (
+              <p className="text-muted-foreground text-sm">
+                This plan's payment link charges the current price. Add a new
+                link with the new amount, or Pay by card disappears when the new
+                price starts.
+              </p>
+            )}
+            <Input
+              id={`price-link-${plan.id}`}
+              type="url"
+              value={link}
+              placeholder="https://buy.stripe.com/…"
+              onChange={(e) => setLink(e.target.value)}
+            />
+          </div>
           {error && <FieldError>{error}</FieldError>}
           <div className="flex justify-end gap-2">
             <Button
@@ -688,6 +789,135 @@ function PriceDialog({
               disabled={save.isPending || !earliest}
             >
               Save price
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * The gym's own Stripe Payment Link for the price members pay this month
+ * (ADR 156). Payments land in the gym's Stripe account, and staff still confirm
+ * the month with Mark paid.
+ */
+function PaymentLinkDialog({
+  plan,
+  onOpenChange,
+}: {
+  plan: Plan;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  const [link, setLink] = useState(plan.paymentLinkUrl ?? "");
+  const [error, setError] = useState<string | null>(null);
+  const save = useMutation(
+    trpc.accessPlan.setPaymentLink.mutationOptions({
+      onSuccess: async (_, input) => {
+        await queryClient.invalidateQueries(trpc.accessPlan.pathFilter());
+        onOpenChange(false);
+        toast.success(
+          input.paymentLinkUrl ? "Payment link saved" : "Payment link removed",
+        );
+      },
+      onError: (e) =>
+        toast.error(e.message || "Couldn't save that link. Try again."),
+    }),
+  );
+  const submit = (value: string | null) => {
+    const parsed = SetPlanPaymentLinkSchema.safeParse({
+      planId: plan.id,
+      paymentLinkUrl: value,
+    });
+    if (!parsed.success) {
+      setError(
+        "Paste a Stripe payment link that starts with https://buy.stripe.com/",
+      );
+      return;
+    }
+    setError(null);
+    save.mutate(parsed.data);
+  };
+
+  return (
+    <Dialog open onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogTitle>Payment link for {plan.name}</DialogTitle>
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit(link.trim() === "" ? null : link);
+          }}
+        >
+          <ol className="text-muted-foreground flex list-decimal flex-col gap-1 pl-5 text-sm">
+            <li>
+              In Stripe, create a Payment Link with a one-time price of{" "}
+              <strong className="text-foreground">
+                {plan.currentAmount
+                  ? formatMoney(
+                      plan.currentAmount.priceMinor,
+                      plan.currentAmount.currency,
+                    )
+                  : "this month's price"}
+              </strong>
+              . The amount must match exactly, or payments wait for you to check
+              them.
+            </li>
+            <li>Copy the link Stripe gives you and paste it below.</li>
+          </ol>
+          <Button size="sm" variant="outline" className="self-start" asChild>
+            <a
+              href="https://dashboard.stripe.com/payment-links/create"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Open Stripe Payment Links
+            </a>
+          </Button>
+          <p className="text-muted-foreground text-sm">
+            Students then see Pay by card for this month, and the money goes to
+            your Stripe account. With card payments set up in Settings, a paid
+            month is marked paid on its own; otherwise confirm it with Mark
+            paid.
+          </p>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={`link-${plan.id}`}>Stripe payment link</Label>
+            <Input
+              id={`link-${plan.id}`}
+              type="url"
+              value={link}
+              placeholder="https://buy.stripe.com/…"
+              onChange={(e) => setLink(e.target.value)}
+            />
+          </div>
+          {error && <FieldError>{error}</FieldError>}
+          <div className="flex flex-wrap justify-end gap-2">
+            {plan.paymentLinkUrl && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={save.isPending}
+                onClick={() => submit(null)}
+              >
+                Remove link
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              busy={save.isPending}
+              disabled={save.isPending}
+            >
+              Save link
             </Button>
           </div>
         </form>

@@ -4,14 +4,23 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { isOwner } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
+import { Callout } from "@matops/ui/callout";
+import { CopyButton } from "@matops/ui/copy-button";
+import { FieldError } from "@matops/ui/field";
+import { Input } from "@matops/ui/input";
 import { Label } from "@matops/ui/label";
 import { Textarea } from "@matops/ui/textarea";
 import { toast } from "@matops/ui/toast";
-import { MembershipPolicySchema } from "@matops/validators";
+import {
+  MembershipPolicySchema,
+  SaveStripeHookSecretSchema,
+} from "@matops/validators";
 
+import { dateFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { useEntity } from "./entity";
 import {
@@ -151,6 +160,265 @@ export function MembershipPaymentsSwitch() {
   );
 }
 
+const HOOK_BLURB =
+  "Mark months paid automatically. Your own Stripe tells MatOps when a student pays through a plan's payment link. It takes about five minutes, once.";
+
+const STRIPE_WEBHOOKS_URL = "https://dashboard.stripe.com/webhooks";
+const HOOK_EVENT = "checkout.session.completed";
+
+const HOOK_PROBLEMS: Record<string, { title: string; fix: string }> = {
+  bad_signature: {
+    title: "The signing secret does not match",
+    fix: "Stripe sent a message, but it was signed with a different secret. Open this endpoint in Stripe, reveal its signing secret, and save it here again.",
+  },
+  test_event: {
+    title: "Stripe sent a test-mode message",
+    fix: "Real payments need the webhook in live mode. In Stripe, turn off Test mode, add the endpoint there, and save its signing secret here.",
+  },
+};
+
+function SetupStep({
+  n,
+  title,
+  children,
+}: {
+  n: number;
+  title: string;
+  children?: ReactNode;
+}) {
+  return (
+    <li className="flex gap-3">
+      <span className="bg-surface-1 text-muted-foreground flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-medium tabular-nums">
+        {n}
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <p className="text-sm font-medium">{title}</p>
+        {children}
+      </div>
+    </li>
+  );
+}
+
+function CopyValue({ value, label }: { value: string; label: string }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <code className="bg-surface-1 min-w-0 flex-1 rounded px-2 py-1 text-xs break-all">
+        {value}
+      </code>
+      <CopyButton value={value} label={label} />
+    </div>
+  );
+}
+
+export function CardPaymentHookSection() {
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  const owner = isOwner(useEntity());
+  const hook = useQuery(trpc.cardPayment.hook.queryOptions());
+  const [secret, setSecret] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const refresh = () =>
+    queryClient.invalidateQueries(trpc.cardPayment.hook.pathFilter());
+  const onError = (e: { message: string }) =>
+    toast.error(e.message || "Couldn't save that. Try again.");
+
+  const start = useMutation(
+    trpc.cardPayment.startHook.mutationOptions({ onSuccess: refresh, onError }),
+  );
+  const save = useMutation(
+    trpc.cardPayment.saveSecret.mutationOptions({
+      onSuccess: async () => {
+        setSecret("");
+        await refresh();
+        toast.success("Signing secret saved");
+      },
+      onError,
+    }),
+  );
+  const remove = useMutation(
+    trpc.cardPayment.removeHook.mutationOptions({
+      onSuccess: async () => {
+        await refresh();
+        toast.success("Automatic confirmation turned off");
+      },
+      onError,
+    }),
+  );
+
+  if (hook.isPending) {
+    return (
+      <SettingsSection index={4} title="Card payments" blurb={HOOK_BLURB}>
+        <SkeletonRows rows={1} lines={2} inList />
+      </SettingsSection>
+    );
+  }
+  if (hook.isError) {
+    return (
+      <SettingsSection index={4} title="Card payments" blurb={HOOK_BLURB}>
+        <ErrorState
+          label="card payment settings"
+          onRetry={() => void hook.refetch()}
+        />
+      </SettingsSection>
+    );
+  }
+  if (!hook.data.configured) return null;
+  const { state, url, lastEventAt, lastProblem } = hook.data;
+  const problem = lastProblem ? HOOK_PROBLEMS[lastProblem] : undefined;
+
+  const secretForm = owner && (
+    <form
+      className="flex flex-col gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const parsed = SaveStripeHookSecretSchema.safeParse({ secret });
+        if (!parsed.success) {
+          setError("Paste the signing secret that starts with whsec_");
+          return;
+        }
+        setError(null);
+        save.mutate(parsed.data);
+      }}
+    >
+      <Label htmlFor="stripe-hook-secret" className="sr-only">
+        Signing secret
+      </Label>
+      <div className="flex flex-wrap gap-2">
+        <Input
+          id="stripe-hook-secret"
+          type="password"
+          autoComplete="off"
+          className="min-w-0 flex-1"
+          value={secret}
+          placeholder="whsec_…"
+          onChange={(e) => setSecret(e.target.value)}
+        />
+        <Button type="submit" size="sm" busy={save.isPending}>
+          Save secret
+        </Button>
+      </div>
+      {error && <FieldError>{error}</FieldError>}
+    </form>
+  );
+
+  const turnOff = owner && (
+    <ConfirmDialog
+      title="Turn off automatic confirmation?"
+      description="MatOps stops reading payments from your Stripe. Delete the endpoint in your Stripe Dashboard too. Payment links keep working, and staff confirm months by hand."
+      confirmLabel="Turn off"
+      onConfirm={async () => {
+        await remove.mutateAsync();
+      }}
+      trigger={
+        <Button size="sm" variant="outline" busy={remove.isPending}>
+          Turn off
+        </Button>
+      }
+    />
+  );
+
+  if (state === "none" || !url) {
+    return (
+      <SettingsSection index={4} title="Card payments" blurb={HOOK_BLURB}>
+        <div className={LIST}>
+          <SettingsRow
+            title="Off"
+            description="Staff confirm card payments by hand with Mark paid."
+          >
+            {owner && (
+              <Button
+                size="sm"
+                busy={start.isPending}
+                onClick={() => start.mutate()}
+              >
+                Set up
+              </Button>
+            )}
+          </SettingsRow>
+        </div>
+      </SettingsSection>
+    );
+  }
+
+  if (state === "needs_secret") {
+    return (
+      <SettingsSection index={4} title="Card payments" blurb={HOOK_BLURB}>
+        <div className={cn(LIST, "flex flex-col gap-5 p-4")}>
+          <ol className="flex flex-col gap-5">
+            <SetupStep n={1} title="Open webhooks in your Stripe Dashboard">
+              <p className="text-muted-foreground text-sm">
+                Use live mode for real payments. Test mode is only for trying it
+                out.
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="self-start"
+                asChild
+              >
+                <a
+                  href={STRIPE_WEBHOOKS_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Open Stripe webhooks
+                </a>
+              </Button>
+            </SetupStep>
+            <SetupStep n={2} title="Add an endpoint with this URL">
+              <CopyValue value={url} label="Copy URL" />
+            </SetupStep>
+            <SetupStep n={3} title="Choose this one event">
+              <CopyValue value={HOOK_EVENT} label="Copy event" />
+            </SetupStep>
+            <SetupStep
+              n={4}
+              title="Reveal the endpoint's signing secret and paste it here"
+            >
+              {secretForm}
+            </SetupStep>
+          </ol>
+          <div className="flex justify-end">{turnOff}</div>
+        </div>
+      </SettingsSection>
+    );
+  }
+
+  return (
+    <SettingsSection index={4} title="Card payments" blurb={HOOK_BLURB}>
+      <div className={LIST}>
+        <SettingsRow
+          stacked
+          title={problem ? "Needs attention" : "On"}
+          description={
+            problem
+              ? undefined
+              : lastEventAt
+                ? `Working. Last message from Stripe: ${dateFmt.format(new Date(lastEventAt))}.`
+                : "Waiting for the first message from Stripe. It arrives with the next card payment."
+          }
+        >
+          <div className="flex flex-col gap-3">
+            {problem && (
+              <Callout tone="warning" title={problem.title}>
+                <p>{problem.fix}</p>
+              </Callout>
+            )}
+            <CopyValue value={url} label="Copy URL" />
+            {owner && (
+              <p className="text-muted-foreground text-sm">
+                Changed the endpoint in Stripe? Paste its new signing secret.
+              </p>
+            )}
+            {secretForm}
+            <div className="flex justify-end">{turnOff}</div>
+          </div>
+        </SettingsRow>
+      </div>
+    </SettingsSection>
+  );
+}
+
 const MEMBERSHIP_BLURB =
   "Members see these bank details wherever they are told to pay.";
 
@@ -181,13 +449,13 @@ export function MembershipSettings() {
 
   if (policy.isPending)
     return (
-      <SettingsSection index={4} title="Memberships" blurb={MEMBERSHIP_BLURB}>
+      <SettingsSection index={5} title="Memberships" blurb={MEMBERSHIP_BLURB}>
         <SkeletonRows rows={3} lines={2} inList />
       </SettingsSection>
     );
   if (policy.isError) {
     return (
-      <SettingsSection index={4} title="Memberships" blurb={MEMBERSHIP_BLURB}>
+      <SettingsSection index={5} title="Memberships" blurb={MEMBERSHIP_BLURB}>
         <ErrorState
           label="your membership settings"
           onRetry={() => void policy.refetch()}
@@ -198,7 +466,7 @@ export function MembershipSettings() {
 
   const saved = policy.data;
   return (
-    <SettingsSection index={4} title="Memberships" blurb={MEMBERSHIP_BLURB}>
+    <SettingsSection index={5} title="Memberships" blurb={MEMBERSHIP_BLURB}>
       <form
         className={LIST}
         onSubmit={(e) => {

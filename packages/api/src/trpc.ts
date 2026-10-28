@@ -39,6 +39,7 @@ import { storage } from "@matops/storage";
 import { LinkTokenSchema } from "@matops/validators";
 
 import { clientIp, take } from "./rate-limit";
+import { parseSecretKey } from "./secret-box";
 
 /**
  * 1. CONTEXT
@@ -65,6 +66,7 @@ export const createTRPCContext = async (opts: {
    */
   baseDb?: DbExec;
   storage?: StorageClient | null;
+  paymentSecretKey?: Buffer | null;
 }) => {
   const authApi = opts.auth.api;
   const session = await authApi.getSession({
@@ -91,6 +93,10 @@ export const createTRPCContext = async (opts: {
     // See docs/issues/33, 60 and docs/architecture.md §5.
     baseDb: opts.baseDb ?? db,
     storage: opts.storage === undefined ? storage() : opts.storage,
+    paymentSecretKey:
+      opts.paymentSecretKey === undefined
+        ? parseSecretKey(process.env.PAYMENT_HOOK_KEY)
+        : opts.paymentSecretKey,
     appUrl: opts.auth.options.baseURL,
     // Forwarded so resolvers can call Better Auth server APIs (createOrganization,
     // setActiveOrganization, …) on behalf of the signed-in user.

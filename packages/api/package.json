@@ -14,6 +14,14 @@
     "./public-file": {
       "types": "./src/public-file.ts",
       "default": "./src/public-file.ts"
+    },
+    "./card-payment": {
+      "types": "./src/card-payment.ts",
+      "default": "./src/card-payment.ts"
+    },
+    "./secret-box": {
+      "types": "./src/secret-box.ts",
+      "default": "./src/secret-box.ts"
     }
   },
   "license": "MIT",

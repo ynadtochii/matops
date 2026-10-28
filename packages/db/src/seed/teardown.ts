@@ -21,6 +21,7 @@ import {
   accessPlanPrice,
   account,
   attendanceCorrection,
+  cardPayment,
   classInstance,
   classParticipation,
   classTemplate,
@@ -44,6 +45,7 @@ import {
   rankPromotion,
   session,
   storedFile,
+  stripeHook,
   user,
   waiverAcceptance,
 } from "../schema";
@@ -184,6 +186,12 @@ export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
     exec
       .delete(membershipPolicy)
       .where(inArray(membershipPolicy.organizationId, orgIds)),
+  );
+  await del("card_payment", () =>
+    exec.delete(cardPayment).where(inArray(cardPayment.organizationId, orgIds)),
+  );
+  await del("stripe_hook", () =>
+    exec.delete(stripeHook).where(inArray(stripeHook.organizationId, orgIds)),
   );
   await del("access_plan_price", () =>
     exec

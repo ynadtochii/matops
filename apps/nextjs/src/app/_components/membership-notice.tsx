@@ -91,22 +91,43 @@ export function MembershipNotice() {
                   it. You do not need to submit it again.
                 </p>
               </Callout>
-            ) : bankDetails ? (
+            ) : bankDetails || m.cardPaymentUrl ? (
               <div className="border-border space-y-4 border-t pt-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="min-w-0">
+                {m.cardPaymentUrl && (
+                  <div className="flex flex-col gap-2">
+                    <Button asChild variant="outline" className="max-sm:w-full">
+                      <a
+                        href={m.cardPaymentUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Pay by card
+                      </a>
+                    </Button>
                     <p className="text-muted-foreground text-sm">
-                      Transfer reference
-                    </p>
-                    <p className="text-md mt-1 font-mono break-all">
-                      {m.reference}
+                      Opens your gym's Stripe page. After you pay, come back and
+                      select “I paid”.
                     </p>
                   </div>
-                  <CopyButton value={m.reference} label="Copy reference" />
-                </div>
+                )}
+                {bankDetails && (
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-muted-foreground text-sm">
+                        Transfer reference
+                      </p>
+                      <p className="text-md mt-1 font-mono break-all">
+                        {m.reference}
+                      </p>
+                    </div>
+                    <CopyButton value={m.reference} label="Copy reference" />
+                  </div>
+                )}
                 <ConfirmDialog
-                  title="Have you sent the bank transfer?"
-                  description="This tells your gym you sent the transfer. They will confirm it once the money arrives."
+                  title={
+                    bankDetails ? "Have you paid?" : "Have you paid by card?"
+                  }
+                  description="This tells your gym you paid. They will confirm it once they see the payment."
                   confirmLabel="Yes, I paid"
                   variant="primary"
                   onConfirm={async () => {

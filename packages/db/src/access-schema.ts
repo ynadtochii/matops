@@ -100,6 +100,7 @@ export const accessPlanPrice = pgTable(
     effectiveMonth: t.date().notNull(),
     priceMinor: t.integer().notNull(),
     currency: t.text().notNull(),
+    paymentLinkUrl: t.text(),
     recordedBy: t.text().references(() => user.id, { onDelete: "set null" }),
     createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
   }),

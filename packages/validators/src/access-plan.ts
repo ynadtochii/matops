@@ -128,11 +128,58 @@ const MonthSchema = z.iso
  * decision about the future: the procedure refuses a month that is not after
  * the current one, using the same `canPriceFrom` rule the client checks with.
  */
+const PAYMENT_LINK_HOST = "buy.stripe.com";
+
+export function isStripePaymentLink(value: string): boolean {
+  if (value.length > 500) return false;
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  return (
+    url.protocol === "https:" &&
+    url.hostname === PAYMENT_LINK_HOST &&
+    url.port === "" &&
+    url.username === "" &&
+    url.password === "" &&
+    url.hash === "" &&
+    url.pathname.length > 1
+  );
+}
+
+export const PaymentLinkUrlSchema = z
+  .string()
+  .trim()
+  .refine(
+    isStripePaymentLink,
+    "Paste a Stripe payment link (https://buy.stripe.com/…)",
+  );
+
 export const SetAccessPlanPriceSchema = z.object({
   id: z.uuid(),
   priceMinor: PriceMinorSchema,
   currency: CurrencySchema,
   effectiveMonth: MonthSchema,
+  paymentLinkUrl: PaymentLinkUrlSchema.nullish(),
+});
+
+export const SaveStripeHookSecretSchema = z.object({
+  secret: z
+    .string()
+    .trim()
+    .regex(
+      /^whsec_[A-Za-z0-9+/=_-]{16,200}$/,
+      "Paste the signing secret that starts with whsec_",
+    ),
+});
+
+export const CardPaymentIdSchema = z.object({ id: z.uuid() });
+
+export const SetPlanPaymentLinkSchema = z.object({
+  planId: z.uuid(),
+  paymentLinkUrl: PaymentLinkUrlSchema.nullable(),
 });
 
 /** Tick one month of one shared membership paid or unpaid. */

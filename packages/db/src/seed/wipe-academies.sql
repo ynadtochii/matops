@@ -43,6 +43,8 @@ DELETE FROM "user" WHERE id LIKE 'seed_%';
 
 DELETE FROM "academy_profile";
 DELETE FROM "entity";
+DELETE FROM "card_payment";
+DELETE FROM "stripe_hook";
 DELETE FROM "organization";
 
 COMMIT;

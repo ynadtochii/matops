@@ -3,6 +3,7 @@ import { accessPlanRouter } from "./router/accessPlan";
 import { accountRouter } from "./router/account";
 import { attendanceRouter } from "./router/attendance";
 import { bookingRouter } from "./router/booking";
+import { cardPaymentRouter } from "./router/cardPayment";
 import { checkinRouter } from "./router/checkin";
 import { classRouter } from "./router/class";
 import { dataTransferRouter } from "./router/dataTransfer";
@@ -45,6 +46,7 @@ export const appRouter = createTRPCRouter({
   pushToken: pushTokenRouter,
   stats: statsRouter,
   storage: storageRouter,
+  cardPayment: cardPaymentRouter,
 });
 
 // export type definition of API

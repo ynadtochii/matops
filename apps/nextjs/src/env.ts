@@ -19,6 +19,8 @@ export const env = createEnv({
    */
   server: {
     POSTGRES_URL: z.url(),
+    PAYMENT_HOOK_KEY: z.string().min(1).optional(),
+    PAYMENT_HOOK_KEY_PREVIOUS: z.string().min(1).optional(),
   },
 
   /**

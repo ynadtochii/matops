@@ -19,6 +19,7 @@ export * from "./entity-schema";
 export * from "./invite-schema";
 export * from "./notification-schema";
 export * from "./notification-notice-schema";
+export * from "./payment-hook-schema";
 export * from "./person-schema";
 export * from "./product-event-schema";
 export * from "./push-token-schema";

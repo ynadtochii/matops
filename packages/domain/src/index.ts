@@ -42,6 +42,7 @@ export * from "./membership";
 export * from "./notify";
 export * from "./payments";
 export * from "./plan-price";
+export * from "./payment-link";
 export * from "./phone";
 export * from "./query-window";
 export * from "./rank";

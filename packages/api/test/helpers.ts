@@ -40,6 +40,8 @@ export interface Harness {
   storage: FakeStorage;
 }
 
+export const TEST_PAYMENT_KEY = Buffer.alloc(32, 7);
+
 function caller(ctx: Ctx) {
   return appRouter.createCaller(ctx);
 }
@@ -155,6 +157,7 @@ export async function harness(academies?: AcademySpec[]): Promise<Harness> {
     requestedEntityId: headers.get("x-matops-entity") ?? undefined,
     baseDb: exec,
     storage,
+    paymentSecretKey: TEST_PAYMENT_KEY,
     appUrl: "http://localhost:3004",
   });
 

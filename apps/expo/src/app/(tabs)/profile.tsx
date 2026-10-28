@@ -216,14 +216,34 @@ function MembershipNotice() {
               </Txt>
             ) : null}
           </Callout>
-          {bankDetails ? (
+          {bankDetails || m.cardPaymentUrl ? (
             <Stack gap={12}>
-              <CopyField label="Bank details" value={bankDetails} />
-              <CopyField
-                label="Reference (add to your transfer)"
-                value={m.reference}
-                data
-              />
+              {m.cardPaymentUrl && !m.reportedAt ? (
+                <Stack gap={6}>
+                  <Button
+                    label="Pay by card"
+                    variant="outline"
+                    onPress={() => {
+                      const url = m.cardPaymentUrl;
+                      if (url) void WebBrowser.openBrowserAsync(url);
+                    }}
+                  />
+                  <Muted>
+                    Opens your gym's Stripe page. After you pay, come back and
+                    tap “I paid”.
+                  </Muted>
+                </Stack>
+              ) : null}
+              {bankDetails ? (
+                <>
+                  <CopyField label="Bank details" value={bankDetails} />
+                  <CopyField
+                    label="Reference (add to your transfer)"
+                    value={m.reference}
+                    data
+                  />
+                </>
+              ) : null}
               {m.reportedAt ? (
                 <Muted>
                   Payment submitted. Waiting for your gym to confirm.
@@ -236,7 +256,7 @@ function MembershipNotice() {
                     confirm({
                       title: "Mark this as paid?",
                       message:
-                        "This tells your gym you sent the transfer. They'll confirm it once the money arrives.",
+                        "This tells your gym you paid. They'll confirm it once they see the payment.",
                       confirmLabel: "I paid",
                       destructive: false,
                       onConfirm: () =>
@@ -247,7 +267,7 @@ function MembershipNotice() {
               )}
             </Stack>
           ) : (
-            <Muted>Ask your gym for their bank details to pay.</Muted>
+            <Muted>Ask your gym how to pay.</Muted>
           )}
         </Stack>
       ))}

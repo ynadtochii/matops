@@ -8,11 +8,8 @@ import {
   asc,
   eq,
   eventRole,
-  gt,
-  gte,
   inArray,
   isNull,
-  lt,
   or,
   recordActivity,
   recordMilestone,
@@ -25,14 +22,11 @@ import {
   accessPlan,
   accessPlanEntity,
   accessPlanPrice,
-  classInstance,
-  classParticipation,
   entity,
   entityMembership,
   member,
   membershipAccessHold,
   membershipMonth,
-  membershipMonthAudit,
   membershipPolicy,
   person,
 } from "@matops/db/schema";
@@ -41,10 +35,10 @@ import {
   appliesInMonth,
   canEditPlan,
   canPriceFrom,
+  cardPaymentUrl,
   changeIsPending,
   formatDeadline,
   formatMonth,
-  instantFromLocalDate,
   isFreeMembershipMonth,
   isStaffRole,
   localDateISO,
@@ -55,6 +49,7 @@ import {
   periodsOverlap,
   priceForMonth,
   resolveAcademyTimeZone,
+  rowForMonth,
   runsOrganization,
 } from "@matops/domain";
 import {
@@ -71,10 +66,11 @@ import {
   RejectMembershipClaimSchema,
   SetAccessPlanCoverageSchema,
   SetAccessPlanPriceSchema,
+  SetPlanPaymentLinkSchema,
 } from "@matops/validators";
 
 import type { BookingToReview } from "../membership-access";
-import { claimSeat } from "../classes";
+import type { MonthStatus } from "../month-write";
 import { studentRosterOf } from "../members";
 import {
   bookingsNeedingReview,
@@ -87,6 +83,14 @@ import {
   membershipCalendar,
   membershipStanding,
 } from "../membership-status";
+import {
+  appendMonthAudit,
+  ASSIGNMENT_NOT_FOUND,
+  loadAssignment,
+  lockMembershipMonth,
+  monthEvidence,
+  writeMonthDecision,
+} from "../month-write";
 import { readOrganizationEntities } from "../organization-read";
 import {
   enrolledProcedure,
@@ -99,7 +103,6 @@ const PLAN_FROZEN = "An archived plan cannot be changed. Restore it first.";
 const UNKNOWN_BRANCH = "One of those branches is not yours";
 const PLAN_CLOSED = "That plan is archived, so it takes no new members";
 const NOT_A_MEMBER = "That person is not part of this gym";
-const ASSIGNMENT_NOT_FOUND = "That membership is gone";
 const MEMBERSHIP_NOT_ACTIVE =
   "That membership is not active, so there is nothing to pay for.";
 const CHANGE_PENDING =
@@ -114,61 +117,6 @@ const COVERAGE_MOVED =
 const DEFAULT_MEMBERSHIP_GRACE_DAYS = 7;
 
 type PlanRow = typeof accessPlan.$inferSelect;
-
-async function promotePaidBookings(
-  exec: DbExec,
-  organizationId: string,
-  entityIds: string[],
-  personId: string,
-  month: string,
-  timeZone: string,
-): Promise<void> {
-  for (const entityId of entityIds) {
-    await withScope(
-      { organizationId, entityId },
-      async (db) => {
-        const bookings = await db
-          .select({
-            id: classParticipation.id,
-            classId: classParticipation.classId,
-          })
-          .from(classParticipation)
-          .innerJoin(
-            classInstance,
-            eq(classInstance.id, classParticipation.classId),
-          )
-          .where(
-            and(
-              eq(classParticipation.personId, personId),
-              eq(classParticipation.bookingStatus, "booked"),
-              eq(classParticipation.bookingTier, "provisional"),
-              eq(classInstance.status, "scheduled"),
-              isNull(classInstance.deletedAt),
-              gt(classInstance.startsAt, new Date()),
-              gte(
-                classInstance.startsAt,
-                instantFromLocalDate(month, 0, timeZone),
-              ),
-              lt(
-                classInstance.startsAt,
-                instantFromLocalDate(nextMonth(month), 0, timeZone),
-              ),
-            ),
-          )
-          .for("update");
-
-        for (const booking of bookings) {
-          await claimSeat(db, booking.classId);
-          await db
-            .update(classParticipation)
-            .set({ bookingTier: "confirmed" })
-            .where(eq(classParticipation.id, booking.id));
-        }
-      },
-      exec,
-    );
-  }
-}
 
 /**
  * What the caller last saw the plan's coverage as (ADR 129). Every coverage
@@ -445,30 +393,6 @@ async function currentMonthOf(db: TenantTx): Promise<{
   const calendar = await membershipCalendar(db);
   const month = monthOf(new Date(), calendar.timeZone);
   return { month, next: nextMonth(month), timeZone: calendar.timeZone };
-}
-
-/** One assignment of this organization, or a 404 that cannot enumerate others. */
-async function loadAssignment(db: TenantTx, id: string) {
-  const [row] = await db
-    .select({
-      id: accessAssignment.id,
-      userId: accessAssignment.personId,
-      personId: accessAssignment.personId,
-      accountUserId: person.accountUserId,
-      planId: accessAssignment.planId,
-      status: accessAssignment.status,
-      startMonth: accessAssignment.startMonth,
-      startsOn: accessAssignment.startsOn,
-      endMonth: accessAssignment.endMonth,
-      assigningEntityId: accessAssignment.assigningEntityId,
-    })
-    .from(accessAssignment)
-    .innerJoin(person, eq(person.id, accessAssignment.personId))
-    .where(eq(accessAssignment.id, id));
-  if (!row) {
-    throw new TRPCError({ code: "NOT_FOUND", message: ASSIGNMENT_NOT_FOUND });
-  }
-  return row;
 }
 
 /** Archived is frozen, not merely hidden: no rename, no coverage change. */
@@ -922,29 +846,6 @@ async function setAssignmentStatus(
   return { id, status };
 }
 
-type MonthStatus = "unpaid" | "reported" | "confirmed" | "rejected";
-
-async function lockMembershipMonth(
-  db: TenantTx,
-  assignmentId: string,
-  month: string,
-) {
-  await db.execute(
-    sql`select pg_advisory_xact_lock(hashtext(${assignmentId}), hashtext(${month}))`,
-  );
-  const [row] = await db
-    .select()
-    .from(membershipMonth)
-    .where(
-      and(
-        eq(membershipMonth.assignmentId, assignmentId),
-        eq(membershipMonth.month, month),
-      ),
-    )
-    .for("update");
-  return row;
-}
-
 function requireMonthVersion(
   current: { version: number } | undefined,
   expectedVersion: number | undefined,
@@ -956,74 +857,6 @@ function requireMonthVersion(
         "This payment changed while you were looking. Refresh and try again.",
     });
   }
-}
-
-async function monthEvidence(
-  db: TenantTx,
-  assignment: Awaited<ReturnType<typeof loadAssignment>>,
-  month: string,
-) {
-  if (!appliesInMonth(assignment, month)) {
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message: "This membership does not apply in that month.",
-    });
-  }
-  const calendar = await membershipCalendar(db);
-  const prices = await db
-    .select({
-      effectiveMonth: accessPlanPrice.effectiveMonth,
-      priceMinor: accessPlanPrice.priceMinor,
-      currency: accessPlanPrice.currency,
-    })
-    .from(accessPlanPrice)
-    .where(eq(accessPlanPrice.planId, assignment.planId));
-  const amount = priceForMonth(prices, month);
-  if (!amount) {
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message: "This membership has no price for that month.",
-    });
-  }
-  return {
-    ...amount,
-    deadline: payDeadline({
-      month,
-      startMonth: assignment.startMonth,
-      policy: calendar,
-    }),
-    calendarTimeZone: calendar.timeZone,
-  };
-}
-
-async function appendMonthAudit(
-  db: TenantTx,
-  input: {
-    organizationId: string;
-    assignmentId: string;
-    month: string;
-    event: string;
-    beforeStatus: MonthStatus | null;
-    afterStatus: MonthStatus;
-    reason?: string;
-    evidence: Awaited<ReturnType<typeof monthEvidence>>;
-    actorId: string;
-  },
-) {
-  await db.insert(membershipMonthAudit).values({
-    organizationId: input.organizationId,
-    assignmentId: input.assignmentId,
-    month: input.month,
-    event: input.event,
-    beforeStatus: input.beforeStatus,
-    afterStatus: input.afterStatus,
-    reason: input.reason,
-    priceMinor: input.evidence.priceMinor,
-    currency: input.evidence.currency,
-    deadline: input.evidence.deadline,
-    calendarTimeZone: input.evidence.calendarTimeZone,
-    actorId: input.actorId,
-  });
 }
 
 export const accessPlanRouter = {
@@ -1046,25 +879,45 @@ export const accessPlanRouter = {
       })
       .from(accessAssignment);
     const gaps = await coverageGaps(ctx.db);
+    const { month } = await currentMonthOf(ctx.db);
+    const prices = await ctx.db
+      .select({
+        planId: accessPlanPrice.planId,
+        effectiveMonth: accessPlanPrice.effectiveMonth,
+        priceMinor: accessPlanPrice.priceMinor,
+        currency: accessPlanPrice.currency,
+        paymentLinkUrl: accessPlanPrice.paymentLinkUrl,
+      })
+      .from(accessPlanPrice);
 
-    return plans.map((p) => ({
-      id: p.id,
-      name: p.name,
-      description: p.description,
-      // Null until the owner prices it, which the setup checklist names and
-      // activation readiness refuses to let past (ADR 128).
-      priceMinor: p.priceMinor,
-      currency: p.currency,
-      archived: p.archivedAt !== null,
-      entityIds: coverage
-        .filter((c) => c.planId === p.id)
-        .map((c) => c.entityId)
-        .sort(),
-      activeHolders: holders.filter(
-        (h) => h.planId === p.id && h.status === "active",
-      ).length,
-      gaps: gaps.get(p.id) ?? { missing: 0, needsDecision: 0 },
-    }));
+    return plans.map((p) => {
+      const current = rowForMonth(
+        prices.filter((row) => row.planId === p.id),
+        month,
+      );
+      return {
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        paymentLinkUrl: current?.paymentLinkUrl ?? null,
+        currentAmount: current
+          ? { priceMinor: current.priceMinor, currency: current.currency }
+          : null,
+        // Null until the owner prices it, which the setup checklist names and
+        // activation readiness refuses to let past (ADR 128).
+        priceMinor: p.priceMinor,
+        currency: p.currency,
+        archived: p.archivedAt !== null,
+        entityIds: coverage
+          .filter((c) => c.planId === p.id)
+          .map((c) => c.entityId)
+          .sort(),
+        activeHolders: holders.filter(
+          (h) => h.planId === p.id && h.status === "active",
+        ).length,
+        gaps: gaps.get(p.id) ?? { missing: 0, needsDecision: 0 },
+      };
+    });
   }),
 
   create: organizationManagerProcedure
@@ -1174,6 +1027,7 @@ export const accessPlanRouter = {
           effectiveMonth: input.effectiveMonth,
           priceMinor: input.priceMinor,
           currency: input.currency,
+          paymentLinkUrl: input.paymentLinkUrl ?? null,
           recordedBy: ctx.session.user.id,
         })
         // Naming the same month twice is a correction, not a second price.
@@ -1182,6 +1036,9 @@ export const accessPlanRouter = {
           set: {
             priceMinor: input.priceMinor,
             currency: input.currency,
+            ...(input.paymentLinkUrl !== undefined && {
+              paymentLinkUrl: input.paymentLinkUrl,
+            }),
             recordedBy: ctx.session.user.id,
           },
         });
@@ -1191,6 +1048,36 @@ export const accessPlanRouter = {
         .set({ priceMinor: input.priceMinor, currency: input.currency })
         .where(eq(accessPlan.id, input.id));
 
+      return { ok: true as const };
+    }),
+
+  /**
+   * The gym's own Stripe payment link for the price in effect this month
+   * (ADR 156). A future price takes its link from `setPrice`, so a member is
+   * never sent to the amount of a month that has not started.
+   */
+  setPaymentLink: organizationManagerProcedure
+    .input(SetPlanPaymentLinkSchema)
+    .mutation(async ({ ctx, input }) => {
+      const { month } = await currentMonthOf(ctx.db);
+      const rows = await ctx.db
+        .select({
+          id: accessPlanPrice.id,
+          effectiveMonth: accessPlanPrice.effectiveMonth,
+        })
+        .from(accessPlanPrice)
+        .where(eq(accessPlanPrice.planId, input.planId));
+      const current = rowForMonth(rows, month);
+      if (!current) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Set a price for this plan first.",
+        });
+      }
+      await ctx.db
+        .update(accessPlanPrice)
+        .set({ paymentLinkUrl: input.paymentLinkUrl })
+        .where(eq(accessPlanPrice.id, current.id));
       return { ok: true as const };
     }),
 
@@ -1622,67 +1509,19 @@ export const accessPlanRouter = {
       }
       const evidence = await monthEvidence(ctx.db, assignment, input.month);
       const now = new Date();
-      const [saved] = await ctx.db
-        .insert(membershipMonth)
-        .values({
-          organizationId: ctx.organizationId,
-          assignmentId: input.assignmentId,
-          month: input.month,
-          status: nextStatus,
-          version: 1,
-          reviewedBy: ctx.session.user.id,
-          reviewedAt: now,
-          priceMinor: evidence.priceMinor,
-          currency: evidence.currency,
-          deadline: evidence.deadline,
-          calendarTimeZone: evidence.calendarTimeZone,
-          reportedAt: null,
-        })
-        .onConflictDoUpdate({
-          target: [membershipMonth.assignmentId, membershipMonth.month],
-          set: {
-            status: nextStatus,
-            version: sql`${membershipMonth.version} + 1`,
-            reviewedBy: ctx.session.user.id,
-            reviewedAt: now,
-            priceMinor: held?.priceMinor ?? evidence.priceMinor,
-            currency: held?.currency ?? evidence.currency,
-            deadline: held?.deadline ?? evidence.deadline,
-            calendarTimeZone:
-              held?.calendarTimeZone ?? evidence.calendarTimeZone,
-            reportedAt: null,
-          },
-        })
-        .returning({ version: membershipMonth.version });
-      await appendMonthAudit(ctx.db, {
+      const written = await writeMonthDecision(ctx.db, {
         organizationId: ctx.organizationId,
-        assignmentId: input.assignmentId,
+        assignment,
         month: input.month,
-        event: input.paid ? "confirmed" : "corrected",
-        beforeStatus: held ? currentStatus : null,
-        afterStatus: nextStatus,
-        reason: input.reason,
+        held,
+        nextStatus,
         evidence,
         actorId: ctx.session.user.id,
+        event: input.paid ? "confirmed" : "corrected",
+        reason: input.reason,
+        now,
       });
-      if (input.paid) {
-        const coverage = await ctx.db
-          .select({ entityId: accessPlanEntity.entityId })
-          .from(accessPlanEntity)
-          .where(eq(accessPlanEntity.planId, assignment.planId));
-        // The organization transaction cannot see class rows, so each branch's
-        // bookings are promoted in that branch's own scope once the month commits.
-        ctx.afterCommit((exec) =>
-          promotePaidBookings(
-            exec,
-            ctx.organizationId,
-            coverage.map((row) => row.entityId),
-            assignment.personId,
-            input.month,
-            evidence.calendarTimeZone,
-          ),
-        );
-      }
+      if (written.promote) ctx.afterCommit(written.promote);
       if (input.paid && input.resolveHoldReason && held) {
         await ctx.db
           .update(membershipAccessHold)
@@ -1703,7 +1542,7 @@ export const accessPlanRouter = {
         changed: true,
         paid: input.paid,
         status: nextStatus,
-        version: saved?.version ?? 1,
+        version: written.version,
       };
     }),
 
@@ -2199,6 +2038,38 @@ export const accessPlanRouter = {
           })
           .from(accessPlanEntity)
       : [];
+    const links = memberships.length
+      ? await ctx.db
+          .select({
+            assignmentId: accessAssignment.id,
+            effectiveMonth: accessPlanPrice.effectiveMonth,
+            paymentLinkUrl: accessPlanPrice.paymentLinkUrl,
+          })
+          .from(accessAssignment)
+          .innerJoin(
+            accessPlanPrice,
+            eq(accessPlanPrice.planId, accessAssignment.planId),
+          )
+          .where(
+            inArray(
+              accessAssignment.id,
+              memberships.map((m) => m.assignmentId),
+            ),
+          )
+      : [];
+
+    const cardLink = (
+      link: string | null | undefined,
+      assignmentId: string,
+      month: string,
+    ) =>
+      link
+        ? cardPaymentUrl(link, {
+            assignmentId,
+            month,
+            email: ctx.session.user.email,
+          })
+        : null;
 
     return {
       bankDetails: await membershipBankDetails(ctx.db),
@@ -2215,6 +2086,14 @@ export const accessPlanRouter = {
           ...m,
           warning: ctx.entity.membershipEnforcedAt ? m.warning : null,
           reference: paymentReference(ctx.session.user.name, m.assignmentId),
+          cardPaymentUrl: cardLink(
+            rowForMonth(
+              links.filter((l) => l.assignmentId === m.assignmentId),
+              m.month,
+            )?.paymentLinkUrl,
+            m.assignmentId,
+            m.month,
+          ),
           next:
             change && next
               ? {

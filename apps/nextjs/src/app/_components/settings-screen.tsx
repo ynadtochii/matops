@@ -10,6 +10,7 @@ import { AcademyLocation } from "./academy-location";
 import { useEntity, useOrganization } from "./entity";
 import { DeskLinkSection } from "./invite-link-card";
 import {
+  CardPaymentHookSection,
   MembershipPaymentsSwitch,
   MembershipSettings,
 } from "./membership-settings";
@@ -31,6 +32,7 @@ export function SettingsScreen() {
         <SignupQuestions />
         <DeskLinkSection />
         {isOwner(academy) && <MembershipPaymentsSwitch />}
+        {canRunOrganization && <CardPaymentHookSection />}
         {canRunOrganization && <MembershipSettings />}
         {isOwner(academy) && (
           <div className="border-border border-t pt-8">

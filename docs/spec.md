@@ -203,6 +203,7 @@ With payment off, the web hides this screen and `/payments` says payments are no
 
 - **Approved members only.** The card carries the gym's bank details, so a **pending** member does not see it.
 - The student sees each membership's plan, amount, the month they are judged on, and its standing, with the gym's bank details and a **reference** to put in the transfer note (copy buttons on each). You pay in your own bank app. There is no card payment.
+- **Pay by card** (ADR 156): when the plan price for the month has the gym's Stripe Payment Link, the student sees **Pay by card**. It opens the gym's own Stripe page with the membership and month as the client reference and the student's email filled in. When the gym set up card payments (ADR 157), a matching payment confirms the month on its own; otherwise the student taps "I paid" as for a transfer. A card link alone, with no bank details, is enough to show the payment card.
 - **"I paid"** reports the month as sent (`accessPlan.claimMonth`). Claiming twice is one claim. An owner or manager confirms it, which marks the month paid, or rejects it (FA3, FA5). While a claim is pending, booking stays open (FA4).
 - There is no plan shop: staff assign the plan (FA2).
 
@@ -327,6 +328,7 @@ Owner or manager. Instructors do not see it.
 - **Address** (ADR 68): free text, up to 200 characters. Students see it on Profile and on the join confirm step.
 - **Map link** (ADR 71): an **optional** share link from Google Maps, Apple Maps, OpenStreetMap or Waze. Only those four hosts are accepted. The field is disabled until an address is typed. A **Check the pin** link opens exactly what the student's tap will open.
 - **Sign-up questions** (ADR 146): **Ask about injuries and medical conditions** turns the optional health question on the student join form on or off (default off). Belt and the news opt-in are always asked. **Require agreement** makes new students accept the academy's agreement to join; it can only be turned on once a text is saved. **Agreement text** starts as a starter template the owner edits and saves. Each save with changed text is a new version, and the owner is responsible for the wording. Students who joined before are not asked.
+- **Card payments** (ADR 157): the owner sets up automatic confirmation. **Set up** shows four steps: open Stripe's webhooks, add an endpoint with the gym's URL, choose `checkout.session.completed`, paste the endpoint's signing secret. The row then shows On and the time of the last message from Stripe, or **Needs attention** with the fix when Stripe sent a message with another secret or in test mode on the live site. **Turn off** removes it. Managers see the state only. Hidden when the server has no `PAYMENT_HOOK_KEY`.
 - **Membership payments** (owner, ADR 154): On or Off, with Turn on and Turn off (FP5).
 - **Bank details:** owners and managers, whether payment is on or off (FR2, FR5).
 - **Delete the academy** (ADR 68): owner only; the owner types **`delete <academy name>`** to confirm. It is a **soft** delete: every member loses the academy at once and its join code is never reissued, but the data survives in the database. No restore screen. The gym closes with its last academy.
@@ -337,6 +339,8 @@ Owner or manager. Instructors do not see it.
 Owners and managers see Memberships whether payment is on or off (ADR 154). With payment off, the page says so, and `/entities/<id>/payments` tells students payments are not in use. Owner or manager:
 
 - **Plans** (FP6): a monthly price in one currency, a price history that names the month a change starts, and the academies it covers.
+- **Card payments to check** (ADR 157): card payments the gym's Stripe reported that MatOps did not match to a month (no reference, a different amount, a rejected month, a membership that does not cover the month) or that paid a month twice. Each shows the student, amount, month and reason, until staff **Hide** it.
+- **Payment link** (ADR 156): each price can carry the gym's Stripe Payment Link (`https://buy.stripe.com/...` only). The dialog shows this month's exact amount to use in Stripe and opens Stripe's Payment Link page. Changing the price of a plan with a link reminds the owner to add a link for the new amount; without one, Pay by card disappears when the new price starts. **Payment link** on a plan sets or removes the link of this month's price; **Change price** takes an optional link for the new price. Staff still confirm card payments with Mark paid.
 - **Assign** a plan to a student from their Membership tab (FA2). Suspend or end an assignment. Ending one cancels no booking (MB4).
 - **This month:** a board of every active membership, unpaid first. Staff **mark a month paid**, or confirm or reject a student's **"I paid"** claim (FA3). A rejected month creates a hold (FA5).
 - **Bank details** in Settings feed the student's card (S9).
