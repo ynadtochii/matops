@@ -48,6 +48,7 @@ export interface BannerMembership {
 export type MembershipBanner =
   | { kind: "choose_plan" }
   | { kind: "no_plans" }
+  | { kind: "paused"; planName: string }
   | { kind: "finish_payment"; planName: string; assignmentId: string }
   | { kind: "waiting_check"; planName: string }
   | { kind: "waiting_cash"; planName: string }
@@ -59,6 +60,12 @@ export type MembershipBanner =
       deadline: Date;
     }
   | { kind: "renew_overdue"; planName: string; assignmentId: string };
+
+export function suspendedMembership<
+  T extends { status: string; covers: boolean },
+>(memberships: readonly T[]): T | undefined {
+  return memberships.find((m) => m.covers && m.status === "suspended");
+}
 
 export function membershipBanner(input: {
   paymentsOn: boolean;
@@ -72,6 +79,8 @@ export function membershipBanner(input: {
     (m) => m.status === "active" && m.covers,
   );
   if (covering.length === 0) {
+    const paused = suspendedMembership(input.memberships);
+    if (paused) return { kind: "paused", planName: paused.planName };
     return input.choosable > 0 ? { kind: "choose_plan" } : { kind: "no_plans" };
   }
   if (
@@ -85,7 +94,9 @@ export function membershipBanner(input: {
   );
   if (declined) return { kind: "rejected", planName: declined.planName };
   const checking = covering.find(
-    (m) => m.paymentStatus === "reported" && !m.awaitingStaff,
+    (m) =>
+      m.paymentStatus === "reported" &&
+      (!m.awaitingStaff || input.now.getTime() < m.deadline.getTime()),
   );
   if (checking) return { kind: "waiting_check", planName: checking.planName };
   const cash = covering.find((m) => m.paymentStatus === "reported");
@@ -119,13 +130,13 @@ export function canSwapChosenPlan(input: {
   chosenBySelf: boolean;
   firstMonth: boolean;
   paymentStatus: "unpaid" | "reported" | "confirmed" | "rejected";
-  held: boolean;
+  referenced: boolean;
 }): boolean {
   return (
     input.chosenBySelf &&
     input.firstMonth &&
     input.paymentStatus === "unpaid" &&
-    !input.held
+    !input.referenced
   );
 }
 
@@ -168,6 +179,12 @@ export function membershipBannerText(
     case "no_plans":
       return {
         text: "Your gym has not set up memberships yet, so booking is closed. Ask the gym.",
+        blocking: true,
+        action: null,
+      };
+    case "paused":
+      return {
+        text: `Your membership for ${banner.planName} is paused, so booking is closed. Ask your gym to restore it.`,
         blocking: true,
         action: null,
       };

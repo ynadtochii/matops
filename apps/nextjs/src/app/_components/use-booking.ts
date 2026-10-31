@@ -81,5 +81,6 @@ export function useBooking() {
     busy: book.isPending || cancel.isPending,
     locked,
     lockedMessage,
+    lockedByMembership: needsGate && !!gate.data?.locked,
   };
 }

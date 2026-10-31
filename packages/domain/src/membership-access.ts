@@ -135,7 +135,7 @@ export function accessReason(
     case "provisional":
       return "Payment reported. You can book while the gym checks your payment. If payment is declined, booking and check-in access will pause.";
     case "expired":
-      return "You haven't paid for this month yet, so booking is closed. Pay at the desk and your gym will open it again.";
+      return "You haven't paid for this month yet, so booking is closed. Pay from Membership to open it again.";
     case "pending-approval":
       return `${branchName} has not approved you yet. You can browse classes while you wait.`;
     case "payment-declined":

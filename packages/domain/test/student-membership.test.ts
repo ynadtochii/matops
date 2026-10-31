@@ -95,6 +95,19 @@ describe("membershipBanner", () => {
     expect(banner([], { choosable: 0 })).toBe("no_plans");
   });
 
+  it("tells a student with a paused plan to ask the gym", () => {
+    expect(banner([held({ status: "suspended" })])).toBe("paused");
+    expect(banner([held({ status: "suspended", covers: false })])).toBe(
+      "choose_plan",
+    );
+    expect(
+      banner([
+        held({ status: "suspended" }),
+        held({ assignmentId: "a2", paymentStatus: "confirmed" }),
+      ]),
+    ).toBeNull();
+  });
+
   it("asks to finish paying a chosen plan", () => {
     expect(banner([held()])).toBe("finish_payment");
   });
@@ -104,6 +117,16 @@ describe("membershipBanner", () => {
     expect(
       banner([held({ paymentStatus: "reported", awaitingStaff: true })]),
     ).toBe("waiting_cash");
+    expect(
+      banner([
+        held({
+          paymentStatus: "reported",
+          awaitingStaff: true,
+          firstMonth: false,
+          deadline: LATER,
+        }),
+      ]),
+    ).toBe("waiting_check");
   });
 
   it("names a declined payment", () => {
@@ -135,7 +158,7 @@ describe("canSwapChosenPlan", () => {
     chosenBySelf: true,
     firstMonth: true,
     paymentStatus: "unpaid" as const,
-    held: false,
+    referenced: false,
   };
 
   it("lets a student swap only an unpaid plan they chose this month", () => {
@@ -145,7 +168,7 @@ describe("canSwapChosenPlan", () => {
     expect(canSwapChosenPlan({ ...chosen, paymentStatus: "reported" })).toBe(
       false,
     );
-    expect(canSwapChosenPlan({ ...chosen, held: true })).toBe(false);
+    expect(canSwapChosenPlan({ ...chosen, referenced: true })).toBe(false);
   });
 });
 

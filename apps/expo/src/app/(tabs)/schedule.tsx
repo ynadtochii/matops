@@ -161,7 +161,7 @@ export default function Schedule() {
           </View>
 
           <View>
-            {booking.lockedMessage ? (
+            {booking.lockedMessage && !booking.lockedByMembership ? (
               <View style={{ marginBottom: 16 }}>
                 <Callout tone="warning" title="Booking unavailable">
                   {booking.lockedMessage}

@@ -78,14 +78,6 @@ import { coverageOf, currentMonthOf, pendingChanges } from "./shared";
 const MEMBERSHIP_NOT_ACTIVE =
   "That membership is not active, so there is nothing to pay for.";
 
-/**
- * Every assignment this person holds, locked for the length of the transaction
- * (ADR 129).
- *
- * Two staff scheduling a change at the same moment would otherwise both read
- * "no overlap" and both write one. The lock is on the PERSON's rows, which is
- * the smallest thing that makes overlap decidable.
- */
 async function requireProof(
   ctx: {
     db: TenantTx;

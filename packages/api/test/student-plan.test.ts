@@ -10,6 +10,8 @@ const ACAD = "acad_choose";
 const OWNER = "u_choose_owner";
 const STUDENT = "u_choose_student";
 const OTHER = "u_choose_other";
+const PAUSED = "u_choose_paused";
+const CARD = "u_choose_card";
 const CLASS = "00000000-0000-4000-8000-0000000c0001";
 
 describe("students choose and pay for a plan", () => {
@@ -23,6 +25,8 @@ describe("students choose and pay for a plan", () => {
   const owner = () => h.as(OWNER, ACAD);
   const student = () => h.as(STUDENT, ACAD);
   const other = () => h.as(OTHER, ACAD);
+  const paused = () => h.as(PAUSED, ACAD);
+  const card = () => h.as(CARD, ACAD);
   const banner = async (who = student()) =>
     (await who.accessPlan.mine()).banner?.kind ?? null;
   const held = async (who = student()) =>
@@ -41,6 +45,8 @@ describe("students choose and pay for a plan", () => {
           { userId: OWNER, role: "owner", status: "active" },
           { userId: STUDENT, role: "student", status: "active" },
           { userId: OTHER, role: "student", status: "active" },
+          { userId: PAUSED, role: "student", status: "active" },
+          { userId: CARD, role: "student", status: "active" },
         ],
       },
     ]);
@@ -333,5 +339,38 @@ describe("students choose and pay for a plan", () => {
         }),
       ),
     ).toBe("FORBIDDEN");
+  });
+
+  it("gives the cash form the gym's own day", async () => {
+    expect((await student().studentPlan.options()).today).toBe("2026-11-03");
+  });
+
+  it("keeps a plan paused by staff paused", async () => {
+    const chosen = await paused().studentPlan.choose({ planId: eight });
+    await owner().accessPlan.suspend({ id: chosen.assignmentId });
+    expect(await banner(paused())).toBe("paused");
+    for (const planId of [eight, unlimited]) {
+      expect(await rejectionCode(paused().studentPlan.choose({ planId }))).toBe(
+        "CONFLICT",
+      );
+    }
+    expect(
+      (await paused().accessPlan.mine()).memberships.map((m) => m.status),
+    ).toEqual(["suspended"]);
+  });
+
+  it("refuses to swap a plan that a card payment points at", async () => {
+    const chosen = await card().studentPlan.choose({ planId: eight });
+    await h.pg.query(
+      `INSERT INTO card_payment (organization_id, stripe_session_id, assignment_id, month, amount_minor, currency, outcome)
+       VALUES ($1, 'cs_test_swap', $2, '2026-11-01', 5000, 'EUR', 'needs_review')`,
+      [ACAD, chosen.assignmentId],
+    );
+    expect(
+      await rejectionCode(card().studentPlan.choose({ planId: unlimited })),
+    ).toBe("CONFLICT");
+    expect(
+      (await card().accessPlan.mine()).memberships.map((m) => m.assignmentId),
+    ).toEqual([chosen.assignmentId]);
   });
 });

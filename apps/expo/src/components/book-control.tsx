@@ -104,7 +104,14 @@ export function useBooking() {
     (bookMutation.isPending && bookMutation.variables.classId === classId) ||
     (cancelMutation.isPending && cancelMutation.variables.classId === classId);
 
-  return { book, cancel, busyFor, locked, lockedMessage };
+  return {
+    book,
+    cancel,
+    busyFor,
+    locked,
+    lockedMessage,
+    lockedByMembership: needsGate && !!gate.data?.locked,
+  };
 }
 
 export type Booking = ReturnType<typeof useBooking>;

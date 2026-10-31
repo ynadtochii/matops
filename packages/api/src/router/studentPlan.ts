@@ -1,13 +1,21 @@
 import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
-import { and, eq, inArray, isNull } from "@matops/db";
+import { eq, inArray, or } from "@matops/db";
 import {
   accessAssignment,
+  accessAssignmentChange,
+  cardPayment,
   membershipAccessHold,
   membershipMonth,
 } from "@matops/db/schema";
-import { canSwapChosenPlan, isStaff, monthOf } from "@matops/domain";
+import {
+  canSwapChosenPlan,
+  isStaff,
+  localDateISO,
+  monthOf,
+  suspendedMembership,
+} from "@matops/domain";
 import { ChoosePlanSchema } from "@matops/validators";
 
 import { staffOf } from "../members";
@@ -28,7 +36,9 @@ import { assignOne, lockAssignmentsOf } from "./accessPlan";
 export const studentPlanRouter = {
   options: memberProcedure.query(async ({ ctx }) => {
     const staff = await staffOf({ academyId: ctx.entity.id, db: ctx.db });
+    const calendar = await membershipCalendar(ctx.db);
     return {
+      today: localDateISO(new Date(), calendar.timeZone),
       plans: await loadChoosablePlans(ctx.db, ctx.entity.id),
       methods: await enabledPaymentMethods(ctx.db),
       staff: staff.flatMap((s) =>
@@ -70,33 +80,59 @@ export const studentPlanRouter = {
         { personId, accountUserId: ctx.session.user.id },
         now,
       );
-      const current = standing.filter(
-        (m) => m.status === "active" && m.entityIds.includes(ctx.entity.id),
-      );
+      const covering = standing.map((m) => ({
+        ...m,
+        covers: m.entityIds.includes(ctx.entity.id),
+      }));
+      if (suspendedMembership(covering)) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message:
+            "Your membership is paused. Ask your gym to restore or change it.",
+        });
+      }
+      const current = covering.filter((m) => m.status === "active" && m.covers);
       const same = current.find((m) => m.planId === plan.id);
       if (same) return { assignmentId: same.assignmentId, created: false };
 
-      const holds = current.length
-        ? await ctx.db
-            .select({ assignmentId: membershipAccessHold.assignmentId })
-            .from(membershipAccessHold)
-            .where(
-              and(
-                inArray(
-                  membershipAccessHold.assignmentId,
-                  current.map((m) => m.assignmentId),
-                ),
-                isNull(membershipAccessHold.resolvedAt),
-              ),
-            )
-        : [];
+      const ids = current.map((m) => m.assignmentId);
+      const referenced = new Set<string>();
+      if (ids.length) {
+        const holds = await ctx.db
+          .select({ id: membershipAccessHold.assignmentId })
+          .from(membershipAccessHold)
+          .where(inArray(membershipAccessHold.assignmentId, ids));
+        const changes = await ctx.db
+          .select({
+            source: accessAssignmentChange.sourceAssignmentId,
+            target: accessAssignmentChange.targetAssignmentId,
+          })
+          .from(accessAssignmentChange)
+          .where(
+            or(
+              inArray(accessAssignmentChange.sourceAssignmentId, ids),
+              inArray(accessAssignmentChange.targetAssignmentId, ids),
+            ),
+          );
+        const payments = await ctx.db
+          .select({ id: cardPayment.assignmentId })
+          .from(cardPayment)
+          .where(inArray(cardPayment.assignmentId, ids));
+        for (const row of [...holds, ...payments]) {
+          if (row.id) referenced.add(row.id);
+        }
+        for (const row of changes) {
+          referenced.add(row.source);
+          referenced.add(row.target);
+        }
+      }
       for (const m of current) {
         const swappable = canSwapChosenPlan({
           chosenBySelf: m.chosenBySelf,
           firstMonth: m.firstMonth,
           paymentStatus: m.paymentStatus as
             "unpaid" | "reported" | "confirmed" | "rejected",
-          held: holds.some((h) => h.assignmentId === m.assignmentId),
+          referenced: referenced.has(m.assignmentId),
         });
         if (!swappable) {
           throw new TRPCError({

@@ -10,7 +10,8 @@ import { useEntity } from "./entity";
 import { MembershipChangeNotice } from "./membership-notice";
 import { PageHeader } from "./page-header";
 import { LIST, Section } from "./primitives";
-import { EmptyState, SuspendedState } from "./states";
+import { SkeletonCard } from "./skeletons";
+import { EmptyState, ErrorState, SuspendedState } from "./states";
 
 const CHOOSING = new Set([
   "choose_plan",
@@ -42,6 +43,13 @@ export function MyDues() {
           <EmptyState title="Memberships appear after your gym approves you.">
             You can browse the schedule while you wait.
           </EmptyState>
+        ) : status === "active" && standing.isPending ? (
+          <SkeletonCard lines={3} />
+        ) : status === "active" && standing.isError ? (
+          <ErrorState
+            label="your membership"
+            onRetry={() => void standing.refetch()}
+          />
         ) : null}
         {!choosing && <MembershipSettled />}
         <MembershipChangeNotice />

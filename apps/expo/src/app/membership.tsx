@@ -11,7 +11,6 @@ import {
   FILE_RULES,
   fitWithin,
   formatMoney,
-  localDateISO,
   paymentMethodUsesReference,
 } from "@matops/domain";
 
@@ -43,9 +42,8 @@ type Method = Options["methods"][number];
 const FALLBACK = "Couldn't send that. Try again.";
 const CASH_DAYS_SHOWN = 31;
 
-function recentDays(): { key: string; label: string }[] {
-  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const today = new Date(`${localDateISO(new Date(), zone)}T12:00:00Z`);
+function recentDays(todayISO: string): { key: string; label: string }[] {
+  const today = new Date(`${todayISO}T12:00:00Z`);
   const label = new Intl.DateTimeFormat(undefined, {
     weekday: "short",
     day: "numeric",
@@ -154,7 +152,8 @@ export default function MembershipScreen() {
     } else if (
       banner.kind === "waiting_check" ||
       banner.kind === "waiting_cash" ||
-      banner.kind === "rejected"
+      banner.kind === "rejected" ||
+      banner.kind === "paused"
     ) {
       body = (
         <Callout
@@ -364,6 +363,7 @@ function PayStep({
           membership={membership}
           method={method}
           staff={options.staff}
+          today={options.today}
         />
       ) : null}
       {method && method.kind !== "cash" ? (
@@ -533,16 +533,18 @@ function CashPanel({
   membership,
   method,
   staff,
+  today,
 }: {
   membership: Membership;
   method: Method;
   staff: Options["staff"];
+  today: string;
 }) {
   const t = useTheme();
   const toast = useToast();
   const claim = useClaim();
   const [paidTo, setPaidTo] = useState<string | null>(staff[0]?.userId ?? null);
-  const [days] = useState(recentDays);
+  const [days] = useState(() => recentDays(today));
   const [paidOn, setPaidOn] = useState(days[0]?.key ?? "");
   const [name, setName] = useState("");
   const [note, setNote] = useState("");

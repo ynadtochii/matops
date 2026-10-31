@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ArrowLeftRight,
   Check,
   ChevronDown,
   ExternalLink,
@@ -18,7 +19,6 @@ import {
   FILE_RULES,
   formatMoney,
   formatMonth,
-  localDateISO,
   paymentMethodUsesReference,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
@@ -279,38 +279,38 @@ function PayStep({
     <section className="flex flex-col gap-6" aria-label="Pay for your plan">
       {onChangePlan && <Progress current={2} />}
 
-      <div
-        className={cn(
-          cardClass(),
-          "flex flex-wrap items-start justify-between gap-4",
-        )}
-      >
-        <div className="flex min-w-0 flex-col gap-1">
+      <div className={cn(cardClass(), "flex flex-col gap-3")}>
+        <div className="flex min-h-8 items-center justify-between gap-3">
           <Eyebrow>{onChangePlan ? "Your plan" : `Due for ${month}`}</Eyebrow>
-          <p className="text-lg font-semibold">{membership.planName}</p>
-          <p className="text-muted-foreground text-sm">
-            {onChangePlan
-              ? `Booking opens once ${month} is paid.`
-              : (membership.warning?.headline ??
-                "Pay this month to keep booking.")}
-          </p>
           {onChangePlan && (
             <Button
-              variant="link"
+              variant="outline"
               size="sm"
-              className="text-muted-foreground mt-1 self-start px-0"
+              className="-my-1 shrink-0"
               onClick={onChangePlan}
             >
+              <ArrowLeftRight aria-hidden />
               Change plan
             </Button>
           )}
         </div>
-        {price && (
-          <div className="text-right">
-            <p className="text-2xl font-semibold tabular-nums">{price}</p>
-            <p className="text-muted-foreground text-xs">for {month}</p>
-          </div>
-        )}
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <p className="text-lg font-semibold">{membership.planName}</p>
+          {price && (
+            <p className="flex items-baseline gap-1.5">
+              <span className="text-2xl font-semibold tabular-nums">
+                {price}
+              </span>
+              <span className="text-muted-foreground text-sm">for {month}</span>
+            </p>
+          )}
+        </div>
+        <p className="text-muted-foreground border-border border-t pt-3 text-sm">
+          {onChangePlan
+            ? `Booking opens once ${month} is paid.`
+            : (membership.warning?.headline ??
+              "Pay this month to keep booking.")}
+        </p>
       </div>
 
       {choices.length === 0 ? (
@@ -325,65 +325,97 @@ function PayStep({
           <div
             role="radiogroup"
             aria-labelledby="pay-how"
-            className="grid gap-2 sm:grid-cols-2"
+            className="flex flex-col gap-2"
           >
             {choices.map((c) => {
               const Icon = METHOD_ICONS[c.kind];
               const selected = choice === c.id;
+              const panelId = `pay-panel-${c.id}`;
               return (
-                <button
+                <div
                   key={c.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={selected}
-                  onClick={() => setChoice(c.id)}
                   className={cn(
-                    cardClass({ variant: "outline", interactive: true }),
-                    FOCUS_RING,
-                    "flex w-full items-center gap-3 text-left",
-                    selected && "border-foreground bg-hover",
+                    "border-border scroll-mt-28 overflow-hidden rounded-lg border transition-colors motion-reduce:transition-none",
+                    selected && "border-foreground",
                   )}
                 >
-                  <span className="bg-surface-2 flex size-9 shrink-0 items-center justify-center rounded-md">
-                    <Icon className="size-4" aria-hidden />
-                  </span>
-                  <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="text-sm font-medium">{c.label}</span>
-                    <span className="text-muted-foreground text-sm">
-                      {methodHint(c.kind, uploadsEnabled)}
-                    </span>
-                  </span>
-                  <span
-                    aria-hidden
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    aria-controls={selected ? panelId : undefined}
+                    onClick={(e) => {
+                      setChoice(c.id);
+                      const item = e.currentTarget.parentElement;
+                      requestAnimationFrame(() =>
+                        item?.scrollIntoView({
+                          block: "start",
+                          behavior: window.matchMedia(
+                            "(prefers-reduced-motion: reduce)",
+                          ).matches
+                            ? "auto"
+                            : "smooth",
+                        }),
+                      );
+                    }}
                     className={cn(
-                      "flex size-4 shrink-0 items-center justify-center rounded-full border",
-                      selected ? "border-foreground" : "border-border-strong",
+                      FOCUS_RING,
+                      "hover:bg-hover flex w-full items-center gap-3 p-4 text-left transition-colors motion-reduce:transition-none",
+                      selected && "bg-hover",
                     )}
                   >
-                    {selected && (
-                      <span className="bg-foreground size-2 rounded-full" />
-                    )}
-                  </span>
-                </button>
+                    <span className="bg-surface-2 flex size-9 shrink-0 items-center justify-center rounded-md">
+                      <Icon className="size-4" aria-hidden />
+                    </span>
+                    <span className="flex min-w-0 flex-1 flex-col">
+                      <span className="text-sm font-medium">{c.label}</span>
+                      <span className="text-muted-foreground text-sm">
+                        {methodHint(c.kind, uploadsEnabled)}
+                      </span>
+                    </span>
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "flex size-4 shrink-0 items-center justify-center rounded-full border",
+                        selected ? "border-foreground" : "border-border-strong",
+                      )}
+                    >
+                      {selected && (
+                        <span className="bg-foreground size-2 rounded-full" />
+                      )}
+                    </span>
+                  </button>
+                  {selected && (
+                    <div
+                      id={panelId}
+                      role="region"
+                      aria-label={`Pay by ${c.label}`}
+                      className="border-border animate-in fade-in-0 slide-in-from-top-1 border-t p-4 duration-200 ease-out motion-reduce:animate-none sm:p-5"
+                    >
+                      {c.id === CARD && membership.cardPaymentUrl ? (
+                        <CardPanel membership={membership} price={price} />
+                      ) : method?.kind === "cash" ? (
+                        <CashPanel
+                          membership={membership}
+                          method={method}
+                          staff={options.staff}
+                          today={options.today}
+                          price={price}
+                        />
+                      ) : method ? (
+                        <TransferPanel
+                          membership={membership}
+                          method={method}
+                          price={price}
+                        />
+                      ) : null}
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>
         </div>
-      )}
-
-      {choice === CARD && membership.cardPaymentUrl && (
-        <CardPanel membership={membership} price={price} />
-      )}
-      {method?.kind === "cash" && (
-        <CashPanel
-          membership={membership}
-          method={method}
-          staff={options.staff}
-          price={price}
-        />
-      )}
-      {method && method.kind !== "cash" && (
-        <TransferPanel membership={membership} method={method} price={price} />
       )}
     </section>
   );
@@ -405,9 +437,7 @@ function useClaim() {
 }
 
 function Steps({ children }: { children: ReactNode }) {
-  return (
-    <ol className={cn(cardClass(), "flex flex-col gap-6 p-5")}>{children}</ol>
-  );
+  return <ol className="flex flex-col gap-6">{children}</ol>;
 }
 
 function Step({
@@ -581,7 +611,7 @@ function CardPanel({
           />
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <div className={cn(cardClass(), "mt-3 flex flex-col gap-3")}>
+          <div className="bg-surface-1 mt-3 flex flex-col gap-3 rounded-md p-4">
             <p className="text-sm">
               {uploadsEnabled
                 ? "Send your gym the receipt Stripe emailed you. They will confirm it."
@@ -697,16 +727,16 @@ function CashPanel({
   membership,
   method,
   staff,
+  today,
   price,
 }: {
   membership: Membership;
   method: Method;
   staff: Options["staff"];
+  today: string;
   price: string | null;
 }) {
   const claim = useClaim();
-  const { timeZone } = useEntity();
-  const today = localDateISO(new Date(), timeZone ?? "UTC");
   const [paidTo, setPaidTo] = useState(staff[0]?.userId ?? SOMEONE_ELSE);
   const [paidOn, setPaidOn] = useState(today);
   const [name, setName] = useState("");
