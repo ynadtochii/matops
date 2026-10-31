@@ -233,10 +233,10 @@ describe("pendingUploadCutoff", () => {
 });
 
 describe("isFileKind", () => {
-  it("knows the two kinds only", () => {
+  it("knows the three kinds only", () => {
     expect(isFileKind("avatar")).toBe(true);
     expect(isFileKind("academy_icon")).toBe(true);
-    expect(isFileKind("payment_receipt")).toBe(false);
+    expect(isFileKind("payment_receipt")).toBe(true);
     expect(isFileKind("document")).toBe(false);
   });
 });
