@@ -4,6 +4,7 @@ import type { DriftStatus } from "@matops/domain";
 import type { BadgeTone } from "@matops/ui/badge";
 import { cn } from "@matops/ui";
 import { Badge } from "@matops/ui/badge";
+import { FOCUS_RING } from "@matops/ui/motion";
 
 /**
  * Shared layout vocabulary for the owner/instructor screens: section headings,
@@ -343,4 +344,42 @@ export function disciplineDot(hue: number | null): string {
   return hue === null
     ? "bg-discipline-default"
     : (DISCIPLINE_BG[hue] ?? "bg-discipline-default");
+}
+
+export function Switch({
+  checked,
+  onCheckedChange,
+  className,
+  ...props
+}: Omit<ComponentProps<"button">, "onChange" | "role" | "type"> & {
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onCheckedChange(!checked)}
+      className={cn(
+        "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none",
+        checked
+          ? "border-primary bg-primary"
+          : "border-border-strong bg-surface-2",
+        FOCUS_RING,
+        className,
+      )}
+      {...props}
+    >
+      <span
+        aria-hidden
+        className={cn(
+          "size-3.5 rounded-full transition-transform motion-reduce:transition-none",
+          checked
+            ? "bg-primary-foreground translate-x-[17px]"
+            : "bg-muted-foreground translate-x-[2px]",
+        )}
+      />
+    </button>
+  );
 }

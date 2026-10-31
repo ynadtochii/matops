@@ -1,6 +1,11 @@
 import { z } from "zod/v4";
 
-import { isValidTimeZone } from "@matops/domain";
+import {
+  isValidTimeZone,
+  MAX_PAYMENT_METHODS,
+  PAYMENT_METHOD_KINDS,
+  paymentMethodNeedsDetails,
+} from "@matops/domain";
 
 import {
   blockText,
@@ -128,11 +133,58 @@ const MonthSchema = z.iso
  * decision about the future: the procedure refuses a month that is not after
  * the current one, using the same `canPriceFrom` rule the client checks with.
  */
+const PAYMENT_LINK_HOST = "buy.stripe.com";
+
+export function isStripePaymentLink(value: string): boolean {
+  if (value.length > 500) return false;
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  return (
+    url.protocol === "https:" &&
+    url.hostname === PAYMENT_LINK_HOST &&
+    url.port === "" &&
+    url.username === "" &&
+    url.password === "" &&
+    url.hash === "" &&
+    url.pathname.length > 1
+  );
+}
+
+export const PaymentLinkUrlSchema = z
+  .string()
+  .trim()
+  .refine(
+    isStripePaymentLink,
+    "Paste a Stripe payment link (https://buy.stripe.com/…)",
+  );
+
 export const SetAccessPlanPriceSchema = z.object({
   id: z.uuid(),
   priceMinor: PriceMinorSchema,
   currency: CurrencySchema,
   effectiveMonth: MonthSchema,
+  paymentLinkUrl: PaymentLinkUrlSchema.nullish(),
+});
+
+export const SaveStripeHookSecretSchema = z.object({
+  secret: z
+    .string()
+    .trim()
+    .regex(
+      /^whsec_[A-Za-z0-9+/=_-]{16,200}$/,
+      "Paste the signing secret that starts with whsec_",
+    ),
+});
+
+export const CardPaymentIdSchema = z.object({ id: z.uuid() });
+
+export const SetPlanPaymentLinkSchema = z.object({
+  planId: z.uuid(),
+  paymentLinkUrl: PaymentLinkUrlSchema.nullable(),
 });
 
 /** Tick one month of one shared membership paid or unpaid. */
@@ -154,6 +206,12 @@ export const ClaimMembershipMonthSchema = z.object({
   expectedVersion: z.number().int().positive().optional(),
   priceMinor: PriceMinorSchema.optional(),
   currency: CurrencySchema.optional(),
+  methodId: z.uuid().optional(),
+  cashPaidTo: IdSchema.optional(),
+  cashPaidToName: lineText(1, 80).optional(),
+  cashPaidOn: z.iso.date().optional(),
+  note: blockText(0, 500).optional(),
+  proofFileId: z.uuid().optional(),
 });
 
 /** Clear a claim without marking the month paid. */
@@ -176,9 +234,45 @@ export const MembershipPolicySchema = z.object({
       z.null(),
     ])
     .optional(),
-  /**
-   * Where members send the money (ADR 127). Required, because saving the policy
-   * REPLACES it: a partial save from a second form would blank the account.
-   */
-  bankDetails: blockText(0, 2000),
+});
+
+export const SavePaymentMethodSchema = z
+  .object({
+    id: z.uuid().optional(),
+    kind: z.enum(PAYMENT_METHOD_KINDS),
+    label: lineText(1, 60),
+    details: blockText(0, 1000),
+    enabled: z.boolean(),
+  })
+  .refine((m) => !paymentMethodNeedsDetails(m.kind) || m.details.length > 0, {
+    message: "Add the details students need to pay",
+    path: ["details"],
+  });
+
+export const PaymentMethodIdSchema = z.object({ id: z.uuid() });
+
+export const ReorderPaymentMethodsSchema = z.object({
+  ids: z
+    .array(z.uuid())
+    .min(1)
+    .max(MAX_PAYMENT_METHODS)
+    .refine((ids) => new Set(ids).size === ids.length, "Each method once"),
+});
+
+export const SetPlanStaffOnlySchema = z.object({
+  planId: z.uuid(),
+  staffOnly: z.boolean(),
+});
+
+export const SetPlanMethodSchema = z.object({
+  planId: z.uuid(),
+  methodId: z.uuid(),
+  on: z.boolean(),
+});
+
+export const ChoosePlanSchema = z.object({ planId: z.uuid() });
+
+export const MembershipMonthRefSchema = z.object({
+  assignmentId: z.uuid(),
+  month: MonthSchema,
 });

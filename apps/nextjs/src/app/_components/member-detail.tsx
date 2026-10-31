@@ -47,6 +47,7 @@ import { Tabs } from "./tabs";
 const MEMBERSHIP_TAG: Record<string, string> = {
   expired: "month unpaid",
   "not-covered": "no membership",
+  "awaiting-staff": "cash to confirm",
   "pending-approval": "awaiting approval",
   suspended: "suspended",
 };
@@ -179,7 +180,7 @@ export function MemberDetail({ m }: { m: Member }) {
           { id: "attendance", label: "Attendance" },
           { id: "rank", label: "Rank" },
           { id: "notes", label: "Notes" },
-          ...(owner && entity.membershipEnforced && !isStaffRole(m)
+          ...(owner && !isStaffRole(m)
             ? [{ id: "membership" as const, label: "Membership" }]
             : []),
         ]}

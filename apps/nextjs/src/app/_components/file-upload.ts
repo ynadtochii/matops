@@ -73,7 +73,52 @@ export function useFileUpload() {
         fileId: started.fileId,
       });
       await queryClient.invalidateQueries(trpc.academy.current.queryFilter());
+      if (!done.url) throw new Error("The upload failed. Try again.");
       return done.url;
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return { upload, pending };
+}
+
+export function useReceiptUpload() {
+  const trpc = useTRPC();
+  const createUpload = useMutation(trpc.storage.createUpload.mutationOptions());
+  const completeUpload = useMutation(
+    trpc.storage.completeUpload.mutationOptions(),
+  );
+  const [pending, setPending] = useState(false);
+  const rule = FILE_RULES.payment_receipt;
+
+  const upload = async (file: File): Promise<string> => {
+    setPending(true);
+    try {
+      const prepared =
+        file.type === "application/pdf"
+          ? { blob: file, type: "application/pdf" as const }
+          : await prepareImage(file, rule.maxImageEdge);
+      if (prepared.blob.size > rule.maxBytes) {
+        throw new Error(
+          `The file is too large. The limit is ${rule.maxBytes / (1024 * 1024)} MB.`,
+        );
+      }
+      const started = await createUpload.mutateAsync({
+        kind: "payment_receipt",
+        contentType: prepared.type,
+        sizeBytes: prepared.blob.size,
+      });
+      const put = await fetch(started.url, {
+        method: "PUT",
+        headers: started.headers,
+        body: prepared.blob,
+      });
+      if (!put.ok) throw new Error("The upload failed. Try again.");
+      const done = await completeUpload.mutateAsync({
+        fileId: started.fileId,
+      });
+      return done.fileId;
     } finally {
       setPending(false);
     }

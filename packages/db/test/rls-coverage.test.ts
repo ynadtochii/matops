@@ -8,6 +8,8 @@ const NO_RLS_BY_DESIGN: Record<string, string> = {
     "The public join screen resolves a token with no active academy, so a policy on app.academy_id would match nothing (docs/issues/28). Migration 0020 revokes every matops_app grant on the table instead, which is stricter than a policy.",
   drop_in_link:
     "The public drop-in form resolves a token before any academy scope is known, so a policy on app.academy_id would match nothing. The migration revokes every matops_app grant on the table instead (ADR 147).",
+  stripe_hook:
+    "A Stripe webhook resolves its token before any gym is known, so a policy on app.organization_id would match nothing. The migration revokes every matops_app grant on the table instead (ADR 157).",
   desk_link:
     "The desk tablet resolves its token before any academy scope is known, so a policy on app.academy_id would match nothing. The migration revokes every matops_app grant on the table instead (ADR 150).",
 };
@@ -27,6 +29,9 @@ const SCOPE_GUC: Record<string, string> = {
   membership_policy: "app.organization_id",
   membership_month: "app.organization_id",
   membership_month_audit: "app.organization_id",
+  card_payment: "app.organization_id",
+  payment_method: "app.organization_id",
+  access_plan_method_off: "app.organization_id",
 };
 
 const ENTITY_GUC = "app.academy_id";

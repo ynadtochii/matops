@@ -52,6 +52,8 @@
   "globalEnv": [
     "POSTGRES_URL",
     "AUTH_SECRET",
+    "PAYMENT_HOOK_KEY",
+    "PAYMENT_HOOK_KEY_PREVIOUS",
     "PORT"
   ],
   "globalPassThroughEnv": [

@@ -22,12 +22,14 @@ export interface StoredObject extends ObjectInfo {
 
 export interface StorageClient {
   presignPut(input: PresignPutInput): Promise<PresignedPut>;
+  presignGet(key: string, expiresIn: number): Promise<string>;
   head(key: string): Promise<ObjectInfo | null>;
   get(key: string, range?: { length: number }): Promise<StoredObject | null>;
   delete(key: string): Promise<void>;
 }
 
-export type StorageOperation = "presignPut" | "head" | "get" | "delete";
+export type StorageOperation =
+  "presignPut" | "presignGet" | "head" | "get" | "delete";
 
 export class StorageError extends Error {
   readonly operation: StorageOperation;

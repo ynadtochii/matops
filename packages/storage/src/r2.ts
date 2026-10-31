@@ -40,30 +40,31 @@ export function createR2Storage(
   const now = options.now ?? (() => new Date());
   const base = `https://${config.accountId}.eu.r2.cloudflarestorage.com/${config.bucket}/`;
 
-  async function presignPut(
+  async function presign(
+    operation: "presignPut" | "presignGet",
     key: string,
     expiresIn: number,
     headers: Record<string, string>,
   ): Promise<string> {
-    assertSafeObjectKey("presignPut", key);
+    assertSafeObjectKey(operation, key);
     if (
       !Number.isInteger(expiresIn) ||
       expiresIn < 1 ||
       expiresIn > MAX_PRESIGN_SECONDS
     ) {
-      throw new StorageError("presignPut", key);
+      throw new StorageError(operation, key);
     }
     const url = new URL(base + key);
     url.searchParams.set("X-Amz-Expires", String(expiresIn));
     try {
       const signed = await aws.sign(url.toString(), {
-        method: "PUT",
+        method: operation === "presignPut" ? "PUT" : "GET",
         headers,
         aws: { signQuery: true, allHeaders: true, datetime: amzDate(now()) },
       });
       return signed.url;
     } catch (cause) {
-      throw new StorageError("presignPut", key, undefined, { cause });
+      throw new StorageError(operation, key, undefined, { cause });
     }
   }
 
@@ -117,11 +118,15 @@ export function createR2Storage(
         "content-type": input.contentType,
         ...(input.cacheControl ? { "cache-control": input.cacheControl } : {}),
       };
-      const url = await presignPut(input.key, input.expiresIn, {
+      const url = await presign("presignPut", input.key, input.expiresIn, {
         ...headers,
         "content-length": String(input.contentLength),
       });
       return { url, headers };
+    },
+
+    presignGet(key, expiresIn) {
+      return presign("presignGet", key, expiresIn, {});
     },
 
     async head(key) {

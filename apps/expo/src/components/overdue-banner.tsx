@@ -16,18 +16,14 @@ export function OverdueBanner() {
     trpc.accessPlan.mine.queryOptions(undefined, { enabled }),
   );
 
-  const warning = memberships.data?.memberships.find(
-    (membership) => membership.warning,
-  )?.warning;
-  const strip = warning?.detail;
-  if (!strip) return null;
+  const banner = memberships.data?.bannerText;
+  if (!banner) return null;
+  const tone = banner.blocking ? t.error : t.warning;
 
   return (
     <Pressable
       accessibilityRole="button"
-      onPress={() =>
-        router.push({ pathname: "/profile", params: { focus: "dues" } })
-      }
+      onPress={() => router.push("/membership")}
       style={({ pressed }) => ({
         flexDirection: "row",
         alignItems: "center",
@@ -39,15 +35,20 @@ export function OverdueBanner() {
         minHeight: 44,
         borderRadius: 8,
         borderWidth: 1,
-        borderColor: `${t.error}4d`,
-        backgroundColor: `${t.error}14`,
+        borderColor: `${tone}4d`,
+        backgroundColor: `${tone}14`,
         opacity: pressed ? 0.85 : 1,
       })}
     >
       <Txt size={13} weight={500} tone="secondary" style={{ flex: 1 }}>
-        {strip}
+        {banner.text}
       </Txt>
-      <ChevronRight size={16} color={t.errorText} />
+      {banner.action ? (
+        <Txt size={13} weight={600}>
+          {banner.action}
+        </Txt>
+      ) : null}
+      <ChevronRight size={16} color={t.foreground} />
     </Pressable>
   );
 }

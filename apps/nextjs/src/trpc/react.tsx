@@ -4,7 +4,13 @@ import type { QueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { createTRPCClient, httpBatchLink, loggerLink } from "@trpc/client";
+import {
+  createTRPCClient,
+  httpBatchLink,
+  httpLink,
+  loggerLink,
+  splitLink,
+} from "@trpc/client";
 import { createTRPCContext } from "@trpc/tanstack-react-query";
 import SuperJSON from "superjson";
 
@@ -71,16 +77,26 @@ export function TRPCReactProvider(props: { children: React.ReactNode }) {
   const queryClient = getQueryClient();
 
   const [trpcClient] = useState(() => {
-    const transport = httpBatchLink<AppRouter>({
-      transformer: SuperJSON,
-      url: getBaseUrl() + "/api/trpc",
-      headers() {
-        const headers = new Headers();
-        headers.set("x-trpc-source", "nextjs-react");
-        const entityId = entityFromPath(window.location.pathname);
-        if (entityId) headers.set("x-matops-entity", entityId);
-        return headers;
-      },
+    const headersFor = (entityId: string | null) => {
+      const headers = new Headers();
+      headers.set("x-trpc-source", "nextjs-react");
+      if (entityId) headers.set("x-matops-entity", entityId);
+      return headers;
+    };
+    const named = (context: Record<string, unknown>) =>
+      typeof context.entityId === "string" ? context.entityId : null;
+    const transport = splitLink<AppRouter>({
+      condition: (op) => named(op.context) !== null,
+      true: httpLink({
+        transformer: SuperJSON,
+        url: getBaseUrl() + "/api/trpc",
+        headers: ({ op }) => headersFor(named(op.context)),
+      }),
+      false: httpBatchLink({
+        transformer: SuperJSON,
+        url: getBaseUrl() + "/api/trpc",
+        headers: () => headersFor(entityFromPath(window.location.pathname)),
+      }),
     });
     return createTRPCClient<AppRouter>({
       links: [

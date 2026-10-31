@@ -3,6 +3,7 @@ import { accessPlanRouter } from "./router/accessPlan";
 import { accountRouter } from "./router/account";
 import { attendanceRouter } from "./router/attendance";
 import { bookingRouter } from "./router/booking";
+import { cardPaymentRouter } from "./router/cardPayment";
 import { checkinRouter } from "./router/checkin";
 import { classRouter } from "./router/class";
 import { dataTransferRouter } from "./router/dataTransfer";
@@ -15,10 +16,12 @@ import { membershipRouter } from "./router/membership";
 import { noteRouter } from "./router/note";
 import { notificationRouter } from "./router/notification";
 import { organizationRouter } from "./router/organization";
+import { paymentMethodRouter } from "./router/paymentMethod";
 import { pushTokenRouter } from "./router/pushToken";
 import { rankRouter } from "./router/rank";
 import { statsRouter } from "./router/stats";
 import { storageRouter } from "./router/storage";
+import { studentPlanRouter } from "./router/studentPlan";
 import { templateRouter } from "./router/template";
 import { createTRPCRouter } from "./trpc";
 
@@ -45,6 +48,9 @@ export const appRouter = createTRPCRouter({
   pushToken: pushTokenRouter,
   stats: statsRouter,
   storage: storageRouter,
+  cardPayment: cardPaymentRouter,
+  paymentMethod: paymentMethodRouter,
+  studentPlan: studentPlanRouter,
 });
 
 // export type definition of API

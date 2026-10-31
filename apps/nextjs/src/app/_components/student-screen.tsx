@@ -63,7 +63,8 @@ function dayName(key: string, todayKey: string, tomorrowKey: string) {
 export function StudentScreen() {
   const trpc = useTRPC();
   const href = useEntityHref();
-  const { book, cancel, busyFor, locked, lockedMessage } = useBooking();
+  const { book, cancel, busyFor, locked, lockedMessage, lockedByMembership } =
+    useBooking();
   const academy = useEntity();
   const suspended = academy.status === "suspended";
 
@@ -115,19 +116,9 @@ export function StudentScreen() {
           </Button>
         }
       />
-      {lockedMessage && (
+      {lockedMessage && !lockedByMembership && (
         <Callout tone="warning" title="Booking unavailable" className="mb-6">
           <p>{lockedMessage}</p>
-          {academy.membershipEnforced && (
-            <Button
-              asChild
-              variant="outline"
-              size="sm"
-              className="mt-2 self-start"
-            >
-              <Link href={href("/payments")}>View membership</Link>
-            </Button>
-          )}
         </Callout>
       )}
       {week.isPending ? (

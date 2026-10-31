@@ -1,0 +1,1 @@
+ALTER TABLE "access_plan_price" ADD COLUMN "payment_link_url" text;

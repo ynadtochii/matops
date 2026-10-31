@@ -10,6 +10,7 @@ import {
   rejectionCode,
   seedClasses,
   storedBookingCount,
+  uploadProof,
 } from "./helpers";
 
 const ACAD = "acad_gate";
@@ -62,7 +63,6 @@ describe("shared membership booking gate", () => {
     await owner().accessPlan.setPolicy({
       graceDays: 7,
       calendarTimeZone: "UTC",
-      bankDetails: "Test bank",
     });
   });
 
@@ -120,7 +120,13 @@ describe("shared membership booking gate", () => {
     await enforce(true);
     const assignmentId = await assign();
     await ageAssignment(assignmentId);
-    await student().accessPlan.claimMonth({ assignmentId });
+    expect(
+      await rejectionCode(student().accessPlan.claimMonth({ assignmentId })),
+    ).toBe("BAD_REQUEST");
+    await student().accessPlan.claimMonth({
+      assignmentId,
+      proofFileId: await uploadProof(h, STUDENT, ACAD),
+    });
     expect((await student().booking.book({ classId: CLASS })).tier).toBe(
       "provisional",
     );

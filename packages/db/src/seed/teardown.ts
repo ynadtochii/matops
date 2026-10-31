@@ -18,9 +18,11 @@ import {
   accessAssignmentChange,
   accessPlan,
   accessPlanEntity,
+  accessPlanMethodOff,
   accessPlanPrice,
   account,
   attendanceCorrection,
+  cardPayment,
   classInstance,
   classParticipation,
   classTemplate,
@@ -39,11 +41,13 @@ import {
   notification,
   notificationNotice,
   organization,
+  paymentMethod,
   person,
   productEvent,
   rankPromotion,
   session,
   storedFile,
+  stripeHook,
   user,
   waiverAcceptance,
 } from "../schema";
@@ -184,6 +188,22 @@ export async function removeAll(exec: SeedExec): Promise<TeardownReport> {
     exec
       .delete(membershipPolicy)
       .where(inArray(membershipPolicy.organizationId, orgIds)),
+  );
+  await del("card_payment", () =>
+    exec.delete(cardPayment).where(inArray(cardPayment.organizationId, orgIds)),
+  );
+  await del("access_plan_method_off", () =>
+    exec
+      .delete(accessPlanMethodOff)
+      .where(inArray(accessPlanMethodOff.organizationId, orgIds)),
+  );
+  await del("payment_method", () =>
+    exec
+      .delete(paymentMethod)
+      .where(inArray(paymentMethod.organizationId, orgIds)),
+  );
+  await del("stripe_hook", () =>
+    exec.delete(stripeHook).where(inArray(stripeHook.organizationId, orgIds)),
   );
   await del("access_plan_price", () =>
     exec

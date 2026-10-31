@@ -41,6 +41,13 @@ export function createFakeStorage(): FakeStorage {
       });
     },
 
+    presignGet(key) {
+      return settle(() => {
+        assertSafeObjectKey("presignGet", key);
+        return `fake://get/${key}`;
+      });
+    },
+
     head(key) {
       return settle(() => {
         assertSafeObjectKey("head", key);
