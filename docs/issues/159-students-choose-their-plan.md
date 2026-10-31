@@ -1,0 +1,34 @@
+# 159 · Students choose and pay for their own plan
+
+**Status:** accepted, built (tests written, not run; migration `0017_student_choice` applied to dev 2026-10-31, not production) · **Date:** 2026-10-31 · **Area:** `packages/db` (`access_plan.staff_only`, `membership_month` cash and method columns), `packages/domain` (`student-membership.ts`, `membership-access.ts`, `storage.ts`, setup step `assign`), `packages/validators`, `packages/storage` (`presignGet`), `packages/api` (`studentPlan` router, `student-plans.ts`, `accessPlan.mine`, `claimMonth`, `claims`, `proofUrl`, `setStaffOnly`, `storage.createUpload` and `completeUpload`), `apps/nextjs` (Membership page, shell banner, Plans tab, Payments claims), `apps/expo` (`/membership` screen, banner, Profile) · **Plan:** [Students choose and pay for their own membership](../student-memberships-plan.md), slices 2 to 7 · **Changes:** FA2 (staff-assigned memberships), [126](126-a-branch-is-not-always-a-mat.md) join grace for self-chosen plans, [152](152-file-storage-on-r2.md) F10 receipts · **Builds on:** [154](154-owner-payment-switch.md), [156](156-plan-payment-link.md), [157](157-card-payment-webhook.md), [158](158-payment-methods.md)
+
+## Context
+
+With payments on, a student with no plan could not book, and only staff could give them one. At Alma the owner had to assign every student by hand, and a new student waited for that. Students should pick a plan and pay for it alone, with staff only confirming cash and proofs.
+
+## Decision
+
+1. **Self-serve is the default.** A plan shows to students when it is not archived, not **Staff only** (`access_plan.staff_only`, default false), covers the academy, has a price above zero this month, and the gym has a way to pay it (a card link or a visible way to pay). `choosablePlans` in the domain is the rule. Staff only plans and staff assignment stay for special cases.
+2. **Choosing creates the membership at once** (`studentPlan.choose`, members only, students only, payments on). It runs `assignOne` with the student as `assigned_by`, then writes this month's `membership_month` row as `unpaid` with the price and a **deadline of now**. The gate already prefers a saved deadline, so a self-chosen first month has no grace without any change to the gate.
+3. **Swapping** is allowed while the self-chosen first month is unpaid and has no hold (`canSwapChosenPlan`). The old membership and its month row are deleted, since nothing was paid on them. Otherwise the student is told to ask the gym.
+4. **One banner state** comes from `membershipBanner` and its words from `membershipBannerText`, both in the domain. `accessPlan.mine` returns `banner` and `bannerText`. States: choose a plan, no plans, finish paying, gym checking a payment, waiting for cash, rejected, renewal due, renewal overdue. Web shows it in the shell's banner strip, the app on each tab; both open the payment screen.
+5. **Cash waits for staff.** A claim with a cash way to pay must name a staff member (from `studentPlan.options.staff`) or a free-text name, and may carry a note (`membership_month.cash_paid_to`, `cash_paid_to_name`, `payment_note`, `payment_method_id`). The access rule reads a reported month with a cash name as `awaiting-staff`: it does not admit, except inside a renewal's grace days. Staff confirm with **Cash received** in Payments.
+6. **Other claims need a proof** when file storage is set up. Bank, MB WAY, other ways to pay, and "I paid by card" without a webhook upload a `payment_receipt` file (JPEG, PNG, WebP or PDF, up to 5 MB), uploaded by the same student, before `claimMonth` accepts them. Without storage there is nowhere to keep a file, so a claim without a proof is still allowed. Receipts upload only while payments are on, are stored with `private, no-store`, are never served by `/files`, and are deleted when older than 61 days by the sweep that already runs on each upload.
+7. **Staff read a proof** through `accessPlan.proofUrl`, owners and managers only, which returns a 5-minute signed R2 link (`StorageClient.presignGet`). Claims list the method, the cash recipient, the note and whether a proof exists.
+8. **Setup step** "Put your members on a plan" becomes "Let students choose a plan": done when a plan that is not Staff only has a price and the gym has a way to pay.
+
+## Consequences
+
+- A student goes from no plan to booked alone when paying by card with a webhook. Cash and proofs need one staff tap.
+- Existing plans become choosable on deploy. An owner who wants a plan kept private marks it Staff only.
+- `access_assignment.assigned_by` equal to the person's own user marks a self-chosen membership; no new column.
+- Old app builds still call `claimMonth` without a proof, which is refused while storage is on. Production has no academies with payments on, so no student is affected; release the new app build before turning payments on for a real gym.
+- Not in scope: switching plan after paying, student cancel or pause, staff notifications for waiting claims.
+
+## Addendum 2026-10-31: the day cash was paid
+
+A cash claim also carries the day the student paid (`membership_month.cash_paid_on`, a plain date, migration `0018_cash_paid_on`). The claim may come days after the money changed hands, so `reported_at` alone does not tell staff which day to check. `claimMonth` refuses a cash claim without the day, with a day after today in the gym's time zone, or with a day more than 62 days back (`cashPaidOnProblem` in the domain, `CASH_PAID_ON_MAX_DAYS`). The web form uses a date input limited to that range. The app shows the last 31 days as choices, so it needs no date picker module. Payments shows "Cash, paid to {name} on {day}".
+
+## Addendum 2026-10-31: ways to pay per plan
+
+Owners asked to take some ways to pay only for some plans. `access_plan_method_off` (migration `0019_plan_method_off`) holds one row per plan and way to pay that is turned off. No row means on, so a new way to pay or a new plan starts with everything on. Both foreign keys cascade, so removing a plan or a way to pay clears its rows. `accessPlan.setPlanMethod` (owner only, like the rest of ways to pay in ADR 158) adds or removes a row; `accessPlan.list` returns `methodsOff` per plan. `studentPlan.options` returns `offPlanIds` on each way to pay, and both clients show only the ways on for the student's plan. `choosablePlans` now takes the number of ways on per plan, so a plan with no card link and every way off is not offered. `claimMonth` refuses a way that is off for the plan being paid. The global switch in Settings (`payment_method.enabled`) still hides a way on every plan. On the Plans tab each plan shows a **Students can choose** switch and one chip per way to pay; the Card chip opens the plan's Stripe link dialog, because card is set by the link, not by a switch.

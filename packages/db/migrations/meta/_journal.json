@@ -113,6 +113,34 @@
       "when": 1793175282637,
       "tag": "0015_stripe_hook_problem",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1793184955538,
+      "tag": "0016_payment_method",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1793461024254,
+      "tag": "0017_student_choice",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793463388626,
+      "tag": "0018_cash_paid_on",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793464172352,
+      "tag": "0019_plan_method_off",
+      "breakpoints": true
     }
   ]
 }

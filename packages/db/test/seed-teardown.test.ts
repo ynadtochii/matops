@@ -96,6 +96,8 @@ describe("seed roundtrip — up then down", () => {
       "membership_month_audit",
       "membership_policy",
       "card_payment",
+      "access_plan_method_off",
+      "payment_method",
       "stripe_hook",
       "product_event",
     ]) {

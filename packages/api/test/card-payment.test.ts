@@ -162,7 +162,7 @@ describe("card payment webhook (ADR 157)", () => {
     );
     const sealed = row.rows[0]?.sealed ?? "";
     expect(sealed).not.toContain(SECRET);
-    expect(openSecret(TEST_PAYMENT_KEY, sealed)).toBe(SECRET);
+    expect(openSecret(TEST_PAYMENT_KEY, sealed, ORG)).toBe(SECRET);
     expect((await owner().cardPayment.hook()).state).toBe("ready");
   });
 
@@ -188,6 +188,28 @@ describe("card payment webhook (ADR 157)", () => {
       (await deliver(paid({ padding: "x".repeat(65 * 1024) }))).status,
     ).toBe(413);
     expect(await monthRow(month)).toBeUndefined();
+  });
+
+  it("spends neither the gym's budget nor a write on forged requests", async () => {
+    const problemAt = async () =>
+      (
+        await h.pg.query<{ at: Date | null }>(
+          `SELECT last_problem_at AS at FROM stripe_hook WHERE organization_id = $1`,
+          [ORG],
+        )
+      ).rows[0]?.at;
+    const first = await problemAt();
+    for (let i = 0; i < 3; i++) {
+      expect(
+        (await deliver(paid(), { secret: "whsec_other_000000000" })).status,
+      ).toBe(400);
+    }
+    expect(await problemAt()).toEqual(first);
+    const budget = await h.pg.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM rate_limit WHERE key = $1`,
+      [`stripe-hook:gym:${ORG}`],
+    );
+    expect(budget.rows[0]?.n).toBe(0);
   });
 
   it("ignores other events, unpaid sessions and test events in production", async () => {

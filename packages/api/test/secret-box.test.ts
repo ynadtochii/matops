@@ -9,25 +9,34 @@ import {
 
 const KEY = Buffer.alloc(32, 1);
 const OTHER = Buffer.alloc(32, 2);
+const GYM = "acad_secret_box";
 
 describe("secret box", () => {
   it("opens what it sealed, and only with the same key", () => {
-    const sealed = sealSecret(KEY, "whsec_abc");
+    const sealed = sealSecret(KEY, "whsec_abc", GYM);
     expect(sealed).not.toContain("whsec_abc");
-    expect(openSecret(KEY, sealed)).toBe("whsec_abc");
-    expect(openSecret(OTHER, sealed)).toBeNull();
+    expect(openSecret(KEY, sealed, GYM)).toBe("whsec_abc");
+    expect(openSecret(OTHER, sealed, GYM)).toBeNull();
+  });
+
+  it("opens a secret only for the gym it was sealed for", () => {
+    expect(
+      openSecret(KEY, sealSecret(KEY, "whsec_abc", GYM), "another_gym"),
+    ).toBeNull();
   });
 
   it("seals the same secret differently each time", () => {
-    expect(sealSecret(KEY, "whsec_abc")).not.toBe(sealSecret(KEY, "whsec_abc"));
+    expect(sealSecret(KEY, "whsec_abc", GYM)).not.toBe(
+      sealSecret(KEY, "whsec_abc", GYM),
+    );
   });
 
   it("refuses a changed or malformed box", () => {
-    const [v, iv, tag, body] = sealSecret(KEY, "whsec_abc").split(".");
+    const [v, iv, tag, body] = sealSecret(KEY, "whsec_abc", GYM).split(".");
     const flipped = `${v}.${iv}.${tag}.${body?.startsWith("A") ? "B" : "A"}${body?.slice(1)}`;
-    expect(openSecret(KEY, flipped)).toBeNull();
-    expect(openSecret(KEY, "garbage")).toBeNull();
-    expect(openSecret(KEY, "v2.a.b.c")).toBeNull();
+    expect(openSecret(KEY, flipped, GYM)).toBeNull();
+    expect(openSecret(KEY, "garbage", GYM)).toBeNull();
+    expect(openSecret(KEY, "v2.a.b.c", GYM)).toBeNull();
   });
 
   it("accepts only a 32-byte base64 key", () => {

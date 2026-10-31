@@ -1,6 +1,5 @@
 <!-- matops — live implementation plan + scope matrix. Rules for this file live in delivery.md. -->
 
-
 **Expo app follows the student web, plan [expo-web-alignment-plan.md](expo-web-alignment-plan.md)**
 
 | Slice | DB | API | Web | Mobile | Shared | Infra |
@@ -53,9 +52,11 @@ Plan: [first-release-plan.md](first-release-plan.md). Code built, including the 
 | Mark all attendance: one button reviews up to 200 ended classes per press, oldest first, any age (ADR 153, O5); no migration | done | done | done | not needed | done | todo |
 | File storage on R2 (ADR 152, plan `file-storage-plan.md`): `packages/storage`, `stored_file` + `0012` (applied to dev 2026-10-16), upload procedures, `/files` route, academy icon in Settings, sidebar and public pages (O6) | done | done | done | todo (avatar, F9) | done | todo |
 | File storage: avatars on web Profile, Students, rosters, Coaches and desk (F8) | done | done | done | not changed | done | — |
-| File storage: Expo avatar (F9), receipts behind the payment flag (F10) | done | todo | todo | todo | todo | — |
+| File storage: Expo avatar (F9), receipts behind the payment flag (F10, built by ADR 159) | done | done | done | done | done | — |
 | Owner switch for membership payments: Settings turns `membership_enforced_at` on or off; owner setup screens show while off (ADR 154, FP5, FR2; Stripe slice 0); no migration | not needed | done | done | not changed | done | todo |
 | Stripe step A: Payment Link on each plan price, Pay by card on web and app, manual confirmation (ADR 156, S9, O7); `0013_plan_payment_link` applied to dev 2026-10-26 | done | done | done | done | done | todo |
+| Students choose their plan: Staff only switch, plan list and choose, banner states, card, cash with staff and note, bank with proof upload, View proof, Expo `/membership` screen (ADR 159, FA2, S9, S11, O7, FP8; student memberships slices 2 to 7); `0017_student_choice` applied to dev 2026-10-31 | done | done | done | done | done | todo |
+| Ways to pay: `payment_method` list in Settings replaces bank details, students see each method (ADR 158, S9, FP8; student memberships slice 1); `0016_payment_method` applied to dev 2026-10-28 | done | done | done | done | done | todo |
 | Stripe step B1: card payment webhook per gym, encrypted signing secret, automatic month confirmation, Card payments to check (ADR 157, S9, O7); `0014_stripe_hook` applied to dev 2026-10-28 | done | done | done | not needed | done | todo |
 | Invite-only gym creation: `GYM_CREATOR_EMAILS` allowlist in Better Auth, Request a demo on landing and sign-in (ADR 149, FP10); no migration | not needed | done | done | not changed | done | todo |
 
@@ -183,6 +184,7 @@ Status: **built, not clicked through and the suites not run here**. Static gates
 | Branch dashboard: the rail, the honest queue | n/a | n/a | done | n/a | n/a | n/a |
 | Gym overview: one state vocabulary       | n/a (removed, ADR 142) | n/a | done | n/a | n/a | n/a |
 | Memberships: counts on the tabs          | n/a | n/a | done | n/a | n/a | n/a |
+| Memberships grouped by job: To check, Months, Plans, Setup; days to pay form; router split (ADR 160) | n/a | done | done | n/a | n/a | n/a |
 | People list: columns at 200 rows         | n/a (removed, ADR 142) | n/a | done | n/a | n/a | n/a |
 | Person: the actions ranked               | n/a (removed, ADR 142) | n/a | done | n/a | n/a | n/a |
 | Roster: the day's work before setup      | n/a | n/a | done | n/a | n/a | n/a |
@@ -297,7 +299,7 @@ What is built: the identity join loop, the scheduling core with a 180-day horizo
 
 **Open operational items:** **`AUTH_SECRET` needs rotating** on the next deploy (the old auth error hook logged it — ADR 60); the mobile **Google browser→app session hand-off** still does not land ([mobile-google-login-handoff.md](mobile-google-login-handoff.md)); and every mobile wave since v1.8 is **static-gates-green only** — no simulator in this environment, so the checks in [mobile-device-test.md](mobile-device-test.md) are outstanding.
 
-**Before real invitations:** confirm and publish the legal operator's identity and address on `/privacy` and rehearse backup and restore (first-release plan S7). The policy uses the existing support email; no legal/privacy environment variables are required. The runbook is [beta-launch-plan.md](beta-launch-plan.md).
+**Due now (a real academy is live in production):** confirm and publish the legal operator's identity and address on `/privacy` and rehearse backup and restore (first-release plan S7). The policy uses the existing support email; no legal/privacy environment variables are required. The runbook is [beta-launch-plan.md](beta-launch-plan.md).
 
 > **Verified live on Neon.**
 >

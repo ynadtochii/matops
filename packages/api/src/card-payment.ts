@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 
-import type { DbExec } from "@matops/db";
+import type { DbExec, StripeHookProblem } from "@matops/db";
 import {
   eq,
   recordStripeHookProblem,
@@ -150,6 +150,17 @@ export async function handleCardPaymentEvent(
   return result.outcome;
 }
 
+function recentlyRecorded(
+  hook: { lastProblem: string | null; lastProblemAt: Date | null },
+  problem: StripeHookProblem,
+): boolean {
+  return (
+    hook.lastProblem === problem &&
+    hook.lastProblemAt !== null &&
+    Date.now() - hook.lastProblemAt.getTime() < MINUTE_MS
+  );
+}
+
 export async function cardPaymentWebhookResponse(
   request: Request,
   token: string,
@@ -179,22 +190,16 @@ export async function cardPaymentWebhookResponse(
   }
   const hook = await resolveStripeHook(token, baseDb);
   if (!hook) return new Response("Not found", { status: 404 });
-  if (
-    !(await takeRateLimit(
-      `stripe-hook:gym:${hook.organizationId}`,
-      PER_GYM_PER_MINUTE,
-      MINUTE_MS,
-      baseDb,
-    ))
-  ) {
-    return new Response("Too many requests", { status: 429 });
-  }
   if (!hook.secretCiphertext) {
     return new Response("The signing secret is not saved yet", {
       status: 409,
     });
   }
-  const secret = openSecretWithAny(deps.secretKeys, hook.secretCiphertext);
+  const secret = openSecretWithAny(
+    deps.secretKeys,
+    hook.secretCiphertext,
+    hook.organizationId,
+  );
   if (!secret) {
     deps.report(new Error("stripe hook secret cannot be opened"), {
       organizationId: hook.organizationId,
@@ -214,11 +219,29 @@ export async function cardPaymentWebhookResponse(
       request.headers.get("stripe-signature"),
     );
   } catch {
-    await recordStripeHookProblem(hook.organizationId, "bad_signature", baseDb);
+    if (!recentlyRecorded(hook, "bad_signature")) {
+      await recordStripeHookProblem(
+        hook.organizationId,
+        "bad_signature",
+        baseDb,
+      );
+    }
     return new Response("Invalid signature", { status: 400 });
   }
+  if (
+    !(await takeRateLimit(
+      `stripe-hook:gym:${hook.organizationId}`,
+      PER_GYM_PER_MINUTE,
+      MINUTE_MS,
+      baseDb,
+    ))
+  ) {
+    return new Response("Too many requests", { status: 429 });
+  }
   if (deps.requireLive && !event.livemode) {
-    await recordStripeHookProblem(hook.organizationId, "test_event", baseDb);
+    if (!recentlyRecorded(hook, "test_event")) {
+      await recordStripeHookProblem(hook.organizationId, "test_event", baseDb);
+    }
     return Response.json({ received: true, outcome: "ignored" });
   }
   await touchStripeHook(hook.organizationId, baseDb);

@@ -124,6 +124,35 @@ describe("membershipAccess", () => {
   });
 });
 
+describe("cash waiting for staff", () => {
+  const cash = (over: Partial<ApplicableAssignment> = {}) =>
+    holding({
+      id: "a1",
+      paymentStatus: "reported",
+      awaitingStaff: true,
+      deadline: NOW,
+      ...over,
+    });
+
+  it("does not admit until staff confirm", () => {
+    expect(ask({ assignments: [cash()] })).toBe("awaiting-staff");
+    expect(accessAdmits("awaiting-staff")).toBe(false);
+    expect(ask({ assignments: [cash({ paymentStatus: "confirmed" })] })).toBe(
+      "ok",
+    );
+  });
+
+  it("still admits inside the grace days of a renewal", () => {
+    expect(ask({ assignments: [cash({ deadline: LATER })] })).toBe("ok");
+  });
+
+  it("keeps a reported transfer provisional", () => {
+    expect(ask({ assignments: [cash({ awaitingStaff: false })] })).toBe(
+      "provisional",
+    );
+  });
+});
+
 describe("coveringAssignments", () => {
   it("keeps only the active ones naming this branch", () => {
     const found = coveringAssignments({

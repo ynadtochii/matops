@@ -479,6 +479,15 @@ export const organizationManagerProcedure = organizationMemberProcedure.use(
   },
 );
 
+export const organizationOwnerProcedure = organizationMemberProcedure.use(
+  ({ ctx, next }) => {
+    if (!isOwner(ctx.orgMembership)) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Owner only" });
+    }
+    return next();
+  },
+);
+
 /**
  * The tenant tiers. Every one of them runs at ONE entity, the one the request
  * named in `x-matops-entity`, inside `withScope({ organizationId, entityId })`.

@@ -24,17 +24,19 @@ export function parseSecretKeys(
 export function openSecretWithAny(
   keys: readonly Buffer[],
   sealed: string,
+  owner: string,
 ): string | null {
   for (const key of keys) {
-    const plain = openSecret(key, sealed);
+    const plain = openSecret(key, sealed, owner);
     if (plain !== null) return plain;
   }
   return null;
 }
 
-export function sealSecret(key: Buffer, plain: string): string {
+export function sealSecret(key: Buffer, plain: string, owner: string): string {
   const iv = randomBytes(12);
   const cipher = createCipheriv(ALGORITHM, key, iv);
+  cipher.setAAD(Buffer.from(owner, "utf8"));
   const body = Buffer.concat([cipher.update(plain, "utf8"), cipher.final()]);
   return [
     VERSION,
@@ -44,7 +46,11 @@ export function sealSecret(key: Buffer, plain: string): string {
   ].join(".");
 }
 
-export function openSecret(key: Buffer, sealed: string): string | null {
+export function openSecret(
+  key: Buffer,
+  sealed: string,
+  owner: string,
+): string | null {
   const [version, iv, tag, body, extra] = sealed.split(".");
   if (version !== VERSION || !iv || !tag || !body || extra !== undefined) {
     return null;
@@ -55,6 +61,7 @@ export function openSecret(key: Buffer, sealed: string): string | null {
       key,
       Buffer.from(iv, "base64url"),
     );
+    decipher.setAAD(Buffer.from(owner, "utf8"));
     decipher.setAuthTag(Buffer.from(tag, "base64url"));
     return Buffer.concat([
       decipher.update(Buffer.from(body, "base64url")),

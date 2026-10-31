@@ -56,7 +56,6 @@ describe("bookings that need a review, not a cancellation", () => {
     await owner().accessPlan.setPolicy({
       graceDays: 7,
       calendarTimeZone: "UTC",
-      bankDetails: "IBAN",
     });
     plan = (
       await owner().accessPlan.create({

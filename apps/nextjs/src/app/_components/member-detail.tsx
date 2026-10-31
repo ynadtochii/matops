@@ -47,6 +47,7 @@ import { Tabs } from "./tabs";
 const MEMBERSHIP_TAG: Record<string, string> = {
   expired: "month unpaid",
   "not-covered": "no membership",
+  "awaiting-staff": "cash to confirm",
   "pending-approval": "awaiting approval",
   suspended: "suspended",
 };

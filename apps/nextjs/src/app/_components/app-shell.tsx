@@ -251,11 +251,7 @@ function ShellChrome({
       !isStaff &&
       isActiveMember({ status: academy.status }),
   });
-  const warning = memberships.data?.memberships.find(
-    (item) => item.warning,
-  )?.warning;
-  const duesStrip = warning?.detail ?? null;
-  const duesStripLocked = warning?.verdict === "blocked";
+  const bannerText = memberships.data?.bannerText ?? null;
   const branchItems = branch
     ? branchNavItems(branch, {
         students: badgeFor(summaryStatus, counts?.roster),
@@ -325,19 +321,25 @@ function ShellChrome({
                 </p>
               </div>
             )}
-            {duesStrip && (
+            {bannerText && (
               <Link
                 href={href("/payments")}
+                role="status"
                 className={`block border-b transition-colors ${
-                  duesStripLocked
+                  bannerText.blocking
                     ? "border-error/25 bg-error/10 hover:bg-error/15"
                     : "border-warning/25 bg-warning/10 hover:bg-warning/15"
                 }`}
               >
                 <span
-                  className={`${columnClass} text-foreground-secondary block py-2 text-sm`}
+                  className={`${columnClass} text-foreground flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2 text-sm`}
                 >
-                  {duesStrip}
+                  <span>{bannerText.text}</span>
+                  {bannerText.action && (
+                    <span className="font-medium underline underline-offset-4">
+                      {bannerText.action}
+                    </span>
+                  )}
                 </span>
               </Link>
             )}

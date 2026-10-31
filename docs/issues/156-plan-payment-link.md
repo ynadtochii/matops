@@ -21,3 +21,7 @@ Gym owners already have Stripe accounts and create payments in their Stripe Dash
 - The owner must create a new Payment Link when a price changes. A link with a different amount from the price in MatOps is not detected in this step.
 - A Payment Link with a recurring price starts a Stripe subscription. MatOps does not follow it yet; each month is still confirmed by hand.
 - Step B adds a webhook from the gym's own Stripe account to confirm months automatically. Step C (ADR 155) adds Connect OAuth once a MatOps platform account can be verified.
+
+## Addendum 2026-10-30: owner only
+
+A payment link decides whose Stripe account receives the students' money. A manager, or anyone with a stolen manager login, could paste a link to their own account. So `accessPlan.setPaymentLink` is now owner only (new tier `organizationOwnerProcedure`), and `setPrice` refuses a link from anyone but the owner. Managers can still change a price without a link, and the Payment link button and the link field are hidden from them. Decision 3 above said "owner or manager"; this replaces it.

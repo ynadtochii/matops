@@ -5,8 +5,11 @@ import {
   foreignKey,
   index,
   pgTable,
+  primaryKey,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+
+import type { PaymentMethodKind } from "@matops/domain";
 
 import { organization, user } from "./auth-schema";
 import { entity } from "./entity-schema";
@@ -52,6 +55,7 @@ export const accessPlan = pgTable(
     currency: t.text(),
     /** Archived stops new assignments and freezes the plan; nobody loses access. */
     archivedAt: t.timestamp({ withTimezone: true }),
+    staffOnly: t.boolean().notNull().default(false),
     createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: t
       .timestamp({ withTimezone: true })
@@ -359,6 +363,64 @@ export const membershipPolicy = pgTable(
   ],
 );
 
+export const paymentMethod = pgTable(
+  "payment_method",
+  (t) => ({
+    id: t.uuid().notNull().primaryKey().defaultRandom(),
+    organizationId: t
+      .text()
+      .notNull()
+      .references(() => organization.id),
+    kind: t.text().$type<PaymentMethodKind>().notNull(),
+    label: t.text().notNull(),
+    details: t.text().notNull().default(""),
+    enabled: t.boolean().notNull().default(true),
+    position: t.integer().notNull().default(0),
+    createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
+    updatedAt: t
+      .timestamp({ withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdateFn(() => new Date()),
+  }),
+  (table) => [
+    index("payment_method_by_position").on(
+      table.organizationId,
+      table.position,
+    ),
+    check(
+      "payment_method_kind_supported",
+      sql`kind in ('bank','mbway','cash','other')`,
+    ),
+  ],
+);
+
+export const accessPlanMethodOff = pgTable(
+  "access_plan_method_off",
+  (t) => ({
+    organizationId: t
+      .text()
+      .notNull()
+      .references(() => organization.id),
+    planId: t
+      .uuid()
+      .notNull()
+      .references(() => accessPlan.id, { onDelete: "cascade" }),
+    paymentMethodId: t
+      .uuid()
+      .notNull()
+      .references(() => paymentMethod.id, { onDelete: "cascade" }),
+    createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
+  }),
+  (table) => [
+    primaryKey({
+      name: "access_plan_method_off_pk",
+      columns: [table.planId, table.paymentMethodId],
+    }),
+    index("access_plan_method_off_by_method").on(table.paymentMethodId),
+  ],
+);
+
 /**
  * One calendar month of one shared membership, ticked by hand.
  *
@@ -390,6 +452,13 @@ export const membershipMonth = pgTable(
     proofFileId: t.uuid().references((): AnyPgColumn => storedFile.id, {
       onDelete: "set null",
     }),
+    paymentMethodId: t.uuid().references((): AnyPgColumn => paymentMethod.id, {
+      onDelete: "set null",
+    }),
+    cashPaidTo: t.text().references(() => user.id, { onDelete: "set null" }),
+    cashPaidToName: t.text(),
+    cashPaidOn: t.date(),
+    paymentNote: t.text(),
     createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: t
       .timestamp({ withTimezone: true })

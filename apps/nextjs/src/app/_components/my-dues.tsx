@@ -5,21 +5,36 @@ import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@matops/ui/badge";
 
 import { useTRPC } from "~/trpc/react";
+import { ChooseMembership } from "./choose-membership";
 import { useEntity } from "./entity";
-import { MembershipChangeNotice, MembershipNotice } from "./membership-notice";
+import { MembershipChangeNotice } from "./membership-notice";
 import { PageHeader } from "./page-header";
 import { LIST, Section } from "./primitives";
 import { EmptyState, SuspendedState } from "./states";
 
+const CHOOSING = new Set([
+  "choose_plan",
+  "no_plans",
+  "finish_payment",
+  "renew_due",
+  "renew_overdue",
+]);
+
 export function MyDues() {
   const { status } = useEntity();
+  const trpc = useTRPC();
+  const standing = useQuery(trpc.accessPlan.mine.queryOptions());
+  const choosing =
+    standing.data?.banner && CHOOSING.has(standing.data.banner.kind)
+      ? standing.data
+      : null;
   return (
     <>
       <PageHeader
         title="Membership"
-        subtitle="Check your membership, payment status, and transfer details."
+        subtitle="Choose your plan, pay for it, and check its status."
       />
-      <MembershipNotice />
+      {choosing && <ChooseMembership mine={choosing} />}
       <div className="mt-8 space-y-8">
         {status === "suspended" ? (
           <SuspendedState />
@@ -28,7 +43,7 @@ export function MyDues() {
             You can browse the schedule while you wait.
           </EmptyState>
         ) : null}
-        <MembershipSettled />
+        {!choosing && <MembershipSettled />}
         <MembershipChangeNotice />
       </div>
     </>
@@ -41,14 +56,16 @@ function MembershipSettled() {
   if (standing.isPending || standing.isError) return null;
   if (standing.data.memberships.length === 0) {
     return (
-      <EmptyState title="Your gym has not assigned a membership yet.">
-        Ask an owner or manager to assign your plan.
+      <EmptyState title="You have no membership yet.">
+        Your gym has not turned on membership payments here.
       </EmptyState>
     );
   }
   const settled = standing.data.memberships.filter(
     (membership) => !membership.warning,
   );
+  const waiting = (m: (typeof settled)[number]) =>
+    m.status === "active" && m.paymentStatus === "reported";
   if (settled.length === 0) return null;
 
   return (
@@ -62,23 +79,31 @@ function MembershipSettled() {
             <div className="min-w-0">
               <h3 className="text-md font-semibold">{membership.planName}</h3>
               <p className="text-muted-foreground mt-1 text-sm">
-                {membership.status === "active"
-                  ? "No payment is due for this month."
-                  : "This membership is inactive. Contact your gym for help."}
+                {waiting(membership)
+                  ? membership.awaitingStaff
+                    ? "Waiting for your gym to confirm your cash payment."
+                    : "Your gym is checking your payment."
+                  : membership.status === "active"
+                    ? "No payment is due for this month."
+                    : "This membership is inactive. Contact your gym for help."}
               </p>
             </div>
             <Badge
               tone={
-                membership.status === "active" && membership.paymentRequired
-                  ? "success"
-                  : "neutral"
+                waiting(membership)
+                  ? "warning"
+                  : membership.status === "active" && membership.paymentRequired
+                    ? "success"
+                    : "neutral"
               }
             >
-              {membership.status === "active"
-                ? membership.paymentRequired
-                  ? "Up to date"
-                  : "Free"
-                : "Inactive"}
+              {waiting(membership)
+                ? "Waiting for the gym"
+                : membership.status === "active"
+                  ? membership.paymentRequired
+                    ? "Up to date"
+                    : "Free"
+                  : "Inactive"}
             </Badge>
           </div>
         ))}

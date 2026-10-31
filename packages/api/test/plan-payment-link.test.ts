@@ -8,6 +8,7 @@ import { harness, rejectionCode, seedAcademies } from "./helpers";
 const ORG = "acad_pay_link";
 const OWNER = "u_pay_link_owner";
 const STUDENT = "u_pay_link_student";
+const MANAGER = "u_pay_link_manager";
 const LINK = "https://buy.stripe.com/test_now";
 const NEXT_LINK = "https://buy.stripe.com/test_next";
 
@@ -33,6 +34,7 @@ describe("plan payment link (ADR 156)", () => {
         members: [
           { userId: OWNER, role: "owner", status: "active" },
           { userId: STUDENT, role: "student", status: "active" },
+          { userId: MANAGER, role: "manager", status: "active" },
         ],
       },
     ]);
@@ -65,12 +67,36 @@ describe("plan payment link (ADR 156)", () => {
     expect((await held()).cardPaymentUrl).toBeNull();
   });
 
-  it("lets only staff who run the gym set it", async () => {
+  it("lets only the owner set it", async () => {
+    for (const who of [student(), h.as(MANAGER, ORG)]) {
+      expect(
+        await rejectionCode(
+          who.accessPlan.setPaymentLink({ planId, paymentLinkUrl: LINK }),
+        ),
+      ).toBe("FORBIDDEN");
+    }
+  });
+
+  it("lets a manager change a price but not add a link with it", async () => {
+    const manager = h.as(MANAGER, ORG);
+    const effectiveMonth = nextMonth((await held()).month);
     expect(
       await rejectionCode(
-        student().accessPlan.setPaymentLink({ planId, paymentLinkUrl: LINK }),
+        manager.accessPlan.setPrice({
+          id: planId,
+          priceMinor: 4500,
+          currency: "EUR",
+          effectiveMonth,
+          paymentLinkUrl: LINK,
+        }),
       ),
     ).toBe("FORBIDDEN");
+    await manager.accessPlan.setPrice({
+      id: planId,
+      priceMinor: 4500,
+      currency: "EUR",
+      effectiveMonth,
+    });
   });
 
   it("refuses a link that is not a Stripe payment link", async () => {

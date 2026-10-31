@@ -65,7 +65,7 @@ describe("gym-level permissions", () => {
       as(MANAGER).accessPlan.assign({ userId: STUDENT, planId }),
     ).resolves.toBeDefined();
     await expect(
-      as(MANAGER).accessPlan.setPolicy({ graceDays: 7, bankDetails: "IBAN" }),
+      as(MANAGER).accessPlan.setPolicy({ graceDays: 7 }),
     ).resolves.toBeDefined();
     await expect(
       as(MANAGER).organization.rename({ name: "Renamed gym" }),

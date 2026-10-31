@@ -34,8 +34,6 @@ import {
   Button,
   Callout,
   Card,
-  confirm,
-  CopyField,
   EmptyState,
   ErrorState,
   Eyebrow,
@@ -188,89 +186,40 @@ function ProfileDetails({
 }
 
 function MembershipNotice() {
-  const t = useTheme();
+  const router = useRouter();
   const standing = useQuery(trpc.accessPlan.mine.queryOptions());
-  const claim = useMutation(
-    trpc.accessPlan.claimMonth.mutationOptions({
-      onSuccess: () => void standing.refetch(),
-    }),
-  );
-  const warned = (standing.data?.memberships ?? []).filter((m) => m.warning);
-  const bankDetails = standing.data?.bankDetails ?? "";
-  if (warned.length === 0) return null;
+  if (!standing.data) return null;
+  const { bannerText, memberships } = standing.data;
+  const active = memberships.filter((m) => m.status === "active");
 
   return (
-    <Stack gap={16}>
-      {warned.map((m) => (
-        <Stack key={m.assignmentId} gap={8}>
-          <Callout
-            tone={m.warning?.verdict === "blocked" ? "error" : "warning"}
-            title={m.warning?.headline}
-          >
-            <Txt size={13} tone="secondary">
-              {m.warning?.detail}
-            </Txt>
-            {m.amount ? (
-              <Txt size={15} tabular style={{ color: t.foreground }}>
-                {formatMoney(m.amount.priceMinor, m.amount.currency)}
-              </Txt>
-            ) : null}
-          </Callout>
-          {bankDetails || m.cardPaymentUrl ? (
-            <Stack gap={12}>
-              {m.cardPaymentUrl && !m.reportedAt ? (
-                <Stack gap={6}>
-                  <Button
-                    label="Pay by card"
-                    variant="outline"
-                    onPress={() => {
-                      const url = m.cardPaymentUrl;
-                      if (url) void WebBrowser.openBrowserAsync(url);
-                    }}
-                  />
-                  <Muted>
-                    Opens your gym's Stripe page. After you pay, come back and
-                    tap “I paid”.
-                  </Muted>
-                </Stack>
-              ) : null}
-              {bankDetails ? (
-                <>
-                  <CopyField label="Bank details" value={bankDetails} />
-                  <CopyField
-                    label="Reference (add to your transfer)"
-                    value={m.reference}
-                    data
-                  />
-                </>
-              ) : null}
-              {m.reportedAt ? (
-                <Muted>
-                  Payment submitted. Waiting for your gym to confirm.
-                </Muted>
-              ) : (
-                <Button
-                  label="I paid"
-                  loading={claim.isPending}
-                  onPress={() =>
-                    confirm({
-                      title: "Mark this as paid?",
-                      message:
-                        "This tells your gym you paid. They'll confirm it once they see the payment.",
-                      confirmLabel: "I paid",
-                      destructive: false,
-                      onConfirm: () =>
-                        claim.mutate({ assignmentId: m.assignmentId }),
-                    })
-                  }
-                />
-              )}
-            </Stack>
-          ) : (
-            <Muted>Ask your gym how to pay.</Muted>
-          )}
-        </Stack>
-      ))}
+    <Stack gap={12}>
+      {bannerText ? (
+        <Callout tone={bannerText.blocking ? "error" : "warning"}>
+          <Txt size={13} tone="secondary">
+            {bannerText.text}
+          </Txt>
+        </Callout>
+      ) : active.length > 0 ? (
+        <Card style={{ gap: 4 }}>
+          <Txt size={15} weight={600}>
+            {active.map((m) => m.planName).join(", ")}
+          </Txt>
+          <Muted>No payment is due for this month.</Muted>
+        </Card>
+      ) : null}
+      {bannerText?.action ? (
+        <Button
+          label={bannerText.action}
+          onPress={() => router.push("/membership")}
+        />
+      ) : (
+        <Button
+          label="Open membership"
+          variant="outline"
+          onPress={() => router.push("/membership")}
+        />
+      )}
     </Stack>
   );
 }

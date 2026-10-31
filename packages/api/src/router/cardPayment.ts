@@ -72,7 +72,7 @@ export const cardPaymentRouter = {
       const key = requireKey(ctx.paymentSecretKey);
       const saved = await saveStripeHookSecret(
         ctx.organizationId,
-        sealSecret(key, input.secret),
+        sealSecret(key, input.secret, ctx.organizationId),
         ctx.baseDb,
       );
       if (!saved) {

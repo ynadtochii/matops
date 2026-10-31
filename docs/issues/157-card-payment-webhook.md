@@ -26,3 +26,9 @@ Step A (ADR 156) sends students to the gym's own Stripe Payment Link with `clien
 - A payment whose amount differs from the price (for example a stale link after a price change) is not confirmed automatically; staff see it with the reason.
 - Out of scope for B1: subscriptions (`invoice.paid`, step B2) and delayed methods such as SEPA or Multibanco (step B3). A Stripe refund does not change the month.
 - `card_payment` keeps the assignment id without a foreign key, like `membership_month_audit`, so the payment record outlives a deleted membership.
+
+## Addendum 2026-10-30: security review fixes
+
+1. **The signature is checked before the gym's budget is used.** The 600-a-minute limit per gym now counts only messages that pass the signature check. Someone who knows a gym's URL but not its secret can no longer use up the budget and delay real Stripe messages.
+2. **A failed check writes at most once a minute.** `bad_signature` and `test_event` are not written again while the same problem was recorded less than a minute ago, so junk requests do not cause a database write each.
+3. **Each encrypted secret is tied to its gym.** The gym id is bound into the AES-GCM encryption (additional authenticated data), so a secret copied into another gym's row does not open. `sealSecret`, `openSecret` and `openSecretWithAny` take the gym id. No row was sealed before this change on dev or production, so nothing had to be sealed again.

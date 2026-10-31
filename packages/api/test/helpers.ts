@@ -193,6 +193,23 @@ export async function rejectionCode(
   }
 }
 
+const PDF = new TextEncoder().encode("%PDF-1.4 proof");
+
+export async function uploadProof(
+  h: Harness,
+  userId: string,
+  academyId: string,
+): Promise<string> {
+  const as = h.as(userId, academyId);
+  const started = await as.storage.createUpload({
+    kind: "payment_receipt",
+    contentType: "application/pdf",
+    sizeBytes: PDF.byteLength,
+  });
+  h.storage.put(started.url.replace("fake://put/", ""), PDF, "application/pdf");
+  return (await as.storage.completeUpload({ fileId: started.fileId })).fileId;
+}
+
 function lit(value: string): string {
   return `'${value.replaceAll("'", "''")}'`;
 }

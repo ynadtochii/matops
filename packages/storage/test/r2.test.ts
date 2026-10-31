@@ -75,6 +75,17 @@ describe("createR2Storage presign", () => {
     });
   });
 
+  it("signs a short-lived GET url for a private file", async () => {
+    const url = new URL(await storage.presignGet("receipt/ent1/abc.pdf", 300));
+    expect(url.pathname).toBe("/matops-private-dev/receipt/ent1/abc.pdf");
+    expect(url.searchParams.get("X-Amz-Expires")).toBe("300");
+    expect(url.searchParams.get("X-Amz-SignedHeaders")).toBe("host");
+    expect(url.searchParams.get("X-Amz-Signature")).toMatch(/^[0-9a-f]{64}$/);
+    await expect(storage.presignGet("../secret", 300)).rejects.toBeInstanceOf(
+      StorageError,
+    );
+  });
+
   it("changes the signature when the length changes", async () => {
     const input = {
       key: "avatar/ent1/abc.webp",
