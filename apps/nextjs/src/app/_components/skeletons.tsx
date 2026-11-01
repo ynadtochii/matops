@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import { cn } from "@matops/ui";
 
-import { LIST, Panel, panelCell } from "./primitives";
+import { LIST } from "./primitives";
 
 export function Bar({ className }: { className?: string }) {
   return (
@@ -117,16 +117,20 @@ function SkeletonControlPanel() {
  * hairline panel of equal channels, not a stack of cards that jumps into one
  * short row when the counts land.
  */
-export function SkeletonQueue({ cells = 3 }: { cells?: number }) {
+export function SkeletonQueue({ chips = 3 }: { chips?: number }) {
   return (
-    <Panel role="status" aria-label="Loading" cols={cells}>
-      {Array.from({ length: cells }, (_, i) => (
-        <div key={i} aria-hidden className={cn(panelCell, "px-2.5 py-3")}>
-          <Bar className="h-6 w-8" />
-          <Bar className="mt-2 h-3 w-20" />
+    <div role="status" aria-label="Loading" className="flex flex-wrap gap-3">
+      {Array.from({ length: chips }, (_, i) => (
+        <div
+          key={i}
+          aria-hidden
+          className="border-border flex min-h-14 items-center gap-3 rounded-lg border px-4 max-sm:w-full sm:min-h-12"
+        >
+          <Bar className="h-5 w-7" />
+          <Bar className="h-3 w-28" />
         </div>
       ))}
-    </Panel>
+    </div>
   );
 }
 

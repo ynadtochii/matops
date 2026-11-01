@@ -110,51 +110,6 @@ export const stagger = (index: number): CSSProperties => ({
 export const RESOLVE =
   "animate-in fade-in-0 duration-200 ease-out motion-reduce:animate-none";
 
-export function Panel({
-  cols = 1,
-  className,
-  children,
-  ...props
-}: ComponentProps<"div"> & { cols?: number }) {
-  return (
-    <div
-      className={cn(
-        "border-border bg-grid-small overflow-hidden rounded-lg border",
-        className,
-      )}
-      {...props}
-    >
-      {/* Pulled a pixel past the strip and clipped, so the last column and row
-          shed their hairline into the strip's edge instead of doubling it. */}
-      <div
-        style={{ "--panel-cols": cols } as CSSProperties}
-        className="-mr-px -mb-px grid grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] lg:grid-cols-[repeat(var(--panel-cols),minmax(0,1fr))]"
-      >
-        {children}
-      </div>
-    </div>
-  );
-}
-
-export const panelCell = "border-border bg-background/90 border-r border-b";
-
-export function PanelNotice({
-  title,
-  children,
-}: {
-  title: string;
-  children?: ReactNode;
-}) {
-  return (
-    <div className={cn(panelCell, "col-span-full px-4 py-5")}>
-      <p className="text-foreground text-sm font-medium">{title}</p>
-      {children && (
-        <p className="text-muted-foreground mt-1 text-sm">{children}</p>
-      )}
-    </div>
-  );
-}
-
 /**
  * A section heading (h2) with an optional attention count and a right-aligned
  * action. The count carries the brand spark — matching the nav badges — because

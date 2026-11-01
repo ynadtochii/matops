@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeftRight,
+  BadgePercent,
   Check,
   ChevronDown,
   ExternalLink,
@@ -27,6 +28,7 @@ import {
   upfrontTotal,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
+import { Badge } from "@matops/ui/badge";
 import { Button } from "@matops/ui/button";
 import {
   Collapsible,
@@ -322,8 +324,7 @@ function PayStep({
       : membership.amount;
   const price = amount ? formatMoney(amount.priceMinor, amount.currency) : null;
   const first = formatMonth(firstMonth, zone);
-  const last = formatMonth(covered.at(-1) ?? firstMonth, zone);
-  const month = months > 1 ? `${first} to ${last}` : first;
+  const period = monthRange(firstMonth, covered.at(-1) ?? firstMonth, zone);
   const pay = { months, amount };
 
   return (
@@ -361,14 +362,22 @@ function PayStep({
             </Button>
           )}
         </div>
-        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <p className="text-lg font-semibold">{membership.planName}</p>
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-x-4">
+          <div className="min-w-0">
+            <p className="text-lg font-semibold break-words">
+              {membership.planName}
+            </p>
+            <p className="text-muted-foreground text-sm">{period}</p>
+          </div>
           {price && (
-            <p className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-semibold tabular-nums">
-                {price}
-              </span>
-              <span className="text-muted-foreground text-sm">for {month}</span>
+            <p className="flex items-baseline gap-2 whitespace-nowrap tabular-nums">
+              {quote && quote.savingMinor > 0 && upfront && (
+                <s className="text-muted-foreground text-sm">
+                  <span className="sr-only">Full price </span>
+                  {formatMoney(quote.fullMinor, upfront.currency)}
+                </s>
+              )}
+              <span className="text-2xl font-semibold">{price}</span>
             </p>
           )}
         </div>
@@ -380,15 +389,20 @@ function PayStep({
               setMonths(next);
               if (next > 1 && choice === CARD) setChoice(null);
             }}
-            fullMinor={quote?.fullMinor ?? 0}
             savingMinor={quote?.savingMinor ?? 0}
             currency={upfront.currency}
             hint={
-              hint
-                ? hint.percent !== null
-                  ? `Pay ${hint.fromMonths} months or more to save ${hint.percent}%.`
-                  : `Pay ${hint.fromMonths} months or more for ${formatMoney(hint.monthMinor ?? 0, upfront.currency)} a month.`
-                : null
+              hint && (
+                <>
+                  Pay {hint.fromMonths} months or more{" "}
+                  <span className="text-success font-medium">
+                    {hint.percent !== null
+                      ? `to save ${hint.percent}%`
+                      : `for ${formatMoney(hint.monthMinor ?? 0, upfront.currency)} a month`}
+                  </span>
+                  .
+                </>
+              )
             }
           />
         )}
@@ -399,7 +413,8 @@ function PayStep({
               ? `Booking opens once ${first} is paid.`
               : (membership.warning?.headline ??
                 "Pay this month to keep booking.")}
-          {ahead && " Pay ahead by cash or bank transfer."}
+          {(firstMonth !== membership.month || upfront) &&
+            " Pay ahead by cash or bank transfer."}
         </p>
       </div>
 
@@ -527,11 +542,22 @@ function claimed(pay: PayChoice) {
   };
 }
 
+function monthRange(from: string, to: string, timeZone: string): string {
+  if (from === to) return formatMonth(from, timeZone);
+  const fmt = (month: string, withYear: boolean) =>
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone,
+      month: "short",
+      year: withYear ? "numeric" : undefined,
+    }).format(new Date(`${month}T12:00:00Z`));
+  const sameYear = from.slice(0, 4) === to.slice(0, 4);
+  return `${fmt(from, !sameYear)} to ${fmt(to, true)}`;
+}
+
 function MonthsPicker({
   months,
   max,
   onChange,
-  fullMinor,
   savingMinor,
   currency,
   hint,
@@ -539,10 +565,9 @@ function MonthsPicker({
   months: number;
   max: number;
   onChange: (months: number) => void;
-  fullMinor: number;
   savingMinor: number;
   currency: string;
-  hint: string | null;
+  hint: ReactNode;
 }) {
   return (
     <div className="border-border flex flex-col gap-2 border-t pt-3">
@@ -581,16 +606,25 @@ function MonthsPicker({
           </Button>
         </div>
       </div>
-      {savingMinor > 0 && (
-        <p className="text-success text-sm">
-          You save {formatMoney(savingMinor, currency)}. Full price{" "}
-          <span className="line-through">
-            {formatMoney(fullMinor, currency)}
-          </span>
-          .
+      {savingMinor > 0 ? (
+        <p className="flex min-h-5.5 items-center gap-2 text-sm">
+          <Badge tone="success">
+            <BadgePercent aria-hidden />
+            You save {formatMoney(savingMinor, currency)}
+          </Badge>
+          <span className="text-muted-foreground">Discount applied.</span>
         </p>
+      ) : (
+        hint && (
+          <p className="text-muted-foreground flex min-h-5.5 items-start gap-2 text-sm">
+            <BadgePercent
+              aria-hidden
+              className="text-success mt-0.5 size-4 shrink-0"
+            />
+            <span>{hint}</span>
+          </p>
+        )
       )}
-      {hint && <p className="text-muted-foreground text-sm">{hint}</p>}
     </div>
   );
 }
@@ -624,17 +658,19 @@ function Step({
   children?: ReactNode;
 }) {
   return (
-    <li className="flex gap-3">
+    <li className="grid grid-cols-[1.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-3">
       <span
         aria-hidden
-        className="border-border-strong text-muted-foreground flex size-6 shrink-0 items-center justify-center rounded-full border text-xs font-medium tabular-nums"
+        className="border-border-strong text-muted-foreground flex size-6 items-center justify-center rounded-full border text-xs font-medium tabular-nums"
       >
         {n}
       </span>
-      <div className="flex min-w-0 flex-1 flex-col gap-3 pt-0.5">
-        <p className="text-sm font-medium">{title}</p>
-        {children}
-      </div>
+      <p className="text-sm font-medium">{title}</p>
+      {children && (
+        <div className="col-span-2 flex min-w-0 flex-col gap-3 sm:col-span-1 sm:col-start-2">
+          {children}
+        </div>
+      )}
     </li>
   );
 }

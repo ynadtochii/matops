@@ -563,7 +563,7 @@ function ClassRowCard({
   return (
     <div
       className={cn(
-        "relative flex flex-col px-4 py-4 transition-colors motion-reduce:transition-none lg:grid lg:grid-cols-[6.5rem_minmax(0,1fr)_auto] lg:items-center lg:gap-x-6 lg:px-5",
+        "relative isolate flex flex-col px-4 py-4 transition-colors motion-reduce:transition-none lg:grid lg:grid-cols-[6.5rem_minmax(0,1fr)_auto] lg:items-center lg:gap-x-6 lg:px-5",
         booked ? "bg-raised" : "hover:bg-hover",
         past && "opacity-60",
       )}

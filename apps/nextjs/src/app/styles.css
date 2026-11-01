@@ -51,12 +51,6 @@
     linear-gradient(to bottom, var(--border) 1px, transparent 1px);
   background-size: 32px 32px;
 }
-@utility bg-grid-small {
-  background-image:
-    linear-gradient(to right, var(--border) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--border) 1px, transparent 1px);
-  background-size: 8px 8px;
-}
 /* A 1px gradient border around a solid fill: `edge-lit-raised`, `edge-rim-card`.
    The fill is set here because the border gradient needs its own background
    layer, so a separate bg-* utility on the same element would erase it. */
