@@ -1,13 +1,17 @@
 import {
   defaultShouldDehydrateQuery,
+  MutationCache,
+  QueryCache,
   QueryClient,
 } from "@tanstack/react-query";
 import SuperJSON from "superjson";
 
 import { staleTimeForQueryKey } from "@matops/domain";
 
-export const createQueryClient = () =>
+export const createQueryClient = (onError?: (error: Error) => void) =>
   new QueryClient({
+    queryCache: new QueryCache({ onError }),
+    mutationCache: new MutationCache({ onError }),
     defaultOptions: {
       queries: {
         staleTime: (query) => staleTimeForQueryKey(query.queryKey),

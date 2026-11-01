@@ -18,6 +18,7 @@ import type { AppRouter } from "@matops/api";
 import { entityFromPath } from "@matops/domain";
 
 import { env } from "~/env";
+import { isMembershipGone, leaveEndedGym } from "./access-ended";
 import { createQueryClient } from "./query-client";
 
 let clientQueryClientSingleton: QueryClient | undefined = undefined;
@@ -27,7 +28,11 @@ const getQueryClient = () => {
     return createQueryClient();
   } else {
     // Browser: use singleton pattern to keep the same query client
-    return (clientQueryClientSingleton ??= createQueryClient());
+    return (clientQueryClientSingleton ??= createQueryClient((error) => {
+      if (isMembershipGone(error) && clientQueryClientSingleton) {
+        void leaveEndedGym(clientQueryClientSingleton);
+      }
+    }));
   }
 };
 

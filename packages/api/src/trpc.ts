@@ -142,6 +142,8 @@ export const GENERIC_ERROR = "Something went wrong. Try again.";
 // An uncaught throw reaches the client with the driver's own words, which for a
 // Postgres error name the table, the column and the constraint. tRPC drops
 // `stack` outside dev but never touches `message`.
+export class MembershipGoneError extends Error {}
+
 export function publicErrorMessage(code: string, message: string): string {
   return code === "INTERNAL_SERVER_ERROR" &&
     process.env.NODE_ENV === "production"
@@ -160,6 +162,7 @@ const t = initTRPC.context<typeof createTRPCContext>().create({
         error.cause instanceof ZodError
           ? z.flattenError(error.cause as ZodError<Record<string, unknown>>)
           : null,
+      membershipGone: error.cause instanceof MembershipGoneError,
     },
   }),
 });
@@ -267,6 +270,7 @@ async function resolveOrganization<U extends { id: string }>(ctx: {
     throw new TRPCError({
       code: "FORBIDDEN",
       message: "You are not a member of this gym",
+      cause: new MembershipGoneError(),
     });
   }
   return { organizationId, orgMembership, user };

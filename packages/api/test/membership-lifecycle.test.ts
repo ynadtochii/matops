@@ -1,6 +1,8 @@
+import { TRPCError } from "@trpc/server";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { Harness } from "./helpers";
+import { MembershipGoneError } from "../src/trpc";
 import {
   harness,
   memberId,
@@ -316,6 +318,32 @@ describe("member archive and permanent erase (docs/issues/84)", () => {
       ).toBe(0);
     });
 
+    it("leaves no name, email or phone a later join could pick up", async () => {
+      const before = await h.pg.query<{ id: string; email: string | null }>(
+        `SELECT id, email FROM person WHERE account_user_id = $1 AND organization_id = $2`,
+        [LEAVER, ACAD],
+      );
+      const held = before.rows[0];
+      if (!held) throw new Error("no person row");
+      await h.as(OWNER, ACAD).membership.purge({ memberId: LEAVER_MEMBER });
+      expect(
+        await countRows(
+          h,
+          `SELECT count(*)::int AS n FROM person WHERE id = $1 AND (email IS NOT NULL OR phone IS NOT NULL OR name <> 'Erased member')`,
+          held.id,
+        ),
+      ).toBe(0);
+      if (held.email) {
+        expect(
+          await countRows(
+            h,
+            `SELECT count(*)::int AS n FROM person WHERE lower(email) = lower($1)`,
+            held.email,
+          ),
+        ).toBe(0);
+      }
+    });
+
     it("keeps the account when they still train somewhere else", async () => {
       const res = await h
         .as(OWNER, ACAD)
@@ -335,6 +363,34 @@ describe("member archive and permanent erase (docs/issues/84)", () => {
           NOMAD,
         ),
       ).toBe(1);
+    });
+
+    it("signs them out of the erased gym and marks their next call", async () => {
+      await h.pg.query(
+        `INSERT INTO "session" (id, expires_at, token, created_at, updated_at, user_id, active_organization_id)
+         VALUES ('s_nomad_here', now() + interval '1 day', 't_nomad_here', now(), now(), $1, $2),
+                ('s_nomad_there', now() + interval '1 day', 't_nomad_there', now(), now(), $1, $3)`,
+        [NOMAD, ACAD, OTHER],
+      );
+      await h.as(OWNER, ACAD).membership.purge({ memberId: NOMAD_MEMBER });
+      const active = await h.pg.query<{ id: string; org: string | null }>(
+        `SELECT id, active_organization_id AS org FROM "session" WHERE user_id = $1 ORDER BY id`,
+        [NOMAD],
+      );
+      expect(active.rows).toEqual([
+        { id: "s_nomad_here", org: null },
+        { id: "s_nomad_there", org: OTHER },
+      ]);
+      const error = await h
+        .as(NOMAD, ACAD)
+        .entity.list()
+        .then(
+          () => null,
+          (e: unknown) => e,
+        );
+      expect(error).toBeInstanceOf(TRPCError);
+      expect((error as TRPCError).code).toBe("FORBIDDEN");
+      expect((error as TRPCError).cause).toBeInstanceOf(MembershipGoneError);
     });
 
     it("does not touch the other academy's copy of their data", async () => {

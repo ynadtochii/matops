@@ -20,6 +20,7 @@ import {
   person,
   rankCorrection,
   rankPromotion,
+  session,
   storedFile,
   user,
   waiverAcceptance,
@@ -318,24 +319,57 @@ export async function deleteOrganizationAssignments(
   return gone.length;
 }
 
+export const ERASED_PERSON_NAME = "Erased member";
+
 export async function deleteMemberRow(
   exec: DbExec,
   organizationId: string,
   userId: string,
 ): Promise<void> {
-  await exec
+  const erased = await exec
     .update(person)
-    .set({ accountUserId: null })
+    .set({
+      accountUserId: null,
+      name: ERASED_PERSON_NAME,
+      email: null,
+      phone: null,
+      archivedAt: new Date(),
+    })
     .where(
       and(
         eq(person.organizationId, organizationId),
         eq(person.accountUserId, userId),
       ),
+    )
+    .returning({ id: person.id });
+  if (erased.length > 0) {
+    await exec.delete(person).where(
+      and(
+        inArray(
+          person.id,
+          erased.map((row) => row.id),
+        ),
+        sql`not exists (select 1 from ${classParticipation} where ${classParticipation.personId} = ${person.id})`,
+        sql`not exists (select 1 from ${entityMembership} where ${entityMembership.personId} = ${person.id})`,
+        sql`not exists (select 1 from ${accessAssignment} where ${accessAssignment.personId} = ${person.id})`,
+        sql`not exists (select 1 from ${accessAssignmentChange} where ${accessAssignmentChange.personId} = ${person.id})`,
+        sql`not exists (select 1 from ${membershipAccessHold} where ${membershipAccessHold.personId} = ${person.id})`,
+      ),
     );
+  }
   await exec
     .delete(member)
     .where(
       and(eq(member.userId, userId), eq(member.organizationId, organizationId)),
+    );
+  await exec
+    .update(session)
+    .set({ activeOrganizationId: null })
+    .where(
+      and(
+        eq(session.userId, userId),
+        eq(session.activeOrganizationId, organizationId),
+      ),
     );
 }
 

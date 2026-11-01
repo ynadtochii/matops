@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, useWindowDimensions, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
@@ -127,6 +127,12 @@ export default function Schedule() {
   const sectionY = useRef(new Map<string, number>());
   const listY = useRef(0);
   const chipsHeight = useRef(0);
+  const jumpedTo = useRef<string | null>(null);
+  const [activeDay, setActiveDay] = useState<string | null>(null);
+  const shownDay =
+    activeDay && byDay.some(([key]) => key === activeDay)
+      ? activeDay
+      : byDay[0]?.[0];
 
   if (suspended) return <SuspendedNotice name={current.data?.name} />;
 
@@ -151,6 +157,21 @@ export default function Schedule() {
           contentContainerStyle={{ paddingBottom: 24 }}
           showsVerticalScrollIndicator={false}
           refreshControl={refreshControl}
+          scrollEventThrottle={64}
+          onScrollBeginDrag={() => (jumpedTo.current = null)}
+          onScroll={(e) => {
+            // After a chip tap, keep that chip lit: a short last day can never
+            // reach the top, so position alone would light the day before it.
+            if (jumpedTo.current) return;
+            const line =
+              e.nativeEvent.contentOffset.y + chipsHeight.current + 8;
+            let current = byDay[0]?.[0] ?? null;
+            for (const [key] of byDay) {
+              const y = sectionY.current.get(key);
+              if (y != null && listY.current + y <= line) current = key;
+            }
+            setActiveDay(current);
+          }}
           stickyHeaderIndices={byDay.length > 0 ? [2] : undefined}
         >
           <View style={{ gap: 4, marginBottom: 16 }}>
@@ -197,8 +218,11 @@ export default function Schedule() {
               days={byDay}
               todayKey={todayKey}
               tomorrowKey={tomorrowKey}
+              activeKey={shownDay}
               onHeight={(h) => (chipsHeight.current = h)}
               onPick={(key) => {
+                jumpedTo.current = key;
+                setActiveDay(key);
                 const y = sectionY.current.get(key);
                 if (y == null) return;
                 scroll.current?.scrollTo({
@@ -446,29 +470,51 @@ function DayChips({
   days,
   todayKey,
   tomorrowKey,
+  activeKey,
   onHeight,
   onPick,
 }: {
   days: [string, ClassRow[]][];
   todayKey: string;
   tomorrowKey: string;
+  activeKey: string | undefined;
   onHeight: (height: number) => void;
   onPick: (key: string) => void;
 }) {
   const t = useTheme();
+  const strip = useRef<ScrollView>(null);
+  const stripWidth = useRef(0);
+  const stripLeft = useRef(0);
+  const chipX = useRef(new Map<string, { x: number; width: number }>());
+
+  useEffect(() => {
+    const chip = activeKey ? chipX.current.get(activeKey) : undefined;
+    if (!chip) return;
+    const start = chip.x - 4;
+    const end = chip.x + chip.width + 4 - stripWidth.current;
+    const x =
+      start < stripLeft.current ? start : end > stripLeft.current ? end : null;
+    if (x !== null) strip.current?.scrollTo({ x, animated: true });
+  }, [activeKey]);
+
   return (
     <View
       style={{ backgroundColor: t.background, paddingVertical: 8 }}
       onLayout={(e) => onHeight(e.nativeEvent.layout.height)}
     >
       <ScrollView
+        ref={strip}
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ gap: 4 }}
+        scrollEventThrottle={64}
+        onLayout={(e) => (stripWidth.current = e.nativeEvent.layout.width)}
+        onScroll={(e) => (stripLeft.current = e.nativeEvent.contentOffset.x)}
       >
         {days.map(([key, rows]) => {
           const date = new Date(`${key}T12:00:00`);
           const today = key === todayKey;
+          const active = key === activeKey;
           const mine = rows.some(
             (c) => c.myBooking === "booked" && c.status !== "cancelled",
           );
@@ -477,6 +523,13 @@ function DayChips({
               key={key}
               accessibilityRole="button"
               accessibilityLabel={`${dayName(key, todayKey, tomorrowKey)}, ${rows.length} ${rows.length === 1 ? "class" : "classes"}${mine ? ", you are booked" : ""}`}
+              accessibilityState={{ selected: active }}
+              onLayout={(e) =>
+                chipX.current.set(key, {
+                  x: e.nativeEvent.layout.x,
+                  width: e.nativeEvent.layout.width,
+                })
+              }
               onPress={() => onPick(key)}
               style={({ pressed }) => ({
                 flexDirection: "row",
@@ -486,15 +539,15 @@ function DayChips({
                 paddingHorizontal: 12,
                 borderRadius: 5,
                 borderWidth: 1,
-                borderColor: today ? t.edgeLit : "transparent",
-                backgroundColor: today
+                borderColor: active ? t.edgeLit : "transparent",
+                backgroundColor: active
                   ? t.surface2
                   : pressed
                     ? t.hover
                     : "transparent",
               })}
             >
-              <Txt size={13} tone={today ? "default" : "muted"} tabular>
+              <Txt size={13} tone={active ? "default" : "muted"} tabular>
                 {today
                   ? "Today"
                   : `${weekdayFmt.format(date)} ${dayNumFmt.format(date)}`}

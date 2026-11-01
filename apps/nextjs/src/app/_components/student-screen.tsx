@@ -82,6 +82,62 @@ export function StudentScreen() {
   // same cache key. Filtering here is what keeps the list to seven local days.
   const byDay = useMemo(() => groupByDay(week.data ?? []), [week.data]);
 
+  const dayNav = useRef<HTMLElement>(null);
+  const jumpedTo = useRef<string | null>(null);
+  const [activeDay, setActiveDay] = useState<string | null>(null);
+  const shownDay =
+    activeDay && byDay.some(([key]) => key === activeDay)
+      ? activeDay
+      : byDay[0]?.[0];
+
+  useEffect(() => {
+    const nav = dayNav.current;
+    const scroller = nav?.closest("main");
+    if (!nav || !scroller) return;
+    const keys = byDay.map(([key]) => key);
+    const update = () => {
+      // After a chip tap, keep that chip lit: a short last day can never
+      // reach the top, so position alone would light the day before it.
+      if (jumpedTo.current) return;
+      const line = nav.getBoundingClientRect().bottom + 8;
+      let current = keys[0] ?? null;
+      for (const key of keys) {
+        const top = document
+          .getElementById(`day-${key}`)
+          ?.getBoundingClientRect().top;
+        if (top !== undefined && top <= line) current = key;
+      }
+      setActiveDay(current);
+    };
+    const release = () => {
+      jumpedTo.current = null;
+    };
+    const userInput = ["wheel", "touchstart", "keydown"] as const;
+    update();
+    scroller.addEventListener("scroll", update, { passive: true });
+    for (const e of userInput)
+      scroller.addEventListener(e, release, { passive: true });
+    return () => {
+      scroller.removeEventListener("scroll", update);
+      for (const e of userInput) scroller.removeEventListener(e, release);
+    };
+  }, [byDay]);
+
+  useEffect(() => {
+    const nav = dayNav.current;
+    const chip = nav?.querySelector<HTMLElement>(`[data-day="${shownDay}"]`);
+    if (!nav || !chip) return;
+    const start = chip.offsetLeft - 4;
+    const end = chip.offsetLeft + chip.offsetWidth + 4 - nav.clientWidth;
+    const left =
+      start < nav.scrollLeft ? start : end > nav.scrollLeft ? end : null;
+    if (left === null) return;
+    const reduce = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    nav.scrollTo({ left, behavior: reduce ? "auto" : "smooth" });
+  }, [shownDay]);
+
   if (suspended) {
     return (
       <>
@@ -142,6 +198,7 @@ export function StudentScreen() {
           )}
 
           <nav
+            ref={dayNav}
             aria-label="Jump to a day"
             className="bg-background sticky top-0 z-10 -mx-1 mb-2 flex [scrollbar-width:none] gap-1 overflow-x-auto px-1 py-2 [&::-webkit-scrollbar]:hidden"
           >
@@ -154,11 +211,17 @@ export function StudentScreen() {
                 <a
                   key={key}
                   href={`#day-${key}`}
+                  data-day={key}
+                  aria-current={key === shownDay ? "location" : undefined}
+                  onClick={() => {
+                    jumpedTo.current = key;
+                    setActiveDay(key);
+                  }}
                   aria-label={`${dayName(key, todayKey, tomorrowKey)}, ${rows.length} ${rows.length === 1 ? "class" : "classes"}${mine ? ", you are booked" : ""}`}
                   className={cn(
                     "rounded-control flex min-h-11 shrink-0 items-center gap-2 border px-3 text-sm transition-colors motion-reduce:transition-none sm:min-h-9",
                     FOCUS_RING,
-                    key === todayKey
+                    key === shownDay
                       ? "edge-lit-surface-2 text-foreground shadow-lift"
                       : "text-muted-foreground hover:bg-hover hover:text-foreground border-transparent",
                   )}
