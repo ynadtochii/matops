@@ -29,6 +29,7 @@ const SCOPE_GUC: Record<string, string> = {
   membership_policy: "app.organization_id",
   membership_month: "app.organization_id",
   membership_month_audit: "app.organization_id",
+  membership_purchase: "app.organization_id",
   card_payment: "app.organization_id",
   payment_method: "app.organization_id",
   access_plan_method_off: "app.organization_id",

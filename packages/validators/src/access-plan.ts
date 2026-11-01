@@ -2,7 +2,10 @@ import { z } from "zod/v4";
 
 import {
   isValidTimeZone,
+  MAX_DISCOUNT_PERCENT,
   MAX_PAYMENT_METHODS,
+  MAX_UPFRONT_MONTHS,
+  MIN_DISCOUNT_FROM_MONTHS,
   PAYMENT_METHOD_KINDS,
   paymentMethodNeedsDetails,
 } from "@matops/domain";
@@ -23,6 +26,20 @@ const EntityIdsSchema = z
   .max(MAX_PLAN_ENTITIES)
   .refine((ids) => new Set(ids).size === ids.length, "Branches must be unique");
 
+export const UpfrontRuleSchema = z
+  .object({
+    fromMonths: z
+      .number()
+      .int()
+      .min(MIN_DISCOUNT_FROM_MONTHS)
+      .max(MAX_UPFRONT_MONTHS),
+    percent: z.number().int().min(1).max(MAX_DISCOUNT_PERCENT).nullable(),
+    monthMinor: PriceMinorSchema.min(1).nullable(),
+  })
+  .refine((r) => (r.percent === null) !== (r.monthMinor === null), {
+    message: "Pick a percent or a price per month",
+  });
+
 export const CreateAccessPlanSchema = z
   .object({
     name: lineText(1, 80),
@@ -35,10 +52,15 @@ export const CreateAccessPlanSchema = z
      */
     priceMinor: PriceMinorSchema.optional(),
     currency: CurrencySchema.optional(),
+    discount: UpfrontRuleSchema.optional(),
   })
   .refine(
     (v) => (v.priceMinor === undefined) === (v.currency === undefined),
     "Give a price and its currency together, or neither",
+  )
+  .refine(
+    (v) => v.discount === undefined || v.priceMinor !== undefined,
+    "Give the plan a price before a discount",
   );
 
 /**
@@ -212,7 +234,23 @@ export const ClaimMembershipMonthSchema = z.object({
   cashPaidOn: z.iso.date().optional(),
   note: blockText(0, 500).optional(),
   proofFileId: z.uuid().optional(),
+  months: z.number().int().min(1).max(MAX_UPFRONT_MONTHS).optional(),
 });
+
+export const SetPlanDiscountSchema = z.object({
+  planId: z.uuid(),
+  rule: UpfrontRuleSchema.nullable(),
+});
+
+export const RecordPurchaseSchema = z.object({
+  assignmentId: z.uuid(),
+  months: z.number().int().min(1).max(MAX_UPFRONT_MONTHS),
+  totalMinor: PriceMinorSchema.optional(),
+  methodId: z.uuid().optional(),
+  note: blockText(0, 500).optional(),
+});
+
+export const DiscardPurchaseSchema = z.object({ purchaseId: z.uuid() });
 
 /** Clear a claim without marking the month paid. */
 export const RejectMembershipClaimSchema = MarkMembershipMonthSchema.omit({

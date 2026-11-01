@@ -7,11 +7,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { TRPCClientError } from "@trpc/client";
 
 import type { RouterOutputs } from "@matops/api";
+import type { Money } from "@matops/domain";
 import {
   FILE_RULES,
   fitWithin,
   formatMoney,
+  formatMonth,
+  monthsFrom,
   paymentMethodUsesReference,
+  upfrontHint,
+  upfrontTotal,
 } from "@matops/domain";
 
 import { useToast } from "~/components/toast";
@@ -93,6 +98,20 @@ async function pickProofJpeg(): Promise<Uint8Array | null> {
   return new fs.File(saved.uri).bytes();
 }
 
+interface PayChoice {
+  months: number;
+  amount: Money | null;
+}
+
+function claimed(pay: PayChoice) {
+  return {
+    months: pay.months,
+    ...(pay.amount
+      ? { priceMinor: pay.amount.priceMinor, currency: pay.amount.currency }
+      : {}),
+  };
+}
+
 function useClaim() {
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -111,6 +130,7 @@ export default function MembershipScreen() {
   const mine = useQuery(trpc.accessPlan.mine.queryOptions());
   const options = useQuery(trpc.studentPlan.options.queryOptions());
   const [picking, setPicking] = useState(false);
+  const [extending, setExtending] = useState(false);
   const refreshing = mine.isRefetching || options.isRefetching;
   const refresh = () => {
     void mine.refetch();
@@ -135,12 +155,38 @@ export default function MembershipScreen() {
     const renewal =
       banner?.kind === "renew_due" || banner?.kind === "renew_overdue";
 
-    if (!banner) {
+    const settled = mine.data.memberships.find(
+      (m) => m.status === "active" && m.paymentRequired && m.upfront,
+    );
+    if (!banner && settled && extending) {
       body = (
-        <EmptyState
-          title="Nothing to pay right now."
-          body="Your membership is up to date."
+        <PayStep
+          membership={settled}
+          options={options.data}
+          extend
+          onCancel={() => setExtending(false)}
+          onReturn={refresh}
         />
+      );
+    } else if (!banner) {
+      body = (
+        <Stack gap={16}>
+          <EmptyState
+            title="Nothing to pay right now."
+            body={
+              settled?.paidUntilLabel
+                ? `Paid through ${settled.paidUntilLabel}.`
+                : "Your membership is up to date."
+            }
+          />
+          {settled ? (
+            <Button
+              label="Pay ahead"
+              variant="outline"
+              onPress={() => setExtending(true)}
+            />
+          ) : null}
+        </Stack>
       );
     } else if (banner.kind === "no_plans") {
       body = (
@@ -271,49 +317,137 @@ function PayStep({
   options,
   onChangePlan,
   onReturn,
+  extend = false,
+  onCancel,
 }: {
   membership: Membership;
   options: Options;
   onChangePlan?: () => void;
   onReturn: () => void;
+  extend?: boolean;
+  onCancel?: () => void;
 }) {
   const t = useTheme();
+  const upfront = membership.upfront;
+  const [months, setMonths] = useState(1);
+  const quote = upfront
+    ? upfrontTotal(upfront.monthlyMinor, upfront.rule, months)
+    : null;
+  const hint = upfront
+    ? upfrontHint(upfront.monthlyMinor, upfront.rule, months)
+    : null;
+  const firstMonth = upfront?.firstMonth ?? membership.month;
+  const ahead = months > 1 || firstMonth !== membership.month;
+  const amount: Money | null =
+    upfront && quote
+      ? { priceMinor: quote.totalMinor, currency: upfront.currency }
+      : membership.amount;
+  const pay = { months, amount };
   const methods = options.methods.filter(
     (m) => !m.offPlanIds.includes(membership.planId),
   );
   const choices = [
-    ...(membership.cardPaymentUrl ? [{ id: "card", label: "Card" }] : []),
+    ...(membership.cardPaymentUrl && !ahead
+      ? [{ id: "card", label: "Card" }]
+      : []),
     ...methods.map((m) => ({ id: m.id, label: m.label })),
   ];
   const [choice, setChoice] = useState<string | null>(
     choices.length === 1 ? (choices[0]?.id ?? null) : null,
   );
   const method = methods.find((m) => m.id === choice);
+  const lastMonth = monthsFrom(firstMonth, months).at(-1) ?? firstMonth;
 
   return (
     <Stack gap={16}>
       <Stack gap={4}>
         {onChangePlan ? <Eyebrow>Step 2 of 2</Eyebrow> : null}
+        {extend ? <Eyebrow>Pay ahead</Eyebrow> : null}
         <Heading>
-          {onChangePlan
-            ? `Pay for ${membership.planName}`
-            : `Pay this month for ${membership.planName}`}
+          {extend
+            ? `Pay ahead for ${membership.planName}`
+            : onChangePlan
+              ? `Pay for ${membership.planName}`
+              : `Pay this month for ${membership.planName}`}
         </Heading>
-        {membership.amount ? (
+        {amount ? (
           <Txt size={20} tabular>
-            {formatMoney(
-              membership.amount.priceMinor,
-              membership.amount.currency,
-            )}
+            {formatMoney(amount.priceMinor, amount.currency)}
           </Txt>
         ) : null}
         <Muted>
-          {onChangePlan
-            ? "Booking opens once this month is paid. You can leave and come back at any time."
-            : (membership.warning?.headline ??
-              "Pay this month to keep booking.")}
+          {extend && upfront
+            ? `Your next paid months start in ${upfront.firstMonthLabel}.`
+            : onChangePlan
+              ? "Booking opens once this month is paid. You can leave and come back at any time."
+              : (membership.warning?.headline ??
+                "Pay this month to keep booking.")}
+          {ahead ? " Pay ahead by cash or bank transfer." : ""}
         </Muted>
       </Stack>
+
+      {upfront ? (
+        <Card style={{ gap: 10 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+            }}
+          >
+            <Txt size={15} weight={500}>
+              Months to pay
+            </Txt>
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+            >
+              <Button
+                label="−"
+                accessibilityLabel="One month less"
+                variant="outline"
+                disabled={months <= 1}
+                onPress={() => setMonths(months - 1)}
+              />
+              <Txt
+                size={20}
+                weight={600}
+                tabular
+                style={{ minWidth: 32, textAlign: "center" }}
+              >
+                {String(months)}
+              </Txt>
+              <Button
+                label="+"
+                accessibilityLabel="One month more"
+                variant="outline"
+                disabled={months >= upfront.maxMonths}
+                onPress={() => {
+                  setMonths(months + 1);
+                  if (choice === "card") setChoice(null);
+                }}
+              />
+            </View>
+          </View>
+          {months > 1 ? (
+            <Muted>
+              {`${upfront.firstMonthLabel} to ${formatMonth(lastMonth, "UTC")}`}
+            </Muted>
+          ) : null}
+          {quote && quote.savingMinor > 0 ? (
+            <Txt size={14} tone="success">
+              {`You save ${formatMoney(quote.savingMinor, upfront.currency)}.`}
+            </Txt>
+          ) : null}
+          {hint ? (
+            <Muted>
+              {hint.percent !== null
+                ? `Pay ${hint.fromMonths} months or more to save ${hint.percent}%.`
+                : `Pay ${hint.fromMonths} months or more for ${formatMoney(hint.monthMinor ?? 0, upfront.currency)} a month.`}
+            </Muted>
+          ) : null}
+        </Card>
+      ) : null}
 
       {choices.length === 0 ? (
         <EmptyState
@@ -364,12 +498,16 @@ function PayStep({
           method={method}
           staff={options.staff}
           today={options.today}
+          pay={pay}
         />
       ) : null}
       {method && method.kind !== "cash" ? (
-        <TransferPanel membership={membership} method={method} />
+        <TransferPanel membership={membership} method={method} pay={pay} />
       ) : null}
 
+      {onCancel ? (
+        <Button label="Cancel" variant="ghost" onPress={onCancel} />
+      ) : null}
       {onChangePlan ? (
         <Button
           label="Choose a different plan"
@@ -500,9 +638,11 @@ function CardPanel({
 function TransferPanel({
   membership,
   method,
+  pay,
 }: {
   membership: Membership;
   method: Method;
+  pay: PayChoice;
 }) {
   const claim = useClaim();
   const proof = useProof();
@@ -527,6 +667,7 @@ function TransferPanel({
           claim.mutate({
             assignmentId: membership.assignmentId,
             methodId: method.id,
+            ...claimed(pay),
             ...(proof.fileId ? { proofFileId: proof.fileId } : {}),
           })
         }
@@ -540,11 +681,13 @@ function CashPanel({
   method,
   staff,
   today,
+  pay,
 }: {
   membership: Membership;
   method: Method;
   staff: Options["staff"];
   today: string;
+  pay: PayChoice;
 }) {
   const t = useTheme();
   const toast = useToast();
@@ -651,6 +794,7 @@ function CashPanel({
           claim.mutate({
             assignmentId: membership.assignmentId,
             methodId: method.id,
+            ...claimed(pay),
             ...(paidTo === null
               ? { cashPaidToName: name.trim() }
               : { cashPaidTo: paidTo }),

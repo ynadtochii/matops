@@ -14,6 +14,7 @@ import {
   memberRank,
   membershipAccessHold,
   membershipMonth,
+  membershipPurchase,
   notification,
   notificationRecipient,
   person,
@@ -262,6 +263,24 @@ export async function deleteOrganizationAssignments(
       eq(membershipMonth.organizationId, organizationId),
       inArray(
         membershipMonth.assignmentId,
+        exec
+          .select({ id: accessAssignment.id })
+          .from(accessAssignment)
+          .where(
+            and(
+              eq(accessAssignment.organizationId, organizationId),
+              eq(accessAssignment.personId, personId),
+            ),
+          ),
+      ),
+    ),
+  );
+
+  await exec.delete(membershipPurchase).where(
+    and(
+      eq(membershipPurchase.organizationId, organizationId),
+      inArray(
+        membershipPurchase.assignmentId,
         exec
           .select({ id: accessAssignment.id })
           .from(accessAssignment)

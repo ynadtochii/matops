@@ -7,6 +7,7 @@ import {
   asc,
   eq,
   eventRole,
+  inArray,
   isNull,
   or,
   recordActivity,
@@ -20,6 +21,7 @@ import {
   accessPlanEntity,
   entityMembership,
   member,
+  membershipPurchase,
   person,
 } from "@matops/db/schema";
 import {
@@ -28,6 +30,8 @@ import {
   isStaffRole,
   localDateISO,
   monthOf,
+  monthsFrom,
+  paidUntil,
   periodsOverlap,
   runsOrganization,
 } from "@matops/domain";
@@ -51,6 +55,7 @@ import {
 } from "../../membership-status";
 import { ASSIGNMENT_NOT_FOUND } from "../../month-write";
 import { readOrganizationEntities } from "../../organization-read";
+import { takenMonths } from "../../purchase-write";
 import {
   organizationManagerIdentityProcedure,
   organizationManagerProcedure,
@@ -607,11 +612,69 @@ export const planHolderProcedures = {
         accountUserId: subject.accountUserId,
       });
       const planNameOf = new Map(rows.map((r) => [r.id, r.planName]));
+      const ahead = await takenMonths(
+        ctx.db,
+        rows.map((r) => r.id),
+        month,
+      );
+      const purchases = rows.length
+        ? await ctx.db
+            .select({
+              id: membershipPurchase.id,
+              assignmentId: membershipPurchase.assignmentId,
+              firstMonth: membershipPurchase.firstMonth,
+              months: membershipPurchase.months,
+              totalMinor: membershipPurchase.totalMinor,
+              currency: membershipPurchase.currency,
+            })
+            .from(membershipPurchase)
+            .where(
+              and(
+                inArray(
+                  membershipPurchase.assignmentId,
+                  rows.map((r) => r.id),
+                ),
+                isNull(membershipPurchase.discardedAt),
+              ),
+            )
+            .orderBy(asc(membershipPurchase.firstMonth))
+        : [];
 
       return rows.map((r) => {
         const now = standing.find((m) => m.assignmentId === r.id);
         const change = waiting.find((c) => c.sourceAssignmentId === r.id);
+        const until = paidUntil(
+          month,
+          new Set(
+            ahead
+              .filter(
+                (a) => a.assignmentId === r.id && a.status === "confirmed",
+              )
+              .map((a) => a.month),
+          ),
+        );
         return {
+          paidUntilLabel:
+            until && until !== month
+              ? formatMonth(until, calendar.timeZone)
+              : null,
+          purchases: purchases
+            .filter(
+              (p) =>
+                p.assignmentId === r.id &&
+                (monthsFrom(p.firstMonth, p.months).at(-1) ?? p.firstMonth) >=
+                  month,
+            )
+            .map((p) => ({
+              id: p.id,
+              months: p.months,
+              totalMinor: p.totalMinor,
+              currency: p.currency,
+              label: `${formatMonth(p.firstMonth, calendar.timeZone)} to ${formatMonth(
+                monthsFrom(p.firstMonth, p.months).at(-1) ?? p.firstMonth,
+                calendar.timeZone,
+              )}`,
+            })),
           id: r.id,
           planId: r.planId,
           planName: r.planName,

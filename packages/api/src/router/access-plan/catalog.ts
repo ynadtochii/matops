@@ -2,7 +2,7 @@ import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
 import type { TenantTx } from "@matops/db";
-import type { AssignmentCoverage } from "@matops/domain";
+import type { AssignmentCoverage, UpfrontRule } from "@matops/domain";
 import {
   and,
   asc,
@@ -28,6 +28,7 @@ import {
   affectedByCoverageChange,
   canEditPlan,
   canPriceFrom,
+  discountProblem,
   isOwner,
   monthOf,
   rowForMonth,
@@ -37,6 +38,7 @@ import {
   CreateAccessPlanSchema,
   SetAccessPlanCoverageSchema,
   SetAccessPlanPriceSchema,
+  SetPlanDiscountSchema,
   SetPlanMethodSchema,
   SetPlanPaymentLinkSchema,
   SetPlanStaffOnlySchema,
@@ -48,6 +50,7 @@ import {
   assignmentAppliesInMonth,
   membershipCalendar,
 } from "../../membership-status";
+import { planRule } from "../../purchase-write";
 import {
   organizationManagerProcedure,
   organizationOwnerProcedure,
@@ -233,6 +236,19 @@ async function coverageGaps(
   return byPlan;
 }
 
+function requireDiscount(rule: UpfrontRule, monthlyMinor: number | null) {
+  const problem = discountProblem(rule, monthlyMinor);
+  if (problem) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message:
+        problem === "no_saving"
+          ? "The price per month must be lower than the monthly price."
+          : "Check the discount: from 2 to 12 months, and a percent from 1 to 90 or a price per month.",
+    });
+  }
+}
+
 export const planCatalogProcedures = {
   /** The whole catalog, archived plans included, with their coverage. */
   list: organizationManagerProcedure.query(async ({ ctx }) => {
@@ -289,6 +305,7 @@ export const planCatalogProcedures = {
         currency: p.currency,
         archived: p.archivedAt !== null,
         staffOnly: p.staffOnly,
+        discount: planRule(p),
         methodsOff: methodsOff
           .filter((o) => o.planId === p.id)
           .map((o) => o.methodId),
@@ -308,6 +325,15 @@ export const planCatalogProcedures = {
     .input(CreateAccessPlanSchema)
     .mutation(async ({ ctx, input }) => {
       await requireOwnEntities(ctx.db, input.entityIds);
+      if (input.discount) {
+        if (!isOwner(ctx.orgMembership)) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Only the owner sets a discount.",
+          });
+        }
+        requireDiscount(input.discount, input.priceMinor ?? null);
+      }
       const [made] = await ctx.db
         .insert(accessPlan)
         .values({
@@ -316,6 +342,9 @@ export const planCatalogProcedures = {
           description: input.description,
           priceMinor: input.priceMinor,
           currency: input.currency,
+          discountFromMonths: input.discount?.fromMonths ?? null,
+          discountPercent: input.discount?.percent ?? null,
+          discountMonthMinor: input.discount?.monthMinor ?? null,
         })
         .returning({ id: accessPlan.id });
       if (!made) {
@@ -468,6 +497,35 @@ export const planCatalogProcedures = {
         .update(accessPlanPrice)
         .set({ paymentLinkUrl: input.paymentLinkUrl })
         .where(eq(accessPlanPrice.id, current.id));
+      return { ok: true as const };
+    }),
+
+  setDiscount: organizationOwnerProcedure
+    .input(SetPlanDiscountSchema)
+    .mutation(async ({ ctx, input }) => {
+      const plan = await loadPlan(ctx.db, input.planId);
+      if (input.rule) {
+        const { month } = await currentMonthOf(ctx.db);
+        const prices = await ctx.db
+          .select({
+            effectiveMonth: accessPlanPrice.effectiveMonth,
+            priceMinor: accessPlanPrice.priceMinor,
+          })
+          .from(accessPlanPrice)
+          .where(eq(accessPlanPrice.planId, plan.id));
+        requireDiscount(
+          input.rule,
+          rowForMonth(prices, month)?.priceMinor ?? null,
+        );
+      }
+      await ctx.db
+        .update(accessPlan)
+        .set({
+          discountFromMonths: input.rule?.fromMonths ?? null,
+          discountPercent: input.rule?.percent ?? null,
+          discountMonthMinor: input.rule?.monthMinor ?? null,
+        })
+        .where(eq(accessPlan.id, plan.id));
       return { ok: true as const };
     }),
 

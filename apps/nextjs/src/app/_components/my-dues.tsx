@@ -1,11 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { Badge } from "@matops/ui/badge";
+import { Button } from "@matops/ui/button";
 
 import { useTRPC } from "~/trpc/react";
-import { ChooseMembership } from "./choose-membership";
+import { ChooseMembership, ExtendMembership } from "./choose-membership";
 import { useEntity } from "./entity";
 import { MembershipChangeNotice } from "./membership-notice";
 import { PageHeader } from "./page-header";
@@ -61,6 +63,7 @@ export function MyDues() {
 function MembershipSettled() {
   const trpc = useTRPC();
   const standing = useQuery(trpc.accessPlan.mine.queryOptions());
+  const [extending, setExtending] = useState<string | null>(null);
   if (standing.isPending || standing.isError) return null;
   if (standing.data.memberships.length === 0) {
     return (
@@ -75,6 +78,15 @@ function MembershipSettled() {
   const waiting = (m: (typeof settled)[number]) =>
     m.status === "active" && m.paymentStatus === "reported";
   if (settled.length === 0) return null;
+  const extend = settled.find((m) => m.assignmentId === extending);
+  if (extend) {
+    return (
+      <ExtendMembership
+        membership={extend}
+        onClose={() => setExtending(null)}
+      />
+    );
+  }
 
   return (
     <Section label="Your memberships">
@@ -92,10 +104,25 @@ function MembershipSettled() {
                     ? "Waiting for your gym to confirm your cash payment."
                     : "Your gym is checking your payment."
                   : membership.status === "active"
-                    ? "No payment is due for this month."
+                    ? membership.paidUntilLabel
+                      ? `Paid through ${membership.paidUntilLabel}.`
+                      : "No payment is due for this month."
                     : "This membership is inactive. Contact your gym for help."}
               </p>
             </div>
+            {membership.status === "active" &&
+              membership.paymentRequired &&
+              membership.upfront &&
+              !waiting(membership) && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="max-sm:order-last max-sm:w-full"
+                  onClick={() => setExtending(membership.assignmentId)}
+                >
+                  Pay ahead
+                </Button>
+              )}
             <Badge
               tone={
                 waiting(membership)

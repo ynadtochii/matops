@@ -8,6 +8,7 @@
 
 **First release**
 
+- [161: Pay several months upfront](issues/161-pay-several-months-upfront.md) (accepted, building): one optional rule per plan, from N months either % off or a fixed price per month. A student or staff picks 1 to 12 months; one `membership_purchase` writes one month row per month, so the booking gate is unchanged. Cash and bank only for more than one month; owner-only custom totals and discard.
 - [160: Memberships grouped by job](issues/160-memberships-grouped-by-job.md): Memberships has four tabs, To check, Months, Plans and Setup. Setup holds the payments switch, ways to pay, card payments and days to pay, so Settings keeps only academy things. Files split by tab and by router group; procedure names unchanged.
 - [159: Students choose their plan](issues/159-students-choose-their-plan.md): self-serve is the default. Students pick any priced plan that is not Staff only, and choosing creates the membership with no grace in the first month. One banner state on web and app. Card through Stripe; cash names who took it and waits for staff; bank and other ways need a private receipt upload that staff open through a 5-minute link. Changes FA2.
 - [158: Ways to pay](issues/158-payment-methods.md): `payment_method` replaces the single bank details text. Owners and managers list bank transfer, MB WAY, cash and their own methods in Settings, hide and order them; students see the visible ones with copy buttons. Card stays on plan prices. Slice 1 of the student memberships plan. Changes ADR 127.

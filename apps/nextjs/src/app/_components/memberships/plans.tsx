@@ -6,11 +6,21 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, Check, Ellipsis, Plus, Users } from "lucide-react";
 
 import type { RouterOutputs } from "@matops/api";
-import { formatMoney, formatMonth, nextMonth } from "@matops/domain";
+import type { UpfrontRule } from "@matops/domain";
+import {
+  discountProblem,
+  formatMoney,
+  formatMonth,
+  MAX_UPFRONT_MONTHS,
+  nextMonth,
+  upfrontRuleLabel,
+  upfrontTotal,
+} from "@matops/domain";
 import { cn } from "@matops/ui";
 import { Badge } from "@matops/ui/badge";
 import { Button } from "@matops/ui/button";
 import { Callout } from "@matops/ui/callout";
+import { Checkbox } from "@matops/ui/checkbox";
 import { Dialog, DialogContent, DialogTitle } from "@matops/ui/dialog";
 import {
   DropdownMenu,
@@ -183,6 +193,7 @@ function PlanCard({ plan, methods }: { plan: Plan; methods: Method[] }) {
   );
   const [pricing, setPricing] = useState(false);
   const [linking, setLinking] = useState(false);
+  const [discounting, setDiscounting] = useState(false);
   const priced = plan.priceMinor !== null && plan.currency;
   const switchId = `plan-open-${plan.id}`;
   const methodsOn = methods.filter((m) => !plan.methodsOff.includes(m.id));
@@ -207,6 +218,9 @@ function PlanCard({ plan, methods }: { plan: Plan; methods: Method[] }) {
         onOpenChange={setPricing}
       />
       {linking && <PaymentLinkDialog plan={plan} onOpenChange={setLinking} />}
+      {discounting && (
+        <DiscountDialog plan={plan} onOpenChange={setDiscounting} />
+      )}
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
@@ -342,6 +356,25 @@ function PlanCard({ plan, methods }: { plan: Plan; methods: Method[] }) {
                   );
                 })}
               </dd>
+
+              <dt className="text-muted-foreground">Pay ahead</dt>
+              <dd className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span>
+                  {plan.discount
+                    ? upfrontRuleLabel(plan.discount, plan.currency ?? "EUR")
+                    : "Same price for every month"}
+                </span>
+                {owner && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="-my-1"
+                    onClick={() => setDiscounting(true)}
+                  >
+                    {plan.discount ? "Change" : "Add a discount"}
+                  </Button>
+                )}
+              </dd>
             </>
           )}
         </dl>
@@ -353,6 +386,215 @@ function PlanCard({ plan, methods }: { plan: Plan; methods: Method[] }) {
         </p>
       )}
     </div>
+  );
+}
+
+function useDiscountDraft(initial: UpfrontRule | null) {
+  const [from, setFrom] = useState(String(initial?.fromMonths ?? 3));
+  const [kind, setKind] = useState<"percent" | "month">(
+    initial?.monthMinor != null ? "month" : "percent",
+  );
+  const [value, setValue] = useState(
+    initial?.monthMinor != null
+      ? (initial.monthMinor / 100).toFixed(2)
+      : String(initial?.percent ?? 10),
+  );
+  const number = Number(value.replace(",", "."));
+  const rule: UpfrontRule | null =
+    !value.trim() || !Number.isFinite(number)
+      ? null
+      : kind === "percent"
+        ? {
+            fromMonths: Number(from),
+            percent: Math.round(number),
+            monthMinor: null,
+          }
+        : {
+            fromMonths: Number(from),
+            percent: null,
+            monthMinor: Math.round(number * 100),
+          };
+  return { from, setFrom, kind, setKind, value, setValue, rule };
+}
+
+type DiscountDraft = ReturnType<typeof useDiscountDraft>;
+
+function discountError(
+  draft: DiscountDraft,
+  monthly: number | null,
+  currency: string,
+): string | null {
+  const problem = draft.rule
+    ? discountProblem(draft.rule, monthly)
+    : "pick_one";
+  if (!problem) return null;
+  return problem === "no_saving" && monthly !== null
+    ? `The price per month must be lower than ${formatMoney(monthly, currency)}.`
+    : `Use 2 to ${MAX_UPFRONT_MONTHS} months, and a percent from 1 to 90 or a price per month.`;
+}
+
+function DiscountFields({
+  idPrefix,
+  draft,
+  monthly,
+  currency,
+}: {
+  idPrefix: string;
+  draft: DiscountDraft;
+  monthly: number | null;
+  currency: string;
+}) {
+  const { rule } = draft;
+  const example =
+    rule && monthly !== null && !discountProblem(rule, monthly)
+      ? upfrontTotal(monthly, rule, rule.fromMonths)
+      : null;
+  return (
+    <>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor={`${idPrefix}-from`}>Discount starts from</Label>
+        <div className="flex items-center gap-2">
+          <Input
+            id={`${idPrefix}-from`}
+            inputMode="numeric"
+            className="w-20"
+            value={draft.from}
+            onChange={(e) => draft.setFrom(e.target.value)}
+          />
+          <span className="text-sm">months</span>
+        </div>
+      </div>
+      <fieldset className="flex flex-col gap-2">
+        <legend className="mb-2 text-sm font-medium">Discount</legend>
+        <div className="flex flex-wrap gap-2">
+          {(
+            [
+              ["percent", "Percent off"],
+              ["month", "Price per month"],
+            ] as const
+          ).map(([id, label]) => (
+            <Button
+              key={id}
+              type="button"
+              size="sm"
+              variant={draft.kind === id ? "primary" : "outline"}
+              aria-pressed={draft.kind === id}
+              onClick={() => {
+                draft.setKind(id);
+                draft.setValue("");
+              }}
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <Input
+            aria-label={
+              draft.kind === "percent" ? "Percent off" : "Price per month"
+            }
+            inputMode="decimal"
+            className="w-28"
+            value={draft.value}
+            placeholder={draft.kind === "percent" ? "10" : "45.00"}
+            onChange={(e) => draft.setValue(e.target.value)}
+          />
+          <span className="text-sm">
+            {draft.kind === "percent" ? "% off" : `${currency} a month`}
+          </span>
+        </div>
+      </fieldset>
+      {example && rule && (
+        <p className="bg-surface-1 rounded-md p-3 text-sm">
+          {rule.fromMonths} months cost{" "}
+          <span className="font-semibold tabular-nums">
+            {formatMoney(example.totalMinor, currency)}
+          </span>{" "}
+          instead of {formatMoney(example.fullMinor, currency)}. Students save{" "}
+          {formatMoney(example.savingMinor, currency)}.
+        </p>
+      )}
+    </>
+  );
+}
+
+function DiscountDialog({
+  plan,
+  onOpenChange,
+}: {
+  plan: Plan;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  const currency = plan.currency ?? "EUR";
+  const monthly = plan.priceMinor ?? 0;
+  const draft = useDiscountDraft(plan.discount);
+  const [error, setError] = useState<string | null>(null);
+  const done = async (message: string) => {
+    await queryClient.invalidateQueries(trpc.accessPlan.list.pathFilter());
+    toast.success(message);
+    onOpenChange(false);
+  };
+  const save = useMutation(
+    trpc.accessPlan.setDiscount.mutationOptions({
+      onSuccess: (_, input) =>
+        done(input.rule ? "Discount saved" : "Discount removed"),
+      onError: (e) => toast.error(e.message || "Couldn't save that."),
+    }),
+  );
+
+  return (
+    <Dialog open onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogTitle>Pay ahead for {plan.name}</DialogTitle>
+        <p className="text-muted-foreground text-sm">
+          Students and staff can pay up to {MAX_UPFRONT_MONTHS} months at once.
+          From the number of months you set, each month costs less.
+        </p>
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const problem = discountError(draft, monthly, currency);
+            setError(problem);
+            if (problem || !draft.rule) return;
+            save.mutate({ planId: plan.id, rule: draft.rule });
+          }}
+        >
+          <DiscountFields
+            idPrefix={`discount-${plan.id}`}
+            draft={draft}
+            monthly={monthly}
+            currency={currency}
+          />
+          {error && <FieldError>{error}</FieldError>}
+          <div className="flex flex-wrap justify-end gap-2">
+            {plan.discount && (
+              <Button
+                type="button"
+                variant="outline"
+                className="sm:mr-auto"
+                disabled={save.isPending}
+                onClick={() => save.mutate({ planId: plan.id, rule: null })}
+              >
+                Remove discount
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" busy={save.isPending}>
+              Save
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -541,6 +783,16 @@ function PriceDialog({
               />
             </div>
           )}
+          {plan.discount?.monthMinor != null &&
+            Math.round(parseFloat(amount.trim()) * 100) <=
+              plan.discount.monthMinor && (
+              <p className="text-warning text-sm">
+                Pay ahead costs{" "}
+                {formatMoney(plan.discount.monthMinor, currency)} a month, which
+                is not lower than this price. Students then pay the normal
+                price. Change the discount too.
+              </p>
+            )}
           {error && <FieldError>{error}</FieldError>}
           <div className="flex justify-end gap-2">
             <Button
@@ -702,12 +954,23 @@ export function NewPlanDialog({
 }) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const { entities } = useOrganization();
+  const { entities, role } = useOrganization();
+  const owner = role === "owner";
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [currency, setCurrency] = useState("EUR");
+  const [discounted, setDiscounted] = useState(false);
+  const draft = useDiscountDraft(null);
   const [error, setError] = useState<string | null>(null);
+  const [discountProblemText, setDiscountProblemText] = useState<string | null>(
+    null,
+  );
+  const typedPrice = price.trim();
+  const monthly =
+    typedPrice === "" || !Number.isFinite(parseFloat(typedPrice))
+      ? null
+      : Math.round(parseFloat(typedPrice) * 100);
 
   const create = useMutation(
     trpc.accessPlan.create.mutationOptions({
@@ -716,7 +979,9 @@ export function NewPlanDialog({
         setName("");
         setDescription("");
         setPrice("");
+        setDiscounted(false);
         setError(null);
+        setDiscountProblemText(null);
         onOpenChange(false);
       },
       onError: (e) =>
@@ -736,6 +1001,12 @@ export function NewPlanDialog({
             // together or not at all, which is what the schema and the column
             // both say (ADR 128).
             const typed = price.trim();
+            const withDiscount = owner && discounted && monthly !== null;
+            const problem = withDiscount
+              ? discountError(draft, monthly, currency)
+              : null;
+            setDiscountProblemText(problem);
+            if (problem) return;
             const parsed = CreateAccessPlanSchema.safeParse({
               name,
               description,
@@ -743,6 +1014,7 @@ export function NewPlanDialog({
               priceMinor:
                 typed === "" ? undefined : Math.round(parseFloat(typed) * 100),
               currency: typed === "" ? undefined : currency,
+              discount: withDiscount && draft.rule ? draft.rule : undefined,
             });
             if (!parsed.success) {
               setError(
@@ -809,6 +1081,39 @@ export function NewPlanDialog({
               />
             </div>
           </div>
+          {owner && (
+            <div className="border-border flex flex-col gap-4 border-t pt-4">
+              <label className="flex items-start gap-2 text-sm">
+                <Checkbox
+                  className="mt-0.5"
+                  checked={discounted}
+                  disabled={monthly === null}
+                  onCheckedChange={(checked) => setDiscounted(checked === true)}
+                />
+                <span className="flex flex-col gap-0.5">
+                  <span className="font-medium">
+                    Cheaper when paying several months
+                  </span>
+                  <span className="text-muted-foreground">
+                    {monthly === null
+                      ? "Add a price first."
+                      : "Optional. You can add or change it later on the plan."}
+                  </span>
+                </span>
+              </label>
+              {discounted && monthly !== null && (
+                <DiscountFields
+                  idPrefix="new-plan-discount"
+                  draft={draft}
+                  monthly={monthly}
+                  currency={currency}
+                />
+              )}
+              {discounted && discountProblemText && (
+                <FieldError>{discountProblemText}</FieldError>
+              )}
+            </div>
+          )}
           <div className="flex justify-end">
             <Button
               type="submit"

@@ -7,6 +7,7 @@ import {
 import { choosablePlans, monthOf, rowForMonth } from "@matops/domain";
 
 import { enabledPaymentMethods, membershipCalendar } from "./membership-status";
+import { planRule } from "./purchase-write";
 
 export async function loadChoosablePlans(db: TenantTx, entityId: string) {
   const calendar = await membershipCalendar(db);
@@ -18,6 +19,9 @@ export async function loadChoosablePlans(db: TenantTx, entityId: string) {
       description: accessPlan.description,
       archivedAt: accessPlan.archivedAt,
       staffOnly: accessPlan.staffOnly,
+      discountFromMonths: accessPlan.discountFromMonths,
+      discountPercent: accessPlan.discountPercent,
+      discountMonthMinor: accessPlan.discountMonthMinor,
     })
     .from(accessPlan);
   const coverage = await db
@@ -58,11 +62,15 @@ export async function loadChoosablePlans(db: TenantTx, entityId: string) {
       waysToPay: methods.filter((m) => !m.offPlanIds.includes(p.id)).length,
     };
   });
-  return choosablePlans(offers, { entityId }).map((p) => ({
-    id: p.id,
-    name: p.name,
-    description: p.description,
-    amount: p.amount,
-    cardLink: p.cardLink,
-  }));
+  return choosablePlans(offers, { entityId }).map((p) => {
+    const plan = plans.find((row) => row.id === p.id);
+    return {
+      id: p.id,
+      name: p.name,
+      description: p.description,
+      amount: p.amount,
+      cardLink: p.cardLink,
+      discount: plan ? planRule(plan) : null,
+    };
+  });
 }

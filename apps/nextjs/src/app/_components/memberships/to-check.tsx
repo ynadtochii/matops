@@ -220,7 +220,10 @@ function ClaimsWaiting() {
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="truncate font-medium">{c.name}</span>
                 <span className="text-muted-foreground truncate text-sm">
-                  {c.planName} · {c.monthLabel}
+                  {c.planName} ·{" "}
+                  {c.purchase
+                    ? `${c.purchase.months} months, ${c.monthLabel} to ${c.purchase.lastMonthLabel} · ${formatMoney(c.purchase.totalMinor, c.purchase.currency)}`
+                    : c.monthLabel}
                 </span>
                 {(c.methodLabel ?? c.cashPaidToName) && (
                   <span className="text-foreground-secondary text-sm">

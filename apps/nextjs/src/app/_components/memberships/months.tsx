@@ -90,6 +90,11 @@ export function MonthsTab() {
                     ? ` · ${formatMoney(r.amount.priceMinor, r.amount.currency)}`
                     : " · no price yet"}
                 </span>
+                {r.paid && r.paidUntilLabel && (
+                  <span className="text-muted-foreground text-xs">
+                    Paid through {r.paidUntilLabel}
+                  </span>
+                )}
                 {!r.paid && r.paymentRequired && (
                   <span
                     className={cn(

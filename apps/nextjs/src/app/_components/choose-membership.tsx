@@ -9,17 +9,22 @@ import {
   ChevronDown,
   ExternalLink,
   FileCheck,
+  Minus,
+  Plus,
   Upload,
 } from "lucide-react";
 
 import type { RouterOutputs } from "@matops/api";
-import type { PaymentMethodKind } from "@matops/domain";
+import type { Money, PaymentMethodKind } from "@matops/domain";
 import {
   cashPaidOnEarliest,
   FILE_RULES,
   formatMoney,
   formatMonth,
+  monthsFrom,
   paymentMethodUsesReference,
+  upfrontHint,
+  upfrontTotal,
 } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { Button } from "@matops/ui/button";
@@ -240,22 +245,60 @@ function methodHint(kind: PaymentMethodKind | typeof CARD, proof: boolean) {
     : "Send the money, then tell the gym.";
 }
 
-function priceOf(membership: Membership) {
-  return membership.amount
-    ? formatMoney(membership.amount.priceMinor, membership.amount.currency)
-    : null;
+export function ExtendMembership({
+  membership,
+  onClose,
+}: {
+  membership: Membership;
+  onClose: () => void;
+}) {
+  const trpc = useTRPC();
+  const options = useQuery(trpc.studentPlan.options.queryOptions());
+  if (options.isPending) return <SkeletonCard lines={4} />;
+  if (options.isError) {
+    return (
+      <ErrorState
+        label="the ways to pay"
+        onRetry={() => void options.refetch()}
+      />
+    );
+  }
+  return (
+    <PayStep
+      membership={membership}
+      options={options.data}
+      extend
+      onClose={onClose}
+    />
+  );
 }
 
 function PayStep({
   membership,
   options,
   onChangePlan,
+  extend = false,
+  onClose,
 }: {
   membership: Membership;
   options: Options;
   onChangePlan?: () => void;
+  extend?: boolean;
+  onClose?: () => void;
 }) {
   const { timeZone, uploadsEnabled } = useEntity();
+  const zone = timeZone ?? "UTC";
+  const upfront = membership.upfront;
+  const [months, setMonths] = useState(1);
+  const quote = upfront
+    ? upfrontTotal(upfront.monthlyMinor, upfront.rule, months)
+    : null;
+  const hint = upfront
+    ? upfrontHint(upfront.monthlyMinor, upfront.rule, months)
+    : null;
+  const firstMonth = upfront?.firstMonth ?? membership.month;
+  const covered = monthsFrom(firstMonth, months);
+  const ahead = months > 1 || firstMonth !== membership.month;
   const methods = options.methods.filter(
     (m) => !m.offPlanIds.includes(membership.planId),
   );
@@ -264,7 +307,7 @@ function PayStep({
     kind: PaymentMethodKind | typeof CARD;
     label: string;
   }[] = [
-    ...(membership.cardPaymentUrl
+    ...(membership.cardPaymentUrl && !ahead
       ? [{ id: CARD, kind: CARD, label: "Card" } as const]
       : []),
     ...methods.map((m) => ({ id: m.id, kind: m.kind, label: m.label })),
@@ -273,8 +316,15 @@ function PayStep({
     choices.length === 1 ? (choices[0]?.id ?? null) : null,
   );
   const method = methods.find((m) => m.id === choice);
-  const price = priceOf(membership);
-  const month = formatMonth(membership.month, timeZone ?? "UTC");
+  const amount: Money | null =
+    upfront && quote
+      ? { priceMinor: quote.totalMinor, currency: upfront.currency }
+      : membership.amount;
+  const price = amount ? formatMoney(amount.priceMinor, amount.currency) : null;
+  const first = formatMonth(firstMonth, zone);
+  const last = formatMonth(covered.at(-1) ?? firstMonth, zone);
+  const month = months > 1 ? `${first} to ${last}` : first;
+  const pay = { months, amount };
 
   return (
     <section className="flex flex-col gap-6" aria-label="Pay for your plan">
@@ -282,7 +332,23 @@ function PayStep({
 
       <div className={cn(cardClass(), "flex flex-col gap-3")}>
         <div className="flex min-h-8 items-center justify-between gap-3">
-          <Eyebrow>{onChangePlan ? "Your plan" : `Due for ${month}`}</Eyebrow>
+          <Eyebrow>
+            {extend
+              ? "Pay ahead"
+              : onChangePlan
+                ? "Your plan"
+                : `Due for ${first}`}
+          </Eyebrow>
+          {extend && onClose && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="-my-1 shrink-0"
+              onClick={onClose}
+            >
+              Cancel
+            </Button>
+          )}
           {onChangePlan && (
             <Button
               variant="outline"
@@ -306,11 +372,34 @@ function PayStep({
             </p>
           )}
         </div>
+        {upfront && (
+          <MonthsPicker
+            months={months}
+            max={upfront.maxMonths}
+            onChange={(next) => {
+              setMonths(next);
+              if (next > 1 && choice === CARD) setChoice(null);
+            }}
+            fullMinor={quote?.fullMinor ?? 0}
+            savingMinor={quote?.savingMinor ?? 0}
+            currency={upfront.currency}
+            hint={
+              hint
+                ? hint.percent !== null
+                  ? `Pay ${hint.fromMonths} months or more to save ${hint.percent}%.`
+                  : `Pay ${hint.fromMonths} months or more for ${formatMoney(hint.monthMinor ?? 0, upfront.currency)} a month.`
+                : null
+            }
+          />
+        )}
         <p className="text-muted-foreground border-border border-t pt-3 text-sm">
-          {onChangePlan
-            ? `Booking opens once ${month} is paid.`
-            : (membership.warning?.headline ??
-              "Pay this month to keep booking.")}
+          {extend
+            ? `Your next paid months start in ${first}.`
+            : onChangePlan
+              ? `Booking opens once ${first} is paid.`
+              : (membership.warning?.headline ??
+                "Pay this month to keep booking.")}
+          {ahead && " Pay ahead by cash or bank transfer."}
         </p>
       </div>
 
@@ -402,12 +491,14 @@ function PayStep({
                           staff={options.staff}
                           today={options.today}
                           price={price}
+                          pay={pay}
                         />
                       ) : method ? (
                         <TransferPanel
                           membership={membership}
                           method={method}
                           price={price}
+                          pay={pay}
                         />
                       ) : null}
                     </div>
@@ -419,6 +510,88 @@ function PayStep({
         </div>
       )}
     </section>
+  );
+}
+
+interface PayChoice {
+  months: number;
+  amount: Money | null;
+}
+
+function claimed(pay: PayChoice) {
+  return {
+    months: pay.months,
+    ...(pay.amount
+      ? { priceMinor: pay.amount.priceMinor, currency: pay.amount.currency }
+      : {}),
+  };
+}
+
+function MonthsPicker({
+  months,
+  max,
+  onChange,
+  fullMinor,
+  savingMinor,
+  currency,
+  hint,
+}: {
+  months: number;
+  max: number;
+  onChange: (months: number) => void;
+  fullMinor: number;
+  savingMinor: number;
+  currency: string;
+  hint: string | null;
+}) {
+  return (
+    <div className="border-border flex flex-col gap-2 border-t pt-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <span id="months-label" className="text-sm font-medium">
+          Months to pay
+        </span>
+        <div
+          role="group"
+          aria-labelledby="months-label"
+          className="flex items-center gap-1"
+        >
+          <Button
+            size="icon"
+            variant="outline"
+            aria-label="One month less"
+            disabled={months <= 1}
+            onClick={() => onChange(months - 1)}
+          >
+            <Minus aria-hidden />
+          </Button>
+          <output
+            aria-live="polite"
+            className="w-10 text-center text-lg font-semibold tabular-nums"
+          >
+            {months}
+          </output>
+          <Button
+            size="icon"
+            variant="outline"
+            aria-label="One month more"
+            disabled={months >= max}
+            onClick={() => onChange(months + 1)}
+          >
+            <Plus aria-hidden />
+          </Button>
+        </div>
+      </div>
+      {savingMinor > 0 && (
+        <p className="text-success text-sm">
+          You save {formatMoney(savingMinor, currency)}. Full price{" "}
+          <span className="line-through">
+            {formatMoney(fullMinor, currency)}
+          </span>
+          .
+        </p>
+      )}
+      {hint && <p className="text-muted-foreground text-sm">{hint}</p>}
+    </div>
   );
 }
 
@@ -683,10 +856,12 @@ function TransferPanel({
   membership,
   method,
   price,
+  pay,
 }: {
   membership: Membership;
   method: Method;
   price: string | null;
+  pay: PayChoice;
 }) {
   const claim = useClaim();
   const { uploadsEnabled } = useEntity();
@@ -745,6 +920,7 @@ function TransferPanel({
             claim.mutate({
               assignmentId: membership.assignmentId,
               methodId: method.id,
+              ...claimed(pay),
               ...(proof ? { proofFileId: proof } : {}),
             })
           }
@@ -767,12 +943,14 @@ function CashPanel({
   staff,
   today,
   price,
+  pay,
 }: {
   membership: Membership;
   method: Method;
   staff: Options["staff"];
   today: string;
   price: string | null;
+  pay: PayChoice;
 }) {
   const claim = useClaim();
   const [paidTo, setPaidTo] = useState(staff[0]?.userId ?? SOMEONE_ELSE);
@@ -799,6 +977,7 @@ function CashPanel({
         claim.mutate({
           assignmentId: membership.assignmentId,
           methodId: method.id,
+          ...claimed(pay),
           ...(someoneElse
             ? { cashPaidToName: name.trim() }
             : { cashPaidTo: paidTo }),

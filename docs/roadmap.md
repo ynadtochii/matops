@@ -185,6 +185,7 @@ Status: **built, not clicked through and the suites not run here**. Static gates
 | Gym overview: one state vocabulary       | n/a (removed, ADR 142) | n/a | done | n/a | n/a | n/a |
 | Memberships: counts on the tabs          | n/a | n/a | done | n/a | n/a | n/a |
 | Memberships grouped by job: To check, Months, Plans, Setup; days to pay form; router split (ADR 160) | n/a | done | done | n/a | n/a | n/a |
+| Pay several months upfront: one rule per plan (percent or price per month from N months), months picker, Pay ahead, Record months, Discard (ADR 161, S9, O7); `0020_upfront` applied to dev 2026-11-01 | done | done | done | done | done | todo |
 | People list: columns at 200 rows         | n/a (removed, ADR 142) | n/a | done | n/a | n/a | n/a |
 | Person: the actions ranked               | n/a (removed, ADR 142) | n/a | done | n/a | n/a | n/a |
 | Roster: the day's work before setup      | n/a | n/a | done | n/a | n/a | n/a |

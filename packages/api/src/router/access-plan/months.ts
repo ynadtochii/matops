@@ -21,6 +21,7 @@ import {
   accessPlanPrice,
   membershipAccessHold,
   membershipMonth,
+  membershipPurchase,
   paymentMethod,
   person,
 } from "@matops/db/schema";
@@ -32,21 +33,28 @@ import {
   formatMonth,
   isActiveMember,
   isFreeMembershipMonth,
+  isOwner,
   isStaff,
   localDateISO,
+  MAX_UPFRONT_MONTHS,
   membershipBanner,
   membershipBannerText,
   monthOf,
+  monthsFrom,
+  paidUntil,
   payDeadline,
   paymentReference,
   priceForMonth,
   RECEIPT_READ_SECONDS,
   rowForMonth,
+  upfrontStart,
 } from "@matops/domain";
 import {
   ClaimMembershipMonthSchema,
+  DiscardPurchaseSchema,
   MarkMembershipMonthSchema,
   MembershipMonthRefSchema,
+  RecordPurchaseSchema,
   RejectMembershipClaimSchema,
 } from "@matops/validators";
 
@@ -67,11 +75,20 @@ import {
   writeMonthDecision,
 } from "../../month-write";
 import { readOrganizationEntities } from "../../organization-read";
+import {
+  dropPurchaseMonths,
+  planRule,
+  purchaseRows,
+  quotePurchase,
+  takenMonths,
+  writePurchase,
+} from "../../purchase-write";
 import { loadChoosablePlans } from "../../student-plans";
 import {
   enrolledProcedure,
   organizationManagerIdentityProcedure,
   organizationManagerProcedure,
+  organizationOwnerProcedure,
 } from "../../trpc";
 import { coverageOf, currentMonthOf, pendingChanges } from "./shared";
 
@@ -225,6 +242,26 @@ async function claimedPayment(
   };
 }
 
+async function requireNoOpenHold(db: TenantTx, assignmentId: string) {
+  const [openHold] = await db
+    .select({ id: membershipAccessHold.id })
+    .from(membershipAccessHold)
+    .where(
+      and(
+        eq(membershipAccessHold.assignmentId, assignmentId),
+        isNull(membershipAccessHold.resolvedAt),
+      ),
+    )
+    .limit(1);
+  if (openHold) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "An owner must resolve the rejected payment before you can report again.",
+    });
+  }
+}
+
 function requireMonthVersion(
   current: { version: number } | undefined,
   expectedVersion: number | undefined,
@@ -264,6 +301,36 @@ export const monthPaymentProcedures = {
       requireMonthVersion(held, input.expectedVersion);
       const nextStatus: MonthStatus = input.paid ? "confirmed" : "unpaid";
       const currentStatus = (held?.status ?? "unpaid") as MonthStatus;
+      if (input.paid && held?.purchaseId && held.status === "reported") {
+        let version = held.version;
+        for (const row of await purchaseRows(ctx.db, held.purchaseId)) {
+          if (row.status !== "reported") continue;
+          const rowHeld =
+            row.month === input.month
+              ? held
+              : await lockMembershipMonth(ctx.db, assignment.id, row.month);
+          const written = await writeMonthDecision(ctx.db, {
+            organizationId: ctx.organizationId,
+            assignment,
+            month: row.month,
+            held: rowHeld,
+            nextStatus: "confirmed",
+            evidence: await monthEvidence(ctx.db, assignment, row.month),
+            actorId: ctx.session.user.id,
+            event: "confirmed",
+            reason: input.reason,
+            now: new Date(),
+          });
+          if (written.promote) ctx.afterCommit(written.promote);
+          if (row.month === input.month) version = written.version;
+        }
+        return {
+          changed: true,
+          paid: true,
+          status: "confirmed" as const,
+          version,
+        };
+      }
       if (currentStatus === nextStatus) {
         return {
           changed: false,
@@ -390,7 +457,20 @@ export const monthPaymentProcedures = {
           .from(accessPlanPrice)
       : [];
 
+    const ahead = await takenMonths(
+      ctx.db,
+      held.map((a) => a.id),
+      month,
+    );
     const rows = held.map((a) => {
+      const until = paidUntil(
+        month,
+        new Set(
+          ahead
+            .filter((m) => m.assignmentId === a.id && m.status === "confirmed")
+            .map((m) => m.month),
+        ),
+      );
       const amount = priceForMonth(
         prices.filter((p) => p.planId === a.planId),
         month,
@@ -414,6 +494,10 @@ export const monthPaymentProcedures = {
           .sort(),
         paid:
           months.find((m) => m.assignmentId === a.id)?.status === "confirmed",
+        paidUntilLabel:
+          until && until !== month
+            ? formatMonth(until, calendar.timeZone)
+            : null,
         // What THIS month cost, which a later price change must not rewrite.
         amount,
         paymentRequired,
@@ -491,6 +575,58 @@ export const monthPaymentProcedures = {
 
       const calendar = await membershipCalendar(ctx.db);
       const month = monthOf(new Date(), calendar.timeZone);
+      if (input.months !== undefined) {
+        const quote = await quotePurchase(
+          ctx.db,
+          assignment,
+          input.months,
+          month,
+        );
+        if (input.months > 1 || quote.firstMonth !== month) {
+          await requireNoOpenHold(ctx.db, assignment.id);
+          if (!input.methodId) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Pay for more than this month by cash or bank transfer.",
+            });
+          }
+          if (
+            input.priceMinor !== undefined &&
+            (input.priceMinor !== quote.totalMinor ||
+              input.currency !== quote.currency)
+          ) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message:
+                "The membership price changed. Refresh before reporting payment.",
+            });
+          }
+          const payment = await claimedPayment(
+            ctx,
+            input,
+            calendar.timeZone,
+            assignment.planId,
+          );
+          await writePurchase(ctx.db, {
+            organizationId: ctx.organizationId,
+            assignment,
+            quote,
+            totalMinor: quote.totalMinor,
+            status: "reported",
+            payment,
+            actorId: ctx.session.user.id,
+            event: "reported",
+            timeZone: calendar.timeZone,
+            now: new Date(),
+          });
+          return {
+            claimed: true,
+            month: quote.firstMonth,
+            status: "reported" as const,
+            version: 1,
+          };
+        }
+      }
       const held = await lockMembershipMonth(ctx.db, assignment.id, month);
       requireMonthVersion(held, input.expectedVersion);
       const currentStatus = (held?.status ?? "unpaid") as MonthStatus;
@@ -502,23 +638,7 @@ export const monthPaymentProcedures = {
           version: held?.version ?? 0,
         };
       }
-      const [openHold] = await ctx.db
-        .select({ id: membershipAccessHold.id })
-        .from(membershipAccessHold)
-        .where(
-          and(
-            eq(membershipAccessHold.assignmentId, assignment.id),
-            isNull(membershipAccessHold.resolvedAt),
-          ),
-        )
-        .limit(1);
-      if (openHold) {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message:
-            "An owner must resolve the rejected payment before you can report again.",
-        });
-      }
+      await requireNoOpenHold(ctx.db, assignment.id);
       const evidence = await monthEvidence(ctx.db, assignment, month);
       if (evidence.priceMinor === 0) {
         return { claimed: false, month, status: "unpaid" as const, version: 0 };
@@ -613,8 +733,16 @@ export const monthPaymentProcedures = {
         cashPaidOn: membershipMonth.cashPaidOn,
         note: membershipMonth.paymentNote,
         hasProof: sql<boolean>`${membershipMonth.proofFileId} is not null`,
+        purchaseId: membershipMonth.purchaseId,
+        purchaseMonths: membershipPurchase.months,
+        purchaseTotalMinor: membershipPurchase.totalMinor,
+        purchaseCurrency: membershipPurchase.currency,
       })
       .from(membershipMonth)
+      .leftJoin(
+        membershipPurchase,
+        eq(membershipPurchase.id, membershipMonth.purchaseId),
+      )
       .innerJoin(
         accessAssignment,
         eq(accessAssignment.id, membershipMonth.assignmentId),
@@ -626,11 +754,33 @@ export const monthPaymentProcedures = {
         eq(paymentMethod.id, membershipMonth.paymentMethodId),
       )
       .where(eq(membershipMonth.status, "reported"))
-      .orderBy(asc(membershipMonth.reportedAt));
-    return rows.map((r) => ({
-      ...r,
-      monthLabel: formatMonth(r.month, calendar.timeZone),
-    }));
+      .orderBy(asc(membershipMonth.reportedAt), asc(membershipMonth.month));
+    const seen = new Set<string>();
+    return rows.flatMap(
+      ({ purchaseMonths, purchaseTotalMinor, purchaseCurrency, ...r }) => {
+        if (r.purchaseId && seen.has(r.purchaseId)) return [];
+        if (r.purchaseId) seen.add(r.purchaseId);
+        const months = purchaseMonths ?? 1;
+        return [
+          {
+            ...r,
+            monthLabel: formatMonth(r.month, calendar.timeZone),
+            purchase:
+              r.purchaseId && purchaseTotalMinor !== null && purchaseCurrency
+                ? {
+                    months,
+                    totalMinor: purchaseTotalMinor,
+                    currency: purchaseCurrency,
+                    lastMonthLabel: formatMonth(
+                      monthsFrom(r.month, months).at(-1) ?? r.month,
+                      calendar.timeZone,
+                    ),
+                  }
+                : null,
+          },
+        ];
+      },
+    );
   }),
 
   proofUrl: organizationManagerIdentityProcedure
@@ -679,6 +829,113 @@ export const monthPaymentProcedures = {
         code: "NOT_FOUND",
         message: "This payment has no proof, or it was deleted.",
       });
+    }),
+
+  recordPurchase: organizationManagerProcedure
+    .input(RecordPurchaseSchema)
+    .mutation(async ({ ctx, input }) => {
+      const assignment = await loadAssignment(ctx.db, input.assignmentId);
+      if (assignment.status !== "active") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: MEMBERSHIP_NOT_ACTIVE,
+        });
+      }
+      const calendar = await membershipCalendar(ctx.db);
+      const month = monthOf(new Date(), calendar.timeZone);
+      const quote = await quotePurchase(
+        ctx.db,
+        assignment,
+        input.months,
+        month,
+      );
+      if (
+        input.totalMinor !== undefined &&
+        input.totalMinor !== quote.totalMinor &&
+        !isOwner(ctx.orgMembership)
+      ) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only the owner can change the total.",
+        });
+      }
+      if (input.methodId) {
+        const [method] = await ctx.db
+          .select({ id: paymentMethod.id })
+          .from(paymentMethod)
+          .where(eq(paymentMethod.id, input.methodId));
+        if (!method) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "That way to pay is gone. Refresh and pick again.",
+          });
+        }
+      }
+      const written = await writePurchase(ctx.db, {
+        organizationId: ctx.organizationId,
+        assignment,
+        quote,
+        totalMinor: input.totalMinor ?? quote.totalMinor,
+        status: "confirmed",
+        payment: {
+          paymentMethodId: input.methodId ?? null,
+          cashPaidTo: null,
+          cashPaidToName: null,
+          cashPaidOn: null,
+          paymentNote: input.note?.trim() ? input.note.trim() : null,
+          proofFileId: null,
+        },
+        actorId: ctx.session.user.id,
+        event: "confirmed",
+        timeZone: calendar.timeZone,
+        now: new Date(),
+      });
+      if (written.promote) ctx.afterCommit(written.promote);
+      return {
+        purchaseId: written.purchaseId,
+        firstMonth: quote.firstMonth,
+        lastMonth: quote.covered.at(-1) ?? quote.firstMonth,
+      };
+    }),
+
+  discardPurchase: organizationOwnerProcedure
+    .input(DiscardPurchaseSchema)
+    .mutation(async ({ ctx, input }) => {
+      const [purchase] = await ctx.db
+        .select({
+          id: membershipPurchase.id,
+          assignmentId: membershipPurchase.assignmentId,
+        })
+        .from(membershipPurchase)
+        .where(
+          and(
+            eq(membershipPurchase.id, input.purchaseId),
+            isNull(membershipPurchase.discardedAt),
+          ),
+        );
+      if (!purchase) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "That purchase is gone. Refresh and try again.",
+        });
+      }
+      const assignment = await loadAssignment(ctx.db, purchase.assignmentId);
+      const { month } = await currentMonthOf(ctx.db);
+      const rows = (await purchaseRows(ctx.db, purchase.id)).filter(
+        (row) => row.month > month || row.status === "reported",
+      );
+      const dropped = await dropPurchaseMonths(ctx.db, {
+        organizationId: ctx.organizationId,
+        assignment,
+        rows,
+        actorId: ctx.session.user.id,
+        event: "discarded",
+      });
+      await ctx.db
+        .update(membershipPurchase)
+        .set({ discardedAt: new Date(), discardedBy: ctx.session.user.id })
+        .where(eq(membershipPurchase.id, purchase.id));
+      return { dropped };
     }),
 
   /**
@@ -747,6 +1004,23 @@ export const monthPaymentProcedures = {
         evidence,
         actorId: ctx.session.user.id,
       });
+      if (held.purchaseId) {
+        const rest = (await purchaseRows(ctx.db, held.purchaseId)).filter(
+          (row) => row.id !== held.id && row.status === "reported",
+        );
+        await dropPurchaseMonths(ctx.db, {
+          organizationId: ctx.organizationId,
+          assignment,
+          rows: rest,
+          actorId: ctx.session.user.id,
+          event: "rejected",
+          reason: input.reason,
+        });
+        await ctx.db
+          .update(membershipPurchase)
+          .set({ discardedAt: now, discardedBy: ctx.session.user.id })
+          .where(eq(membershipPurchase.id, held.purchaseId));
+      }
       return {
         cleared: true,
         status: "rejected" as const,
@@ -811,6 +1085,63 @@ export const monthPaymentProcedures = {
           })
           .from(accessPlanEntity)
       : [];
+    const planIds = [...new Set(memberships.map((m) => m.planId))];
+    const ahead = await takenMonths(
+      ctx.db,
+      memberships.map((m) => m.assignmentId),
+      month,
+    );
+    const rules = planIds.length
+      ? await ctx.db
+          .select({
+            id: accessPlan.id,
+            discountFromMonths: accessPlan.discountFromMonths,
+            discountPercent: accessPlan.discountPercent,
+            discountMonthMinor: accessPlan.discountMonthMinor,
+          })
+          .from(accessPlan)
+          .where(inArray(accessPlan.id, planIds))
+      : [];
+    const planPrices = planIds.length
+      ? await ctx.db
+          .select({
+            planId: accessPlanPrice.planId,
+            effectiveMonth: accessPlanPrice.effectiveMonth,
+            priceMinor: accessPlanPrice.priceMinor,
+            currency: accessPlanPrice.currency,
+          })
+          .from(accessPlanPrice)
+          .where(inArray(accessPlanPrice.planId, planIds))
+      : [];
+    const upfrontOf = (assignmentId: string, planId: string) => {
+      const rows = ahead.filter((a) => a.assignmentId === assignmentId);
+      const until = paidUntil(
+        month,
+        new Set(
+          rows.filter((a) => a.status === "confirmed").map((a) => a.month),
+        ),
+      );
+      const firstMonth = upfrontStart(month, new Set(rows.map((a) => a.month)));
+      const amount = priceForMonth(
+        planPrices.filter((p) => p.planId === planId),
+        firstMonth,
+      );
+      const plan = rules.find((r) => r.id === planId);
+      return {
+        paidUntil: until,
+        paidUntilLabel: until ? formatMonth(until, timeZone) : null,
+        upfront: amount
+          ? {
+              firstMonth,
+              firstMonthLabel: formatMonth(firstMonth, timeZone),
+              monthlyMinor: amount.priceMinor,
+              currency: amount.currency,
+              rule: plan ? planRule(plan) : null,
+              maxMonths: MAX_UPFRONT_MONTHS,
+            }
+          : null,
+      };
+    };
     const links = memberships.length
       ? await ctx.db
           .select({
@@ -904,6 +1235,7 @@ export const monthPaymentProcedures = {
           : undefined;
         return {
           ...m,
+          ...upfrontOf(m.assignmentId, m.planId),
           warning: ctx.entity.membershipEnforcedAt ? m.warning : null,
           reference: paymentReference(ctx.session.user.name, m.assignmentId),
           cardPaymentUrl: cardLink(

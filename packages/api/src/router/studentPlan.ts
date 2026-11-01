@@ -8,6 +8,7 @@ import {
   cardPayment,
   membershipAccessHold,
   membershipMonth,
+  membershipPurchase,
 } from "@matops/db/schema";
 import {
   canSwapChosenPlan,
@@ -118,7 +119,11 @@ export const studentPlanRouter = {
           .select({ id: cardPayment.assignmentId })
           .from(cardPayment)
           .where(inArray(cardPayment.assignmentId, ids));
-        for (const row of [...holds, ...payments]) {
+        const purchases = await ctx.db
+          .select({ id: membershipPurchase.assignmentId })
+          .from(membershipPurchase)
+          .where(inArray(membershipPurchase.assignmentId, ids));
+        for (const row of [...holds, ...payments, ...purchases]) {
           if (row.id) referenced.add(row.id);
         }
         for (const row of changes) {
