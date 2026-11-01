@@ -51,9 +51,11 @@ export function MembershipsScreen() {
 
 function Memberships() {
   const inUse = useAnyBranchTakesPayment();
+  const owner = useOrganization().role === "owner";
   const searchParams = useSearchParams();
+  const asked = TAB_PARAMS[searchParams.get("tab") ?? ""] ?? "check";
   const [tab, setTab] = useState<MembershipTab>(
-    TAB_PARAMS[searchParams.get("tab") ?? ""] ?? "check",
+    asked === "setup" && !owner ? "check" : asked,
   );
   const toCheck = useToCheckCount();
   const [adding, setAdding] = useState(false);
@@ -75,14 +77,20 @@ function Memberships() {
         <p className="text-muted-foreground text-sm">
           Membership payments are off. Students do not see plans or months, and
           they book without paying.{" "}
-          <button
-            type="button"
-            className="text-foreground underline underline-offset-4"
-            onClick={() => setTab("setup")}
-          >
-            Turn them on in Setup
-          </button>{" "}
-          when you are ready.
+          {owner ? (
+            <>
+              <button
+                type="button"
+                className="text-foreground underline underline-offset-4"
+                onClick={() => setTab("setup")}
+              >
+                Turn them on in Setup
+              </button>{" "}
+              when you are ready.
+            </>
+          ) : (
+            "The owner turns them on."
+          )}
         </p>
       )}
 
@@ -98,7 +106,7 @@ function Memberships() {
           },
           { id: "months", label: "Months" },
           { id: "plans", label: "Plans" },
-          { id: "setup", label: "Setup" },
+          ...(owner ? [{ id: "setup" as const, label: "Setup" }] : []),
         ]}
       />
 
@@ -107,10 +115,10 @@ function Memberships() {
       {tab === "plans" && (
         <PlansTab
           onNewPlan={() => setAdding(true)}
-          onOpenSetup={() => setTab("setup")}
+          onOpenSetup={owner ? () => setTab("setup") : undefined}
         />
       )}
-      {tab === "setup" && <SetupTab />}
+      {tab === "setup" && owner && <SetupTab />}
 
       <NewPlanDialog open={adding} onOpenChange={setAdding} />
     </div>

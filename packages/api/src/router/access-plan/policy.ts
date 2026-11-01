@@ -5,7 +5,10 @@ import { entity, membershipPolicy } from "@matops/db/schema";
 import { resolveAcademyTimeZone } from "@matops/domain";
 import { MembershipPolicySchema } from "@matops/validators";
 
-import { organizationManagerProcedure } from "../../trpc";
+import {
+  organizationManagerProcedure,
+  organizationOwnerProcedure,
+} from "../../trpc";
 
 const DEFAULT_MEMBERSHIP_GRACE_DAYS = 7;
 
@@ -48,7 +51,7 @@ export const membershipPolicyProcedures = {
    * one form on the Settings screen carries all of them. Two forms writing this
    * would blank each other's field (ADR 127).
    */
-  setPolicy: organizationManagerProcedure
+  setPolicy: organizationOwnerProcedure
     .input(MembershipPolicySchema)
     .mutation(async ({ ctx, input }) => {
       const next = {

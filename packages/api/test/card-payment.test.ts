@@ -28,6 +28,7 @@ describe("card payment webhook (ADR 157)", () => {
 
   const owner = () => h.as(OWNER, ORG);
   const manager = () => h.as(MANAGER, ORG);
+  const student = () => h.as(STUDENT, ORG);
   const tokenOf = (url: string) => url.split("/").pop() ?? "";
 
   const deliver = async (
@@ -124,7 +125,8 @@ describe("card payment webhook (ADR 157)", () => {
   afterAll(() => h.close());
 
   it("starts off and lets only the owner set it up", async () => {
-    expect(await manager().cardPayment.hook()).toEqual({
+    expect(await rejectionCode(manager().cardPayment.hook())).toBe("FORBIDDEN");
+    expect(await owner().cardPayment.hook()).toEqual({
       configured: true,
       state: "none",
       url: null,
@@ -139,7 +141,8 @@ describe("card payment webhook (ADR 157)", () => {
     expect(hookUrl.startsWith("http://localhost:3004/api/stripe/hooks/")).toBe(
       true,
     );
-    expect((await manager().cardPayment.hook()).state).toBe("needs_secret");
+    expect((await owner().cardPayment.hook()).state).toBe("needs_secret");
+    expect(await student().cardPayment.confirmsItself()).toBe(false);
   });
 
   it("refuses events until the secret is saved", async () => {
@@ -164,6 +167,7 @@ describe("card payment webhook (ADR 157)", () => {
     expect(sealed).not.toContain(SECRET);
     expect(openSecret(TEST_PAYMENT_KEY, sealed, ORG)).toBe(SECRET);
     expect((await owner().cardPayment.hook()).state).toBe("ready");
+    expect(await student().cardPayment.confirmsItself()).toBe(true);
   });
 
   it("refuses a wrong signature, an unknown token and a server without a key", async () => {
@@ -173,6 +177,7 @@ describe("card payment webhook (ADR 157)", () => {
     expect((await owner().cardPayment.hook()).lastProblem).toBe(
       "bad_signature",
     );
+    expect(await student().cardPayment.confirmsItself()).toBe(false);
     expect(
       (
         await deliver(paid(), {

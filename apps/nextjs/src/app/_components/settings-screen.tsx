@@ -18,7 +18,8 @@ import { SignupQuestions } from "./signup-questions";
 
 export function SettingsScreen() {
   const academy = useEntity();
-  const { canRunOrganization } = useOrganization();
+  const { canRunOrganization, role } = useOrganization();
+  const owner = role === "owner";
 
   return (
     <>
@@ -35,11 +36,17 @@ export function SettingsScreen() {
             <div className={LIST}>
               <SettingsRow
                 title={academy.membershipEnforced ? "On" : "Off"}
-                description="Membership payments, ways to pay, card payments and days to pay are in Memberships, under Setup."
+                description={
+                  owner
+                    ? "Membership payments, ways to pay, card payments and days to pay are in Memberships, under Setup."
+                    : "Only the owner changes payment settings."
+                }
               >
-                <Button size="sm" variant="outline" asChild>
-                  <Link href="/memberships?tab=setup">Open Setup</Link>
-                </Button>
+                {owner && (
+                  <Button size="sm" variant="outline" asChild>
+                    <Link href="/memberships?tab=setup">Open Setup</Link>
+                  </Button>
+                )}
               </SettingsRow>
             </div>
           </section>

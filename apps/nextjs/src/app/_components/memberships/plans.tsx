@@ -44,7 +44,7 @@ export function PlansTab({
   onOpenSetup,
 }: {
   onNewPlan: () => void;
-  onOpenSetup: () => void;
+  onOpenSetup?: () => void;
 }) {
   const trpc = useTRPC();
   const plans = useQuery(trpc.accessPlan.list.queryOptions());
@@ -104,7 +104,7 @@ function WaysToPaySummary({
 }: {
   plans: Plan[];
   methods: Method[];
-  onOpenSetup: () => void;
+  onOpenSetup?: () => void;
 }) {
   const linked = plans.some(
     (p) => !p.archived && p.priceMinor !== null && p.paymentLinkUrl,
@@ -129,22 +129,26 @@ function WaysToPaySummary({
             ))}
           </ul>
         )}
-        <button
-          type="button"
-          onClick={onOpenSetup}
-          className={cn(
-            "text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center gap-1 rounded-sm text-sm sm:min-h-8",
-            FOCUS_RING,
-          )}
-        >
-          Add or change in Setup
-          <ArrowRight className="size-3.5" aria-hidden />
-        </button>
+        {onOpenSetup && (
+          <button
+            type="button"
+            onClick={onOpenSetup}
+            className={cn(
+              "text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center gap-1 rounded-sm text-sm sm:min-h-8",
+              FOCUS_RING,
+            )}
+          >
+            Add or change in Setup
+            <ArrowRight className="size-3.5" aria-hidden />
+          </button>
+        )}
       </div>
       {methods.length === 0 && !linked && (
         <Callout tone="warning" title="Students can't pay yet">
-          Turn on a way to pay in Setup, or add a card link to a plan. Until
-          then no plan shows to students.
+          {onOpenSetup
+            ? "Turn on a way to pay in Setup, or add a card link to a plan."
+            : "Ask the owner to turn on a way to pay or add a card link to a plan."}{" "}
+          Until then no plan shows to students.
         </Callout>
       )}
     </div>

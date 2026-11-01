@@ -254,8 +254,9 @@ function ItemLabel({
   behind: { id: string; issues: BranchIssue[] }[];
   className?: string;
 }) {
+  const owner = useOrganization().role === "owner";
   const href =
-    item.done || item.blocked
+    item.done || item.blocked || (item.key === "pay" && !owner)
       ? undefined
       : hrefFor(item.key, firstBranchId, behind);
   if (!href) return <span className={className}>{LABELS[item.key]}</span>;

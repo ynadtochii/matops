@@ -44,3 +44,12 @@ export function parsePaymentLinkReference(
   if (!match?.[1] || !match[2] || !match[3]) return null;
   return { assignmentId: match[1], month: `${match[2]}-${match[3]}-01` };
 }
+
+export function cardConfirmsItself(input: {
+  serverReady: boolean;
+  hook: { secretSaved: boolean; lastProblem: string | null } | null;
+}): boolean {
+  return (
+    input.serverReady && !!input.hook?.secretSaved && !input.hook.lastProblem
+  );
+}

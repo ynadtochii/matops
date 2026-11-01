@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  cardConfirmsItself,
   cardPaymentUrl,
   parsePaymentLinkReference,
   paymentLinkReference,
@@ -78,5 +79,27 @@ describe("parsePaymentLinkReference", () => {
     ]) {
       expect([value, parsePaymentLinkReference(value)]).toEqual([value, null]);
     }
+  });
+});
+
+describe("cardConfirmsItself", () => {
+  const hook = { secretSaved: true, lastProblem: null };
+
+  it("is true only with the server key, a saved secret and no problem", () => {
+    expect(cardConfirmsItself({ serverReady: true, hook })).toBe(true);
+    expect(cardConfirmsItself({ serverReady: false, hook })).toBe(false);
+    expect(cardConfirmsItself({ serverReady: true, hook: null })).toBe(false);
+    expect(
+      cardConfirmsItself({
+        serverReady: true,
+        hook: { secretSaved: false, lastProblem: null },
+      }),
+    ).toBe(false);
+    expect(
+      cardConfirmsItself({
+        serverReady: true,
+        hook: { secretSaved: true, lastProblem: "bad_signature" },
+      }),
+    ).toBe(false);
   });
 });

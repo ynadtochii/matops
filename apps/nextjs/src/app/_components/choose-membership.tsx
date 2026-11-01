@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeftRight,
@@ -52,6 +52,7 @@ type Options = RouterOutputs["studentPlan"]["options"];
 type Method = Options["methods"][number];
 
 const SOMEONE_ELSE = "__someone_else__";
+const CARD_WAIT_MS = 2 * 60 * 1000;
 
 export function ChooseMembership({ mine }: { mine: Mine }) {
   const trpc = useTRPC();
@@ -552,14 +553,21 @@ function CardPanel({
   price: string | null;
 }) {
   const trpc = useTRPC();
-  const claim = useClaim();
   const { uploadsEnabled } = useEntity();
   const [opened, setOpened] = useState(false);
-  const [proof, setProof] = useState<string | null>(null);
+  const [waitedOut, setWaitedOut] = useState(false);
+  const auto =
+    useQuery(trpc.cardPayment.confirmsItself.queryOptions()).data ?? false;
   useQuery({
     ...trpc.accessPlan.mine.queryOptions(),
-    refetchInterval: opened ? 5000 : false,
+    refetchInterval: auto && opened ? 5000 : false,
   });
+  useEffect(() => {
+    if (!auto || !opened) return;
+    const timer = setTimeout(() => setWaitedOut(true), CARD_WAIT_MS);
+    return () => clearTimeout(timer);
+  }, [auto, opened]);
+  const waiting = auto && !waitedOut;
 
   return (
     <div className="flex flex-col gap-3">
@@ -580,64 +588,94 @@ function CardPanel({
             Stripe opens in a new tab.
           </p>
         </Step>
-        <Step n={2} title="Come back to this page">
-          {opened ? (
-            <p
-              className="text-muted-foreground flex items-center gap-2 text-sm"
-              aria-live="polite"
-            >
-              <Spinner size="sm" />
-              Waiting for Stripe. This page updates on its own.
+        {waiting ? (
+          <Step n={2} title="Come back to this page">
+            {opened ? (
+              <p
+                className="text-muted-foreground flex items-center gap-2 text-sm"
+                aria-live="polite"
+              >
+                <Spinner size="sm" />
+                Waiting for Stripe. This page updates on its own.
+              </p>
+            ) : (
+              <p className="text-muted-foreground text-sm">
+                When Stripe confirms the payment, booking opens on its own.
+              </p>
+            )}
+          </Step>
+        ) : (
+          <Step
+            n={2}
+            title={
+              uploadsEnabled
+                ? "Send your gym the Stripe receipt"
+                : "Tell your gym you paid"
+            }
+          >
+            <p className="text-muted-foreground text-sm" aria-live="polite">
+              {auto
+                ? "Stripe has not confirmed your payment yet. If you paid, your gym will check it by hand. Booking opens when they confirm it."
+                : "Your gym checks card payments by hand. Booking opens when they confirm it."}
             </p>
-          ) : (
-            <p className="text-muted-foreground text-sm">
-              When Stripe confirms the payment, booking opens on its own.
-            </p>
-          )}
-        </Step>
+            <CardClaim membership={membership} />
+          </Step>
+        )}
       </Steps>
 
-      <Collapsible>
-        <CollapsibleTrigger
-          className={cn(
-            "text-muted-foreground hover:text-foreground group flex items-center gap-1.5 rounded-sm text-sm",
-            FOCUS_RING,
-          )}
-        >
-          Paid, but nothing changed after a few minutes?
-          <ChevronDown
-            className="size-4 transition-transform group-data-[state=open]:rotate-180 motion-reduce:transition-none"
-            aria-hidden
-          />
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <div className="bg-surface-1 mt-3 flex flex-col gap-3 rounded-md p-4">
-            <p className="text-sm">
-              {uploadsEnabled
-                ? "Send your gym the receipt Stripe emailed you. They will confirm it."
-                : "Tell your gym you paid. They will confirm it."}
-            </p>
-            {uploadsEnabled && (
-              <ProofField fileId={proof} onChange={setProof} />
+      {waiting && (
+        <Collapsible>
+          <CollapsibleTrigger
+            className={cn(
+              "text-muted-foreground hover:text-foreground group flex items-center gap-1.5 rounded-sm text-sm",
+              FOCUS_RING,
             )}
-            <Button
-              variant="outline"
-              className="self-start max-sm:w-full"
-              busy={claim.isPending}
-              disabled={claim.isPending || (uploadsEnabled && !proof)}
-              onClick={() =>
-                claim.mutate({
-                  assignmentId: membership.assignmentId,
-                  ...(proof ? { proofFileId: proof } : {}),
-                })
-              }
-            >
-              {uploadsEnabled ? "Send receipt to the gym" : "I paid by card"}
-            </Button>
-          </div>
-        </CollapsibleContent>
-      </Collapsible>
+          >
+            Paid, but nothing changed after a few minutes?
+            <ChevronDown
+              className="size-4 transition-transform group-data-[state=open]:rotate-180 motion-reduce:transition-none"
+              aria-hidden
+            />
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="bg-surface-1 mt-3 flex flex-col gap-3 rounded-md p-4">
+              <p className="text-sm">
+                {uploadsEnabled
+                  ? "Send your gym the receipt Stripe emailed you. They will confirm it."
+                  : "Tell your gym you paid. They will confirm it."}
+              </p>
+              <CardClaim membership={membership} />
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      )}
     </div>
+  );
+}
+
+function CardClaim({ membership }: { membership: Membership }) {
+  const claim = useClaim();
+  const { uploadsEnabled } = useEntity();
+  const [proof, setProof] = useState<string | null>(null);
+
+  return (
+    <>
+      {uploadsEnabled && <ProofField fileId={proof} onChange={setProof} />}
+      <Button
+        variant="outline"
+        className="self-start max-sm:w-full"
+        busy={claim.isPending}
+        disabled={claim.isPending || (uploadsEnabled && !proof)}
+        onClick={() =>
+          claim.mutate({
+            assignmentId: membership.assignmentId,
+            ...(proof ? { proofFileId: proof } : {}),
+          })
+        }
+      >
+        {uploadsEnabled ? "Send receipt to the gym" : "I paid by card"}
+      </Button>
+    </>
   );
 }
 

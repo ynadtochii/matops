@@ -35,3 +35,7 @@ Memberships stays outside the academy URL (ADR 126). The switch is an academy pr
 ## Not changed
 
 Student screens on the web and in the app, the student's Membership tab for staff, every rule and every message from the server.
+
+## Addendum 2026-11-01: Setup is the owner's only
+
+Payment settings belong to the owner. Managers keep To check, Months and Plans, and lose the Setup tab: `?tab=setup` opens To check for them, the Plans tab and the payments-off line say the owner changes these, Settings shows the Payments row without the Open Setup link, and the setup list step "Add how students can pay you" is plain text for them. The server already kept the payments switch, ways to pay, payment links, per-plan methods and the webhook writes for the owner. It now does the same for `accessPlan.setPolicy` (days to pay) and `cardPayment.hook`, whose URL carries the gym's secret token. Managers can still change prices without a link, the Students can choose switch, and staff-only plans. The webhook guide now has five steps that follow Stripe's current Add destination flow and says what the owner sees when it works.

@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
 
 import type { RouterOutputs } from "@matops/api";
 import type { PaymentMethodKind } from "@matops/domain";
@@ -320,7 +320,7 @@ function GraceDaysForm({
 }
 
 const HOOK_BLURB =
-  "Mark months paid automatically. Your own Stripe tells MatOps when a student pays through a plan's payment link. It takes about five minutes, once.";
+  "Let Stripe mark a month paid on its own. After a student pays through a plan's payment link, your Stripe account sends MatOps a short message. You set this up once, in about five minutes.";
 
 const STRIPE_WEBHOOKS_URL = "https://dashboard.stripe.com/webhooks";
 const HOOK_EVENT = "checkout.session.completed";
@@ -372,7 +372,6 @@ function CopyValue({ value, label }: { value: string; label: string }) {
 function CardPaymentHookSection() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const owner = useOrganization().role === "owner";
   const hook = useQuery(trpc.cardPayment.hook.queryOptions());
   const [secret, setSecret] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -425,7 +424,7 @@ function CardPaymentHookSection() {
   const { state, url, lastEventAt, lastProblem } = hook.data;
   const problem = lastProblem ? HOOK_PROBLEMS[lastProblem] : undefined;
 
-  const secretForm = owner && (
+  const secretForm = (
     <form
       className="flex flex-col gap-2"
       onSubmit={(e) => {
@@ -460,7 +459,7 @@ function CardPaymentHookSection() {
     </form>
   );
 
-  const turnOff = owner && (
+  const turnOff = (
     <ConfirmDialog
       title="Turn off automatic confirmation?"
       description="MatOps stops reading payments from your Stripe. Delete the endpoint in your Stripe Dashboard too. Payment links keep working, and staff confirm months by hand."
@@ -482,17 +481,15 @@ function CardPaymentHookSection() {
         <div className={LIST}>
           <SettingsRow
             title="Off"
-            description="Staff confirm card payments by hand with Mark paid."
+            description="Staff confirm card payments by hand with Mark paid, and students send their Stripe receipt."
           >
-            {owner && (
-              <Button
-                size="sm"
-                busy={start.isPending}
-                onClick={() => start.mutate()}
-              >
-                Set up
-              </Button>
-            )}
+            <Button
+              size="sm"
+              busy={start.isPending}
+              onClick={() => start.mutate()}
+            >
+              Set up
+            </Button>
           </SettingsRow>
         </div>
       </SettingsSection>
@@ -503,11 +500,16 @@ function CardPaymentHookSection() {
     return (
       <SettingsSection index={2} title="Card payments" blurb={HOOK_BLURB}>
         <div className={cn(LIST, "flex flex-col gap-5 p-4")}>
+          <p className="text-muted-foreground text-sm">
+            Keep this page open in one tab and Stripe in another. You copy two
+            things into Stripe and bring one back.
+          </p>
           <ol className="flex flex-col gap-5">
-            <SetupStep n={1} title="Open webhooks in your Stripe Dashboard">
+            <SetupStep n={1} title="Open Stripe in live mode">
               <p className="text-muted-foreground text-sm">
-                Use live mode for real payments. Test mode is only for trying it
-                out.
+                Sign in to the Stripe account your payment links come from. If
+                you see a Test mode or Sandbox banner at the top, switch to your
+                live account first. Real payments only reach live mode.
               </p>
               <Button
                 size="sm"
@@ -521,22 +523,41 @@ function CardPaymentHookSection() {
                   rel="noopener noreferrer"
                 >
                   Open Stripe webhooks
+                  <ExternalLink aria-hidden />
                 </a>
               </Button>
             </SetupStep>
-            <SetupStep n={2} title="Add an endpoint with this URL">
-              <CopyValue value={url} label="Copy URL" />
+            <SetupStep n={2} title="Click Add destination">
+              <p className="text-muted-foreground text-sm">
+                Some accounts call it Add endpoint. Under Events from, choose
+                Your account.
+              </p>
             </SetupStep>
-            <SetupStep n={3} title="Choose this one event">
+            <SetupStep n={3} title="Pick this one event, then click Continue">
+              <p className="text-muted-foreground text-sm">
+                Search for it and tick it. Leave every other event off.
+              </p>
               <CopyValue value={HOOK_EVENT} label="Copy event" />
             </SetupStep>
-            <SetupStep
-              n={4}
-              title="Reveal the endpoint's signing secret and paste it here"
-            >
+            <SetupStep n={4} title="Choose Webhook endpoint and paste this URL">
+              <p className="text-muted-foreground text-sm">
+                Paste it as the Endpoint URL, then click Create destination. The
+                URL belongs to your gym only. Do not share it.
+              </p>
+              <CopyValue value={url} label="Copy URL" />
+            </SetupStep>
+            <SetupStep n={5} title="Copy the signing secret and paste it here">
+              <p className="text-muted-foreground text-sm">
+                Stripe now shows the new destination. Find Signing secret, click
+                Reveal and copy it. It starts with whsec_.
+              </p>
               {secretForm}
             </SetupStep>
           </ol>
+          <p className="text-muted-foreground text-sm">
+            After you save, this shows On. The first card payment then marks its
+            month paid, and the time of Stripe&apos;s last message shows here.
+          </p>
           <div className="flex justify-end">{turnOff}</div>
         </div>
       </SettingsSection>
@@ -564,11 +585,9 @@ function CardPaymentHookSection() {
               </Callout>
             )}
             <CopyValue value={url} label="Copy URL" />
-            {owner && (
-              <p className="text-muted-foreground text-sm">
-                Changed the endpoint in Stripe? Paste its new signing secret.
-              </p>
-            )}
+            <p className="text-muted-foreground text-sm">
+              Changed the destination in Stripe? Paste its new signing secret.
+            </p>
             {secretForm}
             <div className="flex justify-end">{turnOff}</div>
           </div>
@@ -603,7 +622,6 @@ const DETAILS_FIELD: Record<
 };
 
 function PaymentMethodSettings() {
-  const owner = useOrganization().role === "owner";
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const methods = useQuery(trpc.paymentMethod.list.queryOptions());
@@ -681,50 +699,40 @@ function PaymentMethodSettings() {
               ) : undefined
             }
           >
-            {owner && (
-              <>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  aria-label={`Move ${m.label} up`}
-                  disabled={i === 0 || reorder.isPending}
-                  onClick={() => move(i, i - 1)}
-                >
-                  <ChevronUp aria-hidden />
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  aria-label={`Move ${m.label} down`}
-                  disabled={i === list.length - 1 || reorder.isPending}
-                  onClick={() => move(i, i + 1)}
-                >
-                  <ChevronDown aria-hidden />
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setEditing(m)}
-                >
-                  Edit
-                </Button>
-              </>
-            )}
+            <>
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label={`Move ${m.label} up`}
+                disabled={i === 0 || reorder.isPending}
+                onClick={() => move(i, i - 1)}
+              >
+                <ChevronUp aria-hidden />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label={`Move ${m.label} down`}
+                disabled={i === list.length - 1 || reorder.isPending}
+                onClick={() => move(i, i + 1)}
+              >
+                <ChevronDown aria-hidden />
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setEditing(m)}>
+                Edit
+              </Button>
+            </>
           </SettingsRow>
         ))}
-        {owner ? (
-          <div className="flex justify-end p-4">
-            <Button
-              size="sm"
-              disabled={list.length >= MAX_PAYMENT_METHODS}
-              onClick={() => setEditing("new")}
-            >
-              Add a way to pay
-            </Button>
-          </div>
-        ) : (
-          <SettingsRow description="Only the owner can change how students pay." />
-        )}
+        <div className="flex justify-end p-4">
+          <Button
+            size="sm"
+            disabled={list.length >= MAX_PAYMENT_METHODS}
+            onClick={() => setEditing("new")}
+          >
+            Add a way to pay
+          </Button>
+        </div>
       </div>
       {editing && (
         <PaymentMethodDialog

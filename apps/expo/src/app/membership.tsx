@@ -457,11 +457,14 @@ function CardPanel({
   const proof = useProof();
   const academy = useQuery(trpc.academy.current.queryOptions()).data;
   const needsProof = academy?.uploadsEnabled ?? false;
+  const auto =
+    useQuery(trpc.cardPayment.confirmsItself.queryOptions()).data ?? false;
   return (
     <Card style={{ gap: 12 }}>
       <Muted>
-        Pay on your gym's Stripe page. When Stripe confirms the payment, your
-        membership opens on its own.
+        {auto
+          ? "Pay on your gym's Stripe page. When Stripe confirms the payment, your membership opens on its own."
+          : "Pay on your gym's Stripe page. Your gym checks card payments by hand, so send them the Stripe receipt after you pay. Booking opens when they confirm it."}
       </Muted>
       <Button
         label="Pay by card"
@@ -471,8 +474,11 @@ function CardPanel({
         }}
       />
       <Muted>
-        Paid, but nothing changed after a minute? Send your gym the Stripe
-        receipt.
+        {auto
+          ? "Paid, but nothing changed after a minute? Send your gym the Stripe receipt."
+          : needsProof
+            ? "After you pay, add the receipt Stripe emailed you."
+            : "After you pay, tell your gym."}
       </Muted>
       {needsProof ? <ProofPicker proof={proof} /> : null}
       <Button

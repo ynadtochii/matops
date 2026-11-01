@@ -14,6 +14,7 @@ import {
   startStripeHook,
 } from "@matops/db";
 import { accessAssignment, cardPayment, person } from "@matops/db/schema";
+import { cardConfirmsItself } from "@matops/domain";
 import {
   CardPaymentIdSchema,
   SaveStripeHookSecretSchema,
@@ -21,7 +22,7 @@ import {
 
 import { sealSecret } from "../secret-box";
 import {
-  organizationManagerIdentityProcedure,
+  memberIdentityProcedure,
   organizationManagerProcedure,
   organizationOwnerIdentityProcedure,
 } from "../trpc";
@@ -42,7 +43,7 @@ function requireKey(key: Buffer | null | undefined): Buffer {
 }
 
 export const cardPaymentRouter = {
-  hook: organizationManagerIdentityProcedure.query(async ({ ctx }) => {
+  hook: organizationOwnerIdentityProcedure.query(async ({ ctx }) => {
     const hook = await getStripeHook(ctx.organizationId, ctx.baseDb);
     const state: HookState = !hook
       ? "none"
@@ -57,6 +58,17 @@ export const cardPaymentRouter = {
       lastProblem: hook?.lastProblem ?? null,
       lastProblemAt: hook?.lastProblemAt ?? null,
     };
+  }),
+
+  confirmsItself: memberIdentityProcedure.query(async ({ ctx }) => {
+    const hook = await getStripeHook(ctx.organizationId, ctx.baseDb);
+    return cardConfirmsItself({
+      serverReady: Boolean(ctx.paymentSecretKey),
+      hook: hook && {
+        secretSaved: hook.secretCiphertext !== null,
+        lastProblem: hook.lastProblem,
+      },
+    });
   }),
 
   startHook: organizationOwnerIdentityProcedure.mutation(async ({ ctx }) => {
