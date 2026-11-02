@@ -580,4 +580,29 @@ export const classRouter = {
       const notice = await notifyBooked(ctx, row, "class_cancelled");
       return { ok: true as const, notice };
     }),
+
+  remove: staffProcedure
+    .input(ClassIdSchema)
+    .mutation(async ({ ctx, input }) => {
+      await lockAndReadScheduleRevision(ctx.db, ctx.academyId);
+      const [row] = await ctx.db
+        .update(classInstance)
+        .set({ deletedAt: new Date() })
+        .where(
+          and(
+            eq(classInstance.id, input.id),
+            isNull(classInstance.deletedAt),
+            eq(classInstance.status, "cancelled"),
+          ),
+        )
+        .returning({ id: classInstance.id });
+      if (!row) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Class not found or not cancelled",
+        });
+      }
+      await bumpScheduleRevision(ctx.db, ctx.academyId);
+      return { ok: true as const };
+    }),
 } satisfies TRPCRouterRecord;

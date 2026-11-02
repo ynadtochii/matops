@@ -335,7 +335,7 @@ export function WeekGrid({
                           onClick={() => onSelect(row)}
                         />
                       )}
-                      {action && !cancelled && (
+                      {action && (
                         <div className="absolute top-0.5 right-0.5 z-[2] opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 motion-reduce:transition-none">
                           {action(row)}
                         </div>

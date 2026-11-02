@@ -8,7 +8,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Trash2, X } from "lucide-react";
 
 import type { RouterOutputs } from "@matops/api";
 import {
@@ -174,6 +174,23 @@ export function Schedule({
       onSettled: () => invalidate(),
     }),
   );
+  const remove = useMutation(
+    trpc.class.remove.mutationOptions({
+      onMutate: (vars) =>
+        optimistic(queryClient, trpc.class.week.queryKey(weekWindow), (old) =>
+          old.filter((c) => c.id !== vars.id),
+        ),
+      onError: (err, _vars, ctx) => {
+        rollback(queryClient, ctx);
+        onError(err);
+      },
+      onSuccess: () => {
+        setDetailId(null);
+        toast.success("Class removed from the schedule");
+      },
+      onSettled: () => invalidate(),
+    }),
+  );
 
   // The window is snapped to a UTC Monday so the server and the browser build
   // the same cache key. Filtering here is what keeps the grid to its own week.
@@ -235,6 +252,29 @@ export function Schedule({
       trigger={trigger}
     />
   );
+
+  const removeDialog = (c: ClassRow, trigger: ReactNode) => (
+    <ConfirmDialog
+      title="Remove this cancelled class?"
+      description={`${c.title} on ${dayShortFmt.format(new Date(c.startsAt))} at ${timeFmt.format(new Date(c.startsAt))} disappears from the schedule for staff and students. Nobody gets a new message.`}
+      confirmLabel="Remove class"
+      cancelLabel="Keep it"
+      variant="destructive"
+      onConfirm={async () => {
+        await remove.mutateAsync({ id: c.id });
+      }}
+      trigger={trigger}
+    />
+  );
+
+  const classAction = (c: ClassRow, trigger: (label: string) => ReactNode) =>
+    c.status === "cancelled"
+      ? removeDialog(c, trigger(`Remove ${c.title} from the schedule`))
+      : cancelDialog(c, trigger(`Cancel ${c.title}`));
+
+  const actionBusy = (c: ClassRow) =>
+    (cancel.isPending && cancel.variables.id === c.id) ||
+    (remove.isPending && remove.variables.id === c.id);
 
   const detail = (week.data ?? []).find((c) => c.id === detailId);
   const detailTemplate = templates.data?.find(
@@ -567,21 +607,26 @@ export function Schedule({
             weekStart={weekStart(offset)}
             onSelect={(c) => setDetailId(c.id)}
             action={(c) =>
-              cancelDialog(
-                c,
+              classAction(c, (label) => (
                 <button
                   type="button"
-                  aria-label={`Cancel ${c.title}`}
-                  title="Cancel class"
+                  aria-label={label}
+                  title={
+                    c.status === "cancelled" ? "Remove class" : "Cancel class"
+                  }
                   className={cn(
                     "border-border bg-card text-muted-foreground hover:text-error-text hover:border-error/50 flex size-5 items-center justify-center rounded-sm border transition-colors motion-reduce:transition-none",
                     FOCUS_RING,
                   )}
-                  disabled={cancel.isPending && cancel.variables.id === c.id}
+                  disabled={actionBusy(c)}
                 >
-                  <X aria-hidden className="size-3" />
-                </button>,
-              )
+                  {c.status === "cancelled" ? (
+                    <Trash2 aria-hidden className="size-3" />
+                  ) : (
+                    <X aria-hidden className="size-3" />
+                  )}
+                </button>
+              ))
             }
           />
           <div className="flex flex-col gap-6 md:hidden">
@@ -673,21 +718,21 @@ export function Schedule({
                             </span>
                           </span>
                         </button>
-                        {!cancelled &&
-                          cancelDialog(
-                            c,
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              aria-label={`Cancel ${c.title}`}
-                              className="text-muted-foreground hover:text-error-text shrink-0 self-center"
-                              disabled={
-                                cancel.isPending && cancel.variables.id === c.id
-                              }
-                            >
+                        {classAction(c, (label) => (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            aria-label={label}
+                            className="text-muted-foreground hover:text-error-text shrink-0 self-center"
+                            disabled={actionBusy(c)}
+                          >
+                            {cancelled ? (
+                              <Trash2 aria-hidden />
+                            ) : (
                               <X aria-hidden />
-                            </Button>,
-                          )}
+                            )}
+                          </Button>
+                        ))}
                       </li>
                     );
                   })}

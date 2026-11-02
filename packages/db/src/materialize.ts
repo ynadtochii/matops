@@ -113,7 +113,10 @@ export async function materializeTemplate(
       reviveCancelled
         ? insert.onConflictDoUpdate({
             target: [classInstance.templateId, classInstance.startsAt],
-            setWhere: eq(classInstance.status, "cancelled"),
+            setWhere: and(
+              eq(classInstance.status, "cancelled"),
+              isNull(classInstance.deletedAt),
+            ),
             set: {
               status: "scheduled",
               instructorId: template.instructorId,

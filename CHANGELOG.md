@@ -2,6 +2,7 @@
 
 ## Unreleased: first release, one academy
 
+- Remove a cancelled class from the schedule (spec O2). A cancelled class in the staff week now has a remove button instead of cancel (`class.remove`, staff only, refuses a class that is not cancelled). It is a soft delete: bookings stay, and a template timing edit no longer brings a removed class back.
 - Erase removes the gym's person record (ADR 145 addendum). It used to keep the name, email and phone without an account, and a later join with the same email linked that old record back, so staff saw the old name and phone. Now the record is deleted, or blanked to "Erased member" when old bookings still point at it.
 - Student schedule day strip follows the list (spec, Day strip; web and app). The lit chip is now the day in view, not always Today, and the strip scrolls to keep it visible. A student was unsure the days were one scrolling list.
 - Join by code on the web asks the sign-up questions again (ADR 146): belt and stripes, the health question when the academy asks it, "Keep me updated" and the required agreement. The server already required the belt, so the form failed with "Pick your belt." and no way to pick one.
