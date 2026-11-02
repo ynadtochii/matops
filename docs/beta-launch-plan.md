@@ -54,6 +54,9 @@ proves it on production too and removes drift you cannot otherwise see.
 
 #### The runbook
 
+Done on 2026-09-01. **Never run it again:** production now holds a real
+academy (2026-10-31), and step 7 drops everything.
+
 Between step 7 and step 9 the live site is broken. Nobody is using it.
 
 1. **Neon: create the branch.** Branches, Create branch, name `dev`, parent is
@@ -125,8 +128,9 @@ Between step 7 and step 9 the live site is broken. Nobody is using it.
 #### Two things this leaves behind
 
 - **The demo academy is dev-only.** Use `pnpm db:seed` (`seed pilot`) to add a demo academy on dev. Never seed against production.
-- **Never use Neon's "Reset from parent" on `dev` after this.** The parent is
-  empty now, so it would empty dev. Rebuild dev's test data with
+- **Never use Neon's "Reset from parent" on `dev` after this.** The parent
+  holds a real academy now (2026-10-31), so it would wipe dev's test data and
+  copy real personal data into dev. Rebuild dev's test data with
   `pnpm db:seed` instead, which is what it is for.
 
 ### 1.2 The guard that stops a laptop writing to production

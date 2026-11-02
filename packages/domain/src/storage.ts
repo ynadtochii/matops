@@ -1,10 +1,19 @@
 import type { Membership } from "./access";
 import { canEnroll, runsBranch } from "./access";
 
-export const FILE_KINDS = ["avatar", "academy_icon"] as const;
+export const FILE_KINDS = [
+  "avatar",
+  "academy_icon",
+  "payment_receipt",
+] as const;
 export type FileKind = (typeof FILE_KINDS)[number];
 
-export const FILE_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+export const FILE_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "application/pdf",
+] as const;
 export type FileType = (typeof FILE_TYPES)[number];
 
 const MB = 1024 * 1024;
@@ -13,17 +22,44 @@ interface FileKindRule {
   maxBytes: number;
   maxImageEdge: number;
   prefix: string;
+  types: readonly FileType[];
 }
 
+const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+
 export const FILE_RULES: Record<FileKind, FileKindRule> = {
-  avatar: { maxBytes: 2 * MB, maxImageEdge: 512, prefix: "avatar" },
-  academy_icon: { maxBytes: 2 * MB, maxImageEdge: 512, prefix: "icon" },
+  avatar: {
+    maxBytes: 2 * MB,
+    maxImageEdge: 512,
+    prefix: "avatar",
+    types: IMAGE_TYPES,
+  },
+  academy_icon: {
+    maxBytes: 2 * MB,
+    maxImageEdge: 512,
+    prefix: "icon",
+    types: IMAGE_TYPES,
+  },
+  payment_receipt: {
+    maxBytes: 5 * MB,
+    maxImageEdge: 2048,
+    prefix: "receipt",
+    types: [...IMAGE_TYPES, "application/pdf"],
+  },
 };
+
+export const MAX_UPLOAD_BYTES = Math.max(
+  ...Object.values(FILE_RULES).map((rule) => rule.maxBytes),
+);
+export const RECEIPT_KEEP_DAYS = 61;
+export const RECEIPT_READ_SECONDS = 300;
+export const PRIVATE_FILE_CACHE_CONTROL = "private, no-store";
 
 const EXTENSIONS: Record<FileType, string> = {
   "image/jpeg": "jpg",
   "image/png": "png",
   "image/webp": "webp",
+  "application/pdf": "pdf",
 };
 
 export const ACADEMY_STORAGE_QUOTA_BYTES = 1024 * MB;
@@ -42,7 +78,9 @@ export function isFileType(value: string): value is FileType {
 }
 
 export function canUploadFile(kind: FileKind, membership: Membership): boolean {
-  return kind === "avatar" ? canEnroll(membership) : runsBranch(membership);
+  return kind === "academy_icon"
+    ? runsBranch(membership)
+    : canEnroll(membership);
 }
 
 export type UploadProblem =
@@ -55,7 +93,8 @@ export function uploadProblem(input: {
   academyUsedBytes: number;
 }): UploadProblem | null {
   const rule = FILE_RULES[input.kind];
-  if (!isFileType(input.contentType)) return "type_not_allowed";
+  if (!isFileType(input.contentType) || !rule.types.includes(input.contentType))
+    return "type_not_allowed";
   if (!Number.isInteger(input.sizeBytes) || input.sizeBytes < 1) return "empty";
   if (input.sizeBytes > rule.maxBytes) return "too_large";
   if (input.academyUsedBytes + input.sizeBytes > ACADEMY_STORAGE_QUOTA_BYTES)
@@ -76,6 +115,8 @@ export function sniffFileType(bytes: Uint8Array): FileType | null {
     startsWith(bytes, [0x57, 0x45, 0x42, 0x50], 8)
   )
     return "image/webp";
+  if (startsWith(bytes, [0x25, 0x50, 0x44, 0x46, 0x2d]))
+    return "application/pdf";
   return null;
 }
 
@@ -113,6 +154,10 @@ export function publicFileUrl(appUrl: string, key: string | null) {
 
 export function pendingUploadCutoff(now: Date): Date {
   return new Date(now.getTime() - PENDING_UPLOAD_TTL_MS);
+}
+
+export function receiptCutoff(now: Date): Date {
+  return new Date(now.getTime() - RECEIPT_KEEP_DAYS * 24 * 60 * 60 * 1000);
 }
 
 export function fitWithin(

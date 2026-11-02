@@ -1,6 +1,14 @@
 import { z } from "zod/v4";
 
-import { isValidTimeZone } from "@matops/domain";
+import {
+  isValidTimeZone,
+  MAX_DISCOUNT_PERCENT,
+  MAX_PAYMENT_METHODS,
+  MAX_UPFRONT_MONTHS,
+  MIN_DISCOUNT_FROM_MONTHS,
+  PAYMENT_METHOD_KINDS,
+  paymentMethodNeedsDetails,
+} from "@matops/domain";
 
 import {
   blockText,
@@ -18,6 +26,20 @@ const EntityIdsSchema = z
   .max(MAX_PLAN_ENTITIES)
   .refine((ids) => new Set(ids).size === ids.length, "Branches must be unique");
 
+export const UpfrontRuleSchema = z
+  .object({
+    fromMonths: z
+      .number()
+      .int()
+      .min(MIN_DISCOUNT_FROM_MONTHS)
+      .max(MAX_UPFRONT_MONTHS),
+    percent: z.number().int().min(1).max(MAX_DISCOUNT_PERCENT).nullable(),
+    monthMinor: PriceMinorSchema.min(1).nullable(),
+  })
+  .refine((r) => (r.percent === null) !== (r.monthMinor === null), {
+    message: "Pick a percent or a price per month",
+  });
+
 export const CreateAccessPlanSchema = z
   .object({
     name: lineText(1, 80),
@@ -30,10 +52,15 @@ export const CreateAccessPlanSchema = z
      */
     priceMinor: PriceMinorSchema.optional(),
     currency: CurrencySchema.optional(),
+    discount: UpfrontRuleSchema.optional(),
   })
   .refine(
     (v) => (v.priceMinor === undefined) === (v.currency === undefined),
     "Give a price and its currency together, or neither",
+  )
+  .refine(
+    (v) => v.discount === undefined || v.priceMinor !== undefined,
+    "Give the plan a price before a discount",
   );
 
 /**
@@ -128,11 +155,58 @@ const MonthSchema = z.iso
  * decision about the future: the procedure refuses a month that is not after
  * the current one, using the same `canPriceFrom` rule the client checks with.
  */
+const PAYMENT_LINK_HOST = "buy.stripe.com";
+
+export function isStripePaymentLink(value: string): boolean {
+  if (value.length > 500) return false;
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  return (
+    url.protocol === "https:" &&
+    url.hostname === PAYMENT_LINK_HOST &&
+    url.port === "" &&
+    url.username === "" &&
+    url.password === "" &&
+    url.hash === "" &&
+    url.pathname.length > 1
+  );
+}
+
+export const PaymentLinkUrlSchema = z
+  .string()
+  .trim()
+  .refine(
+    isStripePaymentLink,
+    "Paste a Stripe payment link (https://buy.stripe.com/…)",
+  );
+
 export const SetAccessPlanPriceSchema = z.object({
   id: z.uuid(),
   priceMinor: PriceMinorSchema,
   currency: CurrencySchema,
   effectiveMonth: MonthSchema,
+  paymentLinkUrl: PaymentLinkUrlSchema.nullish(),
+});
+
+export const SaveStripeHookSecretSchema = z.object({
+  secret: z
+    .string()
+    .trim()
+    .regex(
+      /^whsec_[A-Za-z0-9+/=_-]{16,200}$/,
+      "Paste the signing secret that starts with whsec_",
+    ),
+});
+
+export const CardPaymentIdSchema = z.object({ id: z.uuid() });
+
+export const SetPlanPaymentLinkSchema = z.object({
+  planId: z.uuid(),
+  paymentLinkUrl: PaymentLinkUrlSchema.nullable(),
 });
 
 /** Tick one month of one shared membership paid or unpaid. */
@@ -154,7 +228,29 @@ export const ClaimMembershipMonthSchema = z.object({
   expectedVersion: z.number().int().positive().optional(),
   priceMinor: PriceMinorSchema.optional(),
   currency: CurrencySchema.optional(),
+  methodId: z.uuid().optional(),
+  cashPaidTo: IdSchema.optional(),
+  cashPaidToName: lineText(1, 80).optional(),
+  cashPaidOn: z.iso.date().optional(),
+  note: blockText(0, 500).optional(),
+  proofFileId: z.uuid().optional(),
+  months: z.number().int().min(1).max(MAX_UPFRONT_MONTHS).optional(),
 });
+
+export const SetPlanDiscountSchema = z.object({
+  planId: z.uuid(),
+  rule: UpfrontRuleSchema.nullable(),
+});
+
+export const RecordPurchaseSchema = z.object({
+  assignmentId: z.uuid(),
+  months: z.number().int().min(1).max(MAX_UPFRONT_MONTHS),
+  totalMinor: PriceMinorSchema.optional(),
+  methodId: z.uuid().optional(),
+  note: blockText(0, 500).optional(),
+});
+
+export const DiscardPurchaseSchema = z.object({ purchaseId: z.uuid() });
 
 /** Clear a claim without marking the month paid. */
 export const RejectMembershipClaimSchema = MarkMembershipMonthSchema.omit({
@@ -176,9 +272,45 @@ export const MembershipPolicySchema = z.object({
       z.null(),
     ])
     .optional(),
-  /**
-   * Where members send the money (ADR 127). Required, because saving the policy
-   * REPLACES it: a partial save from a second form would blank the account.
-   */
-  bankDetails: blockText(0, 2000),
+});
+
+export const SavePaymentMethodSchema = z
+  .object({
+    id: z.uuid().optional(),
+    kind: z.enum(PAYMENT_METHOD_KINDS),
+    label: lineText(1, 60),
+    details: blockText(0, 1000),
+    enabled: z.boolean(),
+  })
+  .refine((m) => !paymentMethodNeedsDetails(m.kind) || m.details.length > 0, {
+    message: "Add the details students need to pay",
+    path: ["details"],
+  });
+
+export const PaymentMethodIdSchema = z.object({ id: z.uuid() });
+
+export const ReorderPaymentMethodsSchema = z.object({
+  ids: z
+    .array(z.uuid())
+    .min(1)
+    .max(MAX_PAYMENT_METHODS)
+    .refine((ids) => new Set(ids).size === ids.length, "Each method once"),
+});
+
+export const SetPlanStaffOnlySchema = z.object({
+  planId: z.uuid(),
+  staffOnly: z.boolean(),
+});
+
+export const SetPlanMethodSchema = z.object({
+  planId: z.uuid(),
+  methodId: z.uuid(),
+  on: z.boolean(),
+});
+
+export const ChoosePlanSchema = z.object({ planId: z.uuid() });
+
+export const MembershipMonthRefSchema = z.object({
+  assignmentId: z.uuid(),
+  month: MonthSchema,
 });

@@ -18,12 +18,19 @@ describe("CreateUploadSchema", () => {
         sizeBytes: 1,
       }).success,
     ).toBe(true);
+    expect(
+      CreateUploadSchema.safeParse({
+        kind: "payment_receipt",
+        contentType: "application/pdf",
+        sizeBytes: 1,
+      }).success,
+    ).toBe(true);
   });
 
   it.each([
-    { kind: "payment_receipt", contentType: "image/png", sizeBytes: 1 },
+    { kind: "receipt", contentType: "image/png", sizeBytes: 1 },
     { kind: "avatar", contentType: "image/svg+xml", sizeBytes: 1 },
-    { kind: "avatar", contentType: "application/pdf", sizeBytes: 1 },
+    { kind: "avatar", contentType: "image/gif", sizeBytes: 1 },
     { kind: "avatar", contentType: "image/png", sizeBytes: 0 },
     { kind: "avatar", contentType: "image/png", sizeBytes: 1.5 },
     { kind: "avatar", contentType: "image/png", sizeBytes: 11 * 1024 * 1024 },

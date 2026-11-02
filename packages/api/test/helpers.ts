@@ -40,6 +40,8 @@ export interface Harness {
   storage: FakeStorage;
 }
 
+export const TEST_PAYMENT_KEY = Buffer.alloc(32, 7);
+
 function caller(ctx: Ctx) {
   return appRouter.createCaller(ctx);
 }
@@ -155,6 +157,7 @@ export async function harness(academies?: AcademySpec[]): Promise<Harness> {
     requestedEntityId: headers.get("x-matops-entity") ?? undefined,
     baseDb: exec,
     storage,
+    paymentSecretKey: TEST_PAYMENT_KEY,
     appUrl: "http://localhost:3004",
   });
 
@@ -188,6 +191,23 @@ export async function rejectionCode(
       ? err.code
       : `non-tRPC error: ${String(err)}`;
   }
+}
+
+const PDF = new TextEncoder().encode("%PDF-1.4 proof");
+
+export async function uploadProof(
+  h: Harness,
+  userId: string,
+  academyId: string,
+): Promise<string> {
+  const as = h.as(userId, academyId);
+  const started = await as.storage.createUpload({
+    kind: "payment_receipt",
+    contentType: "application/pdf",
+    sizeBytes: PDF.byteLength,
+  });
+  h.storage.put(started.url.replace("fake://put/", ""), PDF, "application/pdf");
+  return (await as.storage.completeUpload({ fileId: started.fileId })).fileId;
 }
 
 function lit(value: string): string {

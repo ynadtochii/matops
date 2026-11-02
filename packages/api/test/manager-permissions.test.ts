@@ -65,10 +65,32 @@ describe("gym-level permissions", () => {
       as(MANAGER).accessPlan.assign({ userId: STUDENT, planId }),
     ).resolves.toBeDefined();
     await expect(
-      as(MANAGER).accessPlan.setPolicy({ graceDays: 7, bankDetails: "IBAN" }),
-    ).resolves.toBeDefined();
-    await expect(
       as(MANAGER).organization.rename({ name: "Renamed gym" }),
+    ).resolves.toBeDefined();
+  });
+
+  it("refuses a manager every payment setting", async () => {
+    expect(
+      await rejectionCode(as(MANAGER).accessPlan.setPolicy({ graceDays: 7 })),
+    ).toBe("FORBIDDEN");
+    expect(await rejectionCode(as(MANAGER).cardPayment.hook())).toBe(
+      "FORBIDDEN",
+    );
+    expect(await rejectionCode(as(MANAGER).cardPayment.startHook())).toBe(
+      "FORBIDDEN",
+    );
+    expect(
+      await rejectionCode(
+        as(MANAGER).paymentMethod.save({
+          kind: "cash",
+          label: "Cash",
+          details: "",
+          enabled: true,
+        }),
+      ),
+    ).toBe("FORBIDDEN");
+    await expect(
+      as(OWNER).accessPlan.setPolicy({ graceDays: 7 }),
     ).resolves.toBeDefined();
   });
 

@@ -92,6 +92,22 @@ export async function stalePendingFiles(
     );
 }
 
+export async function expiredReceipts(
+  input: { academyId: string; before: Date },
+  exec: DbReader,
+): Promise<StoredObjectRef[]> {
+  return exec
+    .select({ id: storedFile.id, objectKey: storedFile.objectKey })
+    .from(storedFile)
+    .where(
+      and(
+        eq(storedFile.academyId, input.academyId),
+        eq(storedFile.kind, "payment_receipt"),
+        lt(storedFile.createdAt, input.before),
+      ),
+    );
+}
+
 export async function academyStoredBytes(
   academyId: string,
   exec: DbReader,

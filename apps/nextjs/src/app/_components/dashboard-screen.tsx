@@ -1,8 +1,10 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
+import { ChevronRight } from "lucide-react";
 
 import type { RouterOutputs } from "@matops/api";
 import {
@@ -41,9 +43,6 @@ import {
   DriftBadge,
   ENTER,
   LIST,
-  Panel,
-  panelCell,
-  PanelNotice,
   RESOLVE,
   Section,
   TAP,
@@ -72,7 +71,6 @@ interface QueueItem {
   href: string;
   count: number;
   label: string;
-  sub?: string | null;
 }
 
 /**
@@ -280,70 +278,63 @@ export function DashboardScreen() {
           </div>
         )}
 
-        {/* Needs you — one instrument panel of equal channels on a hairline
-            grid; a job at zero is dropped, not drawn empty. The violet lives in
-            the counts only: it is a spark, not a surface (design.md §1.1). */}
         {queueLoading ? (
           <SkeletonQueue />
+        ) : firstRun ? (
+          <QueueNotice title="This academy is empty. Two steps to open it.">
+            <Link
+              href={href("/schedule")}
+              className="text-foreground decoration-muted-foreground font-medium underline underline-offset-4 hover:decoration-current"
+            >
+              1. Add your weekly classes
+            </Link>
+            {" · "}
+            <Link
+              href={href("/members")}
+              className="text-foreground decoration-muted-foreground font-medium underline underline-offset-4 hover:decoration-current"
+            >
+              2. Share your join link
+            </Link>
+          </QueueNotice>
         ) : (
-          <Panel className={RESOLVE} cols={Math.max(queue.length, 1)}>
-            {firstRun ? (
-              <PanelNotice title="This academy is empty. Two steps to open it.">
-                <Link
-                  href={href("/schedule")}
-                  className="text-foreground decoration-muted-foreground font-medium underline underline-offset-4 hover:decoration-current"
-                >
-                  1. Add your weekly classes
-                </Link>
-                {" · "}
-                <Link
-                  href={href("/members")}
-                  className="text-foreground decoration-muted-foreground font-medium underline underline-offset-4 hover:decoration-current"
-                >
-                  2. Share your join link
-                </Link>
-              </PanelNotice>
-            ) : (
-              <>
+          <div className={cn(RESOLVE, "flex flex-col gap-2")}>
+            {queue.length > 0 && (
+              <ul aria-label="Needs you" className="flex flex-wrap gap-3">
                 {queue.map((i) => (
-                  <QueueSegment
-                    key={i.key}
-                    href={i.href}
-                    count={i.count}
-                    label={i.label}
-                    sub={i.sub}
-                  />
+                  <li key={i.key} className="max-sm:w-full">
+                    <QueueChip href={i.href} count={i.count} label={i.label} />
+                  </li>
                 ))}
-                {queueErrors.length > 0 ? (
-                  <PanelNotice
-                    title={`Couldn't check ${listFmt.format(
-                      queueErrors.map((e) => e.label),
-                    )}.`}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => queueErrors.forEach((e) => e.retry())}
-                      className={cn(
-                        "text-foreground decoration-muted-foreground font-medium underline underline-offset-4 hover:decoration-current",
-                        FOCUS_RING,
-                        TAP,
-                      )}
-                    >
-                      Try again
-                    </button>
-                  </PanelNotice>
-                ) : (
-                  queue.length === 0 && (
-                    <PanelNotice title="All clear.">
-                      {isOwner
-                        ? "Every past class reviewed, everyone approved, and no new leads."
-                        : "Every past class reviewed and everyone approved."}
-                    </PanelNotice>
-                  )
-                )}
-              </>
+              </ul>
             )}
-          </Panel>
+            {queueErrors.length > 0 ? (
+              <QueueNotice
+                title={`Couldn't check ${listFmt.format(
+                  queueErrors.map((e) => e.label),
+                )}.`}
+              >
+                <button
+                  type="button"
+                  onClick={() => queueErrors.forEach((e) => e.retry())}
+                  className={cn(
+                    "text-foreground decoration-muted-foreground font-medium underline underline-offset-4 hover:decoration-current",
+                    FOCUS_RING,
+                    TAP,
+                  )}
+                >
+                  Try again
+                </button>
+              </QueueNotice>
+            ) : (
+              queue.length === 0 && (
+                <QueueNotice title="All clear.">
+                  {isOwner
+                    ? "Every past class reviewed, everyone approved, and no new leads."
+                    : "Every past class reviewed and everyone approved."}
+                </QueueNotice>
+              )
+            )}
+          </div>
         )}
 
         {/* Context, not readings — a caption under the panel, so the counts
@@ -488,29 +479,44 @@ export function DashboardScreen() {
  * many jobs there are; a label wider than its channel truncates rather than
  * wrapping the tile taller than its neighbours.
  */
-function QueueSegment({ href, count, label, sub }: Omit<QueueItem, "key">) {
+function QueueChip({ href, count, label }: Omit<QueueItem, "key">) {
   return (
     <Link
       href={href}
       className={cn(
-        panelCell,
-        "group hover:bg-hover px-2.5 py-3 transition-[background-color,scale] duration-150",
-        FOCUS_RING_INSET,
+        "group edge-lit-surface-2 hover:edge-lit-hover shadow-lift flex min-h-14 items-center gap-3 rounded-lg pr-3 pl-4 transition-[background,scale] duration-150 motion-reduce:transition-none sm:min-h-12",
+        FOCUS_RING,
         PRESS,
       )}
     >
-      <p className="text-foreground text-2xl leading-none font-medium tabular-nums">
+      <span className="text-foreground text-xl leading-none font-semibold tabular-nums">
         {count}
-      </p>
-      <p className="text-muted-foreground group-hover:text-foreground mt-2 truncate text-xs transition-colors motion-reduce:transition-none">
+      </span>
+      <span className="text-foreground-secondary group-hover:text-foreground min-w-0 flex-1 truncate text-sm font-medium transition-colors motion-reduce:transition-none">
         {label}
-      </p>
-      {sub && (
-        <p className="text-muted-foreground text-2xs mt-1 truncate tabular-nums">
-          {sub}
-        </p>
-      )}
+      </span>
+      <ChevronRight
+        aria-hidden
+        className="text-muted-foreground group-hover:text-foreground size-4 shrink-0 transition-[color,translate] duration-150 group-hover:translate-x-0.5 motion-reduce:transition-none"
+      />
     </Link>
+  );
+}
+
+function QueueNotice({
+  title,
+  children,
+}: {
+  title: string;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="border-border rounded-lg border px-4 py-3">
+      <p className="text-foreground text-sm font-medium">{title}</p>
+      {children && (
+        <p className="text-muted-foreground mt-1 text-sm">{children}</p>
+      )}
+    </div>
   );
 }
 

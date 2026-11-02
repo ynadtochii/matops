@@ -61,6 +61,8 @@ function useClassLabel(timeZone: string | undefined) {
   }, [timeZone]);
 }
 
+const PHONE_TAKEN = "This phone number is saved with a different email.";
+
 export function DropInForm({
   token,
   linkedClassId,
@@ -93,6 +95,7 @@ export function DropInForm({
     match: Match | null;
   } | null>(null);
   const [declined, setDeclined] = useState(false);
+  const [keepForm, setKeepForm] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
   const [error, setError] = useState<string | null>(null);
 
@@ -112,10 +115,23 @@ export function DropInForm({
   );
   const submit = useMutation(
     trpc.dropIn.submit.mutationOptions({
-      onError: (err) => {
+      onError: (err, input) => {
         setError(err.message || "Couldn't save that. Try again.");
-        setChecked(null);
         void classes.refetch();
+        if (input.kind === "returning") {
+          setChecked(null);
+          return;
+        }
+        setKeepForm(true);
+        if (err.data?.code === "CONFLICT") {
+          setErrors((prev) => ({ ...prev, phone: PHONE_TAKEN }));
+          requestAnimationFrame(() =>
+            document
+              .getElementById("dropin-contact")
+              ?.querySelector<HTMLInputElement>('input[type="tel"]')
+              ?.focus(),
+          );
+        }
       },
     }),
   );
@@ -191,11 +207,13 @@ export function DropInForm({
   const attending = now.some((c) => c.id === selected);
   const action = attending ? "Check in" : "Book my place";
   const waiver: SignupWaiver | null = academy.data?.waiver ?? null;
-  const mode = !current
-    ? "contact"
-    : current.match && !declined
-      ? "confirm"
-      : "full";
+  const mode = keepForm
+    ? "full"
+    : !current
+      ? "contact"
+      : current.match && !declined
+        ? "confirm"
+        : "full";
 
   const choice = (
     c: { id: string; title: string; startsAt: Date },
@@ -260,7 +278,11 @@ export function DropInForm({
 
   const submitNew = (form: HTMLFormElement) => {
     const id = requireClass();
-    if (!id || !parsed) return;
+    if (!parsed) {
+      setErrors(fieldErrors(contactCheck.error?.issues ?? [], phone));
+      return;
+    }
+    if (!id) return;
     const data = new FormData(form);
     const first = NameSchema.safeParse(data.get("firstName") ?? "");
     const last = NameSchema.safeParse(data.get("lastName") ?? "");
@@ -348,6 +370,7 @@ export function DropInForm({
 
       {selected !== null || (!linkedClassId && all.length > 0) ? (
         <div
+          id="dropin-contact"
           className="flex flex-col gap-3"
           onBlur={(e) => {
             if (!e.currentTarget.contains(e.relatedTarget)) startLookup();
@@ -357,7 +380,12 @@ export function DropInForm({
             value={email}
             onChange={(v) => {
               setEmail(v);
-              setErrors((prev) => ({ ...prev, email: undefined }));
+              setError(null);
+              setErrors((prev) => ({
+                ...prev,
+                email: undefined,
+                ...(prev.phone === PHONE_TAKEN && { phone: undefined }),
+              }));
             }}
             placeholder="you@example.com"
             required
@@ -370,6 +398,7 @@ export function DropInForm({
             value={phone}
             onChange={(v) => {
               setPhone(v);
+              setError(null);
               setErrors((prev) => ({ ...prev, phone: undefined }));
             }}
             required

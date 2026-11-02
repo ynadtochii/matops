@@ -10,6 +10,7 @@ import {
   eq,
   gt,
   inArray,
+  isNotNull,
   isNull,
   listOwnedOrganizations,
   ne,
@@ -26,8 +27,8 @@ import {
   classTemplate,
   entity,
   entityMembership,
-  membershipPolicy,
   organization,
+  paymentMethod,
 } from "@matops/db/schema";
 import {
   branchLaunchIssues,
@@ -148,10 +149,20 @@ export const organizationRouter = {
           .select({ name: organization.name })
           .from(organization)
           .where(eq(organization.id, ctx.organizationId));
-        const [policy] = await tx
-          .select({ bankDetails: membershipPolicy.bankDetails })
-          .from(membershipPolicy)
-          .where(eq(membershipPolicy.organizationId, ctx.organizationId));
+        const [methods] = await tx
+          .select({ n: count() })
+          .from(paymentMethod)
+          .where(eq(paymentMethod.enabled, true));
+        const [cardLinks] = await tx
+          .select({ n: count() })
+          .from(accessPlanPrice)
+          .innerJoin(accessPlan, eq(accessPlan.id, accessPlanPrice.planId))
+          .where(
+            and(
+              isNull(accessPlan.archivedAt),
+              isNotNull(accessPlanPrice.paymentLinkUrl),
+            ),
+          );
         const [plans] = await tx
           .select({ n: count() })
           .from(accessPlan)
@@ -166,6 +177,17 @@ export const organizationRouter = {
               gt(accessPlanPrice.priceMinor, 0),
             ),
           );
+        const [openPaidPlans] = await tx
+          .select({ n: count() })
+          .from(accessPlanPrice)
+          .innerJoin(accessPlan, eq(accessPlan.id, accessPlanPrice.planId))
+          .where(
+            and(
+              isNull(accessPlan.archivedAt),
+              eq(accessPlan.staffOnly, false),
+              gt(accessPlanPrice.priceMinor, 0),
+            ),
+          );
         const [assignments] = await tx
           .select({ n: count() })
           .from(accessAssignment)
@@ -174,9 +196,10 @@ export const organizationRouter = {
           );
         return {
           name: org?.name ?? "",
-          bankDetails: (policy?.bankDetails ?? "").trim().length > 0,
+          waysToPay: (methods?.n ?? 0) + (cardLinks?.n ?? 0) > 0,
           plans: plans?.n ?? 0,
           paidPlans: paidPlans?.n ?? 0,
+          openPaidPlans: openPaidPlans?.n ?? 0,
           assignments: assignments?.n ?? 0,
         };
       },
@@ -310,8 +333,9 @@ export const organizationRouter = {
       activeStudents,
       bookings,
       paymentsOn: branches.some((b) => b.membershipEnforcedAt !== null),
-      bankDetails: gym.bankDetails,
+      waysToPay: gym.waysToPay,
       paidPlans: gym.paidPlans,
+      openPaidPlans: gym.openPaidPlans,
       plans: gym.plans,
       assignments: gym.assignments,
       uncoveredMembers,

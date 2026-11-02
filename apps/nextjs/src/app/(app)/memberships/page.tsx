@@ -13,8 +13,8 @@ export default function MembershipsPage() {
 }
 
 async function MembershipsData() {
-  const { canRunOrganization, entities } = await myEntities();
-  if (canRunOrganization && entities.some((e) => e.membershipEnforced)) {
+  const { canRunOrganization } = await myEntities();
+  if (canRunOrganization) {
     prefetch(trpc.accessPlan.list.queryOptions());
   }
 

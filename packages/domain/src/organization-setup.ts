@@ -16,8 +16,9 @@ export interface SetupFacts {
   activeStudents: number;
   bookings: number;
   paymentsOn: boolean;
-  bankDetails: boolean;
+  waysToPay: boolean;
   paidPlans: number;
+  openPaidPlans: number;
   plans: number;
   assignments: number;
   /** Active members no membership covers, across every branch. */
@@ -32,7 +33,7 @@ export type SetupKey =
   | "approve"
   | "booking"
   | "plan"
-  | "bank"
+  | "pay"
   | "assign"
   | "ready";
 
@@ -78,10 +79,14 @@ export function organizationSetup(facts: SetupFacts): SetupItem[] {
 
   items.push({ key: "plan", done: hasPlan, blocked: !hasBranch });
   if (facts.paidPlans > 0) {
-    items.push({ key: "bank", done: facts.bankDetails, blocked: false });
+    items.push({ key: "pay", done: facts.waysToPay, blocked: false });
   }
   items.push(
-    { key: "assign", done: facts.assignments > 0, blocked: !hasPlan },
+    {
+      key: "assign",
+      done: facts.openPaidPlans > 0 && facts.waysToPay,
+      blocked: !hasPlan,
+    },
     {
       key: "ready",
       done: facts.assignments > 0 && facts.uncoveredMembers === 0,

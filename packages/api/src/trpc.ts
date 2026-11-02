@@ -39,6 +39,7 @@ import { storage } from "@matops/storage";
 import { LinkTokenSchema } from "@matops/validators";
 
 import { clientIp, take } from "./rate-limit";
+import { parseSecretKey } from "./secret-box";
 
 /**
  * 1. CONTEXT
@@ -65,6 +66,7 @@ export const createTRPCContext = async (opts: {
    */
   baseDb?: DbExec;
   storage?: StorageClient | null;
+  paymentSecretKey?: Buffer | null;
 }) => {
   const authApi = opts.auth.api;
   const session = await authApi.getSession({
@@ -91,6 +93,10 @@ export const createTRPCContext = async (opts: {
     // See docs/issues/33, 60 and docs/architecture.md §5.
     baseDb: opts.baseDb ?? db,
     storage: opts.storage === undefined ? storage() : opts.storage,
+    paymentSecretKey:
+      opts.paymentSecretKey === undefined
+        ? parseSecretKey(process.env.PAYMENT_HOOK_KEY)
+        : opts.paymentSecretKey,
     appUrl: opts.auth.options.baseURL,
     // Forwarded so resolvers can call Better Auth server APIs (createOrganization,
     // setActiveOrganization, …) on behalf of the signed-in user.
@@ -136,6 +142,8 @@ export const GENERIC_ERROR = "Something went wrong. Try again.";
 // An uncaught throw reaches the client with the driver's own words, which for a
 // Postgres error name the table, the column and the constraint. tRPC drops
 // `stack` outside dev but never touches `message`.
+export class MembershipGoneError extends Error {}
+
 export function publicErrorMessage(code: string, message: string): string {
   return code === "INTERNAL_SERVER_ERROR" &&
     process.env.NODE_ENV === "production"
@@ -154,6 +162,7 @@ const t = initTRPC.context<typeof createTRPCContext>().create({
         error.cause instanceof ZodError
           ? z.flattenError(error.cause as ZodError<Record<string, unknown>>)
           : null,
+      membershipGone: error.cause instanceof MembershipGoneError,
     },
   }),
 });
@@ -261,6 +270,7 @@ async function resolveOrganization<U extends { id: string }>(ctx: {
     throw new TRPCError({
       code: "FORBIDDEN",
       message: "You are not a member of this gym",
+      cause: new MembershipGoneError(),
     });
   }
   return { organizationId, orgMembership, user };
@@ -468,6 +478,15 @@ export const organizationManagerProcedure = organizationMemberProcedure.use(
         code: "FORBIDDEN",
         message: "Owners and managers only",
       });
+    }
+    return next();
+  },
+);
+
+export const organizationOwnerProcedure = organizationMemberProcedure.use(
+  ({ ctx, next }) => {
+    if (!isOwner(ctx.orgMembership)) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Owner only" });
     }
     return next();
   },

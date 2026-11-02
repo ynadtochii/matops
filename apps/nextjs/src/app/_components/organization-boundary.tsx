@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import type { Organization } from "./entity";
+import { isMembershipGone } from "~/trpc/access-ended";
 import { useTRPC } from "~/trpc/react";
 import { OrganizationProvider } from "./entity";
 import { PageLoader } from "./mat-loader";
@@ -31,6 +32,10 @@ export function OrganizationBoundary({
   });
 
   if (mine.isPending) return <PageLoader label="Opening your gym" />;
+
+  if (mine.isError && isMembershipGone(mine.error)) {
+    return <PageLoader label="Signing you out" />;
+  }
 
   if (mine.isError) {
     return (

@@ -181,6 +181,7 @@ export async function loadMembershipAccess(
       priceMinor: membershipMonth.priceMinor,
       currency: membershipMonth.currency,
       deadline: membershipMonth.deadline,
+      cashPaidToName: membershipMonth.cashPaidToName,
     })
     .from(membershipMonth)
     .where(
@@ -244,6 +245,9 @@ export async function loadMembershipAccess(
           (months.find((m) => m.assignmentId === a.id && m.month === month)
             ?.status as ApplicableAssignment["paymentStatus"]) ?? "unpaid",
         held: heldAssignmentIds.has(a.id),
+        awaitingStaff:
+          months.find((m) => m.assignmentId === a.id && m.month === month)
+            ?.cashPaidToName != null,
         deadline:
           months.find((m) => m.assignmentId === a.id && m.month === month)
             ?.deadline ??
@@ -355,6 +359,8 @@ export async function loadRosterStanding(
         .select({
           assignmentId: membershipMonth.assignmentId,
           status: membershipMonth.status,
+          deadline: membershipMonth.deadline,
+          cashPaidToName: membershipMonth.cashPaidToName,
         })
         .from(membershipMonth)
         .where(
@@ -395,12 +401,16 @@ export async function loadRosterStanding(
         paymentStatus:
           (months.find((m) => m.assignmentId === a.id)
             ?.status as ApplicableAssignment["paymentStatus"]) ?? "unpaid",
-        deadline: payDeadline({
-          month,
-          startMonth: a.startMonth,
-          joinedOn: a.createdAt.toISOString().slice(0, 10),
-          policy: calendar,
-        }),
+        awaitingStaff:
+          months.find((m) => m.assignmentId === a.id)?.cashPaidToName != null,
+        deadline:
+          months.find((m) => m.assignmentId === a.id)?.deadline ??
+          payDeadline({
+            month,
+            startMonth: a.startMonth,
+            joinedOn: a.createdAt.toISOString().slice(0, 10),
+            policy: calendar,
+          }),
       }));
     const covering = theirs.filter(
       (a) => a.status === "active" && a.entityIds.includes(input.entityId),

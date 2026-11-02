@@ -4,15 +4,17 @@ import { z } from "zod/v4";
 
 import {
   currentWaiver,
+  eq,
   findAcademyByCode,
   getAcademyCode,
   getAcademySettings,
   listMembershipsForUser,
+  recordMilestone,
   saveWaiverVersion,
   softDeleteAcademy,
   updateAcademySettings,
 } from "@matops/db";
-import { classTemplate } from "@matops/db/schema";
+import { classTemplate, entity } from "@matops/db/schema";
 import {
   canEnroll,
   driftingTemplateZones,
@@ -27,6 +29,7 @@ import {
   DeleteAcademySchema,
   IdSchema,
   SaveWaiverSchema,
+  SetMembershipEnforcedSchema,
   UpdateAcademySettingsSchema,
 } from "@matops/validators";
 
@@ -171,6 +174,36 @@ export const academyRouter = {
         ctx.db,
       ),
     ),
+
+  /**
+   * Turn membership payments on or off for this academy (ADR 154). On keeps
+   * the first switch-on time, so turning it on twice does not move it.
+   */
+  setMembershipEnforced: ownerIdentityProcedure
+    .input(SetMembershipEnforcedSchema)
+    .mutation(async ({ ctx, input }) => {
+      const enforcedAt = input.enforced
+        ? (ctx.entity.membershipEnforcedAt ?? new Date())
+        : null;
+      await ctx.withScope((db) =>
+        db
+          .update(entity)
+          .set({ membershipEnforcedAt: enforcedAt })
+          .where(eq(entity.id, ctx.academyId)),
+      );
+      if (enforcedAt !== null) {
+        await recordMilestone(
+          {
+            organizationId: ctx.organizationId,
+            entityId: ctx.academyId,
+            name: "branch_activated",
+            actorRole: "owner",
+          },
+          ctx.baseDb,
+        );
+      }
+      return { enforced: enforcedAt !== null };
+    }),
 
   /**
    * Soft delete (ADR 68): the rows survive, so the 6-digit code is never

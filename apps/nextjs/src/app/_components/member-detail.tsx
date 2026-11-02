@@ -33,6 +33,7 @@ import { useTRPC } from "~/trpc/react";
 import { Avatar } from "./avatar";
 import { useEntity, useOrganization } from "./entity";
 import { DriftBadge, LIST, RESOLVE, TAP } from "./primitives";
+import { PurchaseList, RecordMonthsDialog } from "./record-months";
 import { SkeletonLines, SkeletonRows } from "./skeletons";
 import { EmptyState, ErrorState } from "./states";
 import { Tabs } from "./tabs";
@@ -47,6 +48,7 @@ import { Tabs } from "./tabs";
 const MEMBERSHIP_TAG: Record<string, string> = {
   expired: "month unpaid",
   "not-covered": "no membership",
+  "awaiting-staff": "cash to confirm",
   "pending-approval": "awaiting approval",
   suspended: "suspended",
 };
@@ -179,7 +181,7 @@ export function MemberDetail({ m }: { m: Member }) {
           { id: "attendance", label: "Attendance" },
           { id: "rank", label: "Rank" },
           { id: "notes", label: "Notes" },
-          ...(owner && entity.membershipEnforced && !isStaffRole(m)
+          ...(owner && !isStaffRole(m)
             ? [{ id: "membership" as const, label: "Membership" }]
             : []),
         ]}
@@ -224,6 +226,7 @@ function MembershipTab({ personId, name }: { personId: string; name: string }) {
   const { entities } = useOrganization();
   const here = useEntity().academyId;
   const [picked, setPicked] = useState("");
+  const [recording, setRecording] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<{
     enrolled: string[];
     needsDecision: { entityId: string; status: string }[];
@@ -327,8 +330,12 @@ function MembershipTab({ personId, name }: { personId: string; name: string }) {
                       ? ` · ${formatMoney(h.amount.priceMinor, h.amount.currency)}`
                       : ""}{" "}
                     · {h.paid ? "paid" : "not paid yet"}
+                    {h.paidUntilLabel
+                      ? ` · paid through ${h.paidUntilLabel}`
+                      : ""}
                   </span>
                 )}
+                <PurchaseList held={h} />
               </div>
               <div className="flex flex-wrap items-start justify-end gap-2">
                 {h.status === "active" && h.month && (
@@ -349,6 +356,15 @@ function MembershipTab({ personId, name }: { personId: string; name: string }) {
                     }}
                   >
                     {h.paid ? "Undo paid" : "Mark paid"}
+                  </Button>
+                )}
+                {h.status === "active" && h.paymentRequired && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setRecording(h.id)}
+                  >
+                    Record months
                   </Button>
                 )}
                 {h.status === "active" && (
@@ -381,6 +397,18 @@ function MembershipTab({ personId, name }: { personId: string; name: string }) {
           ))}
         </ul>
       )}
+
+      {recording &&
+        held.data
+          .filter((h) => h.id === recording)
+          .map((h) => (
+            <RecordMonthsDialog
+              key={h.id}
+              held={h}
+              plan={plans.data?.find((p) => p.id === h.planId)}
+              onOpenChange={(open) => !open && setRecording(null)}
+            />
+          ))}
 
       {outcome && (
         <div className="flex flex-col gap-1 text-sm">

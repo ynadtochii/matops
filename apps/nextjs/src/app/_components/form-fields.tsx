@@ -146,6 +146,7 @@ export function PhoneField({
           onChange={(e) => push(e.target.value, national)}
           disabled={disabled}
           aria-label="Country code"
+          aria-invalid={error ? true : undefined}
           className="w-30 shrink-0"
         >
           {DIAL_COUNTRIES.map((c) => (

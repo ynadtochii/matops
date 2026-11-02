@@ -30,8 +30,8 @@ const LABELS: Record<SetupKey, string> = {
   approve: "Approve your first student",
   booking: "Get your first booking",
   plan: "Make a membership plan",
-  bank: "Add the bank details members pay into",
-  assign: "Put your members on a plan",
+  pay: "Add how students can pay you",
+  assign: "Let students choose a plan",
   ready: "Check every member is covered",
 };
 
@@ -77,8 +77,8 @@ function hrefFor(
     return id ? entityHref(id, path) : undefined;
   };
   switch (key) {
-    case "bank":
-      return at("/settings");
+    case "pay":
+      return "/memberships?tab=setup";
     case "branch":
       return undefined;
     case "location":
@@ -93,9 +93,9 @@ function hrefFor(
     case "plan":
       return "/memberships?tab=plans";
     case "ready":
-      return "/memberships?tab=access";
+      return "/memberships?tab=check";
     case "assign":
-      return at("/members");
+      return "/memberships?tab=plans";
   }
 }
 
@@ -254,8 +254,9 @@ function ItemLabel({
   behind: { id: string; issues: BranchIssue[] }[];
   className?: string;
 }) {
+  const owner = useOrganization().role === "owner";
   const href =
-    item.done || item.blocked
+    item.done || item.blocked || (item.key === "pay" && !owner)
       ? undefined
       : hrefFor(item.key, firstBranchId, behind);
   if (!href) return <span className={className}>{LABELS[item.key]}</span>;

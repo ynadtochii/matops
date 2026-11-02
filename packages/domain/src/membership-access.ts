@@ -20,6 +20,7 @@ export type AccessVerdict =
   /** The branch has not approved them yet. */
   | "pending-approval"
   | "payment-declined"
+  | "awaiting-staff"
   /** The branch stopped them, whatever their memberships say. */
   | "suspended";
 
@@ -33,6 +34,7 @@ export interface ApplicableAssignment {
   paid: boolean;
   paymentStatus?: "unpaid" | "reported" | "confirmed" | "rejected";
   held?: boolean;
+  awaitingStaff?: boolean;
   paymentRequired?: boolean;
   /** The first moment that is too late for that month. */
   deadline: Date;
@@ -53,7 +55,7 @@ function admits(assignment: ApplicableAssignment, at: Date): boolean {
   return (
     assignment.paymentRequired === false ||
     assignment.paymentStatus === "confirmed" ||
-    assignment.paymentStatus === "reported" ||
+    (assignment.paymentStatus === "reported" && !assignment.awaitingStaff) ||
     (assignment.paymentStatus === undefined && assignment.paid) ||
     at.getTime() < assignment.deadline.getTime()
   );
@@ -100,10 +102,18 @@ export function membershipAccess(input: AccessInput): AccessVerdict {
   ) {
     return "payment-declined";
   }
-  if (covering.some((assignment) => assignment.paymentStatus === "reported")) {
+  if (
+    covering.some(
+      (assignment) =>
+        assignment.paymentStatus === "reported" && !assignment.awaitingStaff,
+    )
+  ) {
     return "provisional";
   }
-  return covering.some((a) => admits(a, input.at)) ? "ok" : "expired";
+  if (covering.some((a) => admits(a, input.at))) return "ok";
+  return covering.some((a) => a.paymentStatus === "reported" && a.awaitingStaff)
+    ? "awaiting-staff"
+    : "expired";
 }
 
 /** Does this verdict let them book and come in? */
@@ -125,14 +135,16 @@ export function accessReason(
     case "provisional":
       return "Payment reported. You can book while the gym checks your payment. If payment is declined, booking and check-in access will pause.";
     case "expired":
-      return "You haven't paid for this month yet, so booking is closed. Pay at the desk and your gym will open it again.";
+      return "You haven't paid for this month yet, so booking is closed. Pay from Membership to open it again.";
     case "pending-approval":
       return `${branchName} has not approved you yet. You can browse classes while you wait.`;
     case "payment-declined":
       return `Your payment for ${branchName} was declined. An owner must approve it before you can book or check in.`;
+    case "awaiting-staff":
+      return `${branchName} still needs to confirm your cash payment. You can book once they do.`;
     case "suspended":
       return `Your place at ${branchName} is paused. Ask the gym to restore it.`;
     case "not-covered":
-      return `No membership of yours covers ${branchName}. Ask the gym to put you on a plan that covers it.`;
+      return `Choose a membership to book classes at ${branchName}.`;
   }
 }

@@ -59,6 +59,33 @@ describe("uploadProblem", () => {
     },
   );
 
+  it("takes a PDF or an image up to 5 MB as a payment receipt", () => {
+    for (const contentType of ["application/pdf", "image/jpeg"]) {
+      expect(
+        uploadProblem({
+          kind: "payment_receipt",
+          ...ok,
+          contentType,
+          sizeBytes: 5 * 1024 * 1024,
+        }),
+      ).toBeNull();
+    }
+    expect(
+      uploadProblem({
+        kind: "payment_receipt",
+        ...ok,
+        sizeBytes: 5 * 1024 * 1024 + 1,
+      }),
+    ).toBe("too_large");
+    expect(
+      uploadProblem({
+        kind: "payment_receipt",
+        ...ok,
+        contentType: "text/html",
+      }),
+    ).toBe("type_not_allowed");
+  });
+
   it.each([0, -1, 1.5])("refuses size %d as empty", (sizeBytes) => {
     expect(uploadProblem({ kind: "avatar", ...ok, sizeBytes })).toBe("empty");
   });
@@ -107,7 +134,9 @@ describe("sniffFileType", () => {
   });
 
   it("refuses a PDF", () => {
-    expect(sniffFileType(bytes(0x25, 0x50, 0x44, 0x46, 0x2d, 0x31))).toBeNull();
+    expect(sniffFileType(bytes(0x25, 0x50, 0x44, 0x46, 0x2d, 0x31))).toBe(
+      "application/pdf",
+    );
   });
 
   it("refuses everything else", () => {
@@ -204,10 +233,10 @@ describe("pendingUploadCutoff", () => {
 });
 
 describe("isFileKind", () => {
-  it("knows the two kinds only", () => {
+  it("knows the three kinds only", () => {
     expect(isFileKind("avatar")).toBe(true);
     expect(isFileKind("academy_icon")).toBe(true);
-    expect(isFileKind("payment_receipt")).toBe(false);
+    expect(isFileKind("payment_receipt")).toBe(true);
     expect(isFileKind("document")).toBe(false);
   });
 });

@@ -15,8 +15,9 @@ const nothing: SetupFacts = {
   activeStudents: 0,
   bookings: 0,
   paymentsOn: false,
-  bankDetails: false,
+  waysToPay: false,
   paidPlans: 0,
+  openPaidPlans: 0,
   plans: 0,
   assignments: 0,
   uncoveredMembers: 0,
@@ -110,9 +111,9 @@ describe("organizationSetup", () => {
       "assign",
       "ready",
     ]);
-    expect(keys({ ...paying, plans: 1, paidPlans: 1 })).toContain("bank");
+    expect(keys({ ...paying, plans: 1, paidPlans: 1 })).toContain("pay");
     expect(
-      done({ ...paying, plans: 1, paidPlans: 1, bankDetails: true }, "bank"),
+      done({ ...paying, plans: 1, paidPlans: 1, waysToPay: true }, "pay"),
     ).toBe(true);
   });
 
@@ -120,6 +121,15 @@ describe("organizationSetup", () => {
     const paying = { ...nothing, branches: 1, paymentsOn: true };
     expect(blocked(paying, "assign")).toBe(true);
     expect(blocked({ ...paying, plans: 1 }, "assign")).toBe(false);
+  });
+
+  it("lets students choose once an open plan has a price and a way to pay", () => {
+    const paying = { ...nothing, branches: 1, paymentsOn: true, plans: 1 };
+    expect(done({ ...paying, openPaidPlans: 1 }, "assign")).toBe(false);
+    expect(done({ ...paying, waysToPay: true }, "assign")).toBe(false);
+    expect(
+      done({ ...paying, openPaidPlans: 1, waysToPay: true }, "assign"),
+    ).toBe(true);
   });
 
   it("is ready when somebody is assigned and nobody is uncovered", () => {

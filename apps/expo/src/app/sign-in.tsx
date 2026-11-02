@@ -28,7 +28,10 @@ import { authClient } from "~/utils/auth";
  * oversized bled-off mark behind the form (the mobile twin of the web sign-in).
  */
 export default function SignIn() {
-  const { redirect } = useLocalSearchParams<{ redirect?: string }>();
+  const { redirect, access } = useLocalSearchParams<{
+    redirect?: string;
+    access?: string;
+  }>();
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [pending, setPending] = useState(false);
@@ -72,6 +75,15 @@ export default function SignIn() {
 
       <Stack gap={24}>
         <Logo size={32} />
+        {access === "ended" ? (
+          <Card style={{ gap: 4 }}>
+            <Title>You were signed out</Title>
+            <Muted>
+              Your access to that gym has ended. If this is a mistake, ask your
+              gym. You can still sign in to another gym.
+            </Muted>
+          </Card>
+        ) : null}
         <Stack gap={8}>
           <Heading>Sign in</Heading>
           <Muted>

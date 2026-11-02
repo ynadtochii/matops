@@ -4,11 +4,18 @@ import { and, createEntity, eq } from "@matops/db";
 import {
   accessAssignment,
   accessPlanPrice,
+  entity,
   entityMembership,
 } from "@matops/db/schema";
 
 import type { Harness } from "./helpers";
-import { harness, personId, rejectionCode, seedAcademies } from "./helpers";
+import {
+  harness,
+  personId,
+  rejectionCode,
+  seedAcademies,
+  uploadProof,
+} from "./helpers";
 
 const ORG = "acad_assign";
 const OWNER = "u_assign_owner";
@@ -530,7 +537,13 @@ describe("a member says they paid", () => {
       .id;
     lees = (await owner().accessPlan.assign({ userId: LEE, planId: plan.id }))
       .id;
+    await h.exec
+      .update(entity)
+      .set({ membershipEnforcedAt: new Date() })
+      .where(eq(entity.id, ORGC));
   });
+
+  const proof = () => uploadProof(h, SAM, ORGC);
 
   afterAll(() => h.close());
 
@@ -542,9 +555,10 @@ describe("a member says they paid", () => {
   };
 
   it("records one claim on the month the member is judged on", async () => {
-    const made = await h
-      .as(SAM, ORGC)
-      .accessPlan.claimMonth({ assignmentId: sams });
+    const made = await h.as(SAM, ORGC).accessPlan.claimMonth({
+      assignmentId: sams,
+      proofFileId: await proof(),
+    });
     expect([made.claimed, made.month]).toEqual([true, monthNow()]);
     const waiting = await owner().accessPlan.claims();
     expect(waiting).toHaveLength(1);
@@ -622,7 +636,10 @@ describe("a member says they paid", () => {
   });
 
   it("rejects the claim and blocks another report until the hold is resolved", async () => {
-    await h.as(SAM, ORGC).accessPlan.claimMonth({ assignmentId: sams });
+    await h.as(SAM, ORGC).accessPlan.claimMonth({
+      assignmentId: sams,
+      proofFileId: await proof(),
+    });
     const before = await auditCount();
 
     const rejected = await owner().accessPlan.rejectClaim({
@@ -678,11 +695,7 @@ describe("the membership policy", () => {
 
   it("answers with sane settings before anybody has saved any", async () => {
     const seen = await owner().accessPlan.policy();
-    expect([seen.graceDays, seen.calendarTimeZone, seen.bankDetails]).toEqual([
-      7,
-      null,
-      "",
-    ]);
+    expect([seen.graceDays, seen.calendarTimeZone]).toEqual([7, null]);
     expect(seen.effective).toBe(seen.suggested);
   });
 
@@ -699,7 +712,6 @@ describe("the membership policy", () => {
     await owner().accessPlan.setPolicy({
       graceDays: 14,
       calendarTimeZone: "Europe/Lisbon",
-      bankDetails: "",
     });
     const seen = await owner().accessPlan.policy();
     expect([seen.graceDays, seen.calendarTimeZone, seen.effective]).toEqual([
@@ -710,7 +722,7 @@ describe("the membership policy", () => {
   });
 
   it("saves again without making a second row", async () => {
-    await owner().accessPlan.setPolicy({ graceDays: 3, bankDetails: "" });
+    await owner().accessPlan.setPolicy({ graceDays: 3 });
     const seen = await owner().accessPlan.policy();
     expect([seen.graceDays, seen.calendarTimeZone]).toEqual([3, null]);
     const rows = await h.pg.query<{ n: number }>(
@@ -721,9 +733,7 @@ describe("the membership policy", () => {
 
   it("refuses a grace the column would refuse too", async () => {
     expect(
-      await rejectionCode(
-        owner().accessPlan.setPolicy({ graceDays: 99, bankDetails: "" }),
-      ),
+      await rejectionCode(owner().accessPlan.setPolicy({ graceDays: 99 })),
     ).toBe("BAD_REQUEST");
   });
 
@@ -733,20 +743,9 @@ describe("the membership policy", () => {
         owner().accessPlan.setPolicy({
           graceDays: 7,
           calendarTimeZone: "Mars/Olympus",
-          bankDetails: "",
         }),
       ),
     ).toBe("BAD_REQUEST");
-  });
-
-  it("saves the gym's bank account with the rest of the policy", async () => {
-    await owner().accessPlan.setPolicy({
-      graceDays: 7,
-      bankDetails: "Demo Bank\nIBAN: PT50 0000",
-    });
-    expect((await owner().accessPlan.policy()).bankDetails).toBe(
-      "Demo Bank\nIBAN: PT50 0000",
-    );
   });
 
   it("is owner only", async () => {
@@ -786,9 +785,11 @@ describe("where a member is told to pay", () => {
         members: [{ userId: STRANGER, role: "owner", status: "active" }],
       },
     ]);
-    await owner().accessPlan.setPolicy({
-      graceDays: 7,
-      bankDetails: "Demo Bank\nIBAN: PT50 1111",
+    await owner().paymentMethod.save({
+      kind: "bank",
+      label: "Bank transfer",
+      details: "Demo Bank\nIBAN: PT50 1111",
+      enabled: true,
     });
     const plan = await owner().accessPlan.create({
       name: "Unlimited",
@@ -804,7 +805,9 @@ describe("where a member is told to pay", () => {
 
   it("hands a member the account and their own reference", async () => {
     const mine = await h.as(ANA, ORG4).accessPlan.mine();
-    expect(mine.bankDetails).toBe("Demo Bank\nIBAN: PT50 1111");
+    expect(mine.paymentMethods.map((m) => m.details)).toEqual([
+      "Demo Bank\nIBAN: PT50 1111",
+    ]);
     expect(mine.memberships[0]?.reference).toContain("USER U_ACCOUNT_ANA");
   });
 
@@ -817,8 +820,6 @@ describe("where a member is told to pay", () => {
   });
 
   it("keeps another gym's bank account out of sight", async () => {
-    expect((await h.as(STRANGER, OTHER4).accessPlan.policy()).bankDetails).toBe(
-      "",
-    );
+    expect(await h.as(STRANGER, OTHER4).paymentMethod.list()).toEqual([]);
   });
 });

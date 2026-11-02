@@ -1,14 +1,16 @@
 import type { SQL, TenantTx } from "@matops/db";
 import type { MembershipWarning, Money } from "@matops/domain";
-import { and, eq, gt, isNull, lte, or, sql } from "@matops/db";
+import { and, asc, eq, gt, isNull, lte, or, sql } from "@matops/db";
 import {
   accessAssignment,
   accessPlan,
   accessPlanEntity,
+  accessPlanMethodOff,
   accessPlanPrice,
   entity,
   membershipMonth,
   membershipPolicy,
+  paymentMethod,
 } from "@matops/db/schema";
 import {
   appliesInMonth,
@@ -47,6 +49,7 @@ const DEFAULT_MEMBERSHIP_GRACE_DAYS = 7;
 
 interface MembershipStanding {
   assignmentId: string;
+  planId: string;
   planName: string;
   status: string;
   entityIds: string[];
@@ -66,6 +69,9 @@ interface MembershipStanding {
   deadline: Date;
   /** When the member said they sent the money for this month. */
   reportedAt: Date | null;
+  awaitingStaff: boolean;
+  firstMonth: boolean;
+  chosenBySelf: boolean;
   warning: MembershipWarning | null;
 }
 
@@ -99,16 +105,27 @@ export async function membershipCalendar(
   };
 }
 
-/**
- * The gym's bank account (ADR 127). One row for the organization, and an empty
- * string before anybody has set it, so a caller never has to know whether the
- * policy row exists.
- */
-export async function membershipBankDetails(db: TenantTx): Promise<string> {
-  const [row] = await db
-    .select({ bankDetails: membershipPolicy.bankDetails })
-    .from(membershipPolicy);
-  return row?.bankDetails ?? "";
+export async function enabledPaymentMethods(db: TenantTx) {
+  const methods = await db
+    .select({
+      id: paymentMethod.id,
+      kind: paymentMethod.kind,
+      label: paymentMethod.label,
+      details: paymentMethod.details,
+    })
+    .from(paymentMethod)
+    .where(eq(paymentMethod.enabled, true))
+    .orderBy(asc(paymentMethod.position), asc(paymentMethod.createdAt));
+  const off = await db
+    .select({
+      planId: accessPlanMethodOff.planId,
+      methodId: accessPlanMethodOff.paymentMethodId,
+    })
+    .from(accessPlanMethodOff);
+  return methods.map((m) => ({
+    ...m,
+    offPlanIds: off.filter((o) => o.methodId === m.id).map((o) => o.planId),
+  }));
 }
 
 /**
@@ -138,6 +155,7 @@ export async function membershipStanding(
       endMonth: accessAssignment.endMonth,
       createdAt: accessAssignment.createdAt,
       startsOn: accessAssignment.startsOn,
+      assignedBy: accessAssignment.assignedBy,
       planId: accessAssignment.planId,
       planName: accessPlan.name,
     })
@@ -171,6 +189,7 @@ export async function membershipStanding(
       currency: membershipMonth.currency,
       deadline: membershipMonth.deadline,
       reportedAt: membershipMonth.reportedAt,
+      cashPaidToName: membershipMonth.cashPaidToName,
     })
     .from(membershipMonth)
     .where(eq(membershipMonth.month, month));
@@ -212,6 +231,7 @@ export async function membershipStanding(
     const deadline = held?.deadline ?? payDeadline(shared);
     return {
       assignmentId: r.id,
+      planId: r.planId,
       planName: r.planName,
       status: r.status,
       // The amount they were asked for, and nothing about whether it arrived:
@@ -228,6 +248,11 @@ export async function membershipStanding(
       version: held?.version ?? 0,
       deadline,
       reportedAt: held?.reportedAt ?? null,
+      awaitingStaff: held?.cashPaidToName != null,
+      firstMonth: r.startMonth === month,
+      chosenBySelf:
+        subject.accountUserId !== null &&
+        r.assignedBy === subject.accountUserId,
       warning:
         r.status === "active" && paymentRequired
           ? membershipWarning({

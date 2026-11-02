@@ -35,3 +35,4 @@ export * from "./person";
 export * from "./signup";
 export * from "./waiver";
 export * from "./stored-file";
+export * from "./payment-hook";

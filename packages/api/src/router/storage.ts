@@ -8,6 +8,7 @@ import type { StorageClient } from "@matops/storage";
 import {
   academyStoredBytes,
   deleteStoredFiles,
+  expiredReceipts,
   getStoredFile,
   insertPendingFile,
   markFileReady,
@@ -22,8 +23,10 @@ import {
   isFileKind,
   isFileType,
   pendingUploadCutoff,
+  PRIVATE_FILE_CACHE_CONTROL,
   PUBLIC_FILE_CACHE_CONTROL,
   publicFileUrl,
+  receiptCutoff,
   SNIFF_BYTES,
   sniffFileType,
   UPLOAD_URL_SECONDS,
@@ -77,7 +80,9 @@ async function dropPrevious(
 function problemMessage(kind: FileKind, problem: UploadProblem): string {
   switch (problem) {
     case "type_not_allowed":
-      return "Use a JPEG, PNG or WebP image.";
+      return kind === "payment_receipt"
+        ? "Use a photo (JPEG, PNG or WebP) or a PDF."
+        : "Use a JPEG, PNG or WebP image.";
     case "empty":
       return "The file is empty.";
     case "too_large":
@@ -103,6 +108,15 @@ export const storageRouter = {
       const storage = requireStorage(ctx.storage);
       const userId = ctx.session.user.id;
       assertCanUpload(input.kind, ctx.membership);
+      if (
+        input.kind === "payment_receipt" &&
+        !ctx.entity.membershipEnforcedAt
+      ) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Your gym does not take membership payments here yet.",
+        });
+      }
       if (input.kind === "avatar" && !ctx.entityMembership) {
         throw new TRPCError({
           code: "FORBIDDEN",
@@ -116,13 +130,17 @@ export const storageRouter = {
         });
       }
 
-      const stale = await stalePendingFiles(
-        {
-          academyId: ctx.academyId,
-          before: pendingUploadCutoff(new Date()),
-        },
-        ctx.db,
-      );
+      const now = new Date();
+      const stale = [
+        ...(await stalePendingFiles(
+          { academyId: ctx.academyId, before: pendingUploadCutoff(now) },
+          ctx.db,
+        )),
+        ...(await expiredReceipts(
+          { academyId: ctx.academyId, before: receiptCutoff(now) },
+          ctx.db,
+        )),
+      ];
       const staleKeys = await deleteStoredFiles(
         { academyId: ctx.academyId, ids: stale.map((file) => file.id) },
         ctx.db,
@@ -165,7 +183,10 @@ export const storageRouter = {
         key: objectKey,
         contentType: input.contentType,
         contentLength: input.sizeBytes,
-        cacheControl: PUBLIC_FILE_CACHE_CONTROL,
+        cacheControl:
+          input.kind === "payment_receipt"
+            ? PRIVATE_FILE_CACHE_CONTROL
+            : PUBLIC_FILE_CACHE_CONTROL,
         expiresIn: UPLOAD_URL_SECONDS,
       });
       return { fileId, url: upload.url, headers: upload.headers };
@@ -218,6 +239,7 @@ export const storageRouter = {
       }
 
       await markFileReady({ academyId: ctx.academyId, id: file.id }, ctx.db);
+      if (kind === "payment_receipt") return { url: null, fileId: file.id };
       const previousId =
         kind === "avatar" && membershipId
           ? await setMembershipAvatar({ membershipId, fileId: file.id }, ctx.db)
@@ -226,7 +248,10 @@ export const storageRouter = {
               ctx.db,
             );
       await dropPrevious(ctx, previousId === file.id ? null : previousId);
-      return { url: publicFileUrl(ctx.appUrl, file.objectKey) };
+      return {
+        url: publicFileUrl(ctx.appUrl, file.objectKey),
+        fileId: file.id,
+      };
     }),
 
   removeAvatar: enrolledProcedure.mutation(async ({ ctx }) => {

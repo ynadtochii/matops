@@ -186,6 +186,6 @@ export function membershipWarning(input: {
   return {
     verdict,
     headline: `${which} is unpaid on ${planName}.`,
-    detail: `Booking is closed since ${when}. Pay at the desk and your gym will tick the month, which opens it again.`,
+    detail: `Booking is closed since ${when}. Pay from Membership to open it again.`,
   };
 }

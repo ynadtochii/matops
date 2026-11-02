@@ -679,30 +679,36 @@ export function ClassRoster({
               return (
                 <li key={d.id} className={ROSTER_ROW}>
                   <Avatar name={name} className="text-2xs size-6" />
-                  <span className="flex min-w-0 flex-1 flex-col text-sm">
-                    <span className="truncate">{name}</span>
-                    {d.belt && (
-                      <span className="text-muted-foreground text-xs">
-                        {signupBeltLabel(d.belt, d.stripes ?? 0)}
+                  <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-sm">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="truncate" title={name}>
+                        {name}
                       </span>
-                    )}
+                      {!canMark && ended && (
+                        <RowTag tone={markTone(present, absent)}>
+                          {present ? "present" : absent ? "absent" : "unmarked"}
+                        </RowTag>
+                      )}
+                      {d.bookingStatus === "booked" && (
+                        <RowTag tone="info">booked</RowTag>
+                      )}
+                      {d.bookingStatus === "none" && <RowTag>walk-in</RowTag>}
+                    </span>
+                    <span className="text-muted-foreground flex flex-wrap gap-x-2 text-xs">
+                      {d.belt && (
+                        <span>{signupBeltLabel(d.belt, d.stripes ?? 0)}</span>
+                      )}
+                      {d.phone && (
+                        <span className="whitespace-nowrap tabular-nums">
+                          {d.phone}
+                        </span>
+                      )}
+                    </span>
                     {d.health && (
-                      <span className="text-foreground text-xs whitespace-pre-wrap">
+                      <span className="text-foreground text-xs break-words whitespace-pre-wrap">
                         Health: {d.health}
                       </span>
                     )}
-                  </span>
-                  {!canMark && ended && (
-                    <RowTag tone={markTone(present, absent)}>
-                      {present ? "present" : absent ? "absent" : "unmarked"}
-                    </RowTag>
-                  )}
-                  {d.bookingStatus === "booked" && (
-                    <RowTag tone="info">booked</RowTag>
-                  )}
-                  {d.bookingStatus === "none" && <RowTag>walk-in</RowTag>}
-                  <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-                    {d.phone}
                   </span>
                   {canMark && (
                     <div
@@ -771,7 +777,7 @@ export function ClassRoster({
               className="text-muted-foreground size-3.5 transition-transform group-open:rotate-45 motion-reduce:transition-none"
             />
             Add someone who isn&apos;t listed
-            <span className="text-muted-foreground ml-auto text-xs font-normal">
+            <span className="text-muted-foreground ml-auto text-xs font-normal whitespace-nowrap max-sm:hidden">
               member or staff
             </span>
           </summary>

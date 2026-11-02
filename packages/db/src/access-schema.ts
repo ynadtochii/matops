@@ -5,8 +5,11 @@ import {
   foreignKey,
   index,
   pgTable,
+  primaryKey,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+
+import type { PaymentMethodKind } from "@matops/domain";
 
 import { organization, user } from "./auth-schema";
 import { entity } from "./entity-schema";
@@ -52,6 +55,10 @@ export const accessPlan = pgTable(
     currency: t.text(),
     /** Archived stops new assignments and freezes the plan; nobody loses access. */
     archivedAt: t.timestamp({ withTimezone: true }),
+    staffOnly: t.boolean().notNull().default(false),
+    discountFromMonths: t.integer(),
+    discountPercent: t.integer(),
+    discountMonthMinor: t.integer(),
     createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: t
       .timestamp({ withTimezone: true })
@@ -71,6 +78,10 @@ export const accessPlan = pgTable(
     check(
       "access_plan_price_sane",
       sql`price_minor is null or (price_minor >= 0 and char_length(currency) = 3)`,
+    ),
+    check(
+      "access_plan_discount_shape",
+      sql`(discount_from_months is null and discount_percent is null and discount_month_minor is null) or (discount_from_months between 2 and 12 and (discount_percent is null) <> (discount_month_minor is null) and (discount_percent is null or discount_percent between 1 and 90) and (discount_month_minor is null or discount_month_minor > 0))`,
     ),
   ],
 );
@@ -100,6 +111,7 @@ export const accessPlanPrice = pgTable(
     effectiveMonth: t.date().notNull(),
     priceMinor: t.integer().notNull(),
     currency: t.text().notNull(),
+    paymentLinkUrl: t.text(),
     recordedBy: t.text().references(() => user.id, { onDelete: "set null" }),
     createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
   }),
@@ -358,6 +370,108 @@ export const membershipPolicy = pgTable(
   ],
 );
 
+export const paymentMethod = pgTable(
+  "payment_method",
+  (t) => ({
+    id: t.uuid().notNull().primaryKey().defaultRandom(),
+    organizationId: t
+      .text()
+      .notNull()
+      .references(() => organization.id),
+    kind: t.text().$type<PaymentMethodKind>().notNull(),
+    label: t.text().notNull(),
+    details: t.text().notNull().default(""),
+    enabled: t.boolean().notNull().default(true),
+    position: t.integer().notNull().default(0),
+    createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
+    updatedAt: t
+      .timestamp({ withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdateFn(() => new Date()),
+  }),
+  (table) => [
+    index("payment_method_by_position").on(
+      table.organizationId,
+      table.position,
+    ),
+    check(
+      "payment_method_kind_supported",
+      sql`kind in ('bank','mbway','cash','other')`,
+    ),
+  ],
+);
+
+export const accessPlanMethodOff = pgTable(
+  "access_plan_method_off",
+  (t) => ({
+    organizationId: t
+      .text()
+      .notNull()
+      .references(() => organization.id),
+    planId: t
+      .uuid()
+      .notNull()
+      .references(() => accessPlan.id, { onDelete: "cascade" }),
+    paymentMethodId: t
+      .uuid()
+      .notNull()
+      .references(() => paymentMethod.id, { onDelete: "cascade" }),
+    createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
+  }),
+  (table) => [
+    primaryKey({
+      name: "access_plan_method_off_pk",
+      columns: [table.planId, table.paymentMethodId],
+    }),
+    index("access_plan_method_off_by_method").on(table.paymentMethodId),
+  ],
+);
+
+export const membershipPurchase = pgTable(
+  "membership_purchase",
+  (t) => ({
+    id: t.uuid().notNull().primaryKey().defaultRandom(),
+    organizationId: t
+      .text()
+      .notNull()
+      .references(() => organization.id),
+    assignmentId: t.uuid().notNull(),
+    firstMonth: t.date().notNull(),
+    months: t.integer().notNull(),
+    totalMinor: t.integer().notNull(),
+    currency: t.text().notNull(),
+    discountFromMonths: t.integer(),
+    discountPercent: t.integer(),
+    discountMonthMinor: t.integer(),
+    recordedBy: t.text().references(() => user.id, { onDelete: "set null" }),
+    discardedAt: t.timestamp({ withTimezone: true }),
+    discardedBy: t.text().references(() => user.id, { onDelete: "set null" }),
+    createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
+  }),
+  (table) => [
+    uniqueIndex("membership_purchase_org_id").on(
+      table.organizationId,
+      table.id,
+    ),
+    index("membership_purchase_by_assignment").on(table.assignmentId),
+    foreignKey({
+      name: "membership_purchase_assignment_same_org",
+      columns: [table.organizationId, table.assignmentId],
+      foreignColumns: [accessAssignment.organizationId, accessAssignment.id],
+    }),
+    check(
+      "membership_purchase_is_a_month",
+      sql`date_trunc('month', first_month) = first_month`,
+    ),
+    check("membership_purchase_months_range", sql`months between 1 and 12`),
+    check(
+      "membership_purchase_total_sane",
+      sql`total_minor >= 0 and char_length(currency) = 3`,
+    ),
+  ],
+);
+
 /**
  * One calendar month of one shared membership, ticked by hand.
  *
@@ -389,6 +503,14 @@ export const membershipMonth = pgTable(
     proofFileId: t.uuid().references((): AnyPgColumn => storedFile.id, {
       onDelete: "set null",
     }),
+    paymentMethodId: t.uuid().references((): AnyPgColumn => paymentMethod.id, {
+      onDelete: "set null",
+    }),
+    cashPaidTo: t.text().references(() => user.id, { onDelete: "set null" }),
+    cashPaidToName: t.text(),
+    cashPaidOn: t.date(),
+    paymentNote: t.text(),
+    purchaseId: t.uuid(),
     createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: t
       .timestamp({ withTimezone: true })
@@ -398,6 +520,15 @@ export const membershipMonth = pgTable(
   }),
   (table) => [
     uniqueIndex("membership_month_org_id").on(table.organizationId, table.id),
+    index("membership_month_by_purchase").on(table.purchaseId),
+    foreignKey({
+      name: "membership_month_purchase_same_org",
+      columns: [table.organizationId, table.purchaseId],
+      foreignColumns: [
+        membershipPurchase.organizationId,
+        membershipPurchase.id,
+      ],
+    }),
     uniqueIndex("membership_month_one_per_month").on(
       table.assignmentId,
       table.month,

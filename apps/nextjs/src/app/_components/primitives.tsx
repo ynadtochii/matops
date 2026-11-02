@@ -4,6 +4,7 @@ import type { DriftStatus } from "@matops/domain";
 import type { BadgeTone } from "@matops/ui/badge";
 import { cn } from "@matops/ui";
 import { Badge } from "@matops/ui/badge";
+import { FOCUS_RING } from "@matops/ui/motion";
 
 /**
  * Shared layout vocabulary for the owner/instructor screens: section headings,
@@ -108,51 +109,6 @@ export const stagger = (index: number): CSSProperties => ({
 
 export const RESOLVE =
   "animate-in fade-in-0 duration-200 ease-out motion-reduce:animate-none";
-
-export function Panel({
-  cols = 1,
-  className,
-  children,
-  ...props
-}: ComponentProps<"div"> & { cols?: number }) {
-  return (
-    <div
-      className={cn(
-        "border-border bg-grid-small overflow-hidden rounded-lg border",
-        className,
-      )}
-      {...props}
-    >
-      {/* Pulled a pixel past the strip and clipped, so the last column and row
-          shed their hairline into the strip's edge instead of doubling it. */}
-      <div
-        style={{ "--panel-cols": cols } as CSSProperties}
-        className="-mr-px -mb-px grid grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] lg:grid-cols-[repeat(var(--panel-cols),minmax(0,1fr))]"
-      >
-        {children}
-      </div>
-    </div>
-  );
-}
-
-export const panelCell = "border-border bg-background/90 border-r border-b";
-
-export function PanelNotice({
-  title,
-  children,
-}: {
-  title: string;
-  children?: ReactNode;
-}) {
-  return (
-    <div className={cn(panelCell, "col-span-full px-4 py-5")}>
-      <p className="text-foreground text-sm font-medium">{title}</p>
-      {children && (
-        <p className="text-muted-foreground mt-1 text-sm">{children}</p>
-      )}
-    </div>
-  );
-}
 
 /**
  * A section heading (h2) with an optional attention count and a right-aligned
@@ -343,4 +299,42 @@ export function disciplineDot(hue: number | null): string {
   return hue === null
     ? "bg-discipline-default"
     : (DISCIPLINE_BG[hue] ?? "bg-discipline-default");
+}
+
+export function Switch({
+  checked,
+  onCheckedChange,
+  className,
+  ...props
+}: Omit<ComponentProps<"button">, "onChange" | "role" | "type"> & {
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onCheckedChange(!checked)}
+      className={cn(
+        "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none",
+        checked
+          ? "border-primary bg-primary"
+          : "border-border-strong bg-surface-2",
+        FOCUS_RING,
+        className,
+      )}
+      {...props}
+    >
+      <span
+        aria-hidden
+        className={cn(
+          "size-3.5 rounded-full transition-transform motion-reduce:transition-none",
+          checked
+            ? "bg-primary-foreground translate-x-[17px]"
+            : "bg-muted-foreground translate-x-[2px]",
+        )}
+      />
+    </button>
+  );
 }

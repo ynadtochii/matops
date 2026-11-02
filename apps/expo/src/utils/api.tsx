@@ -1,4 +1,4 @@
-import { QueryClient } from "@tanstack/react-query";
+import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
 import { createTRPCClient, httpBatchLink, loggerLink } from "@trpc/client";
 import { createTRPCOptionsProxy } from "@trpc/tanstack-react-query";
 import superjson from "superjson";
@@ -6,11 +6,18 @@ import superjson from "superjson";
 import type { AppRouter } from "@matops/api";
 import { staleTimeForQueryKey } from "@matops/domain";
 
+import { isMembershipGone, leaveEndedGym } from "./access-ended";
 import { authClient } from "./auth";
 import { getBaseUrl } from "./base-url";
 import { getActiveEntity } from "./entity-store";
 
-export const queryClient = new QueryClient({
+const onError = (error: Error) => {
+  if (isMembershipGone(error)) void leaveEndedGym(queryClient);
+};
+
+export const queryClient: QueryClient = new QueryClient({
+  queryCache: new QueryCache({ onError }),
+  mutationCache: new MutationCache({ onError }),
   defaultOptions: {
     queries: {
       staleTime: (query) => staleTimeForQueryKey(query.queryKey),

@@ -13,6 +13,11 @@ import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
 import { PhoneField } from "./form-fields";
+import {
+  readSignupAnswers,
+  signupQuestionErrors,
+  SignupQuestions,
+} from "./signup-fields";
 
 /**
  * Join your gym by code (ADR 49). The landing gate for a signed-in user who
@@ -38,7 +43,12 @@ export function JoinByCode() {
     address: string | null;
     timeZone: string | null;
     country: string | null;
+    signupHealthQuestion: boolean;
+    waiver: { id: string; body: string } | null;
   } | null>(null);
+  const [answerErrors, setAnswerErrors] = useState<
+    Partial<Record<string, string>>
+  >({});
 
   // findByCode is a query procedure; fetch it on demand (not on every keystroke)
   // rather than subscribing, so a mutation wrapper drives the button state.
@@ -125,11 +135,22 @@ export function JoinByCode() {
           onSubmit={(e) => {
             e.preventDefault();
             if (join.isPending) return;
+            const data = new FormData(e.currentTarget);
+            const errors = signupQuestionErrors(data, {
+              belt: true,
+              agreement: found.waiver !== null,
+            });
+            setAnswerErrors(errors);
+            if (Object.keys(errors).length > 0) return;
             join.mutate({
               code: found.code,
               firstName: firstName.trim(),
               lastName: lastName.trim(),
               phone: phone.trim(),
+              ...readSignupAnswers(data, {
+                askHealth: found.signupHealthQuestion,
+                waiver: found.waiver,
+              }),
             });
           }}
         >
@@ -150,6 +171,7 @@ export function JoinByCode() {
               disabled={join.isPending}
               onClick={() => {
                 setFound(null);
+                setAnswerErrors({});
                 lookup.reset();
                 join.reset();
               }}
@@ -189,6 +211,19 @@ export function JoinByCode() {
             disabled={join.isPending}
             required
           />
+          <SignupQuestions
+            academyName={found.name}
+            askHealth={found.signupHealthQuestion}
+            waiver={found.waiver}
+            errors={answerErrors}
+          />
+          {(answerErrors.belt ?? answerErrors.agreement) && (
+            <FieldError>
+              {answerErrors.belt
+                ? `${answerErrors.belt}.`
+                : `${answerErrors.agreement}.`}
+            </FieldError>
+          )}
           {join.isError && (
             <FieldError>
               {join.error.message ||

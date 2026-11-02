@@ -1,0 +1,1 @@
+ALTER TABLE "membership_month" ADD COLUMN "cash_paid_on" date;
