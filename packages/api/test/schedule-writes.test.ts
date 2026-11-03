@@ -266,6 +266,81 @@ describe("class.cancel", () => {
   });
 });
 
+describe("class.remove", () => {
+  it("hides a cancelled class from the staff and student week", async () => {
+    const h = await base();
+    await seedClasses(h.pg, [
+      {
+        id: ALREADY_OFF,
+        academyId: A,
+        instructorId: COACH,
+        startsInMinutes: 2880,
+        status: "cancelled",
+      },
+    ]);
+    const from = new Date(Date.now() - 86400000).toISOString();
+    const to = new Date(Date.now() + 7 * 86400000).toISOString();
+
+    await h.as(COACH, A).class.remove({ id: ALREADY_OFF });
+
+    expect(await statusOf(h.pg, ALREADY_OFF)).toBe("deleted");
+    expect(await h.as(OWNER, A).class.week({ from, to })).toHaveLength(0);
+    expect(await h.as(ANA, A).class.mine({ from, to })).toHaveLength(0);
+  });
+
+  it("keeps the booking rows, so history survives", async () => {
+    const h = await base();
+    await seedClasses(h.pg, [
+      {
+        id: ALREADY_OFF,
+        academyId: A,
+        instructorId: COACH,
+        startsInMinutes: 2880,
+        status: "cancelled",
+      },
+    ]);
+    await seedParticipations(h.pg, [
+      { classId: ALREADY_OFF, academyId: A, studentId: ANA },
+    ]);
+
+    await h.as(COACH, A).class.remove({ id: ALREADY_OFF });
+
+    const rows = await h.pg.query(
+      `SELECT id FROM class_participation WHERE class_id = $1`,
+      [ALREADY_OFF],
+    );
+    expect(rows.rows).toHaveLength(1);
+  });
+
+  it("refuses a scheduled class, so a live class is never hidden", async () => {
+    const h = await base();
+    await seedClasses(h.pg, [
+      { id: FUTURE, academyId: A, instructorId: COACH, startsInMinutes: 2880 },
+    ]);
+    expect(
+      await rejectionCode(h.as(COACH, A).class.remove({ id: FUTURE })),
+    ).toBe("NOT_FOUND");
+    expect(await statusOf(h.pg, FUTURE)).toBe("scheduled");
+  });
+
+  it("refuses a student", async () => {
+    const h = await base();
+    await seedClasses(h.pg, [
+      {
+        id: ALREADY_OFF,
+        academyId: A,
+        instructorId: COACH,
+        startsInMinutes: 2880,
+        status: "cancelled",
+      },
+    ]);
+    expect(
+      await rejectionCode(h.as(ANA, A).class.remove({ id: ALREADY_OFF })),
+    ).toBe("FORBIDDEN");
+    expect(await statusOf(h.pg, ALREADY_OFF)).toBe("cancelled");
+  });
+});
+
 describe("a BJJ academy's schedule", () => {
   const ORG = "acad_room";
   const BOSS = "u_room_owner";
