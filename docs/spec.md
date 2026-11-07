@@ -423,8 +423,8 @@ Owners and managers see Memberships whether payment is on or off (ADR 154). With
 - **Deleting a class or template:** soft delete; bookings and attendance are kept; a deleted class notifies its booked students.
 - **Pending people:** the member list shows each pending member's **visit count** so the owner is nudged to approve them. No auto-approve.
 - **Duplicate drop-ins:** leads are **grouped by phone**: one lead per person, with a row per class.
-- **Sole owner:** an owner can **make another staff member a co-owner** from the Staff section on Coaches, so a gym is never left ownerless. Full ownership transfer is not built.
-- **The gym's owner is an owner at its academy** (ADR 125), whatever their membership row says. They can be **erased from the academy roster**, but the erase never takes the gym away and never deletes their account.
+- **Sole owner:** an owner can **make another staff member a co-owner** from the Staff section on Coaches, so a gym is never left ownerless. A co-owner is an owner of the gym too, with Memberships and every other owner screen. Suspending or archiving a co-owner takes the gym role away; restoring gives it back (ADR 162). Full ownership transfer is not built.
+- **The gym's owner is an owner at its academy** (ADR 125), whatever their membership row says. They can be **erased from the academy roster** while another owner remains. The erase never deletes their account, but they stop being a gym owner unless they still own another academy (ADR 162).
 - **The app's academy picker offers only academies you may open:** a suspended, archived or removed membership is left out.
 - **Removing or declining someone with history:** their **attendance and lead records are kept**; access is revoked. Rejoining starts pending again.
 - **Drop-in link opened with no class in the next three local days:** the form says so and asks the visitor to contact the gym. A class-specific link for an unavailable class says to ask the gym for a new link. There is no "just visiting" option: without an eligible class the form saves nothing (ADR 147).
