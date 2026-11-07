@@ -171,7 +171,7 @@ The decision is ADR [124](issues/124-the-organization-owns-typed-entities.md), a
 
 A request passes two checks, both before any transaction opens (`packages/api/src/trpc.ts`).
 
-1. **Gym.** `resolveOrganization` reads Better Auth's `activeOrganizationId` and requires a live `member` row for the caller. The Better Auth role (`owner`, `manager`, `instructor`, `student`) is the gym role.
+1. **Gym.** `resolveOrganization` reads Better Auth's `activeOrganizationId` and requires a live `member` row for the caller. The Better Auth role (`owner`, `manager`, `instructor`, `student`) is the gym role. Every academy role or status write also updates it: an active owner of any academy of the gym is a gym `owner`, and the last academy ownership going moves it back to `member` (`syncGymOwner`, ADR 162).
 2. **Academy.** `resolveEntity` reads the academy id from the **`x-matops-entity`** header. The web app sends the `[entityId]` route segment. The Expo app sends the id it keeps in secure-store. The session never picks the academy. A missing header is `BAD_REQUEST`. An id that is unknown or belongs to another gym is `FORBIDDEN`, with the same message, so a caller cannot probe for other gyms.
 
 An active gym **owner** or **manager** reaches every academy of the gym without an `entity_membership` row. Their standing there reads `owner` or `manager`, and `memberId` stays null when they have no row, so management access never makes them a student. Anyone else needs an `entity_membership` whose status is `pending` or `active`.

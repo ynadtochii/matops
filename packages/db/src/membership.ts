@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import { canRemoveOrDemote } from "@matops/domain";
@@ -509,17 +509,15 @@ export async function getMemberById(
   return rows[0] ?? null;
 }
 
-/**
- * Write role and status for one person at one entity (ADR 124).
- *
- * `entity_membership` is the only record: the Better Auth mirror it used to
- * keep in step went with `member.status` and `member.invited_role` in the
- * contract migration. `member.role` is untouched here on purpose — the Better
- * Auth organization plugin owns it, and it says who runs the ORGANIZATION,
- * which is a different question from who runs one mat.
- */
 type DbWriter = DbExec | TenantTx;
 
+/**
+ * Write role and status for one person at one entity (ADR 124), then keep the
+ * gym role in step with academy ownership (ADR 162): an active owner of any of
+ * the gym's academies owns the gym, and an owner row that stops being active
+ * moves a gym owner who owns no other academy back to `member`. A gym manager
+ * is left alone unless they become an owner.
+ */
 async function writeMembership(
   input: {
     entityId: string;
@@ -545,6 +543,46 @@ async function writeMembership(
       and(
         eq(entityMembership.id, input.memberId),
         eq(entityMembership.entityId, input.entityId),
+      ),
+    );
+  await syncGymOwner(input.memberId, exec);
+}
+
+async function syncGymOwner(memberId: string, exec: DbWriter): Promise<void> {
+  const [target] = await exec
+    .select({
+      userId: entityMembership.userId,
+      organizationId: entityMembership.organizationId,
+      role: entityMembership.role,
+    })
+    .from(entityMembership)
+    .where(eq(entityMembership.id, memberId))
+    .limit(1);
+  if (!target?.userId) return;
+
+  const owned = await exec
+    .select({ id: entityMembership.id })
+    .from(entityMembership)
+    .where(
+      and(
+        eq(entityMembership.userId, target.userId),
+        eq(entityMembership.organizationId, target.organizationId),
+        eq(entityMembership.role, "owner"),
+        eq(entityMembership.status, "active"),
+      ),
+    )
+    .limit(1);
+  const ownsAcademy = owned.length > 0;
+  if (!ownsAcademy && target.role !== "owner") return;
+
+  await exec
+    .update(member)
+    .set({ role: ownsAcademy ? "owner" : "member" })
+    .where(
+      and(
+        eq(member.userId, target.userId),
+        eq(member.organizationId, target.organizationId),
+        ownsAcademy ? ne(member.role, "owner") : eq(member.role, "owner"),
       ),
     );
 }
@@ -587,13 +625,9 @@ export async function setMemberStatus(
  * Lock the entity's memberships and answer whether this change may go ahead.
  * A mat left with no active owner is the thing worth refusing.
  *
- * There is no second check at the organization any more, and that is a
- * decision, not an oversight. It existed because the Better Auth row mirrored
- * the entity role, so demoting someone at one mat also stripped the
- * organization role that was their way into the other. The mirror is gone with
- * the contract migration: `member.role` is now written only when Better Auth
- * creates the row, so no entity change can touch it and there is nothing left
- * to guard (ADR 124).
+ * There is no second check at the organization: `syncGymOwner` keeps an owner
+ * of any other academy as gym owner, so only this mat can lose its last owner
+ * (ADR 124, ADR 162).
  */
 async function mayChangeEntityMembership(
   tx: TenantTx,

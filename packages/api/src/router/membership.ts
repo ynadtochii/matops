@@ -283,10 +283,10 @@ async function requireBranchLifecycleChange(
   const organizationMembership = target.accountUserId
     ? await getMembership(target.accountUserId, ctx.organizationId, ctx.baseDb)
     : null;
-  if (
-    organizationMembership?.role === "owner" ||
-    organizationMembership?.role === "manager"
-  ) {
+  const gymRoleStays =
+    organizationMembership?.role === "manager" ||
+    (organizationMembership?.role === "owner" && target.role !== "owner");
+  if (gymRoleStays) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
       message:
@@ -703,6 +703,11 @@ export const membershipRouter = {
         });
       }
       const accountUserId = m.accountUserId;
+      // Read before the archive, which takes the gym role from a last-academy
+      // owner (ADR 162): a gym owner keeps their account and gym row either way.
+      const ownedGym =
+        (await getMembership(accountUserId, ctx.organizationId, ctx.baseDb))
+          ?.role === "owner";
       await rejectIfLastOwner(
         setMemberStatusIfNotLastOwner(
           ctx.academyId,
@@ -727,17 +732,7 @@ export const membershipRouter = {
         accountUserId,
         ctx.organizationId,
       );
-      // `member.role = "owner"` is written once, by Better Auth, when the gym is
-      // created, and no code path can write it back. So the never-ownerless guard
-      // above counts owners of THIS mat only, so it must not be the last thing
-      // standing between an owner of one mat and the founder's whole organization.
-      const orgMembership = await getMembership(
-        accountUserId,
-        ctx.organizationId,
-        ctx.baseDb,
-      );
-      const foundedOrganization = orgMembership?.role === "owner";
-      if (!stillHere && !foundedOrganization) {
+      if (!stillHere && !ownedGym) {
         // No branch of this organization is left for a shared membership to
         // cover, so it goes with the organization row (ADR 126).
         report.access_assignment = await deleteOrganizationAssignments(
@@ -749,7 +744,7 @@ export const membershipRouter = {
       }
       const elsewhere =
         stillHere ||
-        foundedOrganization ||
+        ownedGym ||
         (await hasOtherMemberships(
           ctx.baseDb,
           accountUserId,
