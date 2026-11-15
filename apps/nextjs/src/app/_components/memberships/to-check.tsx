@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { entityHref, formatMoney, formatMonth } from "@matops/domain";
+import { entityHref, formatDay, formatMoney } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { Badge } from "@matops/ui/badge";
 import { Button } from "@matops/ui/button";
@@ -117,7 +117,7 @@ function CardPaymentsToCheck() {
                 {p.name ?? "Unknown student"}
                 {" · "}
                 {formatMoney(p.amountMinor, p.currency)}
-                {p.month ? ` · ${formatMonth(p.month, "UTC")}` : ""}
+                {p.month ? ` · period from ${formatDay(p.month)}` : ""}
               </span>
               <span className="text-muted-foreground text-sm">
                 {p.outcome === "paid_twice" && <Badge>Paid twice</Badge>}{" "}

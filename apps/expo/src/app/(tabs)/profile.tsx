@@ -205,7 +205,7 @@ function MembershipNotice() {
           <Txt size={15} weight={600}>
             {active.map((m) => m.planName).join(", ")}
           </Txt>
-          <Muted>No payment is due for this month.</Muted>
+          <Muted>No payment is due for this period.</Muted>
         </Card>
       ) : null}
       {bannerText?.action ? (
@@ -235,7 +235,7 @@ function MembershipChangeNotice() {
         <Card key={m.assignmentId} style={{ gap: 4 }}>
           <Eyebrow>Your plan changes</Eyebrow>
           <Muted>
-            {`${m.planName} runs to the end of this month. ${m.next?.planName} starts on 1 ${m.next?.effectiveMonthLabel}${
+            {`${m.planName} runs to the end of this period. ${m.next?.planName} starts on ${m.next?.effectiveMonthLabel}${
               m.next?.amount
                 ? ` at ${formatMoney(m.next.amount.priceMinor, m.next.amount.currency)} a month`
                 : ""

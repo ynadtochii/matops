@@ -85,8 +85,8 @@ export const ArchiveAccessPlanSchema = z.object({
 export const AccessPlanIdSchema = z.object({ id: z.uuid() });
 
 /**
- * Give a person a membership. `startMonth` is the first day of a calendar
- * month; leave it out and the server uses the month it is in.
+ * Give a person a membership. `startsOn` is the day its periods count from;
+ * leave it out and the server uses today (ADR 163).
  */
 const AssignmentFieldsSchema = z.object({
   planId: z.uuid(),
@@ -147,6 +147,8 @@ export const MemberAssignmentsSchema = z
 const MonthSchema = z.iso
   .date()
   .refine((d) => d.endsWith("-01"), "A month is addressed by its first day");
+
+const PeriodSchema = z.iso.date();
 
 /**
  * Set what a plan costs from a month on (ADR 128, spec FP6).
@@ -212,7 +214,7 @@ export const SetPlanPaymentLinkSchema = z.object({
 /** Tick one month of one shared membership paid or unpaid. */
 export const MarkMembershipMonthSchema = z.object({
   assignmentId: z.uuid(),
-  month: MonthSchema,
+  month: PeriodSchema,
   paid: z.boolean(),
   expectedVersion: z.number().int().positive().optional(),
   reason: blockText(1, 500).optional(),
@@ -312,5 +314,18 @@ export const ChoosePlanSchema = z.object({ planId: z.uuid() });
 
 export const MembershipMonthRefSchema = z.object({
   assignmentId: z.uuid(),
-  month: MonthSchema,
+  month: PeriodSchema,
+});
+
+export const ChangePaymentDateSchema = z.object({
+  assignmentId: z.uuid(),
+  nextPaymentOn: z.iso.date(),
+});
+
+export const SetDueDateSchema = z.object({
+  assignmentId: z.uuid(),
+  month: PeriodSchema,
+  stopsOn: z.iso.date().nullable(),
+  expectedVersion: z.number().int().nonnegative().optional(),
+  reason: blockText(1, 500).optional(),
 });

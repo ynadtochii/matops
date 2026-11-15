@@ -29,8 +29,11 @@ import {
   cardPaymentUrl,
   CASH_PAID_ON_MAX_DAYS,
   cashPaidOnProblem,
+  currentPeriod,
+  formatDay,
   formatDeadline,
-  formatMonth,
+  formatPeriod,
+  instantFromLocalDate,
   isActiveMember,
   isFreeMembershipMonth,
   isOwner,
@@ -43,7 +46,9 @@ import {
   monthsFrom,
   paidUntil,
   payDeadline,
+  paymentDayLabel,
   paymentReference,
+  periodLastDay,
   priceForMonth,
   RECEIPT_READ_SECONDS,
   rowForMonth,
@@ -56,6 +61,7 @@ import {
   MembershipMonthRefSchema,
   RecordPurchaseSchema,
   RejectMembershipClaimSchema,
+  SetDueDateSchema,
 } from "@matops/validators";
 
 import type { MonthStatus } from "../../month-write";
@@ -72,6 +78,7 @@ import {
   loadAssignment,
   lockMembershipMonth,
   monthEvidence,
+  requireCurrentPeriod,
   writeMonthDecision,
 } from "../../month-write";
 import { readOrganizationEntities } from "../../organization-read";
@@ -392,9 +399,9 @@ export const monthPaymentProcedures = {
    */
   monthBoard: organizationManagerProcedure.query(async ({ ctx }) => {
     const calendar = await membershipCalendar(ctx.db);
-    const month = monthOf(new Date(), calendar.timeZone);
+    const today = localDateISO(new Date(), calendar.timeZone);
 
-    const held = await ctx.db
+    const running = await ctx.db
       .select({
         id: accessAssignment.id,
         userId: accessAssignment.personId,
@@ -413,12 +420,16 @@ export const monthPaymentProcedures = {
       .where(
         and(
           eq(accessAssignment.status, "active"),
-          // The board is this month's bill, so a membership that ended and one
-          // that has not started are both off it (ADR 129).
-          assignmentAppliesInMonth(month),
+          // The board is today's bill, so a membership that ended and one that
+          // has not started are both off it (ADR 129).
+          assignmentAppliesInMonth(today),
         ),
       )
       .orderBy(asc(person.name));
+    const held = running.flatMap((a) => {
+      const month = currentPeriod(today, a);
+      return month ? [{ ...a, month }] : [];
+    });
 
     const coverage = held.length
       ? await ctx.db
@@ -432,7 +443,9 @@ export const monthPaymentProcedures = {
       ? await ctx.db
           .select({
             assignmentId: membershipMonth.assignmentId,
+            month: membershipMonth.month,
             status: membershipMonth.status,
+            deadline: membershipMonth.deadline,
           })
           .from(membershipMonth)
           .where(
@@ -441,7 +454,9 @@ export const monthPaymentProcedures = {
                 membershipMonth.assignmentId,
                 held.map((a) => a.id),
               ),
-              eq(membershipMonth.month, month),
+              inArray(membershipMonth.month, [
+                ...new Set(held.map((a) => a.month)),
+              ]),
             ),
           )
       : [];
@@ -460,9 +475,13 @@ export const monthPaymentProcedures = {
     const ahead = await takenMonths(
       ctx.db,
       held.map((a) => a.id),
-      month,
+      held.reduce((min, a) => (a.month < min ? a.month : min), today),
     );
     const rows = held.map((a) => {
+      const month = a.month;
+      const record = months.find(
+        (m) => m.assignmentId === a.id && m.month === month,
+      );
       const until = paidUntil(
         month,
         new Set(
@@ -470,18 +489,20 @@ export const monthPaymentProcedures = {
             .filter((m) => m.assignmentId === a.id && m.status === "confirmed")
             .map((m) => m.month),
         ),
+        a.startMonth,
       );
       const amount = priceForMonth(
         prices.filter((p) => p.planId === a.planId),
         month,
       );
       const paymentRequired = !isFreeMembershipMonth(amount);
-      const deadline = payDeadline({
+      const computedDeadline = payDeadline({
         month,
         startMonth: a.startMonth,
         joinedOn: a.startsOn,
         policy: calendar,
       });
+      const deadline = record?.deadline ?? computedDeadline;
       return {
         assignmentId: a.id,
         userId: a.userId,
@@ -492,24 +513,26 @@ export const monthPaymentProcedures = {
           .filter((c) => c.planId === a.planId)
           .map((c) => c.entityId)
           .sort(),
-        paid:
-          months.find((m) => m.assignmentId === a.id)?.status === "confirmed",
+        month,
+        periodLabel: formatPeriod(month, periodLastDay(month, a)),
+        paid: record?.status === "confirmed",
         paidUntilLabel:
-          until && until !== month
-            ? formatMonth(until, calendar.timeZone)
-            : null,
-        // What THIS month cost, which a later price change must not rewrite.
+          until && until !== month ? formatDay(periodLastDay(until, a)) : null,
+        // What THIS period cost, which a later price change must not rewrite.
         amount,
         paymentRequired,
         deadline,
+        deadlineMoved:
+          record?.deadline != null &&
+          record.deadline.getTime() !== computedDeadline.getTime(),
         deadlineLabel: formatDeadline(deadline, calendar.timeZone),
+        deadlineOn: localDateISO(deadline, calendar.timeZone),
         overdue: paymentRequired && deadline.getTime() <= Date.now(),
       };
     });
 
     return {
-      month,
-      monthLabel: formatMonth(month, calendar.timeZone),
+      month: monthOf(new Date(), calendar.timeZone),
       timeZone: calendar.timeZone,
       paidCount: rows.filter((r) => r.paid).length,
       // Plans an owner has not priced yet. Named rather than counted into a
@@ -522,9 +545,9 @@ export const monthPaymentProcedures = {
   /**
    * A member says they sent the transfer for the month they are being judged on.
    *
-   * The server picks the month, never the caller: it is `monthOf(now)` in the
-   * organization's own calendar zone, which is the same month `mine` shows them,
-   * join month included. A claim that could name a month would need a rule about
+   * The server picks the period, never the caller: it is the assignment's
+   * current period in the organization's own calendar zone, which is the same
+   * period `mine` shows them, join period included. A claim that could name a month would need a rule about
    * which months are claimable, and that rule would be a second opinion about
    * something `membershipStanding` already decides.
    *
@@ -574,7 +597,7 @@ export const monthPaymentProcedures = {
       }
 
       const calendar = await membershipCalendar(ctx.db);
-      const month = monthOf(new Date(), calendar.timeZone);
+      const month = requireCurrentPeriod(assignment, calendar.timeZone);
       if (input.months !== undefined) {
         const quote = await quotePurchase(
           ctx.db,
@@ -587,7 +610,8 @@ export const monthPaymentProcedures = {
           if (!input.methodId) {
             throw new TRPCError({
               code: "BAD_REQUEST",
-              message: "Pay for more than this month by cash or bank transfer.",
+              message:
+                "Pay for more than this period by cash or bank transfer.",
             });
           }
           if (
@@ -716,7 +740,6 @@ export const monthPaymentProcedures = {
    * list rather than a feed.
    */
   claims: organizationManagerProcedure.query(async ({ ctx }) => {
-    const calendar = await membershipCalendar(ctx.db);
     const rows = await ctx.db
       .select({
         assignmentId: membershipMonth.assignmentId,
@@ -724,6 +747,8 @@ export const monthPaymentProcedures = {
         reportedAt: membershipMonth.reportedAt,
         personId: accessAssignment.personId,
         userId: accessAssignment.personId,
+        startMonth: accessAssignment.startMonth,
+        endMonth: accessAssignment.endMonth,
         name: person.name,
         email: person.email,
         planName: accessPlan.name,
@@ -757,24 +782,30 @@ export const monthPaymentProcedures = {
       .orderBy(asc(membershipMonth.reportedAt), asc(membershipMonth.month));
     const seen = new Set<string>();
     return rows.flatMap(
-      ({ purchaseMonths, purchaseTotalMinor, purchaseCurrency, ...r }) => {
+      ({
+        purchaseMonths,
+        purchaseTotalMinor,
+        purchaseCurrency,
+        startMonth,
+        endMonth,
+        ...r
+      }) => {
         if (r.purchaseId && seen.has(r.purchaseId)) return [];
         if (r.purchaseId) seen.add(r.purchaseId);
         const months = purchaseMonths ?? 1;
+        const period = { startMonth, endMonth };
+        const last = monthsFrom(r.month, months, startMonth).at(-1) ?? r.month;
         return [
           {
             ...r,
-            monthLabel: formatMonth(r.month, calendar.timeZone),
+            monthLabel: formatPeriod(r.month, periodLastDay(r.month, period)),
             purchase:
               r.purchaseId && purchaseTotalMinor !== null && purchaseCurrency
                 ? {
                     months,
                     totalMinor: purchaseTotalMinor,
                     currency: purchaseCurrency,
-                    lastMonthLabel: formatMonth(
-                      monthsFrom(r.month, months).at(-1) ?? r.month,
-                      calendar.timeZone,
-                    ),
+                    lastMonthLabel: formatDay(periodLastDay(last, period)),
                   }
                 : null,
           },
@@ -842,7 +873,7 @@ export const monthPaymentProcedures = {
         });
       }
       const calendar = await membershipCalendar(ctx.db);
-      const month = monthOf(new Date(), calendar.timeZone);
+      const month = requireCurrentPeriod(assignment, calendar.timeZone);
       const quote = await quotePurchase(
         ctx.db,
         assignment,
@@ -920,7 +951,10 @@ export const monthPaymentProcedures = {
         });
       }
       const assignment = await loadAssignment(ctx.db, purchase.assignmentId);
-      const { month } = await currentMonthOf(ctx.db);
+      const { timeZone } = await membershipCalendar(ctx.db);
+      const month =
+        currentPeriod(localDateISO(new Date(), timeZone), assignment) ??
+        localDateISO(new Date(), timeZone);
       const rows = (await purchaseRows(ctx.db, purchase.id)).filter(
         (row) => row.month > month || row.status === "reported",
       );
@@ -1029,6 +1063,89 @@ export const monthPaymentProcedures = {
     }),
 
   /**
+   * Move the moment one period stops admitting, or put it back (ADR 163).
+   *
+   * The date is the first day booking is closed, the same instant every
+   * deadline in this module names. The stored deadline wins over the computed
+   * one everywhere, and claims and decisions keep it.
+   */
+  setDueDate: organizationOwnerProcedure
+    .input(SetDueDateSchema)
+    .mutation(async ({ ctx, input }) => {
+      const assignment = await loadAssignment(ctx.db, input.assignmentId);
+      const held = await lockMembershipMonth(
+        ctx.db,
+        assignment.id,
+        input.month,
+      );
+      if (
+        input.expectedVersion !== undefined &&
+        input.expectedVersion !== (held?.version ?? 0)
+      ) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message:
+            "This payment changed while you were looking. Refresh and try again.",
+        });
+      }
+      if (held?.status === "confirmed") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "This period is already paid.",
+        });
+      }
+      const calendar = await membershipCalendar(ctx.db);
+      const today = localDateISO(new Date(), calendar.timeZone);
+      const current = currentPeriod(today, assignment);
+      if (current === null || input.month < current) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Only the current or a later period can get a new date.",
+        });
+      }
+      const computed = await monthEvidence(ctx.db, assignment, input.month);
+      const deadline = input.stopsOn
+        ? instantFromLocalDate(input.stopsOn, 0, calendar.timeZone)
+        : computed.deadline;
+      const evidence = { ...computed, deadline };
+      const [saved] = await ctx.db
+        .insert(membershipMonth)
+        .values({
+          organizationId: ctx.organizationId,
+          assignmentId: assignment.id,
+          month: input.month,
+          status: "unpaid",
+          version: 1,
+          priceMinor: computed.priceMinor,
+          currency: computed.currency,
+          deadline,
+          calendarTimeZone: computed.calendarTimeZone,
+        })
+        .onConflictDoUpdate({
+          target: [membershipMonth.assignmentId, membershipMonth.month],
+          set: { deadline, version: sql`${membershipMonth.version} + 1` },
+        })
+        .returning({ version: membershipMonth.version });
+      const status = (held?.status ?? "unpaid") as MonthStatus;
+      await appendMonthAudit(ctx.db, {
+        organizationId: ctx.organizationId,
+        assignmentId: assignment.id,
+        month: input.month,
+        event: input.stopsOn ? "due_date_changed" : "due_date_reset",
+        beforeStatus: held ? status : null,
+        afterStatus: status,
+        reason: input.reason,
+        evidence,
+        actorId: ctx.session.user.id,
+      });
+      return {
+        version: saved?.version ?? 1,
+        deadline,
+        deadlineLabel: formatDeadline(deadline, calendar.timeZone),
+      };
+    }),
+
+  /**
    * Where the signed-in person stands on their own memberships.
    *
    * Enrolled tier, so both clients call the same thing and cannot drift, and a
@@ -1044,10 +1161,10 @@ export const monthPaymentProcedures = {
       },
       new Date(),
     );
-    const { month, timeZone } = await currentMonthOf(ctx.db);
-    // A change waiting for the 1st is the member's business too: they should
-    // read what they will be on and what it costs before it happens (ADR 129).
-    const waiting = await pendingChanges(ctx.db, month, {
+    const { today, timeZone } = await currentMonthOf(ctx.db);
+    // A change waiting to start is the member's business too: they should read
+    // what they will be on and what it costs before it happens (ADR 129).
+    const waiting = await pendingChanges(ctx.db, today, {
       personId: ctx.membership.personId,
       accountUserId: ctx.session.user.id,
     });
@@ -1089,7 +1206,7 @@ export const monthPaymentProcedures = {
     const ahead = await takenMonths(
       ctx.db,
       memberships.map((m) => m.assignmentId),
-      month,
+      memberships.reduce((min, m) => (m.month < min ? m.month : min), today),
     );
     const rules = planIds.length
       ? await ctx.db
@@ -1113,27 +1230,42 @@ export const monthPaymentProcedures = {
           .from(accessPlanPrice)
           .where(inArray(accessPlanPrice.planId, planIds))
       : [];
-    const upfrontOf = (assignmentId: string, planId: string) => {
-      const rows = ahead.filter((a) => a.assignmentId === assignmentId);
+    const upfrontOf = (m: (typeof memberships)[number]) => {
+      const rows = ahead.filter(
+        (a) => a.assignmentId === m.assignmentId && a.month >= m.month,
+      );
       const until = paidUntil(
-        month,
+        m.month,
         new Set(
           rows.filter((a) => a.status === "confirmed").map((a) => a.month),
         ),
+        m.startMonth,
       );
-      const firstMonth = upfrontStart(month, new Set(rows.map((a) => a.month)));
+      const firstMonth = upfrontStart(
+        m.month,
+        new Set(rows.map((a) => a.month)),
+        m.startMonth,
+      );
       const amount = priceForMonth(
-        planPrices.filter((p) => p.planId === planId),
+        planPrices.filter((p) => p.planId === m.planId),
         firstMonth,
       );
-      const plan = rules.find((r) => r.id === planId);
+      const plan = rules.find((r) => r.id === m.planId);
       return {
         paidUntil: until,
-        paidUntilLabel: until ? formatMonth(until, timeZone) : null,
+        paidUntilLabel: until ? formatDay(periodLastDay(until, m)) : null,
         upfront: amount
           ? {
               firstMonth,
-              firstMonthLabel: formatMonth(firstMonth, timeZone),
+              firstMonthLabel: formatDay(firstMonth),
+              periods: monthsFrom(
+                firstMonth,
+                MAX_UPFRONT_MONTHS,
+                m.startMonth,
+              ).map((start) => ({
+                start,
+                lastDayLabel: formatDay(periodLastDay(start, m)),
+              })),
               monthlyMinor: amount.priceMinor,
               currency: amount.currency,
               rule: plan ? planRule(plan) : null,
@@ -1235,7 +1367,8 @@ export const monthPaymentProcedures = {
           : undefined;
         return {
           ...m,
-          ...upfrontOf(m.assignmentId, m.planId),
+          ...upfrontOf(m),
+          paymentDayLabel: paymentDayLabel(m.startMonth),
           warning: ctx.entity.membershipEnforcedAt ? m.warning : null,
           reference: paymentReference(ctx.session.user.name, m.assignmentId),
           cardPaymentUrl: cardLink(
@@ -1251,10 +1384,7 @@ export const monthPaymentProcedures = {
               ? {
                   planName: next.planName,
                   effectiveMonth: change.effectiveMonth,
-                  effectiveMonthLabel: formatMonth(
-                    change.effectiveMonth,
-                    timeZone,
-                  ),
+                  effectiveMonthLabel: formatDay(change.effectiveMonth),
                   amount: priceForMonth(
                     prices.filter((p) => p.planId === next.planId),
                     change.effectiveMonth,

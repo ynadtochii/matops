@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { formatMoney } from "@matops/domain";
@@ -8,12 +9,15 @@ import { Button } from "@matops/ui/button";
 import { toast } from "@matops/ui/toast";
 
 import { useTRPC } from "~/trpc/react";
+import { useOrganization } from "../entity";
+import { DueDateDialog } from "../payment-dates";
 import { LIST, SectionHeading } from "../primitives";
 import { SkeletonRows } from "../skeletons";
 import { EmptyState, ErrorState } from "../states";
 
 /**
- * This month, membership by membership, with a tick against each (ADR 126).
+ * Each membership's current period, with a tick against each (ADR 126, ADR
+ * 163). Periods roll from each member's own payment day.
  *
  * The same record the member profile ticks, read the other way round. An owner
  * confirming payments works from a bank statement in one pass, so the list is
@@ -27,6 +31,8 @@ export function MonthsTab() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const board = useQuery(trpc.accessPlan.monthBoard.queryOptions());
+  const isGymOwner = useOrganization().role === "owner";
+  const [moving, setMoving] = useState<string | null>(null);
   const mark = useMutation(
     trpc.accessPlan.markMonth.mutationOptions({
       onSuccess: async () => {
@@ -43,7 +49,10 @@ export function MonthsTab() {
   if (board.isPending) return <SkeletonRows rows={3} inList />;
   if (board.isError) {
     return (
-      <ErrorState label="this month" onRetry={() => void board.refetch()} />
+      <ErrorState
+        label="current periods"
+        onRetry={() => void board.refetch()}
+      />
     );
   }
 
@@ -65,7 +74,7 @@ export function MonthsTab() {
           </span>
         }
       >
-        {board.data.monthLabel}
+        Current periods
       </SectionHeading>
 
       {rows.length === 0 ? (
@@ -83,9 +92,7 @@ export function MonthsTab() {
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="truncate font-medium">{r.name}</span>
                 <span className="text-muted-foreground truncate text-sm tabular-nums">
-                  {r.planName}
-                  {/* What THIS month costs, so the owner reading a bank
-                      statement is comparing against the right figure. */}
+                  {r.planName} · {r.periodLabel}
                   {r.amount
                     ? ` · ${formatMoney(r.amount.priceMinor, r.amount.currency)}`
                     : " · no price yet"}
@@ -105,9 +112,19 @@ export function MonthsTab() {
                     {r.overdue
                       ? `Blocked since ${r.deadlineLabel}`
                       : `Until ${r.deadlineLabel}`}
+                    {r.deadlineMoved ? " (date changed)" : ""}
                   </span>
                 )}
               </div>
+              {isGymOwner && r.paymentRequired && !r.paid && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setMoving(r.assignmentId)}
+                >
+                  Due date
+                </Button>
+              )}
               {!r.paymentRequired ? (
                 <span className="text-muted-foreground text-sm">
                   No payment required
@@ -123,7 +140,7 @@ export function MonthsTab() {
                   onClick={() =>
                     mark.mutate({
                       assignmentId: r.assignmentId,
-                      month: board.data.month,
+                      month: r.month,
                       paid: !r.paid,
                     })
                   }
@@ -135,6 +152,23 @@ export function MonthsTab() {
           ))}
         </ul>
       )}
+      {moving &&
+        rows
+          .filter((r) => r.assignmentId === moving)
+          .map((r) => (
+            <DueDateDialog
+              key={r.assignmentId}
+              held={{
+                id: r.assignmentId,
+                planName: `${r.name}, ${r.planName}`,
+                month: r.month,
+                periodLabel: r.periodLabel,
+                deadlineOn: r.deadlineOn,
+                deadlineMoved: r.deadlineMoved,
+              }}
+              onOpenChange={(open) => !open && setMoving(null)}
+            />
+          ))}
     </section>
   );
 }

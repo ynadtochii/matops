@@ -26,8 +26,8 @@ export function MembershipChangeNotice() {
         <div key={m.assignmentId} className={cardClass()}>
           <Eyebrow>Your plan changes</Eyebrow>
           <p className="mt-1 text-sm">
-            {m.planName} runs to the end of this month. {m.next?.planName}{" "}
-            starts on 1 {m.next?.effectiveMonthLabel}
+            {m.planName} runs to the end of this period. {m.next?.planName}{" "}
+            starts on {m.next?.effectiveMonthLabel}
             {m.next?.amount
               ? ` at ${formatMoney(m.next.amount.priceMinor, m.next.amount.currency)} a month`
               : ""}

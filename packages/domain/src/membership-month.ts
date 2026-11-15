@@ -1,26 +1,22 @@
 import { instantFromLocalDate, localDateISO } from "./materialize";
+import { addDays } from "./membership-period";
 
 /**
- * Membership months and their pay deadlines (ADR 126). Pure — no clock reading,
- * no I/O. Every instant here is computed in the ORGANIZATION's own calendar
- * time zone, so one shared membership expires at the same moment at every
- * branch it covers.
+ * Membership periods and their pay deadlines (ADR 126, ADR 163). Pure — no
+ * clock reading, no I/O. Every instant here is computed in the ORGANIZATION's
+ * own calendar time zone, so one shared membership expires at the same moment
+ * at every branch it covers.
  *
- * Months run first to first. There is no rolling anniversary: somebody who
- * joins on the 15th pays for that month, and the next month starts on the 1st
- * like everybody else's.
+ * A "month" key is the start date of one rolling period (`membership-period`).
+ * Memberships anchored on the 1st still run first to first.
  */
 
 /**
- * Days a mid-month joiner gets to pay, counted from the day they joined.
- *
- * Fixed at seven on purpose, and NOT the owner's `graceDays`. The two answer
- * different questions: this is how long a new member has to settle up, while
- * `graceDays` is how late an existing member may renew. The plan settled them
- * separately, so a gym that allows fourteen days to renew still gives a joiner
- * seven.
+ * Days a new member gets to pay their first period, counted from the day they
+ * joined. Separate from the owner's `graceDays`, which is how late an existing
+ * member may renew.
  */
-export const JOIN_GRACE_DAYS = 7;
+export const JOIN_GRACE_DAYS = 3;
 
 export interface MembershipPolicy {
   /** Days after the 1st that an unpaid month still admits. */
@@ -31,13 +27,6 @@ export interface MembershipPolicy {
 
 /** A calendar month, written as its first day: "2026-09-01". */
 export type MonthKey = string;
-
-/** Add days to a "YYYY-MM-DD" calendar date. Pure date arithmetic, no zone. */
-function addDays(dateISO: string, days: number): string {
-  const [y, m, d] = dateISO.split("-").map(Number);
-  const moved = new Date(Date.UTC(y ?? 0, (m ?? 1) - 1, (d ?? 1) + days));
-  return moved.toISOString().slice(0, 10);
-}
 
 /** The month a moment falls in, seen in the organization's zone. */
 export function monthOf(instant: Date, timeZone: string): MonthKey {
@@ -52,54 +41,35 @@ export function nextMonth(month: MonthKey): MonthKey {
   return `${String(year).padStart(4, "0")}-${String(next).padStart(2, "0")}-01`;
 }
 
-/** Is this the month the membership began in? */
-function isJoinMonth(month: MonthKey, startMonth: MonthKey): boolean {
-  return month === startMonth;
-}
-
 interface DeadlineInput {
-  /** The month being paid for. */
+  /** The period being paid for: its start date. */
   month: MonthKey;
-  /** The month the membership began in, from `access_assignment.start_month`. */
+  /** The membership's anchor, `access_assignment.start_month`. */
   startMonth: MonthKey;
   /**
-   * The day they actually joined, when that is mid-month. Only read for the
-   * join month; leave it out and the join month behaves like any other.
+   * The day they joined, `access_assignment.starts_on`. A continuation written
+   * by a payment date change carries the original join day, which is before its
+   * first period, so that period renews instead of counting as a join.
    */
   joinedOn?: string | null;
   policy: MembershipPolicy;
 }
 
 /**
- * The moment access stops if this month goes unpaid.
+ * The moment access stops if this period goes unpaid: the first moment that is
+ * too late, so a comparison is a plain `now < deadline`.
  *
- * A normal month: the 1st plus the owner's grace days, at local midnight. With
- * seven days, September admits on the 1st through the 7th and stops on the 8th
- * at 00:00. The deadline is the first moment that is too late, never the last
- * moment that is in time, so a comparison is a plain `now < deadline`.
- *
- * The join month, when they joined part way through it: the day they joined
- * plus {@link JOIN_GRACE_DAYS}. Joining on 15 September gives them until the
- * 22nd at 00:00. That window may run past the end of the month, and that is
- * fine: it is a deadline for September's payment, not a claim on October, which
- * gets its own month record and its own deadline on the 1st.
- *
- * A day outside the month being charged is not a mid-month join: a plan change
- * made on 6 September writes October's assignment that same day, and October is
- * still due on the 1st.
- *
- * Days are added on the CALENDAR and converted to an instant afterwards, so a
- * daylight-saving change inside the window moves the wall clock, not the
- * boundary: the deadline is midnight wherever the clocks end up.
+ * The first period of a new membership: the join day plus
+ * {@link JOIN_GRACE_DAYS}. Every other period: its start plus the owner's grace
+ * days. Days are added on the calendar and converted afterwards, so a
+ * daylight-saving change moves the wall clock, not the boundary.
  */
 export function payDeadline(input: DeadlineInput): Date {
   const { month, startMonth, joinedOn, policy } = input;
-  const midMonthJoin =
-    isJoinMonth(month, startMonth) &&
-    joinedOn?.slice(0, 7) === month.slice(0, 7) &&
-    !joinedOn.endsWith("-01");
-  const from = midMonthJoin ? joinedOn : month;
-  const days = midMonthJoin ? JOIN_GRACE_DAYS : policy.graceDays;
+  const join =
+    month === startMonth && joinedOn != null && joinedOn >= startMonth;
+  const from = join ? joinedOn : month;
+  const days = join ? JOIN_GRACE_DAYS : policy.graceDays;
   return instantFromLocalDate(addDays(from, days), 0, policy.timeZone);
 }
 
@@ -166,16 +136,15 @@ export interface MembershipWarning {
  */
 export function membershipWarning(input: {
   verdict: MonthVerdict;
-  month: MonthKey;
+  periodLabel: string;
   deadline: Date;
   planName: string;
   timeZone: string;
 }): MembershipWarning | null {
-  const { verdict, month, deadline, planName, timeZone } = input;
+  const { verdict, periodLabel: which, deadline, planName, timeZone } = input;
   if (verdict === "paid") return null;
 
   const when = formatDeadline(deadline, timeZone);
-  const which = formatMonth(month, timeZone);
   if (verdict === "within-grace") {
     return {
       verdict,

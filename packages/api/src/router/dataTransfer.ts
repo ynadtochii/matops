@@ -853,7 +853,8 @@ export const dataTransferRouter = {
                   userId: personId,
                   planId: row.normalized.planId,
                   assigningEntityId: row.normalized.entityId,
-                  startMonth: row.normalized.startMonth,
+                  startMonth:
+                    row.normalized.startMonth ?? row.normalized.paymentMonth,
                 },
               )
             : null;

@@ -18,11 +18,11 @@ import {
   user,
 } from "@matops/db/schema";
 import {
-  appliesInMonth,
+  currentPeriod,
   isFreeMembershipMonth,
   isStaff,
+  localDateISO,
   membershipAccess,
-  monthOf,
   payDeadline,
   priceForMonth,
 } from "@matops/domain";
@@ -133,8 +133,8 @@ export async function loadMembershipAccess(
   }
   const sessionAt = input.sessionAt ?? input.now;
   const calendar = await membershipCalendar(db);
-  const nowMonth = monthOf(input.now, calendar.timeZone);
-  const sessionMonth = monthOf(sessionAt, calendar.timeZone);
+  const nowDay = localDateISO(input.now, calendar.timeZone);
+  const sessionDay = localDateISO(sessionAt, calendar.timeZone);
 
   const held = await db
     .select({
@@ -190,7 +190,15 @@ export async function loadMembershipAccess(
           membershipMonth.assignmentId,
           held.map((a) => a.id),
         ),
-        inArray(membershipMonth.month, [...new Set([nowMonth, sessionMonth])]),
+        inArray(membershipMonth.month, [
+          ...new Set(
+            held.flatMap((a) =>
+              [currentPeriod(nowDay, a), currentPeriod(sessionDay, a)].filter(
+                (p): p is string => p !== null,
+              ),
+            ),
+          ),
+        ]),
       ),
     );
 
@@ -208,13 +216,15 @@ export async function loadMembershipAccess(
     : [];
   const heldAssignmentIds = new Set(holds.map((hold) => hold.assignmentId));
 
-  // A membership only counts in the months its period covers (ADR 129), so a
-  // plan that ended in October takes nothing with it into October and its
-  // successor takes nothing back out of September.
-  const forMonth = (month: string): ApplicableAssignment[] =>
+  // A membership only counts on the days its period covers (ADR 129, ADR 163),
+  // and each one is judged in its own current period.
+  const forDay = (day: string): ApplicableAssignment[] =>
     held
-      .filter((a) => appliesInMonth(a, month))
-      .map((a) => ({
+      .flatMap((a) => {
+        const month = currentPeriod(day, a);
+        return month ? [{ a, month }] : [];
+      })
+      .map(({ a, month }) => ({
         id: a.id,
         status: a.status as ApplicableAssignment["status"],
         entityIds: coverage
@@ -259,7 +269,7 @@ export async function loadMembershipAccess(
           }),
       }));
 
-  const nowAssignments = forMonth(nowMonth);
+  const nowAssignments = forDay(nowDay);
   const nowVerdict = membershipAccess({
     entityId: input.entityId,
     membership: input.membership,
@@ -269,8 +279,7 @@ export async function loadMembershipAccess(
   const sessionVerdict = membershipAccess({
     entityId: input.entityId,
     membership: input.membership,
-    assignments:
-      sessionMonth === nowMonth ? nowAssignments : forMonth(sessionMonth),
+    assignments: sessionDay === nowDay ? nowAssignments : forDay(sessionDay),
     at: sessionAt,
   });
   return {
@@ -332,6 +341,7 @@ export async function loadRosterStanding(
       planId: accessAssignment.planId,
       planName: accessPlan.name,
       startMonth: accessAssignment.startMonth,
+      startsOn: accessAssignment.startsOn,
       endMonth: accessAssignment.endMonth,
       createdAt: accessAssignment.createdAt,
     })
@@ -345,7 +355,13 @@ export async function loadRosterStanding(
       ),
     );
   const calendar = await membershipCalendar(db);
-  const month = monthOf(input.now, calendar.timeZone);
+  const today = localDateISO(input.now, calendar.timeZone);
+  const periodOfHeld = new Map(
+    held.flatMap((a) => {
+      const month = currentPeriod(today, a);
+      return month ? [[a.id, month] as const] : [];
+    }),
+  );
   const coverage = held.length
     ? await db
         .select({
@@ -361,6 +377,7 @@ export async function loadRosterStanding(
           status: membershipMonth.status,
           deadline: membershipMonth.deadline,
           cashPaidToName: membershipMonth.cashPaidToName,
+          month: membershipMonth.month,
         })
         .from(membershipMonth)
         .where(
@@ -369,7 +386,7 @@ export async function loadRosterStanding(
               membershipMonth.assignmentId,
               held.map((a) => a.id),
             ),
-            eq(membershipMonth.month, month),
+            inArray(membershipMonth.month, [...new Set(periodOfHeld.values())]),
           ),
         )
     : [];
@@ -381,37 +398,41 @@ export async function loadRosterStanding(
       .filter(
         (a) =>
           (a.personId === person.userId || a.accountUserId === person.userId) &&
-          appliesInMonth(a, month),
+          periodOfHeld.has(a.id),
       )
-      .map((a) => ({
-        id: a.id,
-        status: a.status as ApplicableAssignment["status"],
-        planName: a.planName,
-        entityIds: coverage
-          .filter((c) => c.planId === a.planId)
-          .map((c) => c.entityId),
-        paymentRequired: !isFreeMembershipMonth(
-          priceForMonth(
-            prices.filter((p) => p.planId === a.planId),
-            month,
+      .map((a) => {
+        const month = periodOfHeld.get(a.id) ?? a.startMonth;
+        const record = months.find(
+          (m) => m.assignmentId === a.id && m.month === month,
+        );
+        return {
+          id: a.id,
+          status: a.status as ApplicableAssignment["status"],
+          planName: a.planName,
+          entityIds: coverage
+            .filter((c) => c.planId === a.planId)
+            .map((c) => c.entityId),
+          paymentRequired: !isFreeMembershipMonth(
+            priceForMonth(
+              prices.filter((p) => p.planId === a.planId),
+              month,
+            ),
           ),
-        ),
-        paid:
-          months.find((m) => m.assignmentId === a.id)?.status === "confirmed",
-        paymentStatus:
-          (months.find((m) => m.assignmentId === a.id)
-            ?.status as ApplicableAssignment["paymentStatus"]) ?? "unpaid",
-        awaitingStaff:
-          months.find((m) => m.assignmentId === a.id)?.cashPaidToName != null,
-        deadline:
-          months.find((m) => m.assignmentId === a.id)?.deadline ??
-          payDeadline({
-            month,
-            startMonth: a.startMonth,
-            joinedOn: a.createdAt.toISOString().slice(0, 10),
-            policy: calendar,
-          }),
-      }));
+          paid: record?.status === "confirmed",
+          paymentStatus:
+            (record?.status as ApplicableAssignment["paymentStatus"]) ??
+            "unpaid",
+          awaitingStaff: record?.cashPaidToName != null,
+          deadline:
+            record?.deadline ??
+            payDeadline({
+              month,
+              startMonth: a.startMonth,
+              joinedOn: a.startsOn,
+              policy: calendar,
+            }),
+        };
+      });
     const covering = theirs.filter(
       (a) => a.status === "active" && a.entityIds.includes(input.entityId),
     );
@@ -601,14 +622,14 @@ export async function bookingsNeedingReview(
     for (const b of booked) {
       if (b.accountUserId && staff.get(input.entityId)?.has(b.accountUserId))
         continue;
-      const month = monthOf(b.startsAt, calendar.timeZone);
-      // The session's own month decides, not today's: a booking three weeks out
+      const day = localDateISO(b.startsAt, calendar.timeZone);
+      // The session's own day decides, not today's: a booking three weeks out
       // is judged against the membership that will be running then.
       const covers = held.some(
         (a) =>
           a.userId === b.userId &&
           a.status === "active" &&
-          appliesInMonth(a, month) &&
+          currentPeriod(day, a) !== null &&
           coverage.some(
             (c) => c.planId === a.planId && c.entityId === input.entityId,
           ),
@@ -616,7 +637,7 @@ export async function bookingsNeedingReview(
       const coveredAssignments = held.filter(
         (a) =>
           a.userId === b.userId &&
-          appliesInMonth(a, month) &&
+          currentPeriod(day, a) !== null &&
           coverage.some(
             (c) => c.planId === a.planId && c.entityId === input.entityId,
           ),

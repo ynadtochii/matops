@@ -76,10 +76,19 @@ describe("paying several months upfront (ADR 161)", () => {
       })
     ).id;
     studentAssignment = (
-      await owner().accessPlan.assign({ userId: STUDENT, planId })
+      await owner().accessPlan.assign({
+        userId: STUDENT,
+        planId,
+        startMonth: NOV,
+      })
     ).id;
-    deskAssignment = (await owner().accessPlan.assign({ userId: DESK, planId }))
-      .id;
+    deskAssignment = (
+      await owner().accessPlan.assign({
+        userId: DESK,
+        planId,
+        startMonth: NOV,
+      })
+    ).id;
   });
 
   afterAll(async () => {
@@ -186,7 +195,7 @@ describe("paying several months upfront (ADR 161)", () => {
     });
     expect(claimed).toMatchObject({ claimed: true, month: NOV });
     expect(await statuses(studentAssignment)).toEqual(
-      monthsFrom(NOV, 3).map((month) => ({
+      monthsFrom(NOV, 3, NOV).map((month) => ({
         month,
         status: "reported",
         price_minor: 4500,

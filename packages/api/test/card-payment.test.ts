@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { nextMonth } from "@matops/domain";
+import { nextPeriod, paymentLinkReference } from "@matops/domain";
 
 import type { Harness } from "./helpers";
 import { cardPaymentWebhookResponse } from "../src/card-payment";
@@ -82,7 +82,7 @@ describe("card payment webhook (ADR 157)", () => {
       payment_status: "paid",
       amount_total: 4500,
       currency: "eur",
-      client_reference_id: `${assignmentId}_${month.slice(0, 7)}`,
+      client_reference_id: paymentLinkReference(assignmentId, month),
       ...overrides,
     };
   };
@@ -278,7 +278,7 @@ describe("card payment webhook (ADR 157)", () => {
   });
 
   it("leaves a different amount or a missing reference for review", async () => {
-    const next = nextMonth(month);
+    const next = nextPeriod(month, month);
     expect(
       (
         await deliver(

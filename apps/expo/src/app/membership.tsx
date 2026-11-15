@@ -12,8 +12,6 @@ import {
   FILE_RULES,
   fitWithin,
   formatMoney,
-  formatMonth,
-  monthsFrom,
   paymentMethodUsesReference,
   upfrontHint,
   upfrontTotal,
@@ -175,8 +173,10 @@ export default function MembershipScreen() {
             title="Nothing to pay right now."
             body={
               settled?.paidUntilLabel
-                ? `Paid through ${settled.paidUntilLabel}.`
-                : "Your membership is up to date."
+                ? `Paid through ${settled.paidUntilLabel}. You pay on ${settled.paymentDayLabel} of each month.`
+                : settled
+                  ? `You pay on ${settled.paymentDayLabel} of each month.`
+                  : "Your membership is up to date."
             }
           />
           {settled ? (
@@ -356,7 +356,7 @@ function PayStep({
     choices.length === 1 ? (choices[0]?.id ?? null) : null,
   );
   const method = methods.find((m) => m.id === choice);
-  const lastMonth = monthsFrom(firstMonth, months).at(-1) ?? firstMonth;
+  const lastDayLabel = upfront?.periods[months - 1]?.lastDayLabel ?? null;
 
   return (
     <Stack gap={16}>
@@ -368,7 +368,7 @@ function PayStep({
             ? `Pay ahead for ${membership.planName}`
             : onChangePlan
               ? `Pay for ${membership.planName}`
-              : `Pay this month for ${membership.planName}`}
+              : `Pay ${membership.periodLabel} for ${membership.planName}`}
         </Heading>
         {amount ? (
           <Txt size={20} tabular>
@@ -377,11 +377,11 @@ function PayStep({
         ) : null}
         <Muted>
           {extend && upfront
-            ? `Your next paid months start in ${upfront.firstMonthLabel}.`
+            ? `Your next paid period starts on ${upfront.firstMonthLabel}.`
             : onChangePlan
-              ? "Booking opens once this month is paid. You can leave and come back at any time."
+              ? "Booking opens once this period is paid. You can leave and come back at any time."
               : (membership.warning?.headline ??
-                "Pay this month to keep booking.")}
+                "Pay this period to keep booking.")}
           {ahead ? " Pay ahead by cash or bank transfer." : ""}
         </Muted>
       </Stack>
@@ -429,10 +429,8 @@ function PayStep({
               />
             </View>
           </View>
-          {months > 1 ? (
-            <Muted>
-              {`${upfront.firstMonthLabel} to ${formatMonth(lastMonth, "UTC")}`}
-            </Muted>
+          {months > 1 && lastDayLabel ? (
+            <Muted>{`${upfront.firstMonthLabel} to ${lastDayLabel}`}</Muted>
           ) : null}
           {quote && quote.savingMinor > 0 ? (
             <Txt size={14} tone="success">

@@ -65,6 +65,16 @@ describe("parsePaymentLinkReference", () => {
     ).toEqual({ assignmentId: ASSIGNMENT, month: "2026-10-01" });
   });
 
+  it("keeps the day of a rolling period", () => {
+    expect(paymentLinkReference(ASSIGNMENT, "2026-10-15")).toBe(
+      `${ASSIGNMENT}_2026-10-15`,
+    );
+    expect(parsePaymentLinkReference(`${ASSIGNMENT}_2026-10-15`)).toEqual({
+      assignmentId: ASSIGNMENT,
+      month: "2026-10-15",
+    });
+  });
+
   it("refuses anything else", () => {
     for (const value of [
       null,
@@ -75,6 +85,7 @@ describe("parsePaymentLinkReference", () => {
       `${ASSIGNMENT}-2026-10`,
       `not-a-uuid_2026-10`,
       `${ASSIGNMENT}_2026-10_extra`,
+      `${ASSIGNMENT}_2026-10-32`,
       `${ASSIGNMENT.toUpperCase()}_2026-10`,
     ]) {
       expect([value, parsePaymentLinkReference(value)]).toEqual([value, null]);

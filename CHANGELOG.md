@@ -2,6 +2,7 @@
 
 ## Unreleased: first release, one academy
 
+- Rolling membership periods (ADR 163, spec FA4, FP6, S9, O7). A new membership is paid one month at a time from the day it starts, and a start on the 29th to 31st falls on the last day of shorter months. New members get 3 days to pay their first period. The owner can change a member's payment date (`accessPlan.changePaymentDate`) and the due date of one period (`accessPlan.setDueDate`) from the student's Membership tab and the Months board. Existing memberships stay on the 1st. Migration `0021_rolling_periods` drops the first-of-month checks.
 - A co-owner made from Coaches is now an owner of the gym too, so they see Memberships (ADR 162). Suspending, archiving or erasing an owner takes the gym role away; restore gives it back. Run `packages/db/scripts/2026-11-07-academy-owner-gym-owner.sql` once on each database.
 - Remove a cancelled class from the schedule (spec O2). A cancelled class in the staff week now has a remove button instead of cancel (`class.remove`, staff only, refuses a class that is not cancelled). It is a soft delete: bookings stay, and a template timing edit no longer brings a removed class back.
 - Erase removes the gym's person record (ADR 145 addendum). It used to keep the name, email and phone without an account, and a later join with the same email linked that old record back, so staff saw the old name and phone. Now the record is deleted, or blanked to "Erased member" when old bookings still point at it.

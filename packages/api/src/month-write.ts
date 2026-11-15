@@ -14,9 +14,12 @@ import {
 } from "@matops/db/schema";
 import {
   appliesInMonth,
+  currentPeriod,
   instantFromLocalDate,
-  nextMonth,
+  isPeriodStart,
+  localDateISO,
   payDeadline,
+  periodBoundary,
   priceForMonth,
 } from "@matops/domain";
 
@@ -51,6 +54,21 @@ export async function loadAssignment(db: TenantTx, id: string) {
   return row;
 }
 
+export function requireCurrentPeriod(
+  assignment: { startMonth: string; endMonth: string | null },
+  timeZone: string,
+  now: Date = new Date(),
+): string {
+  const month = currentPeriod(localDateISO(now, timeZone), assignment);
+  if (!month) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "This membership is not running today.",
+    });
+  }
+  return month;
+}
+
 export async function lockMembershipMonth(
   db: TenantTx,
   assignmentId: string,
@@ -77,10 +95,14 @@ export async function monthEvidence(
   assignment: Awaited<ReturnType<typeof loadAssignment>>,
   month: string,
 ) {
-  if (!appliesInMonth(assignment, month)) {
+  if (
+    !appliesInMonth(assignment, month) ||
+    !isPeriodStart(month, assignment.startMonth)
+  ) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
-      message: "This membership does not apply in that month.",
+      message:
+        "That date is not one of this membership's payment periods. Refresh and try again.",
     });
   }
   const calendar = await membershipCalendar(db);
@@ -104,6 +126,7 @@ export async function monthEvidence(
     deadline: payDeadline({
       month,
       startMonth: assignment.startMonth,
+      joinedOn: assignment.startsOn,
       policy: calendar,
     }),
     calendarTimeZone: calendar.timeZone,
@@ -145,7 +168,7 @@ export async function promotePaidBookings(
   organizationId: string,
   entityIds: string[],
   personId: string,
-  month: string,
+  period: { from: string; to: string },
   timeZone: string,
 ): Promise<void> {
   for (const entityId of entityIds) {
@@ -172,11 +195,11 @@ export async function promotePaidBookings(
               gt(classInstance.startsAt, new Date()),
               gte(
                 classInstance.startsAt,
-                instantFromLocalDate(month, 0, timeZone),
+                instantFromLocalDate(period.from, 0, timeZone),
               ),
               lt(
                 classInstance.startsAt,
-                instantFromLocalDate(nextMonth(month), 0, timeZone),
+                instantFromLocalDate(period.to, 0, timeZone),
               ),
             ),
           )
@@ -273,7 +296,10 @@ export async function writeMonthDecision(
         input.organizationId,
         coverage.map((row) => row.entityId),
         input.assignment.personId,
-        input.month,
+        {
+          from: input.month,
+          to: periodBoundary(input.month, input.assignment),
+        },
         evidence.calendarTimeZone,
       ),
   };

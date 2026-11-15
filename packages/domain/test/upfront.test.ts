@@ -83,7 +83,7 @@ describe("splitTotal", () => {
 
 describe("monthsFrom", () => {
   it("lists consecutive months across a year end", () => {
-    expect(monthsFrom("2026-11-01", 3)).toEqual([
+    expect(monthsFrom("2026-11-01", 3, "2026-01-01")).toEqual([
       "2026-11-01",
       "2026-12-01",
       "2027-01-01",
@@ -91,11 +91,34 @@ describe("monthsFrom", () => {
   });
 });
 
+describe("rolling periods", () => {
+  it("steps from the payment day, not the 1st", () => {
+    expect(monthsFrom("2027-01-31", 3, "2026-10-31")).toEqual([
+      "2027-01-31",
+      "2027-02-28",
+      "2027-03-31",
+    ]);
+    expect(
+      paidUntil(
+        "2026-11-15",
+        new Set(["2026-11-15", "2026-12-15"]),
+        "2026-09-15",
+      ),
+    ).toBe("2026-12-15");
+  });
+});
+
 describe("upfrontStart", () => {
   it("starts at the first month not yet paid or claimed", () => {
-    expect(upfrontStart("2026-11-01", new Set())).toBe("2026-11-01");
+    expect(upfrontStart("2026-11-01", new Set(), "2026-01-01")).toBe(
+      "2026-11-01",
+    );
     expect(
-      upfrontStart("2026-11-01", new Set(["2026-11-01", "2026-12-01"])),
+      upfrontStart(
+        "2026-11-01",
+        new Set(["2026-11-01", "2026-12-01"]),
+        "2026-01-01",
+      ),
     ).toBe("2027-01-01");
   });
 });
@@ -106,10 +129,15 @@ describe("paidUntil", () => {
       paidUntil(
         "2026-11-01",
         new Set(["2026-11-01", "2026-12-01", "2027-02-01"]),
+        "2026-01-01",
       ),
     ).toBe("2026-12-01");
-    expect(paidUntil("2026-11-01", new Set(["2026-11-01"]))).toBe("2026-11-01");
-    expect(paidUntil("2026-11-01", new Set(["2026-12-01"]))).toBeNull();
+    expect(paidUntil("2026-11-01", new Set(["2026-11-01"]), "2026-01-01")).toBe(
+      "2026-11-01",
+    );
+    expect(
+      paidUntil("2026-11-01", new Set(["2026-12-01"]), "2026-01-01"),
+    ).toBeNull();
   });
 });
 

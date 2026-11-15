@@ -21,17 +21,23 @@ import {
   accessPlanEntity,
   entityMembership,
   member,
+  membershipAccessHold,
   membershipPurchase,
   person,
 } from "@matops/db/schema";
 import {
   appliesInMonth,
-  formatMonth,
+  currentPeriod,
+  formatDay,
+  formatDeadline,
+  formatPeriod,
   isStaffRole,
   localDateISO,
-  monthOf,
   monthsFrom,
   paidUntil,
+  paymentDateProblem,
+  paymentDayLabel,
+  periodLastDay,
   periodsOverlap,
   runsOrganization,
 } from "@matops/domain";
@@ -40,6 +46,7 @@ import {
   AssignMembershipSchema,
   AssignmentIdSchema,
   BookingReviewSchema,
+  ChangePaymentDateSchema,
   MemberAssignmentsSchema,
 } from "@matops/validators";
 
@@ -53,12 +60,13 @@ import {
   membershipCalendar,
   membershipStanding,
 } from "../../membership-status";
-import { ASSIGNMENT_NOT_FOUND } from "../../month-write";
+import { ASSIGNMENT_NOT_FOUND, loadAssignment } from "../../month-write";
 import { readOrganizationEntities } from "../../organization-read";
 import { takenMonths } from "../../purchase-write";
 import {
   organizationManagerIdentityProcedure,
   organizationManagerProcedure,
+  organizationOwnerProcedure,
 } from "../../trpc";
 import {
   coverageOf,
@@ -111,6 +119,18 @@ function recordFirstAssignment(ctx: {
   });
 }
 
+const PAYMENT_DATE_PROBLEM = {
+  not_after_today: "Pick a date after today.",
+  inactive: "This membership is paused or ended. Restore it first.",
+  ended:
+    "This membership already has an end date. Change the date on the membership that follows it.",
+  change_pending: "A plan change is scheduled. Cancel it first.",
+  payment_declined:
+    "A payment on this membership was declined. Resolve it first.",
+  paid_ahead:
+    "They paid ahead for later periods. Discard that purchase first, then change the date.",
+} as const;
+
 export async function assignOne(
   ctx: {
     db: TenantTx;
@@ -132,22 +152,11 @@ export async function assignOne(
     input.userId,
   );
 
-  // The gym's own calendar decides which month "now" is. Just after midnight
-  // on 1 October in Lisbon, UTC is still September, and an assignment starting
-  // in a month that is already over carries a deadline that has passed.
-  const { month, timeZone } = await currentMonthOf(ctx.db);
-  const startMonth = input.startMonth
-    ? `${input.startMonth.slice(0, 7)}-01`
-    : month;
-  const startsOn =
-    input.startsOn ??
-    (startMonth === month ? localDateISO(new Date(), timeZone) : startMonth);
-  if (startsOn.slice(0, 7) !== startMonth.slice(0, 7)) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "The start date must be inside the start month.",
-    });
-  }
+  // The gym's own calendar decides which day "today" is, and a new membership's
+  // periods count from the day it starts (ADR 163).
+  const { today } = await currentMonthOf(ctx.db);
+  const startMonth = input.startsOn ?? input.startMonth ?? today;
+  const startsOn = startMonth;
 
   const periods = await lockAssignmentsOf(
     ctx.db,
@@ -368,8 +377,8 @@ async function setAssignmentStatus(
   // A successor waiting on this membership would restore access the moment it
   // started, which is not what pausing meant (ADR 129). Say so rather than let
   // it happen quietly.
-  const { month } = await currentMonthOf(ctx.db);
-  const waiting = await pendingChanges(ctx.db, month);
+  const { today } = await currentMonthOf(ctx.db);
+  const waiting = await pendingChanges(ctx.db, today);
   if (waiting.some((c) => c.sourceAssignmentId === id)) {
     throw new TRPCError({ code: "CONFLICT", message: CHANGE_PENDING });
   }
@@ -567,6 +576,99 @@ export const planHolderProcedures = {
       setAssignmentStatus(ctx, input.id, "cancelled"),
     ),
 
+  /**
+   * Move a member's payment day (ADR 163). The current period stretches or
+   * shrinks to the new date, and a continuation on the same plan starts there,
+   * so every assignment keeps one fixed anchor and past periods stay on the
+   * row they were paid on.
+   */
+  changePaymentDate: organizationOwnerProcedure
+    .input(ChangePaymentDateSchema)
+    .mutation(async ({ ctx, input }) => {
+      const found = await loadAssignment(ctx.db, input.assignmentId);
+      const periods = await lockAssignmentsOf(
+        ctx.db,
+        found.personId,
+        found.accountUserId,
+        ctx.organizationId,
+      );
+      const source = periods.find((a) => a.id === found.id);
+      if (!source) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: ASSIGNMENT_NOT_FOUND,
+        });
+      }
+      const { today } = await currentMonthOf(ctx.db);
+      const currentStart = currentPeriod(today, source);
+      const taken = await takenMonths(ctx.db, [source.id], today);
+      const waiting = await pendingChanges(ctx.db, today);
+      const holds = await ctx.db
+        .select({ id: membershipAccessHold.id })
+        .from(membershipAccessHold)
+        .where(
+          and(
+            eq(membershipAccessHold.assignmentId, source.id),
+            isNull(membershipAccessHold.resolvedAt),
+          ),
+        );
+      const problem = paymentDateProblem({
+        nextPaymentOn: input.nextPaymentOn,
+        today,
+        status: source.status,
+        endMonth: source.endMonth,
+        currentStart,
+        takenAfterCurrent: taken
+          .map((row) => row.month)
+          .filter((month) => currentStart !== null && month > currentStart),
+        changePending: waiting.some(
+          (c) =>
+            c.sourceAssignmentId === source.id ||
+            c.targetAssignmentId === source.id,
+        ),
+        held: holds.length > 0,
+      });
+      if (problem) {
+        throw new TRPCError({
+          code: problem === "not_after_today" ? "BAD_REQUEST" : "CONFLICT",
+          message: PAYMENT_DATE_PROBLEM[problem],
+        });
+      }
+
+      const [assignedBy] = await ctx.db
+        .select({ assignedBy: accessAssignment.assignedBy })
+        .from(accessAssignment)
+        .where(eq(accessAssignment.id, source.id));
+      await ctx.db
+        .update(accessAssignment)
+        .set({ endMonth: input.nextPaymentOn })
+        .where(eq(accessAssignment.id, source.id));
+      const [made] = await ctx.db
+        .insert(accessAssignment)
+        .values({
+          organizationId: ctx.organizationId,
+          personId: found.personId,
+          planId: source.planId,
+          assigningEntityId: source.assigningEntityId,
+          startMonth: input.nextPaymentOn,
+          startsOn: source.startsOn,
+          assignedBy: assignedBy?.assignedBy ?? ctx.session.user.id,
+        })
+        .returning({ id: accessAssignment.id });
+      if (!made) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Couldn't change the payment date. Try again.",
+        });
+      }
+      return {
+        endedId: source.id,
+        id: made.id,
+        nextPaymentOn: input.nextPaymentOn,
+        paymentDayLabel: paymentDayLabel(input.nextPaymentOn),
+      };
+    }),
+
   /** Every membership one person holds in this organization. */
   forUser: organizationManagerProcedure
     .input(MemberAssignmentsSchema)
@@ -601,13 +703,13 @@ export const planHolderProcedures = {
         .from(accessPlanEntity);
 
       const calendar = await membershipCalendar(ctx.db);
-      const month = monthOf(new Date(), calendar.timeZone);
+      const today = localDateISO(new Date(), calendar.timeZone);
       const standing = await membershipStanding(
         ctx.db,
         { personId: subject.id, accountUserId: subject.accountUserId },
         new Date(),
       );
-      const waiting = await pendingChanges(ctx.db, month, {
+      const waiting = await pendingChanges(ctx.db, today, {
         personId: subject.id,
         accountUserId: subject.accountUserId,
       });
@@ -615,7 +717,10 @@ export const planHolderProcedures = {
       const ahead = await takenMonths(
         ctx.db,
         rows.map((r) => r.id),
-        month,
+        rows.reduce(
+          (min, r) => (r.startMonth < min ? r.startMonth : min),
+          today,
+        ),
       );
       const purchases = rows.length
         ? await ctx.db
@@ -643,37 +748,38 @@ export const planHolderProcedures = {
       return rows.map((r) => {
         const now = standing.find((m) => m.assignmentId === r.id);
         const change = waiting.find((c) => c.sourceAssignmentId === r.id);
-        const until = paidUntil(
-          month,
-          new Set(
-            ahead
-              .filter(
-                (a) => a.assignmentId === r.id && a.status === "confirmed",
-              )
-              .map((a) => a.month),
-          ),
-        );
+        const until = now
+          ? paidUntil(
+              now.month,
+              new Set(
+                ahead
+                  .filter(
+                    (a) => a.assignmentId === r.id && a.status === "confirmed",
+                  )
+                  .map((a) => a.month),
+              ),
+              r.startMonth,
+            )
+          : null;
+        const lastOf = (p: { firstMonth: string; months: number }) =>
+          periodLastDay(
+            monthsFrom(p.firstMonth, p.months, r.startMonth).at(-1) ??
+              p.firstMonth,
+            r,
+          );
         return {
           paidUntilLabel:
-            until && until !== month
-              ? formatMonth(until, calendar.timeZone)
+            now && until && until !== now.month
+              ? formatDay(periodLastDay(until, r))
               : null,
           purchases: purchases
-            .filter(
-              (p) =>
-                p.assignmentId === r.id &&
-                (monthsFrom(p.firstMonth, p.months).at(-1) ?? p.firstMonth) >=
-                  month,
-            )
+            .filter((p) => p.assignmentId === r.id && lastOf(p) >= today)
             .map((p) => ({
               id: p.id,
               months: p.months,
               totalMinor: p.totalMinor,
               currency: p.currency,
-              label: `${formatMonth(p.firstMonth, calendar.timeZone)} to ${formatMonth(
-                monthsFrom(p.firstMonth, p.months).at(-1) ?? p.firstMonth,
-                calendar.timeZone,
-              )}`,
+              label: formatPeriod(p.firstMonth, lastOf(p)),
             })),
           id: r.id,
           planId: r.planId,
@@ -688,21 +794,31 @@ export const planHolderProcedures = {
             .map((c) => c.entityId)
             .sort(),
           month: now?.month ?? null,
-          monthLabel: now ? formatMonth(now.month, calendar.timeZone) : null,
+          monthLabel: now?.periodLabel ?? null,
+          paymentDayLabel: paymentDayLabel(r.startMonth),
+          nextPaymentOn: now?.nextPaymentOn ?? null,
+          nextPaymentLabel: now ? formatDay(now.nextPaymentOn) : null,
+          deadline: now?.deadline ?? null,
+          deadlineLabel: now
+            ? formatDeadline(now.deadline, calendar.timeZone)
+            : null,
+          deadlineOn: now
+            ? localDateISO(now.deadline, calendar.timeZone)
+            : null,
+          deadlineMoved: now?.deadlineMoved ?? false,
+          paymentStatus: now?.paymentStatus ?? null,
+          version: now?.version ?? 0,
           paid: now?.paid ?? false,
           paymentRequired: now?.paymentRequired ?? true,
           amount: now?.amount ?? null,
-          appliesNow: appliesInMonth(r, month),
-          // The plan waiting for the 1st, so the profile can say what happens
+          appliesNow: now !== undefined,
+          // The plan waiting to start, so the profile can say what happens
           // next and offer to take it back (ADR 129).
           pendingChange: change
             ? {
                 id: change.id,
                 effectiveMonth: change.effectiveMonth,
-                effectiveMonthLabel: formatMonth(
-                  change.effectiveMonth,
-                  calendar.timeZone,
-                ),
+                effectiveMonthLabel: formatDay(change.effectiveMonth),
                 targetAssignmentId: change.targetAssignmentId,
                 targetPlanName:
                   planNameOf.get(change.targetAssignmentId) ?? null,

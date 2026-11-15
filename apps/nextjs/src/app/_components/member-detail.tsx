@@ -32,6 +32,7 @@ import { dateFmt } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 import { Avatar } from "./avatar";
 import { useEntity, useOrganization } from "./entity";
+import { DueDateDialog, PaymentDateDialog } from "./payment-dates";
 import { DriftBadge, LIST, RESOLVE, TAP } from "./primitives";
 import { PurchaseList, RecordMonthsDialog } from "./record-months";
 import { SkeletonLines, SkeletonRows } from "./skeletons";
@@ -227,6 +228,11 @@ function MembershipTab({ personId, name }: { personId: string; name: string }) {
   const here = useEntity().academyId;
   const [picked, setPicked] = useState("");
   const [recording, setRecording] = useState<string | null>(null);
+  const [dates, setDates] = useState<{
+    id: string;
+    kind: "payment" | "due";
+  } | null>(null);
+  const isGymOwner = useOrganization().role === "owner";
   const [outcome, setOutcome] = useState<{
     enrolled: string[];
     needsDecision: { entityId: string; status: string }[];
@@ -319,6 +325,7 @@ function MembershipTab({ personId, name }: { personId: string; name: string }) {
                 </span>
                 <span className="text-muted-foreground text-xs">
                   From {h.startMonth}
+                  {h.endMonth ? ` to ${h.endMonth}` : ""}
                   {h.assigningEntityId
                     ? ` · added at ${nameOf(h.assigningEntityId)}`
                     : ""}
@@ -335,6 +342,22 @@ function MembershipTab({ personId, name }: { personId: string; name: string }) {
                       : ""}
                   </span>
                 )}
+                {h.status === "active" && h.nextPaymentLabel && (
+                  <span className="text-muted-foreground text-xs">
+                    Pays on {h.paymentDayLabel} · next payment{" "}
+                    {h.nextPaymentLabel}
+                  </span>
+                )}
+                {h.status === "active" &&
+                  h.month &&
+                  h.paymentRequired &&
+                  !h.paid &&
+                  h.deadlineLabel && (
+                    <span className="text-muted-foreground text-xs">
+                      Booking stops on {h.deadlineLabel}
+                      {h.deadlineMoved ? " (date changed)" : ""}
+                    </span>
+                  )}
                 <PurchaseList held={h} />
               </div>
               <div className="flex flex-wrap items-start justify-end gap-2">
@@ -367,6 +390,28 @@ function MembershipTab({ personId, name }: { personId: string; name: string }) {
                     Record months
                   </Button>
                 )}
+                {isGymOwner && h.status === "active" && h.month && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setDates({ id: h.id, kind: "payment" })}
+                  >
+                    Payment date
+                  </Button>
+                )}
+                {isGymOwner &&
+                  h.status === "active" &&
+                  h.month &&
+                  h.paymentRequired &&
+                  !h.paid && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setDates({ id: h.id, kind: "due" })}
+                    >
+                      Due date
+                    </Button>
+                  )}
                 {h.status === "active" && (
                   <Button
                     size="sm"
@@ -409,6 +454,39 @@ function MembershipTab({ personId, name }: { personId: string; name: string }) {
               onOpenChange={(open) => !open && setRecording(null)}
             />
           ))}
+
+      {dates &&
+        held.data
+          .filter((h) => h.id === dates.id)
+          .map((h) => {
+            const close = (open: boolean) => !open && setDates(null);
+            if (!h.month || !h.nextPaymentOn) return null;
+            return dates.kind === "payment" ? (
+              <PaymentDateDialog
+                key={h.id}
+                held={{
+                  id: h.id,
+                  planName: h.planName,
+                  month: h.month,
+                  nextPaymentOn: h.nextPaymentOn,
+                }}
+                onOpenChange={close}
+              />
+            ) : h.deadlineOn && h.monthLabel ? (
+              <DueDateDialog
+                key={h.id}
+                held={{
+                  id: h.id,
+                  planName: h.planName,
+                  month: h.month,
+                  periodLabel: h.monthLabel,
+                  deadlineOn: h.deadlineOn,
+                  deadlineMoved: h.deadlineMoved,
+                }}
+                onOpenChange={close}
+              />
+            ) : null;
+          })}
 
       {outcome && (
         <div className="flex flex-col gap-1 text-sm">
