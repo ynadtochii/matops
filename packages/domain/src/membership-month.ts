@@ -1,5 +1,13 @@
+import type { PeriodSchedule } from "./membership-period";
+import { appliesInMonth } from "./access-plan";
 import { instantFromLocalDate, localDateISO } from "./materialize";
-import { addDays, isJoinPeriod } from "./membership-period";
+import {
+  addDays,
+  isJoinPeriod,
+  periodLabel,
+  periodsFrom,
+} from "./membership-period";
+import { MAX_UPFRONT_MONTHS } from "./upfront";
 
 /**
  * Membership periods and their pay deadlines (ADR 126, ADR 163). Pure — no
@@ -19,7 +27,7 @@ import { addDays, isJoinPeriod } from "./membership-period";
 export const JOIN_GRACE_DAYS = 3;
 
 export interface MembershipPolicy {
-  /** Days after the 1st that an unpaid month still admits. */
+  /** Days after a period starts that it still admits while unpaid. */
   graceDays: number;
   /** IANA zone the organization counts its months in. */
   timeZone: string;
@@ -46,11 +54,7 @@ interface DeadlineInput {
   month: MonthKey;
   /** The membership's anchor, `access_assignment.start_month`. */
   startMonth: MonthKey;
-  /**
-   * The day they joined, `access_assignment.starts_on`. A continuation written
-   * by a payment date change carries the original join day, which is before its
-   * first period, so that period renews instead of counting as a join.
-   */
+  /** The day they joined, `access_assignment.starts_on`. */
   joinedOn?: string | null;
   policy: MembershipPolicy;
 }
@@ -159,4 +163,51 @@ export function membershipWarning(input: {
     headline: `${periodLabel} is unpaid on ${planName}.`,
     detail: `Booking is closed since ${when}. Pay from Membership to open it again.`,
   };
+}
+
+export interface DueDate {
+  month: MonthKey;
+  label: string;
+  deadlineOn: string;
+  deadlineMoved: boolean;
+  paid: boolean;
+}
+
+// The current period and the next two, then on to the first unpaid one, so a
+// member paid well ahead still shows when their next payment is due.
+export function upcomingDueDates(input: {
+  current: MonthKey;
+  schedule: PeriodSchedule & { startsOn: string | null };
+  recorded: readonly {
+    month: MonthKey;
+    status: string;
+    deadline: Date | null;
+  }[];
+  policy: MembershipPolicy;
+}): DueDate[] {
+  const { current, schedule, recorded, policy } = input;
+  const dates: DueDate[] = [];
+  for (const month of periodsFrom(current, schedule, MAX_UPFRONT_MONTHS + 1)) {
+    if (!appliesInMonth(schedule, month)) break;
+    const record = recorded.find((m) => m.month === month);
+    const paid = record?.status === "confirmed";
+    const computed = payDeadline({
+      month,
+      startMonth: schedule.startMonth,
+      joinedOn: schedule.startsOn,
+      policy,
+    });
+    const deadline = record?.deadline ?? computed;
+    dates.push({
+      month,
+      label: periodLabel(month, schedule),
+      deadlineOn: localDateISO(deadline, policy.timeZone),
+      deadlineMoved:
+        record?.deadline != null &&
+        record.deadline.getTime() !== computed.getTime(),
+      paid,
+    });
+    if (dates.length >= 3 && !paid) break;
+  }
+  return dates;
 }

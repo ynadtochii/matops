@@ -8,6 +8,7 @@ import {
   monthVerdict,
   nextMonth,
   payDeadline,
+  upcomingDueDates,
 } from "../src/membership-month";
 
 const LISBON: MembershipPolicy = { graceDays: 7, timeZone: "Europe/Lisbon" };
@@ -184,5 +185,91 @@ describe("membershipWarning", () => {
       verdict: "within-grace",
     });
     expect(warning?.headline).toContain("15 Dec to 14 Jan 2027");
+  });
+});
+
+describe("upcomingDueDates", () => {
+  const UTC: MembershipPolicy = { graceDays: 8, timeZone: "UTC" };
+  const schedule = {
+    startMonth: "2026-09-01",
+    startsOn: "2026-09-01",
+    endMonth: null,
+    periodAnchor: null,
+    periodAnchorFrom: null,
+  };
+  const paid = (month: string) => ({
+    month,
+    status: "confirmed",
+    deadline: null,
+  });
+
+  it("lists the current period and the next two", () => {
+    expect(
+      upcomingDueDates({
+        current: "2026-11-01",
+        schedule,
+        recorded: [],
+        policy: UTC,
+      }),
+    ).toEqual([
+      {
+        month: "2026-11-01",
+        label: "1 Nov to 30 Nov 2026",
+        deadlineOn: "2026-11-09",
+        deadlineMoved: false,
+        paid: false,
+      },
+      {
+        month: "2026-12-01",
+        label: "1 Dec to 31 Dec 2026",
+        deadlineOn: "2026-12-09",
+        deadlineMoved: false,
+        paid: false,
+      },
+      {
+        month: "2027-01-01",
+        label: "1 Jan to 31 Jan 2027",
+        deadlineOn: "2027-01-09",
+        deadlineMoved: false,
+        paid: false,
+      },
+    ]);
+  });
+
+  it("keeps paid periods and goes on to the first unpaid one", () => {
+    const dates = upcomingDueDates({
+      current: "2026-11-01",
+      schedule,
+      recorded: [
+        paid("2026-11-01"),
+        paid("2026-12-01"),
+        paid("2027-01-01"),
+        {
+          month: "2027-02-01",
+          status: "unpaid",
+          deadline: new Date("2027-02-20T00:00:00Z"),
+        },
+      ],
+      policy: UTC,
+    });
+    expect(
+      dates.map((d) => [d.month, d.paid, d.deadlineOn, d.deadlineMoved]),
+    ).toEqual([
+      ["2026-11-01", true, "2026-11-09", false],
+      ["2026-12-01", true, "2026-12-09", false],
+      ["2027-01-01", true, "2027-01-09", false],
+      ["2027-02-01", false, "2027-02-20", true],
+    ]);
+  });
+
+  it("stops at the end of the membership", () => {
+    expect(
+      upcomingDueDates({
+        current: "2026-11-01",
+        schedule: { ...schedule, endMonth: "2027-01-01" },
+        recorded: [],
+        policy: UTC,
+      }).map((d) => d.month),
+    ).toEqual(["2026-11-01", "2026-12-01"]);
   });
 });

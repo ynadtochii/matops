@@ -2,6 +2,7 @@
 
 ## Unreleased: first release, one academy
 
+- Confirming a payment claim opens a dialog (ADR 164, spec O7). A first payment starts the membership on the day they paid, and the owner can change the start day, the months it covers and the total (`accessPlan.confirmClaim`). Managers confirm the claim as reported.
 - Rolling membership periods (ADR 163, spec FA4, FP6, S9, O7). A new membership is paid one month at a time from the day it starts, and a start on the 29th to 31st falls on the last day of shorter months. New members get 3 days to pay their first period. The owner can change a member's payment date (`accessPlan.changePaymentDate`) and the due date of one period (`accessPlan.setDueDate`) from the student's Membership tab and the Months board. Existing memberships stay on the 1st. Migration `0021_rolling_periods` drops the first-of-month checks and adds `access_assignment.period_anchor` and `period_anchor_from`.
 - A co-owner made from Coaches is now an owner of the gym too, so they see Memberships (ADR 162). Suspending, archiving or erasing an owner takes the gym role away; restore gives it back. Run `packages/db/scripts/2026-11-07-academy-owner-gym-owner.sql` once on each database.
 - Remove a cancelled class from the schedule (spec O2). A cancelled class in the staff week now has a remove button instead of cancel (`class.remove`, staff only, refuses a class that is not cancelled). It is a soft delete: bookings stay, and a template timing edit no longer brings a removed class back.

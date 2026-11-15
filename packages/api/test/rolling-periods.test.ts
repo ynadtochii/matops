@@ -224,6 +224,17 @@ describe("rolling membership periods (ADR 163)", () => {
     expect(
       rows[0]?.dueDates.find((d) => d.month === "2026-12-10"),
     ).toMatchObject({ deadlineOn: "2026-12-22", deadlineMoved: true });
+
+    const board = await owner().accessPlan.monthBoard();
+    expect(
+      board.rows
+        .find((r) => r.assignmentId === assignment)
+        ?.dueDates.map((d) => [d.month, d.deadlineOn]),
+    ).toEqual([
+      [START, "2026-11-18"],
+      ["2026-12-10", "2026-12-22"],
+      ["2027-01-10", "2027-01-17"],
+    ]);
   });
 
   it("renews after the change with the moved due date and no join grace", async () => {
@@ -256,6 +267,23 @@ describe("rolling membership periods (ADR 163)", () => {
         }),
       ),
     ).toBe("CONFLICT");
+  });
+
+  it("moves the due date of a paid period and shows the next unpaid one", async () => {
+    await owner().accessPlan.setDueDate({
+      assignmentId: aheadAssignment,
+      month: START,
+      stopsOn: "2026-11-30",
+    });
+    const rows = await owner().accessPlan.forUser({ userId: AHEAD });
+    expect(
+      rows[0]?.dueDates.map((d) => [d.month, d.paid, d.deadlineMoved]),
+    ).toEqual([
+      [START, true, true],
+      ["2026-12-15", true, false],
+      ["2027-01-15", true, false],
+      ["2027-02-15", false, false],
+    ]);
   });
 
   it("still pauses a membership after the change", async () => {

@@ -116,7 +116,7 @@ export function MonthsTab() {
                   </span>
                 )}
               </div>
-              {isGymOwner && r.paymentRequired && !r.paid && (
+              {isGymOwner && r.paymentRequired && r.dueDates.length > 0 && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -161,14 +161,7 @@ export function MonthsTab() {
               held={{
                 id: r.assignmentId,
                 planName: `${r.name}, ${r.planName}`,
-                periods: [
-                  {
-                    month: r.month,
-                    label: r.periodLabel,
-                    deadlineOn: r.deadlineOn,
-                    deadlineMoved: r.deadlineMoved,
-                  },
-                ],
+                periods: r.dueDates,
               }}
               onOpenChange={(open) => !open && setMoving(null)}
             />

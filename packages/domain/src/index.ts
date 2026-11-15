@@ -38,6 +38,7 @@ export * from "./materialize";
 export * from "./organization-setup";
 export * from "./membership-access";
 export * from "./membership-month";
+export * from "./claim-confirm";
 export * from "./membership-period";
 export * from "./membership";
 export * from "./notify";

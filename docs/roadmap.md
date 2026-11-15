@@ -186,7 +186,8 @@ Status: **built, not clicked through and the suites not run here**. Static gates
 | Memberships: counts on the tabs          | n/a | n/a | done | n/a | n/a | n/a |
 | Memberships grouped by job: To check, Months, Plans, Setup; days to pay form; router split (ADR 160) | n/a | done | done | n/a | n/a | n/a |
 | Pay several months upfront: one rule per plan (percent or price per month from N months), months picker, Pay ahead, Record months, Discard (ADR 161, S9, O7); `0020_upfront` applied to dev 2026-11-01 | done | done | done | done | done | todo |
-| Rolling membership periods from the start day, owner changes payment date and due date (ADR 163, FA4, S9, O7); `0021_rolling_periods` not applied yet | done | done | done | done | done | todo |
+| Rolling membership periods from the start day, owner changes payment date and due date (ADR 163, FA4, S9, O7); `0021_rolling_periods` applied to dev 2026-11-15 | done | done | done | done | done | todo |
+| Confirm a claim with start day and months, defaults from the claim, owner overrides (ADR 164, O7) | n/a | done | done | n/a | done | n/a |
 | People list: columns at 200 rows         | n/a (removed, ADR 142) | n/a | done | n/a | n/a | n/a |
 | Person: the actions ranked               | n/a (removed, ADR 142) | n/a | done | n/a | n/a | n/a |
 | Roster: the day's work before setup      | n/a | n/a | done | n/a | n/a | n/a |

@@ -40,16 +40,15 @@ import {
   isStaffRole,
   localDateISO,
   paidUntil,
-  payDeadline,
   paymentDateProblem,
   paymentDay,
   paymentDayLabel,
-  periodLabel,
   periodLastDay,
   periodOf,
   periodsFrom,
   periodsOverlap,
   runsOrganization,
+  upcomingDueDates,
 } from "@matops/domain";
 import {
   AccessPlanIdSchema,
@@ -837,27 +836,11 @@ export const planHolderProcedures = {
             r,
           );
         const dueDates = now
-          ? periodsFrom(now.month, r, 3).flatMap((month) => {
-              if (!appliesInMonth(r, month)) return [];
-              const record = theirs.find((m) => m.month === month);
-              if (record?.status === "confirmed") return [];
-              const computed = payDeadline({
-                month,
-                startMonth: r.startMonth,
-                joinedOn: r.startsOn,
-                policy: calendar,
-              });
-              const deadline = record?.deadline ?? computed;
-              return [
-                {
-                  month,
-                  label: periodLabel(month, r),
-                  deadlineOn: localDateISO(deadline, calendar.timeZone),
-                  deadlineMoved:
-                    record?.deadline != null &&
-                    record.deadline.getTime() !== computed.getTime(),
-                },
-              ];
+          ? upcomingDueDates({
+              current: now.month,
+              schedule: r,
+              recorded: theirs,
+              policy: calendar,
             })
           : [];
         return {

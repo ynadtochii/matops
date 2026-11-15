@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -16,6 +17,7 @@ import { useTRPC } from "~/trpc/react";
 import { Eyebrow, LIST, SectionHeading } from "../primitives";
 import { SkeletonRows } from "../skeletons";
 import { EmptyState, ErrorState } from "../states";
+import { ConfirmClaimDialog } from "./confirm-claim";
 
 export function useToCheckCount() {
   const trpc = useTRPC();
@@ -145,9 +147,9 @@ function CardPaymentsToCheck() {
 /**
  * Claims waiting for an answer (ADR 127).
  *
- * Confirm is the same `markMonth` the board uses, which is what makes the two
- * doors reach one record. Reject clears the claim and changes nothing else, so
- * the member can send the money and say so again.
+ * Confirm opens a dialog with the start day and months taken from the claim
+ * (ADR 164). Reject clears the claim and changes nothing else, so the member
+ * can send the money and say so again.
  */
 function ClaimsWaiting() {
   const trpc = useTRPC();
@@ -165,15 +167,7 @@ function ClaimsWaiting() {
       e.message || "Couldn't finish that. Check your connection and try again.",
     );
 
-  const confirm = useMutation(
-    trpc.accessPlan.markMonth.mutationOptions({
-      onSuccess: async () => {
-        await invalidate();
-        toast.success("Payment confirmed");
-      },
-      onError,
-    }),
-  );
+  const [confirming, setConfirming] = useState<string | null>(null);
   const reject = useMutation(
     trpc.accessPlan.rejectClaim.mutationOptions({
       onSuccess: async () => {
@@ -208,10 +202,8 @@ function ClaimsWaiting() {
       <ul className={LIST}>
         {rows.map((c) => {
           const busy =
-            (confirm.isPending &&
-              confirm.variables.assignmentId === c.assignmentId) ||
-            (reject.isPending &&
-              reject.variables.assignmentId === c.assignmentId);
+            reject.isPending &&
+            reject.variables.assignmentId === c.assignmentId;
           return (
             <li
               key={`${c.assignmentId}:${c.month}`}
@@ -252,14 +244,8 @@ function ClaimsWaiting() {
               </div>
               <Button
                 size="sm"
-                busy={busy}
-                onClick={() =>
-                  confirm.mutate({
-                    assignmentId: c.assignmentId,
-                    month: c.month,
-                    paid: true,
-                  })
-                }
+                disabled={busy}
+                onClick={() => setConfirming(`${c.assignmentId}:${c.month}`)}
               >
                 {c.cashPaidToName ? "Cash received" : "Confirm"}
               </Button>
@@ -280,6 +266,15 @@ function ClaimsWaiting() {
           );
         })}
       </ul>
+      {rows
+        .filter((c) => `${c.assignmentId}:${c.month}` === confirming)
+        .map((c) => (
+          <ConfirmClaimDialog
+            key={confirming}
+            claim={c}
+            onOpenChange={(open) => !open && setConfirming(null)}
+          />
+        ))}
     </section>
   );
 }

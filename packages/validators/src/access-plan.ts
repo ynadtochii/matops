@@ -252,6 +252,16 @@ export const RecordPurchaseSchema = z.object({
   note: blockText(0, 500).optional(),
 });
 
+export const ConfirmClaimSchema = z.object({
+  assignmentId: z.uuid(),
+  month: PeriodSchema,
+  expectedVersion: z.number().int().positive().optional(),
+  startsOn: z.iso.date().optional(),
+  months: z.number().int().min(1).max(MAX_UPFRONT_MONTHS).optional(),
+  totalMinor: PriceMinorSchema.optional(),
+  reason: blockText(1, 500).optional(),
+});
+
 export const DiscardPurchaseSchema = z.object({ purchaseId: z.uuid() });
 
 /** Clear a claim without marking the month paid. */

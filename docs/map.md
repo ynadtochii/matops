@@ -8,6 +8,7 @@
 
 **First release**
 
+- [164: Confirm a claim with its start day and months](issues/164-confirm-claim-start-and-months.md): Confirm in To check opens a dialog. A first payment starts the membership on the day they paid (owner can change it), and the owner picks how many months it covers. Managers confirm the defaults. No migration.
 - [163: Rolling membership periods](issues/163-rolling-membership-periods.md): a membership is paid in one-month periods from its own start day (last day of short months), not by calendar month. New members get 3 days to pay. The owner changes a payment date (stored on the same membership row) or one due date. Migration `0021_rolling_periods` drops the first-of-month checks and adds `access_assignment.period_anchor` and `period_anchor_from`. Existing memberships stay on the 1st.
 - [162: An academy owner owns the gym](issues/162-academy-owner-owns-the-gym.md): an active owner of any academy is a gym owner, so a co-owner made from Coaches sees Memberships. Losing the last academy ownership moves the gym role back to `member`. Fill script, no migration. Amends ADR 124 and 125.
 - [161: Pay several months upfront](issues/161-pay-several-months-upfront.md) (accepted, building): one optional rule per plan, from N months either % off or a fixed price per month. A student or staff picks 1 to 12 months; one `membership_purchase` writes one month row per month, so the booking gate is unchanged. Cash and bank only for more than one month; owner-only custom totals and discard.

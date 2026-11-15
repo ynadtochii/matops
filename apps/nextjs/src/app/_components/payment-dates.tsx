@@ -152,6 +152,7 @@ export function DueDateDialog({
       label: string;
       deadlineOn: string;
       deadlineMoved: boolean;
+      paid: boolean;
     }[];
   };
   onOpenChange: (open: boolean) => void;
@@ -188,7 +189,8 @@ export function DueDateDialog({
       <DialogContent>
         <DialogTitle>Change due date for {held.planName}</DialogTitle>
         <p className="text-muted-foreground text-sm">
-          If the period is still unpaid, booking stops at the start of this day.
+          If the period is unpaid, booking stops at the start of this day. For a
+          paid period, the date counts only if the payment is undone.
         </p>
         <form
           className="flex flex-col gap-4"
@@ -216,7 +218,7 @@ export function DueDateDialog({
             >
               {held.periods.map((p) => (
                 <option key={p.month} value={p.month}>
-                  {p.label}
+                  {p.paid ? `${p.label} (paid)` : p.label}
                 </option>
               ))}
             </Select>
