@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
+import { formatDay } from "@matops/domain";
 import { Badge } from "@matops/ui/badge";
 import { Button } from "@matops/ui/button";
 
@@ -106,9 +107,15 @@ function MembershipSettled() {
                   : membership.status === "active"
                     ? membership.paidUntilLabel
                       ? `Paid through ${membership.paidUntilLabel}.`
-                      : "No payment is due for this month."
+                      : "No payment is due for this period."
                     : "This membership is inactive. Contact your gym for help."}
               </p>
+              {membership.status === "active" && membership.paymentRequired && (
+                <p className="text-muted-foreground mt-1 text-xs">
+                  You pay on {membership.paymentDayLabel} of each month. Next
+                  payment {formatDay(membership.nextPaymentOn)}.
+                </p>
+              )}
             </div>
             {membership.status === "active" &&
               membership.paymentRequired &&

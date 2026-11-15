@@ -13,24 +13,24 @@ import {
   paymentMethod,
 } from "@matops/db/schema";
 import {
-  appliesInMonth,
   isFreeMembershipMonth,
+  isJoinPeriod,
+  localDateISO,
   membershipWarning,
-  monthOf,
   monthVerdict,
   payDeadline,
+  periodBoundary,
+  periodLabel,
   priceForMonth,
   resolveAcademyTimeZone,
+  runningOn,
 } from "@matops/domain";
 
 /**
- * The SQL half of {@link appliesInMonth} for a count that has no month in hand
- * (ADR 129): the assignment has started and has not ended today.
- *
- * `start_month` and `end_month` are first-of-month dates, so comparing them
- * against `current_date` answers the month question without a second lookup.
- * A reader that already knows the month it is judging should filter in
- * TypeScript with `appliesInMonth` instead, which is exact about the zone.
+ * The SQL half of `currentPeriod` for a count that has no period in
+ * hand (ADR 129, ADR 163): the assignment has started and has not ended today.
+ * A reader that already knows the day it is judging should filter in
+ * TypeScript with `currentPeriod` instead, which is exact about the zone.
  */
 export function assignmentAppliesNow() {
   return assignmentAppliesInMonth(sql`current_date`);
@@ -59,14 +59,22 @@ interface MembershipStanding {
    * owner confirmed against a bank statement (ADR 40, ADR 127).
    */
   amount: Money | null;
-  /** The month being judged, as its first day. */
+  /** The period being judged, as its start date. */
   month: string;
+  periodLabel: string;
+  startMonth: string;
+  startsOn: string;
+  endMonth: string | null;
+  periodAnchor: string | null;
+  periodAnchorFrom: string | null;
+  nextPaymentOn: string;
   paid: boolean;
   paymentStatus: string;
   version: number;
   paymentRequired: boolean;
   /** The first moment that is too late. */
   deadline: Date;
+  deadlineMoved: boolean;
   /** When the member said they sent the money for this month. */
   reportedAt: Date | null;
   awaitingStaff: boolean;
@@ -145,7 +153,7 @@ export async function membershipStanding(
   now: Date,
 ): Promise<MembershipStanding[]> {
   const calendar = await membershipCalendar(db);
-  const month = monthOf(now, calendar.timeZone);
+  const today = localDateISO(now, calendar.timeZone);
 
   const rows = await db
     .select({
@@ -153,6 +161,8 @@ export async function membershipStanding(
       status: accessAssignment.status,
       startMonth: accessAssignment.startMonth,
       endMonth: accessAssignment.endMonth,
+      periodAnchor: accessAssignment.periodAnchor,
+      periodAnchorFrom: accessAssignment.periodAnchorFrom,
       createdAt: accessAssignment.createdAt,
       startsOn: accessAssignment.startsOn,
       assignedBy: accessAssignment.assignedBy,
@@ -167,10 +177,9 @@ export async function membershipStanding(
         : sql`false`,
     );
   if (rows.length === 0) return [];
-  // Only the memberships whose period covers this month (ADR 129). A successor
-  // that starts next month owes nothing yet, and the one it replaces still owes
-  // this month.
-  const applicable = rows.filter((r) => appliesInMonth(r, month));
+  // Only the memberships running today (ADR 129). A successor that starts later
+  // owes nothing yet, and the one it replaces still owes its current period.
+  const applicable = runningOn(today, rows);
   if (applicable.length === 0) return [];
 
   const coverage = await db
@@ -192,7 +201,16 @@ export async function membershipStanding(
       cashPaidToName: membershipMonth.cashPaidToName,
     })
     .from(membershipMonth)
-    .where(eq(membershipMonth.month, month));
+    .where(
+      or(
+        ...applicable.map((r) =>
+          and(
+            eq(membershipMonth.assignmentId, r.id),
+            eq(membershipMonth.month, r.month),
+          ),
+        ),
+      ),
+    );
   // What each plan cost THIS month, which is not always what it costs now
   // (ADR 128). Resolved from the history rather than copied onto the month, so
   // there is one answer and no second copy to drift from it.
@@ -206,6 +224,7 @@ export async function membershipStanding(
     .from(accessPlanPrice);
 
   return applicable.map((r) => {
+    const month = r.month;
     const held = months.find((m) => m.assignmentId === r.id);
     const paymentStatus = held?.status ?? "unpaid";
     const paid = paymentStatus === "confirmed";
@@ -223,12 +242,12 @@ export async function membershipStanding(
     const shared = {
       month,
       startMonth: r.startMonth,
-      // The day they joined only matters in the month they joined, and it is
-      // the assignment's own creation day.
       joinedOn: r.startsOn,
       policy: calendar,
     };
-    const deadline = held?.deadline ?? payDeadline(shared);
+    const computed = payDeadline(shared);
+    const deadline = held?.deadline ?? computed;
+    const label = periodLabel(month, r);
     return {
       assignmentId: r.id,
       planId: r.planId,
@@ -243,13 +262,23 @@ export async function membershipStanding(
         .map((c) => c.entityId)
         .sort(),
       month,
+      periodLabel: label,
+      startMonth: r.startMonth,
+      startsOn: r.startsOn,
+      endMonth: r.endMonth,
+      periodAnchor: r.periodAnchor,
+      periodAnchorFrom: r.periodAnchorFrom,
+      nextPaymentOn: periodBoundary(month, r),
       paid,
       paymentStatus,
       version: held?.version ?? 0,
       deadline,
+      deadlineMoved:
+        held?.deadline != null &&
+        held.deadline.getTime() !== computed.getTime(),
       reportedAt: held?.reportedAt ?? null,
       awaitingStaff: held?.cashPaidToName != null,
-      firstMonth: r.startMonth === month,
+      firstMonth: isJoinPeriod(month, r),
       chosenBySelf:
         subject.accountUserId !== null &&
         r.assignedBy === subject.accountUserId,
@@ -261,7 +290,7 @@ export async function membershipStanding(
                 paid: paid || paymentStatus === "reported",
                 now,
               }),
-              month,
+              periodLabel: label,
               deadline,
               planName: r.planName,
               timeZone: calendar.timeZone,

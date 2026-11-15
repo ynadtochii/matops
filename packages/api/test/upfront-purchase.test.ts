@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { monthsFrom } from "@matops/domain";
+import { periodsFrom } from "@matops/domain";
 
 import type { Harness } from "./helpers";
 import { harness, rejectionCode, uploadProof } from "./helpers";
@@ -76,10 +76,19 @@ describe("paying several months upfront (ADR 161)", () => {
       })
     ).id;
     studentAssignment = (
-      await owner().accessPlan.assign({ userId: STUDENT, planId })
+      await owner().accessPlan.assign({
+        userId: STUDENT,
+        planId,
+        startMonth: NOV,
+      })
     ).id;
-    deskAssignment = (await owner().accessPlan.assign({ userId: DESK, planId }))
-      .id;
+    deskAssignment = (
+      await owner().accessPlan.assign({
+        userId: DESK,
+        planId,
+        startMonth: NOV,
+      })
+    ).id;
   });
 
   afterAll(async () => {
@@ -186,7 +195,16 @@ describe("paying several months upfront (ADR 161)", () => {
     });
     expect(claimed).toMatchObject({ claimed: true, month: NOV });
     expect(await statuses(studentAssignment)).toEqual(
-      monthsFrom(NOV, 3).map((month) => ({
+      periodsFrom(
+        NOV,
+        {
+          startMonth: NOV,
+          endMonth: null,
+          periodAnchor: null,
+          periodAnchorFrom: null,
+        },
+        3,
+      ).map((month) => ({
         month,
         status: "reported",
         price_minor: 4500,

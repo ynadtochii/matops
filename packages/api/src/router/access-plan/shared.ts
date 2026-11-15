@@ -10,7 +10,12 @@ import {
   entityMembership,
   person,
 } from "@matops/db/schema";
-import { changeIsPending, monthOf, nextMonth } from "@matops/domain";
+import {
+  changeIsPending,
+  localDateISO,
+  monthOf,
+  nextMonth,
+} from "@matops/domain";
 
 import { loadStaffAccess } from "../../membership-access";
 import {
@@ -76,15 +81,25 @@ export async function pendingChanges(
   return rows.filter((r) => changeIsPending(r, currentMonth));
 }
 
-/** The gym's current month, in its own membership calendar. */
+/**
+ * The gym's current calendar month, for prices, and today, for whether a
+ * membership is running (ADR 163), both in its own membership calendar.
+ */
 export async function currentMonthOf(db: TenantTx): Promise<{
   month: string;
   next: string;
+  today: string;
   timeZone: string;
 }> {
   const calendar = await membershipCalendar(db);
-  const month = monthOf(new Date(), calendar.timeZone);
-  return { month, next: nextMonth(month), timeZone: calendar.timeZone };
+  const now = new Date();
+  const month = monthOf(now, calendar.timeZone);
+  return {
+    month,
+    next: nextMonth(month),
+    today: localDateISO(now, calendar.timeZone),
+    timeZone: calendar.timeZone,
+  };
 }
 
 /** The entity ids one plan covers today. */
@@ -218,7 +233,7 @@ export async function reconcilePlanHolders(
   planId: string,
   entityIds: string[],
 ): Promise<PlanReconciliation> {
-  const { month } = await currentMonthOf(db);
+  const { today } = await currentMonthOf(db);
   const holders = await db
     .select({
       userId: accessAssignment.personId,
@@ -234,7 +249,7 @@ export async function reconcilePlanHolders(
         eq(accessAssignment.status, "active"),
         // A membership that has ended enrols nobody: adding a branch to an old
         // plan must not put its former holders back on a mat (ADR 129).
-        assignmentAppliesInMonth(month),
+        assignmentAppliesInMonth(today),
       ),
     );
 

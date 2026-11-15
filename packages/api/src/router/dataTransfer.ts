@@ -582,6 +582,8 @@ async function exportRows(
           status: accessAssignment.status,
           startMonth: accessAssignment.startMonth,
           endMonth: accessAssignment.endMonth,
+          periodAnchor: accessAssignment.periodAnchor,
+          periodAnchorFrom: accessAssignment.periodAnchorFrom,
           assigningEntityId: accessAssignment.assigningEntityId,
           assignedBy: accessAssignment.assignedBy,
           createdAt: accessAssignment.createdAt,
@@ -853,7 +855,8 @@ export const dataTransferRouter = {
                   userId: personId,
                   planId: row.normalized.planId,
                   assigningEntityId: row.normalized.entityId,
-                  startMonth: row.normalized.startMonth,
+                  startMonth:
+                    row.normalized.startMonth ?? row.normalized.paymentMonth,
                 },
               )
             : null;

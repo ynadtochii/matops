@@ -176,8 +176,8 @@ export const accessPlanEntity = pgTable(
  * from: `assigningEntityId` records where the owner was standing, and grants
  * nothing.
  *
- * `startMonth` is the first day of the calendar month the membership begins in.
- * Months run first-to-first, so there is no rolling anniversary to track.
+ * `startMonth` is the anchor of its rolling periods (ADR 163): the first day
+ * of the first period. One on the 1st runs calendar months.
  */
 export const accessAssignment = pgTable(
   "access_assignment",
@@ -200,6 +200,8 @@ export const accessAssignment = pgTable(
      * applies on either side of the boundary.
      */
     endMonth: t.date(),
+    periodAnchor: t.date(),
+    periodAnchorFrom: t.date(),
     status: t.text().notNull().default("active"),
     assignedBy: t.text().references(() => user.id, { onDelete: "set null" }),
     createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -247,16 +249,12 @@ export const accessAssignment = pgTable(
       table.startMonth,
     ),
     check(
-      "access_assignment_start_is_a_month",
-      sql`date_trunc('month', start_month) = start_month`,
+      "access_assignment_anchor_complete",
+      sql`(period_anchor is null) = (period_anchor_from is null)`,
     ),
     check(
-      "access_assignment_starts_on_in_month",
-      sql`date_trunc('month', starts_on) = start_month`,
-    ),
-    check(
-      "access_assignment_end_is_a_month",
-      sql`end_month is null or date_trunc('month', end_month) = end_month`,
+      "access_assignment_anchor_ordered",
+      sql`period_anchor is null or (period_anchor_from >= start_month and period_anchor > period_anchor_from)`,
     ),
     check(
       "access_assignment_period_ordered",
@@ -320,10 +318,6 @@ export const accessAssignmentChange = pgTable(
       table.effectiveMonth,
     ),
     index("access_assignment_change_by_person").on(table.personId),
-    check(
-      "access_assignment_change_is_a_month",
-      sql`date_trunc('month', effective_month) = effective_month`,
-    ),
     check(
       "access_assignment_change_two_rows",
       sql`source_assignment_id <> target_assignment_id`,
@@ -460,10 +454,6 @@ export const membershipPurchase = pgTable(
       columns: [table.organizationId, table.assignmentId],
       foreignColumns: [accessAssignment.organizationId, accessAssignment.id],
     }),
-    check(
-      "membership_purchase_is_a_month",
-      sql`date_trunc('month', first_month) = first_month`,
-    ),
     check("membership_purchase_months_range", sql`months between 1 and 12`),
     check(
       "membership_purchase_total_sane",
@@ -542,10 +532,6 @@ export const membershipMonth = pgTable(
       columns: [table.organizationId, table.assignmentId],
       foreignColumns: [accessAssignment.organizationId, accessAssignment.id],
     }),
-    check(
-      "membership_month_is_a_month",
-      sql`date_trunc('month', month) = month`,
-    ),
     check(
       "membership_month_status_supported",
       sql`status in ('unpaid','reported','confirmed','rejected')`,

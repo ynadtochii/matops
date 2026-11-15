@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
+import type { PeriodSchedule } from "../src/membership-period";
 import type { UpfrontRule } from "../src/upfront";
 import {
   discountProblem,
-  monthsFrom,
   paidUntil,
   splitTotal,
   upfrontHint,
@@ -81,21 +81,33 @@ describe("splitTotal", () => {
   });
 });
 
-describe("monthsFrom", () => {
-  it("lists consecutive months across a year end", () => {
-    expect(monthsFrom("2026-11-01", 3)).toEqual([
-      "2026-11-01",
-      "2026-12-01",
-      "2027-01-01",
-    ]);
+const CALENDAR: PeriodSchedule = {
+  startMonth: "2026-01-01",
+  endMonth: null,
+  periodAnchor: null,
+  periodAnchorFrom: null,
+};
+
+describe("rolling periods", () => {
+  it("steps from the payment day, not the 1st", () => {
+    expect(
+      paidUntil("2026-11-15", new Set(["2026-11-15", "2026-12-15"]), {
+        ...CALENDAR,
+        startMonth: "2026-09-15",
+      }),
+    ).toBe("2026-12-15");
   });
 });
 
 describe("upfrontStart", () => {
   it("starts at the first month not yet paid or claimed", () => {
-    expect(upfrontStart("2026-11-01", new Set())).toBe("2026-11-01");
+    expect(upfrontStart("2026-11-01", new Set(), CALENDAR)).toBe("2026-11-01");
     expect(
-      upfrontStart("2026-11-01", new Set(["2026-11-01", "2026-12-01"])),
+      upfrontStart(
+        "2026-11-01",
+        new Set(["2026-11-01", "2026-12-01"]),
+        CALENDAR,
+      ),
     ).toBe("2027-01-01");
   });
 });
@@ -106,10 +118,15 @@ describe("paidUntil", () => {
       paidUntil(
         "2026-11-01",
         new Set(["2026-11-01", "2026-12-01", "2027-02-01"]),
+        CALENDAR,
       ),
     ).toBe("2026-12-01");
-    expect(paidUntil("2026-11-01", new Set(["2026-11-01"]))).toBe("2026-11-01");
-    expect(paidUntil("2026-11-01", new Set(["2026-12-01"]))).toBeNull();
+    expect(paidUntil("2026-11-01", new Set(["2026-11-01"]), CALENDAR)).toBe(
+      "2026-11-01",
+    );
+    expect(
+      paidUntil("2026-11-01", new Set(["2026-12-01"]), CALENDAR),
+    ).toBeNull();
   });
 });
 

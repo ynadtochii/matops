@@ -2,11 +2,13 @@ import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
 import type { DbExec, TenantTx } from "@matops/db";
+import type { AssignmentStatus } from "@matops/domain";
 import {
   and,
   asc,
   eq,
   eventRole,
+  gt,
   inArray,
   isNull,
   or,
@@ -21,25 +23,39 @@ import {
   accessPlanEntity,
   entityMembership,
   member,
+  membershipAccessHold,
+  membershipMonth,
+  membershipMonthAudit,
   membershipPurchase,
   person,
 } from "@matops/db/schema";
 import {
+  addDays,
   appliesInMonth,
-  formatMonth,
+  currentPeriod,
+  earliestKey,
+  formatDay,
+  formatDeadline,
+  formatPeriod,
   isStaffRole,
   localDateISO,
-  monthOf,
-  monthsFrom,
   paidUntil,
+  paymentDateProblem,
+  paymentDay,
+  paymentDayLabel,
+  periodLastDay,
+  periodOf,
+  periodsFrom,
   periodsOverlap,
   runsOrganization,
+  upcomingDueDates,
 } from "@matops/domain";
 import {
   AccessPlanIdSchema,
   AssignMembershipSchema,
   AssignmentIdSchema,
   BookingReviewSchema,
+  ChangePaymentDateSchema,
   MemberAssignmentsSchema,
 } from "@matops/validators";
 
@@ -53,12 +69,13 @@ import {
   membershipCalendar,
   membershipStanding,
 } from "../../membership-status";
-import { ASSIGNMENT_NOT_FOUND } from "../../month-write";
+import { ASSIGNMENT_NOT_FOUND, loadAssignment } from "../../month-write";
 import { readOrganizationEntities } from "../../organization-read";
 import { takenMonths } from "../../purchase-write";
 import {
   organizationManagerIdentityProcedure,
   organizationManagerProcedure,
+  organizationOwnerProcedure,
 } from "../../trpc";
 import {
   coverageOf,
@@ -111,6 +128,31 @@ function recordFirstAssignment(ctx: {
   });
 }
 
+const PAYMENT_DATE_PROBLEM = {
+  not_after_today: "Pick a date after today.",
+  inactive: "This membership is paused or ended. Restore it first.",
+  ended:
+    "This membership already has an end date. Change the date on the membership that follows it.",
+  change_pending: "A plan change is scheduled. Cancel it first.",
+  payment_declined:
+    "A payment on this membership was declined. Resolve it first.",
+  paid_ahead:
+    "They paid ahead for later periods. Discard that purchase first, then change the date.",
+} as const;
+
+// A start month that today still falls inside (a CSV import with this
+// month) is joined today, so the new member gets their days to pay from now.
+function joinsToday(startMonth: string, today: string): boolean {
+  if (startMonth > today) return false;
+  const schedule = {
+    startMonth,
+    endMonth: null,
+    periodAnchor: null,
+    periodAnchorFrom: null,
+  };
+  return periodOf(today, schedule) === startMonth;
+}
+
 export async function assignOne(
   ctx: {
     db: TenantTx;
@@ -132,22 +174,12 @@ export async function assignOne(
     input.userId,
   );
 
-  // The gym's own calendar decides which month "now" is. Just after midnight
-  // on 1 October in Lisbon, UTC is still September, and an assignment starting
-  // in a month that is already over carries a deadline that has passed.
-  const { month, timeZone } = await currentMonthOf(ctx.db);
-  const startMonth = input.startMonth
-    ? `${input.startMonth.slice(0, 7)}-01`
-    : month;
+  // The gym's own calendar decides which day "today" is, and a new membership's
+  // periods count from the day it starts (ADR 163).
+  const { today } = await currentMonthOf(ctx.db);
+  const startMonth = input.startMonth ?? input.startsOn ?? today;
   const startsOn =
-    input.startsOn ??
-    (startMonth === month ? localDateISO(new Date(), timeZone) : startMonth);
-  if (startsOn.slice(0, 7) !== startMonth.slice(0, 7)) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "The start date must be inside the start month.",
-    });
-  }
+    input.startsOn ?? (joinsToday(startMonth, today) ? today : startMonth);
 
   const periods = await lockAssignmentsOf(
     ctx.db,
@@ -246,6 +278,8 @@ export async function lockAssignmentsOf(
       startMonth: accessAssignment.startMonth,
       startsOn: accessAssignment.startsOn,
       endMonth: accessAssignment.endMonth,
+      periodAnchor: accessAssignment.periodAnchor,
+      periodAnchorFrom: accessAssignment.periodAnchorFrom,
       assigningEntityId: accessAssignment.assigningEntityId,
     })
     .from(accessAssignment)
@@ -368,8 +402,8 @@ async function setAssignmentStatus(
   // A successor waiting on this membership would restore access the moment it
   // started, which is not what pausing meant (ADR 129). Say so rather than let
   // it happen quietly.
-  const { month } = await currentMonthOf(ctx.db);
-  const waiting = await pendingChanges(ctx.db, month);
+  const { today } = await currentMonthOf(ctx.db);
+  const waiting = await pendingChanges(ctx.db, today);
   if (waiting.some((c) => c.sourceAssignmentId === id)) {
     throw new TRPCError({ code: "CONFLICT", message: CHANGE_PENDING });
   }
@@ -567,6 +601,122 @@ export const planHolderProcedures = {
       setAssignmentStatus(ctx, input.id, "cancelled"),
     ),
 
+  /**
+   * Move a member's payment day (ADR 163). The current period stretches or
+   * shrinks to the new date, and later periods count from it, on the same
+   * row, so holds, pauses, ends and purchases keep working on one membership.
+   */
+  changePaymentDate: organizationOwnerProcedure
+    .input(ChangePaymentDateSchema)
+    .mutation(async ({ ctx, input }) => {
+      const found = await loadAssignment(ctx.db, input.assignmentId);
+      const periods = await lockAssignmentsOf(
+        ctx.db,
+        found.personId,
+        found.accountUserId,
+        ctx.organizationId,
+      );
+      const source = periods.find((a) => a.id === found.id);
+      if (!source) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: ASSIGNMENT_NOT_FOUND,
+        });
+      }
+      const { today } = await currentMonthOf(ctx.db);
+      const currentStart = currentPeriod(today, source);
+      const taken = await takenMonths(ctx.db, [source.id], today);
+      const waiting = await pendingChanges(ctx.db, today);
+      const holds = await ctx.db
+        .select({ id: membershipAccessHold.id })
+        .from(membershipAccessHold)
+        .where(
+          and(
+            eq(membershipAccessHold.assignmentId, source.id),
+            isNull(membershipAccessHold.resolvedAt),
+          ),
+        );
+      const problem = paymentDateProblem({
+        nextPaymentOn: input.nextPaymentOn,
+        today,
+        status: source.status as AssignmentStatus,
+        endMonth: source.endMonth,
+        currentStart,
+        takenAfterCurrent: taken
+          .map((row) => row.month)
+          .filter((month) => currentStart !== null && month > currentStart),
+        changePending: waiting.some(
+          (c) =>
+            c.sourceAssignmentId === source.id ||
+            c.targetAssignmentId === source.id,
+        ),
+        declined: holds.length > 0,
+      });
+      if (problem) {
+        throw new TRPCError({
+          code: problem === "not_after_today" ? "BAD_REQUEST" : "CONFLICT",
+          message: PAYMENT_DATE_PROBLEM[problem],
+        });
+      }
+
+      if (!currentStart) throw new Error("checked by paymentDateProblem");
+      const [current] = await ctx.db
+        .select({
+          status: membershipMonth.status,
+          priceMinor: membershipMonth.priceMinor,
+          currency: membershipMonth.currency,
+          deadline: membershipMonth.deadline,
+          calendarTimeZone: membershipMonth.calendarTimeZone,
+        })
+        .from(membershipMonth)
+        .where(
+          and(
+            eq(membershipMonth.assignmentId, source.id),
+            eq(membershipMonth.month, currentStart),
+          ),
+        );
+      await ctx.db
+        .update(accessAssignment)
+        .set({
+          periodAnchor: input.nextPaymentOn,
+          periodAnchorFrom: currentStart,
+        })
+        .where(eq(accessAssignment.id, source.id));
+      // Unpaid rows after today only carry a moved due date, and their keys
+      // belong to the old schedule.
+      await ctx.db
+        .delete(membershipMonth)
+        .where(
+          and(
+            eq(membershipMonth.assignmentId, source.id),
+            gt(membershipMonth.month, currentStart),
+            eq(membershipMonth.status, "unpaid"),
+          ),
+        );
+      const status = current?.status ?? "unpaid";
+      await ctx.db.insert(membershipMonthAudit).values({
+        organizationId: ctx.organizationId,
+        assignmentId: source.id,
+        month: currentStart,
+        event: "payment_date_changed",
+        beforeStatus: current ? status : null,
+        afterStatus: status,
+        reason: input.reason
+          ? `Next payment ${input.nextPaymentOn}: ${input.reason}`
+          : `Next payment ${input.nextPaymentOn}`,
+        priceMinor: current?.priceMinor ?? null,
+        currency: current?.currency ?? null,
+        deadline: current?.deadline ?? null,
+        calendarTimeZone: current?.calendarTimeZone ?? null,
+        actorId: ctx.session.user.id,
+      });
+      return {
+        id: source.id,
+        nextPaymentOn: input.nextPaymentOn,
+        paymentDayLabel: paymentDayLabel(input.nextPaymentOn),
+      };
+    }),
+
   /** Every membership one person holds in this organization. */
   forUser: organizationManagerProcedure
     .input(MemberAssignmentsSchema)
@@ -586,6 +736,8 @@ export const planHolderProcedures = {
           startMonth: accessAssignment.startMonth,
           startsOn: accessAssignment.startsOn,
           endMonth: accessAssignment.endMonth,
+          periodAnchor: accessAssignment.periodAnchor,
+          periodAnchorFrom: accessAssignment.periodAnchorFrom,
           assigningEntityId: accessAssignment.assigningEntityId,
         })
         .from(accessAssignment)
@@ -601,22 +753,45 @@ export const planHolderProcedures = {
         .from(accessPlanEntity);
 
       const calendar = await membershipCalendar(ctx.db);
-      const month = monthOf(new Date(), calendar.timeZone);
+      const today = localDateISO(new Date(), calendar.timeZone);
       const standing = await membershipStanding(
         ctx.db,
         { personId: subject.id, accountUserId: subject.accountUserId },
         new Date(),
       );
-      const waiting = await pendingChanges(ctx.db, month, {
+      const waiting = await pendingChanges(ctx.db, today, {
         personId: subject.id,
         accountUserId: subject.accountUserId,
       });
       const planNameOf = new Map(rows.map((r) => [r.id, r.planName]));
-      const ahead = await takenMonths(
-        ctx.db,
-        rows.map((r) => r.id),
-        month,
-      );
+      const recorded = rows.length
+        ? await ctx.db
+            .select({
+              assignmentId: membershipMonth.assignmentId,
+              month: membershipMonth.month,
+              status: membershipMonth.status,
+              deadline: membershipMonth.deadline,
+            })
+            .from(membershipMonth)
+            .where(
+              and(
+                inArray(
+                  membershipMonth.assignmentId,
+                  rows.map((r) => r.id),
+                ),
+                gt(
+                  membershipMonth.month,
+                  addDays(
+                    earliestKey(
+                      standing.map((m) => m.month),
+                      today,
+                    ),
+                    -1,
+                  ),
+                ),
+              ),
+            )
+        : [];
       const purchases = rows.length
         ? await ctx.db
             .select({
@@ -643,37 +818,44 @@ export const planHolderProcedures = {
       return rows.map((r) => {
         const now = standing.find((m) => m.assignmentId === r.id);
         const change = waiting.find((c) => c.sourceAssignmentId === r.id);
-        const until = paidUntil(
-          month,
-          new Set(
-            ahead
-              .filter(
-                (a) => a.assignmentId === r.id && a.status === "confirmed",
-              )
-              .map((a) => a.month),
-          ),
-        );
+        const theirs = recorded.filter((m) => m.assignmentId === r.id);
+        const until = now
+          ? paidUntil(
+              now.month,
+              new Set(
+                theirs
+                  .filter((m) => m.status === "confirmed")
+                  .map((m) => m.month),
+              ),
+              r,
+            )
+          : null;
+        const lastOf = (p: { firstMonth: string; months: number }) =>
+          periodLastDay(
+            periodsFrom(p.firstMonth, r, p.months).at(-1) ?? p.firstMonth,
+            r,
+          );
+        const dueDates = now
+          ? upcomingDueDates({
+              current: now.month,
+              schedule: r,
+              recorded: theirs,
+              policy: calendar,
+            })
+          : [];
         return {
           paidUntilLabel:
-            until && until !== month
-              ? formatMonth(until, calendar.timeZone)
+            now && until && until !== now.month
+              ? formatDay(periodLastDay(until, r))
               : null,
           purchases: purchases
-            .filter(
-              (p) =>
-                p.assignmentId === r.id &&
-                (monthsFrom(p.firstMonth, p.months).at(-1) ?? p.firstMonth) >=
-                  month,
-            )
+            .filter((p) => p.assignmentId === r.id && lastOf(p) >= today)
             .map((p) => ({
               id: p.id,
               months: p.months,
               totalMinor: p.totalMinor,
               currency: p.currency,
-              label: `${formatMonth(p.firstMonth, calendar.timeZone)} to ${formatMonth(
-                monthsFrom(p.firstMonth, p.months).at(-1) ?? p.firstMonth,
-                calendar.timeZone,
-              )}`,
+              label: formatPeriod(p.firstMonth, lastOf(p)),
             })),
           id: r.id,
           planId: r.planId,
@@ -688,21 +870,33 @@ export const planHolderProcedures = {
             .map((c) => c.entityId)
             .sort(),
           month: now?.month ?? null,
-          monthLabel: now ? formatMonth(now.month, calendar.timeZone) : null,
+          monthLabel: now?.periodLabel ?? null,
+          paymentDayLabel: paymentDayLabel(paymentDay(r)),
+          dueDates,
+          paymentDateFrom: addDays(today, 1),
+          nextPaymentOn: now?.nextPaymentOn ?? null,
+          nextPaymentLabel: now ? formatDay(now.nextPaymentOn) : null,
+          deadline: now?.deadline ?? null,
+          deadlineLabel: now
+            ? formatDeadline(now.deadline, calendar.timeZone)
+            : null,
+          deadlineOn: now
+            ? localDateISO(now.deadline, calendar.timeZone)
+            : null,
+          deadlineMoved: now?.deadlineMoved ?? false,
+          paymentStatus: now?.paymentStatus ?? null,
+          version: now?.version ?? 0,
           paid: now?.paid ?? false,
           paymentRequired: now?.paymentRequired ?? true,
           amount: now?.amount ?? null,
-          appliesNow: appliesInMonth(r, month),
-          // The plan waiting for the 1st, so the profile can say what happens
+          appliesNow: now !== undefined,
+          // The plan waiting to start, so the profile can say what happens
           // next and offer to take it back (ADR 129).
           pendingChange: change
             ? {
                 id: change.id,
                 effectiveMonth: change.effectiveMonth,
-                effectiveMonthLabel: formatMonth(
-                  change.effectiveMonth,
-                  calendar.timeZone,
-                ),
+                effectiveMonthLabel: formatDay(change.effectiveMonth),
                 targetAssignmentId: change.targetAssignmentId,
                 targetPlanName:
                   planNameOf.get(change.targetAssignmentId) ?? null,

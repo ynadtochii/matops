@@ -163,11 +163,11 @@ async function assignmentCoverage(
 
 /** What a coverage edit would do, without doing it. */
 async function preview(db: TenantTx, planId: string, next: string[]) {
-  const { month } = await currentMonthOf(db);
+  const { today } = await currentMonthOf(db);
   const affected = affectedByCoverageChange(
     planId,
     next,
-    await assignmentCoverage(db, month),
+    await assignmentCoverage(db, today),
   );
   const staff = await loadStaffAccess(db, {
     entityIds: [...new Set(affected.flatMap((a) => [...a.gains, ...a.loses]))],
@@ -200,7 +200,7 @@ const EMPTY_RECONCILIATION: PlanReconciliation = {
 async function coverageGaps(
   db: TenantTx,
 ): Promise<Map<string, { missing: number; needsDecision: number }>> {
-  const { month } = await currentMonthOf(db);
+  const { today } = await currentMonthOf(db);
   const rows = await db
     .select({
       planId: accessAssignment.planId,
@@ -222,7 +222,7 @@ async function coverageGaps(
     .where(
       and(
         eq(accessAssignment.status, "active"),
-        assignmentAppliesInMonth(month),
+        assignmentAppliesInMonth(today),
       ),
     );
 
@@ -674,8 +674,8 @@ export const planCatalogProcedures = {
     .mutation(async ({ ctx, input }) => {
       await loadPlan(ctx.db, input.id);
       if (input.archived) {
-        const { month } = await currentMonthOf(ctx.db);
-        const waiting = await pendingChanges(ctx.db, month);
+        const { today } = await currentMonthOf(ctx.db);
+        const waiting = await pendingChanges(ctx.db, today);
         const targets = await ctx.db
           .select({
             id: accessAssignment.id,

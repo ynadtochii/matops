@@ -259,9 +259,12 @@ describe("assigning a shared membership", () => {
     expect(again.restored).toBe(true);
   });
 
-  it("starts the membership on the first of a calendar month", async () => {
+  it("starts the membership on the day it was assigned", async () => {
     const held = await owner().accessPlan.forUser({ userId: BEA });
-    expect(held[0]?.startMonth).toMatch(/^\d{4}-\d{2}-01$/);
+    const around = [-1, 0, 1].map((days) =>
+      new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10),
+    );
+    expect(around).toContain(held[0]?.startMonth);
   });
 
   it("records the coverage the plan holds, not the branch it was assigned from", async () => {
@@ -345,7 +348,7 @@ describe("marking a membership month paid", () => {
     ).toBe("FORBIDDEN");
   });
 
-  it("refuses a month that is not the first of one", async () => {
+  it("refuses a date that is not one of its periods", async () => {
     expect(
       await rejectionCode(
         owner().accessPlan.markMonth({
@@ -354,7 +357,7 @@ describe("marking a membership month paid", () => {
           paid: true,
         }),
       ),
-    ).toBe("BAD_REQUEST");
+    ).toBe("PRECONDITION_FAILED");
   });
 
   it("has no record at all until somebody ticks it", async () => {
@@ -436,9 +439,9 @@ describe("marking a membership month paid", () => {
   it("lists every active membership of the month, unpaid included", async () => {
     const board = await owner().accessPlan.monthBoard();
     expect(board.month).toMatch(/^\d{4}-\d{2}-01$/);
-    expect(board.monthLabel).toBeTruthy();
 
     const row = board.rows.find((r) => r.assignmentId === assignment);
+    expect(row?.periodLabel).toBeTruthy();
     expect(row?.userId).toBe(personId(ORG2, SAM));
     expect(row?.planName).toBe("Mat only");
     expect(row?.entityIds).toEqual([ORG2]);
@@ -447,15 +450,17 @@ describe("marking a membership month paid", () => {
 
   it("counts a month as paid on the board once it is ticked", async () => {
     const start = await owner().accessPlan.monthBoard();
+    const month =
+      start.rows.find((r) => r.assignmentId === assignment)?.month ?? "";
     await owner().accessPlan.markMonth({
       assignmentId: assignment,
-      month: start.month,
+      month,
       paid: false,
     });
     const before = await owner().accessPlan.monthBoard();
     await owner().accessPlan.markMonth({
       assignmentId: assignment,
-      month: start.month,
+      month,
       paid: true,
     });
     const after = await owner().accessPlan.monthBoard();
@@ -507,7 +512,8 @@ describe("a member says they paid", () => {
   let lees: string;
 
   const owner = () => h.as(BOSS, ORGC);
-  const monthNow = () => `${new Date().toISOString().slice(0, 7)}-01` as const;
+  let periodStart: string;
+  const monthNow = () => periodStart;
 
   beforeAll(async () => {
     h = await harness();
@@ -537,6 +543,11 @@ describe("a member says they paid", () => {
       .id;
     lees = (await owner().accessPlan.assign({ userId: LEE, planId: plan.id }))
       .id;
+    const started = await h.pg.query<{ start: string }>(
+      `SELECT start_month::text AS start FROM access_assignment WHERE id = $1`,
+      [sams],
+    );
+    periodStart = started.rows[0]?.start ?? "";
     await h.exec
       .update(entity)
       .set({ membershipEnforcedAt: new Date() })

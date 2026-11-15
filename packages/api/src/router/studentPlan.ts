@@ -14,7 +14,6 @@ import {
   canSwapChosenPlan,
   isStaff,
   localDateISO,
-  monthOf,
   suspendedMembership,
 } from "@matops/domain";
 import { ChoosePlanSchema } from "@matops/validators";
@@ -29,6 +28,7 @@ import {
   appendMonthAudit,
   loadAssignment,
   monthEvidence,
+  requireCurrentPeriod,
 } from "../month-write";
 import { loadChoosablePlans } from "../student-plans";
 import { memberProcedure } from "../trpc";
@@ -163,7 +163,7 @@ export const studentPlanRouter = {
       });
       const assignment = await loadAssignment(ctx.db, done.id);
       const calendar = await membershipCalendar(ctx.db);
-      const month = monthOf(now, calendar.timeZone);
+      const month = requireCurrentPeriod(assignment, calendar.timeZone, now);
       const evidence = await monthEvidence(ctx.db, assignment, month);
       const firstMonth = { ...evidence, deadline: now };
       const [written] = await ctx.db

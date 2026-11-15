@@ -20,9 +20,8 @@ import type { Money, PaymentMethodKind } from "@matops/domain";
 import {
   cashPaidOnEarliest,
   FILE_RULES,
+  formatDay,
   formatMoney,
-  formatMonth,
-  monthsFrom,
   paymentMethodUsesReference,
   upfrontHint,
   upfrontTotal,
@@ -288,8 +287,7 @@ function PayStep({
   extend?: boolean;
   onClose?: () => void;
 }) {
-  const { timeZone, uploadsEnabled } = useEntity();
-  const zone = timeZone ?? "UTC";
+  const { uploadsEnabled } = useEntity();
   const upfront = membership.upfront;
   const [months, setMonths] = useState(1);
   const quote = upfront
@@ -299,7 +297,7 @@ function PayStep({
     ? upfrontHint(upfront.monthlyMinor, upfront.rule, months)
     : null;
   const firstMonth = upfront?.firstMonth ?? membership.month;
-  const covered = monthsFrom(firstMonth, months);
+  const covered = upfront?.periods.slice(0, months) ?? [];
   const ahead = months > 1 || firstMonth !== membership.month;
   const methods = options.methods.filter(
     (m) => !m.offPlanIds.includes(membership.planId),
@@ -323,8 +321,14 @@ function PayStep({
       ? { priceMinor: quote.totalMinor, currency: upfront.currency }
       : membership.amount;
   const price = amount ? formatMoney(amount.priceMinor, amount.currency) : null;
-  const first = formatMonth(firstMonth, zone);
-  const period = monthRange(firstMonth, covered.at(-1) ?? firstMonth, zone);
+  const last = covered.at(-1);
+  const first =
+    firstMonth === membership.month
+      ? membership.periodLabel
+      : `the period from ${formatDay(firstMonth)}`;
+  const period = last
+    ? `${formatDay(firstMonth)} to ${last.lastDayLabel}`
+    : membership.periodLabel;
   const pay = { months, amount };
 
   return (
@@ -408,11 +412,11 @@ function PayStep({
         )}
         <p className="text-muted-foreground border-border border-t pt-3 text-sm">
           {extend
-            ? `Your next paid months start in ${first}.`
+            ? `Your next paid period starts on ${formatDay(firstMonth)}.`
             : onChangePlan
               ? `Booking opens once ${first} is paid.`
               : (membership.warning?.headline ??
-                "Pay this month to keep booking.")}
+                "Pay this period to keep booking.")}
           {(firstMonth !== membership.month || upfront) &&
             " Pay ahead by cash or bank transfer."}
         </p>
@@ -540,18 +544,6 @@ function claimed(pay: PayChoice) {
       ? { priceMinor: pay.amount.priceMinor, currency: pay.amount.currency }
       : {}),
   };
-}
-
-function monthRange(from: string, to: string, timeZone: string): string {
-  if (from === to) return formatMonth(from, timeZone);
-  const fmt = (month: string, withYear: boolean) =>
-    new Intl.DateTimeFormat("en-GB", {
-      timeZone,
-      month: "short",
-      year: withYear ? "numeric" : undefined,
-    }).format(new Date(`${month}T12:00:00Z`));
-  const sameYear = from.slice(0, 4) === to.slice(0, 4);
-  return `${fmt(from, !sameYear)} to ${fmt(to, true)}`;
 }
 
 function MonthsPicker({

@@ -8,6 +8,7 @@ import {
   monthVerdict,
   nextMonth,
   payDeadline,
+  upcomingDueDates,
 } from "../src/membership-month";
 
 const LISBON: MembershipPolicy = { graceDays: 7, timeZone: "Europe/Lisbon" };
@@ -65,94 +66,59 @@ describe("payDeadline for a normal month", () => {
   });
 });
 
-describe("payDeadline for a mid-month join", () => {
-  const september = {
-    month: "2026-09-01",
-    startMonth: "2026-09-01",
+describe("payDeadline for a new membership", () => {
+  const joined = {
+    month: "2026-09-15",
+    startMonth: "2026-09-15",
+    joinedOn: "2026-09-15",
     policy: LISBON,
   };
 
-  it("gives a 15 September joiner seven days, to the 22nd", () => {
-    expect(
-      payDeadline({ ...september, joinedOn: "2026-09-15" }).toISOString(),
-    ).toBe("2026-09-21T23:00:00.000Z");
+  it("gives a 15 September joiner three days, to the 18th", () => {
+    expect(payDeadline(joined).toISOString()).toBe("2026-09-17T23:00:00.000Z");
   });
 
-  it("starts October on the 1st with the normal monthly grace", () => {
-    const october = payDeadline({
-      month: "2026-10-01",
-      startMonth: "2026-09-01",
-      joinedOn: "2026-09-15",
-      policy: LISBON,
-    });
-    expect(october.toISOString()).toBe("2026-10-07T23:00:00.000Z");
+  it("gives the next period its start plus the owner's grace days", () => {
+    expect(payDeadline({ ...joined, month: "2026-10-15" }).toISOString()).toBe(
+      "2026-10-21T23:00:00.000Z",
+    );
   });
 
-  it("lets a late-month join's window cross into the next month", () => {
-    // Joining on 28 September, seven days runs to 5 October. September's
-    // deadline moves; October's does not, and gets its own month record.
-    const septemberDue = payDeadline({
-      ...september,
-      joinedOn: "2026-09-28",
-    });
-    expect(septemberDue.toISOString()).toBe("2026-10-04T23:00:00.000Z");
-
-    const octoberDue = payDeadline({
-      month: "2026-10-01",
-      startMonth: "2026-09-01",
-      joinedOn: "2026-09-28",
-      policy: LISBON,
-    });
-    expect(octoberDue.toISOString()).toBe("2026-10-07T23:00:00.000Z");
-    expect(septemberDue.getTime()).toBeLessThan(octoberDue.getTime());
-  });
-
-  it("gives a plan change written in September October's own deadline", () => {
-    // The successor assignment is created on 6 September and starts in
-    // October, so the day it was written is not a mid-month join.
+  it("counts a calendar membership's mid-month join from the join day", () => {
     expect(
       payDeadline({
-        month: "2026-10-01",
-        startMonth: "2026-10-01",
-        joinedOn: "2026-09-06",
+        month: "2026-09-01",
+        startMonth: "2026-09-01",
+        joinedOn: "2026-09-28",
         policy: LISBON,
       }).toISOString(),
-    ).toBe("2026-10-07T23:00:00.000Z");
+    ).toBe("2026-09-30T23:00:00.000Z");
+  });
+
+  it("renews the first period of a continuation", () => {
+    expect(
+      payDeadline({
+        month: "2026-12-10",
+        startMonth: "2026-12-10",
+        joinedOn: "2026-09-15",
+        policy: LISBON,
+      }).toISOString(),
+    ).toBe("2026-12-17T00:00:00.000Z");
   });
 
   it("keeps midnight across a daylight-saving change", () => {
-    // Lisbon leaves summer time on 25 October 2026. Joining on the 22nd, the
-    // window ends on the 29th at local midnight, which is 00:00Z once the
-    // clocks have gone back, not 23:00Z the day before.
     expect(
       payDeadline({
-        month: "2026-10-01",
-        startMonth: "2026-10-01",
-        joinedOn: "2026-10-22",
+        month: "2026-10-24",
+        startMonth: "2026-10-24",
+        joinedOn: "2026-10-24",
         policy: LISBON,
       }).toISOString(),
-    ).toBe("2026-10-29T00:00:00.000Z");
-  });
-
-  it("treats a first-of-the-month join as a normal month", () => {
-    const asJoin = payDeadline({ ...september, joinedOn: "2026-09-01" });
-    const asNormal = payDeadline({ ...september, joinedOn: null });
-    expect(asJoin.toISOString()).toBe(asNormal.toISOString());
-  });
-
-  it("ignores the join day once the join month has passed", () => {
-    const later = payDeadline({
-      month: "2026-11-01",
-      startMonth: "2026-09-01",
-      joinedOn: "2026-09-15",
-      policy: LISBON,
-    });
-    // Midnight on 8 November is 00:00Z: Lisbon is back on winter time by then.
-    expect(later.toISOString()).toBe("2026-11-08T00:00:00.000Z");
+    ).toBe("2026-10-27T00:00:00.000Z");
   });
 
   it("uses the join grace the constant names", () => {
-    expect(JOIN_GRACE_DAYS).toBe(7);
+    expect(JOIN_GRACE_DAYS).toBe(3);
   });
 });
 
@@ -183,7 +149,7 @@ describe("monthVerdict", () => {
 
 describe("membershipWarning", () => {
   const base = {
-    month: "2026-09-01",
+    periodLabel: "September 2026",
     deadline: new Date("2026-09-07T23:00:00Z"),
     planName: "BJJ + Gym",
     timeZone: "Europe/Lisbon",
@@ -212,12 +178,98 @@ describe("membershipWarning", () => {
     expect(warning?.detail).toMatch(/Tue 8 Sept?/);
   });
 
-  it("reads the month in the organization's own zone", () => {
+  it("names the period it is given", () => {
     const warning = membershipWarning({
       ...base,
-      month: "2026-12-01",
+      periodLabel: "15 Dec to 14 Jan 2027",
       verdict: "within-grace",
     });
-    expect(warning?.headline).toContain("December 2026");
+    expect(warning?.headline).toContain("15 Dec to 14 Jan 2027");
+  });
+});
+
+describe("upcomingDueDates", () => {
+  const UTC: MembershipPolicy = { graceDays: 8, timeZone: "UTC" };
+  const schedule = {
+    startMonth: "2026-09-01",
+    startsOn: "2026-09-01",
+    endMonth: null,
+    periodAnchor: null,
+    periodAnchorFrom: null,
+  };
+  const paid = (month: string) => ({
+    month,
+    status: "confirmed",
+    deadline: null,
+  });
+
+  it("lists the current period and the next two", () => {
+    expect(
+      upcomingDueDates({
+        current: "2026-11-01",
+        schedule,
+        recorded: [],
+        policy: UTC,
+      }),
+    ).toEqual([
+      {
+        month: "2026-11-01",
+        label: "1 Nov to 30 Nov 2026",
+        deadlineOn: "2026-11-09",
+        deadlineMoved: false,
+        paid: false,
+      },
+      {
+        month: "2026-12-01",
+        label: "1 Dec to 31 Dec 2026",
+        deadlineOn: "2026-12-09",
+        deadlineMoved: false,
+        paid: false,
+      },
+      {
+        month: "2027-01-01",
+        label: "1 Jan to 31 Jan 2027",
+        deadlineOn: "2027-01-09",
+        deadlineMoved: false,
+        paid: false,
+      },
+    ]);
+  });
+
+  it("keeps paid periods and goes on to the first unpaid one", () => {
+    const dates = upcomingDueDates({
+      current: "2026-11-01",
+      schedule,
+      recorded: [
+        paid("2026-11-01"),
+        paid("2026-12-01"),
+        paid("2027-01-01"),
+        {
+          month: "2027-02-01",
+          status: "unpaid",
+          deadline: new Date("2027-02-20T00:00:00Z"),
+        },
+      ],
+      policy: UTC,
+    });
+    expect(
+      dates.map((d) => [d.month, d.paid, d.deadlineOn, d.deadlineMoved]),
+    ).toEqual([
+      ["2026-11-01", true, "2026-11-09", false],
+      ["2026-12-01", true, "2026-12-09", false],
+      ["2027-01-01", true, "2027-01-09", false],
+      ["2027-02-01", false, "2027-02-20", true],
+    ]);
+  });
+
+  it("stops at the end of the membership", () => {
+    expect(
+      upcomingDueDates({
+        current: "2026-11-01",
+        schedule: { ...schedule, endMonth: "2027-01-01" },
+        recorded: [],
+        policy: UTC,
+      }).map((d) => d.month),
+    ).toEqual(["2026-11-01", "2026-12-01"]);
   });
 });

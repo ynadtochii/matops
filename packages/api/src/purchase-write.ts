@@ -13,8 +13,9 @@ import {
 } from "@matops/db/schema";
 import {
   appliesInMonth,
-  formatMonth,
-  monthsFrom,
+  formatDay,
+  periodBoundary,
+  periodsFrom,
   priceForMonth,
   splitTotal,
   upfrontStart,
@@ -76,8 +77,9 @@ export async function quotePurchase(
   const firstMonth = upfrontStart(
     currentMonth,
     new Set(taken.map((row) => row.month)),
+    assignment,
   );
-  const covered = monthsFrom(firstMonth, months);
+  const covered = periodsFrom(firstMonth, assignment, months);
   if (!covered.every((month) => appliesInMonth(assignment, month))) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
@@ -154,7 +156,7 @@ export async function writePurchase(
     if (row && row.status !== "unpaid") {
       throw new TRPCError({
         code: "CONFLICT",
-        message: `${formatMonth(month, input.timeZone)} is already paid or waiting for a check. Refresh and try again.`,
+        message: `The period from ${formatDay(month)} is already paid or waiting for a check. Refresh and try again.`,
       });
     }
     held.push(row);
@@ -194,7 +196,7 @@ export async function writePurchase(
       purchaseId: purchase.id,
       priceMinor: evidence.priceMinor,
       currency: evidence.currency,
-      deadline: evidence.deadline,
+      deadline: held[i]?.deadline ?? evidence.deadline,
       calendarTimeZone: evidence.calendarTimeZone,
       ...claim,
       ...input.payment,
@@ -238,7 +240,7 @@ export async function writePurchase(
           input.organizationId,
           coverage.map((row) => row.entityId),
           assignment.personId,
-          month,
+          { from: month, to: periodBoundary(month, assignment) },
           input.timeZone,
         );
       }
