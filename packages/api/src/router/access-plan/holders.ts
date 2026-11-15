@@ -2,11 +2,13 @@ import type { TRPCRouterRecord } from "@trpc/server";
 import { TRPCError } from "@trpc/server";
 
 import type { DbExec, TenantTx } from "@matops/db";
+import type { AssignmentStatus } from "@matops/domain";
 import {
   and,
   asc,
   eq,
   eventRole,
+  gt,
   inArray,
   isNull,
   or,
@@ -22,22 +24,30 @@ import {
   entityMembership,
   member,
   membershipAccessHold,
+  membershipMonth,
+  membershipMonthAudit,
   membershipPurchase,
   person,
 } from "@matops/db/schema";
 import {
+  addDays,
   appliesInMonth,
   currentPeriod,
+  earliestKey,
   formatDay,
   formatDeadline,
   formatPeriod,
   isStaffRole,
   localDateISO,
-  monthsFrom,
   paidUntil,
+  payDeadline,
   paymentDateProblem,
+  paymentDay,
   paymentDayLabel,
+  periodLabel,
   periodLastDay,
+  periodOf,
+  periodsFrom,
   periodsOverlap,
   runsOrganization,
 } from "@matops/domain";
@@ -131,6 +141,19 @@ const PAYMENT_DATE_PROBLEM = {
     "They paid ahead for later periods. Discard that purchase first, then change the date.",
 } as const;
 
+// A start month that today still falls inside (a CSV import with this
+// month) is joined today, so the new member gets their days to pay from now.
+function joinsToday(startMonth: string, today: string): boolean {
+  if (startMonth > today) return false;
+  const schedule = {
+    startMonth,
+    endMonth: null,
+    periodAnchor: null,
+    periodAnchorFrom: null,
+  };
+  return periodOf(today, schedule) === startMonth;
+}
+
 export async function assignOne(
   ctx: {
     db: TenantTx;
@@ -155,8 +178,9 @@ export async function assignOne(
   // The gym's own calendar decides which day "today" is, and a new membership's
   // periods count from the day it starts (ADR 163).
   const { today } = await currentMonthOf(ctx.db);
-  const startMonth = input.startsOn ?? input.startMonth ?? today;
-  const startsOn = startMonth;
+  const startMonth = input.startMonth ?? input.startsOn ?? today;
+  const startsOn =
+    input.startsOn ?? (joinsToday(startMonth, today) ? today : startMonth);
 
   const periods = await lockAssignmentsOf(
     ctx.db,
@@ -255,6 +279,8 @@ export async function lockAssignmentsOf(
       startMonth: accessAssignment.startMonth,
       startsOn: accessAssignment.startsOn,
       endMonth: accessAssignment.endMonth,
+      periodAnchor: accessAssignment.periodAnchor,
+      periodAnchorFrom: accessAssignment.periodAnchorFrom,
       assigningEntityId: accessAssignment.assigningEntityId,
     })
     .from(accessAssignment)
@@ -578,9 +604,8 @@ export const planHolderProcedures = {
 
   /**
    * Move a member's payment day (ADR 163). The current period stretches or
-   * shrinks to the new date, and a continuation on the same plan starts there,
-   * so every assignment keeps one fixed anchor and past periods stay on the
-   * row they were paid on.
+   * shrinks to the new date, and later periods count from it, on the same
+   * row, so holds, pauses, ends and purchases keep working on one membership.
    */
   changePaymentDate: organizationOwnerProcedure
     .input(ChangePaymentDateSchema)
@@ -615,7 +640,7 @@ export const planHolderProcedures = {
       const problem = paymentDateProblem({
         nextPaymentOn: input.nextPaymentOn,
         today,
-        status: source.status,
+        status: source.status as AssignmentStatus,
         endMonth: source.endMonth,
         currentStart,
         takenAfterCurrent: taken
@@ -626,7 +651,7 @@ export const planHolderProcedures = {
             c.sourceAssignmentId === source.id ||
             c.targetAssignmentId === source.id,
         ),
-        held: holds.length > 0,
+        declined: holds.length > 0,
       });
       if (problem) {
         throw new TRPCError({
@@ -635,35 +660,59 @@ export const planHolderProcedures = {
         });
       }
 
-      const [assignedBy] = await ctx.db
-        .select({ assignedBy: accessAssignment.assignedBy })
-        .from(accessAssignment)
-        .where(eq(accessAssignment.id, source.id));
+      if (!currentStart) throw new Error("checked by paymentDateProblem");
+      const [current] = await ctx.db
+        .select({
+          status: membershipMonth.status,
+          priceMinor: membershipMonth.priceMinor,
+          currency: membershipMonth.currency,
+          deadline: membershipMonth.deadline,
+          calendarTimeZone: membershipMonth.calendarTimeZone,
+        })
+        .from(membershipMonth)
+        .where(
+          and(
+            eq(membershipMonth.assignmentId, source.id),
+            eq(membershipMonth.month, currentStart),
+          ),
+        );
       await ctx.db
         .update(accessAssignment)
-        .set({ endMonth: input.nextPaymentOn })
-        .where(eq(accessAssignment.id, source.id));
-      const [made] = await ctx.db
-        .insert(accessAssignment)
-        .values({
-          organizationId: ctx.organizationId,
-          personId: found.personId,
-          planId: source.planId,
-          assigningEntityId: source.assigningEntityId,
-          startMonth: input.nextPaymentOn,
-          startsOn: source.startsOn,
-          assignedBy: assignedBy?.assignedBy ?? ctx.session.user.id,
+        .set({
+          periodAnchor: input.nextPaymentOn,
+          periodAnchorFrom: currentStart,
         })
-        .returning({ id: accessAssignment.id });
-      if (!made) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Couldn't change the payment date. Try again.",
-        });
-      }
+        .where(eq(accessAssignment.id, source.id));
+      // Unpaid rows after today only carry a moved due date, and their keys
+      // belong to the old schedule.
+      await ctx.db
+        .delete(membershipMonth)
+        .where(
+          and(
+            eq(membershipMonth.assignmentId, source.id),
+            gt(membershipMonth.month, currentStart),
+            eq(membershipMonth.status, "unpaid"),
+          ),
+        );
+      const status = current?.status ?? "unpaid";
+      await ctx.db.insert(membershipMonthAudit).values({
+        organizationId: ctx.organizationId,
+        assignmentId: source.id,
+        month: currentStart,
+        event: "payment_date_changed",
+        beforeStatus: current ? status : null,
+        afterStatus: status,
+        reason: input.reason
+          ? `Next payment ${input.nextPaymentOn}: ${input.reason}`
+          : `Next payment ${input.nextPaymentOn}`,
+        priceMinor: current?.priceMinor ?? null,
+        currency: current?.currency ?? null,
+        deadline: current?.deadline ?? null,
+        calendarTimeZone: current?.calendarTimeZone ?? null,
+        actorId: ctx.session.user.id,
+      });
       return {
-        endedId: source.id,
-        id: made.id,
+        id: source.id,
         nextPaymentOn: input.nextPaymentOn,
         paymentDayLabel: paymentDayLabel(input.nextPaymentOn),
       };
@@ -688,6 +737,8 @@ export const planHolderProcedures = {
           startMonth: accessAssignment.startMonth,
           startsOn: accessAssignment.startsOn,
           endMonth: accessAssignment.endMonth,
+          periodAnchor: accessAssignment.periodAnchor,
+          periodAnchorFrom: accessAssignment.periodAnchorFrom,
           assigningEntityId: accessAssignment.assigningEntityId,
         })
         .from(accessAssignment)
@@ -714,14 +765,34 @@ export const planHolderProcedures = {
         accountUserId: subject.accountUserId,
       });
       const planNameOf = new Map(rows.map((r) => [r.id, r.planName]));
-      const ahead = await takenMonths(
-        ctx.db,
-        rows.map((r) => r.id),
-        rows.reduce(
-          (min, r) => (r.startMonth < min ? r.startMonth : min),
-          today,
-        ),
-      );
+      const recorded = rows.length
+        ? await ctx.db
+            .select({
+              assignmentId: membershipMonth.assignmentId,
+              month: membershipMonth.month,
+              status: membershipMonth.status,
+              deadline: membershipMonth.deadline,
+            })
+            .from(membershipMonth)
+            .where(
+              and(
+                inArray(
+                  membershipMonth.assignmentId,
+                  rows.map((r) => r.id),
+                ),
+                gt(
+                  membershipMonth.month,
+                  addDays(
+                    earliestKey(
+                      standing.map((m) => m.month),
+                      today,
+                    ),
+                    -1,
+                  ),
+                ),
+              ),
+            )
+        : [];
       const purchases = rows.length
         ? await ctx.db
             .select({
@@ -748,25 +819,47 @@ export const planHolderProcedures = {
       return rows.map((r) => {
         const now = standing.find((m) => m.assignmentId === r.id);
         const change = waiting.find((c) => c.sourceAssignmentId === r.id);
+        const theirs = recorded.filter((m) => m.assignmentId === r.id);
         const until = now
           ? paidUntil(
               now.month,
               new Set(
-                ahead
-                  .filter(
-                    (a) => a.assignmentId === r.id && a.status === "confirmed",
-                  )
-                  .map((a) => a.month),
+                theirs
+                  .filter((m) => m.status === "confirmed")
+                  .map((m) => m.month),
               ),
-              r.startMonth,
+              r,
             )
           : null;
         const lastOf = (p: { firstMonth: string; months: number }) =>
           periodLastDay(
-            monthsFrom(p.firstMonth, p.months, r.startMonth).at(-1) ??
-              p.firstMonth,
+            periodsFrom(p.firstMonth, r, p.months).at(-1) ?? p.firstMonth,
             r,
           );
+        const dueDates = now
+          ? periodsFrom(now.month, r, 3).flatMap((month) => {
+              if (!appliesInMonth(r, month)) return [];
+              const record = theirs.find((m) => m.month === month);
+              if (record?.status === "confirmed") return [];
+              const computed = payDeadline({
+                month,
+                startMonth: r.startMonth,
+                joinedOn: r.startsOn,
+                policy: calendar,
+              });
+              const deadline = record?.deadline ?? computed;
+              return [
+                {
+                  month,
+                  label: periodLabel(month, r),
+                  deadlineOn: localDateISO(deadline, calendar.timeZone),
+                  deadlineMoved:
+                    record?.deadline != null &&
+                    record.deadline.getTime() !== computed.getTime(),
+                },
+              ];
+            })
+          : [];
         return {
           paidUntilLabel:
             now && until && until !== now.month
@@ -795,7 +888,9 @@ export const planHolderProcedures = {
             .sort(),
           month: now?.month ?? null,
           monthLabel: now?.periodLabel ?? null,
-          paymentDayLabel: paymentDayLabel(r.startMonth),
+          paymentDayLabel: paymentDayLabel(paymentDay(r)),
+          dueDates,
+          paymentDateFrom: addDays(today, 1),
           nextPaymentOn: now?.nextPaymentOn ?? null,
           nextPaymentLabel: now ? formatDay(now.nextPaymentOn) : null,
           deadline: now?.deadline ?? null,

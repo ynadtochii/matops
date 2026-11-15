@@ -390,28 +390,27 @@ function MembershipTab({ personId, name }: { personId: string; name: string }) {
                     Record months
                   </Button>
                 )}
-                {isGymOwner && h.status === "active" && h.month && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setDates({ id: h.id, kind: "payment" })}
-                  >
-                    Payment date
-                  </Button>
-                )}
                 {isGymOwner &&
                   h.status === "active" &&
                   h.month &&
-                  h.paymentRequired &&
-                  !h.paid && (
+                  !h.endMonth && (
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => setDates({ id: h.id, kind: "due" })}
+                      onClick={() => setDates({ id: h.id, kind: "payment" })}
                     >
-                      Due date
+                      Payment date
                     </Button>
                   )}
+                {isGymOwner && h.paymentRequired && h.dueDates.length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setDates({ id: h.id, kind: "due" })}
+                  >
+                    Due date
+                  </Button>
+                )}
                 {h.status === "active" && (
                   <Button
                     size="sm"
@@ -469,23 +468,21 @@ function MembershipTab({ personId, name }: { personId: string; name: string }) {
                   planName: h.planName,
                   month: h.month,
                   nextPaymentOn: h.nextPaymentOn,
+                  paymentDateFrom: h.paymentDateFrom,
                 }}
                 onOpenChange={close}
               />
-            ) : h.deadlineOn && h.monthLabel ? (
+            ) : (
               <DueDateDialog
                 key={h.id}
                 held={{
                   id: h.id,
                   planName: h.planName,
-                  month: h.month,
-                  periodLabel: h.monthLabel,
-                  deadlineOn: h.deadlineOn,
-                  deadlineMoved: h.deadlineMoved,
+                  periods: h.dueDates,
                 }}
                 onOpenChange={close}
               />
-            ) : null;
+            );
           })}
 
       {outcome && (

@@ -161,10 +161,14 @@ export function MonthsTab() {
               held={{
                 id: r.assignmentId,
                 planName: `${r.name}, ${r.planName}`,
-                month: r.month,
-                periodLabel: r.periodLabel,
-                deadlineOn: r.deadlineOn,
-                deadlineMoved: r.deadlineMoved,
+                periods: [
+                  {
+                    month: r.month,
+                    label: r.periodLabel,
+                    deadlineOn: r.deadlineOn,
+                    deadlineMoved: r.deadlineMoved,
+                  },
+                ],
               }}
               onOpenChange={(open) => !open && setMoving(null)}
             />

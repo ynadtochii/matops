@@ -200,6 +200,8 @@ export const accessAssignment = pgTable(
      * applies on either side of the boundary.
      */
     endMonth: t.date(),
+    periodAnchor: t.date(),
+    periodAnchorFrom: t.date(),
     status: t.text().notNull().default("active"),
     assignedBy: t.text().references(() => user.id, { onDelete: "set null" }),
     createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -245,6 +247,14 @@ export const accessAssignment = pgTable(
     index("access_assignment_by_person_period").on(
       table.personId,
       table.startMonth,
+    ),
+    check(
+      "access_assignment_anchor_complete",
+      sql`(period_anchor is null) = (period_anchor_from is null)`,
+    ),
+    check(
+      "access_assignment_anchor_ordered",
+      sql`period_anchor is null or (period_anchor_from >= start_month and period_anchor > period_anchor_from)`,
     ),
     check(
       "access_assignment_period_ordered",

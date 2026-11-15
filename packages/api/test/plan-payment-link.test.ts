@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { nextMonth } from "@matops/domain";
+import { nextMonth, paymentLinkReference } from "@matops/domain";
 
 import type { Harness } from "./helpers";
 import { harness, rejectionCode, seedAcademies } from "./helpers";
@@ -117,7 +117,7 @@ describe("plan payment link (ADR 156)", () => {
 
     const membership = await held();
     expect(membership.cardPaymentUrl).toBe(
-      `${LINK}?client_reference_id=${membership.assignmentId}_${membership.month.slice(0, 7)}`,
+      `${LINK}?client_reference_id=${paymentLinkReference(membership.assignmentId, membership.month)}`,
     );
   });
 

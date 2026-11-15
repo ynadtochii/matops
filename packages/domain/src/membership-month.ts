@@ -1,5 +1,5 @@
 import { instantFromLocalDate, localDateISO } from "./materialize";
-import { addDays } from "./membership-period";
+import { addDays, isJoinPeriod } from "./membership-period";
 
 /**
  * Membership periods and their pay deadlines (ADR 126, ADR 163). Pure — no
@@ -25,7 +25,7 @@ export interface MembershipPolicy {
   timeZone: string;
 }
 
-/** A calendar month, written as its first day: "2026-09-01". */
+/** The start date of one membership period (ADR 163): "2026-09-15". */
 export type MonthKey = string;
 
 /** The month a moment falls in, seen in the organization's zone. */
@@ -66,9 +66,11 @@ interface DeadlineInput {
  */
 export function payDeadline(input: DeadlineInput): Date {
   const { month, startMonth, joinedOn, policy } = input;
-  const join =
-    month === startMonth && joinedOn != null && joinedOn >= startMonth;
-  const from = join ? joinedOn : month;
+  const join = isJoinPeriod(month, {
+    startMonth,
+    startsOn: joinedOn ?? null,
+  });
+  const from = join && joinedOn ? joinedOn : month;
   const days = join ? JOIN_GRACE_DAYS : policy.graceDays;
   return instantFromLocalDate(addDays(from, days), 0, policy.timeZone);
 }
@@ -141,20 +143,20 @@ export function membershipWarning(input: {
   planName: string;
   timeZone: string;
 }): MembershipWarning | null {
-  const { verdict, periodLabel: which, deadline, planName, timeZone } = input;
+  const { verdict, periodLabel, deadline, planName, timeZone } = input;
   if (verdict === "paid") return null;
 
   const when = formatDeadline(deadline, timeZone);
   if (verdict === "within-grace") {
     return {
       verdict,
-      headline: `${which} is not paid yet on ${planName}.`,
+      headline: `${periodLabel} is not paid yet on ${planName}.`,
       detail: `You can still book and train until ${when}. After that, booking stops and any classes you have booked are cancelled.`,
     };
   }
   return {
     verdict,
-    headline: `${which} is unpaid on ${planName}.`,
+    headline: `${periodLabel} is unpaid on ${planName}.`,
     detail: `Booking is closed since ${when}. Pay from Membership to open it again.`,
   };
 }

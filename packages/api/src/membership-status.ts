@@ -13,8 +13,6 @@ import {
   paymentMethod,
 } from "@matops/db/schema";
 import {
-  currentPeriod,
-  formatPeriod,
   isFreeMembershipMonth,
   isJoinPeriod,
   localDateISO,
@@ -22,13 +20,14 @@ import {
   monthVerdict,
   payDeadline,
   periodBoundary,
-  periodLastDay,
+  periodLabel,
   priceForMonth,
   resolveAcademyTimeZone,
+  runningOn,
 } from "@matops/domain";
 
 /**
- * The SQL half of {@link appliesInMonth} for a count that has no period in
+ * The SQL half of `currentPeriod` for a count that has no period in
  * hand (ADR 129, ADR 163): the assignment has started and has not ended today.
  * A reader that already knows the day it is judging should filter in
  * TypeScript with `currentPeriod` instead, which is exact about the zone.
@@ -66,6 +65,8 @@ interface MembershipStanding {
   startMonth: string;
   startsOn: string;
   endMonth: string | null;
+  periodAnchor: string | null;
+  periodAnchorFrom: string | null;
   nextPaymentOn: string;
   paid: boolean;
   paymentStatus: string;
@@ -160,6 +161,8 @@ export async function membershipStanding(
       status: accessAssignment.status,
       startMonth: accessAssignment.startMonth,
       endMonth: accessAssignment.endMonth,
+      periodAnchor: accessAssignment.periodAnchor,
+      periodAnchorFrom: accessAssignment.periodAnchorFrom,
       createdAt: accessAssignment.createdAt,
       startsOn: accessAssignment.startsOn,
       assignedBy: accessAssignment.assignedBy,
@@ -176,10 +179,7 @@ export async function membershipStanding(
   if (rows.length === 0) return [];
   // Only the memberships running today (ADR 129). A successor that starts later
   // owes nothing yet, and the one it replaces still owes its current period.
-  const applicable = rows.flatMap((r) => {
-    const month = currentPeriod(today, r);
-    return month ? [{ ...r, month }] : [];
-  });
+  const applicable = runningOn(today, rows);
   if (applicable.length === 0) return [];
 
   const coverage = await db
@@ -247,7 +247,7 @@ export async function membershipStanding(
     };
     const computed = payDeadline(shared);
     const deadline = held?.deadline ?? computed;
-    const periodLabel = formatPeriod(month, periodLastDay(month, r));
+    const label = periodLabel(month, r);
     return {
       assignmentId: r.id,
       planId: r.planId,
@@ -262,10 +262,12 @@ export async function membershipStanding(
         .map((c) => c.entityId)
         .sort(),
       month,
-      periodLabel,
+      periodLabel: label,
       startMonth: r.startMonth,
       startsOn: r.startsOn,
       endMonth: r.endMonth,
+      periodAnchor: r.periodAnchor,
+      periodAnchorFrom: r.periodAnchorFrom,
       nextPaymentOn: periodBoundary(month, r),
       paid,
       paymentStatus,
@@ -288,7 +290,7 @@ export async function membershipStanding(
                 paid: paid || paymentStatus === "reported",
                 now,
               }),
-              periodLabel,
+              periodLabel: label,
               deadline,
               planName: r.planName,
               timeZone: calendar.timeZone,

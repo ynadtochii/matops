@@ -32,7 +32,6 @@ import {
   currentPeriod,
   formatDay,
   formatDeadline,
-  formatPeriod,
   instantFromLocalDate,
   isActiveMember,
   isFreeMembershipMonth,
@@ -43,15 +42,18 @@ import {
   membershipBanner,
   membershipBannerText,
   monthOf,
-  monthsFrom,
   paidUntil,
   payDeadline,
+  paymentDay,
   paymentDayLabel,
   paymentReference,
+  periodLabel,
   periodLastDay,
+  periodsFrom,
   priceForMonth,
   RECEIPT_READ_SECONDS,
   rowForMonth,
+  runningOn,
   upfrontStart,
 } from "@matops/domain";
 import {
@@ -412,6 +414,8 @@ export const monthPaymentProcedures = {
         startMonth: accessAssignment.startMonth,
         startsOn: accessAssignment.startsOn,
         endMonth: accessAssignment.endMonth,
+        periodAnchor: accessAssignment.periodAnchor,
+        periodAnchorFrom: accessAssignment.periodAnchorFrom,
         createdAt: accessAssignment.createdAt,
       })
       .from(accessAssignment)
@@ -426,10 +430,7 @@ export const monthPaymentProcedures = {
         ),
       )
       .orderBy(asc(person.name));
-    const held = running.flatMap((a) => {
-      const month = currentPeriod(today, a);
-      return month ? [{ ...a, month }] : [];
-    });
+    const held = runningOn(today, running);
 
     const coverage = held.length
       ? await ctx.db
@@ -489,7 +490,7 @@ export const monthPaymentProcedures = {
             .filter((m) => m.assignmentId === a.id && m.status === "confirmed")
             .map((m) => m.month),
         ),
-        a.startMonth,
+        a,
       );
       const amount = priceForMonth(
         prices.filter((p) => p.planId === a.planId),
@@ -514,7 +515,7 @@ export const monthPaymentProcedures = {
           .map((c) => c.entityId)
           .sort(),
         month,
-        periodLabel: formatPeriod(month, periodLastDay(month, a)),
+        periodLabel: periodLabel(month, a),
         paid: record?.status === "confirmed",
         paidUntilLabel:
           until && until !== month ? formatDay(periodLastDay(until, a)) : null,
@@ -571,6 +572,8 @@ export const monthPaymentProcedures = {
           startMonth: accessAssignment.startMonth,
           startsOn: accessAssignment.startsOn,
           endMonth: accessAssignment.endMonth,
+          periodAnchor: accessAssignment.periodAnchor,
+          periodAnchorFrom: accessAssignment.periodAnchorFrom,
           assigningEntityId: accessAssignment.assigningEntityId,
           accountUserId: person.accountUserId,
           userId: accessAssignment.personId,
@@ -749,6 +752,8 @@ export const monthPaymentProcedures = {
         userId: accessAssignment.personId,
         startMonth: accessAssignment.startMonth,
         endMonth: accessAssignment.endMonth,
+        periodAnchor: accessAssignment.periodAnchor,
+        periodAnchorFrom: accessAssignment.periodAnchorFrom,
         name: person.name,
         email: person.email,
         planName: accessPlan.name,
@@ -788,17 +793,19 @@ export const monthPaymentProcedures = {
         purchaseCurrency,
         startMonth,
         endMonth,
+        periodAnchor,
+        periodAnchorFrom,
         ...r
       }) => {
         if (r.purchaseId && seen.has(r.purchaseId)) return [];
         if (r.purchaseId) seen.add(r.purchaseId);
         const months = purchaseMonths ?? 1;
-        const period = { startMonth, endMonth };
-        const last = monthsFrom(r.month, months, startMonth).at(-1) ?? r.month;
+        const period = { startMonth, endMonth, periodAnchor, periodAnchorFrom };
+        const last = periodsFrom(r.month, period, months).at(-1) ?? r.month;
         return [
           {
             ...r,
-            monthLabel: formatPeriod(r.month, periodLastDay(r.month, period)),
+            monthLabel: periodLabel(r.month, period),
             purchase:
               r.purchaseId && purchaseTotalMinor !== null && purchaseCurrency
                 ? {
@@ -1239,12 +1246,12 @@ export const monthPaymentProcedures = {
         new Set(
           rows.filter((a) => a.status === "confirmed").map((a) => a.month),
         ),
-        m.startMonth,
+        m,
       );
       const firstMonth = upfrontStart(
         m.month,
         new Set(rows.map((a) => a.month)),
-        m.startMonth,
+        m,
       );
       const amount = priceForMonth(
         planPrices.filter((p) => p.planId === m.planId),
@@ -1258,14 +1265,12 @@ export const monthPaymentProcedures = {
           ? {
               firstMonth,
               firstMonthLabel: formatDay(firstMonth),
-              periods: monthsFrom(
-                firstMonth,
-                MAX_UPFRONT_MONTHS,
-                m.startMonth,
-              ).map((start) => ({
-                start,
-                lastDayLabel: formatDay(periodLastDay(start, m)),
-              })),
+              periods: periodsFrom(firstMonth, m, MAX_UPFRONT_MONTHS).map(
+                (start) => ({
+                  start,
+                  lastDayLabel: formatDay(periodLastDay(start, m)),
+                }),
+              ),
               monthlyMinor: amount.priceMinor,
               currency: amount.currency,
               rule: plan ? planRule(plan) : null,
@@ -1368,7 +1373,7 @@ export const monthPaymentProcedures = {
         return {
           ...m,
           ...upfrontOf(m),
-          paymentDayLabel: paymentDayLabel(m.startMonth),
+          paymentDayLabel: paymentDayLabel(paymentDay(m)),
           warning: ctx.entity.membershipEnforcedAt ? m.warning : null,
           reference: paymentReference(ctx.session.user.name, m.assignmentId),
           cardPaymentUrl: cardLink(

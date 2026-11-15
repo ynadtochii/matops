@@ -175,9 +175,15 @@ describe("rolling membership periods (ADR 163)", () => {
   });
 
   it("shortens the current period and starts the new payment day", async () => {
+    const wrong = await owner().accessPlan.changePaymentDate({
+      assignmentId: assignment,
+      nextPaymentOn: "2026-12-20",
+    });
+    expect(wrong.paymentDayLabel).toBe("the 20th");
     const done = await owner().accessPlan.changePaymentDate({
       assignmentId: assignment,
       nextPaymentOn: "2026-12-10",
+      reason: "Salary day",
     });
     expect(done.paymentDayLabel).toBe("the 10th");
 
@@ -189,22 +195,38 @@ describe("rolling membership periods (ADR 163)", () => {
     ]);
 
     const rows = await owner().accessPlan.forUser({ userId: STUDENT });
-    expect(rows.map((r) => [r.startMonth, r.endMonth]).sort()).toEqual([
-      ["2026-11-15", "2026-12-10"],
-      ["2026-12-10", null],
+    expect(
+      rows.map((r) => [r.id, r.startMonth, r.endMonth, r.paymentDayLabel]),
+    ).toEqual([[assignment, START, null, "the 10th"]]);
+    expect(rows[0]?.dueDates.map((d) => d.month)).toEqual([
+      START,
+      "2026-12-10",
+      "2027-01-10",
     ]);
 
-    expect(
-      await rejectionCode(
-        owner().accessPlan.changePaymentDate({
-          assignmentId: assignment,
-          nextPaymentOn: "2026-12-20",
-        }),
-      ),
-    ).toBe("CONFLICT");
+    const audit = await h.pg.query<{ event: string; reason: string | null }>(
+      `SELECT event, reason FROM membership_month_audit WHERE assignment_id = $1 AND event = 'payment_date_changed' ORDER BY created_at`,
+      [assignment],
+    );
+    expect(audit.rows.map((r) => r.reason)).toEqual([
+      "Next payment 2026-12-20",
+      "Next payment 2026-12-10: Salary day",
+    ]);
   });
 
-  it("renews the first period after the change with the usual grace", async () => {
+  it("moves the due date of a later period", async () => {
+    await owner().accessPlan.setDueDate({
+      assignmentId: assignment,
+      month: "2026-12-10",
+      stopsOn: "2026-12-22",
+    });
+    const rows = await owner().accessPlan.forUser({ userId: STUDENT });
+    expect(
+      rows[0]?.dueDates.find((d) => d.month === "2026-12-10"),
+    ).toMatchObject({ deadlineOn: "2026-12-22", deadlineMoved: true });
+  });
+
+  it("renews after the change with the moved due date and no join grace", async () => {
     vi.setSystemTime(new Date("2026-12-12T12:00:00Z"));
     const held = await mine();
     expect([
@@ -215,7 +237,7 @@ describe("rolling membership periods (ADR 163)", () => {
     ]).toEqual([
       "2026-12-10",
       "10 Dec 2026 to 9 Jan 2027",
-      "2026-12-17T00:00:00.000Z",
+      "2026-12-22T00:00:00.000Z",
       false,
     ]);
     vi.setSystemTime(new Date("2026-11-20T12:00:00Z"));
@@ -234,5 +256,11 @@ describe("rolling membership periods (ADR 163)", () => {
         }),
       ),
     ).toBe("CONFLICT");
+  });
+
+  it("still pauses a membership after the change", async () => {
+    await owner().accessPlan.suspend({ id: assignment });
+    const rows = await owner().accessPlan.forUser({ userId: STUDENT });
+    expect(rows[0]?.status).toBe("suspended");
   });
 });

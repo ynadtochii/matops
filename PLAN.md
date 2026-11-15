@@ -29,8 +29,8 @@ Make membership periods rolling: each membership falls due on its own payment da
 
 ## Decisions
 - Keep the tables. `membership_month.month`, `access_assignment.start_month` / `end_month`, `access_assignment_change.effective_month` and `membership_purchase.first_month` hold a period start date. DB column names stay (same precedent as `academy_id`). TypeScript names that become false are renamed (`MonthKey` → `PeriodKey`, `nextMonth` → `nextPeriod`, `appliesInMonth` → `appliesInPeriod`).
-- New column `access_assignment.period_anchor date null`. Null means calendar months (day 1). New assignments write the start day. Structure only, no backfill.
-- Change payment date reuses the ADR 129 split: end the current assignment on the new date and start a new assignment on the same plan that day, with the new anchor. One fixed anchor per assignment keeps the period math a pure function of one date. Past periods and records stay on the old row. A period ends at the next anchor date or the assignment end, whichever comes first.
+- New columns `access_assignment.period_anchor` and `period_anchor_from`, both null until a payment date change. Structure only, no backfill.
+- Change payment date stays on the same row: the period running at the change ends on the new date, and later periods count from it.
 - The Stripe reference becomes `assignmentId_YYYY-MM-DD`. The parser still accepts the old `assignmentId_YYYY-MM` (maps to `-01`), because sessions that are already open in Stripe carry it.
 - `MonthSchema` drops `endsWith("-01")`. The server checks that the date is a real period start of that assignment.
 
@@ -49,7 +49,7 @@ Make membership periods rolling: each membership falls due on its own payment da
 - Router tests over PGlite: a member who joins on the 15th is admitted until the 18th and blocked from the 18th at 00:00. A changed payment date moves the next due date. A due date override admits and blocks as set and survives a claim and a confirm. The old Stripe reference still confirms a calendar month.
 
 ## Current Step
-Built (2026-11-15): steps 1 to 7. Deviations from the plan: no `period_anchor` column (the anchor is `start_month`, since every writer sets them equal), and DB names plus most TS names (`month`, `MonthKey`) kept. Typecheck and lint pass. Tests written, not run: `pnpm -F @matops/domain test`, `pnpm -F @matops/api test`. Migration `0021` not applied to dev yet.
+Built (2026-11-15): steps 1 to 7, then review fixes. Deviation from the plan: Change payment date does not split the assignment. It writes `period_anchor` and `period_anchor_from` on the same row, so holds, pause, end and pay ahead keep working. DB names and most TS names (`month`, `MonthKey`) kept. Typecheck and lint pass. Tests written, not run: `pnpm -F @matops/domain test`, `pnpm -F @matops/api test`. Migration `0021` not applied to dev yet.
 
 ## Risk
 - Production has one live academy. The migration only adds a column and drops checks, so the old code keeps working while it lands. Before step 4 ships, check (read-only) how many `access_assignment` rows production holds.

@@ -320,6 +320,7 @@ export const MembershipMonthRefSchema = z.object({
 export const ChangePaymentDateSchema = z.object({
   assignmentId: z.uuid(),
   nextPaymentOn: z.iso.date(),
+  reason: blockText(1, 500).optional(),
 });
 
 export const SetDueDateSchema = z.object({

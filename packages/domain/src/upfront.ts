@@ -1,5 +1,6 @@
 import type { MonthKey } from "./membership-month";
-import { nextPeriod, periodsFrom } from "./membership-period";
+import type { PeriodSchedule } from "./membership-period";
+import { nextPeriod } from "./membership-period";
 import { formatMoney } from "./payments";
 
 export const MAX_UPFRONT_MONTHS = 12;
@@ -58,32 +59,26 @@ export function splitTotal(totalMinor: number, months: number): number[] {
   );
 }
 
-export function monthsFrom(
-  first: MonthKey,
-  count: number,
-  anchor: string,
-): MonthKey[] {
-  return periodsFrom(first, anchor, count);
-}
-
 export function upfrontStart(
   currentMonth: MonthKey,
   taken: ReadonlySet<MonthKey>,
-  anchor: string,
+  schedule: PeriodSchedule,
 ): MonthKey {
   let month = currentMonth;
-  while (taken.has(month)) month = nextPeriod(month, anchor);
+  while (taken.has(month)) month = nextPeriod(month, schedule);
   return month;
 }
 
 export function paidUntil(
   currentMonth: MonthKey,
   paid: ReadonlySet<MonthKey>,
-  anchor: string,
+  schedule: PeriodSchedule,
 ): MonthKey | null {
   if (!paid.has(currentMonth)) return null;
   let last = currentMonth;
-  while (paid.has(nextPeriod(last, anchor))) last = nextPeriod(last, anchor);
+  while (paid.has(nextPeriod(last, schedule))) {
+    last = nextPeriod(last, schedule);
+  }
   return last;
 }
 

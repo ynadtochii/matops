@@ -278,7 +278,12 @@ describe("card payment webhook (ADR 157)", () => {
   });
 
   it("leaves a different amount or a missing reference for review", async () => {
-    const next = nextPeriod(month, month);
+    const next = nextPeriod(month, {
+      startMonth: month,
+      endMonth: null,
+      periodAnchor: null,
+      periodAnchorFrom: null,
+    });
     expect(
       (
         await deliver(

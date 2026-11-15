@@ -14,8 +14,8 @@ import {
 import {
   appliesInMonth,
   formatDay,
-  monthsFrom,
   periodBoundary,
+  periodsFrom,
   priceForMonth,
   splitTotal,
   upfrontStart,
@@ -77,9 +77,9 @@ export async function quotePurchase(
   const firstMonth = upfrontStart(
     currentMonth,
     new Set(taken.map((row) => row.month)),
-    assignment.startMonth,
+    assignment,
   );
-  const covered = monthsFrom(firstMonth, months, assignment.startMonth);
+  const covered = periodsFrom(firstMonth, assignment, months);
   if (!covered.every((month) => appliesInMonth(assignment, month))) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",

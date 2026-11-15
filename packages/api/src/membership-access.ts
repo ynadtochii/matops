@@ -25,6 +25,7 @@ import {
   membershipAccess,
   payDeadline,
   priceForMonth,
+  runningOn,
 } from "@matops/domain";
 
 import { membershipCalendar } from "./membership-status";
@@ -144,6 +145,8 @@ export async function loadMembershipAccess(
       startMonth: accessAssignment.startMonth,
       startsOn: accessAssignment.startsOn,
       endMonth: accessAssignment.endMonth,
+      periodAnchor: accessAssignment.periodAnchor,
+      periodAnchorFrom: accessAssignment.periodAnchorFrom,
       createdAt: accessAssignment.createdAt,
     })
     .from(accessAssignment)
@@ -219,55 +222,50 @@ export async function loadMembershipAccess(
   // A membership only counts on the days its period covers (ADR 129, ADR 163),
   // and each one is judged in its own current period.
   const forDay = (day: string): ApplicableAssignment[] =>
-    held
-      .flatMap((a) => {
-        const month = currentPeriod(day, a);
-        return month ? [{ a, month }] : [];
-      })
-      .map(({ a, month }) => ({
-        id: a.id,
-        status: a.status as ApplicableAssignment["status"],
-        entityIds: coverage
-          .filter((c) => c.planId === a.planId)
-          .map((c) => c.entityId),
-        paymentRequired: !isFreeMembershipMonth(
-          (() => {
-            const recorded = months.find(
-              (m) => m.assignmentId === a.id && m.month === month,
-            );
-            return recorded?.priceMinor !== null &&
-              recorded?.priceMinor !== undefined &&
-              recorded.currency
-              ? {
-                  priceMinor: recorded.priceMinor,
-                  currency: recorded.currency,
-                }
-              : priceForMonth(
-                  prices.filter((p) => p.planId === a.planId),
-                  month,
-                );
-          })(),
-        ),
-        paid:
-          months.find((m) => m.assignmentId === a.id && m.month === month)
-            ?.status === "confirmed",
-        paymentStatus:
-          (months.find((m) => m.assignmentId === a.id && m.month === month)
-            ?.status as ApplicableAssignment["paymentStatus"]) ?? "unpaid",
-        held: heldAssignmentIds.has(a.id),
-        awaitingStaff:
-          months.find((m) => m.assignmentId === a.id && m.month === month)
-            ?.cashPaidToName != null,
-        deadline:
-          months.find((m) => m.assignmentId === a.id && m.month === month)
-            ?.deadline ??
-          payDeadline({
-            month,
-            startMonth: a.startMonth,
-            joinedOn: a.startsOn,
-            policy: calendar,
-          }),
-      }));
+    runningOn(day, held).map(({ month, ...a }) => ({
+      id: a.id,
+      status: a.status as ApplicableAssignment["status"],
+      entityIds: coverage
+        .filter((c) => c.planId === a.planId)
+        .map((c) => c.entityId),
+      paymentRequired: !isFreeMembershipMonth(
+        (() => {
+          const recorded = months.find(
+            (m) => m.assignmentId === a.id && m.month === month,
+          );
+          return recorded?.priceMinor !== null &&
+            recorded?.priceMinor !== undefined &&
+            recorded.currency
+            ? {
+                priceMinor: recorded.priceMinor,
+                currency: recorded.currency,
+              }
+            : priceForMonth(
+                prices.filter((p) => p.planId === a.planId),
+                month,
+              );
+        })(),
+      ),
+      paid:
+        months.find((m) => m.assignmentId === a.id && m.month === month)
+          ?.status === "confirmed",
+      paymentStatus:
+        (months.find((m) => m.assignmentId === a.id && m.month === month)
+          ?.status as ApplicableAssignment["paymentStatus"]) ?? "unpaid",
+      held: heldAssignmentIds.has(a.id),
+      awaitingStaff:
+        months.find((m) => m.assignmentId === a.id && m.month === month)
+          ?.cashPaidToName != null,
+      deadline:
+        months.find((m) => m.assignmentId === a.id && m.month === month)
+          ?.deadline ??
+        payDeadline({
+          month,
+          startMonth: a.startMonth,
+          joinedOn: a.startsOn,
+          policy: calendar,
+        }),
+    }));
 
   const nowAssignments = forDay(nowDay);
   const nowVerdict = membershipAccess({
@@ -343,6 +341,8 @@ export async function loadRosterStanding(
       startMonth: accessAssignment.startMonth,
       startsOn: accessAssignment.startsOn,
       endMonth: accessAssignment.endMonth,
+      periodAnchor: accessAssignment.periodAnchor,
+      periodAnchorFrom: accessAssignment.periodAnchorFrom,
       createdAt: accessAssignment.createdAt,
     })
     .from(accessAssignment)
@@ -576,6 +576,8 @@ export async function bookingsNeedingReview(
         planId: accessAssignment.planId,
         startMonth: accessAssignment.startMonth,
         endMonth: accessAssignment.endMonth,
+        periodAnchor: accessAssignment.periodAnchor,
+        periodAnchorFrom: accessAssignment.periodAnchorFrom,
       })
       .from(accessAssignment)
       .where(inArray(accessAssignment.personId, personIds));

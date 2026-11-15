@@ -1,5 +1,5 @@
 {
-  "id": "51fa4e48-58c5-415d-a5b6-4ae17960504f",
+  "id": "79dec647-eab7-4e77-8351-edea5dad04a9",
   "prevId": "113ef3ac-b701-4599-b972-c38ece5898d7",
   "version": "7",
   "dialect": "postgresql",
@@ -87,6 +87,18 @@
         },
         "end_month": {
           "name": "end_month",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "period_anchor": {
+          "name": "period_anchor",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "period_anchor_from": {
+          "name": "period_anchor_from",
           "type": "date",
           "primaryKey": false,
           "notNull": false
@@ -281,6 +293,14 @@
         "access_assignment_status_supported": {
           "name": "access_assignment_status_supported",
           "value": "status in ('active','suspended','cancelled')"
+        },
+        "access_assignment_anchor_complete": {
+          "name": "access_assignment_anchor_complete",
+          "value": "(period_anchor is null) = (period_anchor_from is null)"
+        },
+        "access_assignment_anchor_ordered": {
+          "name": "access_assignment_anchor_ordered",
+          "value": "period_anchor is null or (period_anchor_from >= start_month and period_anchor > period_anchor_from)"
         },
         "access_assignment_period_ordered": {
           "name": "access_assignment_period_ordered",

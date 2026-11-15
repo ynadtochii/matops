@@ -348,7 +348,7 @@ describe("marking a membership month paid", () => {
     ).toBe("FORBIDDEN");
   });
 
-  it("refuses a month that is not the first of one", async () => {
+  it("refuses a date that is not one of its periods", async () => {
     expect(
       await rejectionCode(
         owner().accessPlan.markMonth({
@@ -357,7 +357,7 @@ describe("marking a membership month paid", () => {
           paid: true,
         }),
       ),
-    ).toBe("BAD_REQUEST");
+    ).toBe("PRECONDITION_FAILED");
   });
 
   it("has no record at all until somebody ticks it", async () => {
@@ -512,7 +512,8 @@ describe("a member says they paid", () => {
   let lees: string;
 
   const owner = () => h.as(BOSS, ORGC);
-  const monthNow = () => `${new Date().toISOString().slice(0, 7)}-01` as const;
+  let periodStart: string;
+  const monthNow = () => periodStart;
 
   beforeAll(async () => {
     h = await harness();
@@ -542,6 +543,11 @@ describe("a member says they paid", () => {
       .id;
     lees = (await owner().accessPlan.assign({ userId: LEE, planId: plan.id }))
       .id;
+    const started = await h.pg.query<{ start: string }>(
+      `SELECT start_month::text AS start FROM access_assignment WHERE id = $1`,
+      [sams],
+    );
+    periodStart = started.rows[0]?.start ?? "";
     await h.exec
       .update(entity)
       .set({ membershipEnforcedAt: new Date() })

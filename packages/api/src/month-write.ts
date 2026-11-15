@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 
 import type { DbExec, TenantTx } from "@matops/db";
+import type { PeriodSchedule } from "@matops/domain";
 import { and, eq, gt, gte, isNull, lt, sql, withScope } from "@matops/db";
 import {
   accessAssignment,
@@ -43,6 +44,8 @@ export async function loadAssignment(db: TenantTx, id: string) {
       startMonth: accessAssignment.startMonth,
       startsOn: accessAssignment.startsOn,
       endMonth: accessAssignment.endMonth,
+      periodAnchor: accessAssignment.periodAnchor,
+      periodAnchorFrom: accessAssignment.periodAnchorFrom,
       assigningEntityId: accessAssignment.assigningEntityId,
     })
     .from(accessAssignment)
@@ -55,7 +58,7 @@ export async function loadAssignment(db: TenantTx, id: string) {
 }
 
 export function requireCurrentPeriod(
-  assignment: { startMonth: string; endMonth: string | null },
+  assignment: PeriodSchedule,
   timeZone: string,
   now: Date = new Date(),
 ): string {
@@ -95,10 +98,20 @@ export async function monthEvidence(
   assignment: Awaited<ReturnType<typeof loadAssignment>>,
   month: string,
 ) {
-  if (
-    !appliesInMonth(assignment, month) ||
-    !isPeriodStart(month, assignment.startMonth)
-  ) {
+  // A row already written for this key stays addressable even if a later
+  // payment date change moved the schedule past it.
+  const [recorded] = isPeriodStart(month, assignment)
+    ? [true]
+    : await db
+        .select({ id: membershipMonth.id })
+        .from(membershipMonth)
+        .where(
+          and(
+            eq(membershipMonth.assignmentId, assignment.id),
+            eq(membershipMonth.month, month),
+          ),
+        );
+  if (!appliesInMonth(assignment, month) || !recorded) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
       message:
