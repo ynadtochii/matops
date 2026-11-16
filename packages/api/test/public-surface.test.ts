@@ -134,7 +134,7 @@ describe("dropIn.classes, the unauthenticated class listing", () => {
     expect(result.upcoming.map((c) => c.id)).not.toContain(CLASS_LATER);
   });
 
-  it("returns only the linked class, up to seven days out", async () => {
+  it("returns only the linked class inside the link window", async () => {
     const h = await base();
     const token = await mintToken(h);
     await seedClasses(h.pg, [
@@ -158,6 +158,152 @@ describe("dropIn.classes, the unauthenticated class listing", () => {
       .dropIn.classes({ token, classId: CLASS_LATER });
     expect(result.now).toEqual([]);
     expect(result.upcoming.map((c) => c.id)).toEqual([CLASS_LATER]);
+  });
+});
+
+const CLASS_CANCELLED = "aaaaaaaa-0000-4000-8000-000000000003";
+
+const EMPTY_VISITOR_PAGE = {
+  about: "",
+  prices: "",
+  rules: "",
+  firstVisit: "",
+  contact: "",
+  more: "",
+  showAddress: false,
+};
+
+describe("dropIn.page, the unauthenticated visitor page", () => {
+  it("returns NOT_FOUND for an unknown token", async () => {
+    const h = await base();
+    expect(
+      await rejectionCode(
+        h.as("nobody", null).dropIn.page({ token: "ghost-token" }),
+      ),
+    ).toBe("NOT_FOUND");
+  });
+
+  it("returns NOT_FOUND for a rotated token", async () => {
+    const h = await base();
+    const first = await mintToken(h);
+    await h.as(OWNER, A).dropIn.rotateLink();
+    expect(
+      await rejectionCode(h.as("nobody", null).dropIn.page({ token: first })),
+    ).toBe("NOT_FOUND");
+  });
+
+  it("shows no info section the owner left empty", async () => {
+    const h = await base();
+    const token = await mintToken(h);
+    await h.as(OWNER, A).academy.updateVisitorPage({
+      ...EMPTY_VISITOR_PAGE,
+      rules: "  ",
+    });
+    const page = await h.as("nobody", null).dropIn.page({ token });
+    expect(page).toMatchObject({
+      about: null,
+      prices: null,
+      rules: null,
+      firstVisit: null,
+      contact: null,
+      more: null,
+      address: null,
+      mapUrl: null,
+    });
+    expect(page.weeks).toHaveLength(2);
+  });
+
+  it("returns the text the owner saved", async () => {
+    const h = await base();
+    const token = await mintToken(h);
+    await h.as(OWNER, A).academy.updateVisitorPage({
+      ...EMPTY_VISITOR_PAGE,
+      about: "Friendly BJJ club",
+      prices: "Drop-in 15 EUR",
+      contact: "Telegram @gym",
+      more: "Showers on site",
+    });
+    const page = await h.as("nobody", null).dropIn.page({ token });
+    expect(page).toMatchObject({
+      about: "Friendly BJJ club",
+      prices: "Drop-in 15 EUR",
+      rules: null,
+      contact: "Telegram @gym",
+      more: "Showers on site",
+    });
+  });
+
+  it("keeps the address off the page until the owner turns it on", async () => {
+    const h = await base();
+    const token = await mintToken(h);
+    await h.as(OWNER, A).academy.updateSettings({ address: "Main St 1" });
+    const hidden = await h.as("nobody", null).dropIn.page({ token });
+    expect(hidden.address).toBeNull();
+
+    await h.as(OWNER, A).academy.updateVisitorPage({
+      ...EMPTY_VISITOR_PAGE,
+      showAddress: true,
+    });
+    const shown = await h.as("nobody", null).dropIn.page({ token });
+    expect(shown.address).toBe("Main St 1");
+  });
+
+  it("uses the zone of the class templates when the academy saved none", async () => {
+    const h = await base();
+    const token = await mintToken(h);
+    await h.pg.query(`UPDATE "entity" SET time_zone = NULL WHERE id = $1`, [A]);
+    await h.pg.query(
+      `INSERT INTO "class_template" (id, academy_id, title, days_of_week, starts_at_minutes, duration_minutes, time_zone, capacity)
+       VALUES (gen_random_uuid(), $1, 'Gi', '{1}', 600, 60, 'Europe/Lisbon', 20),
+              (gen_random_uuid(), $1, 'No-Gi', '{2}', 600, 60, 'Europe/Lisbon', 20),
+              (gen_random_uuid(), $1, 'Open mat', '{6}', 600, 60, 'UTC', 20)`,
+      [A],
+    );
+    const page = await h.as("nobody", null).dropIn.page({ token });
+    expect(page.timeZone).toBe("Europe/Lisbon");
+  });
+
+  it("lists bookable classes with no coach or capacity data", async () => {
+    const h = await base();
+    const token = await mintToken(h);
+    await seedClasses(h.pg, [
+      {
+        id: CLASS_FUTURE,
+        academyId: A,
+        instructorId: COACH,
+        title: "Grappling · All levels",
+        startsInMinutes: 120,
+        durationMinutes: 60,
+      },
+      {
+        id: CLASS_CANCELLED,
+        academyId: A,
+        instructorId: COACH,
+        startsInMinutes: 180,
+        durationMinutes: 60,
+        status: "cancelled",
+      },
+    ]);
+    const page = await h.as("nobody", null).dropIn.page({ token });
+    const listed = page.weeks.flatMap((w) => w.days.flatMap((d) => d.classes));
+    expect(listed.map((c) => c.id)).toEqual([CLASS_FUTURE]);
+    expect(Object.keys(listed[0] ?? {}).sort()).toEqual([
+      "durationMinutes",
+      "id",
+      "startsAt",
+      "title",
+    ]);
+  });
+});
+
+describe("academy.updateVisitorPage, the owner's page settings", () => {
+  it("refuses an instructor", async () => {
+    const h = await base();
+    expect(
+      await rejectionCode(
+        h.as(COACH, A).academy.updateVisitorPage(EMPTY_VISITOR_PAGE),
+      ),
+    ).toBe("FORBIDDEN");
   });
 });
 

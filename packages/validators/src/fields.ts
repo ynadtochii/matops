@@ -221,6 +221,18 @@ export const UpdateAcademySettingsSchema = z.object({
   waiverRequired: z.boolean().optional(),
 });
 
+export const VISITOR_TEXT_MAX = 2000;
+
+export const UpdateVisitorPageSchema = z.object({
+  about: blockText(0, VISITOR_TEXT_MAX),
+  prices: blockText(0, VISITOR_TEXT_MAX),
+  rules: blockText(0, VISITOR_TEXT_MAX),
+  firstVisit: blockText(0, VISITOR_TEXT_MAX),
+  contact: blockText(0, 500),
+  more: blockText(0, VISITOR_TEXT_MAX),
+  showAddress: z.boolean(),
+});
+
 export const SaveWaiverSchema = z.object({ body: blockText(20, 5000) });
 
 export const SetMembershipEnforcedSchema = z.object({ enforced: z.boolean() });

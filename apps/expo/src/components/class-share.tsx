@@ -2,11 +2,7 @@ import { Platform, Share } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { Share2 } from "lucide-react-native";
 
-import {
-  dropInPath,
-  VISITOR_LINK_DAYS,
-  visitorClassState,
-} from "@matops/domain";
+import { dropInPath, visitorClassState, visitorLinkDays } from "@matops/domain";
 
 import { useToast } from "~/components/toast";
 import { Button, IconButton, useTheme } from "~/components/ui";
@@ -37,7 +33,7 @@ export function ClassShare({
       { ...cls, startsAt: new Date(cls.startsAt) },
       new Date(),
       academy.timeZone ?? "UTC",
-      VISITOR_LINK_DAYS,
+      visitorLinkDays(new Date(), academy.timeZone ?? "UTC"),
     ) !== null;
   const link = useQuery(
     trpc.dropIn.link.queryOptions(undefined, { enabled: shareable }),

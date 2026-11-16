@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { dropInPath, runsBranch } from "@matops/domain";
+import { dropInPath, runsBranch, visitorPagePath } from "@matops/domain";
 import { cn } from "@matops/ui";
 import { ConfirmDialog } from "@matops/ui/alert-dialog";
 import { Button } from "@matops/ui/button";
@@ -137,25 +137,44 @@ export function DropInLinkCard() {
     );
 
   return (
-    <LinkCard
-      label="Drop-in link"
-      hint="Send it to people who want to try a class. They pick a class and book without an account."
-      url={linkUrl(dropInPath(link.data.token, link.data.sharedBy))}
-      qrUrl={linkUrl(dropInPath(link.data.token, null))}
-      rotate={() => rotate.mutateAsync()}
-      rotating={rotate.isPending}
-      qr={{
-        title: "Scan to try a class",
-        description:
-          "They scan it with their phone camera and pick a class. No account needed.",
-        caption: "Scan to try a class",
-        codeLabel: `Drop-in QR code for ${academyName}`,
-      }}
-      share={{
-        title: `Try a class at ${academyName}`,
-        text: "Pick a class and leave your details here:",
-      }}
-    />
+    <>
+      <LinkCard
+        label="Academy page"
+        hint="Send it to people who ask about training. It shows the next two weeks of classes and the info you set in Settings, and they book a class from it. Rotating the drop-in link changes this link too."
+        url={linkUrl(visitorPagePath(link.data.token, link.data.sharedBy))}
+        qrUrl={linkUrl(visitorPagePath(link.data.token, null))}
+        qr={{
+          title: "Scan to see the academy",
+          description:
+            "They scan it with their phone camera and see the schedule and info. No account needed.",
+          caption: "Scan to see classes",
+          codeLabel: `Academy page QR code for ${academyName}`,
+        }}
+        share={{
+          title: `Train at ${academyName}`,
+          text: "Classes, prices and info, and you can book a first class here:",
+        }}
+      />
+      <LinkCard
+        label="Drop-in link"
+        hint="Send it to people who want to try a class. They pick a class and book without an account."
+        url={linkUrl(dropInPath(link.data.token, link.data.sharedBy))}
+        qrUrl={linkUrl(dropInPath(link.data.token, null))}
+        rotate={() => rotate.mutateAsync()}
+        rotating={rotate.isPending}
+        qr={{
+          title: "Scan to try a class",
+          description:
+            "They scan it with their phone camera and pick a class. No account needed.",
+          caption: "Scan to try a class",
+          codeLabel: `Drop-in QR code for ${academyName}`,
+        }}
+        share={{
+          title: `Try a class at ${academyName}`,
+          text: "Pick a class and leave your details here:",
+        }}
+      />
+    </>
   );
 }
 
@@ -218,9 +237,10 @@ export function DropInLinkButton() {
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-lg">
-        <DialogTitle>Drop-in link</DialogTitle>
+        <DialogTitle>Drop-in links</DialogTitle>
         <DialogDescription>
-          Copy or share this link with people who want to try a class.
+          Send the academy page to people who ask about training, or the drop-in
+          link to people who already want to try a class.
         </DialogDescription>
         <DropInLinkCard />
       </DialogContent>
@@ -246,8 +266,8 @@ function LinkCard({
   qrUrl?: string | null;
   create?: () => void;
   creating?: boolean;
-  rotate: () => Promise<unknown>;
-  rotating: boolean;
+  rotate?: () => Promise<unknown>;
+  rotating?: boolean;
   qr: {
     title: string;
     description: string;
@@ -265,7 +285,7 @@ function LinkCard({
     <div className={cn(cardClass(), "flex flex-col gap-2")}>
       <div className="flex items-center justify-between gap-2">
         <span className="font-medium">{label}</span>
-        {!isOwner ? null : url ? (
+        {!isOwner || !rotate ? null : url ? (
           <ConfirmDialog
             title="Rotate this link?"
             description="The current link stops working for everyone you already sent it to. A new link takes its place."

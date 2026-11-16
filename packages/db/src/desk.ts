@@ -1,10 +1,9 @@
 import { and, eq, isNull } from "drizzle-orm";
 
-import { resolveAcademyTimeZone } from "@matops/domain";
-
 import type { DbExec } from "./client";
 import type { LiveLinkRow } from "./live-link";
 import type { DbReader } from "./tenant";
+import { academyTimeZone } from "./academy-settings";
 import { deskLink } from "./drop-in-link-schema";
 import { entity } from "./entity-schema";
 import { getOrCreateLiveLink, rotateLiveLink } from "./live-link";
@@ -59,5 +58,8 @@ export async function resolveDeskLink(
     )
     .limit(1);
   if (!row) return null;
-  return { ...row, timeZone: resolveAcademyTimeZone(row.timeZone) };
+  return {
+    ...row,
+    timeZone: await academyTimeZone(row.id, row.timeZone, exec),
+  };
 }

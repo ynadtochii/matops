@@ -1,7 +1,6 @@
 import type { TenantTx } from "@matops/db";
-import { desc, eq, sql } from "@matops/db";
-import { classTemplate, entity } from "@matops/db/schema";
-import { resolveAcademyTimeZone } from "@matops/domain";
+import { eq, academyTimeZone as resolveZone } from "@matops/db";
+import { entity } from "@matops/db/schema";
 
 export interface TimeZoneCtx {
   db: TenantTx;
@@ -40,17 +39,10 @@ export async function academyContext(
     signupHealthQuestion: org?.signupHealthQuestion ?? false,
     waiverRequired: org?.waiverRequired ?? false,
   };
-  if (org?.timeZone) {
-    return { timeZone: resolveAcademyTimeZone(org.timeZone), ...rest };
-  }
-
-  const [row] = await ctx.db
-    .select({ timeZone: classTemplate.timeZone })
-    .from(classTemplate)
-    .groupBy(classTemplate.timeZone)
-    .orderBy(desc(sql`count(*)`))
-    .limit(1);
-  return { timeZone: resolveAcademyTimeZone(null, row?.timeZone), ...rest };
+  return {
+    timeZone: await resolveZone(ctx.academyId, org?.timeZone ?? null, ctx.db),
+    ...rest,
+  };
 }
 
 export async function academyTimeZone(ctx: TimeZoneCtx): Promise<string> {

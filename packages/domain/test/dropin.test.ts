@@ -4,9 +4,10 @@ import {
   dropInPath,
   normalizePhone,
   returningLeadGate,
-  VISITOR_LINK_DAYS,
   visitorClassChoices,
   visitorClassState,
+  visitorLinkDays,
+  visitorPageWeeks,
 } from "../src/dropin";
 
 const TZ = "UTC";
@@ -85,30 +86,13 @@ describe("visitorClassState", () => {
     ).toBeNull();
   });
 
-  it("offers a class up to the end of the sixth following day with the link window", () => {
+  it("offers a class up to the end of next week's Sunday with the link window", () => {
+    const days = visitorLinkDays(now, TZ);
     expect(
-      visitorClassState(
-        cls("five-days", "2026-08-20T10:00:00Z"),
-        now,
-        TZ,
-        VISITOR_LINK_DAYS,
-      ),
+      visitorClassState(cls("last", "2026-08-23T23:59:00Z"), now, TZ, days),
     ).toBe("book");
     expect(
-      visitorClassState(
-        cls("last", "2026-08-21T23:59:00Z"),
-        now,
-        TZ,
-        VISITOR_LINK_DAYS,
-      ),
-    ).toBe("book");
-    expect(
-      visitorClassState(
-        cls("too-late", "2026-08-22T00:00:00Z"),
-        now,
-        TZ,
-        VISITOR_LINK_DAYS,
-      ),
+      visitorClassState(cls("too-late", "2026-08-24T00:00:00Z"), now, TZ, days),
     ).toBeNull();
   });
 
@@ -272,5 +256,75 @@ describe("dropInPath", () => {
     expect(dropInPath("tok", "a b", "c&d")).toBe(
       "/drop-in/tok?class=c%26d&by=a%20b",
     );
+  });
+});
+
+describe("visitorLinkDays", () => {
+  it("reaches next week's Sunday from any day of this week", () => {
+    expect(visitorLinkDays(new Date("2026-08-10T09:00:00Z"), TZ)).toBe(14);
+    expect(visitorLinkDays(new Date("2026-08-15T09:00:00Z"), TZ)).toBe(9);
+    expect(visitorLinkDays(new Date("2026-08-16T09:00:00Z"), TZ)).toBe(8);
+  });
+
+  it("uses the academy's local weekday", () => {
+    const sundayNightInKyiv = new Date("2026-08-16T22:30:00Z");
+    expect(visitorLinkDays(sundayNightInKyiv, "Europe/Kyiv")).toBe(14);
+  });
+});
+
+describe("visitorPageWeeks", () => {
+  const now = new Date("2026-08-12T12:00:00Z");
+
+  it("splits bookable classes into this week and next week by local day", () => {
+    const [thisWeek, nextWeek] = visitorPageWeeks(
+      [
+        cls("next-mon", "2026-08-17T10:00:00Z"),
+        cls("thu-b", "2026-08-13T19:00:00Z"),
+        cls("thu-a", "2026-08-13T10:00:00Z"),
+        cls("next-sun", "2026-08-23T10:00:00Z"),
+      ],
+      now,
+      TZ,
+    );
+    expect(thisWeek.weekStart).toBe("2026-08-10");
+    expect(nextWeek.weekStart).toBe("2026-08-17");
+    expect(thisWeek.days).toEqual([
+      {
+        day: "2026-08-13",
+        classes: [
+          expect.objectContaining({ id: "thu-a" }),
+          expect.objectContaining({ id: "thu-b" }),
+        ],
+      },
+    ]);
+    expect(nextWeek.days.map((d) => d.day)).toEqual([
+      "2026-08-17",
+      "2026-08-23",
+    ]);
+  });
+
+  it("leaves out past, running, cancelled and later classes", () => {
+    const [thisWeek, nextWeek] = visitorPageWeeks(
+      [
+        cls("past", "2026-08-11T10:00:00Z"),
+        cls("running", "2026-08-12T11:30:00Z"),
+        cls("cancelled", "2026-08-14T10:00:00Z", { status: "cancelled" }),
+        cls("week-after", "2026-08-24T10:00:00Z"),
+      ],
+      now,
+      TZ,
+    );
+    expect(thisWeek.days).toEqual([]);
+    expect(nextWeek.days).toEqual([]);
+  });
+
+  it("puts a class on the academy's local day", () => {
+    const [thisWeek, nextWeek] = visitorPageWeeks(
+      [cls("sun-late-utc", "2026-08-16T22:30:00Z")],
+      now,
+      "Europe/Kyiv",
+    );
+    expect(thisWeek.days).toEqual([]);
+    expect(nextWeek.days.map((d) => d.day)).toEqual(["2026-08-17"]);
   });
 });

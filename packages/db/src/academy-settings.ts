@@ -1,9 +1,12 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
+
+import { resolveAcademyTimeZone } from "@matops/domain";
 
 import type { DbExec } from "./client";
 import type { DbReader, DbWriter } from "./tenant";
 import { organization } from "./auth-schema";
 import { entity } from "./entity-schema";
+import { classTemplate } from "./scheduling";
 
 interface AcademySettings {
   academyId: string;
@@ -76,6 +79,83 @@ export async function updateAcademySettings(
       .set(next)
       .where(and(eq(entity.id, academyId), isNull(entity.deletedAt)));
   }
+}
+
+/** The academy's own zone, or the zone most of its class templates run on
+ * when none is saved (academies made before the zone was asked for). */
+export async function academyTimeZone(
+  academyId: string,
+  stored: string | null,
+  exec: DbReader,
+): Promise<string> {
+  if (stored) return resolveAcademyTimeZone(stored);
+  const [row] = await exec
+    .select({ timeZone: classTemplate.timeZone })
+    .from(classTemplate)
+    .where(eq(classTemplate.academyId, academyId))
+    .groupBy(classTemplate.timeZone)
+    .orderBy(desc(sql`count(*)`))
+    .limit(1);
+  return resolveAcademyTimeZone(null, row?.timeZone);
+}
+
+export interface VisitorPageText {
+  about: string | null;
+  prices: string | null;
+  rules: string | null;
+  firstVisit: string | null;
+  contact: string | null;
+  more: string | null;
+}
+
+export interface VisitorPage extends VisitorPageText {
+  showAddress: boolean;
+  address: string | null;
+  mapUrl: string | null;
+}
+
+const visitorPageColumns = {
+  about: entity.visitorAbout,
+  prices: entity.visitorPrices,
+  rules: entity.visitorRules,
+  firstVisit: entity.visitorFirstVisit,
+  contact: entity.visitorContact,
+  more: entity.visitorMore,
+  showAddress: entity.visitorShowAddress,
+  address: entity.address,
+  mapUrl: entity.mapUrl,
+};
+
+export async function getVisitorPage(
+  academyId: string,
+  exec: DbReader,
+): Promise<VisitorPage | null> {
+  const [row] = await exec
+    .select(visitorPageColumns)
+    .from(entity)
+    .where(and(eq(entity.id, academyId), isNull(entity.deletedAt)))
+    .limit(1);
+  return row ?? null;
+}
+
+export async function updateVisitorPageSettings(
+  academyId: string,
+  input: Record<keyof VisitorPageText, string> & { showAddress: boolean },
+  exec: DbWriter,
+): Promise<void> {
+  const text = (value: string) => value.trim() || null;
+  await exec
+    .update(entity)
+    .set({
+      visitorAbout: text(input.about),
+      visitorPrices: text(input.prices),
+      visitorRules: text(input.rules),
+      visitorFirstVisit: text(input.firstVisit),
+      visitorContact: text(input.contact),
+      visitorMore: text(input.more),
+      visitorShowAddress: input.showAddress,
+    })
+    .where(and(eq(entity.id, academyId), isNull(entity.deletedAt)));
 }
 
 /**

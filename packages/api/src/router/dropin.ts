@@ -7,6 +7,7 @@ import {
   desc,
   eq,
   getOrCreateDropInLink,
+  getVisitorPage,
   listAcademyClassesInWindow,
   lookupReturningLead,
   resolveDropInLink,
@@ -19,9 +20,10 @@ import { dropIn, entityMembership, person, user } from "@matops/db/schema";
 import {
   isStaffRole,
   publicFileUrl,
-  VISITOR_LINK_DAYS,
   VISITOR_LIST_DAYS,
   visitorClassChoices,
+  visitorLinkDays,
+  visitorPageWeeks,
   visitorWindow,
 } from "@matops/domain";
 import {
@@ -77,7 +79,9 @@ async function visitorChoices(
   exec: DbExec,
 ) {
   const now = new Date();
-  const days = classId ? VISITOR_LINK_DAYS : VISITOR_LIST_DAYS;
+  const days = classId
+    ? visitorLinkDays(now, academy.timeZone)
+    : VISITOR_LIST_DAYS;
   const window = visitorWindow(now, academy.timeZone, days);
   const listed = await listAcademyClassesInWindow(
     academy.academyId,
@@ -95,6 +99,55 @@ async function visitorChoices(
   return {
     now: choices.now.map(pick),
     upcoming: choices.upcoming.map(pick),
+  };
+}
+
+async function visitorPage(
+  academy: DropInAcademy,
+  appUrl: string,
+  exec: DbExec,
+) {
+  const page = await getVisitorPage(academy.academyId, exec);
+  if (!page) throw new TRPCError({ code: "NOT_FOUND", message: LINK_GONE });
+  const now = new Date();
+  const window = visitorWindow(
+    now,
+    academy.timeZone,
+    visitorLinkDays(now, academy.timeZone),
+  );
+  const classes = await listAcademyClassesInWindow(
+    academy.academyId,
+    window.from.getTime(),
+    window.to.getTime(),
+    exec,
+  );
+  const weeks = visitorPageWeeks(classes, now, academy.timeZone).map(
+    (week) => ({
+      weekStart: week.weekStart,
+      days: week.days.map((day) => ({
+        day: day.day,
+        classes: day.classes.map((c) => ({
+          id: c.id,
+          title: c.title,
+          startsAt: c.startsAt,
+          durationMinutes: c.durationMinutes,
+        })),
+      })),
+    }),
+  );
+  return {
+    name: academy.name,
+    timeZone: academy.timeZone,
+    iconUrl: publicFileUrl(appUrl, academy.iconKey),
+    address: page.showAddress ? page.address : null,
+    mapUrl: page.showAddress && page.address ? page.mapUrl : null,
+    about: page.about,
+    prices: page.prices,
+    rules: page.rules,
+    firstVisit: page.firstVisit,
+    contact: page.contact,
+    more: page.more,
+    weeks,
   };
 }
 
@@ -190,6 +243,17 @@ export const dropInRouter = {
       visitorChoices(
         await requireLink(input.token, ctx.baseDb),
         input.classId,
+        ctx.baseDb,
+      ),
+    ),
+
+  page: publicProcedure
+    .use(rateLimited(30, 60_000))
+    .input(LinkTokenSchema)
+    .query(async ({ ctx, input }) =>
+      visitorPage(
+        await requireLink(input.token, ctx.baseDb),
+        ctx.appUrl,
         ctx.baseDb,
       ),
     ),

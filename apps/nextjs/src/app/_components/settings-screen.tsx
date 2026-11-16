@@ -15,6 +15,7 @@ import { DeskLinkSection } from "./invite-link-card";
 import { PageHeader } from "./page-header";
 import { ENTER, LIST, SectionHeading, SettingsRow } from "./primitives";
 import { SignupQuestions } from "./signup-questions";
+import { VisitorPageSettings } from "./visitor-page-settings";
 
 export function SettingsScreen() {
   const academy = useEntity();
@@ -29,6 +30,7 @@ export function SettingsScreen() {
         <AcademyIconSettings name={academy.name} iconUrl={academy.iconUrl} />
         <AcademyLocation address={academy.address} mapUrl={academy.mapUrl} />
         <SignupQuestions />
+        <VisitorPageSettings address={academy.address} />
         <DeskLinkSection />
         {canRunOrganization && (
           <section className="flex flex-col gap-3">

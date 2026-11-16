@@ -8,6 +8,7 @@
 
 **First release**
 
+- [165: Academy page for visitors](issues/165-academy-page-for-visitors.md): `/academy/<drop-in token>` shows the academy name, the owner's optional text (About, Prices, Your first visit, Rules, Contact, and the address when turned on) and this week's and next week's bookable classes with a Book button into the drop-in form. The class link window grows to the end of next week. Migration `0022_visitor_page` adds the text columns to `entity`.
 - [164: Confirm a claim with its start day and months](issues/164-confirm-claim-start-and-months.md): Confirm in To check opens a dialog. A first payment starts the membership on the day they paid (owner can change it), and the owner picks how many months it covers. Managers confirm the defaults. No migration.
 - [163: Rolling membership periods](issues/163-rolling-membership-periods.md): a membership is paid in one-month periods from its own start day (last day of short months), not by calendar month. New members get 3 days to pay. The owner changes a payment date (stored on the same membership row) or one due date. Migration `0021_rolling_periods` drops the first-of-month checks and adds `access_assignment.period_anchor` and `period_anchor_from`. Existing memberships stay on the 1st.
 - [162: An academy owner owns the gym](issues/162-academy-owner-owns-the-gym.md): an active owner of any academy is a gym owner, so a co-owner made from Coaches sees Memberships. Losing the last academy ownership moves the gym role back to `member`. Fill script, no migration. Amends ADR 124 and 125.

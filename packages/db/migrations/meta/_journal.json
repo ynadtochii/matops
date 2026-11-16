@@ -155,6 +155,20 @@
       "when": 1794767096784,
       "tag": "0021_rolling_periods",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1794823503035,
+      "tag": "0022_visitor_page",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1794824837443,
+      "tag": "0023_visitor_more",
+      "breakpoints": true
     }
   ]
 }

@@ -8,11 +8,13 @@ import {
   findAcademyByCode,
   getAcademyCode,
   getAcademySettings,
+  getVisitorPage,
   listMembershipsForUser,
   recordMilestone,
   saveWaiverVersion,
   softDeleteAcademy,
   updateAcademySettings,
+  updateVisitorPageSettings,
 } from "@matops/db";
 import { classTemplate, entity } from "@matops/db/schema";
 import {
@@ -31,6 +33,7 @@ import {
   SaveWaiverSchema,
   SetMembershipEnforcedSchema,
   UpdateAcademySettingsSchema,
+  UpdateVisitorPageSchema,
 } from "@matops/validators";
 
 import { academyContext } from "../academy-tz";
@@ -159,6 +162,21 @@ export const academyRouter = {
         }
         await updateAcademySettings(ctx.academyId, input, db);
       });
+      return { ok: true as const };
+    }),
+
+  visitorPage: branchManagerProcedure.query(async ({ ctx }) => {
+    const page = await getVisitorPage(ctx.academyId, ctx.db);
+    if (!page) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Academy not found" });
+    }
+    return page;
+  }),
+
+  updateVisitorPage: branchManagerProcedure
+    .input(UpdateVisitorPageSchema)
+    .mutation(async ({ ctx, input }) => {
+      await updateVisitorPageSettings(ctx.academyId, input, ctx.db);
       return { ok: true as const };
     }),
 
