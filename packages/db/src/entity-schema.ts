@@ -59,6 +59,13 @@ export const entity = pgTable(
     iconFileId: t.uuid().references((): AnyPgColumn => storedFile.id, {
       onDelete: "set null",
     }),
+    visitorAbout: t.text(),
+    visitorPrices: t.text(),
+    visitorRules: t.text(),
+    visitorFirstVisit: t.text(),
+    visitorContact: t.text(),
+    visitorMore: t.text(),
+    visitorShowAddress: t.boolean().notNull().default(false),
     createdAt: t.timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: t
       .timestamp({ withTimezone: true })

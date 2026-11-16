@@ -365,6 +365,7 @@ One row per slice. This is the single answer to _"what's left, on which surface?
 | 3.6   | Class-specific drop-in link and three-local-day visitor window         | —    | —    | done | —    | done | —     |
 | 3.7   | Students share a class drop-in link (web; seven-day class link)        | —    | done | done | todo | done | —     |
 | 3.8   | Drop-in sharer credit ("Brought by" on a lead, ADR 151)                | done | done | done | —    | done | —     |
+| 3.9   | Academy page for visitors: owner text, two weeks of classes, Book into drop-in (ADR 165, S8c); `0022` applied to dev 2026-11-16, `0023` applied to dev 2026-11-16 | done | done | done | done (class link window) | done | —     |
 | **4** | **Notifications & polish**                                             |      |      |      |      |      |       |
 | 4.1   | `notifications` package (Expo Push + Resend)                           | done | done | —    | done | done | done  |
 | 4.2   | Events (cancel, reminder, approval, class change)                      | done | done | —    | done | done | done¹ |

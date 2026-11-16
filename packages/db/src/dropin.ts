@@ -4,15 +4,15 @@ import type { SignupAnswers } from "@matops/domain";
 import {
   checkSignupAnswers,
   matchLeadByPhone,
-  resolveAcademyTimeZone,
   returningLeadGate,
-  VISITOR_LINK_DAYS,
   visitorClassState,
+  visitorLinkDays,
 } from "@matops/domain";
 
 import type { DbExec } from "./client";
 import type { LiveLinkRow } from "./live-link";
 import type { DbReader } from "./tenant";
+import { academyTimeZone } from "./academy-settings";
 import { dropInLink } from "./drop-in-link-schema";
 import { entity, entityMembership } from "./entity-schema";
 import { getLiveLink, getOrCreateLiveLink, rotateLiveLink } from "./live-link";
@@ -151,7 +151,7 @@ export async function resolveDropInLink(
   return {
     academyId: row.academyId,
     name: row.name,
-    timeZone: resolveAcademyTimeZone(row.timeZone),
+    timeZone: await academyTimeZone(row.academyId, row.timeZone, exec),
     country: row.country,
     signupHealthQuestion: row.signupHealthQuestion,
     waiver: waiver ? { id: waiver.id, body: waiver.body } : null,
@@ -398,7 +398,12 @@ export async function submitDropInVisit(
       .limit(1)
       .for("update");
     const mode = cls
-      ? visitorClassState(cls, now, academy.timeZone, VISITOR_LINK_DAYS)
+      ? visitorClassState(
+          cls,
+          now,
+          academy.timeZone,
+          visitorLinkDays(now, academy.timeZone),
+        )
       : null;
     if (!cls || !mode) return { ok: false, reason: "class" };
 

@@ -2,11 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 
-import {
-  dropInPath,
-  VISITOR_LINK_DAYS,
-  visitorClassState,
-} from "@matops/domain";
+import { dropInPath, visitorClassState, visitorLinkDays } from "@matops/domain";
 import { Button } from "@matops/ui/button";
 import { CopyButton } from "@matops/ui/copy-button";
 
@@ -39,7 +35,7 @@ export function ClassDropInLink({
       { ...cls, startsAt: new Date(cls.startsAt) },
       new Date(),
       academy.timeZone ?? "UTC",
-      VISITOR_LINK_DAYS,
+      visitorLinkDays(new Date(), academy.timeZone ?? "UTC"),
     ) !== null;
   const link = useQuery(
     trpc.dropIn.link.queryOptions(undefined, { enabled: shareable }),

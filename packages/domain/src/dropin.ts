@@ -1,5 +1,10 @@
 import type { CheckInClass } from "./checkin";
-import { academyDay, addLocalDays, localMidnight } from "./local-date";
+import {
+  academyDay,
+  addLocalDays,
+  localDate,
+  localMidnight,
+} from "./local-date";
 
 /**
  * Pure drop-in / lead rules (spec O4/§4; ADR 147). No I/O. A drop-in is a
@@ -28,8 +33,21 @@ export function dropInPath(
   return `/drop-in/${token}${query.length > 0 ? `?${query.join("&")}` : ""}`;
 }
 
+export function visitorPagePath(
+  token: string,
+  sharedBy: string | null,
+): string {
+  return `/academy/${token}${sharedBy ? `?by=${encodeURIComponent(sharedBy)}` : ""}`;
+}
+
 export const VISITOR_LIST_DAYS = 3;
-export const VISITOR_LINK_DAYS = 7;
+
+/** Local days from today to the end of next week's Sunday: a class link and the
+ * visitor page reach that far, so every class the page shows can be booked. */
+export function visitorLinkDays(now: Date, timeZone: string): number {
+  const daysSinceMonday = (localDate(now, timeZone).weekday + 6) % 7;
+  return 14 - daysSinceMonday;
+}
 
 interface VisitorWindow {
   from: Date;
@@ -83,6 +101,47 @@ export function visitorClassChoices<T extends CheckInClass>(
     if (state === "book") choices.upcoming.push(c);
   }
   return choices;
+}
+
+export interface VisitorPageDay<T> {
+  day: string;
+  classes: T[];
+}
+
+export interface VisitorPageWeek<T> {
+  weekStart: string;
+  days: VisitorPageDay<T>[];
+}
+
+/** This week and next week (Monday to Sunday, academy time) with only the
+ * classes a visitor can still book. Days with no class are left out. */
+export function visitorPageWeeks<T extends CheckInClass>(
+  classes: T[],
+  now: Date,
+  timeZone: string,
+): [VisitorPageWeek<T>, VisitorPageWeek<T>] {
+  const today = academyDay(now, timeZone);
+  const thisWeek = addLocalDays(
+    today,
+    -((localDate(now, timeZone).weekday + 6) % 7),
+  );
+  const nextWeek = addLocalDays(thisWeek, 7);
+  const days = visitorLinkDays(now, timeZone);
+  const weeks: [VisitorPageWeek<T>, VisitorPageWeek<T>] = [
+    { weekStart: thisWeek, days: [] },
+    { weekStart: nextWeek, days: [] },
+  ];
+  const bookable = classes
+    .filter((c) => visitorClassState(c, now, timeZone, days) === "book")
+    .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+  for (const c of bookable) {
+    const day = academyDay(c.startsAt, timeZone);
+    const week = day < nextWeek ? weeks[0] : weeks[1];
+    const last = week.days.at(-1);
+    if (last?.day === day) last.classes.push(c);
+    else week.days.push({ day, classes: [c] });
+  }
+  return weeks;
 }
 
 export type ReturningLeadGate = "ok" | "agreement" | "full";

@@ -289,11 +289,11 @@ describe("submitDropInVisit", () => {
     expect(result).toMatchObject({ ok: false, reason: "class" });
   });
 
-  it("fails with reason class for a class beyond the 7-day window", async () => {
+  it("fails with reason class for a class after the end of next week", async () => {
     await seedClass(pg, {
       id: CLASS_FUTURE,
       academyId: "academy_A",
-      startsInMinutes: 60 * 24 * 8,
+      startsInMinutes: 60 * 24 * 15,
     });
     const result = await submitDropInVisit(
       { ...NEW_VISITOR, classId: CLASS_FUTURE },
